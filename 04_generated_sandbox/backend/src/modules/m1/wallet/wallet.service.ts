@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomBytes } from 'crypto';
+import { PersistentMap } from '../../../foundation/store/persistent-map';
 import { EventBus } from '../../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../../foundation/events/glos-events';
 import { BankLinkChallenge, CurrencyCode, PayoutRecord, SettlementTrigger, Wallet, WalletSummary } from './wallet.types';
@@ -21,10 +22,19 @@ function currencyFor(jurisdiction?: string): CurrencyCode {
  */
 @Injectable()
 export class WalletService {
-  private readonly wallets = new Map<string, Wallet>();
+  // Durable: wallet balances are real money (an agent's prepaid float, paid in cash). A restart must
+  // not zero them. Every balance/flag mutation is followed by a re-set via save() to flush to disk.
+  private readonly wallets = new PersistentMap<string, Wallet>('m1-wallets');
+  // Transient: micro-deposit challenges are short-lived and safe to lose on restart.
   private readonly bankChallenges = new Map<string, { did: string; amounts: [number, number] }>();
 
   constructor(private readonly events: EventBus) {}
+
+  /** Re-store an in-place-mutated wallet so the snapshot store flushes it. */
+  private save(wallet: Wallet): Wallet {
+    this.wallets.set(wallet.did, wallet);
+    return wallet;
+  }
 
   /** Idempotent: provision a wallet for a verified DID (UDIW-040). */
   provision(did: string, options: { jurisdiction?: string; corporate?: boolean } = {}): Wallet {
@@ -59,14 +69,16 @@ export class WalletService {
   }
 
   setCorporate(did: string, corporate: boolean): void {
-    this.require(did).corporate = corporate;
+    const wallet = this.require(did);
+    wallet.corporate = corporate;
+    this.save(wallet);
   }
 
   /** UDIW-043: configure how settlement releases for this wallet. */
   setSettlementTrigger(did: string, trigger: SettlementTrigger): Wallet {
     const wallet = this.require(did);
     wallet.settlementTrigger = validateSettlementTrigger(trigger);
-    return wallet;
+    return this.save(wallet);
   }
 
   balanceOf(did: string, currency?: CurrencyCode): number {
@@ -80,7 +92,7 @@ export class WalletService {
     const wallet = this.require(did);
     const ccy = currency ?? wallet.settlementCurrency;
     wallet.balances[ccy] = (wallet.balances[ccy] ?? 0) + amount;
-    return wallet;
+    return this.save(wallet);
   }
 
   /** Debit funds (internal transfer, e.g. funding an escrow). Throws on insufficient balance. */
@@ -90,7 +102,7 @@ export class WalletService {
     const ccy = currency ?? wallet.settlementCurrency;
     if ((wallet.balances[ccy] ?? 0) < amount) throw new BadRequestException('Insufficient balance');
     wallet.balances[ccy] -= amount;
-    return wallet;
+    return this.save(wallet);
   }
 
   /** UDIW-044: instant payout to an external rail. Debits the wallet, emits the event. */
@@ -102,6 +114,7 @@ export class WalletService {
       throw new BadRequestException('Insufficient balance');
     }
     wallet.balances[currency] -= input.amount;
+    this.save(wallet);
 
     const record: PayoutRecord = {
       payoutId: `pay_${randomBytes(12).toString('hex')}`,
@@ -135,7 +148,9 @@ export class WalletService {
       throw new BadRequestException('Amounts do not match');
     }
     this.bankChallenges.delete(challengeId);
-    this.require(did).bankLinked = true;
+    const wallet = this.require(did);
+    wallet.bankLinked = true;
+    this.save(wallet);
     return { linked: true };
   }
 

@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomBytes } from 'crypto';
+import { PersistentMap } from '../../foundation/store/persistent-map';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { LedgerService } from '../../foundation/ledger/ledger.service';
@@ -45,7 +46,9 @@ export interface HandoverResult {
  */
 @Injectable()
 export class ParcelService {
-  private readonly parcels = new Map<string, Parcel>();
+  // Durable: a parcel in flight (money charged, custody held) must survive a restart. Persistence is
+  // driven through scan() — the near-universal transition point — plus the few post-scan mutations.
+  private readonly parcels = new PersistentMap<string, Parcel>('pudo-parcels');
 
   constructor(
     private readonly agents: AgentService,
@@ -188,6 +191,7 @@ export class ParcelService {
         this.scan(parcel, 'Ready_For_Pickup', agentDid, 'OTP locked after repeated wrong codes');
         throw new BadRequestException('Too many wrong codes — ask the control tower to reissue');
       }
+      this.persist(parcel); // keep the attempt counter durable so a restart can't reset the lockout
       throw new BadRequestException('Incorrect OTP');
     }
 
@@ -304,6 +308,7 @@ export class ParcelService {
       void this.events.publish(GlosEvent.Pudo.InboundCreated, { parcelId, vendorId: input.vendorId, originAgentDid: input.originAgentDid, destAgentDid: input.destAgentDid }, { source: 'pudo' }).catch(() => undefined);
       void this.events.publish(GlosEvent.Pudo.ParcelPaid, { parcelId, vendorId: input.vendorId, originAgentDid: input.originAgentDid, amount: shipmentCost, externalOrderId: input.externalOrderId }, { source: 'pudo' }).catch(() => undefined);
     }
+    this.persist(parcel); // paidStatus/label were mutated after the initial set()
     return { parcel, label: bill.paid ? label : null, paid: bill.paid };
   }
 
@@ -324,6 +329,7 @@ export class ParcelService {
     if (!bill.paid) return { parcel, label: null, paid: false };
     parcel.paidStatus = 'ParcelPaid';
     parcel.label = dest ? this.label(parcel, dest.shopName) : parcel.label;
+    this.persist(parcel);
     void this.events.publish(GlosEvent.Pudo.ParcelPaid, { parcelId, vendorId: parcel.vendorId, originAgentDid: parcel.originAgentDid, amount: parcel.shipmentCost, externalOrderId: parcel.externalOrderId }, { source: 'pudo' }).catch(() => undefined);
     return { parcel, label: parcel.label ?? null, paid: true };
   }
@@ -408,6 +414,7 @@ export class ParcelService {
     parcel.actualCost = actual;
     const rebate = Math.round(Math.max(0, parcel.ceilingCost - actual) * 100) / 100;
     parcel.rebate = rebate;
+    this.persist(parcel); // actualCost/rebate mutated after collectConfirm's scan
     if (rebate > 0) this.vendors.rebate(parcel.vendorId, parcel.parcelId, rebate);
   }
 
@@ -470,6 +477,12 @@ export class ParcelService {
     const anchorTxId = this.ledger.anchor({ p: parcel.parcelId, st: status, by, at }).txId;
     const scan: ParcelScan = { at, status, by, note, anchorTxId };
     parcel.scans.push(scan);
+    this.persist(parcel); // every state transition durably captures the parcel's current state
+  }
+
+  /** Re-store the (in-place-mutated) parcel so the snapshot store flushes it to disk. */
+  private persist(parcel: Parcel): void {
+    this.parcels.set(parcel.parcelId, parcel);
   }
 
   private require(parcelId: string): Parcel {

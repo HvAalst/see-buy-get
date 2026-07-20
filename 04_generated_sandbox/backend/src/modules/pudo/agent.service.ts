@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { PersistentMap } from '../../foundation/store/persistent-map';
 import { createHash, randomBytes } from 'crypto';
 import { DidService } from '../../foundation/did/did.service';
 import { IdentityVault } from '../../foundation/data-firewall/identity-vault.service';
@@ -38,7 +39,9 @@ const fp = (value: string): string => createHash('sha256').update(value.trim().t
  */
 @Injectable()
 export class AgentService {
-  private readonly agents = new Map<string, Agent>(); // keyed by DID
+  // Durable: the agent golden record (status, shelf, zone, wallet link). A signed-up agent — and the
+  // wallet balance keyed to them — is meaningless after a restart if this record is gone.
+  private readonly agents = new PersistentMap<string, Agent>('pudo-agents'); // keyed by DID
   /** Hashed identity/device fingerprints for the DRAFT dedup check (18.5) — no PII stored here. */
   private readonly fingerprints = new Set<string>();
 

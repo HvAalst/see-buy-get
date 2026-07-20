@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { PersistentMap } from '../../foundation/store/persistent-map';
 import { createHash, randomBytes } from 'crypto';
 import { DidService } from '../../foundation/did/did.service';
 import { IdentityVault } from '../../foundation/data-firewall/identity-vault.service';
@@ -32,7 +33,8 @@ const fp = (value: string): string => createHash('sha256').update(value.trim().t
  */
 @Injectable()
 export class FleetManagerService {
-  private readonly managers = new Map<string, FleetManager>(); // keyed by DID
+  // Durable: onboarded fleet managers (KYC state, bond, the tenant boundary S3 authorizes against).
+  private readonly managers = new PersistentMap<string, FleetManager>('pudo-fleet-managers'); // keyed by DID
   private readonly fingerprints = new Set<string>();
 
   constructor(

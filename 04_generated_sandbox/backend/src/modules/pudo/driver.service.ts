@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { PersistentMap } from '../../foundation/store/persistent-map';
 import { createHash, randomBytes } from 'crypto';
 import { DidService } from '../../foundation/did/did.service';
 import { IdentityVault } from '../../foundation/data-firewall/identity-vault.service';
@@ -34,8 +35,10 @@ const fp = (value: string): string => createHash('sha256').update(value.trim().t
  */
 @Injectable()
 export class DriverService {
-  private readonly drivers = new Map<string, FleetDriver>(); // keyed by DID
-  private readonly badges = new Map<string, string>(); // badgeId → DID
+  // Durable: onboarded drivers + their badge index (badgeId → DID). If drivers reload but the badge
+  // index does not, handover badge resolution breaks after a restart — so both persist.
+  private readonly drivers = new PersistentMap<string, FleetDriver>('pudo-drivers'); // keyed by DID
+  private readonly badges = new PersistentMap<string, string>('pudo-driver-badges'); // badgeId → DID
   private readonly fingerprints = new Set<string>();
 
   constructor(

@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { PersistentMap } from '../../foundation/store/persistent-map';
 import { randomBytes } from 'crypto';
 import { TRUCK_SUBTYPE_CATALOG, TruckSubtype, TruckSubtypeSpec, VEHICLE_SPEC, VehicleClass } from './fleet.config';
 import { Vehicle, VehicleDocuments, VehicleOwnerType } from './fleet.types';
@@ -26,7 +27,8 @@ interface RegisterVehicleInput {
  */
 @Injectable()
 export class VehicleService {
-  private readonly vehicles = new Map<string, Vehicle>();
+  // Durable: registered fleet vehicles (documents, verification, pricing, manager ownership).
+  private readonly vehicles = new PersistentMap<string, Vehicle>('pudo-vehicles');
 
   constructor(private readonly managers: FleetManagerService) {}
 

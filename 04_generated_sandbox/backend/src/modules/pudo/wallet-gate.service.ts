@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { randomBytes } from 'crypto';
+import { PersistentMap } from '../../foundation/store/persistent-map';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { WalletService } from '../m1/wallet/wallet.service';
@@ -16,7 +17,9 @@ import { LedgerType, PudoLedgerEntry } from './pudo.types';
  */
 @Injectable()
 export class WalletGateService {
-  private readonly ledger: PudoLedgerEntry[] = [];
+  // Durable: the typed money ledger (top-ups, fees, payouts, refunds). Keyed by entry id; a Map
+  // preserves insertion order, so entries() stays chronological (then reversed for newest-first).
+  private readonly ledger = new PersistentMap<string, PudoLedgerEntry>('pudo-ledger');
 
   constructor(
     private readonly wallet: WalletService,
@@ -93,7 +96,7 @@ export class WalletGateService {
   }
 
   entries(filter: { did?: string; type?: LedgerType } = {}): PudoLedgerEntry[] {
-    return this.ledger.filter((e) => (!filter.did || e.did === filter.did) && (!filter.type || e.type === filter.type)).slice().reverse();
+    return [...this.ledger.values()].filter((e) => (!filter.did || e.did === filter.did) && (!filter.type || e.type === filter.type)).reverse();
   }
 
   /** Sum of all agent wallet balances — the platform's pre-paid liability (System Float). */
@@ -103,7 +106,7 @@ export class WalletGateService {
 
   private record(type: LedgerType, sign: '+' | '-', amount: number, did: string | undefined, reference: string, refType: PudoLedgerEntry['refType']): PudoLedgerEntry {
     const entry: PudoLedgerEntry = { id: `led_${randomBytes(8).toString('hex')}`, type, sign, amount: Math.round(amount * 100) / 100, did, reference, refType, at: new Date().toISOString() };
-    this.ledger.push(entry);
+    this.ledger.set(entry.id, entry);
     return entry;
   }
 }

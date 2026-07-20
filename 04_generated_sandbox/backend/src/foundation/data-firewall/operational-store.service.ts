@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { PersistentMap } from '../store/persistent-map';
 import { assertNoPii } from './pii-policy';
 import { OperationalProfile } from './data-firewall.types';
 
@@ -11,7 +12,9 @@ import { OperationalProfile } from './data-firewall.types';
  */
 @Injectable()
 export class OperationalStore {
-  private readonly profiles = new Map<string, OperationalProfile>();
+  // Durable: the pseudonymous profile carries capabilities (the S2 scope source) and, from S2, the
+  // tokenVersion used for revocation. Losing it on restart would silently re-validate revoked tokens.
+  private readonly profiles = new PersistentMap<string, OperationalProfile>('operational-profiles');
 
   /** Insert/update an operational profile. Throws DataFirewallViolation if PII is present. */
   upsert(profile: OperationalProfile): OperationalProfile {
@@ -30,6 +33,7 @@ export class OperationalStore {
     const profile = this.profiles.get(did);
     if (!profile) return false;
     profile.reputationScore = reputationScore;
+    this.profiles.set(did, profile); // persist the in-place reputation update
     return true;
   }
 

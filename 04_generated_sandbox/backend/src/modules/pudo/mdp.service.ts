@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { PersistentMap } from '../../foundation/store/persistent-map';
 import { randomBytes } from 'crypto';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
@@ -27,7 +28,8 @@ import { Mdp, NextHop, Tote } from './pudo.types';
  */
 @Injectable()
 export class MdpService {
-  private readonly mdps = new Map<string, Mdp>();
+  // Durable: onboarded MDP sort-hubs (a signed-up participant type).
+  private readonly mdps = new PersistentMap<string, Mdp>('pudo-mdps');
 
   constructor(
     private readonly agents: AgentService,

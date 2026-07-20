@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
+import { PersistentMap } from '../../foundation/store/persistent-map';
 import { AgentService } from './agent.service';
 import { DriverService } from './driver.service';
 import { MdpService } from './mdp.service';
@@ -32,7 +33,9 @@ const RESET_TTL_MS = 30 * 60 * 1000;
  */
 @Injectable()
 export class AccountService {
-  private readonly accounts = new Map<string, Account>(); // keyed by lower-cased email
+  // Durable: these are real login credentials (scrypt salt + hash). A restart wiping them logs every
+  // participant out permanently. Keyed by lower-cased email.
+  private readonly accounts = new PersistentMap<string, Account>('pudo-accounts');
 
   constructor(
     private readonly agents: AgentService,
@@ -73,6 +76,7 @@ export class AccountService {
     if (!account) return { sent: false }; // do not reveal which emails exist
     account.resetToken = `RST-${randomBytes(4).toString('hex').toUpperCase()}`;
     account.resetExpires = Date.now() + RESET_TTL_MS;
+    this.accounts.set(account.email, account); // persist the reset token
     return { sent: true, resetToken: account.resetToken };
   }
 
@@ -84,6 +88,7 @@ export class AccountService {
     account.hash = this.hash(password, account.salt);
     account.resetToken = undefined;
     account.resetExpires = undefined;
+    this.accounts.set(account.email, account); // persist the new password hash
     return { ok: true };
   }
 
