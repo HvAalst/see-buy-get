@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GLOS · Send something</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./components/components.css" />
+  <style>
+    .sn { max-width: 480px; margin: 0 auto; padding: 20px; display: grid; gap: 18px; }
+    .sn__head { display: flex; align-items: center; justify-content: space-between; }
+    .sn__title { font-size: 1.5rem; color: var(--forest); margin: 0; }
+    .sn__instruction { font-size: 1.1rem; color: var(--text); }
+    .sn__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .sn__card {
+      display: grid; gap: 6px; justify-items: center; text-align: center;
+      min-height: 96px; padding: 14px; font: inherit; cursor: pointer;
+      background: #fff; border: 2px solid var(--border); border-radius: var(--radius);
+    }
+    .sn__card.is-selected { border-color: var(--brand); border-left: 5px solid var(--brand-bright); background: var(--info-bg); }
+    .sn__card-icon { font-size: 2rem; }
+    .sn__card-label { font-weight: 700; }
+    .sn__field { display: grid; gap: 6px; }
+    .sn__field label { font-weight: 700; }
+    .sn__field input { min-height: 52px; padding: 12px 14px; font-size: 1.1rem; border: 2px solid var(--border); border-radius: var(--radius); }
+    .sn__summary { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; display: grid; gap: 8px; }
+    .sn__row { display: flex; justify-content: space-between; gap: 12px; }
+    .sn__row span:first-child { color: var(--muted); }
+    .sn__label-box { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; text-align: center; }
+    .sn__did { font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); word-break: break-all; }
+    .sn__msg--err { color: var(--danger); font-weight: 700; }
+    .sn__chips { display: flex; gap: 10px; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+  <main class="sn" id="send"></main>
+  <script type="module" src="./send.js"></script>
+</body>
+</html>

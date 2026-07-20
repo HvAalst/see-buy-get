@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GLOS · Wallet</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./components/components.css" />
+  <style>
+    .wl { max-width: 480px; margin: 0 auto; padding: 20px; display: grid; gap: 20px; }
+    .wl__head { display: flex; align-items: center; justify-content: space-between; }
+    .wl__title { font-size: 1.5rem; color: var(--forest); margin: 0; }
+    .wl__panel { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; display: grid; gap: 16px; }
+    .wl__row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .wl__amounts { display: flex; gap: 14px; justify-content: center; }
+    .wl__chip { font-size: 1.6rem; font-weight: 800; color: var(--forest); background: var(--info-bg); border-radius: var(--radius); padding: 12px 18px; }
+    .wl__field { display: grid; gap: 6px; }
+    .wl__field input { min-height: 52px; padding: 12px 14px; font-size: 1.1rem; border: 2px solid var(--border); border-radius: var(--radius); }
+    .wl__msg { font-weight: 700; }
+    .wl__msg--ok { color: var(--success); }
+    .wl__msg--err { color: var(--danger); }
+    .wl__did { font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); word-break: break-all; }
+  </style>
+</head>
+<body>
+  <main class="wl" id="wallet"></main>
+  <script type="module" src="./wallet.js"></script>
+</body>
+</html>

@@ -1,0 +1,31 @@
+# GLOS — baseline ignores.
+
+# Dependencies & build output
+node_modules/
+/dist
+dist/
+/coverage
+coverage/
+*.tsbuildinfo
+
+# Secrets & env
+.env
+.env.local
+*.local
+
+# Durable state written at runtime (S1 — better-sqlite3 write-through store)
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+data/
+
+# Generated API contract client types (S7 — regenerated from contracts/openapi.json)
+04_generated_sandbox/frontend/src/lib/glos/schema.d.ts
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+# Microsoft Word lock files (the .docx compendiums are opened for editing)
+~$*

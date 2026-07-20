@@ -1,0 +1,1228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GLOS · Multi-Role Registration (UDIW-010 Prototype)</title>
+<style>
+  /* ---------- Design tokens ---------- */
+  :root{
+    /* Yukel / Shoplane brand palette */
+    --forest:#0E3B2D;
+    --brand:#1E9E66;
+    --brand-bright:#2FBF71;
+    --gold:#C9A227;
+    --navy:#0E3B2D;
+    --navy-dark:#082019;
+    --azure:#1E9E66;
+    --azure-light:#2FBF71;
+    --bg:#FFFFFF;
+    --surface:#F4F6F7;
+    --card:#FFFFFF;
+    --border:#E2E6E9;
+    --border-soft:#EEF1F3;
+    --muted:#6B7280;
+    --text:#1B1B1B;
+    --success:#1E8E4A;
+    --success-bg:#E5F4EC;
+    --warn:#9A6B00;
+    --warn-bg:#FCF1D6;
+    --danger:#B0233A;
+    --info:#0E3B2D;
+    --info-bg:#E7F3EC;
+    --radius:10px;
+    --shadow-sm:0 1px 2px rgba(14,59,45,.06);
+    --shadow:0 4px 16px rgba(14,59,45,.08);
+    --shadow-lg:0 10px 30px rgba(14,59,45,.12);
+    --mono:'SF Mono', Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    font-size:15px;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---------- App shell ---------- */
+  .app{
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+  }
+  .topbar{
+    background:var(--navy);
+    color:#fff;
+    padding:14px 32px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    box-shadow:var(--shadow);
+    position:sticky;
+    top:0;
+    z-index:20;
+  }
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;letter-spacing:.5px}
+  .brand-mark{
+    width:30px;height:30px;border-radius:6px;
+    background:linear-gradient(135deg,var(--azure-light),var(--azure));
+    display:grid;place-items:center;font-size:13px;font-weight:800;color:#fff;
+  }
+  .brand-meta{font-size:11px;font-weight:500;color:#A8B7CC;margin-left:4px;letter-spacing:.4px;text-transform:uppercase}
+  .topbar .right{font-size:13px;color:#C0CCDE;display:flex;align-items:center;gap:16px}
+  .pill{
+    background:rgba(255,255,255,.1);padding:4px 10px;border-radius:999px;font-size:11px;
+    font-family:var(--mono);letter-spacing:.5px;
+  }
+
+  .main{
+    flex:1;
+    padding:40px 32px 60px;
+    max-width:1080px;
+    width:100%;
+    margin:0 auto;
+  }
+
+  /* ---------- Footer / status strip ---------- */
+  .req-strip{
+    background:#fff;
+    border-top:1px solid var(--border);
+    padding:14px 32px;
+    font-size:12px;
+    color:var(--muted);
+    display:flex;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:12px;
+  }
+  .req-strip code{font-family:var(--mono);background:var(--info-bg);color:var(--navy);padding:2px 6px;border-radius:4px;font-size:11px}
+
+  /* ---------- Card ---------- */
+  .card{
+    background:var(--card);
+    border-radius:14px;
+    box-shadow:var(--shadow);
+    border:1px solid var(--border-soft);
+  }
+  .card-pad{padding:36px}
+  .card h1{margin:0 0 8px;font-size:24px;color:var(--navy);font-weight:700}
+  .card h2{margin:0 0 6px;font-size:20px;color:var(--navy);font-weight:700}
+  .card .sub{color:var(--muted);font-size:14px;margin-bottom:24px}
+
+  /* ---------- Forms ---------- */
+  .field{margin-bottom:18px}
+  .field label{
+    display:block;font-size:13px;font-weight:600;color:var(--navy);margin-bottom:6px;
+  }
+  .field .hint{font-size:12px;color:var(--muted);margin-top:4px}
+  input[type="text"],input[type="email"],input[type="password"],
+  input[type="tel"],input[type="number"],select,textarea{
+    width:100%;
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:11px 12px;
+    font-size:14px;
+    font-family:inherit;
+    color:var(--text);
+    background:#fff;
+    transition:border-color .15s, box-shadow .15s;
+  }
+  input:focus,select:focus,textarea:focus{
+    outline:none;
+    border-color:var(--azure);
+    box-shadow:0 0 0 3px rgba(46,117,182,.15);
+  }
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:600px){.row{grid-template-columns:1fr}}
+
+  /* Checkbox */
+  .check{display:flex;align-items:flex-start;gap:10px;font-size:13px;color:var(--text);cursor:pointer}
+  .check input{margin-top:3px}
+
+  /* ---------- Buttons ---------- */
+  .btn{
+    border:none;border-radius:8px;font-family:inherit;font-size:14px;font-weight:600;
+    cursor:pointer;padding:11px 18px;transition:transform .08s,box-shadow .15s,background .15s;
+    display:inline-flex;align-items:center;gap:8px;
+  }
+  .btn:active{transform:translateY(1px)}
+  .btn-primary{background:var(--azure);color:#fff;box-shadow:var(--shadow-sm)}
+  .btn-primary:hover{background:#256DAB}
+  .btn-primary:disabled{background:#A8C4DE;cursor:not-allowed}
+  .btn-ghost{background:transparent;color:var(--navy);border:1px solid var(--border)}
+  .btn-ghost:hover{background:var(--info-bg)}
+  .btn-link{background:transparent;color:var(--azure);padding:6px 4px;font-weight:600}
+  .btn-link:hover{text-decoration:underline}
+  .btn-row{display:flex;justify-content:space-between;align-items:center;margin-top:28px}
+  .btn-row.right{justify-content:flex-end}
+
+  /* ---------- Step indicator ---------- */
+  .steps{
+    display:flex;align-items:center;gap:6px;margin-bottom:24px;
+  }
+  .step-pill{
+    flex:1;height:6px;border-radius:3px;background:var(--border-soft);
+  }
+  .step-pill.done{background:var(--azure)}
+  .step-pill.active{background:var(--azure);box-shadow:0 0 0 3px rgba(46,117,182,.18)}
+  .step-label{font-size:12px;color:var(--muted);margin-bottom:14px;font-weight:600;letter-spacing:.3px;text-transform:uppercase}
+
+  /* ---------- Role picker ---------- */
+  .role-grid{
+    display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin-top:8px;
+  }
+  @media(max-width:700px){.role-grid{grid-template-columns:1fr}}
+  .role-card{
+    border:1px solid var(--border);
+    border-radius:12px;padding:20px;background:#fff;cursor:pointer;
+    transition:all .15s;display:flex;flex-direction:column;gap:8px;
+    position:relative;
+  }
+  .role-card:hover{border-color:var(--azure);box-shadow:var(--shadow);transform:translateY(-2px)}
+  .role-card.added{cursor:default;background:#F7F9FC;border-color:var(--border-soft)}
+  .role-card.added:hover{transform:none;box-shadow:none;border-color:var(--border-soft)}
+  .role-icon{
+    width:40px;height:40px;border-radius:10px;display:grid;place-items:center;font-size:20px;
+    background:var(--info-bg);
+  }
+  .role-card .name{font-weight:700;color:var(--navy);font-size:16px}
+  .role-card .desc{font-size:13px;color:var(--muted);line-height:1.4}
+  .role-card .meta{
+    display:flex;align-items:center;gap:8px;margin-top:8px;font-size:11px;
+    color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;
+  }
+  .role-card .added-badge{
+    position:absolute;top:14px;right:14px;
+    background:var(--success-bg);color:var(--success);
+    padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;
+    display:flex;align-items:center;gap:4px;
+  }
+
+  /* ---------- Status badges ---------- */
+  .badge{
+    display:inline-flex;align-items:center;gap:5px;
+    padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;
+    text-transform:uppercase;letter-spacing:.4px;
+  }
+  .badge.success{background:var(--success-bg);color:var(--success)}
+  .badge.warn{background:var(--warn-bg);color:var(--warn)}
+  .badge.info{background:var(--info-bg);color:var(--info)}
+  .badge.dot{width:6px;height:6px;border-radius:50%;background:currentColor;padding:0}
+  .badge .dot{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block}
+
+  /* ---------- Dashboard ---------- */
+  .account-header{
+    background:linear-gradient(135deg,var(--navy),var(--navy-dark));
+    color:#fff;border-radius:14px;padding:28px 32px;margin-bottom:24px;
+    box-shadow:var(--shadow);
+    display:flex;align-items:center;justify-content:space-between;gap:24px;
+  }
+  .account-meta{display:flex;flex-direction:column;gap:6px}
+  .account-meta .name{font-size:20px;font-weight:700}
+  .account-meta .email{font-size:13px;color:#C0CCDE}
+  .account-meta .did{font-family:var(--mono);font-size:12px;color:#A8B7CC;margin-top:4px}
+  .account-stats{display:flex;gap:24px}
+  .stat{text-align:right}
+  .stat .num{font-size:26px;font-weight:700}
+  .stat .lbl{font-size:11px;color:#A8B7CC;text-transform:uppercase;letter-spacing:.5px}
+
+  .roles-section{margin-top:8px}
+  .roles-section h2{
+    color:var(--navy);font-size:16px;font-weight:700;margin:0 0 14px;
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  .role-row{
+    background:#fff;border:1px solid var(--border-soft);border-radius:12px;
+    padding:18px 20px;margin-bottom:10px;
+    display:flex;align-items:center;gap:16px;
+    transition:border-color .15s;
+  }
+  .role-row:hover{border-color:var(--border)}
+  .role-row .role-icon{flex-shrink:0}
+  .role-row .info{flex:1;min-width:0}
+  .role-row .title{font-weight:700;color:var(--navy);font-size:15px}
+  .role-row .meta-line{font-size:12px;color:var(--muted);margin-top:2px}
+  .role-row .actions{display:flex;align-items:center;gap:10px}
+  .tier-pill{
+    background:var(--info-bg);color:var(--navy);
+    padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;
+    font-family:var(--mono);
+  }
+
+  /* ---------- Liveness mock ---------- */
+  .liveness{
+    background:#0E1A2E;border-radius:12px;padding:32px;color:#fff;
+    text-align:center;margin-bottom:16px;
+  }
+  .liveness .face{
+    width:120px;height:120px;border-radius:50%;
+    background:radial-gradient(circle at 30% 30%,#3A4A66,#1A2233);
+    margin:0 auto 16px;display:grid;place-items:center;font-size:48px;
+    border:3px dashed var(--azure-light);animation:pulse 2s infinite;
+  }
+  @keyframes pulse{
+    0%,100%{box-shadow:0 0 0 0 rgba(91,155,213,.4)}
+    50%{box-shadow:0 0 0 12px rgba(91,155,213,0)}
+  }
+  .liveness .challenge{font-size:14px;color:#A8B7CC;margin-bottom:8px}
+  .liveness .phrase{font-size:22px;font-weight:700;letter-spacing:1px}
+
+  /* ---------- Processing modal ---------- */
+  .processing{
+    background:var(--info-bg);border-radius:10px;padding:18px 20px;
+    display:flex;align-items:center;gap:14px;margin-bottom:18px;
+  }
+  .processing .spin{
+    width:22px;height:22px;border-radius:50%;
+    border:3px solid var(--border);border-top-color:var(--azure);
+    animation:spin 0.8s linear infinite;flex-shrink:0;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .processing .msg{font-size:13px;color:var(--navy);font-weight:600}
+
+  /* ---------- Success screen ---------- */
+  .success-screen{text-align:center;padding:20px 0}
+  .success-icon{
+    width:80px;height:80px;border-radius:50%;
+    background:var(--success-bg);color:var(--success);
+    display:grid;place-items:center;font-size:40px;margin:0 auto 20px;
+  }
+  .success-screen h2{color:var(--navy)}
+  .vc-issued{
+    background:#fff;border:1px dashed var(--azure);border-radius:10px;
+    padding:14px 16px;margin:18px auto;max-width:380px;text-align:left;
+    font-size:13px;
+  }
+  .vc-issued .label{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+  .vc-issued .vc-name{font-weight:700;color:var(--navy);font-size:14px;display:flex;align-items:center;gap:6px}
+  .vc-issued .vc-meta{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:6px}
+
+  /* ---------- Info note ---------- */
+  .note{
+    background:var(--info-bg);border-left:3px solid var(--azure);
+    padding:12px 14px;border-radius:6px;font-size:13px;color:var(--navy);
+    margin-bottom:18px;
+  }
+  .note strong{color:var(--navy)}
+  .note.warn{background:var(--warn-bg);border-color:var(--warn);color:var(--warn)}
+
+  /* ---------- Reset / dev controls ---------- */
+  .dev-controls{
+    position:fixed;bottom:16px;right:16px;z-index:30;
+    display:flex;gap:8px;
+  }
+  .dev-controls .btn{font-size:12px;padding:8px 12px;background:#fff;color:var(--muted);border:1px solid var(--border)}
+  .dev-controls .btn:hover{background:var(--info-bg);color:var(--navy)}
+
+  /* ---------- Helpers ---------- */
+  .muted{color:var(--muted)}
+  .mono{font-family:var(--mono)}
+  .hidden{display:none}
+  .scrim{
+    position:fixed;inset:0;background:rgba(15,25,45,.55);
+    display:grid;place-items:center;z-index:50;padding:20px;
+  }
+  .modal{
+    background:#fff;border-radius:14px;max-width:520px;width:100%;
+    padding:28px;box-shadow:var(--shadow-lg);
+  }
+  .fade-in{animation:fadeIn .25s ease}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">G</div>
+      <div>GLOS<span class="brand-meta"> · Identity & Wallet</span></div>
+    </div>
+    <div class="right">
+      <span class="pill" id="topbar-did">No account</span>
+      <span class="muted" style="color:#A8B7CC">Sandbox</span>
+    </div>
+  </header>
+
+  <main class="main" id="root"></main>
+
+  <footer class="req-strip">
+    <div>Prototype for <code>UDIW-010</code> — Multi-Role Registration, with role-specific verification paths (linked to <code>UDIW-011</code> tiers, <code>UDIW-013</code> liveness, <code>UDIW-014</code> sanctions).</div>
+    <div>GLOS · M1 Identity & Wallet</div>
+  </footer>
+</div>
+
+<div class="dev-controls">
+  <button class="btn" onclick="resetState()">Reset Demo</button>
+</div>
+
+<script>
+// =========================================================
+// State
+// =========================================================
+const ROLES = {
+  shipper: {
+    id:'shipper', name:'Shipper', icon:'📦',
+    description:'Send goods through the GLOS network. Publish shipments, get matched with carriers, settle payments.',
+    targetTier:3,
+    targetTierLabel:'Tier 3 · Verified Business',
+    pathLabel:'Business Verification (KYB)',
+    steps:['Business Identity','Beneficial Owners','Confirm']
+  },
+  carrier: {
+    id:'carrier', name:'Carrier / Courier', icon:'🚚',
+    description:'Move freight or last-mile parcels. Bid on jobs, accept tasks, receive instant payouts.',
+    targetTier:2,
+    targetTierLabel:'Tier 2 · Verified Individual',
+    pathLabel:'Personal Verification (KYC + Vehicle)',
+    steps:['Personal ID','Liveness Check','Vehicle & Insurance','Confirm']
+  },
+  warehouse: {
+    id:'warehouse', name:'Warehouse Operator', icon:'🏭',
+    description:'Offer storage, cross-dock, and fulfillment capacity. Plug into orchestration and earn on utilization.',
+    targetTier:4,
+    targetTierLabel:'Tier 4 · Certified Operator',
+    pathLabel:'Business + Facility Certification',
+    steps:['Business Identity','Facility & Insurance','Certifications','Confirm']
+  },
+  customs: {
+    id:'customs', name:'Customs Broker', icon:'📜',
+    description:'File entries and clear cargo across borders. GLOS connects you to shippers and freight forwarders.',
+    targetTier:3,
+    targetTierLabel:'Tier 3 · Verified Business',
+    pathLabel:'Business + License Verification',
+    steps:['Business Identity','Broker License','Jurisdictions','Confirm']
+  }
+};
+
+const COUNTRIES = ['United States','Germany','United Kingdom','Singapore','Netherlands','China','India','Brazil','Japan','Australia'];
+
+const initialState = {
+  screen:'signup',   // signup, dashboard, role_picker, role_flow, role_complete
+  account:null,      // { email, name, did, masterId, createdAt }
+  roles:[],          // [{ id, name, icon, tier, tierLabel, status:'verified'|'pending', addedAt, vcs:[] }]
+  flow:{             // active verification flow
+    roleId:null,
+    stepIndex:0,
+    data:{},         // form data accumulated through the flow
+    processing:false,
+  }
+};
+
+let state = JSON.parse(JSON.stringify(initialState));
+
+// =========================================================
+// Utilities
+// =========================================================
+function $(id){return document.getElementById(id)}
+function html(strings, ...vals){
+  let s='';
+  strings.forEach((str,i)=>{s+=str+(vals[i]??'')});
+  return s;
+}
+function randomHex(n){
+  return Array.from({length:n},()=>Math.floor(Math.random()*16).toString(16)).join('');
+}
+function mkDid(){return 'did:glos:0x'+randomHex(24)}
+function mkMasterId(){return 'GLOS-MA-'+randomHex(8).toUpperCase()}
+function escape(s){
+  return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function setState(patch){
+  state = {...state, ...patch};
+  render();
+}
+function setFlow(patch){
+  state.flow = {...state.flow, ...patch};
+  render();
+}
+
+// =========================================================
+// Render
+// =========================================================
+function render(){
+  const root = $('root');
+  // Update topbar DID
+  if(state.account){
+    $('topbar-did').textContent = state.account.did.slice(0,18)+'…';
+  }else{
+    $('topbar-did').textContent = 'No account';
+  }
+
+  let view = '';
+  switch(state.screen){
+    case 'signup': view = renderSignup(); break;
+    case 'dashboard': view = renderDashboard(); break;
+    case 'role_picker': view = renderRolePicker(); break;
+    case 'role_flow': view = renderRoleFlow(); break;
+    case 'role_complete': view = renderRoleComplete(); break;
+  }
+  root.innerHTML = view;
+  // re-bind any controls that need it
+  bindEvents();
+  // Show modal if processing
+  if(state.flow.processing){
+    renderProcessingOverlay();
+  }else{
+    const m = $('processing-modal');
+    if(m) m.remove();
+  }
+}
+
+// =========================================================
+// Screen: Sign-up (Tier 1 — UDIW-010 master account)
+// =========================================================
+function renderSignup(){
+  return html`
+    <div class="card card-pad fade-in" style="max-width:520px;margin:60px auto 0">
+      <h1>Create your master account</h1>
+      <p class="sub">One identity, many roles. You can register as a shipper, carrier, warehouse operator, or customs broker — all under a single GLOS master account.</p>
+
+      <div class="field">
+        <label>Email</label>
+        <input id="su-email" type="email" placeholder="you@company.com" value="hans@yukel.com" />
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Full name</label>
+          <input id="su-name" type="text" placeholder="Your name" value="Johannes" />
+        </div>
+        <div class="field">
+          <label>Phone</label>
+          <input id="su-phone" type="tel" placeholder="+1 555 …" value="+1 555 0184" />
+        </div>
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input id="su-pwd" type="password" placeholder="Choose a strong password" value="••••••••••" />
+      </div>
+      <label class="check" style="margin-top:8px">
+        <input id="su-tos" type="checkbox" checked />
+        <span>I agree to the GLOS Terms of Service and the M1 Identity Vault data policy.</span>
+      </label>
+
+      <div class="btn-row right">
+        <button class="btn btn-primary" onclick="onSignup()">Create master account →</button>
+      </div>
+
+      <div class="note" style="margin-top:24px">
+        <strong>Tier 1 · Browser identity.</strong> Email + phone verification unlocks tracking and small parcel shipping. You'll upgrade to higher tiers per role you add.
+      </div>
+    </div>
+  `;
+}
+
+function onSignup(){
+  const email = $('su-email').value.trim();
+  const name = $('su-name').value.trim();
+  const phone = $('su-phone').value.trim();
+  if(!email || !name){
+    alert('Please fill out email and name.');
+    return;
+  }
+  const account = {
+    email, name, phone,
+    did: mkDid(),
+    masterId: mkMasterId(),
+    createdAt: new Date().toLocaleString(),
+    currentTier:1,
+  };
+  setState({ account, screen:'dashboard' });
+}
+
+// =========================================================
+// Screen: Dashboard
+// =========================================================
+function renderDashboard(){
+  const acc = state.account;
+  const roles = state.roles;
+
+  let rolesBlock = '';
+  if(roles.length === 0){
+    rolesBlock = html`
+      <div class="card card-pad" style="text-align:center;padding:48px 32px">
+        <div style="font-size:36px;margin-bottom:12px">🪪</div>
+        <h2>Add your first role</h2>
+        <p class="sub" style="max-width:420px;margin:0 auto 24px">
+          Your master account is created (Tier 1). Pick an operational role to unlock the full network — each role has its own verification path.
+        </p>
+        <button class="btn btn-primary" onclick="setState({screen:'role_picker'})">+ Add a role</button>
+      </div>
+    `;
+  } else {
+    rolesBlock = html`
+      <div class="card card-pad">
+        <h2 style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <span>Your roles</span>
+          <button class="btn btn-ghost" onclick="setState({screen:'role_picker'})">+ Add another role</button>
+        </h2>
+        ${roles.map(r => renderRoleRow(r)).join('')}
+      </div>
+    `;
+  }
+
+  return html`
+    <div class="fade-in">
+      <div class="account-header">
+        <div class="account-meta">
+          <div class="name">${escape(acc.name)}</div>
+          <div class="email">${escape(acc.email)}</div>
+          <div class="did">${escape(acc.did)}</div>
+          <div class="email" style="margin-top:6px">Master account: <span class="mono">${escape(acc.masterId)}</span></div>
+        </div>
+        <div class="account-stats">
+          <div class="stat">
+            <div class="num">${roles.length}</div>
+            <div class="lbl">Active roles</div>
+          </div>
+          <div class="stat">
+            <div class="num">T${Math.max(1,...roles.map(r=>r.tier),acc.currentTier)}</div>
+            <div class="lbl">Highest tier</div>
+          </div>
+        </div>
+      </div>
+      ${rolesBlock}
+    </div>
+  `;
+}
+
+function renderRoleRow(r){
+  const status = r.status === 'verified'
+    ? '<span class="badge success"><span class="dot"></span>Verified</span>'
+    : '<span class="badge warn"><span class="dot"></span>Pending</span>';
+  return html`
+    <div class="role-row">
+      <div class="role-icon">${r.icon}</div>
+      <div class="info">
+        <div class="title">${escape(r.name)}</div>
+        <div class="meta-line">Added ${escape(r.addedAt)} · ${r.vcs.length} verifiable credential${r.vcs.length===1?'':'s'} issued</div>
+      </div>
+      <div class="actions">
+        ${status}
+        <div class="tier-pill">${r.tierLabel}</div>
+      </div>
+    </div>
+  `;
+}
+
+// =========================================================
+// Screen: Role Picker
+// =========================================================
+function renderRolePicker(){
+  const addedIds = new Set(state.roles.map(r=>r.id));
+  return html`
+    <div class="fade-in" style="max-width:820px;margin:0 auto">
+      <div style="margin-bottom:16px">
+        <button class="btn btn-link" onclick="setState({screen:'dashboard'})">← Back to dashboard</button>
+      </div>
+      <div class="card card-pad">
+        <h1>What role do you want to add?</h1>
+        <p class="sub">You can register multiple roles under the same master account. Each role has its own verification path and unlocks different network privileges.</p>
+
+        <div class="role-grid">
+          ${Object.values(ROLES).map(r => {
+            const added = addedIds.has(r.id);
+            return html`
+              <div class="role-card ${added?'added':''}" ${added?'':`onclick="startRoleFlow('${r.id}')"`}>
+                ${added ? '<div class="added-badge"><span class="dot" style="background:currentColor;width:6px;height:6px;border-radius:50%;display:inline-block"></span>Added</div>' : ''}
+                <div class="role-icon">${r.icon}</div>
+                <div class="name">${r.name}</div>
+                <div class="desc">${r.description}</div>
+                <div class="meta">
+                  <span>→ ${r.targetTierLabel}</span>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+
+        <div class="note" style="margin-top:24px">
+          <strong>One identity, many hats.</strong> The same legal entity (you) holds one DID. Each role gets its own verification path, badges, and reputation dimensions — but the master account ties them together.
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function startRoleFlow(roleId){
+  state.flow = { roleId, stepIndex:0, data:{}, processing:false };
+  setState({ screen:'role_flow' });
+}
+
+// =========================================================
+// Screen: Role-Specific Verification Flow
+// =========================================================
+function renderRoleFlow(){
+  const role = ROLES[state.flow.roleId];
+  const stepCount = role.steps.length;
+  const i = state.flow.stepIndex;
+
+  let stepBody = '';
+  switch(role.id){
+    case 'shipper':   stepBody = shipperStep(i); break;
+    case 'carrier':   stepBody = carrierStep(i); break;
+    case 'warehouse': stepBody = warehouseStep(i); break;
+    case 'customs':   stepBody = customsStep(i); break;
+  }
+
+  const pills = role.steps.map((s,idx) => {
+    const cls = idx < i ? 'done' : idx === i ? 'active' : '';
+    return `<div class="step-pill ${cls}" title="${escape(s)}"></div>`;
+  }).join('');
+
+  return html`
+    <div class="fade-in" style="max-width:680px;margin:0 auto">
+      <div style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">
+        <button class="btn btn-link" onclick="exitFlow()">← Cancel and return</button>
+        <div class="badge info">${role.icon} ${escape(role.name)} · ${escape(role.pathLabel)}</div>
+      </div>
+      <div class="card card-pad">
+        <div class="step-label">Step ${i+1} of ${stepCount} — ${escape(role.steps[i])}</div>
+        <div class="steps">${pills}</div>
+        ${stepBody}
+      </div>
+    </div>
+  `;
+}
+
+function exitFlow(){
+  state.flow = { roleId:null, stepIndex:0, data:{}, processing:false };
+  setState({ screen: state.roles.length ? 'dashboard' : 'role_picker' });
+}
+
+function advanceStep(){
+  const role = ROLES[state.flow.roleId];
+  if(state.flow.stepIndex < role.steps.length - 1){
+    state.flow.stepIndex++;
+    render();
+  } else {
+    // Complete the flow
+    completeRole();
+  }
+}
+
+function backStep(){
+  if(state.flow.stepIndex > 0){
+    state.flow.stepIndex--;
+    render();
+  } else {
+    exitFlow();
+  }
+}
+
+function captureField(id){
+  const el = $(id);
+  if(!el) return;
+  state.flow.data[id] = el.value;
+}
+
+function captureAndAdvance(ids, opts={}){
+  ids.forEach(captureField);
+  if(opts.processing){
+    setFlow({ processing:true });
+    setTimeout(()=>{
+      setFlow({ processing:false });
+      advanceStep();
+    }, opts.processing);
+  } else {
+    advanceStep();
+  }
+}
+
+// ---------- Shipper steps ----------
+function shipperStep(i){
+  if(i===0){
+    return html`
+      <h2>Business identity</h2>
+      <p class="sub">We need your legal entity details to verify your business with KYB.</p>
+      <div class="field">
+        <label>Legal business name</label>
+        <input id="sp-biz" type="text" placeholder="Yukel Trading GmbH" value="${escape(state.flow.data['sp-biz']||'Yukel Trading GmbH')}" />
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Country of registration</label>
+          <select id="sp-country">${COUNTRIES.map(c=>`<option ${c==='Germany'?'selected':''}>${c}</option>`).join('')}</select>
+        </div>
+        <div class="field">
+          <label>Tax ID / VAT number</label>
+          <input id="sp-tax" type="text" placeholder="DE123456789" value="${escape(state.flow.data['sp-tax']||'DE123456789')}" />
+        </div>
+      </div>
+      <div class="field">
+        <label>Business registration number</label>
+        <input id="sp-reg" type="text" placeholder="HRB 12345" value="${escape(state.flow.data['sp-reg']||'HRB 92841')}" />
+      </div>
+      ${stepButtons(["sp-biz","sp-country","sp-tax","sp-reg"])}
+    `;
+  }
+  if(i===1){
+    return html`
+      <h2>Ultimate Beneficial Owners</h2>
+      <p class="sub">List individuals who own ≥25% of the company. UBO checks are required at Tier 3.</p>
+      <div class="field">
+        <label>UBO 1 — full legal name</label>
+        <input id="sp-ubo1" type="text" placeholder="Full legal name" value="${escape(state.flow.data['sp-ubo1']||state.account.name)}" />
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Ownership %</label>
+          <input id="sp-ubo1pct" type="number" min="25" max="100" value="${escape(state.flow.data['sp-ubo1pct']||'100')}" />
+        </div>
+        <div class="field">
+          <label>Nationality</label>
+          <select id="sp-ubo1nat">${COUNTRIES.map(c=>`<option ${c==='Germany'?'selected':''}>${c}</option>`).join('')}</select>
+        </div>
+      </div>
+      <label class="check" style="margin-top:12px">
+        <input type="checkbox" id="sp-ubo-attest" checked />
+        <span>I attest these are all UBOs with ≥25% ownership.</span>
+      </label>
+      ${stepButtons(["sp-ubo1","sp-ubo1pct","sp-ubo1nat"], {primary:'Run KYB checks', processing:1600, processingMsg:'Cross-referencing tax IDs with government registries · Running sanctions and PEP screening (UDIW-014)…'})}
+    `;
+  }
+  if(i===2){
+    return html`
+      <h2>Confirm shipper registration</h2>
+      <p class="sub">Review and submit. On confirmation we'll attach a "Verified Shipper · Tier 3" Verifiable Credential to your DID.</p>
+      ${summaryBlock([
+        ['Business name', state.flow.data['sp-biz']],
+        ['Country', state.flow.data['sp-country']],
+        ['Tax ID', state.flow.data['sp-tax']],
+        ['Registration #', state.flow.data['sp-reg']],
+        ['UBO', `${state.flow.data['sp-ubo1']} (${state.flow.data['sp-ubo1pct']}%)`],
+        ['Sanctions screen', '<span class="badge success">PASSED</span>'],
+      ])}
+      ${stepButtons([], {primary:'Confirm & issue VC', processing:1100, processingMsg:'Generating Verifiable Credential and anchoring to identity ledger…'})}
+    `;
+  }
+}
+
+// ---------- Carrier steps ----------
+function carrierStep(i){
+  if(i===0){
+    return html`
+      <h2>Personal identity</h2>
+      <p class="sub">Upload a government-issued ID. We'll verify it via the KYC hub.</p>
+      <div class="row">
+        <div class="field">
+          <label>Full legal name</label>
+          <input id="cr-name" type="text" value="${escape(state.flow.data['cr-name']||state.account.name)}" />
+        </div>
+        <div class="field">
+          <label>Date of birth</label>
+          <input id="cr-dob" type="text" placeholder="1990-01-15" value="${escape(state.flow.data['cr-dob']||'1991-04-22')}" />
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>ID document type</label>
+          <select id="cr-idtype">
+            <option>Passport</option>
+            <option selected>National ID Card</option>
+            <option>Driver's License</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>ID number</label>
+          <input id="cr-idnum" type="text" value="${escape(state.flow.data['cr-idnum']||'L8X7Y2P0Q')}" />
+        </div>
+      </div>
+      <div class="field">
+        <label>Upload front of ID</label>
+        <input type="file" id="cr-idfile" />
+        <div class="hint">In the prototype, no file is actually uploaded.</div>
+      </div>
+      ${stepButtons(["cr-name","cr-dob","cr-idtype","cr-idnum"])}
+    `;
+  }
+  if(i===1){
+    return html`
+      <h2>Biometric liveness check</h2>
+      <p class="sub">Look at the camera and read the challenge phrase aloud. This proves you're a live person (UDIW-013).</p>
+      <div class="liveness">
+        <div class="face">👤</div>
+        <div class="challenge">Read aloud:</div>
+        <div class="phrase">"GLOS · 7 · BLUE · ANCHOR"</div>
+      </div>
+      <div class="note">
+        <strong>Spoof-proof.</strong> Random challenge phrases prevent replay attacks. A proof-of-liveness certificate is generated and bound to your DID.
+      </div>
+      ${stepButtons([], {primary:'Capture and verify', processing:1600, processingMsg:'Verifying liveness · Cross-referencing facial biometric · Running sanctions and PEP screen…'})}
+    `;
+  }
+  if(i===2){
+    return html`
+      <h2>Vehicle & insurance</h2>
+      <p class="sub">Tell us about your vehicle. We'll issue a vehicle digital twin and a "Licensed-Driver" VC.</p>
+      <div class="row">
+        <div class="field">
+          <label>Vehicle type</label>
+          <select id="cr-vtype">
+            <option>Bicycle</option>
+            <option>Motorbike / Scooter</option>
+            <option selected>Van</option>
+            <option>Truck (rigid)</option>
+            <option>Truck (articulated)</option>
+            <option>Reefer van</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>License plate</label>
+          <input id="cr-plate" type="text" value="${escape(state.flow.data['cr-plate']||'B-YU 1842')}" />
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Driver's license number</label>
+          <input id="cr-dlnum" type="text" value="${escape(state.flow.data['cr-dlnum']||'D9KX72L901')}" />
+        </div>
+        <div class="field">
+          <label>Insurance policy #</label>
+          <input id="cr-insurance" type="text" value="${escape(state.flow.data['cr-insurance']||'INS-7-2026-44218')}" />
+        </div>
+      </div>
+      <label class="check" style="margin-top:8px">
+        <input type="checkbox" id="cr-bgcheck" checked />
+        <span>Authorize a background check via accredited bureau (issues a "Background-Check-Passed" VC).</span>
+      </label>
+      ${stepButtons(["cr-vtype","cr-plate","cr-dlnum","cr-insurance"], {primary:'Submit for review', processing:1500, processingMsg:'Issuing vehicle digital twin · Triggering background check…'})}
+    `;
+  }
+  if(i===3){
+    return html`
+      <h2>Confirm carrier registration</h2>
+      <p class="sub">Review and submit. You'll be onboarded as a Tier 2 verified individual with three VCs.</p>
+      ${summaryBlock([
+        ['Name', state.flow.data['cr-name']],
+        ['ID', `${state.flow.data['cr-idtype']} · ${state.flow.data['cr-idnum']}`],
+        ['Liveness', '<span class="badge success">PASSED</span>'],
+        ['Vehicle', `${state.flow.data['cr-vtype']} · ${state.flow.data['cr-plate']}`],
+        ['Insurance', state.flow.data['cr-insurance']],
+        ['Background check', '<span class="badge info">In progress — VC issued on completion</span>'],
+      ])}
+      ${stepButtons([], {primary:'Confirm & issue VCs', processing:1100, processingMsg:'Issuing Verifiable Credentials and anchoring to identity ledger…'})}
+    `;
+  }
+}
+
+// ---------- Warehouse steps ----------
+function warehouseStep(i){
+  if(i===0){
+    return html`
+      <h2>Business identity</h2>
+      <p class="sub">Operating a warehouse requires Tier 4. We start with the same KYB as a shipper.</p>
+      <div class="field">
+        <label>Legal business name</label>
+        <input id="wh-biz" type="text" value="${escape(state.flow.data['wh-biz']||'Yukel Logistics Hub GmbH')}" />
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Country of operation</label>
+          <select id="wh-country">${COUNTRIES.map(c=>`<option ${c==='Germany'?'selected':''}>${c}</option>`).join('')}</select>
+        </div>
+        <div class="field">
+          <label>Tax ID</label>
+          <input id="wh-tax" type="text" value="${escape(state.flow.data['wh-tax']||'DE123456789')}" />
+        </div>
+      </div>
+      ${stepButtons(["wh-biz","wh-country","wh-tax"])}
+    `;
+  }
+  if(i===1){
+    return html`
+      <h2>Facility & insurance</h2>
+      <p class="sub">Each facility is registered as a digital twin with its own credentials.</p>
+      <div class="field">
+        <label>Facility address</label>
+        <input id="wh-addr" type="text" value="${escape(state.flow.data['wh-addr']||'Industriestraße 12, 60314 Frankfurt am Main')}" />
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Total area (m²)</label>
+          <input id="wh-area" type="number" value="${escape(state.flow.data['wh-area']||'4200')}" />
+        </div>
+        <div class="field">
+          <label>Dock doors</label>
+          <input id="wh-docks" type="number" value="${escape(state.flow.data['wh-docks']||'12')}" />
+        </div>
+      </div>
+      <div class="field">
+        <label>Insurance certificate #</label>
+        <input id="wh-ins" type="text" value="${escape(state.flow.data['wh-ins']||'WH-INS-2026-99214')}" />
+      </div>
+      ${stepButtons(["wh-addr","wh-area","wh-docks","wh-ins"])}
+    `;
+  }
+  if(i===2){
+    return html`
+      <h2>Certifications</h2>
+      <p class="sub">Pick the capabilities this facility holds. Each generates a separate Verifiable Credential.</p>
+      ${[
+        ['wh-cap-cold','Cold chain (2–8°C, validated)','🥶'],
+        ['wh-cap-frozen','Frozen (-20°C)','❄️'],
+        ['wh-cap-dg','Dangerous goods storage (IMDG/IATA)','⚠️'],
+        ['wh-cap-bonded','Customs bonded zone','🛂'],
+        ['wh-cap-gdp','GDP pharma compliant','💊'],
+      ].map(([id,label,icon]) => html`
+        <label class="check" style="padding:10px 12px;border:1px solid var(--border-soft);border-radius:8px;margin-bottom:8px">
+          <input type="checkbox" id="${id}" ${(state.flow.data[id]||id==='wh-cap-cold'||id==='wh-cap-bonded')?'checked':''} />
+          <span style="display:flex;align-items:center;gap:8px"><span style="font-size:18px">${icon}</span> ${escape(label)}</span>
+        </label>
+      `).join('')}
+      <div class="note warn" style="margin-top:14px">
+        <strong>Tier 4 requires on-site audit.</strong> An audit visit will be scheduled by GLOS. Capabilities marked here are provisional until audit clears.
+      </div>
+      ${stepButtons(["wh-cap-cold","wh-cap-frozen","wh-cap-dg","wh-cap-bonded","wh-cap-gdp"], {primary:'Submit for audit', processing:1500, processingMsg:'Scheduling on-site audit · Issuing provisional facility digital twin…'})}
+    `;
+  }
+  if(i===3){
+    return html`
+      <h2>Confirm warehouse registration</h2>
+      ${summaryBlock([
+        ['Business', state.flow.data['wh-biz']],
+        ['Facility', state.flow.data['wh-addr']],
+        ['Capacity', `${state.flow.data['wh-area']} m² · ${state.flow.data['wh-docks']} dock doors`],
+        ['Insurance', state.flow.data['wh-ins']],
+        ['On-site audit', '<span class="badge warn">Scheduled — facility status: Provisional</span>'],
+      ])}
+      ${stepButtons([], {primary:'Confirm', processing:1100, processingMsg:'Anchoring facility digital twin · Issuing provisional VCs…'})}
+    `;
+  }
+}
+
+// ---------- Customs Broker steps ----------
+function customsStep(i){
+  if(i===0){
+    return html`
+      <h2>Business identity</h2>
+      <p class="sub">Customs brokers operate at Tier 3. Start with KYB.</p>
+      <div class="field">
+        <label>Legal business name</label>
+        <input id="cb-biz" type="text" value="${escape(state.flow.data['cb-biz']||'Yukel Customs Brokerage GmbH')}" />
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Country</label>
+          <select id="cb-country">${COUNTRIES.map(c=>`<option ${c==='Germany'?'selected':''}>${c}</option>`).join('')}</select>
+        </div>
+        <div class="field">
+          <label>Tax ID</label>
+          <input id="cb-tax" type="text" value="${escape(state.flow.data['cb-tax']||'DE123456789')}" />
+        </div>
+      </div>
+      ${stepButtons(["cb-biz","cb-country","cb-tax"])}
+    `;
+  }
+  if(i===1){
+    return html`
+      <h2>Broker license</h2>
+      <p class="sub">Provide your customs broker license. We'll verify it with the issuing authority.</p>
+      <div class="row">
+        <div class="field">
+          <label>License authority</label>
+          <input id="cb-auth" type="text" value="${escape(state.flow.data['cb-auth']||'Generalzolldirektion (DE)')}" />
+        </div>
+        <div class="field">
+          <label>License number</label>
+          <input id="cb-lic" type="text" value="${escape(state.flow.data['cb-lic']||'DE-CB-2024-771')}" />
+        </div>
+      </div>
+      <div class="field">
+        <label>EORI number</label>
+        <input id="cb-eori" type="text" value="${escape(state.flow.data['cb-eori']||'DE491100000000123')}" />
+      </div>
+      ${stepButtons(["cb-auth","cb-lic","cb-eori"], {primary:'Verify license', processing:1400, processingMsg:'Verifying license with Generalzolldirektion…'})}
+    `;
+  }
+  if(i===2){
+    return html`
+      <h2>Operating jurisdictions</h2>
+      <p class="sub">Which ports and economic zones are you certified to clear cargo through?</p>
+      ${[
+        ['cb-j-eu','EU customs union','🇪🇺'],
+        ['cb-j-uk','United Kingdom','🇬🇧'],
+        ['cb-j-ch','Switzerland','🇨🇭'],
+        ['cb-j-tr','Turkey','🇹🇷'],
+        ['cb-j-us','United States (CBP)','🇺🇸'],
+      ].map(([id,label,icon]) => html`
+        <label class="check" style="padding:10px 12px;border:1px solid var(--border-soft);border-radius:8px;margin-bottom:8px">
+          <input type="checkbox" id="${id}" ${(state.flow.data[id]||id==='cb-j-eu'||id==='cb-j-uk')?'checked':''} />
+          <span style="display:flex;align-items:center;gap:8px"><span style="font-size:18px">${icon}</span> ${escape(label)}</span>
+        </label>
+      `).join('')}
+      ${stepButtons(["cb-j-eu","cb-j-uk","cb-j-ch","cb-j-tr","cb-j-us"])}
+    `;
+  }
+  if(i===3){
+    return html`
+      <h2>Confirm customs broker registration</h2>
+      ${summaryBlock([
+        ['Business', state.flow.data['cb-biz']],
+        ['License', `${state.flow.data['cb-lic']} (${state.flow.data['cb-auth']})`],
+        ['EORI', state.flow.data['cb-eori']],
+        ['License verified', '<span class="badge success">CONFIRMED</span>'],
+      ])}
+      ${stepButtons([], {primary:'Confirm & issue VC', processing:1100, processingMsg:'Issuing Verifiable Credential · Updating identity ledger…'})}
+    `;
+  }
+}
+
+// ---------- Step helpers ----------
+function stepButtons(fields, opts={}){
+  const primary = opts.primary || 'Continue →';
+  const onclick = opts.processing
+    ? `captureAndAdvance(${JSON.stringify(fields)}, {processing:${opts.processing}})`
+    : `captureAndAdvance(${JSON.stringify(fields)})`;
+  // store processing msg
+  if(opts.processingMsg){ state._processingMsg = opts.processingMsg; }
+  return html`
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="backStep()">← Back</button>
+      <button class="btn btn-primary" onclick="${onclick}">${escape(primary)}</button>
+    </div>
+  `;
+}
+function summaryBlock(rows){
+  return html`
+    <div style="border:1px solid var(--border-soft);border-radius:10px;overflow:hidden;margin-bottom:6px">
+      ${rows.map(([k,v],i)=>html`
+        <div style="display:flex;padding:11px 14px;background:${i%2?'#fff':'#F7F9FC'};border-bottom:${i<rows.length-1?'1px solid var(--border-soft)':'none'}">
+          <div style="flex:0 0 38%;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-weight:600">${escape(k)}</div>
+          <div style="flex:1;font-size:14px;color:var(--text)">${v}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// =========================================================
+// Role completion + DID/VC issuance
+// =========================================================
+function completeRole(){
+  const role = ROLES[state.flow.roleId];
+  // Build the VCs the role would receive
+  const vcs = roleVcs(role);
+  const newRole = {
+    id: role.id,
+    name: role.name,
+    icon: role.icon,
+    tier: role.targetTier,
+    tierLabel: role.targetTierLabel,
+    status: role.id === 'warehouse' ? 'pending' : 'verified',  // warehouse waits on audit
+    addedAt: new Date().toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}),
+    vcs,
+  };
+  state.roles = [...state.roles, newRole];
+  state.account.currentTier = Math.max(state.account.currentTier, role.targetTier);
+  state.screen = 'role_complete';
+  state.flow = { roleId: role.id, stepIndex:0, data:{}, processing:false };
+  render();
+}
+
+function roleVcs(role){
+  switch(role.id){
+    case 'shipper': return [
+      {name:'Verified Shipper · Tier 3', issuer:'GLOS Identity Vault'},
+      {name:'KYB Passed', issuer:'GLOS KYB Hub'},
+    ];
+    case 'carrier': return [
+      {name:'Verified Individual · Tier 2', issuer:'GLOS Identity Vault'},
+      {name:'Liveness Confirmed', issuer:'GLOS Biometric Service'},
+      {name:'Licensed Driver', issuer:'GLOS Asset Registry'},
+      {name:'Background-Check-Pending', issuer:'Accredited Bureau'},
+    ];
+    case 'warehouse': return [
+      {name:'Verified Business · Tier 3 (provisional)', issuer:'GLOS Identity Vault'},
+      {name:'Facility Digital Twin', issuer:'GLOS Asset Registry'},
+      {name:'Cold Chain Capable (provisional)', issuer:'GLOS Capability Registry'},
+      {name:'Bonded Zone (provisional)', issuer:'GLOS Capability Registry'},
+    ];
+    case 'customs': return [
+      {name:'Verified Business · Tier 3', issuer:'GLOS Identity Vault'},
+      {name:'Licensed Customs Broker · EU+UK', issuer:'GLOS Capability Registry'},
+    ];
+  }
+  return [];
+}
+
+// =========================================================
+// Screen: Role complete
+// =========================================================
+function renderRoleComplete(){
+  const r = state.roles[state.roles.length-1];
+  return html`
+    <div class="fade-in" style="max-width:560px;margin:0 auto">
+      <div class="card card-pad success-screen">
+        <div class="success-icon">${r.status==='pending'?'⏳':'✓'}</div>
+        <h2>${r.status==='pending' ? `${r.name} registration submitted` : `You're verified as a ${r.name}`}</h2>
+        <p class="sub">
+          ${r.status==='pending'
+            ? `Your application is being reviewed. The on-site audit will issue final credentials.`
+            : `Your DID now carries the credentials below. You can start using ${r.name.toLowerCase()} capabilities on the network.`}
+        </p>
+
+        <div style="margin:24px 0">
+          ${r.vcs.map(v => html`
+            <div class="vc-issued">
+              <div class="label">Verifiable Credential</div>
+              <div class="vc-name">🪪 ${escape(v.name)}</div>
+              <div class="vc-meta">Issuer: ${escape(v.issuer)} · ${escape(state.account.did.slice(0,28))}…</div>
+            </div>
+          `).join('')}
+        </div>
+
+        <div class="btn-row" style="justify-content:center;gap:12px">
+          <button class="btn btn-ghost" onclick="setState({screen:'role_picker'})">+ Add another role</button>
+          <button class="btn btn-primary" onclick="setState({screen:'dashboard'})">Go to dashboard →</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// =========================================================
+// Processing overlay
+// =========================================================
+function renderProcessingOverlay(){
+  const msg = state._processingMsg || 'Processing…';
+  let existing = $('processing-modal');
+  if(existing) existing.remove();
+  const div = document.createElement('div');
+  div.className = 'scrim';
+  div.id = 'processing-modal';
+  div.innerHTML = html`
+    <div class="modal" style="max-width:420px">
+      <div class="processing" style="margin:0">
+        <div class="spin"></div>
+        <div class="msg">${escape(msg)}</div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(div);
+}
+
+// =========================================================
+// Reset
+// =========================================================
+function resetState(){
+  state = JSON.parse(JSON.stringify(initialState));
+  render();
+}
+
+// =========================================================
+// Event binding (re-bind after each render)
+// =========================================================
+function bindEvents(){
+  // currently inline onclicks cover everything; placeholder for future bindings
+}
+
+// =========================================================
+// Boot
+// =========================================================
+render();
+</script>
+</body>
+</html>

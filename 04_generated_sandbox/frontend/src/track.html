@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Track your parcel | GLOS PUDO</title>
+  <meta name="description" content="Track a GLOS PUDO parcel with your tracking key. See the live status — created, in transit, ready for pick-up, delivered — and which point to collect from. No account or app needed." />
+  <meta name="robots" content="index, follow, max-image-preview:large" />
+  <link rel="canonical" href="https://pudo.glos.example/track.html" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="GLOS PUDO" />
+  <meta property="og:title" content="Track your GLOS PUDO parcel" />
+  <meta property="og:description" content="Enter your tracking key to see the live status and pick-up point. No account needed." />
+  <meta property="og:url" content="https://pudo.glos.example/track.html" />
+  <link rel="stylesheet" href="./fonts.css" />
+  <style>
+    /* Public parcel tracking — fast, mobile-first, PostNL-inspired. The shell + how-to is static (crawlable
+       / extractable by generative engines); the live status is fetched on top of GET /pudo/track/:key. */
+    :root {
+      --pnl-indigo: #4c46e0; --pnl-indigo-dk: #3a34c2;
+      --pnl-orange: #ff6200; --pnl-orange-dk: #dc4405;
+      --pnl-green: #1fa45a; --pnl-amber: #ffab00;
+      --pnl-ink: #1a1a1a; --pnl-muted: #5a5a64;
+      --pnl-panel: #f2f2f4; --pnl-border: #e2e2e6; --pnl-border-strong: #c9c9d0;
+      --pnl-font: 'PostNL', 'Mulish', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: #fff; font-family: var(--pnl-font); color: var(--pnl-ink); -webkit-font-smoothing: antialiased; }
+    .tr { max-width: 620px; margin: 0 auto; padding: 0 20px 64px; }
+    .tr__swoosh { height: 7px; border-radius: 999px; background: linear-gradient(90deg, var(--pnl-amber) 0%, var(--pnl-orange) 30%, var(--pnl-orange-dk) 44%, var(--pnl-indigo) 72%, var(--pnl-green) 100%); margin: 24px 0 18px; }
+    .tr__back { display: inline-block; color: var(--pnl-indigo); font-weight: 700; text-decoration: none; font-size: 0.9rem; margin-bottom: 10px; }
+    .tr__h1 { font-size: 1.9rem; font-weight: 900; color: #172b6b; letter-spacing: -0.02em; margin: 0 0 4px; }
+    .tr__sub { color: var(--pnl-muted); font-size: 1.02rem; margin: 0 0 18px; }
+    .tr__row { display: flex; gap: 10px; }
+    .tr__in { flex: 1; min-height: 52px; padding: 14px 16px; font-size: 1.05rem; font-family: inherit; border: 1.5px solid #c9c9d0; border-radius: 10px; }
+    .tr__in:focus { outline: none; border-color: var(--pnl-indigo); box-shadow: 0 0 0 3px rgba(76,70,224,0.18); }
+    .tr__btn { padding: 14px 22px; border: none; border-radius: 10px; background: var(--pnl-indigo); color: #fff; font-weight: 800; font-size: 1rem; cursor: pointer; font-family: inherit; }
+    .tr__btn:hover { background: var(--pnl-indigo-dk); }
+
+    .tr__result { margin-top: 20px; border: 1px solid var(--pnl-border); border-radius: 14px; padding: 20px; }
+    .tr__status { display: inline-block; font-weight: 800; font-size: 0.92rem; padding: 5px 14px; border-radius: 999px; background: rgba(76,70,224,0.12); color: var(--pnl-indigo); }
+    .tr__status--done { background: rgba(31,164,90,0.14); color: var(--pnl-green); }
+    .tr__status--bad { background: rgba(220,68,5,0.12); color: var(--pnl-orange-dk); }
+    .tr__route { color: var(--pnl-muted); font-size: 0.98rem; margin: 14px 0 4px; }
+    .tr__ready { color: var(--pnl-green); font-weight: 800; margin: 6px 0; }
+    .tr__step { display: grid; grid-template-columns: 130px 1fr; gap: 6px 14px; padding: 11px 0; border-top: 1px solid var(--pnl-border); font-size: 0.95rem; }
+    .tr__step-when { color: var(--pnl-muted); }
+    .tr__err { color: var(--pnl-orange-dk); font-weight: 700; margin-top: 16px; }
+
+    .tr__seo { margin-top: 40px; }
+    .tr__seo h2 { font-size: 1.2rem; font-weight: 800; color: #172b6b; letter-spacing: -0.01em; margin: 26px 0 8px; }
+    .tr__seo p, .tr__seo li { color: #333; font-size: 1rem; line-height: 1.6; }
+    .tr__seo ul { padding-left: 20px; }
+    .tr__seo dt { font-weight: 800; margin-top: 10px; }
+    .tr__seo dd { margin: 2px 0 0; color: var(--pnl-muted); }
+    .tr__foot { margin-top: 36px; padding-top: 18px; border-top: 1px solid var(--pnl-border); color: var(--pnl-muted); font-size: 0.9rem; }
+    .tr__foot a { color: var(--pnl-indigo); font-weight: 700; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <main class="tr">
+    <div class="tr__swoosh"></div>
+    <a class="tr__back" href="index.html">‹ Home</a>
+    <h1 class="tr__h1">Track your parcel</h1>
+    <p class="tr__sub">Enter your tracking key to see where your GLOS PUDO parcel is and which point to collect it from.</p>
+
+    <div class="tr__row">
+      <input class="tr__in" id="trackKey" type="text" placeholder="e.g. T-XXXXXXXX" autocomplete="off" inputmode="text" aria-label="Tracking key" />
+      <button class="tr__btn" id="trackBtn" type="button">Track</button>
+    </div>
+    <div id="trackOut"></div>
+
+    <!-- Static, crawlable how-to + status guide (visible without JS; matches the JSON-LD below) -->
+    <section class="tr__seo">
+      <h2>How to track a GLOS PUDO parcel</h2>
+      <p>Your tracking key looks like <code>T-XXXXXXXX</code> and is sent to you by the store or sender. Enter it above to see the live status. Tracking is public — you don't need an account or the app. When your parcel is <strong>ready for pick-up</strong>, you'll also see the shelf slot and the pick-up point to collect from; bring your separate collection code to the shop.</p>
+
+      <h2>What the statuses mean</h2>
+      <dl>
+        <dt>Created</dt><dd>The label has been generated; the parcel is about to enter the network.</dd>
+        <dt>At PUDO</dt><dd>Accepted at a pick-up / drop-off point, waiting for transport.</dd>
+        <dt>On the way</dt><dd>On a vehicle, moving between points or through a sort hub (MDP).</dd>
+        <dt>Ready for pick-up</dt><dd>Shelved at your destination point — collect any time the shop is open, with your collection code.</dd>
+        <dt>Delivered</dt><dd>Collected and confirmed. The journey is complete.</dd>
+      </dl>
+    </section>
+
+    <footer class="tr__foot">
+      <a href="index.html">GLOS PUDO home</a> · <a href="onboarding.html">Join the network</a>
+    </footer>
+  </main>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "How to track a GLOS PUDO parcel",
+    "description": "Track a GLOS PUDO parcel using your tracking key to see its live status and pick-up point.",
+    "step": [
+      { "@type": "HowToStep", "name": "Find your tracking key", "text": "Your tracking key (e.g. T-XXXXXXXX) is sent by the store or sender." },
+      { "@type": "HowToStep", "name": "Enter the key", "text": "Type the tracking key on the GLOS PUDO tracking page and select Track." },
+      { "@type": "HowToStep", "name": "See the status", "text": "View the live status — created, in transit, ready for pick-up, or delivered — and the pick-up point." },
+      { "@type": "HowToStep", "name": "Collect", "text": "When ready, go to the pick-up point and show your collection code to collect the parcel." }
+    ]
+  }
+  </script>
+  <script type="module" src="./track.js"></script>
+</body>
+</html>

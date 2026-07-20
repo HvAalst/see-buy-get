@@ -1,0 +1,431 @@
+:root {
+  /* Yukel / Shoplane brand palette (inherited from yukel.com/shoplane) */
+  --forest: #0E3B2D;        /* deep forest — header strip, footer, dark surfaces */
+  --forest-dark: #082019;   /* darker forest — hover */
+  --brand: #1E9E66;         /* emerald — primary brand band & fills */
+  --brand-dark: #17804F;    /* emerald hover */
+  --brand-bright: #2FBF71;  /* bright green — active/left-accent indicator */
+  --gold: #C9A227;          /* gold — secondary accent (footer links) */
+  --gold-bg: #F7F1DA;
+
+  /* Semantic tokens (names kept for compatibility; remapped to the green palette) */
+  --navy: var(--forest);        /* dark text/markers/primary buttons */
+  --navy-dark: var(--forest-dark);
+  --azure: var(--brand);        /* vivid accent for fills/borders/focus */
+  --azure-light: var(--brand-bright);
+  --bg: #FFFFFF;
+  --surface: #F4F6F7;           /* light-gray section bars (e.g. "Category") */
+  --card: #FFFFFF;
+  --border: #E2E6E9;
+  --border-soft: #EEF1F3;
+  --muted: #6B7280;
+  --text: #1B1B1B;
+  --success: #1E8E4A;
+  --success-bg: #E5F4EC;
+  --warn: #9A6B00;
+  --warn-bg: #FCF1D6;
+  --danger: #B0233A;
+  --info: var(--forest);
+  --info-bg: #E7F3EC;
+  --radius: 12px;
+  --shadow: 0 14px 40px rgba(14, 59, 45, 0.12);
+  --shadow-sm: 0 1px 2px rgba(14, 59, 45, 0.06);
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: 'SF Mono', Menlo, Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.55;
+}
+
+button {
+  font: inherit;
+}
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 32px;
+  background: var(--brand);
+  color: #fff;
+  box-shadow: var(--shadow);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.brand-mark {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--azure-light), var(--azure));
+  font-weight: 800;
+  font-size: 16px;
+  color: #fff;
+}
+
+.brand-title {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.brand-meta {
+  font-size: 12px;
+  opacity: 0.75;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn {
+  border: none;
+  border-radius: 999px;
+  padding: 11px 18px;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+.btn-primary {
+  background: #fff;
+  color: var(--navy);
+  font-weight: 700;
+}
+
+.btn-ghost {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.main {
+  width: min(1200px, 100%);
+  margin: 0 auto;
+  padding: 32px 32px 60px;
+  display: grid;
+  gap: 24px;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+.card-pad {
+  padding: 28px;
+}
+
+.hero-card {
+  display: grid;
+  gap: 24px;
+}
+
+.eyebrow {
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  color: var(--brand-dark);
+}
+
+.hero-card h1 {
+  margin: 0;
+  font-size: clamp(2rem, 2.7vw, 3rem);
+  line-height: 1.05;
+}
+
+.hero-card p {
+  margin: 0;
+  color: var(--muted);
+  max-width: 640px;
+}
+
+.hero-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.metric {
+  padding: 18px;
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: #F4F8F5;
+}
+
+.metric-value {
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.metric-label {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.grid-two {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 24px;
+}
+
+.section-title {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.summary-text {
+  margin: 0 0 20px;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.role-list,
+.plugin-grid,
+.lifecycle-board,
+.ingestion-history {
+  display: grid;
+  gap: 12px;
+}
+
+.ingestion-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.ingestion-summary-grid > div {
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  padding: 16px;
+  background: #F4F8F5;
+}
+
+.summary-number {
+  font-size: 1.8rem;
+  font-weight: 700;
+}
+
+.summary-label {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.94rem;
+}
+
+.ingestion-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.ingestion-card {
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: #fff;
+  padding: 18px;
+  display: grid;
+  gap: 10px;
+}
+
+.ingestion-card-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 14px;
+  align-items: center;
+}
+
+.ingestion-meta {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.ingestion-tag {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.lifecycle-step {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 18px;
+  padding: 20px;
+  border-radius: 14px;
+  border: 1px solid var(--border-soft);
+  background: #fff;
+  align-items: start;
+}
+
+.step-index {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--azure);
+  color: #fff;
+  font-weight: 700;
+}
+
+.step-title {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.step-meta {
+  color: var(--muted);
+  font-size: 0.92rem;
+  margin-top: 4px;
+}
+
+.step-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.step-details,
+.step-eta {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.status-info {
+  background: var(--info-bg);
+  color: var(--info);
+}
+
+.role-card,
+.plugin-card {
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border-soft);
+  background: #fff;
+  display: grid;
+  gap: 10px;
+}
+
+.role-card {
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+}
+
+.role-icon,
+.plugin-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--azure-light);
+  color: #fff;
+  font-size: 1.2rem;
+}
+
+.role-title,
+.plugin-title {
+  font-weight: 700;
+}
+
+.role-meta,
+.plugin-description {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.status-verified {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.status-pending {
+  background: var(--info-bg);
+  color: var(--info);
+}
+
+.plugin-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.plugin-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+.plugin-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.plugin-actions .btn {
+  padding: 10px 14px;
+}
+
+@media (max-width: 900px) {
+  .main {
+    padding: 24px 20px 50px;
+  }
+
+  .grid-two {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-actions {
+    grid-template-columns: 1fr;
+  }
+}

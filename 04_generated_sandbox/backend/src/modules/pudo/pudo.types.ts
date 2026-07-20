@@ -1,0 +1,278 @@
+// PUDO Light domain (Compendium Ch 12–19). The emerging-market Tier 1/2 on-ramp. Reuses the GLOS
+// backbone (DID, vault, wallet, ledger, events) but models its own light parcel/agent/corridor flow.
+
+export type AgentStatus = 'DRAFT' | 'KYC_PENDING' | 'APPROVED_UNFUNDED' | 'ACTIVE' | 'LOCKED';
+/** Business availability the agent controls (Risk #30 store closure), distinct from the lifecycle status. */
+export type OpenState = 'open' | 'closed';
+
+/** The agent-eligibility "filter" (Compendium 18.1). Hard requirements gate onboarding. */
+export interface AgentRequirements {
+  androidVersion: number; // ≥ 10
+  reliablePower: boolean;
+  tradingLicence: string; // licence number/reference (must be present)
+  criminalRecordClear: boolean;
+  canFloatCod?: boolean; // preferred, not required
+}
+
+export type Weekday = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
+export interface DayHours {
+  open: string; // "HH:MM"
+  close: string; // "HH:MM"
+}
+/** Weekly opening schedule. A missing/null day means closed that day. */
+export type WeeklyHours = Partial<Record<Weekday, DayHours | null>>;
+
+/** Shelf as a grid: columns are colour-coded, rows numbered (e.g. slot "Green-3"). */
+export interface ShelfConfig {
+  rows: number;
+  cols: number;
+}
+export interface ShelfSlot {
+  label: string; // e.g. "Green-3"
+  color: string; // column colour
+  row: number;
+  col: number;
+  occupiedBy?: string; // parcelId
+}
+
+/** KYC documents collected to move DRAFT → KYC_PENDING (Compendium 18.5). */
+export interface KycDocuments {
+  idCopyRef: string;
+  tradingLicenceRef: string;
+  shopPhotoRefs: string[]; // at least one
+  submittedAt: string;
+}
+
+export interface Agent {
+  agentId: string;
+  did: string;
+  vaultRef: string; // Golden Record PII (name, national ID, mobile) in the IdentityVault
+  shopName: string;
+  zone: string;
+  location: { lat: number; lng: number }; // map pin (provided, or geocoded from the address)
+  physicalAddress?: string; // typed physical address (optional if a pin is given)
+  landmark: string; // no street addresses — landmark + GPS
+  openState: OpenState; // agent-controlled open / temporarily-closed
+  openingHours: WeeklyHours; // per-day schedule (pickup window + ETA constraint)
+  shelf: ShelfConfig; // rows × cols → colour/number slot grid (replaces the m² cap)
+  pricePerParcel: number; // open-data handling fee the agent advertises (public — competition pressure)
+  deviceImei: string; // Golden Record device — agent binds to this tablet
+  requirements: AgentRequirements;
+  kyc?: KycDocuments;
+  equipmentDepositPaid: boolean; // $50 refundable starter-kit deposit (18.3)
+  status: AgentStatus;
+  lastPingAt: string;
+  createdAt: string;
+}
+
+export type ParcelSize = 'S' | 'M' | 'L' | 'HEAVY';
+export type ParcelStatus = 'Created' | 'At_PUDO' | 'On_Bus' | 'At_MDP' | 'Ready_For_Pickup' | 'Delivered' | 'Disputed' | 'Voided';
+
+/**
+ * MDP hub (Compendium Ch 17 — Main Distribution Point). A regional sort centre, distinct from a PUDO
+ * shop: parcels are NOT shelved here, they are sorted into tote bags by next destination. One MDP
+ * covers one or more zones; it sits in the middle of every multi-hop journey (PUDO → MDP → … → PUDO).
+ */
+export interface Mdp {
+  mdpId: string;
+  name: string;
+  zones: string[]; // the delivery zones this hub serves (last-mile reach)
+  location: { lat: number; lng: number };
+  contactPhone?: string; // operator contact (control-tower escalation + GPS anchor)
+  address?: string; // physical address (the map pin gives the coordinates)
+  pricePerParcel: number; // open-data sort fee the hub advertises (public)
+  createdAt: string;
+}
+
+/**
+ * free (in the pocket) → filling (linked to a destination, taking parcels) → available (full or aged
+ * out → published for drivers to claim) → claimed (a driver took it, en route to pick up) →
+ * in_transit (scanned onto the vehicle). The MDP empties it on arrival and it returns to free.
+ */
+export type ToteStatus = 'free' | 'filling' | 'available' | 'claimed' | 'in_transit';
+
+/**
+ * A tote bag: a reusable laminated QR (`toteId`) + a human-readable `code` (BAG-007) so the worker
+ * eyeballs the right bag without rescanning. When filling it is linked to ONE next destination; a bus
+ * driver scans the bag (not each parcel); the receiving MDP empties it and the tote returns to free.
+ * Full (or 24 h-aged) totes are published to the dispatch marketplace for a passing driver to claim.
+ */
+export interface Tote {
+  toteId: string; // the laminated QR payload
+  code: string; // human-readable bag code
+  status: ToteStatus;
+  locationId: string; // where the bag is now (mdpId | agentDid | bus:<badge>)
+  destinationNodeId?: string; // next hop this bag is committed to (a PUDO did or an MDP id)
+  destinationLabel?: string;
+  parcels: string[]; // parcelIds currently in the bag
+  unitsUsed: number; // fill against BAG_CAPACITY_UNITS
+  weightKg: number; // accumulated parcel weight (for vehicle capacity / dispatch matching)
+  filledAt?: string; // when the first parcel went in (drives the 24 h max-wait publish)
+  availableAt?: string; // when it was published to the claim marketplace
+  claimedBy?: string; // driverDid that claimed it
+}
+
+/** The next hop the system computes for a parcel while sorting it at an MDP. */
+export interface NextHop {
+  type: 'pudo' | 'mdp';
+  id: string;
+  label: string;
+  zone: string;
+}
+export type PaymentMode = 'cash' | 'prepaid';
+export type ParcelDirection = 'outbound' | 'inbound';
+
+/**
+ * What the e-commerce checkout charges the BUYER (collected by the store, becomes the vendor's income).
+ * GLOS only reports it — the vendor always prepays the FULL shipment cost to the daughter company.
+ *   full   → the buyer pays the whole shipment price at checkout.
+ *   capped → the buyer pays up to `buyerContributionCap` (free at/above `freeOverSubtotal`); vendor absorbs the rest.
+ */
+export interface ShippingPolicy {
+  mode: 'full' | 'capped';
+  freeOverSubtotal: number; // (capped) order value at/above which the buyer is charged nothing
+  buyerContributionCap: number; // (capped) the most the buyer is charged at checkout
+}
+
+/** A registered e-commerce vendor that wires its checkout into PUDO for click-and-collect. */
+export interface Vendor {
+  vendorId: string;
+  name: string;
+  callbackUrl?: string; // GLOS pushes HMAC-signed status callbacks here
+  secret: string;
+  location?: { lat: number; lng: number }; // store map pin — origin-PUDO suggestions are ranked from here
+  address?: string;
+  country: string; // which per-country daughter company settles this vendor
+  balance: number; // prepaid balance held with the daughter company ('no prepay, no label' gate)
+  shippingPolicy: ShippingPolicy;
+  createdAt: string;
+}
+
+/**
+ * A buyer's checkout selection captured by the embedded PUDO-picker node (or a webhook, or manual entry):
+ * the destination PUDO the buyer chose + the email for the collection code. It travels from the buyer's
+ * checkout, across the auth boundary, into the merchant console where it pre-fills a shipment (no dropdown).
+ */
+export interface CheckoutHandoff {
+  id: string;
+  vendorId: string;
+  destAgentDid: string; // the PUDO the buyer picked at checkout
+  buyerEmail: string;
+  buyerMobile?: string;
+  externalOrderId?: string;
+  items?: Array<{ name: string; qty: number }>;
+  subtotal?: number; // order value — drives the buyer/vendor split
+  source: 'node' | 'webhook' | 'manual';
+  consumed: boolean; // flipped once a shipment is minted from it
+  parcelId?: string; // the shipment it became
+  at: string;
+}
+
+export interface PhygitalLabel {
+  parcelId: string;
+  qrPayload: string; // what the printed QR encodes
+  svg: string; // a simple printable label
+}
+
+export interface ParcelScan {
+  at: string;
+  status: ParcelStatus | 'CREATED';
+  by: string; // agent or driver did/badge
+  note?: string;
+  anchorTxId?: string;
+}
+
+export interface Parcel {
+  parcelId: string; // pre-printed QR sticker id
+  direction: ParcelDirection;
+  size: ParcelSize;
+  dimensionsCm?: { l: number; w: number; h: number }; // declared dims that derived the size tier
+  weightKg: number; // implied by size tier (Heavy > 20 kg)
+  fragile?: boolean; // cannot ride a bike/motorcycle (no fragile on a two-wheeler)
+  originAgentDid: string;
+  originZone: string;
+  destZone: string;
+  destAgentDid?: string;
+  senderMobile: string;
+  receiverMobile: string;
+  dropoffPhotoRef?: string; // mandatory for outbound drop-off (fraud defence)
+  deliveredPhotoRef?: string;
+  paymentMode: PaymentMode;
+  status: ParcelStatus;
+  corridorId?: string;
+  committedNodeDid?: string; // first-mile node the parcel is committed to
+  toteId?: string; // the tote bag currently carrying the parcel (transit / MDP sort)
+  atMdpId?: string; // the MDP hub the parcel was dropped at (while At_MDP / awaiting sort)
+  driverBadgeId?: string;
+  /**
+   * Release secret. The destination agent reads it aloud from their screen and the customer repeats
+   * it back — it is never SMS'd, so it costs nothing and works with no signal. Because it is the
+   * sole custody check, wrong attempts are counted and the code is burned at OTP_MAX_ATTEMPTS.
+   */
+  otp?: string;
+  otpAttempts?: number;
+  /** Set when the OTP was burned by repeated wrong attempts; release needs an operator reissue. */
+  otpLockedAt?: string;
+  // --- inbound (e-commerce pickup-at-PUDO) ---
+  vendorId?: string;
+  externalOrderId?: string;
+  buyerEmail?: string; // where the collection/verification code is sent
+  collectionCode?: string; // the buyer's QR collection token (presented at the destination PUDO — the handover secret)
+  trackingKey?: string; // PUBLIC track-and-trace token (safe to share — no PII, drives "track my parcel")
+  binSlot?: string; // chaos-shelf slot at the destination PUDO
+  items?: Array<{ name: string; qty: number }>;
+  contentPhotoRef?: string; // photo of the contents at mint — the baseline a dispute is judged against
+  label?: PhygitalLabel; // the generated label, persisted so the order detail can reprint it
+  // --- pricing + prepaid settlement (open-data quote; GLOS holds no fiat, bills the vendor full) ---
+  subtotal?: number; // order value (drives the buyer-charge under a capped policy)
+  routeMode?: 'flexible' | 'locked'; // flexible = any carrier @ ceiling (rebated); locked = cheapest route
+  routeKm?: number; // total route distance (kept for the flexible delivery rebate calc)
+  nodeFees?: number; // sum of per-parcel fees at each PUDO + MDP on the route
+  transportCost?: number; // per-km transport at the chosen rate (ceiling or cheapest)
+  platformFee?: number; // the 2% daughter-co margin
+  shipmentCost?: number; // what the vendor is billed prepaid (nodeFees + transport + platform fee)
+  ceilingCost?: number; // the worst-case (highest-rate) total a flexible parcel reserves
+  actualCost?: number; // the real total once the carrier is known (drives the flexible rebate)
+  rebate?: number; // refunded to the vendor after delivery (ceiling − actual) on a flexible parcel
+  actualPerKm?: number; // the delivering carrier's per-km rate (captured at handover, drives the rebate)
+  buyerCharge?: number; // what the checkout charged the buyer (REPORTED only — vendor's income)
+  paidStatus?: 'unpaid' | 'ParcelPaid'; // prepaid gate — label issues only when ParcelPaid
+  disputeReason?: string;
+  disputePhotoRef?: string;
+  acceptedAt: string;
+  handedToBusAt?: string;
+  deliveredAt?: string;
+  scans: ParcelScan[];
+}
+
+export type LedgerType = 'TOP_UP' | 'FEE' | 'LABOR_PAYOUT' | 'DRIVER_PAYOUT' | 'REFUND' | 'OVERDRAFT' | 'SETTLEMENT' | 'BILLING' | 'REBATE';
+
+export interface PudoLedgerEntry {
+  id: string;
+  type: LedgerType;
+  sign: '+' | '-';
+  amount: number;
+  did?: string; // agent (or driver) the entry applies to
+  reference: string; // parcel id / manifest id / driver id / admin id / bank txn / mdp id / vendor id
+  refType: 'parcel' | 'manifest' | 'driver' | 'admin' | 'bank' | 'mdp' | 'vendor';
+  at: string;
+}
+
+export interface Corridor {
+  corridorId: string;
+  name: string;
+  originZone: string;
+  destZone: string;
+  vehicleType: 'bus' | 'truck';
+  schedule: string; // e.g. 'North-South Express, 08:00'
+  status: 'active' | 'blocked';
+}
+
+export interface Driver {
+  driverDid: string;
+  badgeId: string;
+  name: string;
+  corridorId: string;
+  vehicleType: 'bus' | 'truck';
+  capacityKg: number;
+}

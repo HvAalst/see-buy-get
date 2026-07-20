@@ -1,0 +1,92 @@
+// Fleet domain config (Compendium Ch 19 — Drivers & Fleet). Vehicle classes span micro last-mile
+// (bicycle, motorcycle) through line-haul (bus) and bulk cargo (truck). The system computes capacity
+// + handling rules per class, and the class decides how rigorous DRIVER onboarding is:
+//   - light registry  (bike, motorcycle): fast onboarding so micro-businesses can join the MDP→PUDO
+//     feeder. The system knows the limits — a bike takes ≤ 20 kg parcels and NO fragile items.
+//   - heavy registry  (tuktuk, car, van, bus, truck): full KYC + a valid licence with expiry +
+//     full vehicle spec (type, sub-type, load capacity).
+// Vehicle docs are a PRIORITY signal, not a hard gate — insurance is government-regulated; GLOS just
+// prefers vehicles with full registration + doc photos + a factory/VIN number.
+
+import { ParcelSize } from './pudo.types';
+
+export type VehicleClass = 'bike' | 'motorcycle' | 'tuktuk' | 'car' | 'van' | 'bus' | 'truck';
+
+/**
+ * A truck "comes in many forms" — an extensive body/handling taxonomy (Ch 19), because heavy freight
+ * is where GLOS ultimately scales. Each sub-type carries a default load + handling capabilities
+ * (cold-chain / dry-bulk / liquid / hazmat / oversized) the system uses for capacity + future matching.
+ */
+export interface TruckSubtypeSpec {
+  label: string;
+  capacityKg: number; // typical payload (operator may still declare a real figure)
+  bulk?: boolean; // loose dry bulk (cement, grain, aggregate)
+  coldChain?: boolean; // temperature-controlled
+  liquid?: boolean; // tanker
+  hazmat?: boolean; // dangerous goods
+  oversized?: boolean; // abnormal / project cargo
+}
+
+export const TRUCK_SUBTYPE_CATALOG = {
+  flatbed: { label: 'Flatbed (open)', capacityKg: 12000 },
+  dropside: { label: 'Drop-side', capacityKg: 8000, bulk: true },
+  box: { label: 'Box / dry van', capacityKg: 10000 },
+  curtain_side: { label: 'Curtain-side (tautliner)', capacityKg: 12000 },
+  refrigerated: { label: 'Refrigerated (reefer)', capacityKg: 9000, coldChain: true },
+  insulated: { label: 'Insulated', capacityKg: 9000, coldChain: true },
+  tipper: { label: 'Tipper / dumper', capacityKg: 16000, bulk: true },
+  cement_mixer: { label: 'Concrete mixer', capacityKg: 12000, bulk: true },
+  grain_hopper: { label: 'Grain hopper', capacityKg: 22000, bulk: true },
+  bulk_tanker: { label: 'Dry-bulk tanker (cement/flour)', capacityKg: 22000, bulk: true },
+  tanker: { label: 'Tanker (liquids)', capacityKg: 20000, liquid: true },
+  food_tanker: { label: 'Food-grade tanker', capacityKg: 18000, liquid: true },
+  fuel_tanker: { label: 'Fuel tanker', capacityKg: 20000, liquid: true, hazmat: true },
+  water_bowser: { label: 'Water bowser', capacityKg: 16000, liquid: true },
+  hazmat: { label: 'Hazmat / chemical', capacityKg: 18000, hazmat: true },
+  car_carrier: { label: 'Car carrier', capacityKg: 10000, oversized: true },
+  livestock: { label: 'Livestock', capacityKg: 12000 },
+  skeletal: { label: 'Skeletal (container chassis)', capacityKg: 30000 },
+  container_selfloader: { label: 'Container self-loader (sidelifter)', capacityKg: 30000 },
+  crane: { label: 'Crane / Hiab', capacityKg: 14000 },
+  lowboy: { label: 'Lowboy / low-loader (machinery)', capacityKg: 40000, oversized: true },
+  logging: { label: 'Logging / timber', capacityKg: 25000, oversized: true },
+  tow_recovery: { label: 'Tow / recovery', capacityKg: 8000 },
+  refuse: { label: 'Refuse / compactor', capacityKg: 12000 },
+} satisfies Record<string, TruckSubtypeSpec>;
+
+export type TruckSubtype = keyof typeof TRUCK_SUBTYPE_CATALOG;
+export const TRUCK_SUBTYPES = Object.keys(TRUCK_SUBTYPE_CATALOG) as TruckSubtype[];
+
+export interface VehicleClassSpec {
+  registry: 'light' | 'heavy'; // drives driver-onboarding rigor
+  defaultCapacityKg: number; // system-computed capacity when none is provided
+  maxCapacityKg: number; // upper bound the operator may declare (heavy registry)
+  maxParcelKg: number; // largest single parcel this class may carry
+  allowsFragile: boolean; // a bike/motorcycle may not carry fragile items
+  carriesBulk: boolean; // bulk cargo (sugar/cement bags) — trucks only
+  role: string;
+}
+
+export const VEHICLE_SPEC: Record<VehicleClass, VehicleClassSpec> = {
+  bike: { registry: 'light', defaultCapacityKg: 20, maxCapacityKg: 20, maxParcelKg: 20, allowsFragile: false, carriesBulk: false, role: 'micro feeder · MDP→PUDO last mile' },
+  motorcycle: { registry: 'light', defaultCapacityKg: 50, maxCapacityKg: 80, maxParcelKg: 30, allowsFragile: false, carriesBulk: false, role: 'micro feeder · last mile' },
+  tuktuk: { registry: 'heavy', defaultCapacityKg: 250, maxCapacityKg: 400, maxParcelKg: 80, allowsFragile: true, carriesBulk: false, role: 'last mile · light distribution' },
+  car: { registry: 'heavy', defaultCapacityKg: 300, maxCapacityKg: 500, maxParcelKg: 100, allowsFragile: true, carriesBulk: false, role: 'last mile' },
+  van: { registry: 'heavy', defaultCapacityKg: 1200, maxCapacityKg: 2000, maxParcelKg: 300, allowsFragile: true, carriesBulk: false, role: 'feeder · distribution' },
+  bus: { registry: 'heavy', defaultCapacityKg: 500, maxCapacityKg: 800, maxParcelKg: 200, allowsFragile: true, carriesBulk: false, role: 'corridor line-haul' },
+  truck: { registry: 'heavy', defaultCapacityKg: 8000, maxCapacityKg: 30000, maxParcelKg: 2000, allowsFragile: true, carriesBulk: true, role: 'bulk cargo · line-haul' },
+};
+
+/** Map a vehicle class onto the corridor's coarse bus/truck heuristic for line-haul legs. */
+export const CLASS_TO_CORRIDOR_VEHICLE: Record<VehicleClass, 'bus' | 'truck'> = {
+  bike: 'bus', motorcycle: 'bus', tuktuk: 'bus', car: 'bus', van: 'truck', bus: 'bus', truck: 'truck',
+};
+
+// Parcel size → an indicative kg, reused for vehicle-fit checks (mirrors SIZE_WEIGHT_KG tiers).
+export const PARCEL_SIZE_KG: Record<ParcelSize, number> = { S: 1, M: 5, L: 15, HEAVY: 25 };
+
+export const DRIVER_LICENCE_GRACE_DAYS = 0; // expired licence = cannot operate (heavy registry)
+
+// Fleet-manager onboarding (Ch 19). A fleet manager is the operator who owns the vehicles + employs
+// the drivers; they are vetted before they may register a fleet, then post a refundable operating bond.
+export const FLEET_BOND_USD = 200; // refundable operating bond to activate a fleet manager

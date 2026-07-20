@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GLOS M1-ONB Low-Literacy Prototype</title>
+    <!-- Tailwind CSS via CDN for layout -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for highly descriptive icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .step-panel { display: none; }
+        .step-panel.active { display: block; }
+        .success-pulse { animation: pulse 2s infinite; }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white font-sans min-h-screen flex flex-col justify-between selection:bg-green-500">
+
+    <!-- Top Navigation Header -->
+    <header class="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center shadow-md">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center font-black text-xl text-gray-900 tracking-wider">G</div>
+            <span class="font-bold text-lg tracking-wider hidden sm:inline">GLOS | Identity</span>
+        </div>
+        <!-- Universal Speaker Guide for Low-Literacy Support -->
+        <button onclick="simulateAudioCoach()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-full flex items-center gap-2 font-bold transition shadow-lg success-pulse active:scale-95">
+            <i class="fa-solid fa-volume-high text-xl"></i>
+            <span class="text-sm">AUDIO GUIDE</span>
+        </button>
+    </header>
+
+    <!-- Main Dynamic Application Window -->
+    <main class="max-w-md w-full mx-auto p-4 flex-grow flex flex-col justify-center">
+        
+        <!-- ==========================================
+             STEP 1: ROLE CATEGORIZATION (UDIW-010)
+             ========================================== -->
+        <div id="step-role" class="step-panel active space-y-6">
+            <div class="text-center">
+                <h1 class="text-2xl font-black mb-2 text-green-400">WHO ARE YOU?</h1>
+                <p class="text-gray-400 text-sm">Tap your primary job card below to start.</p>
+            </div>
+            
+            <div class="grid grid-cols-1 gap-4">
+                <!-- Carrier Option -->
+                <button onclick="selectRole('Driver / Fleet')" class="w-full p-5 bg-gray-800 hover:bg-gray-750 border-2 border-transparent hover:border-green-500 rounded-2xl flex items-center gap-5 transition active:scale-98 text-left group">
+                    <div class="w-16 h-16 bg-blue-500/20 text-blue-400 rounded-xl flex items-center justify-center group-hover:bg-green-500 group-hover:text-gray-900 transition text-3xl">
+                        <i class="fa-solid fa-truck"></i>
+                    </div>
+                    <div>
+                        <h2 class="font-black text-xl">DRIVER</h2>
+                        <p class="text-gray-400 text-sm">Large trucks, regional freight moving</p>
+                    </div>
+                </button>
+
+                <!-- PUDO Point Option -->
+                <button onclick="selectRole('PUDO Agent')" class="w-full p-5 bg-gray-800 hover:bg-gray-750 border-2 border-transparent hover:border-green-500 rounded-2xl flex items-center gap-5 transition active:scale-98 text-left group">
+                    <div class="w-16 h-16 bg-purple-500/20 text-purple-400 rounded-xl flex items-center justify-center group-hover:bg-green-500 group-hover:text-gray-900 transition text-3xl">
+                        <i class="fa-solid fa-store"></i>
+                    </div>
+                    <div>
+                        <h2 class="font-black text-xl">STORE / AGENT</h2>
+                        <p class="text-gray-400 text-sm">Main distribution point, pickup location</p>
+                    </div>
+                </button>
+
+                <!-- Last-Mile Courier -->
+                <button onclick="selectRole('Courier')" class="w-full p-5 bg-gray-800 hover:bg-gray-750 border-2 border-transparent hover:border-green-500 rounded-2xl flex items-center gap-5 transition active:scale-98 text-left group">
+                    <div class="w-16 h-16 bg-orange-500/20 text-orange-400 rounded-xl flex items-center justify-center group-hover:bg-green-500 group-hover:text-gray-900 transition text-3xl">
+                        <i class="fa-solid fa-bicycle"></i>
+                    </div>
+                    <div>
+                        <h2 class="font-black text-xl">COURIER</h2>
+                        <p class="text-gray-400 text-sm">Local bike, motorbike, or hand delivery</p>
+                    </div>
+                </button>
+            </div>
+        </div>
+
+        <!-- ==========================================
+             STEP 2: ZERO-TYPING SIGN IN (UDIW-011 TIER 1)
+             ========================================== -->
+        <div id="step-phone" class="step-panel space-y-6">
+            <div class="text-center">
+                <span id="badge-role" class="bg-green-500/20 text-green-400 font-bold px-3 py-1 rounded-full text-xs uppercase tracking-widest">Role</span>
+                <h1 class="text-2xl font-black mt-2 mb-1 text-green-400">ENTER PHONE NUMBER</h1>
+                <p class="text-gray-400 text-sm">Tap your number keys below.</p>
+            </div>
+
+            <!-- Visual Phone Box -->
+            <div class="bg-gray-950 p-4 rounded-xl text-center text-2xl font-mono tracking-widest text-green-400 h-16 flex items-center justify-center border border-gray-800" id="phone-display">
+                - - - - - - - - - -
+            </div>
+
+            <!-- Large Custom Keypad Interface -->
+            <div class="grid grid-cols-3 gap-3 max-w-xs mx-auto">
+                <button onclick="pressKey('1')" class="bg-gray-800 hover:bg-gray-700 py-4 rounded-xl text-xl font-bold active:bg-green-600">1</button>
+                <button onclick="pressKey('2')" class="bg-gray-800 hover:bg-gray-700 py-4 rounded-xl text-xl font-bold active:bg-green-600">2</button>
+                <button onclick="pressKey('3')" class="bg-gray-800 hover:bg-gray-700 py-4 rounded-xl text-xl font-bold active:bg-green-600">3</button>
+                <button onclick="pressKey('4')" class="bg-gray-800 hover:bg-gray-700 py-4 rounded-xl text-xl font-bold active:bg-green-600">4</button>
+                <button onclick="pressKey('5')" class="bg-gray-800 hover:bg-gray-700 py-4 rounded-xl text-xl font-bold active:bg-green-600">5</button>
+                <button onclick="pressKey('6')" class="bg-gray-800 hover:bg-gray-700 py-4 rounded-xl text-xl font-bold active:bg-green-600">6</button>
+                <button onclick="pressKey('7')" class="bg-gray-800 hover:bg-gray-700 py-4 rounded-xl text-xl font-bold active:bg-green-600">7</button>
+                <button onclick="pressKey('8')" class="bg-gray-800 hover:bg-gray-700 py-4 rounded-xl text-xl font-bold active:bg-green-600">8</button>
+                <button onclick="pressKey('9')" class="bg-gray-800 hover:bg-gray-700 py-4 rounded-xl text-xl font-bold active:bg-green-600">9</button>
+                <button onclick="clearKey()" class="bg-red-900/40 text-red-400 py-4 rounded-xl text-xl font-bold"><i class="fa-solid fa-backspace"></i></button>
+                <button onclick="pressKey('0')" class="bg-gray-800 hover:bg-gray-700 py-4 rounded-xl text-xl font-bold">0</button>
+                <button onclick="nextStep('step-id-scan')" id="btn-phone-next" class="bg-green-600 text-gray-900 py-4 rounded-xl text-xl font-black opacity-40 cursor-not-allowed" disabled><i class="fa-solid fa-arrow-right"></i></button>
+            </div>
+        </div>
+
+        <!-- ==========================================
+             STEP 3: CAMERA-FIRST ID PROOFING (UDIW-013)
+             ========================================== -->
+        <div id="step-id-scan" class="step-panel space-y-6">
+            <div class="text-center">
+                <h1 class="text-2xl font-black text-green-400">SCAN ID CARD</h1>
+                <p class="text-gray-400 text-sm">Place your paper or card inside the green box.</p>
+            </div>
+
+            <!-- Simulated Live Viewfinder Frame -->
+            <div class="w-full aspect-[4/3] bg-gray-950 rounded-2xl relative overflow-hidden flex items-center justify-center border-4 border-dashed border-gray-700" id="viewfinder">
+                <div class="absolute w-4/5 h-3/5 border-4 border-green-500 rounded-xl flex flex-col justify-between p-2 opacity-80" id="id-target-box">
+                    <span class="text-xs text-green-400 font-mono tracking-widest uppercase">Align ID Document Here</span>
+                    <div class="text-right"><i class="fa-solid fa-address-card text-green-500 text-3xl opacity-40"></i></div>
+                </div>
+                <!-- Scanning Animation Feedback overlay -->
+                <div id="scan-line" class="absolute inset-x-0 top-0 h-1 bg-green-400 opacity-0 shadow-lg shadow-green-500"></div>
+                <div class="text-center text-gray-600 pointer-events-none" id="camera-status-text">
+                    <i class="fa-solid fa-camera text-4xl mb-2"></i>
+                    <p class="text-xs">Camera Feed Inactive</p>
+                </div>
+            </div>
+
+            <div class="flex gap-3">
+                <button onclick="nextStep('step-phone')" class="w-1/3 bg-gray-800 py-4 rounded-xl font-bold text-gray-400"><i class="fa-solid fa-chevron-left mr-2"></i>Back</button>
+                <button onclick="triggerIdCapture()" class="w-2/3 bg-green-500 hover:bg-green-400 text-gray-900 py-4 rounded-xl font-black tracking-wide text-lg flex items-center justify-center gap-2 shadow-lg active:scale-95">
+                    <i class="fa-solid fa-circle-dot text-xl"></i> TAKE PHOTO
+                </button>
+            </div>
+        </div>
+
+        <!-- ==========================================
+             STEP 4: AUTOMATED SCREENING PROGRESS
+             ========================================== -->
+        <div id="step-processing" class="step-panel text-center space-y-8 py-8">
+            <div class="relative w-28 h-28 mx-auto flex items-center justify-center">
+                <div class="absolute inset-0 border-4 border-amber-500/20 rounded-full"></div>
+                <div class="absolute inset-0 border-4 border-amber-500 rounded-full border-t-transparent animate-spin"></div>
+                <i class="fa-solid fa-shield-halved text-amber-500 text-4xl"></i>
+            </div>
+            
+            <div class="space-y-2">
+                <h2 class="text-2xl font-black text-amber-500 uppercase tracking-wide">Securing Passport</h2>
+                <p id="processing-msg" class="text-sm text-gray-400 font-mono">Running Sanctions Screening...</p>
+            </div>
+            
+            <div class="bg-gray-950 p-4 rounded-xl border border-gray-800 text-left max-w-xs mx-auto space-y-2">
+                <div class="flex items-center justify-between text-xs text-gray-500 font-mono">
+                    <span>KYC / KYB Validation</span>
+                    <span id="status-kyc" class="text-amber-500"><i class="fa-solid fa-circle-notch animate-spin"></i></span>
+                </div>
+                <div class="flex items-center justify-between text-xs text-gray-500 font-mono">
+                    <span>Sanctions Check</span>
+                    <span id="status-sanctions" class="text-gray-600"><i class="fa-solid fa-minus"></i></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==========================================
+             STEP 5: SUCCESS & WALLET DISCOVERY (UDIW-040)
+             ========================================== -->
+        <div id="step-success" class="step-panel text-center space-y-6">
+            <div class="w-24 h-24 bg-green-500 text-gray-900 rounded-full flex items-center justify-center mx-auto text-5xl shadow-xl success-pulse">
+                <i class="fa-solid fa-check"></i>
+            </div>
+
+            <div>
+                <h1 class="text-3xl font-black text-green-400 uppercase">Passport Ready!</h1>
+                <p class="text-gray-400 text-sm mt-1">Your decentralized ID vault is active.</p>
+            </div>
+
+            <!-- Immersive Multi-Currency Wallet Card mockup -->
+            <div class="bg-gradient-to-br from-green-600 to-emerald-900 p-6 rounded-2xl shadow-2xl border border-green-400/30 text-left relative overflow-hidden">
+                <div class="absolute right-[-20px] top-[-20px] text-gray-900/10 text-9xl font-black select-none pointer-events-none">
+                    <i class="fa-solid fa-wallet"></i>
+                </div>
+                <div class="flex justify-between items-start mb-4">
+                    <div>
+                        <span class="text-xs uppercase font-mono text-green-200 tracking-widest">GLOS DIGITAL WALLET</span>
+                        <h3 class="text-2xl font-black text-white mt-1" id="final-wallet-bal">0.00 <span class="text-sm font-normal">Credits</span></h3>
+                    </div>
+                    <i class="fa-solid fa-cube text-green-300 text-xl"></i>
+                </div>
+                <div class="border-t border-white/20 pt-3 flex justify-between items-center">
+                    <span class="text-[10px] font-mono text-green-200" id="did-display-string">did:glos:pending...</span>
+                    <span class="bg-white/20 text-white text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wide">Tier 2 Verified</span>
+                </div>
+            </div>
+
+            <button onclick="window.location.reload();" class="w-full bg-white hover:bg-gray-100 text-gray-900 py-4 rounded-xl font-black tracking-wide text-lg shadow-lg active:scale-95">
+                ENTER PLATFORM DASHBOARD
+            </button>
+        </div>
+
+    </main>
+
+    <!-- Bottom Stepper Tracker Visual Indicator -->
+    <footer class="p-4 bg-gray-950 border-t border-gray-800 flex justify-center items-center gap-2">
+        <div id="dot-role" class="w-3 h-3 rounded-full bg-green-500 transition-colors duration-300"></div>
+        <div id="dot-phone" class="w-3 h-3 rounded-full bg-gray-750 transition-colors duration-300"></div>
+        <div id="dot-id-scan" class="w-3 h-3 rounded-full bg-gray-750 transition-colors duration-300"></div>
+        <div id="dot-processing" class="w-3 h-3 rounded-full bg-gray-750 transition-colors duration-300"></div>
+        <div id="dot-success" class="w-3 h-3 rounded-full bg-gray-750 transition-colors duration-300"></div>
+    </footer>
+
+    <!-- Interactive Onboarding Business logic engine -->
+    <script>
+        let selectedRoleType = '';
+        let inputPhoneNumber = '';
+        const speechPhrases = {
+            'step-role': "Welcome to Global Logistics. Please tell us who you are by tapping on Driver, Store Agent, or Courier.",
+            'step-phone': "Excellent. Now use the large number keys to tap in your mobile telephone connection profile.",
+            'step-id-scan': "Please align your local government identity document or permit inside the green highlighted borders and click take photo.",
+            'step-processing': "We are checking your global data clearances. Please keep the terminal active.",
+            'step-success': "Success. Your digital passport identity card and linked multi currency wallet asset engine is now completely initialized."
+        };
+
+        function nextStep(stepId) {
+            // Update panel presentation states
+            document.querySelectorAll('.step-panel').forEach(p => p.classList.remove('active'));
+            document.getElementById(stepId).classList.add('active');
+
+            // Manage lower progress tracker dot highlighting
+            const stepName = stepId.replace('step-', '');
+            let fillDots = true;
+            document.querySelectorAll('footer div').forEach(dot => {
+                const dotName = dot.id.replace('dot-', '');
+                if(fillDots) {
+                    dot.className = "w-3 h-3 rounded-full bg-green-500";
+                } else {
+                    dot.className = "w-3 h-3 rounded-full bg-gray-750";
+                }
+                if(dotName === stepName) fillDots = false;
+            });
+
+            // Handle step-specific simulation hooks
+            if (stepId === 'step-processing') {
+                runSimulatedVerifications();
+            }
+        }
+
+        function selectRole(role) {
+            selectedRoleType = role;
+            document.getElementById('badge-role').innerText = role;
+            nextStep('step-phone');
+        }
+
+        function pressKey(num) {
+            if (inputPhoneNumber.length < 10) {
+                inputPhoneNumber += num;
+                updatePhoneDisplay();
+            }
+        }
+
+        function clearKey() {
+            inputPhoneNumber = inputPhoneNumber.slice(0, -1);
+            updatePhoneDisplay();
+        }
+
+        function updatePhoneDisplay() {
+            const display = document.getElementById('phone-display');
+            if (inputPhoneNumber.length === 0) {
+                display.innerText = "- - - - - - - - - -";
+                display.classList.add('text-gray-600');
+            } else {
+                display.innerText = inputPhoneNumber;
+                display.classList.remove('text-gray-600');
+            }
+
+            const btn = document.getElementById('btn-phone-next');
+            if (inputPhoneNumber.length >= 7) { 
+                btn.removeAttribute('disabled');
+                btn.className = "bg-green-500 text-gray-900 py-4 rounded-xl text-xl font-black cursor-pointer shadow-md";
+            } else {
+                btn.setAttribute('disabled', 'true');
+                btn.className = "bg-gray-800 text-gray-600 py-4 rounded-xl text-xl font-black opacity-40 cursor-not-allowed";
+            }
+        }
+
+        function triggerIdCapture() {
+            const scanLine = document.getElementById('scan-line');
+            const targetBox = document.getElementById('id-target-box');
+            scanLine.className = "absolute inset-x-0 h-1 bg-green-400 opacity-100 transition-all duration-1000 top-full";
+            targetBox.className = "absolute w-4/5 h-3/5 border-4 border-white rounded-xl flex flex-col justify-between p-2 duration-300 transform scale-95";
+            
+            setTimeout(() => {
+                nextStep('step-processing');
+            }, 1200);
+        }
+
+        function runSimulatedVerifications() {
+            const msg = document.getElementById('processing-msg');
+            const kyc = document.getElementById('status-kyc');
+            const sanctions = document.getElementById('status-sanctions');
+            
+            setTimeout(() => {
+                kyc.innerHTML = '<i class="fa-solid fa-circle-check text-green-500 text-sm"></i>';
+                sanctions.innerHTML = '<i class="fa-solid fa-circle-notch animate-spin text-amber-500"></i>';
+                msg.innerText = "Querying Global Anti-Money Laundering Registers...";
+            }, 1500);
+
+            setTimeout(() => {
+                sanctions.innerHTML = '<i class="fa-solid fa-circle-check text-green-500 text-sm"></i>';
+                msg.innerText = "Anchoring Cryptographic DID Root Fragment...";
+                
+                // Set final variables for the success wallet presentation layout
+                document.getElementById('did-display-string').innerText = `did:glos:eth:${Math.random().toString(16).substr(2, 8)}...`;
+            }, 3000);
+
+            setTimeout(() => {
+                nextStep('step-success');
+            }, 4200);
+        }
+
+        function simulateAudioCoach() {
+            // Find current active step window panel identifier
+            const activePanel = document.querySelector('.step-panel.active').id;
+            const contextText = speechPhrases[activePanel] || "GLOS platform onboarding mode active.";
+            
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(contextText);
+                utterance.rate = 0.95; // Slightly slower, pacing for clearing complexity barriers
+                window.speechSynthesis.speak(utterance);
+            } else {
+                alert("🔊 [Audio Prompt Simulation]\n" + contextText);
+            }
+        }
+    </script>
+</body>
+</html>

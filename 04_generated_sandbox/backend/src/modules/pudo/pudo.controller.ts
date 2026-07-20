@@ -1,0 +1,914 @@
+import { Body, Controller, Get, HttpException, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common';
+import { AgentService } from './agent.service';
+import { WalletGateService } from './wallet-gate.service';
+import { CorridorService } from './corridor.service';
+import { ParcelService } from './parcel.service';
+import { MonitorService } from './monitor.service';
+import { RatingService } from './rating.service';
+import { VendorService } from './vendor.service';
+import { ShelfService } from './shelf.service';
+import { RoutingService } from './routing.service';
+import { MdpService } from './mdp.service';
+import { ToteService } from './tote.service';
+import { VehicleService } from './vehicle.service';
+import { DriverService } from './driver.service';
+import { FleetService } from './fleet.service';
+import { DispatchService } from './dispatch.service';
+import { FleetManagerService } from './fleet-manager.service';
+import { AccountService } from './account.service';
+import { OtpService } from './otp.service';
+import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
+import { AcceptParcelDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, CoupleDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, OverdraftDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetPriceDto, ShelfDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, TopUpDto, UpdateVendorDto, VehicleDocsDto, VoidDto } from './pudo.dto';
+import { classifySize, SIZE_WEIGHT_KG } from './pudo.config';
+import { haversineKm } from './geo';
+
+interface ModuleInfo {
+  module: string;
+  name: string;
+  edition: string;
+  status: 'active';
+}
+
+/**
+ * PUDO Light — emerging-market Tier 1/2 on-ramp. DID-authenticated (global guard; no @Public).
+ * Surface = the operator Control Tower (agents / finance / corridors / dashboard / support) + the
+ * 3-screen agent app (accept / handover / pickup) over the pre-paid wallet gate.
+ */
+@Controller('pudo')
+export class PudoController {
+  constructor(
+    private readonly agents: AgentService,
+    private readonly gate: WalletGateService,
+    private readonly corridors: CorridorService,
+    private readonly parcels: ParcelService,
+    private readonly monitor: MonitorService,
+    private readonly ratings: RatingService,
+    private readonly vendors: VendorService,
+    private readonly shelf: ShelfService,
+    private readonly routing: RoutingService,
+    private readonly mdps: MdpService,
+    private readonly totes: ToteService,
+    private readonly vehicles: VehicleService,
+    private readonly drivers: DriverService,
+    private readonly fleet: FleetService,
+    private readonly dispatch: DispatchService,
+    private readonly managers: FleetManagerService,
+    private readonly accounts: AccountService,
+    private readonly otp: OtpService,
+  ) {}
+
+  // --- phone verification (mandatory at onboarding — control-tower contact + GPS) ---
+
+  /** Issue a verification code for a phone (returned for the sandbox; SMS'd in production). */
+  @Post('auth/phone/request')
+  phoneRequest(@Body() dto: PhoneRequestDto) {
+    return this.otp.request(dto.phone);
+  }
+
+  /** Confirm the code → marks the phone verified for sign-up. */
+  @Post('auth/phone/verify')
+  phoneVerify(@Body() dto: PhoneVerifyDto) {
+    return this.otp.verify(dto.phone, dto.code);
+  }
+
+  // --- participant accounts: sign up / sign in / reset (PUDO field apps) ---
+
+  /** Create a participant account + its domain entity (PUDO agent / driver / MDP) from the wizard. */
+  @Post('auth/signup')
+  signup(@Body() dto: SignupDto) {
+    return this.accounts.signup(dto);
+  }
+
+  /** Sign in with email + password → the linked participant (role + id) so the app can open. */
+  @Post('auth/login')
+  authLogin(@Body() dto: LoginDto) {
+    return this.accounts.login(dto.email, dto.password);
+  }
+
+  /** Request a password reset (the token is returned for the sandbox; emailed in production). */
+  @Post('auth/forgot')
+  authForgot(@Body() dto: ForgotDto) {
+    return this.accounts.forgot(dto.email);
+  }
+
+  @Post('auth/reset')
+  authReset(@Body() dto: ResetDto) {
+    return this.accounts.reset(dto.token, dto.password);
+  }
+
+  @Get('module-info')
+  info(): ModuleInfo {
+    return { module: 'PUDO', name: 'PUDO Light — Pick-Up/Drop-Off network', edition: 'Light v1.0 (GLOS Phase 1, emerging markets)', status: 'active' };
+  }
+
+  // --- agents (↔ M1 Tiers 1–2) ---
+
+  @Post('agents')
+  register(@Body() dto: RegisterAgentDto) {
+    return this.agents.register(dto);
+  }
+
+  /** Upload KYC documents (ID copy, trading licence, shop photos) → KYC_PENDING. */
+  @Post('agents/:did/submit-kyc')
+  submitKyc(@Param('did') did: string, @Body() dto: SubmitKycDto) {
+    return this.agents.submitKyc(did, dto);
+  }
+
+  @Post('agents/:did/kyc-decision')
+  decideKyc(@Param('did') did: string, @Body() dto: KycDecisionDto) {
+    return this.agents.decideKyc(did, dto.approve, dto.by);
+  }
+
+  /** Record the refundable equipment/starter-kit deposit. */
+  @Post('agents/:did/deposit')
+  deposit(@Param('did') did: string) {
+    return this.agents.recordDeposit(did);
+  }
+
+  /** Operator KYC review queue — agents awaiting a decision. */
+  @Get('agents/kyc-queue')
+  kycQueue() {
+    return this.agents.kycQueue();
+  }
+
+  @Post('agents/:did/ping')
+  ping(@Param('did') did: string) {
+    return this.agents.ping(did);
+  }
+
+  /** Agent marks the shop open or temporarily closed. */
+  @Post('agents/:did/availability')
+  setAvailability(@Param('did') did: string, @Body() dto: AvailabilityDto) {
+    return this.agents.setAvailability(did, dto.open);
+  }
+
+  /** Set the weekly opening schedule (pickup window + ETA constraint). */
+  @Post('agents/:did/hours')
+  setHours(@Param('did') did: string, @Body() dto: SetHoursDto) {
+    return this.agents.setHours(did, dto.openingHours);
+  }
+
+  /** Reconfigure the shelf grid (rows × columns). */
+  @Post('agents/:did/shelf')
+  setShelf(@Param('did') did: string, @Body() dto: ShelfDto) {
+    return this.agents.setShelf(did, dto);
+  }
+
+  /** The shelf grid + free-slot availability for a PUDO. */
+  @Get('agents/:did/shelf')
+  getShelf(@Param('did') did: string) {
+    return { grid: this.shelf.grid(did), capacity: this.shelf.capacity(did), available: this.shelf.available(did) };
+  }
+
+  @Get('agents')
+  listAgents() {
+    return this.agents.list().map((a) => ({ ...a, balance: this.agents.balance(a.did), rating: this.ratings.agentRating(a.did), freeSlots: this.shelf.available(a.did), capacity: this.shelf.capacity(a.did) }));
+  }
+
+  @Get('agents/:did')
+  getAgent(@Param('did') did: string) {
+    const a = this.agents.get(did);
+    return { ...a, balance: this.agents.balance(did), rating: this.ratings.agentRating(did) };
+  }
+
+  // --- pre-paid wallet (Light SSE) ---
+
+  /** 'No money, no scan' gate — 402 when locked (matches the playbook's GET /agent/can-transact). */
+  @Get('agents/:did/can-transact')
+  canTransact(@Param('did') did: string) {
+    const result = this.gate.canTransact(did);
+    if (!result.ok) throw new HttpException(result, HttpStatus.PAYMENT_REQUIRED);
+    return result;
+  }
+
+  @Post('agents/:did/top-up')
+  topUp(@Param('did') did: string, @Body() dto: TopUpDto) {
+    return this.gate.topUp(did, dto.amount, dto.bankRef);
+  }
+
+  @Post('agents/:did/overdraft')
+  overdraft(@Param('did') did: string, @Body() dto: OverdraftDto) {
+    return this.gate.overdraft(did, dto.amount, dto.adminId);
+  }
+
+  @Get('agents/:did/ledger')
+  agentLedger(@Param('did') did: string) {
+    return this.gate.entries({ did });
+  }
+
+  // --- corridors + drivers (↔ M3 light) ---
+
+  @Post('corridors')
+  addCorridor(@Body() dto: CorridorDto) {
+    return this.corridors.addCorridor(dto);
+  }
+
+  @Get('corridors')
+  listCorridors() {
+    return this.corridors.listCorridors();
+  }
+
+  @Post('corridors/:id/status')
+  setCorridorStatus(@Param('id') id: string, @Body() dto: CorridorStatusDto) {
+    return this.corridors.setStatus(id, dto.status);
+  }
+
+  @Post('drivers')
+  addDriver(@Body() dto: DriverDto) {
+    return this.corridors.addDriver(dto);
+  }
+
+  @Get('drivers')
+  listDrivers() {
+    return this.corridors.listDrivers();
+  }
+
+  /** Weekly driver settlement (Finance · DRIVER_PAYOUT). */
+  @Post('drivers/payout')
+  driverPayout(@Body() dto: DriverPayoutDto) {
+    return this.gate.driverPayout(dto.driverId, dto.amount);
+  }
+
+  // --- agent app: 3 screens ---
+
+  @Post('parcels/accept')
+  accept(@Body() dto: AcceptParcelDto) {
+    return this.parcels.accept(dto);
+  }
+
+  @Post('parcels/handover')
+  handover(@Body() dto: HandoverDto) {
+    return this.parcels.handover(dto);
+  }
+
+  @Post('parcels/:id/arrive')
+  arrive(@Param('id') id: string, @Body() dto: ArriveDto) {
+    return this.parcels.arrive(id, dto.destAgentDid);
+  }
+
+  @Post('parcels/:id/pickup')
+  pickup(@Param('id') id: string, @Body() dto: PickupDto) {
+    return this.parcels.pickup(id, dto.agentDid, dto.otp, dto.deliveredPhotoRef);
+  }
+
+  @Post('parcels/:id/void')
+  voidParcel(@Param('id') id: string, @Body() dto: VoidDto) {
+    return this.parcels.void(id, dto.agentDid, dto.voidedPhotoRef);
+  }
+
+  @Get('parcels')
+  listParcels(@Query('status') status?: string, @Query('agent') agent?: string) {
+    return this.parcels.list({ status: status as never, agentDid: agent });
+  }
+
+  @Get('parcels/:id')
+  getParcel(@Param('id') id: string) {
+    return this.monitor.parcelTimeline(id);
+  }
+
+  /** The planned route for a parcel (origin PUDO → MDP(s) → dest PUDO), once a destination is known. */
+  @Get('parcels/:id/route')
+  parcelRoute(@Param('id') id: string) {
+    const parcel = this.parcels.get(id);
+    if (!parcel.destAgentDid) return { planned: false, reason: 'No destination PUDO nominated yet (set at accept or arrival).' };
+    return { planned: true, ...this.routing.planJourney({ originAgentDid: parcel.committedNodeDid ?? parcel.originAgentDid, destAgentDid: parcel.destAgentDid }) };
+  }
+
+  /** Reverse logistics: cancel a not-yet-delivered parcel (Created / At_PUDO / At_MDP). */
+  @Post('parcels/:id/cancel')
+  cancelParcel(@Param('id') id: string, @Body() dto: CancelParcelDto) {
+    return this.parcels.cancel(id, dto.by, dto.reason);
+  }
+
+  /** Destination PUDO receives a whole bag → shelves each parcel + frees the tote (closes the tote leg). */
+  @Post('agents/:did/receive-bag')
+  receiveBag(@Param('did') did: string, @Body() dto: ReceiveBagDto) {
+    return this.mdps.deliverBag(did, dto.code);
+  }
+
+  // --- e-commerce vendors + inbound pickup-at-PUDO ---
+
+  /** Register an e-commerce vendor (returns a signing secret for callback verification). */
+  @Post('vendors')
+  registerVendor(@Body() dto: RegisterVendorDto) {
+    return this.vendors.register(dto);
+  }
+
+  @Get('vendors')
+  listVendors() {
+    return this.vendors.list();
+  }
+
+  /** Load a single vendor (so the merchant console can sign back into an existing store via ?vendor=). */
+  @Get('vendors/:id')
+  getVendor(@Param('id') id: string) {
+    return this.vendors.get(id);
+  }
+
+  /** Update the store profile: map pin (origin-PUDO ranking), address, callback URL, split policy. */
+  @Patch('vendors/:id')
+  updateVendor(@Param('id') id: string, @Body() dto: UpdateVendorDto) {
+    return this.vendors.updateProfile(id, dto);
+  }
+
+  /** A vendor's orders (their inbound parcels) for the merchant console. */
+  @Get('vendors/:id/orders')
+  vendorOrders(@Param('id') id: string) {
+    this.vendors.get(id); // 404 if unknown
+    return this.parcels.list({ vendorId: id }).map((p) => ({ parcelId: p.parcelId, externalOrderId: p.externalOrderId, status: p.status, paidStatus: p.paidStatus, collectionCode: p.collectionCode, trackingKey: p.trackingKey, binSlot: p.binSlot, destZone: p.destZone, size: p.size, shipmentCost: p.shipmentCost, buyerCharge: p.buyerCharge, routeMode: p.routeMode, createdAt: p.acceptedAt }));
+  }
+
+  /** Full detail for one order (the watch-only status screen's drill-down). Validates it belongs to the vendor. */
+  @Get('vendors/:id/orders/:parcelId')
+  vendorOrder(@Param('id') id: string, @Param('parcelId') parcelId: string) {
+    this.vendors.get(id);
+    const p = this.parcels.get(parcelId);
+    if (p.vendorId !== id) throw new HttpException('Order does not belong to this vendor', HttpStatus.NOT_FOUND);
+    return p;
+  }
+
+  /** The buyer's checkout selections waiting to be shipped (the console's incoming-orders inbox). */
+  @Get('vendors/:id/checkouts')
+  vendorCheckouts(@Param('id') id: string) {
+    this.vendors.get(id);
+    return this.vendors.checkoutsFor(id);
+  }
+
+  /**
+   * The embedded PUDO-picker node (or a webhook, or manual entry): capture the buyer's destination-PUDO
+   * choice + email so it can pre-fill a shipment in the console. This is what hooks into the vendor's checkout.
+   */
+  @Post('vendors/:id/checkout')
+  captureCheckout(@Param('id') id: string, @Body() dto: CheckoutDto) {
+    return this.vendors.captureCheckout({ vendorId: id, destAgentDid: dto.destPudoDid, buyerEmail: dto.buyerEmail, buyerMobile: dto.buyerMobile, externalOrderId: dto.externalOrderId, items: dto.items, subtotal: dto.subtotal, source: dto.source });
+  }
+
+  /** Vendor status-callback outbox (HMAC-signed ready_for_pickup / collected / disputed). */
+  @Get('vendors/:id/callbacks')
+  vendorCallbacks(@Param('id') id: string) {
+    return this.vendors.outboxFor(id);
+  }
+
+  /** Derive the size tier from dimensions (cm) + weight (kg) — live preview for the mint form. */
+  @Post('size/classify')
+  classify(@Body() dto: ClassifyDto) {
+    return { size: classifySize(dto) };
+  }
+
+  /** Quote a shipment from the open-data participant rates: flexible (any carrier) vs locked (cheapest). */
+  @Get('quote')
+  quote(@Query('origin') origin: string, @Query('dest') dest: string, @Query('size') size?: string) {
+    if (!origin || !dest) throw new HttpException('origin and dest are required', HttpStatus.BAD_REQUEST);
+    return this.routing.quoteShipment(origin, dest, (size as 'S' | 'M' | 'L' | 'HEAVY') || 'M');
+  }
+
+  /**
+   * Quote many candidates at once so each PUDO pin on the map carries a real total. Either fix the origin
+   * and vary the destinations (buyer's map) or fix the destination and vary the origins (vendor's drop-off map).
+   */
+  @Get('quote/options')
+  quoteOptions(@Query('origin') origin: string, @Query('dest') dest: string, @Query('origins') origins: string, @Query('dests') dests: string, @Query('size') size?: string) {
+    const sz = (size as 'S' | 'M' | 'L' | 'HEAVY') || 'M';
+    const list = (origin && dests) ? dests.split(',').map((d) => [origin, d] as const)
+      : (dest && origins) ? origins.split(',').map((o) => [o, dest] as const)
+        : null;
+    if (!list) throw new HttpException('provide origin+dests or dest+origins', HttpStatus.BAD_REQUEST);
+    const variable = origin ? 1 : 0; // which side varies → the `did` the pin represents
+    return { options: list.filter(([a, b]) => a && b).map(([o, d]) => {
+      try { return { did: [o, d][variable], quote: this.routing.quoteShipment(o, d, sz) }; }
+      catch (e) { return { did: [o, d][variable], error: e instanceof Error ? e.message : 'no route' }; }
+    }) };
+  }
+
+  /**
+   * Competitive price discovery, BOUNDED so it scales to 30k PUDOs. Returns a local **benchmark**
+   * (median / p25–p75 / min–max / count of nearby same-type rates) + a **capped** set of nearby price
+   * pins for the map — never the whole network. With `type` → that one service (PUDO/MDP per-parcel,
+   * vehicle per-km); without `type` → just the three network benchmarks (the public hub summary).
+   * Without lat/lng → network-wide (no radius filter). In-memory haversine here; a geo-index at real scale.
+   */
+  @Get('pricing/near')
+  pricingNear(@Query('type') type?: string, @Query('lat') lat?: string, @Query('lng') lng?: string, @Query('radiusKm') radiusKm?: string, @Query('limit') limit?: string) {
+    const R = Number(radiusKm) || 25;
+    const L = Math.min(Number(limit) || 50, 200);
+    const here = lat && lng ? { lat: Number(lat), lng: Number(lng) } : undefined;
+    const pct = (sorted: number[], p: number): number => {
+      if (!sorted.length) return 0;
+      const i = (sorted.length - 1) * p, lo = Math.floor(i), hi = Math.ceil(i);
+      return Math.round((sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo)) * 100) / 100;
+    };
+    const benchmark = (prices: number[]) => {
+      const s = [...prices].sort((a, b) => a - b);
+      return { count: s.length, median: pct(s, 0.5), p25: pct(s, 0.25), p75: pct(s, 0.75), min: s[0] ?? 0, max: s[s.length - 1] ?? 0 };
+    };
+    type Row = { id: string; label: string; location?: { lat: number; lng: number }; price: number };
+    const rowsFor = (t: string): Row[] => {
+      if (t === 'mdp') return this.mdps.list().map((m) => ({ id: m.mdpId, label: m.name, location: m.location, price: m.pricePerParcel }));
+      if (t === 'vehicle') return this.vehicles.list({ status: 'ACTIVE' }).map((v) => ({ id: v.vehicleId, label: v.plate, price: v.pricePerKm }));
+      return this.agents.list().filter((a) => a.status === 'ACTIVE').map((a) => ({ id: a.did, label: a.shopName, location: a.location, price: a.pricePerParcel }));
+    };
+    const forType = (t: string) => {
+      let rows = rowsFor(t).map((r) => ({ ...r, km: here && r.location ? Math.round(haversineKm(here, r.location) * 10) / 10 : undefined }));
+      if (here && t !== 'vehicle') rows = rows.filter((r) => r.km != null && r.km <= R).sort((a, b) => (a.km ?? 0) - (b.km ?? 0)); // vehicles roam → network benchmark
+      return { benchmark: benchmark(rows.map((r) => r.price)), pins: t === 'vehicle' ? [] : rows.slice(0, L) };
+    };
+    if (type) return { type, radiusKm: here ? R : null, ...forType(type) };
+    return { pudo: forType('pudo').benchmark, mdp: forType('mdp').benchmark, vehicle: forType('vehicle').benchmark };
+  }
+
+  /** Open pricing feed — every PUDO, MDP and vehicle's advertised rate. DEBUG/small-network only — at scale use /pricing/near. */
+  @Get('pricing')
+  pricing() {
+    return {
+      pudos: this.agents.list().filter((a) => a.status === 'ACTIVE').map((a) => ({ did: a.did, shopName: a.shopName, zone: a.zone, location: a.location, pricePerParcel: a.pricePerParcel })),
+      mdps: this.mdps.list().map((m) => ({ mdpId: m.mdpId, name: m.name, zones: m.zones, location: m.location, pricePerParcel: m.pricePerParcel })),
+      vehicles: this.vehicles.list({ status: 'ACTIVE' }).map((v) => ({ vehicleId: v.vehicleId, plate: v.plate, vehicleClass: v.vehicleClass, pricePerKm: v.pricePerKm })),
+      perKm: this.vehicles.priceRange(),
+    };
+  }
+
+  /** A PUDO agent sets its open-data per-parcel handling price. */
+  @Patch('agents/:did/pricing')
+  setAgentPrice(@Param('did') did: string, @Body() dto: SetPriceDto) {
+    return this.agents.setPrice(did, dto.price);
+  }
+
+  /** An MDP sets its open-data per-parcel sort price. */
+  @Patch('mdps/:id/pricing')
+  setMdpPrice(@Param('id') id: string, @Body() dto: SetPriceDto) {
+    return this.mdps.setPrice(id, dto.price);
+  }
+
+  /** A driver / fleet manager sets a vehicle's open-data per-km transport rate. */
+  @Patch('vehicles/:id/pricing')
+  setVehiclePrice(@Param('id') id: string, @Body() dto: SetPriceDto) {
+    return this.vehicles.setPrice(id, dto.price);
+  }
+
+  /** Vendor prepays its balance with the per-country daughter company. */
+  @Post('vendors/:id/top-up')
+  topUpVendor(@Param('id') id: string, @Body() dto: TopUpDto) {
+    return this.vendors.topUp(id, dto.amount);
+  }
+
+  /** A vendor's prepaid balance + settlement book (top-ups / billings / rebates). */
+  @Get('vendors/:id/settlement')
+  vendorSettlement(@Param('id') id: string) {
+    return { balance: this.vendors.balanceOf(id), entries: this.vendors.settlementsFor(id) };
+  }
+
+  /** Retry the prepaid gate on an unpaid shipment after a top-up → issue the label + ParcelPaid. */
+  @Post('parcels/:id/settle')
+  settleParcel(@Param('id') id: string) {
+    return this.parcels.settleUnpaid(id);
+  }
+
+  /** Public track-and-trace by the shareable tracking key (no PII, no handover code). */
+  @Get('track/:key')
+  track(@Param('key') key: string) {
+    return this.parcels.track(key);
+  }
+
+  /** Vendor mint: an order ships → create the inbound parcel + phygital label + collection code + tracking key. */
+  @Post('inbound/orders')
+  createInbound(@Body() dto: InboundOrderDto) {
+    const vendor = this.vendors.get(dto.vendorId);
+    const handoff = dto.checkoutId ? this.vendors.checkout(dto.checkoutId) : undefined;
+    const destPudoDid = dto.destPudoDid ?? handoff?.destAgentDid;
+    if (!destPudoDid) throw new HttpException('A destination PUDO is required', HttpStatus.BAD_REQUEST);
+    // Derive the size, then quote the route from the open-data participant rates.
+    const size = dto.dimensionsCm ? classifySize({ ...dto.dimensionsCm, kg: dto.weightKg ?? SIZE_WEIGHT_KG[dto.size ?? 'M'] }) : (dto.size ?? 'M');
+    const quote = this.routing.quoteShipment(dto.originPudoDid, destPudoDid, size);
+    const result = this.parcels.createInbound({
+      vendorId: dto.vendorId,
+      externalOrderId: dto.externalOrderId ?? handoff?.externalOrderId,
+      originAgentDid: dto.originPudoDid,
+      destAgentDid: destPudoDid,
+      buyerMobile: dto.buyerMobile ?? handoff?.buyerMobile ?? '',
+      buyerEmail: dto.buyerEmail ?? handoff?.buyerEmail,
+      size: dto.size,
+      dimensionsCm: dto.dimensionsCm,
+      weightKg: dto.weightKg,
+      contentPhotoRef: dto.contentPhotoRef,
+      fragile: dto.fragile,
+      items: dto.items ?? handoff?.items,
+      subtotal: dto.subtotal ?? handoff?.subtotal,
+      shippingPolicy: vendor.shippingPolicy,
+      routeMode: dto.routeMode,
+      quote,
+    });
+    if (handoff) this.vendors.consumeCheckout(handoff.id, result.parcel.parcelId);
+    return result;
+  }
+
+  /** Origin PUDO scans the vendor's parcel in. */
+  @Post('parcels/:id/intake')
+  intake(@Param('id') id: string, @Body() dto: IntakeDto) {
+    return this.parcels.intakeInbound(id, dto.agentDid);
+  }
+
+  /** Destination PUDO shelves an arrived parcel → Ready_For_Pickup + buyer notified. */
+  @Post('parcels/:id/shelve')
+  shelve(@Param('id') id: string, @Body() dto: ShelveDto) {
+    return this.parcels.shelve(id, dto.agentDid, dto.binId);
+  }
+
+  /** Buyer presents the collection QR → resolve the parcel + shelf slot (opens the handover screen). */
+  @Post('parcels/collect')
+  collect(@Body() dto: CollectDto) {
+    return this.parcels.collect(dto.collectionCode, dto.agentDid);
+  }
+
+  /** Buyer confirms the parcel is correct → Delivered, order closed. */
+  @Post('parcels/:id/collect-confirm')
+  collectConfirm(@Param('id') id: string, @Body() dto: CollectDto) {
+    return this.parcels.collectConfirm(id, dto.agentDid, dto.collectionCode);
+  }
+
+  /** Buyer reports a discrepancy at collection → Disputed, with mandatory photo proof. */
+  @Post('parcels/:id/dispute')
+  dispute(@Param('id') id: string, @Body() dto: DisputeDto) {
+    return this.parcels.dispute(id, dto.agentDid, dto.reason, dto.photoProofRef);
+  }
+
+  /** Tier-1 customer rates a delivered parcel → writes the agent composite to the shared core (graduation). */
+  @Post('parcels/:id/rate')
+  rate(@Param('id') id: string, @Body() dto: RateDto) {
+    return this.ratings.rate({ parcelId: id, stars: dto.stars, raterMobile: dto.raterMobile });
+  }
+
+  @Get('agents/:did/rating')
+  agentRating(@Param('did') did: string) {
+    return this.ratings.agentRating(did);
+  }
+
+  // --- operator control tower (↔ M7/SSE light) ---
+
+  @Get('dashboard')
+  dashboard() {
+    return this.monitor.dashboard();
+  }
+
+  @Get('flags')
+  flags() {
+    return this.monitor.flags();
+  }
+
+  /** PUDO coverage heatmap — points + density + open/closed counts (feeds journey-leg planning). */
+  @Get('heatmap')
+  heatmap() {
+    return this.monitor.heatmap();
+  }
+
+  // --- routing: first-mile node + leg computation ---
+
+  /** Assign a first-mile node: nearest open PUDO with free shelf capacity. */
+  @Post('routing/assign-node')
+  assignNode(@Body() dto: AssignNodeDto) {
+    return this.routing.assignFirstMileNode(dto);
+  }
+
+  /** Plan the journey: commit a first-mile node (given or assigned) and compute the legs + ETA. */
+  @Post('routing/plan-journey')
+  planJourney(@Body() dto: PlanJourneyDto) {
+    return this.routing.planJourney(dto);
+  }
+
+  @Get('finance')
+  finance() {
+    return this.monitor.finance();
+  }
+
+  // --- MDP hubs + tote-bag sorting (multi-hop) ---
+
+  /** Register an MDP sort hub covering one or more zones. */
+  @Post('mdps')
+  registerMdp(@Body() dto: RegisterMdpDto) {
+    return this.mdps.register(dto);
+  }
+
+  @Get('mdps')
+  listMdps() {
+    return this.mdps.list().map((m) => ({ ...m, totes: this.totes.list({ locationId: m.mdpId }).length }));
+  }
+
+  /** Register a fresh laminated tote (QR + human code) into the pool at this MDP. */
+  @Post('mdps/:id/totes')
+  registerTote(@Param('id') id: string) {
+    return this.mdps.registerTote(id);
+  }
+
+  /** Totes currently at a location (MDP id or agent did). */
+  @Get('totes')
+  listTotes(@Query('location') location?: string, @Query('status') status?: string) {
+    return this.totes.list({ locationId: location, status: status as never });
+  }
+
+  @Get('totes/:code')
+  getTote(@Param('code') code: string) {
+    return this.totes.requireByCode(code);
+  }
+
+  /** Link a free bag to a single next destination so it can start taking parcels. */
+  @Post('totes/:code/assign')
+  assignTote(@Param('code') code: string, @Body() dto: AssignToteDto) {
+    return this.totes.assign(code, dto.destinationNodeId, dto.destinationLabel);
+  }
+
+  /** Drop a parcel into a bag (capacity-checked) — connects bag ↔ parcel. */
+  @Post('totes/:code/fill')
+  fillTote(@Param('code') code: string, @Body() dto: FillToteDto) {
+    return this.mdps.fillTote(code, dto.parcelId);
+  }
+
+  /** Scan the bag onto a bus — one scan moves the whole tote + every parcel to On_Bus. */
+  @Post('totes/:code/load')
+  loadBag(@Param('code') code: string, @Body() dto: LoadBagDto) {
+    return this.mdps.loadBag(code, dto.driverBadgeId);
+  }
+
+  /** A bus drops a bag at an MDP → scan the bag code, empty it; parcels become unsorted (At_MDP). */
+  @Post('mdps/:id/drop-bag')
+  dropBag(@Param('id') id: string, @Body() dto: DropBagDto) {
+    return this.mdps.dropBag(id, dto.code);
+  }
+
+  /** Sort a parcel at an MDP → returns its next destination + the bag code to drop it in. */
+  @Post('mdps/:id/sort')
+  sortParcel(@Param('id') id: string, @Body() dto: SortParcelDto) {
+    return this.mdps.sortParcel(id, dto.parcelId);
+  }
+
+  // --- fleet managers (the operator who owns the fleet — own onboarding + requirements) ---
+
+  /** Register a fleet manager (eligibility: business reg + transport-operator licence + tax ID + depot). */
+  @Post('fleet/managers')
+  registerManager(@Body() dto: RegisterFleetManagerDto) {
+    return this.managers.register(dto);
+  }
+
+  @Get('fleet/managers')
+  listManagers() {
+    return this.managers.list();
+  }
+
+  /** Fleet-console sign-in — resolve an ACTIVE manager from their login code (scopes the console). */
+  @Post('fleet/managers/login')
+  managerLogin(@Body() dto: ManagerLoginDto) {
+    return this.managers.login(dto.code);
+  }
+
+  /** Managers awaiting a KYC decision (the GLOS operator review queue). */
+  @Get('fleet/managers/kyc-queue')
+  managerKycQueue() {
+    return this.managers.kycQueue();
+  }
+
+  @Get('fleet/managers/:did')
+  getManager(@Param('did') did: string) {
+    return this.managers.get(did);
+  }
+
+  /** Upload business KYC (registration cert, operator licence, owner ID, proof of address) → KYC_PENDING. */
+  @Post('fleet/managers/:did/submit-kyc')
+  managerSubmitKyc(@Param('did') did: string, @Body() dto: ManagerKycDto) {
+    return this.managers.submitKyc(did, dto);
+  }
+
+  @Post('fleet/managers/:did/kyc-decision')
+  managerDecideKyc(@Param('did') did: string, @Body() dto: ManagerKycDecisionDto) {
+    return this.managers.decideKyc(did, dto.approve, dto.by);
+  }
+
+  /** Record the refundable operating bond → ACTIVE (the manager may now register a fleet). */
+  @Post('fleet/managers/:did/bond')
+  managerBond(@Param('did') did: string) {
+    return this.managers.recordBond(did);
+  }
+
+  @Post('fleet/managers/:did/suspend')
+  suspendManager(@Param('did') did: string) {
+    return this.managers.suspend(did);
+  }
+
+  // --- fleet: vehicles (own ID) ---
+
+  /** Register a vehicle into the fleet (own ID; capacity computed; verified = full docs + factory ID). */
+  @Post('vehicles')
+  registerVehicle(@Body() dto: RegisterVehicleDto) {
+    return this.vehicles.register(dto as never);
+  }
+
+  @Get('vehicles')
+  listVehicles(@Query('status') status?: string, @Query('class') vehicleClass?: string) {
+    return this.vehicles.list({ status: status as never, vehicleClass: vehicleClass as never });
+  }
+
+  /** The truck sub-type catalog (label + capacity + handling capabilities) for registration UIs. */
+  @Get('vehicles/truck-subtypes')
+  truckSubtypes() {
+    return Object.entries(TRUCK_SUBTYPE_CATALOG).map(([id, s]) => ({ id, ...s }));
+  }
+
+  @Get('vehicles/:id')
+  getVehicle(@Param('id') id: string) {
+    return this.vehicles.get(id);
+  }
+
+  /** Upload / update registration docs — re-evaluates the verified (dispatch-priority) flag. */
+  @Post('vehicles/:id/documents')
+  updateVehicleDocs(@Param('id') id: string, @Body() dto: VehicleDocsDto) {
+    return this.vehicles.updateDocuments(id, dto);
+  }
+
+  @Post('vehicles/:id/ground')
+  groundVehicle(@Param('id') id: string) {
+    return this.vehicles.ground(id);
+  }
+
+  @Post('vehicles/:id/retire')
+  retireVehicle(@Param('id') id: string) {
+    return this.vehicles.retire(id);
+  }
+
+  // --- fleet: drivers (own ID, staged onboarding) ---
+
+  /** Register a driver. Bike/motorcycle → light registry (ACTIVE immediately); heavier → DRAFT + KYC. */
+  @Post('drivers/onboard')
+  registerDriver(@Body() dto: RegisterDriverDto) {
+    return this.drivers.register(dto as never);
+  }
+
+  @Get('fleet/drivers')
+  listFleetDrivers() {
+    return this.drivers.list();
+  }
+
+  @Get('fleet/drivers/kyc-queue')
+  driverKycQueue() {
+    return this.drivers.kycQueue();
+  }
+
+  @Get('fleet/drivers/:did')
+  getFleetDriver(@Param('did') did: string) {
+    return this.drivers.get(did);
+  }
+
+  /** Heavy registry: upload ID + licence copy → KYC_PENDING. */
+  @Post('fleet/drivers/:did/submit-kyc')
+  driverSubmitKyc(@Param('did') did: string, @Body() dto: DriverKycDto) {
+    return this.drivers.submitKyc(did, dto);
+  }
+
+  @Post('fleet/drivers/:did/kyc-decision')
+  driverDecideKyc(@Param('did') did: string, @Body() dto: DriverKycDecisionDto) {
+    return this.drivers.decideKyc(did, dto.approve, dto.by);
+  }
+
+  @Post('fleet/drivers/:did/suspend')
+  suspendDriver(@Param('did') did: string) {
+    return this.drivers.suspend(did);
+  }
+
+  @Post('fleet/drivers/:did/ping')
+  pingDriver(@Param('did') did: string) {
+    return this.drivers.ping(did);
+  }
+
+  // --- fleet: flexible driver ↔ vehicle coupling ---
+
+  /** Couple a driver to a vehicle (optionally on a corridor). Re-assignable. */
+  @Post('fleet/drivers/:did/couple')
+  couple(@Param('did') did: string, @Body() dto: CoupleDto) {
+    return this.fleet.couple(did, dto.vehicleId, dto.corridorId);
+  }
+
+  @Post('fleet/drivers/:did/uncouple')
+  uncouple(@Param('did') did: string) {
+    return this.fleet.uncouple(did);
+  }
+
+  /** Driver starts a shift by scanning the vehicle's dashboard QR → couples them for the day. */
+  @Post('fleet/drivers/:did/start-session')
+  startSession(@Param('did') did: string, @Body() dto: StartSessionDto) {
+    return this.fleet.startSession(did, dto.vehicleQr);
+  }
+
+  /** Driver closes the shift → decouples driver + vehicle. */
+  @Post('fleet/drivers/:did/end-session')
+  endSession(@Param('did') did: string) {
+    return this.fleet.endSession(did);
+  }
+
+  /** The driver's current shift session (active coupling + vehicle), or { active:false } off duty. */
+  @Get('fleet/drivers/:did/session')
+  driverSession(@Param('did') did: string) {
+    return this.fleet.sessionFor(did);
+  }
+
+  @Post('fleet/drivers/:did/assign-corridor')
+  assignDriverCorridor(@Param('did') did: string, @Body() dto: AssignCorridorDto) {
+    return this.fleet.assignCorridor(did, dto.corridorId);
+  }
+
+  @Get('fleet/assignments')
+  listAssignments(@Query('status') status?: string) {
+    return this.fleet.list({ status: status as never });
+  }
+
+  // --- PUDO outbound totes + the dispatch marketplace (opportunistic line-haul) ---
+
+  /** Register a fresh tote at a PUDO so the agent can bag outbound parcels for a destination MDP. */
+  @Post('agents/:did/totes')
+  registerAgentTote(@Param('did') did: string) {
+    this.agents.get(did); // 404 if unknown
+    return this.totes.register(did);
+  }
+
+  /** Publish a filling tote to the claim marketplace early (before it is full / 24 h). */
+  @Post('totes/:code/release')
+  releaseTote(@Param('code') code: string) {
+    return this.dispatch.release(code);
+  }
+
+  /** Sweep: publish every tote that is full or has waited ≥ 24 h. */
+  @Post('dispatch/publish-ready')
+  publishReady() {
+    return { published: this.dispatch.publishReady() };
+  }
+
+  /** Register a bulk freight job (trucks only) into the same marketplace as totes. */
+  @Post('dispatch/freight')
+  registerFreight(@Body() dto: RegisterFreightDto) {
+    return this.dispatch.registerFreight(dto);
+  }
+
+  @Get('dispatch/freight')
+  listFreight(@Query('status') status?: string) {
+    return this.dispatch.listFreight({ status: status as never });
+  }
+
+  /** Bulk freight pickup (claimed → in_transit). */
+  @Post('dispatch/freight/:id/pickup')
+  freightPickup(@Param('id') id: string) {
+    return this.dispatch.pickupFreight(id);
+  }
+
+  /** Bulk freight delivery (in_transit → delivered; releases the driver's reserved capacity). */
+  @Post('dispatch/freight/:id/deliver')
+  freightDeliver(@Param('id') id: string) {
+    return this.dispatch.deliverFreight(id);
+  }
+
+  /** A driver declares a route A→B → the platform suggests the loads sitting on the way. */
+  @Post('fleet/drivers/:did/suggest-work')
+  suggestWork(@Param('did') did: string, @Body() dto: SuggestRouteDto) {
+    const offers = this.dispatch.suggest(did, dto);
+    this.fleet.reportLocation(did, dto.from); // the driver is at the route start → live map
+    return { remainingCapacityKg: this.dispatch.remainingCapacity(did), offers };
+  }
+
+  /** Driver GPS heartbeat — updates the vehicle's position on the live fleet map. */
+  @Post('fleet/drivers/:did/locate')
+  locate(@Param('did') did: string, @Body() dto: LocateDto) {
+    const a = this.fleet.reportLocation(did, dto);
+    return { located: Boolean(a), location: a?.location };
+  }
+
+  /** Fleet-manager dashboard: vehicle/driver/session counts, working hours, live positions + cargo.
+   * Pass ?manager=<did> to scope to one fleet; omit for the network-wide view. */
+  @Get('fleet/dashboard')
+  fleetDashboard(@Query('manager') managerDid?: string) {
+    const overview = this.fleet.overview(managerDid);
+    const driverDids = managerDid ? new Set(this.drivers.list().filter((d) => d.managerDid === managerDid).map((d) => d.did)) : undefined;
+    const cargo = this.dispatch.activeCargo(driverDids);
+    const items = cargo.items.map((c) => ({ ...c, driver: this.driverNameOf(c.driverDid) }));
+    return { managerDid: managerDid ?? null, ...overview, cargo: { ...cargo, items } };
+  }
+
+  private driverNameOf(did: string): string {
+    try { return this.drivers.get(did).displayName; } catch { return '—'; }
+  }
+
+  @Get('fleet/drivers/:did/offers')
+  driverOffers(@Param('did') did: string) {
+    return this.dispatch.activeOffersFor(did);
+  }
+
+  @Get('fleet/drivers/:did/claims')
+  driverClaims(@Param('did') did: string) {
+    return { remainingCapacityKg: this.dispatch.remainingCapacity(did), claims: this.dispatch.claimsFor(did) };
+  }
+
+  /** Driver accepts a suggestion → reserves the load + its weight against the vehicle's capacity. */
+  @Post('dispatch/offers/:id/claim')
+  claimOffer(@Param('id') id: string) {
+    return this.dispatch.claim(id);
+  }
+
+  /** Driver declines a suggestion. */
+  @Post('dispatch/offers/:id/ignore')
+  ignoreOffer(@Param('id') id: string) {
+    return this.dispatch.ignore(id);
+  }
+}

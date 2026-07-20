@@ -1,0 +1,22 @@
+# GLOS PUDO
+
+> GLOS PUDO is a pick-up / drop-off (PUDO) parcel network for emerging markets: local shops act as parcel collection points, linked by independent drivers and regional sort hubs (MDPs). Parcels are tracked end to end and pricing is open data (every point, hub and driver publishes its own rate).
+
+## How it works
+- Track a parcel with a tracking key (for example `T-XXXXXXXX`) on the home page under "Follow your parcel". No account or app is required.
+- Collect a parcel by showing your collection code at the destination pick-up point (a local shop).
+- Send a parcel by dropping it at a PUDO point; it travels point -> hub (MDP) -> point to the destination pick-up point.
+- Pricing is open data: a shipment is quoted from the points it passes (each charges a per-parcel fee) plus the distance (drivers charge per km), so customers always see a competitive price.
+
+## Key pages
+- [Home / launcher](/index.html): track a parcel, open the field apps, businesses and operator surfaces
+- [Join the network](/onboarding.html): become a PUDO point, a driver, an MDP sort hub, an online vendor, or a fleet operator
+- [Merchant console](/vendor.html): wire e-commerce checkout into click-and-collect (generate labels, tracking keys and collection codes)
+- [PUDO control tower](/pudo-tower.html): network operations, coverage and finance
+
+## Notes
+- Built for low-literacy, mobile-first use on inexpensive phones.
+- GLOS holds no fiat; it orchestrates logistics and reports prices. Vendors prepay shipment cost; buyers pay at checkout.
+
+## Contact
+GLOS PUDO — open-data logistics for emerging markets.

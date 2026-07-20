@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GLOS · Trust score</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./components/components.css" />
+  <style>
+    .rp { max-width: 480px; margin: 0 auto; padding: 20px; display: grid; gap: 18px; }
+    .rp__head { display: flex; align-items: center; justify-content: space-between; }
+    .rp__title { font-size: 1.5rem; color: var(--forest); margin: 0; }
+    .rp__hero { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; text-align: center; }
+    .rp__stars { font-size: 2.4rem; letter-spacing: 4px; color: var(--gold); }
+    .rp__score { font-size: 2.2rem; font-weight: 800; color: var(--forest); }
+    .rp__sub { color: var(--muted); }
+    .rp__dim { display: grid; gap: 10px; }
+    .rp__dim-row { display: grid; gap: 4px; }
+    .rp__dim-top { display: flex; justify-content: space-between; font-weight: 700; }
+    .rp__bar { height: 12px; background: var(--border-soft); border-radius: 999px; overflow: hidden; }
+    .rp__bar-fill { height: 100%; background: var(--brand-bright); border-radius: 999px; }
+    .rp__chips { display: flex; gap: 10px; flex-wrap: wrap; }
+    .rp__badge { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border: 2px solid var(--brand); border-radius: 999px; font-weight: 700; color: var(--forest); background: var(--info-bg); }
+    .rp__panel { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; display: grid; gap: 8px; }
+    .rp__hist { color: var(--muted); font-size: 0.9rem; }
+    .rp__did { font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); word-break: break-all; }
+    .rp__msg--err { color: var(--danger); font-weight: 700; }
+  </style>
+</head>
+<body>
+  <main class="rp" id="reputation"></main>
+  <script type="module" src="./reputation.js"></script>
+</body>
+</html>

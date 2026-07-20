@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Join GLOS · Choose your role</title>
+  <meta name="description" content="Join the GLOS PUDO network — become a pick-up point, drive and deliver, run a sort hub, sell online, or operate a fleet." />
+  <link rel="stylesheet" href="./fonts.css" />
+  <style>
+    /* Join / role chooser — PostNL-inspired (glos_brand_palette): indigo primary, orange accent, swoosh,
+       Mulish, compact solid controls. A pure router into the role-specific sign-up wizards. */
+    :root {
+      --pnl-indigo: #4c46e0; --pnl-indigo-dk: #3a34c2;
+      --pnl-orange: #ff6200; --pnl-orange-dk: #dc4405;
+      --pnl-navy: #172b6b; --pnl-green: #1fa45a; --pnl-amber: #ffab00;
+      --pnl-ink: #1a1a1a; --pnl-muted: #5a5a64;
+      --pnl-panel: #f2f2f4; --pnl-border: #e2e2e6; --pnl-border-strong: #c9c9d0;
+      --pnl-font: 'PostNL', 'Mulish', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: #fff; font-family: var(--pnl-font); color: var(--pnl-ink); -webkit-font-smoothing: antialiased; }
+    .ob { max-width: 720px; margin: 0 auto; padding: 0 22px 64px; }
+    .ob__swoosh { height: 7px; border-radius: 999px; background: linear-gradient(90deg, var(--pnl-amber) 0%, var(--pnl-orange) 30%, var(--pnl-orange-dk) 44%, var(--pnl-indigo) 72%, var(--pnl-green) 100%); margin: 26px 0 20px; }
+    .ob__back { display: inline-block; color: var(--pnl-indigo); font-weight: 700; text-decoration: none; font-size: 0.9rem; margin-bottom: 12px; }
+    .ob__title { font-size: 2rem; font-weight: 900; color: #172b6b; letter-spacing: -0.02em; margin: 0 0 4px; }
+    .ob__sub { color: var(--pnl-muted); font-size: 1.02rem; margin: 0 0 24px; }
+
+    .ob__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 620px) { .ob__grid { grid-template-columns: 1fr; } }
+    .ob__card { display: flex; align-items: center; gap: 14px; padding: 18px; border: 1.5px solid var(--pnl-border); border-radius: 14px; text-decoration: none; color: inherit; background: #fff; transition: border-color .12s, box-shadow .12s; }
+    .ob__card:hover { border-color: var(--pnl-indigo); box-shadow: 0 4px 16px rgba(76,70,224,0.10); }
+    .ob__ic { width: 46px; height: 46px; flex: none; border-radius: 12px; display: grid; place-items: center; background: rgba(76,70,224,0.10); }
+    .ob__ic svg { width: 26px; height: 26px; fill: none; stroke: var(--pnl-indigo); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .ob__card--accent .ob__ic { background: rgba(255,98,0,0.12); }
+    .ob__card--accent .ob__ic svg { stroke: var(--pnl-orange-dk); }
+    .ob__c-t { font-weight: 800; font-size: 1.02rem; color: #172b6b; }
+    .ob__c-s { color: var(--pnl-muted); font-size: 0.85rem; line-height: 1.35; }
+    .ob__arr { margin-left: auto; color: var(--pnl-border-strong); font-size: 1.3rem; font-weight: 800; }
+    .ob__card:hover .ob__arr { color: var(--pnl-indigo); }
+
+    .ob__foot { margin-top: 26px; color: var(--pnl-muted); font-size: 0.92rem; }
+    .ob__foot a { color: var(--pnl-indigo); font-weight: 700; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <main class="ob">
+    <div class="ob__swoosh"></div>
+    <a class="ob__back" href="index.html">‹ Home</a>
+    <h1 class="ob__title">Join the GLOS PUDO network</h1>
+    <p class="ob__sub">Pick how you want to take part. We'll set you up in a few steps — phone verification, your location, and you're live.</p>
+
+    <div class="ob__grid">
+      <a class="ob__card" href="signup-pudo.html">
+        <span class="ob__ic"><svg viewBox="0 0 24 24"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/></svg></span>
+        <span><span class="ob__c-t">Become a PUDO point</span><span class="ob__c-s">Earn from your shop — hold parcels for pick-up & drop-off.</span></span>
+        <span class="ob__arr">›</span>
+      </a>
+      <a class="ob__card" href="signup-driver.html">
+        <span class="ob__ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="11" rx="2"/><path d="M3 11h18"/><circle cx="7.5" cy="18.5" r="1.5"/><circle cx="16.5" cy="18.5" r="1.5"/></svg></span>
+        <span><span class="ob__c-t">Drive & deliver</span><span class="ob__c-s">Self-employed or join a fleet — claim loads on your route.</span></span>
+        <span class="ob__arr">›</span>
+      </a>
+      <a class="ob__card" href="signup-mdp.html">
+        <span class="ob__ic"><svg viewBox="0 0 24 24"><path d="M3 7h13l4 4v6H3z"/><path d="M16 7v4h4"/></svg></span>
+        <span><span class="ob__c-t">Run a sort hub (MDP)</span><span class="ob__c-s">Receive, sort and dispatch parcels between zones.</span></span>
+        <span class="ob__arr">›</span>
+      </a>
+      <a class="ob__card ob__card--accent" href="vendor.html">
+        <span class="ob__ic"><svg viewBox="0 0 24 24"><path d="M4 9h16l-1.2-4.5H5.2z"/><path d="M5 9v10h14V9"/><path d="M9.5 19v-5h5v5"/></svg></span>
+        <span><span class="ob__c-t">Sell online (vendor)</span><span class="ob__c-s">Wire your store into click-and-collect — labels & tracking.</span></span>
+        <span class="ob__arr">›</span>
+      </a>
+      <a class="ob__card ob__card--accent" href="fleet.html">
+        <span class="ob__ic"><svg viewBox="0 0 24 24"><rect x="2" y="8" width="13" height="8" rx="1"/><path d="M15 11h4l3 3v2h-7"/><circle cx="6" cy="18" r="1.6"/><circle cx="18" cy="18" r="1.6"/></svg></span>
+        <span><span class="ob__c-t">Operate a fleet</span><span class="ob__c-s">Register vehicles & drivers, take work across the network.</span></span>
+        <span class="ob__arr">›</span>
+      </a>
+    </div>
+
+    <p class="ob__foot">Already registered? Open your app and <b>Sign in</b> from the <a href="index.html">home page</a>.</p>
+  </main>
+</body>
+</html>

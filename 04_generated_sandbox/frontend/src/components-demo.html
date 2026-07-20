@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GLOS · WS-UX Component Kit (T-007)</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./components/components.css" />
+  <style>
+    .demo { max-width: 760px; margin: 0 auto; padding: 24px; display: grid; gap: 28px; }
+    .demo h1 { color: var(--navy); }
+    .demo section { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+    .demo h2 { margin-top: 0; font-size: 1.05rem; color: var(--navy); }
+  </style>
+</head>
+<body>
+  <main class="demo">
+    <h1>WS-UX Component Kit</h1>
+    <p class="summary-text">Low-literacy-first building blocks (ticket T-007). Each pairs icon + word + color + shape, uses large tap targets, and supports read-aloud.</p>
+
+    <section><h2>BigButton</h2><div id="d-bigbtn"></div></section>
+    <section><h2>StepProgress</h2><div id="d-steps"></div></section>
+    <section><h2>StatusBadge</h2><div id="d-badges" style="display:flex; gap:10px; flex-wrap:wrap;"></div></section>
+    <section><h2>AmountHero</h2><div id="d-amount"></div></section>
+    <section><h2>CardList</h2><div id="d-cards"></div></section>
+    <section><h2>TierLadder</h2><div id="d-ladder"></div></section>
+    <section><h2>ReadAloud</h2><div id="d-readaloud"></div></section>
+    <section><h2>PhotoCapture</h2><div id="d-photo"></div></section>
+    <section><h2>MapPinPicker</h2><div id="d-map"></div></section>
+  </main>
+
+  <script type="module">
+    import {
+      BigButton, StepProgress, StatusBadge, AmountHero,
+      CardList, TierLadder, ReadAloud, PhotoCapture, MapPinPicker, mount,
+    } from './components/index.js';
+
+    mount(document.getElementById('d-bigbtn'), BigButton({ label: 'Cash out', icon: '💸', onClick: () => alert('Paid') }));
+
+    mount(document.getElementById('d-steps'), StepProgress({
+      steps: ['Your details', 'Take selfie', 'Add vehicle', 'Done'],
+      currentIndex: 1,
+    }));
+
+    mount(document.getElementById('d-badges'), [
+      StatusBadge('verified'), StatusBadge('active'), StatusBadge('pending'),
+      StatusBadge('late'), StatusBadge('held'),
+    ]);
+
+    mount(document.getElementById('d-amount'), AmountHero({ amount: 38.5, currency: 'USD', caption: 'You earn' }));
+
+    mount(document.getElementById('d-cards'), CardList({
+      items: [
+        { icon: '🚚', title: 'Pickup in Zone A', subtitle: '5 kg parcel · Fragile', meta: 'Tap to accept', status: 'active' },
+        { icon: '📦', title: 'Delivery to Zone B', subtitle: 'Within 2 hours', status: 'pending' },
+      ],
+      onSelect: (item) => alert('Selected: ' + item.title),
+    }));
+
+    mount(document.getElementById('d-ladder'), TierLadder({ currentTier: 2 }));
+
+    mount(document.getElementById('d-readaloud'), ReadAloud('Your package is running late. New time: 4 PM.', { label: 'Listen' }));
+
+    mount(document.getElementById('d-photo'), PhotoCapture({ label: 'Take delivery photo', onCapture: () => console.log('captured') }));
+
+    mount(document.getElementById('d-map'), MapPinPicker({ label: 'Where is the pickup?', onChange: (c) => console.log('coords', c) }));
+  </script>
+</body>
+</html>
