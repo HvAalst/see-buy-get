@@ -1,12 +1,15 @@
 import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { PersistentMap } from '../../foundation/store/persistent-map';
+import { AuthService } from '../../foundation/auth/auth.service';
+import { AccessToken } from '../../foundation/auth/auth.types';
 import { AgentService } from './agent.service';
 import { DriverService } from './driver.service';
 import { MdpService } from './mdp.service';
 import { VehicleService } from './vehicle.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { OtpService } from './otp.service';
+import { actorRoleForAccount } from './roles.map';
 
 export type AccountRole = 'pudo' | 'driver' | 'mdp';
 
@@ -16,7 +19,8 @@ interface Account {
   role: AccountRole;
   salt: string;
   hash: string;
-  did: string; // the linked domain entity (agent DID / driver DID / MDP id)
+  did: string; // the linked domain entity's real DID (agent / driver / MDP)
+  tenant?: string; // for a fleet driver: the owning manager's DID (the token's tenant boundary)
   createdAt: string;
   resetToken?: string;
   resetExpires?: number;
@@ -44,10 +48,11 @@ export class AccountService {
     private readonly vehicles: VehicleService,
     private readonly managers: FleetManagerService,
     private readonly otp: OtpService,
+    private readonly auth: AuthService,
   ) {}
 
   /** Create a participant account + its domain entity from the sign-up wizard. Requires a verified phone. */
-  signup(input: { role: AccountRole; email: string; password: string; phone: string; profile: Record<string, unknown> }): { accountId: string; role: AccountRole; did: string; email: string; entityStatus?: string } {
+  signup(input: { role: AccountRole; email: string; password: string; phone: string; profile: Record<string, unknown> }): { accountId: string; role: AccountRole; did: string; email: string; entityStatus?: string; token: AccessToken } {
     const email = (input.email || '').trim().toLowerCase();
     if (!email.includes('@')) throw new BadRequestException('A valid email is required');
     if ((input.password || '').length < 6) throw new BadRequestException('Password must be at least 6 characters');
@@ -55,19 +60,24 @@ export class AccountService {
     if (!this.otp.isVerified(input.phone)) throw new BadRequestException('Verify your phone number first');
     if (this.accounts.has(email)) throw new ConflictException('An account with this email already exists');
 
-    const { did, entityStatus } = this.provision(input.role, input.profile);
+    const { did, entityStatus, tenant } = this.provision(input.role, input.profile);
     this.otp.consume(input.phone); // one verification → one account
     const salt = randomBytes(16).toString('hex');
-    const account: Account = { accountId: `acc_${randomBytes(8).toString('hex')}`, email, role: input.role, salt, hash: this.hash(input.password, salt), did, createdAt: new Date().toISOString() };
+    const account: Account = { accountId: `acc_${randomBytes(8).toString('hex')}`, email, role: input.role, salt, hash: this.hash(input.password, salt), did, tenant, createdAt: new Date().toISOString() };
     this.accounts.set(email, account);
-    return { accountId: account.accountId, role: account.role, did, email, entityStatus };
+    return { accountId: account.accountId, role: account.role, did, email, entityStatus, token: this.mint(account) };
   }
 
-  /** Verify credentials → the linked participant (role + did) so the app can open. */
-  login(email: string, password: string): { accountId: string; role: AccountRole; did: string; email: string } {
+  /** Verify credentials → an actor-scoped token (S2). Replaces the old ?<role>=<did> URL "session". */
+  login(email: string, password: string): { accountId: string; role: AccountRole; did: string; email: string; token: AccessToken } {
     const account = this.accounts.get((email || '').trim().toLowerCase());
     if (!account || !this.verify(password, account)) throw new UnauthorizedException('Wrong email or password');
-    return { accountId: account.accountId, role: account.role, did: account.did, email: account.email };
+    return { accountId: account.accountId, role: account.role, did: account.did, email: account.email, token: this.mint(account) };
+  }
+
+  /** Mint the shift-length actor token an app carries after sign-in/up. */
+  private mint(account: Account): AccessToken {
+    return this.auth.mintActorToken({ role: actorRoleForAccount(account.role), did: account.did, tenant: account.tenant });
   }
 
   /** Issue a password-reset token (returned for the sandbox — would be emailed in production). */
@@ -94,7 +104,7 @@ export class AccountService {
 
   // --- internals ---
 
-  private provision(role: AccountRole, profile: Record<string, unknown>): { did: string; entityStatus?: string } {
+  private provision(role: AccountRole, profile: Record<string, unknown>): { did: string; entityStatus?: string; tenant?: string } {
     if (role === 'pudo') {
       const agent = this.agents.register((profile.agent ?? {}) as never);
       if (profile.kyc) this.agents.submitKyc(agent.did, profile.kyc as never);
@@ -106,11 +116,11 @@ export class AccountService {
       const driver = this.drivers.register({ ...(profile.driver as object), managerDid } as never);
       if (!managerDid && profile.vehicle) this.vehicles.register((profile.vehicle ?? {}) as never); // self-employed: own vehicle
       if (profile.kyc && driver.registry === 'heavy') this.drivers.submitKyc(driver.did, profile.kyc as never);
-      return { did: driver.did, entityStatus: this.drivers.get(driver.did).status };
+      return { did: driver.did, entityStatus: this.drivers.get(driver.did).status, tenant: managerDid };
     }
     if (role === 'mdp') {
       const mdp = this.mdps.register((profile.mdp ?? {}) as never);
-      return { did: mdp.mdpId };
+      return { did: mdp.did }; // the real DID now (was the mdp_<hex> id — a type lie)
     }
     throw new BadRequestException(`Unknown account role: ${role}`);
   }

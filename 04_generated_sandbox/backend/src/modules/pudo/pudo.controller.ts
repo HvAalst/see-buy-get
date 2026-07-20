@@ -1,4 +1,6 @@
 import { Body, Controller, Get, HttpException, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common';
+import { Public } from '../../foundation/auth/public.decorator';
+import { AuthService } from '../../foundation/auth/auth.service';
 import { AgentService } from './agent.service';
 import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
@@ -55,17 +57,23 @@ export class PudoController {
     private readonly managers: FleetManagerService,
     private readonly accounts: AccountService,
     private readonly otp: OtpService,
+    private readonly auth: AuthService,
   ) {}
 
   // --- phone verification (mandatory at onboarding — control-tower contact + GPS) ---
+  // These six are @Public(): they are the PRE-auth flow. A caller cannot hold an actor token before
+  // they have signed up or logged in, and once GLOS_CLIENT_SECRET gates /auth/token (S0) the browser
+  // can no longer mint a machine token to reach them either. They must be reachable unauthenticated.
 
   /** Issue a verification code for a phone (returned for the sandbox; SMS'd in production). */
+  @Public()
   @Post('auth/phone/request')
   phoneRequest(@Body() dto: PhoneRequestDto) {
     return this.otp.request(dto.phone);
   }
 
   /** Confirm the code → marks the phone verified for sign-up. */
+  @Public()
   @Post('auth/phone/verify')
   phoneVerify(@Body() dto: PhoneVerifyDto) {
     return this.otp.verify(dto.phone, dto.code);
@@ -73,24 +81,28 @@ export class PudoController {
 
   // --- participant accounts: sign up / sign in / reset (PUDO field apps) ---
 
-  /** Create a participant account + its domain entity (PUDO agent / driver / MDP) from the wizard. */
+  /** Create a participant account + its domain entity (PUDO agent / driver / MDP) → an actor token. */
+  @Public()
   @Post('auth/signup')
   signup(@Body() dto: SignupDto) {
     return this.accounts.signup(dto);
   }
 
-  /** Sign in with email + password → the linked participant (role + id) so the app can open. */
+  /** Sign in with email + password → an actor-scoped token the app carries. */
+  @Public()
   @Post('auth/login')
   authLogin(@Body() dto: LoginDto) {
     return this.accounts.login(dto.email, dto.password);
   }
 
   /** Request a password reset (the token is returned for the sandbox; emailed in production). */
+  @Public()
   @Post('auth/forgot')
   authForgot(@Body() dto: ForgotDto) {
     return this.accounts.forgot(dto.email);
   }
 
+  @Public()
   @Post('auth/reset')
   authReset(@Body() dto: ResetDto) {
     return this.accounts.reset(dto.token, dto.password);
@@ -652,10 +664,14 @@ export class PudoController {
     return this.managers.list();
   }
 
-  /** Fleet-console sign-in — resolve an ACTIVE manager from their login code (scopes the console). */
+  /** Fleet-console sign-in — resolve an ACTIVE manager from their login code, mint their actor token.
+   * A manager's own DID is both their identity and their tenant boundary (they see only their fleet). */
+  @Public()
   @Post('fleet/managers/login')
   managerLogin(@Body() dto: ManagerLoginDto) {
-    return this.managers.login(dto.code);
+    const m = this.managers.login(dto.code);
+    const token = this.auth.mintActorToken({ role: 'fleet_manager', did: m.did, tenant: m.did });
+    return { ...m, token };
   }
 
   /** Managers awaiting a KYC decision (the GLOS operator review queue). */

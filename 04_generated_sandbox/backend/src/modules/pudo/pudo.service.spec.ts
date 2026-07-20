@@ -26,6 +26,7 @@ import { TrackingContextService } from '../m4/tracking-context.service';
 import { NormalizationService } from '../m4/normalization.service';
 import { ConnectorRegistry, MobileSdkConnector, RestCarrierConnector } from '../m4/connectors/connectors';
 import { WalletService } from '../m1/wallet/wallet.service';
+import { AuthService } from '../../foundation/auth/auth.service';
 import { DidService } from '../../foundation/did/did.service';
 import { IdentityVault } from '../../foundation/data-firewall/identity-vault.service';
 import { OperationalStore } from '../../foundation/data-firewall/operational-store.service';
@@ -69,7 +70,7 @@ describe('PUDO Light', () => {
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
         GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, ToteService, VehicleService, DriverService, FleetService, DispatchService, FleetManagerService, AccountService, OtpService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
-        WalletService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
+        WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
       ],
     }).compile();

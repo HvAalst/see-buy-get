@@ -37,6 +37,18 @@ export class OperationalStore {
     return true;
   }
 
+  /**
+   * "Sign out all my devices" (S2): bump the revocation counter so every live token for this DID goes
+   * inactive on its next introspect. Returns the new version, or null if the DID has no profile.
+   */
+  bumpTokenVersion(did: string): number | null {
+    const profile = this.profiles.get(did);
+    if (!profile) return null;
+    profile.tokenVersion = (profile.tokenVersion ?? 0) + 1;
+    this.profiles.set(did, profile);
+    return profile.tokenVersion;
+  }
+
   /** Pseudonymous query used by matching: find by capability, never by identity. */
   findByCapability(capability: string): OperationalProfile[] {
     return Array.from(this.profiles.values()).filter((p) => p.capabilities.includes(capability));

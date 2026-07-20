@@ -1,7 +1,10 @@
 import { BadRequestException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { DidService } from '../did/did.service';
-import { AccessToken, IntrospectionResult, IssueTokenInput, TokenClaims } from './auth.types';
+import { OperationalStore } from '../data-firewall/operational-store.service';
+import { scopesForRole } from './actor-scopes';
+import { AccessToken, ActorRole, IntrospectionResult, IssueTokenInput, TokenClaims } from './auth.types';
+import { Tier } from '../data-firewall/data-firewall.types';
 
 /** Default lifetime when a caller does not ask for one. */
 export const DEFAULT_TTL_SECONDS = 900; // 15 min
@@ -13,6 +16,8 @@ export const DEFAULT_TTL_SECONDS = 900; // 15 min
 export const MAX_TTL_SECONDS = 12 * 60 * 60; // 12h
 /** Ceiling for the *public* grant, where the TTL is attacker-controlled. */
 export const PUBLIC_MAX_TTL_SECONDS = 900; // 15 min
+/** Actor sessions are shift-length: long enough to survive a working day on a flaky network. */
+export const SHIFT_TTL_SECONDS = 10 * 60 * 60; // 10h
 
 /**
  * AuthService — minimal OAuth 2.1 / OIDC-style token shim (T-006, APIG-011 subset).
@@ -34,7 +39,10 @@ export class AuthService {
    */
   private readonly clientSecret = process.env.GLOS_CLIENT_SECRET;
 
-  constructor(private readonly didService: DidService) {
+  constructor(
+    private readonly didService: DidService,
+    private readonly profiles: OperationalStore,
+  ) {
     if (!this.clientSecret) {
       this.logger.warn(
         'GLOS_CLIENT_SECRET is not set — POST /v1/auth/token will mint a token for ANY subject. ' +
@@ -54,7 +62,8 @@ export class AuthService {
     }
   }
 
-  issueToken({ sub, type, ttlSeconds = DEFAULT_TTL_SECONDS }: IssueTokenInput): AccessToken {
+  issueToken(input: IssueTokenInput): AccessToken {
+    const { sub, type, ttlSeconds = DEFAULT_TTL_SECONDS } = input;
     if (!sub || !type) throw new BadRequestException('sub and type are required');
     if (type !== 'client_credentials' && type !== 'did') {
       throw new BadRequestException('type must be "client_credentials" or "did"');
@@ -66,8 +75,42 @@ export class AuthService {
     // Hard ceiling — an unbounded caller-supplied lifetime is a permanent credential.
     const ttl = Math.max(60, Math.min(Math.floor(ttlSeconds) || DEFAULT_TTL_SECONDS, MAX_TTL_SECONDS));
     const now = Math.floor(Date.now() / 1000);
-    const claims: TokenClaims = { sub, type, iat: now, exp: now + ttl };
+    const claims: TokenClaims = {
+      sub,
+      type,
+      iat: now,
+      exp: now + ttl,
+      ver: 1,
+      // Actor claims — undefined on a plain machine token, populated by mintActorToken().
+      role: input.role,
+      did: input.did,
+      scopes: input.scopes,
+      tenant: input.tenant,
+      tier: input.tier,
+      tokenVersion: input.tokenVersion,
+    };
     return { access_token: this.sign(claims), token_type: 'Bearer', expires_in: ttl };
+  }
+
+  /**
+   * Mint a shift-length actor token at login. Scopes come from the role vocabulary; tier and the
+   * revocation counter come from the actor's OperationalProfile (if any). This is the durable
+   * replacement for the ?agent=<did> URL-param "session" — the token now carries who you are and
+   * what you may do, verifiably. The DID must already be registered (issueToken enforces it).
+   */
+  mintActorToken(input: { role: ActorRole; did: string; tenant?: string; tier?: Tier }): AccessToken {
+    const profile = this.profiles.get(input.did);
+    return this.issueToken({
+      sub: input.did,
+      type: 'did',
+      role: input.role,
+      did: input.did,
+      scopes: scopesForRole(input.role),
+      tenant: input.tenant,
+      tier: input.tier ?? profile?.tier,
+      tokenVersion: profile?.tokenVersion ?? 0,
+      ttlSeconds: SHIFT_TTL_SECONDS,
+    });
   }
 
   introspect(token: string): IntrospectionResult {
@@ -78,7 +121,23 @@ export class AuthService {
     if (claims.type === 'did' && !this.didService.exists(claims.sub)) {
       return { active: false, reason: 'did_not_found' };
     }
-    return { active: true, sub: claims.sub, type: claims.type, exp: claims.exp };
+    // Revocation: if the actor's profile tokenVersion has moved past the token's, it was signed out.
+    if (claims.tokenVersion != null && claims.did) {
+      const current = this.profiles.get(claims.did)?.tokenVersion ?? 0;
+      if (current > claims.tokenVersion) return { active: false, reason: 'revoked' };
+    }
+    // WHITELIST PROJECTION — every actor field must be copied here or the guard never sees it.
+    return {
+      active: true,
+      sub: claims.sub,
+      type: claims.type,
+      exp: claims.exp,
+      role: claims.role,
+      did: claims.did,
+      scopes: claims.scopes,
+      tenant: claims.tenant,
+      tier: claims.tier,
+    };
   }
 
   // --- token codec (compact, HMAC-SHA256) ---

@@ -75,6 +75,8 @@ export type ParcelStatus = 'Created' | 'At_PUDO' | 'On_Bus' | 'At_MDP' | 'Ready_
  */
 export interface Mdp {
   mdpId: string;
+  /** Real GLOS DID (S2). The mdpId stays the domain key; the DID is what an actor token binds to. */
+  did: string;
   name: string;
   zones: string[]; // the delivery zones this hub serves (last-mile reach)
   location: { lat: number; lng: number };

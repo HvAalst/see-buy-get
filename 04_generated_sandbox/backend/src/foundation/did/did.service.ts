@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { randomBytes } from 'crypto';
+import { PersistentMap } from '../store/persistent-map';
 import { LedgerService } from '../ledger/ledger.service';
 import { EventBus } from '../events/event-bus.service';
 import { GlosEvent } from '../events/glos-events';
@@ -13,7 +14,10 @@ import { DidDocument, DID_METHOD, VerificationMethod } from './did.types';
  */
 @Injectable()
 export class DidService {
-  private readonly registry = new Map<string, DidDocument>();
+  // Durable: the DID is the root identity every persisted entity (agent/driver/...) references, and
+  // DID-bound actor tokens (S2) are introspected against exists(). If DIDs vanished on restart, every
+  // actor token would go inactive and every persisted record would point at an unresolvable identity.
+  private readonly registry = new PersistentMap<string, DidDocument>('did-registry');
 
   constructor(
     private readonly ledger: LedgerService,

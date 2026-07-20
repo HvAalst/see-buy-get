@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { AuthService, DEFAULT_TTL_SECONDS, MAX_TTL_SECONDS } from './auth.service';
 import { DidService } from '../did/did.service';
+import { OperationalStore } from '../data-firewall/operational-store.service';
 import { LedgerService } from '../ledger/ledger.service';
 import { InMemoryLedgerAdapter } from '../ledger/in-memory-ledger.adapter';
 import { LEDGER_ADAPTER } from '../ledger/ledger.types';
@@ -9,12 +10,14 @@ import { EventBus } from '../events/event-bus.service';
 describe('AuthService', () => {
   let auth: AuthService;
   let did: DidService;
+  let profiles: OperationalStore;
 
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         AuthService,
         DidService,
+        OperationalStore,
         LedgerService,
         EventBus,
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
@@ -22,6 +25,7 @@ describe('AuthService', () => {
     }).compile();
     auth = moduleRef.get(AuthService);
     did = moduleRef.get(DidService);
+    profiles = moduleRef.get(OperationalStore);
   });
 
   it('issues and accepts a client-credentials token', () => {
@@ -65,10 +69,37 @@ describe('AuthService', () => {
     expect(auth.issueToken({ sub: 'c', type: 'client_credentials' }).expires_in).toBe(DEFAULT_TTL_SECONDS);
   });
 
+  it('mints an actor token whose claims survive the introspect projection (S2)', () => {
+    const doc = did.generate('pudo:+254700');
+    profiles.upsert({ did: doc.id, tier: 2, status: 'active', capabilities: ['pudo-agent'] });
+
+    const { access_token } = auth.mintActorToken({ role: 'agent', did: doc.id, tenant: 'fleet-1' });
+    const r = auth.introspect(access_token);
+
+    expect(r.active).toBe(true);
+    expect(r.role).toBe('agent');
+    expect(r.did).toBe(doc.id);
+    expect(r.tenant).toBe('fleet-1');
+    expect(r.tier).toBe(2);
+    expect(r.scopes).toContain('parcel:accept'); // proves scopes are projected, not dropped
+  });
+
+  it('revokes all of an actor\'s live tokens when tokenVersion is bumped', () => {
+    const doc = did.generate('pudo:+254701');
+    profiles.upsert({ did: doc.id, tier: 2, status: 'active', capabilities: ['pudo-agent'], tokenVersion: 0 });
+    const { access_token } = auth.mintActorToken({ role: 'agent', did: doc.id });
+    expect(auth.introspect(access_token).active).toBe(true);
+
+    profiles.bumpTokenVersion(doc.id); // "sign out all my devices"
+    const r = auth.introspect(access_token);
+    expect(r.active).toBe(false);
+    expect(r.reason).toBe('revoked');
+  });
+
   it('gates the public grant on the client secret once one is configured', () => {
     expect(() => auth.assertClientCredentials(undefined)).not.toThrow(); // unset in tests → open
 
-    const gated = new AuthService(did);
+    const gated = new AuthService(did, profiles);
     (gated as unknown as { clientSecret?: string }).clientSecret = 's3cret';
     expect(() => gated.assertClientCredentials('s3cret')).not.toThrow();
     expect(() => gated.assertClientCredentials('wrong')).toThrow();

@@ -3,6 +3,8 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
 import { randomBytes } from 'crypto';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
+import { DidService } from '../../foundation/did/did.service';
+import { OperationalStore } from '../../foundation/data-firewall/operational-store.service';
 import { AgentService } from './agent.service';
 import { ParcelService } from './parcel.service';
 import { ToteService } from './tote.service';
@@ -38,14 +40,23 @@ export class MdpService {
     private readonly fleet: FleetService,
     private readonly gate: WalletGateService,
     private readonly events: EventBus,
+    private readonly dids: DidService,
+    private readonly core: OperationalStore,
   ) {}
 
   // --- registry ---
 
   register(input: { name: string; zones: string[]; location: { lat: number; lng: number }; contactPhone?: string; address?: string; pricePerParcel?: number }): Mdp {
     if (!input.zones?.length) throw new BadRequestException('An MDP must cover at least one zone');
+    // Real DID (S2) — an MDP worker is a first-class actor and their token binds to this, not to a
+    // synthetic mdp_<hex> id. A pseudonymous operational profile makes it OperationalStore-resolvable
+    // (tier/tokenVersion) like every other participant. No PII goes to the core (contact/address stay
+    // on the domain record only).
+    const did = this.dids.generate(`mdp:${input.name}`, { role: 'pudo-mdp' }).id;
+    this.core.upsert({ did, tier: 2, status: 'active', capabilities: ['pudo-mdp'], metadata: { zones: input.zones } });
     const mdp: Mdp = {
       mdpId: `mdp_${randomBytes(5).toString('hex')}`,
+      did,
       name: input.name,
       zones: input.zones,
       location: input.location,

@@ -51,4 +51,10 @@ export interface OperationalProfile {
   jurisdiction?: string;
   /** Free-form non-PII operational metadata (scanned by the firewall on write). */
   metadata?: Record<string, unknown>;
+  /**
+   * Revocation counter (S2). Copied into an actor token at mint and compared on every introspect;
+   * incrementing it invalidates all of this actor's live tokens ("sign out all my devices"). O(1),
+   * no denylist, survives restart because the profile is persisted.
+   */
+  tokenVersion?: number;
 }
