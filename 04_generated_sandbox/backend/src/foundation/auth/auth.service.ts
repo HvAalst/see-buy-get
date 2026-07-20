@@ -93,6 +93,26 @@ export class AuthService {
   }
 
   /**
+   * Mint an OPERATOR token (role 'operator', the `*` scope). Trusted-caller only: the caller must
+   * present the client secret. This is the "ops via script/curl" path the plan defers a UI for — the
+   * client secret is the operator trust boundary until a real ops console exists.
+   */
+  mintOperatorToken(clientSecret?: string): AccessToken {
+    this.assertClientCredentials(clientSecret);
+    return this.issueToken({ sub: 'glos-operator', type: 'client_credentials', role: 'operator', scopes: ['*'], ttlSeconds: SHIFT_TTL_SECONDS });
+  }
+
+  /**
+   * Impersonate a participant — mint an actor token for an arbitrary registered DID. Trusted-caller
+   * only (client secret). Used by the seed and ops tooling to act AS an entity they provisioned
+   * without a password. In dev (no secret configured) this is open, like every grant.
+   */
+  mintActorTokenFor(clientSecret: string | undefined, input: { role: ActorRole; did: string; tenant?: string; tier?: Tier }): AccessToken {
+    this.assertClientCredentials(clientSecret);
+    return this.mintActorToken(input);
+  }
+
+  /**
    * Mint a shift-length actor token at login. Scopes come from the role vocabulary; tier and the
    * revocation counter come from the actor's OperationalProfile (if any). This is the durable
    * replacement for the ?agent=<did> URL-param "session" — the token now carries who you are and

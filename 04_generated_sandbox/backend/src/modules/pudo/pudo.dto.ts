@@ -73,7 +73,7 @@ export class TopUpDto {
 
 export class OverdraftDto {
   @IsNumber() @Min(0.01) amount!: number;
-  @IsString() adminId!: string;
+  @IsOptional() @IsString() adminId?: string; // operator-override only; normal actors are pinned to their token
 }
 
 export class CorridorDto {
@@ -94,7 +94,7 @@ export class DriverDto {
 }
 
 export class AcceptParcelDto {
-  @IsString() agentDid!: string;
+  @IsOptional() @IsString() agentDid?: string; // operator-override only; normal actors are pinned to their token
   @IsString() parcelId!: string;
   @IsIn(['S', 'M', 'L', 'HEAVY']) size!: 'S' | 'M' | 'L' | 'HEAVY';
   @IsString() destZone!: string;
@@ -107,23 +107,23 @@ export class AcceptParcelDto {
 }
 
 export class HandoverDto {
-  @IsString() agentDid!: string;
+  @IsOptional() @IsString() agentDid?: string; // operator-override only; normal actors are pinned to their token
   @IsString() driverBadgeId!: string;
   @IsString({ each: true }) parcelIds!: string[];
 }
 
 export class ArriveDto {
-  @IsString() destAgentDid!: string;
+  @IsOptional() @IsString() destAgentDid?: string; // operator-override only; normal actors are pinned to their token
 }
 
 export class PickupDto {
-  @IsString() agentDid!: string;
+  @IsOptional() @IsString() agentDid?: string; // operator-override only; normal actors are pinned to their token
   @IsString() otp!: string;
   @IsOptional() @IsString() deliveredPhotoRef?: string;
 }
 
 export class VoidDto {
-  @IsString() agentDid!: string;
+  @IsOptional() @IsString() agentDid?: string; // operator-override only; normal actors are pinned to their token
   @IsString() voidedPhotoRef!: string;
 }
 
@@ -222,21 +222,21 @@ export class InboundOrderDto {
 }
 
 export class IntakeDto {
-  @IsString() agentDid!: string;
+  @IsOptional() @IsString() agentDid?: string; // operator-override only; normal actors are pinned to their token
 }
 
 export class ShelveDto {
-  @IsString() agentDid!: string;
+  @IsOptional() @IsString() agentDid?: string; // operator-override only; normal actors are pinned to their token
   @IsOptional() @IsString() binId?: string;
 }
 
 export class CollectDto {
-  @IsString() agentDid!: string;
+  @IsOptional() @IsString() agentDid?: string; // operator-override only; normal actors are pinned to their token
   @IsString() collectionCode!: string;
 }
 
 export class DisputeDto {
-  @IsString() agentDid!: string;
+  @IsOptional() @IsString() agentDid?: string; // operator-override only; normal actors are pinned to their token
   @IsString() reason!: string;
   @IsString() photoProofRef!: string;
 }

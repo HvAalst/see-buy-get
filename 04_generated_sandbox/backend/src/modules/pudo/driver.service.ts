@@ -167,8 +167,8 @@ export class DriverService {
     return this.require(did);
   }
 
-  list(): FleetDriver[] {
-    return [...this.drivers.values()];
+  list(filter: { managerDid?: string } = {}): FleetDriver[] {
+    return [...this.drivers.values()].filter((d) => !filter.managerDid || d.managerDid === filter.managerDid);
   }
 
   // --- internals ---

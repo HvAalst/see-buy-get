@@ -13,7 +13,10 @@ const rnd = () => Math.random().toString(16).slice(2, 8);
 let token;
 async function tok() {
   if (token) return token;
-  const r = await fetch(`${API}/auth/token`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sub: 'seed', type: 'client_credentials' }) });
+  // The seed provisions entities and then acts as them — that is an OPERATOR capability (S3). An
+  // operator token satisfies every @Roles('operator') route and may impersonate any agent by passing
+  // agentDid in the body (which the calls below already do). GLOS_CLIENT_SECRET is required once set.
+  const r = await fetch(`${API}/auth/token`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ role: 'operator', type: 'client_credentials', clientSecret: process.env.GLOS_CLIENT_SECRET }) });
   if (!r.ok) throw new Error(`auth ${r.status}`);
   token = (await r.json()).access_token;
   return token;

@@ -1,5 +1,9 @@
 import { Body, Controller, Get, HttpException, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common';
 import { Public } from '../../foundation/auth/public.decorator';
+import { Roles } from '../../foundation/auth/scopes.decorator';
+import { Actor } from '../../foundation/auth/actor.decorator';
+import { actingDid, actingTenant, auditActor } from '../../foundation/auth/acting';
+import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { AuthService } from '../../foundation/auth/auth.service';
 import { AgentService } from './agent.service';
 import { WalletGateService } from './wallet-gate.service';
@@ -126,9 +130,11 @@ export class PudoController {
     return this.agents.submitKyc(did, dto);
   }
 
+  /** Operator vetting decision — a field token must never approve/reject KYC. */
+  @Roles('operator')
   @Post('agents/:did/kyc-decision')
-  decideKyc(@Param('did') did: string, @Body() dto: KycDecisionDto) {
-    return this.agents.decideKyc(did, dto.approve, dto.by);
+  decideKyc(@Param('did') did: string, @Body() dto: KycDecisionDto, @Actor() actor: IntrospectionResult) {
+    return this.agents.decideKyc(did, dto.approve, auditActor(actor, dto.by));
   }
 
   /** Record the refundable equipment/starter-kit deposit. */
@@ -138,6 +144,7 @@ export class PudoController {
   }
 
   /** Operator KYC review queue — agents awaiting a decision. */
+  @Roles('operator')
   @Get('agents/kyc-queue')
   kycQueue() {
     return this.agents.kycQueue();
@@ -198,9 +205,11 @@ export class PudoController {
     return this.gate.topUp(did, dto.amount, dto.bankRef);
   }
 
+  /** Emergency admin credit — operator only (self-asserted adminId is no longer trusted). */
+  @Roles('operator')
   @Post('agents/:did/overdraft')
-  overdraft(@Param('did') did: string, @Body() dto: OverdraftDto) {
-    return this.gate.overdraft(did, dto.amount, dto.adminId);
+  overdraft(@Param('did') did: string, @Body() dto: OverdraftDto, @Actor() actor: IntrospectionResult) {
+    return this.gate.overdraft(did, dto.amount, auditActor(actor, dto.adminId));
   }
 
   @Get('agents/:did/ledger')
@@ -235,7 +244,8 @@ export class PudoController {
     return this.corridors.listDrivers();
   }
 
-  /** Weekly driver settlement (Finance · DRIVER_PAYOUT). */
+  /** Weekly driver settlement (Finance · DRIVER_PAYOUT) — operator only. */
+  @Roles('operator')
   @Post('drivers/payout')
   driverPayout(@Body() dto: DriverPayoutDto) {
     return this.gate.driverPayout(dto.driverId, dto.amount);
@@ -244,28 +254,28 @@ export class PudoController {
   // --- agent app: 3 screens ---
 
   @Post('parcels/accept')
-  accept(@Body() dto: AcceptParcelDto) {
-    return this.parcels.accept(dto);
+  accept(@Body() dto: AcceptParcelDto, @Actor() actor: IntrospectionResult) {
+    return this.parcels.accept({ ...dto, agentDid: actingDid(actor, dto.agentDid) });
   }
 
   @Post('parcels/handover')
-  handover(@Body() dto: HandoverDto) {
-    return this.parcels.handover(dto);
+  handover(@Body() dto: HandoverDto, @Actor() actor: IntrospectionResult) {
+    return this.parcels.handover({ ...dto, agentDid: actingDid(actor, dto.agentDid) });
   }
 
   @Post('parcels/:id/arrive')
-  arrive(@Param('id') id: string, @Body() dto: ArriveDto) {
-    return this.parcels.arrive(id, dto.destAgentDid);
+  arrive(@Param('id') id: string, @Body() dto: ArriveDto, @Actor() actor: IntrospectionResult) {
+    return this.parcels.arrive(id, actingDid(actor, dto.destAgentDid));
   }
 
   @Post('parcels/:id/pickup')
-  pickup(@Param('id') id: string, @Body() dto: PickupDto) {
-    return this.parcels.pickup(id, dto.agentDid, dto.otp, dto.deliveredPhotoRef);
+  pickup(@Param('id') id: string, @Body() dto: PickupDto, @Actor() actor: IntrospectionResult) {
+    return this.parcels.pickup(id, actingDid(actor, dto.agentDid), dto.otp, dto.deliveredPhotoRef);
   }
 
   @Post('parcels/:id/void')
-  voidParcel(@Param('id') id: string, @Body() dto: VoidDto) {
-    return this.parcels.void(id, dto.agentDid, dto.voidedPhotoRef);
+  voidParcel(@Param('id') id: string, @Body() dto: VoidDto, @Actor() actor: IntrospectionResult) {
+    return this.parcels.void(id, actingDid(actor, dto.agentDid), dto.voidedPhotoRef);
   }
 
   @Get('parcels')
@@ -286,10 +296,11 @@ export class PudoController {
     return { planned: true, ...this.routing.planJourney({ originAgentDid: parcel.committedNodeDid ?? parcel.originAgentDid, destAgentDid: parcel.destAgentDid }) };
   }
 
-  /** Reverse logistics: cancel a not-yet-delivered parcel (Created / At_PUDO / At_MDP). */
+  /** Reverse logistics: cancel a not-yet-delivered parcel (Created / At_PUDO / At_MDP) — operator only. */
+  @Roles('operator')
   @Post('parcels/:id/cancel')
-  cancelParcel(@Param('id') id: string, @Body() dto: CancelParcelDto) {
-    return this.parcels.cancel(id, dto.by, dto.reason);
+  cancelParcel(@Param('id') id: string, @Body() dto: CancelParcelDto, @Actor() actor: IntrospectionResult) {
+    return this.parcels.cancel(id, auditActor(actor, dto.by), dto.reason);
   }
 
   /** Destination PUDO receives a whole bag → shelves each parcel + frees the tote (closes the tote leg). */
@@ -515,32 +526,32 @@ export class PudoController {
 
   /** Origin PUDO scans the vendor's parcel in. */
   @Post('parcels/:id/intake')
-  intake(@Param('id') id: string, @Body() dto: IntakeDto) {
-    return this.parcels.intakeInbound(id, dto.agentDid);
+  intake(@Param('id') id: string, @Body() dto: IntakeDto, @Actor() actor: IntrospectionResult) {
+    return this.parcels.intakeInbound(id, actingDid(actor, dto.agentDid));
   }
 
   /** Destination PUDO shelves an arrived parcel → Ready_For_Pickup + buyer notified. */
   @Post('parcels/:id/shelve')
-  shelve(@Param('id') id: string, @Body() dto: ShelveDto) {
-    return this.parcels.shelve(id, dto.agentDid, dto.binId);
+  shelve(@Param('id') id: string, @Body() dto: ShelveDto, @Actor() actor: IntrospectionResult) {
+    return this.parcels.shelve(id, actingDid(actor, dto.agentDid), dto.binId);
   }
 
   /** Buyer presents the collection QR → resolve the parcel + shelf slot (opens the handover screen). */
   @Post('parcels/collect')
-  collect(@Body() dto: CollectDto) {
-    return this.parcels.collect(dto.collectionCode, dto.agentDid);
+  collect(@Body() dto: CollectDto, @Actor() actor: IntrospectionResult) {
+    return this.parcels.collect(dto.collectionCode, actingDid(actor, dto.agentDid));
   }
 
   /** Buyer confirms the parcel is correct → Delivered, order closed. */
   @Post('parcels/:id/collect-confirm')
-  collectConfirm(@Param('id') id: string, @Body() dto: CollectDto) {
-    return this.parcels.collectConfirm(id, dto.agentDid, dto.collectionCode);
+  collectConfirm(@Param('id') id: string, @Body() dto: CollectDto, @Actor() actor: IntrospectionResult) {
+    return this.parcels.collectConfirm(id, actingDid(actor, dto.agentDid), dto.collectionCode);
   }
 
   /** Buyer reports a discrepancy at collection → Disputed, with mandatory photo proof. */
   @Post('parcels/:id/dispute')
-  dispute(@Param('id') id: string, @Body() dto: DisputeDto) {
-    return this.parcels.dispute(id, dto.agentDid, dto.reason, dto.photoProofRef);
+  dispute(@Param('id') id: string, @Body() dto: DisputeDto, @Actor() actor: IntrospectionResult) {
+    return this.parcels.dispute(id, actingDid(actor, dto.agentDid), dto.reason, dto.photoProofRef);
   }
 
   /** Tier-1 customer rates a delivered parcel → writes the agent composite to the shared core (graduation). */
@@ -554,13 +565,15 @@ export class PudoController {
     return this.ratings.agentRating(did);
   }
 
-  // --- operator control tower (↔ M7/SSE light) ---
+  // --- operator control tower (↔ M7/SSE light) — operator only ---
 
+  @Roles('operator')
   @Get('dashboard')
   dashboard() {
     return this.monitor.dashboard();
   }
 
+  @Roles('operator')
   @Get('flags')
   flags() {
     return this.monitor.flags();
@@ -586,6 +599,8 @@ export class PudoController {
     return this.routing.planJourney(dto);
   }
 
+  /** Network revenue / float / ledger — operator only. A field token must never read this. */
+  @Roles('operator')
   @Get('finance')
   finance() {
     return this.monitor.finance();
@@ -675,6 +690,7 @@ export class PudoController {
   }
 
   /** Managers awaiting a KYC decision (the GLOS operator review queue). */
+  @Roles('operator')
   @Get('fleet/managers/kyc-queue')
   managerKycQueue() {
     return this.managers.kycQueue();
@@ -691,17 +707,22 @@ export class PudoController {
     return this.managers.submitKyc(did, dto);
   }
 
+  /** GLOS operator vetting of a fleet manager — a manager/driver token must never self-approve. */
+  @Roles('operator')
   @Post('fleet/managers/:did/kyc-decision')
-  managerDecideKyc(@Param('did') did: string, @Body() dto: ManagerKycDecisionDto) {
-    return this.managers.decideKyc(did, dto.approve, dto.by);
+  managerDecideKyc(@Param('did') did: string, @Body() dto: ManagerKycDecisionDto, @Actor() actor: IntrospectionResult) {
+    return this.managers.decideKyc(did, dto.approve, auditActor(actor, dto.by));
   }
 
-  /** Record the refundable operating bond → ACTIVE (the manager may now register a fleet). */
+  /** Record the refundable operating bond → ACTIVE — operator only (the fleet console recorded its
+   * own bond before S3: a self-approval loop wired into shipped UI). */
+  @Roles('operator')
   @Post('fleet/managers/:did/bond')
   managerBond(@Param('did') did: string) {
     return this.managers.recordBond(did);
   }
 
+  @Roles('operator')
   @Post('fleet/managers/:did/suspend')
   suspendManager(@Param('did') did: string) {
     return this.managers.suspend(did);
@@ -715,9 +736,10 @@ export class PudoController {
     return this.vehicles.register(dto as never);
   }
 
+  /** A fleet manager sees only their own vehicles (actor.tenant); operator sees all. */
   @Get('vehicles')
-  listVehicles(@Query('status') status?: string, @Query('class') vehicleClass?: string) {
-    return this.vehicles.list({ status: status as never, vehicleClass: vehicleClass as never });
+  listVehicles(@Actor() actor: IntrospectionResult, @Query('status') status?: string, @Query('class') vehicleClass?: string) {
+    return this.vehicles.list({ status: status as never, vehicleClass: vehicleClass as never, managerDid: actingTenant(actor) });
   }
 
   /** The truck sub-type catalog (label + capacity + handling capabilities) for registration UIs. */
@@ -755,11 +777,13 @@ export class PudoController {
     return this.drivers.register(dto as never);
   }
 
+  /** A fleet manager sees only their own drivers (actor.tenant); operator sees all. */
   @Get('fleet/drivers')
-  listFleetDrivers() {
-    return this.drivers.list();
+  listFleetDrivers(@Actor() actor: IntrospectionResult) {
+    return this.drivers.list({ managerDid: actingTenant(actor) });
   }
 
+  @Roles('operator')
   @Get('fleet/drivers/kyc-queue')
   driverKycQueue() {
     return this.drivers.kycQueue();
@@ -776,11 +800,13 @@ export class PudoController {
     return this.drivers.submitKyc(did, dto);
   }
 
+  @Roles('operator')
   @Post('fleet/drivers/:did/kyc-decision')
-  driverDecideKyc(@Param('did') did: string, @Body() dto: DriverKycDecisionDto) {
-    return this.drivers.decideKyc(did, dto.approve, dto.by);
+  driverDecideKyc(@Param('did') did: string, @Body() dto: DriverKycDecisionDto, @Actor() actor: IntrospectionResult) {
+    return this.drivers.decideKyc(did, dto.approve, auditActor(actor, dto.by));
   }
 
+  @Roles('operator')
   @Post('fleet/drivers/:did/suspend')
   suspendDriver(@Param('did') did: string) {
     return this.drivers.suspend(did);
@@ -892,9 +918,11 @@ export class PudoController {
   }
 
   /** Fleet-manager dashboard: vehicle/driver/session counts, working hours, live positions + cargo.
-   * Pass ?manager=<did> to scope to one fleet; omit for the network-wide view. */
+   * A fleet manager sees ONLY their own fleet (actor.tenant); the ?manager= scope and the omit-for-all
+   * view are operator-only. Before S3 anyone could pass ?manager= to read a competitor's fleet. */
   @Get('fleet/dashboard')
-  fleetDashboard(@Query('manager') managerDid?: string) {
+  fleetDashboard(@Actor() actor: IntrospectionResult, @Query('manager') managerQuery?: string) {
+    const managerDid = actingTenant(actor, managerQuery);
     const overview = this.fleet.overview(managerDid);
     const driverDids = managerDid ? new Set(this.drivers.list().filter((d) => d.managerDid === managerDid).map((d) => d.did)) : undefined;
     const cargo = this.dispatch.activeCargo(driverDids);

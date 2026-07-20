@@ -318,7 +318,7 @@ describe('GLOS backend (e2e)', () => {
     // Fund the shipper's wallet (prototype credit).
     await request(http).post(`/v1/identity/accounts/${shipper.accountId}/wallet/credit`).send({ amount: 1000 }).expect(201);
 
-    const tokenRes = await request(http).post('/v1/auth/token').send({ sub: 'ops', type: 'client_credentials' }).expect(201);
+    const tokenRes = await request(http).post('/v1/auth/token').send({ role: 'operator', type: 'client_credentials' }).expect(201);
     const auth = { Authorization: `Bearer ${tokenRes.body.access_token}` };
 
     // Create + decompose a shipment.
@@ -370,7 +370,7 @@ describe('GLOS backend (e2e)', () => {
     const carrier = await onboard('carrier');
     await request(http).post(`/v1/identity/accounts/${shipper.accountId}/wallet/credit`).send({ amount: 1000 }).expect(201);
 
-    const tokenRes = await request(http).post('/v1/auth/token').send({ sub: 'ops', type: 'client_credentials' }).expect(201);
+    const tokenRes = await request(http).post('/v1/auth/token').send({ role: 'operator', type: 'client_credentials' }).expect(201);
     const auth = { Authorization: `Bearer ${tokenRes.body.access_token}` };
 
     // Shipment.
@@ -407,7 +407,7 @@ describe('GLOS backend (e2e)', () => {
     }
     const shipper = await onboard('shipper');
     const carrier = await onboard('carrier');
-    const tokenRes = await request(http).post('/v1/auth/token').send({ sub: 'ops', type: 'client_credentials' }).expect(201);
+    const tokenRes = await request(http).post('/v1/auth/token').send({ role: 'operator', type: 'client_credentials' }).expect(201);
     const auth = { Authorization: `Bearer ${tokenRes.body.access_token}` };
 
     // Shipment → match → accept (records the transaction participants in M5).
@@ -444,7 +444,7 @@ describe('GLOS backend (e2e)', () => {
     const shipper = await onboard('shipper');
     const carrier = await onboard('carrier');
     await request(http).post(`/v1/identity/accounts/${shipper.accountId}/wallet/credit`).send({ amount: 1000 }).expect(201);
-    const tokenRes = await request(http).post('/v1/auth/token').send({ sub: 'ops', type: 'client_credentials' }).expect(201);
+    const tokenRes = await request(http).post('/v1/auth/token').send({ role: 'operator', type: 'client_credentials' }).expect(201);
     const auth = { Authorization: `Bearer ${tokenRes.body.access_token}` };
 
     const created = await request(http).post('/v1/shipments').set(auth).send({ origin: 'LA', destination: 'SF', totalWeightKg: 9, packageCount: 1, mode: 'road' }).expect(201);
@@ -474,7 +474,7 @@ describe('GLOS backend (e2e)', () => {
 
   it('M7 control tower: tracked shipment → disruption → blast radius → policy auto-rebook via M3 (§11.5)', async () => {
     const http = app.getHttpServer();
-    const tokenRes = await request(http).post('/v1/auth/token').send({ sub: 'ops', type: 'client_credentials' }).expect(201);
+    const tokenRes = await request(http).post('/v1/auth/token').send({ role: 'operator', type: 'client_credentials' }).expect(201);
     const auth = { Authorization: `Bearer ${tokenRes.body.access_token}` };
     const shipper = 'did:glos:shipper-m7';
 
@@ -511,7 +511,7 @@ describe('GLOS backend (e2e)', () => {
 
   it('M3 Sprint 2/3: batch matching, explainable quote, tiers, override + fairness', async () => {
     const http = app.getHttpServer();
-    const tokenRes = await request(http).post('/v1/auth/token').send({ sub: 'ops', type: 'client_credentials' }).expect(201);
+    const tokenRes = await request(http).post('/v1/auth/token').send({ role: 'operator', type: 'client_credentials' }).expect(201);
     const auth = { Authorization: `Bearer ${tokenRes.body.access_token}` };
 
     // Two decomposed shipments + two available carriers.
@@ -551,7 +551,7 @@ describe('GLOS backend (e2e)', () => {
 
   it('M4 Sprint 2/3: ETA + geofence + IoT exception → M7 autonomous response (M4→M7 telemetry loop)', async () => {
     const http = app.getHttpServer();
-    const tokenRes = await request(http).post('/v1/auth/token').send({ sub: 'ops', type: 'client_credentials' }).expect(201);
+    const tokenRes = await request(http).post('/v1/auth/token').send({ role: 'operator', type: 'client_credentials' }).expect(201);
     const auth = { Authorization: `Bearer ${tokenRes.body.access_token}` };
     const shipper = 'did:glos:e2e-acme';
 
@@ -590,7 +590,7 @@ describe('GLOS backend (e2e)', () => {
 
   it('PUDO Light: agent onboarding + pre-paid gate + steel-thread parcel flow (emerging-market on-ramp)', async () => {
     const http = app.getHttpServer();
-    const tokenRes = await request(http).post('/v1/auth/token').send({ sub: 'ops', type: 'client_credentials' }).expect(201);
+    const tokenRes = await request(http).post('/v1/auth/token').send({ role: 'operator', type: 'client_credentials' }).expect(201);
     const auth = { Authorization: `Bearer ${tokenRes.body.access_token}` };
 
     async function onboard(shopName: string, zone: string) {
@@ -641,7 +641,7 @@ describe('GLOS backend (e2e)', () => {
 
   it('PUDO inbound e-commerce: vendor webhook → label → intake → bus → shelve → collect + vendor callbacks', async () => {
     const http = app.getHttpServer();
-    const tokenRes = await request(http).post('/v1/auth/token').send({ sub: 'ops', type: 'client_credentials' }).expect(201);
+    const tokenRes = await request(http).post('/v1/auth/token').send({ role: 'operator', type: 'client_credentials' }).expect(201);
     const auth = { Authorization: `Bearer ${tokenRes.body.access_token}` };
 
     async function onboard(shop: string, zone: string) {
@@ -685,7 +685,7 @@ describe('GLOS backend (e2e)', () => {
 
   it('PUDO MDP hub: pack a bag → bus scans it → drop+empty → sort each parcel → re-bag (tote-bag flow)', async () => {
     const http = app.getHttpServer();
-    const tokenRes = await request(http).post('/v1/auth/token').send({ sub: 'ops', type: 'client_credentials' }).expect(201);
+    const tokenRes = await request(http).post('/v1/auth/token').send({ role: 'operator', type: 'client_credentials' }).expect(201);
     const auth = { Authorization: `Bearer ${tokenRes.body.access_token}` };
 
     async function onboard(shop: string, zone: string) {
@@ -745,7 +745,7 @@ describe('GLOS backend (e2e)', () => {
 
   it('PUDO fleet: onboard a bike courier + vehicle → couple → bike rejects fragile/over-weight at handover', async () => {
     const http = app.getHttpServer();
-    const tokenRes = await request(http).post('/v1/auth/token').send({ sub: 'ops', type: 'client_credentials' }).expect(201);
+    const tokenRes = await request(http).post('/v1/auth/token').send({ role: 'operator', type: 'client_credentials' }).expect(201);
     const auth = { Authorization: `Bearer ${tokenRes.body.access_token}` };
     const u = Math.random().toString(16).slice(2, 10);
 
@@ -779,7 +779,7 @@ describe('GLOS backend (e2e)', () => {
 
   it('PUDO dispatch: agent bags a tote → released → a routed driver is offered it → claims → loads', async () => {
     const http = app.getHttpServer();
-    const tokenRes = await request(http).post('/v1/auth/token').send({ sub: 'ops', type: 'client_credentials' }).expect(201);
+    const tokenRes = await request(http).post('/v1/auth/token').send({ role: 'operator', type: 'client_credentials' }).expect(201);
     const auth = { Authorization: `Bearer ${tokenRes.body.access_token}` };
     const u = Math.random().toString(16).slice(2, 10);
 
@@ -832,7 +832,7 @@ describe('GLOS backend (e2e)', () => {
 
   it('PUDO driver shift session: scan the vehicle QR to start (couple), close to end (decouple)', async () => {
     const http = app.getHttpServer();
-    const tokenRes = await request(http).post('/v1/auth/token').send({ sub: 'ops', type: 'client_credentials' }).expect(201);
+    const tokenRes = await request(http).post('/v1/auth/token').send({ role: 'operator', type: 'client_credentials' }).expect(201);
     const auth = { Authorization: `Bearer ${tokenRes.body.access_token}` };
     const u = Math.random().toString(16).slice(2, 10);
 
@@ -854,7 +854,7 @@ describe('GLOS backend (e2e)', () => {
 
   it('PUDO fleet manager: onboard (requirements + KYC + bond) → ACTIVE → registers a scoped fleet', async () => {
     const http = app.getHttpServer();
-    const tokenRes = await request(http).post('/v1/auth/token').send({ sub: 'ops', type: 'client_credentials' }).expect(201);
+    const tokenRes = await request(http).post('/v1/auth/token').send({ role: 'operator', type: 'client_credentials' }).expect(201);
     const auth = { Authorization: `Bearer ${tokenRes.body.access_token}` };
     const u = Math.random().toString(16).slice(2, 10);
 
@@ -887,5 +887,45 @@ describe('GLOS backend (e2e)', () => {
     const dash = await request(http).get('/v1/pudo/fleet/dashboard').query({ manager: mDid }).set(auth).expect(200);
     expect(dash.body.managerDid).toBe(mDid);
     expect(dash.body.vehicles.total).toBe(1);
+  });
+
+  it('S3 authorization: a field token cannot perform operator actions, and fleets are tenant-isolated', async () => {
+    const http = app.getHttpServer();
+    const u = Math.floor(Math.random() * 1e6);
+    const operator = { Authorization: `Bearer ${(await request(http).post('/v1/auth/token').send({ role: 'operator', type: 'client_credentials' }).expect(201)).body.access_token}` };
+
+    // Onboard + activate two fleet managers, each with one vehicle (operator actions).
+    const onboardManager = async (name: string) => {
+      const m = (await request(http).post('/v1/pudo/fleet/managers').set(operator).send({ companyName: name, tradingName: name, contactPhone: `+2547${u}${name.length}`, contactEmail: `ops@${name}.example`, ownerFullName: 'Owner', ownerNationalId: `MGR-${u}-${name}`, depotAddress: '1 Depot Rd', location: { lat: -1.3, lng: 36.8 }, requirements: { businessRegistrationNo: `BRN-${u}-${name}`, transportOperatorLicence: `TOL-${u}-${name}`, taxId: `TAX-${u}-${name}`, declaredFleetSize: 3 } }).expect(201)).body;
+      await request(http).post(`/v1/pudo/fleet/managers/${m.did}/submit-kyc`).set(operator).send({ businessRegCertRef: 'r.pdf', operatorLicenceRef: 'l.pdf', ownerIdRef: 'id.jpg', proofOfAddressRef: 'a.pdf' }).expect(201);
+      await request(http).post(`/v1/pudo/fleet/managers/${m.did}/kyc-decision`).set(operator).send({ approve: true }).expect(201);
+      await request(http).post(`/v1/pudo/fleet/managers/${m.did}/bond`).set(operator).expect(201);
+      await request(http).post('/v1/pudo/vehicles').set(operator).send({ plate: `${name}-${u}`, vehicleClass: 'van', ownerName: name, managerDid: m.did }).expect(201);
+      return m.did as string;
+    };
+    const mA = await onboardManager('AlphaCo');
+    const mB = await onboardManager('BetaCo');
+
+    // Actor tokens: manager A (fleet_manager, tenant=mA) and a driver under A (field role).
+    const aToken = { Authorization: `Bearer ${(await request(http).post('/v1/auth/token').send({ role: 'fleet_manager', did: mA, tenant: mA, type: 'client_credentials' }).expect(201)).body.access_token}` };
+    const driver = (await request(http).post('/v1/pudo/drivers/onboard').set(operator).send({ displayName: 'Boda', fullName: 'Boda Rider', nationalId: `DRV-${u}`, mobile: `+254d${u}`, licenceClasses: ['motorcycle'], managerDid: mA }).expect(201)).body;
+    const dToken = { Authorization: `Bearer ${(await request(http).post('/v1/auth/token').send({ role: 'driver', did: driver.did, tenant: mA, type: 'client_credentials' }).expect(201)).body.access_token}` };
+
+    // 1) A driver (field) token is FORBIDDEN from operator actions — the core S3 hole, now closed.
+    await request(http).post(`/v1/pudo/fleet/managers/${mB}/bond`).set(dToken).expect(403);
+    await request(http).post(`/v1/pudo/fleet/managers/${mB}/kyc-decision`).set(dToken).send({ approve: true }).expect(403);
+    await request(http).get('/v1/pudo/finance').set(dToken).expect(403);
+    await request(http).get('/v1/pudo/agents/kyc-queue').set(dToken).expect(403);
+
+    // 2) Tenant isolation — manager A sees ONLY their own vehicle, never BetaCo's, and cannot widen
+    //    the scope with ?manager=<competitor> (the query is ignored for a non-operator).
+    const own = await request(http).get('/v1/pudo/vehicles').set(aToken).expect(200);
+    expect(own.body.every((v: { managerDid?: string }) => v.managerDid === mA)).toBe(true);
+    const spoof = await request(http).get('/v1/pudo/vehicles').query({ manager: mB }).set(aToken).expect(200);
+    expect(spoof.body.every((v: { managerDid?: string }) => v.managerDid === mA)).toBe(true); // query did NOT widen scope
+
+    // 3) The operator still sees everything.
+    const all = await request(http).get('/v1/pudo/vehicles').set(operator).expect(200);
+    expect(all.body.length).toBeGreaterThanOrEqual(2);
   });
 });
