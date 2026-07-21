@@ -277,7 +277,11 @@ describe('PUDO Light', () => {
     expect(agents.get(a.did).status).toBe('ACTIVE'); // balance 1.60 → still scannable
     parcels.accept({ agentDid: a.did, parcelId: 'QR-B', size: 'S', destZone: 'Z', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'b.jpg' });
     expect(agents.get(a.did).status).toBe('LOCKED'); // balance 0 → locked
-    expect(gate.canTransact(a.did).ok).toBe(false);
+    const gateState = gate.canTransact(a.did);
+    expect(gateState.ok).toBe(false); // legacy alias
+    expect(gateState.canTransact).toBe(false);
+    expect(gateState.code).toBe('WALLET_INSUFFICIENT'); // a low-literacy UI maps this to the top-up icon
+    expect(gateState.shortfall).toBeGreaterThan(0);
     expect(() => parcels.accept({ agentDid: a.did, parcelId: 'QR-C', size: 'S', destZone: 'Z', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'c.jpg' })).toThrow();
   });
 

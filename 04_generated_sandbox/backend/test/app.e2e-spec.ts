@@ -660,7 +660,12 @@ describe('GLOS backend (e2e)', () => {
 
     // Vendor onboarding + the shipment webhook.
     const vendor = await request(http).post('/v1/pudo/vendors').set(auth).send({ name: 'ACME Store', callbackUrl: 'https://acme.example/hook' }).expect(201);
-    await request(http).post(`/v1/pudo/vendors/${vendor.body.vendorId}/top-up`).set(auth).send({ amount: 50 }).expect(201); // prepay the daughter co
+    expect(vendor.body.secret).toMatch(/^whsec_/); // issued exactly once, at registration
+    // But a later fetch must NOT re-expose the signing secret (a guessed vendorId would leak the key).
+    const reFetched = await request(http).get(`/v1/pudo/vendors/${vendor.body.vendorId}`).set(auth).expect(200);
+    expect(reFetched.body.secret).toBeUndefined();
+    const topped = await request(http).post(`/v1/pudo/vendors/${vendor.body.vendorId}/top-up`).set(auth).send({ amount: 50 }).expect(201); // prepay the daughter co
+    expect(topped.body.secret).toBeUndefined();
     const order = await request(http).post('/v1/pudo/inbound/orders').set(auth).send({ vendorId: vendor.body.vendorId, externalOrderId: 'ORD-77', originPudoDid: origin, destPudoDid: dest, buyerMobile: '+254700999', size: 'M', contentPhotoRef: 'content.jpg', items: [{ name: 'Books', qty: 3 }] }).expect(201);
     const parcelId = order.body.parcel.parcelId as string;
     const collectionCode = order.body.parcel.collectionCode as string;
@@ -927,5 +932,24 @@ describe('GLOS backend (e2e)', () => {
     // 3) The operator still sees everything.
     const all = await request(http).get('/v1/pudo/vehicles').set(operator).expect(200);
     expect(all.body.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('S4 problem+json: every error carries a machine code, a traceId, and a preserved status', async () => {
+    const http = app.getHttpServer();
+    const auth = { Authorization: `Bearer ${(await request(http).post('/v1/auth/token').send({ role: 'operator', type: 'client_credentials' }).expect(201)).body.access_token}` };
+
+    // A 404 renders RFC 9457 with a stable machine code (still status 404) — not a bare Nest body.
+    const notFound = await request(http).get('/v1/pudo/vendors/ven_does_not_exist').set(auth).expect(404);
+    expect(notFound.body.code).toBe('NOT_FOUND');
+    expect(notFound.body.status).toBe(404);
+    expect(notFound.body.retryable).toBe(false);
+    expect(notFound.body.traceId).toMatch(/^trc_/);
+    expect(notFound.body.type).toContain('/problems/NOT_FOUND');
+    expect(typeof notFound.body.detail).toBe('string');
+
+    // ValidationPipe failures normalize to VALIDATION_FAILED with the violations surfaced structurally.
+    const badBody = await request(http).post('/v1/pudo/vendors').set(auth).send({ callbackUrl: 123 }).expect(400);
+    expect(badBody.body.code).toBe('VALIDATION_FAILED');
+    expect(Array.isArray(badBody.body.params.violations)).toBe(true);
   });
 });

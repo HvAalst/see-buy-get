@@ -27,10 +27,19 @@ export class WalletGateService {
     private readonly events: EventBus,
   ) {}
 
-  /** 'No money, no scan' gate (GET /agent/can-transact → 402 if false). */
-  canTransact(did: string): { ok: boolean; balance: number; threshold: number } {
+  /**
+   * 'No money, no scan' gate. Returns 200 with a domain payload — an error status must never carry
+   * business data (S4), so a locked agent is a normal, readable answer, not a 402. `canTransact` is the
+   * new field; `ok` is kept as an alias so the shipped agent app keeps working. `code` lets a
+   * low-literacy UI pick the right icon (top-up vs unlock) and `shortfall` names the exact gap.
+   */
+  canTransact(did: string): { ok: boolean; canTransact: boolean; code: string | null; balance: number; threshold: number; shortfall: number } {
     const balance = this.agents.balance(did);
-    return { ok: this.agents.canScan(did) && balance >= LOCK_THRESHOLD, balance, threshold: LOCK_THRESHOLD };
+    const funded = balance >= LOCK_THRESHOLD;
+    const ok = this.agents.canScan(did) && funded;
+    const code = ok ? null : !funded ? 'WALLET_INSUFFICIENT' : 'AGENT_LOCKED';
+    const shortfall = funded ? 0 : Math.round((LOCK_THRESHOLD - balance) * 100) / 100;
+    return { ok, canTransact: ok, code, balance, threshold: LOCK_THRESHOLD, shortfall };
   }
 
   /** Real money in → credits the wallet, may activate the agent. */

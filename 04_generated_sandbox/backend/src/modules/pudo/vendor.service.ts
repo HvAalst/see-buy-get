@@ -114,7 +114,19 @@ export class VendorService {
   }
 
   list(): Array<Omit<Vendor, 'secret'>> {
-    return [...this.vendors.values()].map(({ secret, ...v }) => { void secret; return v; });
+    return [...this.vendors.values()].map((v) => VendorService.publicView(v));
+  }
+
+  /**
+   * The vendor as it may be returned to a client — without the HMAC signing `secret`. The secret is
+   * shown exactly once, in the register() response; any later fetch (get / update / top-up) must not
+   * re-expose it, or a guessed vendorId would hand over the callback-signing key. Internal callers keep
+   * using get(), which returns the full record because notify() needs the secret to sign.
+   */
+  static publicView(vendor: Vendor): Omit<Vendor, 'secret'> {
+    const { secret, ...rest } = vendor;
+    void secret;
+    return rest;
   }
 
   // --- checkout handoffs (buyer's destination-PUDO choice → merchant console) ---

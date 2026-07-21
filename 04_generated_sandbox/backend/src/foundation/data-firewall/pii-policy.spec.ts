@@ -33,4 +33,18 @@ describe('assertNoPii (firewall guard)', () => {
   it('catches email-like string values as a backstop', () => {
     expect(() => assertNoPii({ note: 'contact me at jane@example.com' })).toThrow(DataFirewallViolation);
   });
+
+  it('catches compound qualifiers that evade the exact match (camelCase tokens)', () => {
+    // These all passed the old normalizeKey exact-match and leaked PII into the operational core.
+    for (const field of ['senderMobile', 'receiverMobile', 'buyerEmail', 'contactPhone', 'physicalAddress']) {
+      expect(() => assertNoPii({ [field]: 'x' })).toThrow(DataFirewallViolation);
+    }
+  });
+
+  it('does not over-match benign compounds that merely contain a weak word', () => {
+    // `name`/`photo`/`city` are excluded from the token set precisely to keep these clean.
+    expect(() => assertNoPii({ shopName: 'Mama Sarah', companyName: 'Acme', displayName: 'S' })).not.toThrow();
+    expect(() => assertNoPii({ contentPhotoRef: 'ref-1', dropoffPhotoRef: 'ref-2' })).not.toThrow();
+    expect(() => assertNoPii({ destZone: 'SouthTown', trackingKey: 'trk_1' })).not.toThrow();
+  });
 });

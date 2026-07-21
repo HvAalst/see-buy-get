@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { HttpModule } from './foundation/http/http.module';
 import { EventBusModule } from './foundation/events/event-bus.module';
 import { DataFirewallModule } from './foundation/data-firewall/data-firewall.module';
 import { CredentialModule } from './foundation/credentials/credential.module';
@@ -26,6 +27,7 @@ import { SseModule } from './modules/sse/sse.module';
  */
 @Module({
   imports: [
+    HttpModule,
     EventBusModule,
     DataFirewallModule,
     CredentialModule,

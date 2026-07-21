@@ -16,6 +16,21 @@ export const PII_FIELDS = new Set<string>([
   'selfie', 'biometric', 'faceimage', 'photo',
 ]);
 
+/**
+ * High-signal PII *tokens*: if any of these appears as a camelCase/separator-delimited word inside a
+ * field name, the field is PII even when the whole name isn't an exact match. This is what catches the
+ * compound qualifiers that evade PII_FIELDS today — senderMobile, receiverMobile, buyerEmail,
+ * contactPhone, physicalAddress. Deliberately excludes weak tokens (name, photo, city, street) that
+ * appear in benign fields (shopName, contentPhotoRef) to avoid false positives.
+ */
+const PII_TOKENS = new Set<string>([
+  'phone', 'mobile', 'msisdn', 'email',
+  'address',
+  'ssn', 'passport', 'iban', 'bankaccount',
+  'latitude', 'longitude', 'geolocation', 'gpscoordinates',
+  'selfie', 'biometric',
+]);
+
 const EMAIL_RE = /[^@\s]+@[^@\s]+\.[^@\s]+/;
 
 export class DataFirewallViolation extends Error {
@@ -27,6 +42,15 @@ export class DataFirewallViolation extends Error {
 
 function normalizeKey(key: string): string {
   return key.toLowerCase().replace(/[_\s-]/g, '');
+}
+
+/** Split a field name into lowercase words on camelCase and separator boundaries (senderMobile → [sender, mobile]). */
+function keyTokens(key: string): string[] {
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .split(/[_\s-]+/)
+    .map((t) => t.toLowerCase())
+    .filter(Boolean);
 }
 
 /**
@@ -45,6 +69,7 @@ export function assertNoPii(value: unknown, path = ''): void {
     for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
       const here = path ? `${path}.${key}` : key;
       if (PII_FIELDS.has(normalizeKey(key))) throw new DataFirewallViolation(here);
+      if (keyTokens(key).some((t) => PII_TOKENS.has(t))) throw new DataFirewallViolation(here);
       assertNoPii(val, here);
     }
     return;

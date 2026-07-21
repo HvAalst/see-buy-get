@@ -192,12 +192,14 @@ export class PudoController {
 
   // --- pre-paid wallet (Light SSE) ---
 
-  /** 'No money, no scan' gate — 402 when locked (matches the playbook's GET /agent/can-transact). */
+  /**
+   * 'No money, no scan' gate. Returns 200 with `{ ok, canTransact, code, balance, shortfall }` — a
+   * locked wallet is a readable state, not an error status carrying a payload (S4). The client reads
+   * `code` to choose between the top-up and unlock prompts.
+   */
   @Get('agents/:did/can-transact')
   canTransact(@Param('did') did: string) {
-    const result = this.gate.canTransact(did);
-    if (!result.ok) throw new HttpException(result, HttpStatus.PAYMENT_REQUIRED);
-    return result;
+    return this.gate.canTransact(did);
   }
 
   @Post('agents/:did/top-up')
@@ -322,16 +324,19 @@ export class PudoController {
     return this.vendors.list();
   }
 
-  /** Load a single vendor (so the merchant console can sign back into an existing store via ?vendor=). */
+  /**
+   * Load a single vendor (so the merchant console can sign back into an existing store via ?vendor=).
+   * Returns the public view — the signing secret is issued once at registration and never re-exposed.
+   */
   @Get('vendors/:id')
   getVendor(@Param('id') id: string) {
-    return this.vendors.get(id);
+    return VendorService.publicView(this.vendors.get(id));
   }
 
   /** Update the store profile: map pin (origin-PUDO ranking), address, callback URL, split policy. */
   @Patch('vendors/:id')
   updateVendor(@Param('id') id: string, @Body() dto: UpdateVendorDto) {
-    return this.vendors.updateProfile(id, dto);
+    return VendorService.publicView(this.vendors.updateProfile(id, dto));
   }
 
   /** A vendor's orders (their inbound parcels) for the merchant console. */
@@ -471,7 +476,7 @@ export class PudoController {
   /** Vendor prepays its balance with the per-country daughter company. */
   @Post('vendors/:id/top-up')
   topUpVendor(@Param('id') id: string, @Body() dto: TopUpDto) {
-    return this.vendors.topUp(id, dto.amount);
+    return VendorService.publicView(this.vendors.topUp(id, dto.amount));
   }
 
   /** A vendor's prepaid balance + settlement book (top-ups / billings / rebates). */
