@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { randomBytes } from 'crypto';
 import { TRUCK_SUBTYPE_CATALOG, TruckSubtype, TruckSubtypeSpec, VEHICLE_SPEC, VehicleClass } from './fleet.config';
@@ -34,12 +35,12 @@ export class VehicleService {
 
   register(input: RegisterVehicleInput): Vehicle {
     const spec = VEHICLE_SPEC[input.vehicleClass];
-    if (!spec) throw new BadRequestException(`Unknown vehicle class: ${input.vehicleClass}`);
+    if (!spec) throw new GlosError('INVALID_VEHICLE_CLASS', `Unknown vehicle class: ${input.vehicleClass}`);
     if (input.managerDid) this.managers.requireActive(input.managerDid);
-    if (!input.plate?.trim()) throw new BadRequestException('A number plate is required');
-    if (input.vehicleClass === 'truck' && !input.truckSubtype) throw new BadRequestException('A truck needs a sub-type (e.g. flatbed / tipper / refrigerated / tanker / lowboy …)');
-    if (input.truckSubtype && input.vehicleClass !== 'truck') throw new BadRequestException('Sub-types apply to trucks only');
-    if (input.truckSubtype && !TRUCK_SUBTYPE_CATALOG[input.truckSubtype]) throw new BadRequestException(`Unknown truck sub-type: ${input.truckSubtype}`);
+    if (!input.plate?.trim()) throw new GlosError('FIELD_REQUIRED', 'A number plate is required');
+    if (input.vehicleClass === 'truck' && !input.truckSubtype) throw new GlosError('FIELD_REQUIRED', 'A truck needs a sub-type (e.g. flatbed / tipper / refrigerated / tanker / lowboy …)');
+    if (input.truckSubtype && input.vehicleClass !== 'truck') throw new GlosError('INVALID_INPUT', 'Sub-types apply to trucks only');
+    if (input.truckSubtype && !TRUCK_SUBTYPE_CATALOG[input.truckSubtype]) throw new GlosError('INVALID_TRUCK_SUBTYPE', `Unknown truck sub-type: ${input.truckSubtype}`);
 
     const sub: TruckSubtypeSpec | undefined = input.truckSubtype ? TRUCK_SUBTYPE_CATALOG[input.truckSubtype] : undefined;
     const capacityKg = this.computeCapacity(input.vehicleClass, input.capacityKg, sub?.capacityKg);
@@ -79,7 +80,7 @@ export class VehicleService {
   computeCapacity(vehicleClass: VehicleClass, declaredKg?: number, subtypeKg?: number): number {
     const spec = VEHICLE_SPEC[vehicleClass];
     if (declaredKg != null) {
-      if (declaredKg <= 0) throw new BadRequestException('Load capacity must be positive');
+      if (declaredKg <= 0) throw new GlosError('AMOUNT_INVALID', 'Load capacity must be positive');
       const ceiling = Math.max(spec.maxCapacityKg, subtypeKg ?? 0);
       return Math.min(declaredKg, ceiling);
     }
@@ -122,7 +123,7 @@ export class VehicleService {
 
   /** Set the vehicle's open-data per-km transport rate (the driver/fleet manager prices their own asset). */
   setPrice(vehicleId: string, pricePerKm: number): Vehicle {
-    if (pricePerKm < 0) throw new BadRequestException('Price cannot be negative');
+    if (pricePerKm < 0) throw new GlosError('AMOUNT_INVALID', 'Price cannot be negative');
     const vehicle = this.require(vehicleId);
     vehicle.pricePerKm = Math.round(pricePerKm * 1000) / 1000;
     return vehicle;
@@ -144,7 +145,7 @@ export class VehicleService {
 
   private require(vehicleId: string): Vehicle {
     const v = this.vehicles.get(vehicleId);
-    if (!v) throw new NotFoundException(`Vehicle not found: ${vehicleId}`);
+    if (!v) throw new GlosError('NOT_FOUND', `Vehicle not found: ${vehicleId}`);
     return v;
   }
 }

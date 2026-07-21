@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { GlosError } from '../../foundation/http/glos-error';
 import { randomBytes } from 'crypto';
 import { BAG_CAPACITY_UNITS, SIZE_UNITS, SIZE_WEIGHT_KG, TOTE_CODE_PREFIX } from './pudo.config';
 import { ParcelSize, Tote } from './pudo.types';
@@ -37,7 +38,7 @@ export class ToteService {
   /** Link a free tote to a single next destination — it can now take parcels for that destination. */
   assign(code: string, destinationNodeId: string, destinationLabel: string): Tote {
     const tote = this.requireByCode(code);
-    if (tote.status !== 'free') throw new BadRequestException(`Bag ${code} is ${tote.status}, must be empty/free to assign`);
+    if (tote.status !== 'free') throw new GlosError('INVALID_STATE', `Bag ${code} is ${tote.status}, must be empty/free to assign`);
     tote.status = 'filling';
     tote.destinationNodeId = destinationNodeId;
     tote.destinationLabel = destinationLabel;
@@ -52,8 +53,8 @@ export class ToteService {
   /** Drop a parcel into the bag (capacity-checked) and connect bag ↔ parcel. */
   add(code: string, parcelId: string, size: ParcelSize): Tote {
     const tote = this.requireByCode(code);
-    if (tote.status !== 'filling') throw new BadRequestException(`Bag ${code} is ${tote.status}, assign it to a destination first`);
-    if (!this.fits(tote, size)) throw new BadRequestException(`Bag ${code} is full (${this.fillPct(tote)}%) — open a new bag for this destination`);
+    if (tote.status !== 'filling') throw new GlosError('INVALID_STATE', `Bag ${code} is ${tote.status}, assign it to a destination first`);
+    if (!this.fits(tote, size)) throw new GlosError('BAG_FULL', `Bag ${code} is full (${this.fillPct(tote)}%) — open a new bag for this destination`);
     if (!tote.parcels.length) tote.filledAt = new Date().toISOString();
     tote.parcels.push(parcelId);
     tote.unitsUsed = Math.round((tote.unitsUsed + SIZE_UNITS[size]) * 1000) / 1000;
@@ -69,8 +70,8 @@ export class ToteService {
   /** Publish a filling bag to the dispatch marketplace (full or aged-out, or an early manual release). */
   markAvailable(code: string): Tote {
     const tote = this.requireByCode(code);
-    if (tote.status !== 'filling') throw new BadRequestException(`Bag ${code} is ${tote.status}, only a filling bag can be published`);
-    if (!tote.parcels.length) throw new BadRequestException(`Bag ${code} is empty`);
+    if (tote.status !== 'filling') throw new GlosError('INVALID_STATE', `Bag ${code} is ${tote.status}, only a filling bag can be published`);
+    if (!tote.parcels.length) throw new GlosError('BAG_EMPTY', `Bag ${code} is empty`);
     tote.status = 'available';
     tote.availableAt = new Date().toISOString();
     return tote;
@@ -79,7 +80,7 @@ export class ToteService {
   /** A driver claims an available bag (reserves it for pickup). */
   markClaimed(code: string, driverDid: string): Tote {
     const tote = this.requireByCode(code);
-    if (tote.status !== 'available') throw new BadRequestException(`Bag ${code} is ${tote.status}, not available to claim`);
+    if (tote.status !== 'available') throw new GlosError('INVALID_STATE', `Bag ${code} is ${tote.status}, not available to claim`);
     tote.status = 'claimed';
     tote.claimedBy = driverDid;
     return tote;
@@ -88,7 +89,7 @@ export class ToteService {
   /** Release a claim back to the marketplace (driver dropped it / no-show). */
   unclaim(code: string): Tote {
     const tote = this.requireByCode(code);
-    if (tote.status !== 'claimed') throw new BadRequestException(`Bag ${code} is ${tote.status}, not claimed`);
+    if (tote.status !== 'claimed') throw new GlosError('INVALID_STATE', `Bag ${code} is ${tote.status}, not claimed`);
     tote.status = 'available';
     tote.claimedBy = undefined;
     return tote;
@@ -97,8 +98,8 @@ export class ToteService {
   /** Scan the bag onto a bus — the whole tote (and its parcels) moves with one scan. */
   load(code: string, driverBadgeId: string): Tote {
     const tote = this.requireByCode(code);
-    if (tote.status !== 'filling' && tote.status !== 'available' && tote.status !== 'claimed') throw new BadRequestException(`Bag ${code} is ${tote.status}, nothing to load`);
-    if (!tote.parcels.length) throw new BadRequestException(`Bag ${code} is empty`);
+    if (tote.status !== 'filling' && tote.status !== 'available' && tote.status !== 'claimed') throw new GlosError('INVALID_STATE', `Bag ${code} is ${tote.status}, nothing to load`);
+    if (!tote.parcels.length) throw new GlosError('BAG_EMPTY', `Bag ${code} is empty`);
     tote.status = 'in_transit';
     tote.locationId = `bus:${driverBadgeId}`;
     return tote;
@@ -135,7 +136,7 @@ export class ToteService {
 
   requireByCode(code: string): Tote {
     const tote = this.byCodeMaybe(code);
-    if (!tote) throw new NotFoundException(`Tote not found: ${code}`);
+    if (!tote) throw new GlosError('NOT_FOUND', `Tote not found: ${code}`);
     return tote;
   }
 

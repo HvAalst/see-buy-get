@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { randomBytes } from 'crypto';
 import { EventBus } from '../../foundation/events/event-bus.service';
@@ -47,7 +48,7 @@ export class MdpService {
   // --- registry ---
 
   register(input: { name: string; zones: string[]; location: { lat: number; lng: number }; contactPhone?: string; address?: string; pricePerParcel?: number }): Mdp {
-    if (!input.zones?.length) throw new BadRequestException('An MDP must cover at least one zone');
+    if (!input.zones?.length) throw new GlosError('ZONES_REQUIRED', 'An MDP must cover at least one zone');
     // Real DID (S2) — an MDP worker is a first-class actor and their token binds to this, not to a
     // synthetic mdp_<hex> id. A pseudonymous operational profile makes it OperationalStore-resolvable
     // (tier/tokenVersion) like every other participant. No PII goes to the core (contact/address stay
@@ -71,7 +72,7 @@ export class MdpService {
 
   /** Set the hub's open-data per-parcel sort price (public, drives the shipment quote). */
   setPrice(mdpId: string, pricePerParcel: number): Mdp {
-    if (pricePerParcel < 0) throw new BadRequestException('Price cannot be negative');
+    if (pricePerParcel < 0) throw new GlosError('AMOUNT_INVALID', 'Price cannot be negative');
     const mdp = this.require(mdpId);
     mdp.pricePerParcel = Math.round(pricePerParcel * 100) / 100;
     return mdp;
@@ -83,7 +84,7 @@ export class MdpService {
 
   require(mdpId: string): Mdp {
     const mdp = this.mdps.get(mdpId);
-    if (!mdp) throw new NotFoundException(`MDP not found: ${mdpId}`);
+    if (!mdp) throw new GlosError('NOT_FOUND', `MDP not found: ${mdpId}`);
     return mdp;
   }
 
@@ -115,16 +116,16 @@ export class MdpService {
     const pending = this.totes.requireByCode(code);
     const fleet = this.fleet.resolveBadge(driverBadgeId);
     // A claimed bag may only be loaded by the driver who claimed it.
-    if (pending.claimedBy && (!fleet || fleet.driverDid !== pending.claimedBy)) throw new BadRequestException(`Bag ${code} is reserved for another driver`);
+    if (pending.claimedBy && (!fleet || fleet.driverDid !== pending.claimedBy)) throw new GlosError('BAG_RESERVED', `Bag ${code} is reserved for another driver`);
     if (fleet && pending.parcels.length) {
       let kg = 0;
       for (const id of pending.parcels) {
         const p = this.parcels.get(id);
         kg += p.weightKg;
-        if (p.weightKg > fleet.maxParcelKg) throw new BadRequestException(`Parcel ${id} (${p.weightKg}kg) exceeds the ${fleet.maxParcelKg}kg limit of this ${fleet.vehicle.vehicleClass}`);
-        if (p.fragile && !fleet.allowsFragile) throw new BadRequestException(`A ${fleet.vehicle.vehicleClass} cannot carry fragile parcels (${id})`);
+        if (p.weightKg > fleet.maxParcelKg) throw new GlosError('CAPACITY_EXCEEDED', `Parcel ${id} (${p.weightKg}kg) exceeds the ${fleet.maxParcelKg}kg limit of this ${fleet.vehicle.vehicleClass}`);
+        if (p.fragile && !fleet.allowsFragile) throw new GlosError('FRAGILE_NOT_ALLOWED', `A ${fleet.vehicle.vehicleClass} cannot carry fragile parcels (${id})`);
       }
-      if (kg > fleet.capacityKg) throw new BadRequestException(`Bag ${code} (${kg}kg) exceeds this ${fleet.vehicle.vehicleClass}'s ${fleet.capacityKg}kg capacity`);
+      if (kg > fleet.capacityKg) throw new GlosError('CAPACITY_EXCEEDED', `Bag ${code} (${kg}kg) exceeds this ${fleet.vehicle.vehicleClass}'s ${fleet.capacityKg}kg capacity`);
     }
     const tote = this.totes.load(code, driverBadgeId);
     for (const parcelId of tote.parcels) {
@@ -141,7 +142,7 @@ export class MdpService {
   dropBag(mdpId: string, code: string): { mdpId: string; emptied: string[] } {
     const mdp = this.require(mdpId);
     const before = this.totes.requireByCode(code);
-    if (!before.parcels.length) throw new BadRequestException(`Bag ${code} is already empty`);
+    if (!before.parcels.length) throw new GlosError('BAG_EMPTY', `Bag ${code} is already empty`);
     const { parcels } = this.totes.empty(code, mdpId);
     for (const parcelId of parcels) {
       const p = this.parcels.setTransit(parcelId, 'At_MDP', mdp.name, `dropped at ${mdp.name} · awaiting sort`, undefined);
@@ -159,8 +160,8 @@ export class MdpService {
   deliverBag(agentDid: string, code: string): { code: string; agentDid: string; delivered: string[] } {
     const agent = this.agents.get(agentDid);
     const tote = this.totes.requireByCode(code);
-    if (!tote.parcels.length) throw new BadRequestException(`Bag ${code} is empty`);
-    if (tote.destinationNodeId && tote.destinationNodeId !== agentDid) throw new BadRequestException(`Bag ${code} is addressed to ${tote.destinationLabel || tote.destinationNodeId}, not ${agent.shopName}`);
+    if (!tote.parcels.length) throw new GlosError('BAG_EMPTY', `Bag ${code} is empty`);
+    if (tote.destinationNodeId && tote.destinationNodeId !== agentDid) throw new GlosError('BAG_MISADDRESSED', `Bag ${code} is addressed to ${tote.destinationLabel || tote.destinationNodeId}, not ${agent.shopName}`);
     const delivered: string[] = [];
     for (const parcelId of [...tote.parcels]) {
       const parcel = this.parcels.get(parcelId);
@@ -181,8 +182,8 @@ export class MdpService {
   sortParcel(mdpId: string, parcelId: string): { parcelId: string; nextDestination: NextHop; toteCode: string; toteId: string; fillPct: number } {
     const mdp = this.require(mdpId);
     const parcel = this.parcels.get(parcelId);
-    if (parcel.status !== 'At_MDP') throw new BadRequestException(`Parcel is ${parcel.status}, must be At_MDP to sort`);
-    if (!parcel.destAgentDid) throw new BadRequestException('Parcel has no destination PUDO to sort toward');
+    if (parcel.status !== 'At_MDP') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, must be At_MDP to sort`);
+    if (!parcel.destAgentDid) throw new GlosError('INVALID_STATE', 'Parcel has no destination PUDO to sort toward');
 
     const next = this.nextHop(mdp, parcel.destZone, parcel.destAgentDid);
 
@@ -211,7 +212,7 @@ export class MdpService {
       return { type: 'pudo', id: dest.did, label: dest.shopName, zone: destZone };
     }
     const onward = this.mdpForZone(destZone);
-    if (!onward) throw new BadRequestException(`No MDP serves destination zone ${destZone}`);
+    if (!onward) throw new GlosError('INVALID_STATE', `No MDP serves destination zone ${destZone}`);
     return { type: 'mdp', id: onward.mdpId, label: onward.name, zone: destZone };
   }
 }

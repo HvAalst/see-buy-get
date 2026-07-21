@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { GlosError } from '../../foundation/http/glos-error';
 import { createHmac, randomBytes } from 'crypto';
 import { CheckoutHandoff, ShippingPolicy, Vendor } from './pudo.types';
 import { DEFAULT_VENDOR_COUNTRY } from './pudo.config';
@@ -60,7 +61,7 @@ export class VendorService {
 
   /** Real money in — the vendor prepays the daughter company. */
   topUp(vendorId: string, amount: number): Vendor {
-    if (amount <= 0) throw new BadRequestException('Top-up must be positive');
+    if (amount <= 0) throw new GlosError('AMOUNT_INVALID', 'Top-up must be positive');
     const vendor = this.get(vendorId);
     vendor.balance = Math.round((vendor.balance + amount) * 100) / 100;
     this.book(vendor, 'TOP_UP', '+', amount, undefined, 'prepay');
@@ -105,7 +106,7 @@ export class VendorService {
 
   get(vendorId: string): Vendor {
     const vendor = this.vendors.get(vendorId);
-    if (!vendor) throw new NotFoundException(`Vendor not found: ${vendorId}`);
+    if (!vendor) throw new GlosError('NOT_FOUND', `Vendor not found: ${vendorId}`);
     return vendor;
   }
 
@@ -146,7 +147,7 @@ export class VendorService {
 
   checkout(id: string): CheckoutHandoff {
     const c = this.checkouts.find((x) => x.id === id);
-    if (!c) throw new NotFoundException(`Checkout not found: ${id}`);
+    if (!c) throw new GlosError('NOT_FOUND', `Checkout not found: ${id}`);
     return c;
   }
 

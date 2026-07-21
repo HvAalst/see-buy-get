@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { GlosError } from '../../foundation/http/glos-error';
 import { randomBytes } from 'crypto';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
@@ -31,11 +32,11 @@ export class FleetService {
   couple(driverDid: string, vehicleId: string, corridorId?: string): Assignment {
     const driver = this.drivers.get(driverDid);
     const vehicle = this.vehicles.get(vehicleId);
-    if (!this.drivers.canOperate(driverDid)) throw new BadRequestException(`Driver is ${driver.status} (or licence expired) — cannot be coupled`);
-    if (!this.vehicles.isUsable(vehicleId)) throw new BadRequestException(`Vehicle is ${vehicle.status} — cannot be coupled`);
-    if (!this.drivers.clearedFor(driverDid, vehicle.vehicleClass)) throw new BadRequestException(`Driver is not licence-cleared for a ${vehicle.vehicleClass}`);
-    if (this.activeForDriver(driverDid)) throw new BadRequestException('Driver is already coupled to a vehicle — uncouple first');
-    if (this.activeForVehicle(vehicleId)) throw new BadRequestException('Vehicle is already coupled to a driver — uncouple first');
+    if (!this.drivers.canOperate(driverDid)) throw new GlosError('CANNOT_COUPLE', `Driver is ${driver.status} (or licence expired) — cannot be coupled`);
+    if (!this.vehicles.isUsable(vehicleId)) throw new GlosError('CANNOT_COUPLE', `Vehicle is ${vehicle.status} — cannot be coupled`);
+    if (!this.drivers.clearedFor(driverDid, vehicle.vehicleClass)) throw new GlosError('CANNOT_COUPLE', `Driver is not licence-cleared for a ${vehicle.vehicleClass}`);
+    if (this.activeForDriver(driverDid)) throw new GlosError('ALREADY_COUPLED', 'Driver is already coupled to a vehicle — uncouple first');
+    if (this.activeForVehicle(vehicleId)) throw new GlosError('ALREADY_COUPLED', 'Vehicle is already coupled to a driver — uncouple first');
     if (corridorId) this.corridors.requireCorridor(corridorId);
 
     const assignment: Assignment = {
@@ -58,7 +59,7 @@ export class FleetService {
    */
   startSession(driverDid: string, vehicleScan: string): Assignment {
     const vehicle = this.vehicles.byQr(vehicleScan);
-    if (!vehicle) throw new NotFoundException('Unknown vehicle QR — scan the sticker on the dashboard');
+    if (!vehicle) throw new GlosError('NOT_FOUND', 'Unknown vehicle QR — scan the sticker on the dashboard');
     return this.couple(driverDid, vehicle.vehicleId);
   }
 
@@ -77,7 +78,7 @@ export class FleetService {
   /** End the driver's active coupling (frees both the driver and the vehicle). */
   uncouple(driverDid: string): Assignment {
     const active = this.activeForDriver(driverDid);
-    if (!active) throw new BadRequestException('Driver is not currently coupled to a vehicle');
+    if (!active) throw new GlosError('NOT_COUPLED', 'Driver is not currently coupled to a vehicle');
     active.status = 'ended';
     active.endedAt = new Date().toISOString();
     this.drivers.setAssignedVehicle(driverDid, undefined);
@@ -136,7 +137,7 @@ export class FleetService {
   /** Set / change the corridor the active coupling serves. */
   assignCorridor(driverDid: string, corridorId: string): Assignment {
     const active = this.activeForDriver(driverDid);
-    if (!active) throw new BadRequestException('Driver is not currently coupled to a vehicle');
+    if (!active) throw new GlosError('NOT_COUPLED', 'Driver is not currently coupled to a vehicle');
     this.corridors.requireCorridor(corridorId);
     active.corridorId = corridorId;
     return active;
@@ -181,7 +182,7 @@ export class FleetService {
 
   get(assignmentId: string): Assignment {
     const a = this.assignments.get(assignmentId);
-    if (!a) throw new NotFoundException(`Assignment not found: ${assignmentId}`);
+    if (!a) throw new GlosError('NOT_FOUND', `Assignment not found: ${assignmentId}`);
     return a;
   }
 }

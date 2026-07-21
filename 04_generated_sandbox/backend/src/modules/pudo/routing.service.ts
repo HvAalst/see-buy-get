@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { GlosError } from '../../foundation/http/glos-error';
 import { AgentService } from './agent.service';
 import { ShelfService } from './shelf.service';
 import { CorridorService } from './corridor.service';
@@ -88,7 +89,7 @@ export class RoutingService {
     const candidates = this.agents
       .list()
       .filter((a) => a.status === 'ACTIVE' && a.openState === 'open' && this.shelf.hasSpace(a.did) && (!input.zone || a.zone === input.zone));
-    if (!candidates.length) throw new BadRequestException('No open PUDO with free shelf capacity available');
+    if (!candidates.length) throw new GlosError('NO_CAPACITY_AVAILABLE', 'No open PUDO with free shelf capacity available');
 
     const ranked = input.location
       ? candidates.map((a) => ({ a, d: haversineKm(input.location!, a.location) })).sort((x, y) => x.d - y.d)
@@ -114,7 +115,7 @@ export class RoutingService {
       // Cross-zone with no hub → require a direct zone-pair corridor (the pre-MDP behaviour).
       // Same-zone deliveries need no corridor: they are a direct local hop (a neighbourhood courier leg).
       const corridor = this.corridors.forZones(origin.zone, dest.zone);
-      if (!corridor) throw new NotFoundException(`No active corridor from ${origin.zone} to ${dest.zone} and no MDP hub to route through`);
+      if (!corridor) throw new GlosError('NOT_FOUND', `No active corridor from ${origin.zone} to ${dest.zone} and no MDP hub to route through`);
     }
 
     const weightKg = input.weightKg ?? 1;

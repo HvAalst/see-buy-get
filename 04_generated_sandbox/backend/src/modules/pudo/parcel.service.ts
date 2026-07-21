@@ -1,4 +1,5 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { GlosError } from '../../foundation/http/glos-error';
 import { randomBytes } from 'crypto';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { EventBus } from '../../foundation/events/event-bus.service';
@@ -64,14 +65,14 @@ export class ParcelService {
 
   /** Screen 1 — Accept Parcel (ingest). */
   accept(input: AcceptInput): Parcel {
-    if (this.parcels.has(input.parcelId)) throw new BadRequestException(`Parcel ${input.parcelId} already exists`);
-    if (!input.dropoffPhotoRef) throw new BadRequestException('A drop-off photo is mandatory (fraud defence)');
+    if (this.parcels.has(input.parcelId)) throw new GlosError('PARCEL_EXISTS', `Parcel ${input.parcelId} already exists`);
+    if (!input.dropoffPhotoRef) throw new GlosError('PHOTO_REQUIRED', 'A drop-off photo is mandatory (fraud defence)');
     const agent = this.agents.get(input.agentDid);
     const mode: PaymentMode = input.paymentMode ?? 'cash';
 
     // 'No money, no scan' gate applies to cash parcels (they consume a platform credit).
     if (mode === 'cash' && !this.gate.canTransact(input.agentDid).ok) {
-      throw new ForbiddenException('Insufficient funds. Top up to accept parcels.');
+      throw new GlosError('WALLET_INSUFFICIENT', 'Insufficient funds. Top up to accept parcels.');
     }
 
     const weightKg = SIZE_WEIGHT_KG[input.size];
@@ -114,13 +115,13 @@ export class ParcelService {
     let corridorId: string;
     let vehicleType: 'bus' | 'truck';
     if (fleet) {
-      if (!fleet.corridorId) throw new BadRequestException('Driver is not assigned to a corridor — assign one before handover');
+      if (!fleet.corridorId) throw new GlosError('INVALID_STATE', 'Driver is not assigned to a corridor — assign one before handover');
       badgeId = fleet.badgeId;
       corridorId = this.corridors.requireCorridor(fleet.corridorId).corridorId;
       vehicleType = fleet.vehicleType;
     } else {
       const driver = this.corridors.driverByBadge(input.driverBadgeId);
-      if (!driver) throw new BadRequestException('Unknown driver badge — not a registered fleet driver or on the corridor whitelist');
+      if (!driver) throw new GlosError('INVALID_INPUT', 'Unknown driver badge — not a registered fleet driver or on the corridor whitelist');
       badgeId = driver.badgeId;
       corridorId = this.corridors.requireCorridor(driver.corridorId).corridorId;
       vehicleType = driver.vehicleType;
@@ -163,7 +164,7 @@ export class ParcelService {
   /** Arrival at the destination PUDO → Ready_For_Pickup; OTP issued to the receiver. */
   arrive(parcelId: string, destAgentDid: string): { parcelId: string; otp: string; status: string; binSlot: string } {
     const parcel = this.require(parcelId);
-    if (parcel.status !== 'On_Bus') throw new BadRequestException(`Parcel is ${parcel.status}, expected On_Bus`);
+    if (parcel.status !== 'On_Bus') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected On_Bus`);
     const otp = String(Math.floor(parseInt(randomBytes(2).toString('hex'), 16) / 65536 * 9000 + 1000));
     parcel.status = 'Ready_For_Pickup';
     parcel.destAgentDid = destAgentDid;
@@ -180,8 +181,8 @@ export class ParcelService {
   /** Screen 3 — Customer Pickup (release) with OTP. */
   pickup(parcelId: string, agentDid: string, otp: string, deliveredPhotoRef?: string): Parcel {
     const parcel = this.require(parcelId);
-    if (parcel.status !== 'Ready_For_Pickup') throw new BadRequestException(`Parcel is ${parcel.status}, expected Ready_For_Pickup`);
-    if (parcel.otpLockedAt) throw new BadRequestException('Too many wrong codes — ask the control tower to reissue');
+    if (parcel.status !== 'Ready_For_Pickup') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
+    if (parcel.otpLockedAt) throw new GlosError('OTP_LOCKED', 'Too many wrong codes — ask the control tower to reissue');
 
     if (parcel.otp !== (otp || '').trim()) {
       parcel.otpAttempts = (parcel.otpAttempts ?? 0) + 1;
@@ -189,10 +190,10 @@ export class ParcelService {
         // Burn it. This is the only check standing between a stranger and someone else's parcel.
         parcel.otpLockedAt = new Date().toISOString();
         this.scan(parcel, 'Ready_For_Pickup', agentDid, 'OTP locked after repeated wrong codes');
-        throw new BadRequestException('Too many wrong codes — ask the control tower to reissue');
+        throw new GlosError('OTP_LOCKED', 'Too many wrong codes — ask the control tower to reissue');
       }
       this.persist(parcel); // keep the attempt counter durable so a restart can't reset the lockout
-      throw new BadRequestException('Incorrect OTP');
+      throw new GlosError('OTP_INVALID', 'Incorrect OTP');
     }
 
     parcel.status = 'Delivered';
@@ -207,10 +208,10 @@ export class ParcelService {
   /** Reverse logistics — void within the 5-minute window; refunds the shipping charge. */
   void(parcelId: string, agentDid: string, voidedPhotoRef: string): Parcel {
     const parcel = this.require(parcelId);
-    if (parcel.originAgentDid !== agentDid) throw new ForbiddenException('Only the accepting PUDO can void');
-    if (parcel.status !== 'At_PUDO') throw new BadRequestException('Only an At_PUDO parcel can be voided');
-    if (Date.now() - new Date(parcel.acceptedAt).getTime() > VOID_WINDOW_MS) throw new BadRequestException('Void window has expired');
-    if (!voidedPhotoRef) throw new BadRequestException('A photo of the voided label is required');
+    if (parcel.originAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Only the accepting PUDO can void');
+    if (parcel.status !== 'At_PUDO') throw new GlosError('INVALID_STATE', 'Only an At_PUDO parcel can be voided');
+    if (Date.now() - new Date(parcel.acceptedAt).getTime() > VOID_WINDOW_MS) throw new GlosError('WINDOW_EXPIRED', 'Void window has expired');
+    if (!voidedPhotoRef) throw new GlosError('PHOTO_REQUIRED', 'A photo of the voided label is required');
 
     parcel.status = 'Voided';
     this.scan(parcel, 'Voided', agentDid, 'voided + refunded');
@@ -223,7 +224,7 @@ export class ParcelService {
    * shipping charge if it is still at the accepting PUDO. (A more complete return-to-sender is future.) */
   cancel(parcelId: string, by = 'ops', reason?: string): Parcel {
     const parcel = this.require(parcelId);
-    if (!['Created', 'At_PUDO', 'At_MDP'].includes(parcel.status)) throw new BadRequestException(`Cannot cancel a ${parcel.status} parcel`);
+    if (!['Created', 'At_PUDO', 'At_MDP'].includes(parcel.status)) throw new GlosError('INVALID_STATE', `Cannot cancel a ${parcel.status} parcel`);
     if (parcel.paymentMode === 'cash' && parcel.status === 'At_PUDO') this.gate.refund(parcel.originAgentDid, WHOLESALE, parcel.parcelId);
     parcel.status = 'Voided';
     this.scan(parcel, 'Voided', by, reason ? `cancelled · ${reason}` : 'cancelled');
@@ -242,7 +243,7 @@ export class ParcelService {
   createInbound(input: { vendorId: string; externalOrderId?: string; originAgentDid: string; destAgentDid: string; buyerMobile: string; buyerEmail?: string; size?: ParcelSize; dimensionsCm?: { l: number; w: number; h: number }; weightKg?: number; contentPhotoRef: string; fragile?: boolean; items?: Array<{ name: string; qty: number }>; subtotal?: number; shippingPolicy: ShippingPolicy; routeMode?: 'flexible' | 'locked'; quote: ShipmentQuote }): { parcel: Parcel; label: PhygitalLabel | null; paid: boolean } {
     const origin = this.agents.get(input.originAgentDid);
     const dest = this.agents.get(input.destAgentDid);
-    if (!input.contentPhotoRef) throw new BadRequestException('A photo of the contents is required (the baseline for dispute resolution)');
+    if (!input.contentPhotoRef) throw new GlosError('PHOTO_REQUIRED', 'A photo of the contents is required (the baseline for dispute resolution)');
     // Derive the tier from dimensions+weight when provided; otherwise trust the explicit size.
     const size: ParcelSize = input.dimensionsCm ? classifySize({ ...input.dimensionsCm, kg: input.weightKg ?? SIZE_WEIGHT_KG[input.size ?? 'M'] }) : (input.size ?? 'M');
     const weightKg = input.weightKg ?? SIZE_WEIGHT_KG[size];
@@ -322,7 +323,7 @@ export class ParcelService {
   /** Retry the prepaid gate after a top-up: bill an unpaid parcel → issue the label + ParcelPaid on success. */
   settleUnpaid(parcelId: string): { parcel: Parcel; label: PhygitalLabel | null; paid: boolean } {
     const parcel = this.require(parcelId);
-    if (parcel.direction !== 'inbound' || !parcel.vendorId) throw new BadRequestException('Not a vendor shipment');
+    if (parcel.direction !== 'inbound' || !parcel.vendorId) throw new GlosError('NOT_INBOUND', 'Not a vendor shipment');
     if (parcel.paidStatus === 'ParcelPaid') return { parcel, label: parcel.label ?? null, paid: true };
     const dest = parcel.destAgentDid ? this.agents.get(parcel.destAgentDid) : undefined;
     const bill = this.vendors.billShipment(parcel.vendorId, parcelId, parcel.shipmentCost ?? 0);
@@ -337,7 +338,7 @@ export class ParcelService {
   /** Public track-and-trace by the shareable tracking key — no PII, no handover secret (Risk: code leak). */
   track(trackingKey: string): { ref: string; status: ParcelStatus; size: ParcelSize; destination: string; destZone: string; steps: Array<{ status: string; at: string; note?: string }>; binSlot?: string } {
     const parcel = [...this.parcels.values()].find((p) => p.trackingKey === trackingKey);
-    if (!parcel) throw new NotFoundException('No parcel for that tracking key');
+    if (!parcel) throw new GlosError('NOT_FOUND', 'No parcel for that tracking key');
     const dest = parcel.destAgentDid ? this.agents.list().find((a) => a.did === parcel.destAgentDid) : undefined;
     return {
       ref: parcel.parcelId,
@@ -353,10 +354,10 @@ export class ParcelService {
   /** Origin PUDO scans the vendor's parcel in (Created → At_PUDO). Pre-paid: labour fee, no gate. */
   intakeInbound(parcelId: string, agentDid: string): Parcel {
     const parcel = this.require(parcelId);
-    if (parcel.direction !== 'inbound') throw new BadRequestException('Not an inbound parcel');
-    if (parcel.status !== 'Created') throw new BadRequestException(`Parcel is ${parcel.status}, expected Created`);
-    if (parcel.paidStatus !== 'ParcelPaid') throw new BadRequestException('Shipment is not paid — the vendor must prepay before the PUDO accepts it');
-    if (parcel.originAgentDid !== agentDid) throw new ForbiddenException('Intake only at the vendor-selected origin PUDO');
+    if (parcel.direction !== 'inbound') throw new GlosError('NOT_INBOUND', 'Not an inbound parcel');
+    if (parcel.status !== 'Created') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Created`);
+    if (parcel.paidStatus !== 'ParcelPaid') throw new GlosError('SHIPMENT_NOT_PAID', 'Shipment is not paid — the vendor must prepay before the PUDO accepts it');
+    if (parcel.originAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Intake only at the vendor-selected origin PUDO');
     parcel.status = 'At_PUDO';
     parcel.acceptedAt = new Date().toISOString();
     this.scan(parcel, 'At_PUDO', agentDid, 'inbound intake');
@@ -368,8 +369,8 @@ export class ParcelService {
   /** Destination PUDO shelves an arrived parcel in a chaos-shelf slot → Ready_For_Pickup + buyer notified. */
   shelve(parcelId: string, agentDid: string, binId?: string): { parcelId: string; binSlot: string; status: string } {
     const parcel = this.require(parcelId);
-    if (parcel.status !== 'On_Bus') throw new BadRequestException(`Parcel is ${parcel.status}, expected On_Bus`);
-    if (parcel.destAgentDid && parcel.destAgentDid !== agentDid) throw new ForbiddenException('Shelve only at the buyer-selected destination PUDO');
+    if (parcel.status !== 'On_Bus') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected On_Bus`);
+    if (parcel.destAgentDid && parcel.destAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Shelve only at the buyer-selected destination PUDO');
     parcel.destAgentDid = agentDid;
     parcel.binSlot = this.shelf.assign(agentDid, parcelId); // chaos-shelf slot from the grid (binId hint ignored)
     void binId;
@@ -382,16 +383,16 @@ export class ParcelService {
   /** Buyer presents the collection QR → resolve the parcel + shelf slot, opening the handover screen. */
   collect(collectionCode: string, agentDid: string): { parcel: Parcel; binSlot?: string } {
     const parcel = [...this.parcels.values()].find((p) => p.collectionCode === collectionCode && p.destAgentDid === agentDid && p.status === 'Ready_For_Pickup');
-    if (!parcel) throw new NotFoundException('No parcel awaiting collection for that code at this PUDO');
+    if (!parcel) throw new GlosError('NOT_FOUND', 'No parcel awaiting collection for that code at this PUDO');
     return { parcel, binSlot: parcel.binSlot };
   }
 
   /** Buyer confirms the parcel is correct → Delivered, transaction closed. Pays the pickup labour fee. */
   collectConfirm(parcelId: string, agentDid: string, collectionCode: string): Parcel {
     const parcel = this.require(parcelId);
-    if (parcel.status !== 'Ready_For_Pickup') throw new BadRequestException(`Parcel is ${parcel.status}, expected Ready_For_Pickup`);
-    if (parcel.destAgentDid !== agentDid) throw new ForbiddenException('Release only at the destination PUDO');
-    if (parcel.collectionCode !== collectionCode) throw new BadRequestException('Collection code does not match');
+    if (parcel.status !== 'Ready_For_Pickup') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
+    if (parcel.destAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Release only at the destination PUDO');
+    if (parcel.collectionCode !== collectionCode) throw new GlosError('CODE_MISMATCH', 'Collection code does not match');
     parcel.status = 'Delivered';
     parcel.deliveredAt = new Date().toISOString();
     this.shelf.release(agentDid, parcelId); // free the shelf slot
@@ -421,9 +422,9 @@ export class ParcelService {
   /** Buyer reports a discrepancy at collection → Disputed, with mandatory photo proof. */
   dispute(parcelId: string, agentDid: string, reason: string, photoProofRef: string): Parcel {
     const parcel = this.require(parcelId);
-    if (parcel.status !== 'Ready_For_Pickup') throw new BadRequestException(`Parcel is ${parcel.status}, expected Ready_For_Pickup`);
-    if (parcel.destAgentDid !== agentDid) throw new ForbiddenException('Dispute is raised at the destination PUDO');
-    if (!reason?.trim() || !photoProofRef) throw new BadRequestException('A reason and a photo proof are required to dispute');
+    if (parcel.status !== 'Ready_For_Pickup') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
+    if (parcel.destAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Dispute is raised at the destination PUDO');
+    if (!reason?.trim() || !photoProofRef) throw new GlosError('DISPUTE_INCOMPLETE', 'A reason and a photo proof are required to dispute');
     parcel.status = 'Disputed';
     parcel.disputeReason = reason;
     parcel.disputePhotoRef = photoProofRef;
@@ -487,7 +488,7 @@ export class ParcelService {
 
   private require(parcelId: string): Parcel {
     const parcel = this.parcels.get(parcelId);
-    if (!parcel) throw new NotFoundException(`Parcel not found: ${parcelId}`);
+    if (!parcel) throw new GlosError('NOT_FOUND', `Parcel not found: ${parcelId}`);
     return parcel;
   }
 }

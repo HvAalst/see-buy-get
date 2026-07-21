@@ -1,4 +1,5 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { createHash, randomBytes } from 'crypto';
 import { DidService } from '../../foundation/did/did.service';
@@ -57,14 +58,14 @@ export class FleetManagerService {
 
   register(input: RegisterManagerInput): FleetManager {
     const unmet = this.unmetRequirements(input);
-    if (unmet.length) throw new BadRequestException(`Does not meet fleet-manager requirements: ${unmet.join('; ')}`);
+    if (unmet.length) throw new GlosError('REQUIREMENTS_NOT_MET', `Does not meet fleet-manager requirements: ${unmet.join('; ')}`);
     const location = input.location ?? geocodeAddress(input.depotAddress!);
 
     // Dedup — one business registration / tax ID / operator licence across the network.
     const prints = { reg: fp(input.requirements.businessRegistrationNo), tax: fp(input.requirements.taxId), lic: fp(input.requirements.transportOperatorLicence) };
-    if (this.fingerprints.has(prints.reg)) throw new ConflictException('A fleet manager with this business registration already exists');
-    if (this.fingerprints.has(prints.tax)) throw new ConflictException('A fleet manager with this tax ID already exists');
-    if (this.fingerprints.has(prints.lic)) throw new ConflictException('A fleet manager with this operator licence already exists');
+    if (this.fingerprints.has(prints.reg)) throw new GlosError('DUPLICATE', 'A fleet manager with this business registration already exists');
+    if (this.fingerprints.has(prints.tax)) throw new GlosError('DUPLICATE', 'A fleet manager with this tax ID already exists');
+    if (this.fingerprints.has(prints.lic)) throw new GlosError('DUPLICATE', 'A fleet manager with this operator licence already exists');
 
     const did = this.dids.generate(`pudo-fleet:${input.contactPhone}`, { role: 'fleet-manager' }).id;
     const { vaultRef } = this.vault.store({ fullName: input.ownerFullName, governmentId: input.ownerNationalId, phone: input.contactPhone }, { region: 'local' });
@@ -93,9 +94,9 @@ export class FleetManagerService {
   /** Upload KYC docs (business reg cert, operator licence, owner ID, proof of address) → KYC_PENDING. */
   submitKyc(did: string, documents: { businessRegCertRef: string; operatorLicenceRef: string; ownerIdRef: string; proofOfAddressRef: string }): FleetManager {
     const m = this.require(did);
-    if (m.status !== 'DRAFT') throw new BadRequestException(`Manager is ${m.status}, expected DRAFT`);
+    if (m.status !== 'DRAFT') throw new GlosError('INVALID_STATE', `Manager is ${m.status}, expected DRAFT`);
     if (!documents.businessRegCertRef || !documents.operatorLicenceRef || !documents.ownerIdRef || !documents.proofOfAddressRef) {
-      throw new BadRequestException('KYC requires a business registration certificate, operator licence, owner ID, and proof of address');
+      throw new GlosError('KYC_INCOMPLETE', 'KYC requires a business registration certificate, operator licence, owner ID, and proof of address');
     }
     m.kyc = { ...documents, submittedAt: new Date().toISOString() } as FleetManagerKyc;
     return this.transition(m, 'KYC_PENDING');
@@ -104,11 +105,11 @@ export class FleetManagerService {
   /** Vetting decision: approve → APPROVED (post the bond next); reject → DRAFT. */
   decideKyc(did: string, approve: boolean, by?: string): FleetManager {
     const m = this.require(did);
-    if (m.status !== 'KYC_PENDING') throw new BadRequestException(`Manager is ${m.status}, expected KYC_PENDING`);
+    if (m.status !== 'KYC_PENDING') throw new GlosError('INVALID_STATE', `Manager is ${m.status}, expected KYC_PENDING`);
     if (!approve) return this.transition(m, 'DRAFT');
-    if (!m.kyc) throw new BadRequestException('Cannot approve: KYC documents missing');
+    if (!m.kyc) throw new GlosError('KYC_INCOMPLETE', 'Cannot approve: KYC documents missing');
     const unmet = this.unmetRequirements(m);
-    if (unmet.length) throw new BadRequestException(`Cannot approve: ${unmet.join('; ')}`);
+    if (unmet.length) throw new GlosError('APPROVAL_BLOCKED', `Cannot approve: ${unmet.join('; ')}`);
     this.core.upsert({ did, vaultRef: m.vaultRef, tier: 2, status: 'active', capabilities: ['fleet-manager'], metadata: { by } });
     return this.transition(m, 'APPROVED');
   }
@@ -116,7 +117,7 @@ export class FleetManagerService {
   /** Record the refundable operating bond → ACTIVE (the manager may now register a fleet). */
   recordBond(did: string): FleetManager {
     const m = this.require(did);
-    if (m.status !== 'APPROVED') throw new BadRequestException(`Manager is ${m.status}, expected APPROVED before posting the bond`);
+    if (m.status !== 'APPROVED') throw new GlosError('INVALID_STATE', `Manager is ${m.status}, expected APPROVED before posting the bond`);
     m.bondPaid = true;
     if (!m.loginCode) m.loginCode = `FM-${randomBytes(3).toString('hex').toUpperCase()}`; // console sign-in code
     this.transition(m, 'ACTIVE');
@@ -128,8 +129,8 @@ export class FleetManagerService {
   login(credential: string): FleetManager {
     const c = (credential || '').trim();
     const m = [...this.managers.values()].find((x) => x.loginCode === c.toUpperCase() || x.did === c);
-    if (!m) throw new UnauthorizedException('Unknown sign-in code');
-    if (m.status !== 'ACTIVE') throw new UnauthorizedException(`Fleet manager is ${m.status} — not yet active`);
+    if (!m) throw new GlosError('AUTH_CODE_INVALID', 'Unknown sign-in code');
+    if (m.status !== 'ACTIVE') throw new GlosError('AUTH_NOT_ACTIVE', `Fleet manager is ${m.status} — not yet active`);
     return m;
   }
 
@@ -144,7 +145,7 @@ export class FleetManagerService {
   /** Guard used by vehicle/driver registration — only an ACTIVE manager may build a fleet. */
   requireActive(did: string): FleetManager {
     const m = this.require(did);
-    if (m.status !== 'ACTIVE') throw new BadRequestException(`Fleet manager is ${m.status} — must be ACTIVE to register vehicles or drivers`);
+    if (m.status !== 'ACTIVE') throw new GlosError('INVALID_STATE', `Fleet manager is ${m.status} — must be ACTIVE to register vehicles or drivers`);
     return m;
   }
 
@@ -169,7 +170,7 @@ export class FleetManagerService {
 
   private require(did: string): FleetManager {
     const m = this.managers.get(did);
-    if (!m) throw new NotFoundException(`Fleet manager not found: ${did}`);
+    if (!m) throw new GlosError('NOT_FOUND', `Fleet manager not found: ${did}`);
     return m;
   }
 }

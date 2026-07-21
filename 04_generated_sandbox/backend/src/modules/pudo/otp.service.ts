@@ -1,8 +1,9 @@
-import { BadRequestException, HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { GlosError } from '../../foundation/http/glos-error';
 import { randomInt, timingSafeEqual } from 'crypto';
 
-/** 429 — @nestjs/common has no built-in for this status. */
-const tooManyRequests = (message: string) => new HttpException(message, HttpStatus.TOO_MANY_REQUESTS);
+/** 429 — a retryable rate-limit rejection (RATE_LIMITED carries status 429 + retryable in the registry). */
+const tooManyRequests = (message: string) => new GlosError('RATE_LIMITED', message);
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 /** A verified phone does not stay verified forever — sign-up must follow verification promptly. */
@@ -65,7 +66,7 @@ export class OtpService {
   /** Issue a 6-digit code for a phone (returned here; SMS'd in production). */
   request(phone: string): { sent: boolean; code: string } {
     const p = this.norm(phone);
-    if (p.replace(/\D/g, '').length < 9) throw new BadRequestException('Enter a valid phone number');
+    if (p.replace(/\D/g, '').length < 9) throw new GlosError('PHONE_INVALID', 'Enter a valid phone number');
     this.assertWithinRate(p);
 
     const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
@@ -79,16 +80,16 @@ export class OtpService {
     const entry = this.codes.get(p);
     if (!entry || entry.expires < Date.now()) {
       this.codes.delete(p);
-      throw new BadRequestException('Wrong or expired code');
+      throw new GlosError('OTP_INVALID', 'Wrong or expired code');
     }
 
     if (!OtpService.safeEqual(entry.code, (code || '').trim())) {
       entry.attempts += 1;
       if (entry.attempts >= MAX_ATTEMPTS) {
         this.codes.delete(p); // burn it — a 6-digit code must not be brute-forceable
-        throw new BadRequestException('Too many wrong codes. Request a new one.');
+        throw new GlosError('OTP_LOCKED', 'Too many wrong codes. Request a new one.');
       }
-      throw new BadRequestException('Wrong or expired code');
+      throw new GlosError('OTP_INVALID', 'Wrong or expired code');
     }
 
     this.codes.delete(p);

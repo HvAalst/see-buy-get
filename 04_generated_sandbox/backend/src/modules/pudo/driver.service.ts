@@ -1,4 +1,5 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { createHash, randomBytes } from 'crypto';
 import { DidService } from '../../foundation/did/did.service';
@@ -55,23 +56,23 @@ export class DriverService {
   }
 
   register(input: RegisterDriverInput): FleetDriver {
-    if (!input.licenceClasses?.length) throw new BadRequestException('Select at least one vehicle class the driver can operate');
-    for (const c of input.licenceClasses) if (!VEHICLE_SPEC[c]) throw new BadRequestException(`Unknown vehicle class: ${c}`);
+    if (!input.licenceClasses?.length) throw new GlosError('FIELD_REQUIRED', 'Select at least one vehicle class the driver can operate');
+    for (const c of input.licenceClasses) if (!VEHICLE_SPEC[c]) throw new GlosError('INVALID_VEHICLE_CLASS', `Unknown vehicle class: ${c}`);
     if (input.managerDid) this.managers.requireActive(input.managerDid);
     const registry = this.registryFor(input.licenceClasses);
 
     // Heavy registry requires a real licence (number + expiry, not already expired).
     if (registry === 'heavy') {
-      if (!input.licenceNumber?.trim()) throw new BadRequestException('A driving licence number is required for this vehicle class');
-      if (!input.licenceExpiresAt) throw new BadRequestException('A licence expiry date is required for this vehicle class');
-      if (this.isExpired(input.licenceExpiresAt)) throw new BadRequestException('The driving licence has expired');
+      if (!input.licenceNumber?.trim()) throw new GlosError('LICENCE_REQUIRED', 'A driving licence number is required for this vehicle class');
+      if (!input.licenceExpiresAt) throw new GlosError('LICENCE_REQUIRED', 'A licence expiry date is required for this vehicle class');
+      if (this.isExpired(input.licenceExpiresAt)) throw new GlosError('LICENCE_EXPIRED', 'The driving licence has expired');
     }
 
     // Dedup — one national ID, one mobile, one licence number across the network.
     const prints = { id: fp(input.nationalId), mobile: fp(input.mobile), ...(input.licenceNumber ? { lic: fp(input.licenceNumber) } : {}) };
-    if (this.fingerprints.has(prints.id)) throw new ConflictException('A driver with this national ID already exists');
-    if (this.fingerprints.has(prints.mobile)) throw new ConflictException('A driver with this mobile already exists');
-    if (prints.lic && this.fingerprints.has(prints.lic)) throw new ConflictException('A driver with this licence number already exists');
+    if (this.fingerprints.has(prints.id)) throw new GlosError('DUPLICATE', 'A driver with this national ID already exists');
+    if (this.fingerprints.has(prints.mobile)) throw new GlosError('DUPLICATE', 'A driver with this mobile already exists');
+    if (prints.lic && this.fingerprints.has(prints.lic)) throw new GlosError('DUPLICATE', 'A driver with this licence number already exists');
 
     const did = this.dids.generate(`pudo-driver:${input.mobile}`, { role: 'pudo-driver' }).id;
     const { vaultRef } = this.vault.store({ fullName: input.fullName, governmentId: input.nationalId, phone: input.mobile }, { region: 'local' });
@@ -103,9 +104,9 @@ export class DriverService {
   /** Heavy registry: upload ID + licence copy → KYC_PENDING. */
   submitKyc(did: string, documents: { idCopyRef: string; licenceCopyRef: string }): FleetDriver {
     const driver = this.require(did);
-    if (driver.registry !== 'heavy') throw new BadRequestException('Light-registry drivers (bike/motorcycle) do not need KYC');
-    if (driver.status !== 'DRAFT') throw new BadRequestException(`Driver is ${driver.status}, expected DRAFT`);
-    if (!documents.idCopyRef || !documents.licenceCopyRef) throw new BadRequestException('KYC requires an ID copy and a licence copy');
+    if (driver.registry !== 'heavy') throw new GlosError('INVALID_STATE', 'Light-registry drivers (bike/motorcycle) do not need KYC');
+    if (driver.status !== 'DRAFT') throw new GlosError('INVALID_STATE', `Driver is ${driver.status}, expected DRAFT`);
+    if (!documents.idCopyRef || !documents.licenceCopyRef) throw new GlosError('KYC_INCOMPLETE', 'KYC requires an ID copy and a licence copy');
     driver.kyc = { idCopyRef: documents.idCopyRef, licenceCopyRef: documents.licenceCopyRef, submittedAt: new Date().toISOString() } as DriverKyc;
     driver.status = 'KYC_PENDING';
     return driver;
@@ -114,11 +115,11 @@ export class DriverService {
   /** Operator vetting (heavy): approve → ACTIVE (+ badge); reject → DRAFT. Re-checks licence + record. */
   decideKyc(did: string, approve: boolean, by?: string): FleetDriver {
     const driver = this.require(did);
-    if (driver.status !== 'KYC_PENDING') throw new BadRequestException(`Driver is ${driver.status}, expected KYC_PENDING`);
+    if (driver.status !== 'KYC_PENDING') throw new GlosError('INVALID_STATE', `Driver is ${driver.status}, expected KYC_PENDING`);
     if (!approve) { driver.status = 'DRAFT'; return driver; }
-    if (!driver.kyc) throw new BadRequestException('Cannot approve: KYC documents missing');
-    if (!driver.criminalRecordClear) throw new BadRequestException('Cannot approve: criminal-record check not cleared');
-    if (this.isExpired(driver.licence.expiresAt)) throw new BadRequestException('Cannot approve: the driving licence has expired');
+    if (!driver.kyc) throw new GlosError('KYC_INCOMPLETE', 'Cannot approve: KYC documents missing');
+    if (!driver.criminalRecordClear) throw new GlosError('APPROVAL_BLOCKED', 'Cannot approve: criminal-record check not cleared');
+    if (this.isExpired(driver.licence.expiresAt)) throw new GlosError('APPROVAL_BLOCKED', 'Cannot approve: the driving licence has expired');
     this.core.upsert({ did, vaultRef: driver.vaultRef, tier: 2, status: 'active', capabilities: ['pudo-driver'], metadata: { by } });
     this.activate(driver, by ?? 'vetting');
     return driver;
@@ -189,7 +190,7 @@ export class DriverService {
 
   private require(did: string): FleetDriver {
     const driver = this.drivers.get(did);
-    if (!driver) throw new NotFoundException(`Driver not found: ${did}`);
+    if (!driver) throw new GlosError('NOT_FOUND', `Driver not found: ${did}`);
     return driver;
   }
 }

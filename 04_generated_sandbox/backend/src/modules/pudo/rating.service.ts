@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { GlosError } from '../../foundation/http/glos-error';
 import { randomBytes } from 'crypto';
 import { OperationalStore } from '../../foundation/data-firewall/operational-store.service';
 import { EventBus } from '../../foundation/events/event-bus.service';
@@ -37,8 +38,8 @@ export class RatingService {
   /** Rate a delivered parcel (1–5 stars). Updates the agent composite + writes it to the core. */
   rate(input: { parcelId: string; stars: number; raterMobile: string }): { rating: RatingRecord; agentComposite: number } {
     const parcel = this.parcels.get(input.parcelId);
-    if (parcel.status !== 'Delivered') throw new BadRequestException('Only a delivered parcel can be rated');
-    if (!(input.stars >= 1 && input.stars <= 5)) throw new BadRequestException('Stars must be 1–5');
+    if (parcel.status !== 'Delivered') throw new GlosError('INVALID_STATE', 'Only a delivered parcel can be rated');
+    if (!(input.stars >= 1 && input.stars <= 5)) throw new GlosError('INVALID_RATING', 'Stars must be 1–5');
 
     const agentDid = parcel.originAgentDid;
     const record: RatingRecord = { id: `rat_${randomBytes(6).toString('hex')}`, parcelId: input.parcelId, agentDid, stars: input.stars, raterMobile: input.raterMobile, at: new Date().toISOString() };

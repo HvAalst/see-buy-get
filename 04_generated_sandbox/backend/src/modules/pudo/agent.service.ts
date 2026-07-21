@@ -1,4 +1,5 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { createHash, randomBytes } from 'crypto';
 import { DidService } from '../../foundation/did/did.service';
@@ -69,18 +70,18 @@ export class AgentService {
   /** Capture shop + identity, run the eligibility filter + dedup, mint a DID, vault the Golden Record → DRAFT. */
   register(input: RegisterAgentInput): Agent {
     // Location: a map pin AND/OR a physical address — at least one. Geocode the address if no pin.
-    if (!input.location && !input.physicalAddress?.trim()) throw new BadRequestException('Provide a map pin (location) and/or a physical address');
+    if (!input.location && !input.physicalAddress?.trim()) throw new GlosError('ADDRESS_REQUIRED', 'Provide a map pin (location) and/or a physical address');
     const location = input.location ?? geocodeAddress(input.physicalAddress!);
 
     // Eligibility filter (18.1) — block ineligible applicants up front.
     const unmet = this.unmetRequirements(input);
-    if (unmet.length) throw new BadRequestException(`Does not meet PUDO agent requirements: ${unmet.join('; ')}`);
+    if (unmet.length) throw new GlosError('REQUIREMENTS_NOT_MET', `Does not meet PUDO agent requirements: ${unmet.join('; ')}`);
 
     // Dedup check (18.5 DRAFT) — one national ID, one mobile, one device across the network.
     const prints = { id: fp(input.nationalId), mobile: fp(input.mobile), device: fp(input.deviceImei) };
-    if (this.fingerprints.has(prints.id)) throw new ConflictException('An agent with this national ID already exists');
-    if (this.fingerprints.has(prints.mobile)) throw new ConflictException('An agent with this mobile already exists');
-    if (this.fingerprints.has(prints.device)) throw new ConflictException('This device is already registered to another agent');
+    if (this.fingerprints.has(prints.id)) throw new GlosError('DUPLICATE', 'An agent with this national ID already exists');
+    if (this.fingerprints.has(prints.mobile)) throw new GlosError('DUPLICATE', 'An agent with this mobile already exists');
+    if (this.fingerprints.has(prints.device)) throw new GlosError('DUPLICATE', 'This device is already registered to another agent');
 
     const did = this.dids.generate(`pudo:${input.mobile}`, { role: 'pudo-agent' }).id;
     const { vaultRef } = this.vault.store({ fullName: input.fullName, governmentId: input.nationalId, phone: input.mobile }, { region: 'local' });
@@ -114,9 +115,9 @@ export class AgentService {
   /** Upload KYC documents (ID copy, trading licence, shop photos) → KYC_PENDING (18.5). */
   submitKyc(did: string, documents: { idCopyRef: string; tradingLicenceRef: string; shopPhotoRefs: string[] }): Agent {
     const agent = this.require(did);
-    if (agent.status !== 'DRAFT') throw new BadRequestException(`Agent is ${agent.status}, expected DRAFT`);
+    if (agent.status !== 'DRAFT') throw new GlosError('INVALID_STATE', `Agent is ${agent.status}, expected DRAFT`);
     if (!documents.idCopyRef || !documents.tradingLicenceRef || !(documents.shopPhotoRefs?.length > 0)) {
-      throw new BadRequestException('KYC requires an ID copy, a trading licence, and at least one shop photo');
+      throw new GlosError('KYC_INCOMPLETE', 'KYC requires an ID copy, a trading licence, and at least one shop photo');
     }
     agent.kyc = { idCopyRef: documents.idCopyRef, tradingLicenceRef: documents.tradingLicenceRef, shopPhotoRefs: documents.shopPhotoRefs, submittedAt: new Date().toISOString() } as KycDocuments;
     return this.transition(agent, 'KYC_PENDING');
@@ -125,11 +126,11 @@ export class AgentService {
   /** Vetting decision (18.5): approve → APPROVED_UNFUNDED (+ wallet); reject → DRAFT. Requirements + docs re-checked. */
   decideKyc(did: string, approve: boolean, by?: string): Agent {
     const agent = this.require(did);
-    if (agent.status !== 'KYC_PENDING') throw new BadRequestException(`Agent is ${agent.status}, expected KYC_PENDING`);
+    if (agent.status !== 'KYC_PENDING') throw new GlosError('INVALID_STATE', `Agent is ${agent.status}, expected KYC_PENDING`);
     if (!approve) return this.transition(agent, 'DRAFT');
-    if (!agent.kyc) throw new BadRequestException('Cannot approve: KYC documents missing');
+    if (!agent.kyc) throw new GlosError('KYC_INCOMPLETE', 'Cannot approve: KYC documents missing');
     const unmet = this.unmetRequirements(agent);
-    if (unmet.length) throw new BadRequestException(`Cannot approve: ${unmet.join('; ')}`);
+    if (unmet.length) throw new GlosError('APPROVAL_BLOCKED', `Cannot approve: ${unmet.join('; ')}`);
     this.wallet.provision(did, { jurisdiction: 'US' });
     this.core.upsert({ did, vaultRef: agent.vaultRef, tier: 2, status: 'active', capabilities: ['pudo-agent'], metadata: { zone: agent.zone, by } });
     return this.transition(agent, 'APPROVED_UNFUNDED');
@@ -189,7 +190,7 @@ export class AgentService {
   /** Reconfigure the shelf grid (rows × columns). */
   setShelf(did: string, shelf: ShelfConfig): Agent {
     const agent = this.require(did);
-    if (shelf.rows < 1 || shelf.cols < 1) throw new BadRequestException('Shelf needs at least one row and column');
+    if (shelf.rows < 1 || shelf.cols < 1) throw new GlosError('INVALID_INPUT', 'Shelf needs at least one row and column');
     agent.shelf = shelf;
     return agent;
   }
@@ -204,7 +205,7 @@ export class AgentService {
 
   /** Set the agent's open-data per-parcel handling price (public, drives the shipment quote). */
   setPrice(did: string, pricePerParcel: number): Agent {
-    if (pricePerParcel < 0) throw new BadRequestException('Price cannot be negative');
+    if (pricePerParcel < 0) throw new GlosError('AMOUNT_INVALID', 'Price cannot be negative');
     const agent = this.require(did);
     agent.pricePerParcel = Math.round(pricePerParcel * 100) / 100;
     return agent;
@@ -223,7 +224,7 @@ export class AgentService {
 
   private require(did: string): Agent {
     const agent = this.agents.get(did);
-    if (!agent) throw new NotFoundException(`PUDO agent not found: ${did}`);
+    if (!agent) throw new GlosError('NOT_FOUND', `PUDO agent not found: ${did}`);
     return agent;
   }
 }

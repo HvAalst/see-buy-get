@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { GlosError } from '../../foundation/http/glos-error';
 import { randomBytes } from 'crypto';
 import { BUS_MAX_KG } from './pudo.config';
 import { Corridor, Driver } from './pudo.types';
@@ -50,7 +51,7 @@ export class CorridorService {
 
   requireCorridor(corridorId: string): Corridor {
     const corridor = this.corridors.get(corridorId);
-    if (!corridor) throw new NotFoundException(`Corridor not found: ${corridorId}`);
+    if (!corridor) throw new GlosError('NOT_FOUND', `Corridor not found: ${corridorId}`);
     return corridor;
   }
 

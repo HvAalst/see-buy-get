@@ -1,4 +1,5 @@
-import { Body, Controller, Get, HttpException, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { GlosError } from '../../foundation/http/glos-error';
 import { Public } from '../../foundation/auth/public.decorator';
 import { Roles } from '../../foundation/auth/scopes.decorator';
 import { Actor } from '../../foundation/auth/actor.decorator';
@@ -351,7 +352,7 @@ export class PudoController {
   vendorOrder(@Param('id') id: string, @Param('parcelId') parcelId: string) {
     this.vendors.get(id);
     const p = this.parcels.get(parcelId);
-    if (p.vendorId !== id) throw new HttpException('Order does not belong to this vendor', HttpStatus.NOT_FOUND);
+    if (p.vendorId !== id) throw new GlosError('NOT_FOUND', 'Order does not belong to this vendor');
     return p;
   }
 
@@ -386,7 +387,7 @@ export class PudoController {
   /** Quote a shipment from the open-data participant rates: flexible (any carrier) vs locked (cheapest). */
   @Get('quote')
   quote(@Query('origin') origin: string, @Query('dest') dest: string, @Query('size') size?: string) {
-    if (!origin || !dest) throw new HttpException('origin and dest are required', HttpStatus.BAD_REQUEST);
+    if (!origin || !dest) throw new GlosError('FIELD_REQUIRED', 'origin and dest are required');
     return this.routing.quoteShipment(origin, dest, (size as 'S' | 'M' | 'L' | 'HEAVY') || 'M');
   }
 
@@ -400,7 +401,7 @@ export class PudoController {
     const list = (origin && dests) ? dests.split(',').map((d) => [origin, d] as const)
       : (dest && origins) ? origins.split(',').map((o) => [o, dest] as const)
         : null;
-    if (!list) throw new HttpException('provide origin+dests or dest+origins', HttpStatus.BAD_REQUEST);
+    if (!list) throw new GlosError('FIELD_REQUIRED', 'provide origin+dests or dest+origins');
     const variable = origin ? 1 : 0; // which side varies → the `did` the pin represents
     return { options: list.filter(([a, b]) => a && b).map(([o, d]) => {
       try { return { did: [o, d][variable], quote: this.routing.quoteShipment(o, d, sz) }; }
@@ -503,7 +504,7 @@ export class PudoController {
     const vendor = this.vendors.get(dto.vendorId);
     const handoff = dto.checkoutId ? this.vendors.checkout(dto.checkoutId) : undefined;
     const destPudoDid = dto.destPudoDid ?? handoff?.destAgentDid;
-    if (!destPudoDid) throw new HttpException('A destination PUDO is required', HttpStatus.BAD_REQUEST);
+    if (!destPudoDid) throw new GlosError('FIELD_REQUIRED', 'A destination PUDO is required');
     // Derive the size, then quote the route from the open-data participant rates.
     const size = dto.dimensionsCm ? classifySize({ ...dto.dimensionsCm, kg: dto.weightKg ?? SIZE_WEIGHT_KG[dto.size ?? 'M'] }) : (dto.size ?? 'M');
     const quote = this.routing.quoteShipment(dto.originPudoDid, destPudoDid, size);

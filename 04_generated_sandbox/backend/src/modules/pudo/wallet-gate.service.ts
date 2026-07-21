@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { GlosError } from '../../foundation/http/glos-error';
 import { randomBytes } from 'crypto';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { EventBus } from '../../foundation/events/event-bus.service';
@@ -44,7 +45,7 @@ export class WalletGateService {
 
   /** Real money in → credits the wallet, may activate the agent. */
   topUp(did: string, amount: number, bankRef = 'cash'): PudoLedgerEntry {
-    if (amount <= 0) throw new BadRequestException('Top-up amount must be positive');
+    if (amount <= 0) throw new GlosError('AMOUNT_INVALID', 'Top-up amount must be positive');
     this.wallet.require(did); // wallet must exist (agent approved)
     this.wallet.credit(did, amount);
     const entry = this.record('TOP_UP', '+', amount, did, bankRef, 'bank');

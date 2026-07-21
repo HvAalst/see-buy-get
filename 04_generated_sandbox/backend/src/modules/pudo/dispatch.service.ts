@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { GlosError } from '../../foundation/http/glos-error';
 import { randomBytes } from 'crypto';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
@@ -81,7 +82,7 @@ export class DispatchService {
   /** Suggest the loads sitting along a driver's A→B route, within remaining vehicle capacity. */
   suggest(driverDid: string, route: RoutePlan, now: number = Date.now()): Offer[] {
     const vehicle = this.fleet.vehicleForDriver(driverDid);
-    if (!vehicle) throw new BadRequestException('Couple the driver to a vehicle before requesting work');
+    if (!vehicle) throw new GlosError('NOT_COUPLED', 'Couple the driver to a vehicle before requesting work');
     this.publishReady(now);
     const remaining = this.remainingCapacity(driverDid);
 
@@ -120,14 +121,14 @@ export class DispatchService {
   /** Driver accepts an offer → reserves the load (and its weight) for this driver. */
   claim(offerId: string, now: number = Date.now()): Offer {
     const offer = this.requireOffer(offerId);
-    if (offer.status === 'expired' || new Date(offer.expiresAt).getTime() <= now) { offer.status = 'expired'; throw new BadRequestException('Offer has lapsed (auto-ignored)'); }
-    if (offer.status !== 'pending') throw new BadRequestException(`Offer is ${offer.status}`);
+    if (offer.status === 'expired' || new Date(offer.expiresAt).getTime() <= now) { offer.status = 'expired'; throw new GlosError('WINDOW_EXPIRED', 'Offer has lapsed (auto-ignored)'); }
+    if (offer.status !== 'pending') throw new GlosError('INVALID_STATE', `Offer is ${offer.status}`);
     const vehicle = this.fleet.vehicleForDriver(offer.driverDid);
-    if (!vehicle) throw new BadRequestException('Driver is no longer coupled to a vehicle');
-    if (offer.weightKg > this.remainingCapacity(offer.driverDid)) throw new BadRequestException('Not enough remaining capacity for this load');
+    if (!vehicle) throw new GlosError('NOT_COUPLED', 'Driver is no longer coupled to a vehicle');
+    if (offer.weightKg > this.remainingCapacity(offer.driverDid)) throw new GlosError('CAPACITY_EXCEEDED', 'Not enough remaining capacity for this load');
 
     if (offer.kind === 'tote') this.totes.markClaimed(offer.ref, offer.driverDid);
-    else { const f = this.requireFreight(offer.ref); if (f.status !== 'available') throw new BadRequestException(`Freight is ${f.status}`); f.status = 'claimed'; f.claimedBy = offer.driverDid; }
+    else { const f = this.requireFreight(offer.ref); if (f.status !== 'available') throw new GlosError('INVALID_STATE', `Freight is ${f.status}`); f.status = 'claimed'; f.claimedBy = offer.driverDid; }
 
     offer.status = 'claimed';
     // Retire the competing offers for the same load.
@@ -174,13 +175,13 @@ export class DispatchService {
   /** Bulk freight is picked up (claimed → in_transit) then delivered (→ delivered, capacity released). */
   pickupFreight(freightId: string): Freight {
     const f = this.requireFreight(freightId);
-    if (f.status !== 'claimed') throw new BadRequestException(`Freight is ${f.status}, expected claimed`);
+    if (f.status !== 'claimed') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected claimed`);
     f.status = 'in_transit';
     return f;
   }
   deliverFreight(freightId: string): Freight {
     const f = this.requireFreight(freightId);
-    if (f.status !== 'in_transit') throw new BadRequestException(`Freight is ${f.status}, expected in_transit`);
+    if (f.status !== 'in_transit') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected in_transit`);
     f.status = 'delivered'; // no longer counts against the driver's remaining capacity
     return f;
   }
@@ -241,13 +242,13 @@ export class DispatchService {
 
   private requireOffer(offerId: string): Offer {
     const o = this.offers.get(offerId);
-    if (!o) throw new NotFoundException(`Offer not found: ${offerId}`);
+    if (!o) throw new GlosError('NOT_FOUND', `Offer not found: ${offerId}`);
     return o;
   }
 
   private requireFreight(freightId: string): Freight {
     const f = this.freights.get(freightId);
-    if (!f) throw new NotFoundException(`Freight not found: ${freightId}`);
+    if (!f) throw new GlosError('NOT_FOUND', `Freight not found: ${freightId}`);
     return f;
   }
 }

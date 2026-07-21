@@ -863,15 +863,17 @@ describe('GLOS backend (e2e)', () => {
     const auth = { Authorization: `Bearer ${tokenRes.body.access_token}` };
     const u = Math.random().toString(16).slice(2, 10);
 
-    // Eligibility filter blocks a missing operator licence.
-    await request(http).post('/v1/pudo/fleet/managers').set(auth).send({ companyName: 'BadCo', contactPhone: `+254${u}`, ownerFullName: 'O', ownerNationalId: `MGR-${u}`, location: { lat: -1.2, lng: 36.8 }, requirements: { businessRegistrationNo: `BRN-${u}`, transportOperatorLicence: '', taxId: `TAX-${u}` } }).expect(400);
+    // Eligibility filter blocks a missing operator licence — with a domain code the codemod attached.
+    const ineligible = await request(http).post('/v1/pudo/fleet/managers').set(auth).send({ companyName: 'BadCo', contactPhone: `+254${u}`, ownerFullName: 'O', ownerNationalId: `MGR-${u}`, location: { lat: -1.2, lng: 36.8 }, requirements: { businessRegistrationNo: `BRN-${u}`, transportOperatorLicence: '', taxId: `TAX-${u}` } }).expect(400);
+    expect(ineligible.body.code).toBe('REQUIREMENTS_NOT_MET');
 
     const reg = await request(http).post('/v1/pudo/fleet/managers').set(auth).send({ companyName: 'Acme Haulage', contactPhone: `+254${u}`, ownerFullName: 'A Owner', ownerNationalId: `MGR-${u}`, location: { lat: -1.2, lng: 36.8 }, requirements: { businessRegistrationNo: `BRN-${u}`, transportOperatorLicence: `TOL-${u}`, taxId: `TAX-${u}` } }).expect(201);
     const mDid = reg.body.did as string;
     expect(reg.body.status).toBe('DRAFT');
 
-    // Cannot build a fleet until ACTIVE.
-    await request(http).post('/v1/pudo/vehicles').set(auth).send({ plate: `MV-${u}`, vehicleClass: 'van', ownerName: 'A', managerDid: mDid }).expect(400);
+    // Cannot build a fleet until ACTIVE — an INVALID_STATE, not a generic bad request.
+    const tooEarly = await request(http).post('/v1/pudo/vehicles').set(auth).send({ plate: `MV-${u}`, vehicleClass: 'van', ownerName: 'A', managerDid: mDid }).expect(400);
+    expect(tooEarly.body.code).toBe('INVALID_STATE');
 
     await request(http).post(`/v1/pudo/fleet/managers/${mDid}/submit-kyc`).set(auth).send({ businessRegCertRef: 'r.pdf', operatorLicenceRef: 'l.pdf', ownerIdRef: 'id.jpg', proofOfAddressRef: 'a.pdf' }).expect(201);
     const queue = await request(http).get('/v1/pudo/fleet/managers/kyc-queue').set(auth).expect(200);
@@ -884,7 +886,8 @@ describe('GLOS backend (e2e)', () => {
     // The manager can sign into the console with the issued code; a bad code is rejected.
     const signin = await request(http).post('/v1/pudo/fleet/managers/login').set(auth).send({ code: active.body.loginCode }).expect(201);
     expect(signin.body.did).toBe(mDid);
-    await request(http).post('/v1/pudo/fleet/managers/login').set(auth).send({ code: 'FM-NOPE' }).expect(401);
+    const badCode = await request(http).post('/v1/pudo/fleet/managers/login').set(auth).send({ code: 'FM-NOPE' }).expect(401);
+    expect(badCode.body.code).toBe('AUTH_CODE_INVALID');
 
     // Now the manager can register a vehicle, and the dashboard scopes to their fleet.
     const veh = await request(http).post('/v1/pudo/vehicles').set(auth).send({ plate: `MV-${u}`, vehicleClass: 'van', ownerName: 'Acme', managerDid: mDid }).expect(201);

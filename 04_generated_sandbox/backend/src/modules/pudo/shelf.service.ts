@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { GlosError } from '../../foundation/http/glos-error';
 import { AgentService } from './agent.service';
 import { SHELF_COLORS } from './pudo.config';
 import { ShelfSlot } from './pudo.types';
@@ -48,7 +49,7 @@ export class ShelfService {
   assign(agentDid: string, parcelId: string): string {
     const occ = this.occupancy.get(agentDid) ?? new Map<string, string>();
     const free = this.grid(agentDid).find((s) => !s.occupiedBy);
-    if (!free) throw new BadRequestException('Shelf is full at this PUDO');
+    if (!free) throw new GlosError('SHELF_FULL', 'Shelf is full at this PUDO');
     occ.set(free.label, parcelId);
     this.occupancy.set(agentDid, occ);
     return free.label;

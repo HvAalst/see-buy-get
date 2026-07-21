@@ -1,4 +1,5 @@
-import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { GlosError } from '../../foundation/http/glos-error';
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { AuthService } from '../../foundation/auth/auth.service';
@@ -54,11 +55,11 @@ export class AccountService {
   /** Create a participant account + its domain entity from the sign-up wizard. Requires a verified phone. */
   signup(input: { role: AccountRole; email: string; password: string; phone: string; profile: Record<string, unknown> }): { accountId: string; role: AccountRole; did: string; email: string; entityStatus?: string; token: AccessToken } {
     const email = (input.email || '').trim().toLowerCase();
-    if (!email.includes('@')) throw new BadRequestException('A valid email is required');
-    if ((input.password || '').length < 6) throw new BadRequestException('Password must be at least 6 characters');
-    if (!input.phone?.trim()) throw new BadRequestException('A phone number is required');
-    if (!this.otp.isVerified(input.phone)) throw new BadRequestException('Verify your phone number first');
-    if (this.accounts.has(email)) throw new ConflictException('An account with this email already exists');
+    if (!email.includes('@')) throw new GlosError('EMAIL_INVALID', 'A valid email is required');
+    if ((input.password || '').length < 6) throw new GlosError('PASSWORD_TOO_SHORT', 'Password must be at least 6 characters');
+    if (!input.phone?.trim()) throw new GlosError('PHONE_REQUIRED', 'A phone number is required');
+    if (!this.otp.isVerified(input.phone)) throw new GlosError('PHONE_NOT_VERIFIED', 'Verify your phone number first');
+    if (this.accounts.has(email)) throw new GlosError('DUPLICATE', 'An account with this email already exists');
 
     const { did, entityStatus, tenant } = this.provision(input.role, input.profile);
     this.otp.consume(input.phone); // one verification → one account
@@ -71,7 +72,7 @@ export class AccountService {
   /** Verify credentials → an actor-scoped token (S2). Replaces the old ?<role>=<did> URL "session". */
   login(email: string, password: string): { accountId: string; role: AccountRole; did: string; email: string; token: AccessToken } {
     const account = this.accounts.get((email || '').trim().toLowerCase());
-    if (!account || !this.verify(password, account)) throw new UnauthorizedException('Wrong email or password');
+    if (!account || !this.verify(password, account)) throw new GlosError('AUTH_FAILED', 'Wrong email or password');
     return { accountId: account.accountId, role: account.role, did: account.did, email: account.email, token: this.mint(account) };
   }
 
@@ -91,9 +92,9 @@ export class AccountService {
   }
 
   reset(token: string, password: string): { ok: boolean } {
-    if ((password || '').length < 6) throw new BadRequestException('Password must be at least 6 characters');
+    if ((password || '').length < 6) throw new GlosError('PASSWORD_TOO_SHORT', 'Password must be at least 6 characters');
     const account = [...this.accounts.values()].find((a) => a.resetToken && a.resetToken === (token || '').trim().toUpperCase());
-    if (!account || !account.resetExpires || account.resetExpires < Date.now()) throw new BadRequestException('Invalid or expired reset token');
+    if (!account || !account.resetExpires || account.resetExpires < Date.now()) throw new GlosError('WINDOW_EXPIRED', 'Invalid or expired reset token');
     account.salt = randomBytes(16).toString('hex');
     account.hash = this.hash(password, account.salt);
     account.resetToken = undefined;
@@ -122,7 +123,7 @@ export class AccountService {
       const mdp = this.mdps.register((profile.mdp ?? {}) as never);
       return { did: mdp.did }; // the real DID now (was the mdp_<hex> id — a type lie)
     }
-    throw new BadRequestException(`Unknown account role: ${role}`);
+    throw new GlosError('UNKNOWN_ROLE', `Unknown account role: ${role}`);
   }
 
   private hash(password: string, salt: string): string {
