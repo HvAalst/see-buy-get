@@ -19,14 +19,14 @@ async function getToken() {
 }
 async function api(path) {
   const t = await getToken();
-  const res = await fetch(`${API}/pudo${path}`, { headers: { Authorization: `Bearer ${t}` } });
+  const res = await fetch(`${API}/sbg${path}`, { headers: { Authorization: `Bearer ${t}` } });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.message || `Error ${res.status}`);
   return data;
 }
 async function post(path, body) {
   const t = await getToken();
-  const res = await fetch(`${API}/pudo${path}`, { method: 'POST', headers: { Authorization: `Bearer ${t}`, ...(body ? { 'content-type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
+  const res = await fetch(`${API}/sbg${path}`, { method: 'POST', headers: { Authorization: `Bearer ${t}`, ...(body ? { 'content-type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.message || `Error ${res.status}`);
   return data;

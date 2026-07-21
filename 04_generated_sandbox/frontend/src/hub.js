@@ -41,7 +41,7 @@ async function getToken() {
   return token;
 }
 async function api(path) {
-  try { const t = await getToken(); const res = await fetch(`${API}/pudo${path}`, { headers: { Authorization: `Bearer ${t}` } }); return res.ok ? await res.json() : []; } catch { return []; }
+  try { const t = await getToken(); const res = await fetch(`${API}/sbg${path}`, { headers: { Authorization: `Bearer ${t}` } }); return res.ok ? await res.json() : []; } catch { return []; }
 }
 
 async function load() {

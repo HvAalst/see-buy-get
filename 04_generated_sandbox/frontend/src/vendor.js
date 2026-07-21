@@ -50,7 +50,7 @@ async function getToken() {
 }
 async function api(path, { method = 'GET', body } = {}) {
   const t = await getToken();
-  const res = await fetch(`${API}/pudo${path}`, { method, headers: { Authorization: `Bearer ${t}`, ...(body ? { 'content-type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
+  const res = await fetch(`${API}/sbg${path}`, { method, headers: { Authorization: `Bearer ${t}`, ...(body ? { 'content-type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.message || `Error ${res.status}`);
   return data;

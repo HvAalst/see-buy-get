@@ -595,38 +595,38 @@ describe('GLOS backend (e2e)', () => {
 
     async function onboard(shopName: string, zone: string) {
       const u = Math.random().toString(16).slice(2, 10);
-      const reg = await request(http).post('/v1/pudo/agents').set(auth)
+      const reg = await request(http).post('/v1/sbg/agents').set(auth)
         .send({ shopName, zone, location: { lat: -1.2, lng: 36.8 }, landmark: 'by the market', shelf: { rows: 3, cols: 3 }, openingHours: { mon: { open: '08:00', close: '18:00' }, tue: { open: '08:00', close: '18:00' }, wed: { open: '08:00', close: '18:00' }, thu: { open: '08:00', close: '18:00' }, fri: { open: '08:00', close: '18:00' }, sat: { open: '08:00', close: '18:00' }, sun: null }, fullName: `${shopName} owner`, nationalId: `ID-${u}`, mobile: `+254${u}`, deviceImei: `IMEI-${u}`, requirements: { androidVersion: 13, reliablePower: true, tradingLicence: 'TL-1', criminalRecordClear: true } }).expect(201);
       const did = reg.body.did as string;
-      await request(http).post(`/v1/pudo/agents/${did}/submit-kyc`).set(auth).send({ idCopyRef: 'id.jpg', tradingLicenceRef: 'lic.pdf', shopPhotoRefs: ['shop.jpg'] }).expect(201);
-      await request(http).post(`/v1/pudo/agents/${did}/kyc-decision`).set(auth).send({ approve: true }).expect(201);
-      await request(http).post(`/v1/pudo/agents/${did}/top-up`).set(auth).send({ amount: 50 }).expect(201);
+      await request(http).post(`/v1/sbg/agents/${did}/submit-kyc`).set(auth).send({ idCopyRef: 'id.jpg', tradingLicenceRef: 'lic.pdf', shopPhotoRefs: ['shop.jpg'] }).expect(201);
+      await request(http).post(`/v1/sbg/agents/${did}/kyc-decision`).set(auth).send({ approve: true }).expect(201);
+      await request(http).post(`/v1/sbg/agents/${did}/top-up`).set(auth).send({ amount: 50 }).expect(201);
       return did;
     }
     const origin = await onboard('North PUDO', 'NorthTown');
     const dest = await onboard('South PUDO', 'SouthTown');
 
     // Agent is ACTIVE and the gate passes.
-    expect((await request(http).get(`/v1/pudo/agents/${origin}`).set(auth).expect(200)).body.status).toBe('ACTIVE');
-    await request(http).get(`/v1/pudo/agents/${origin}/can-transact`).set(auth).expect(200);
+    expect((await request(http).get(`/v1/sbg/agents/${origin}`).set(auth).expect(200)).body.status).toBe('ACTIVE');
+    await request(http).get(`/v1/sbg/agents/${origin}/can-transact`).set(auth).expect(200);
 
     // Static corridor + driver.
-    const corridor = await request(http).post('/v1/pudo/corridors').set(auth).send({ name: 'N-S Express', originZone: 'NorthTown', destZone: 'SouthTown' }).expect(201);
-    const driver = await request(http).post('/v1/pudo/drivers').set(auth).send({ driverDid: 'did:glos:bus1', name: 'John', corridorId: corridor.body.corridorId }).expect(201);
+    const corridor = await request(http).post('/v1/sbg/corridors').set(auth).send({ name: 'N-S Express', originZone: 'NorthTown', destZone: 'SouthTown' }).expect(201);
+    const driver = await request(http).post('/v1/sbg/drivers').set(auth).send({ driverDid: 'did:glos:bus1', name: 'John', corridorId: corridor.body.corridorId }).expect(201);
 
     // Screen 1 Accept → Screen 2 Handover → arrive → Screen 3 Pickup (OTP).
-    await request(http).post('/v1/pudo/parcels/accept').set(auth).send({ agentDid: origin, parcelId: 'E2E-QR-1', size: 'M', destZone: 'SouthTown', senderMobile: '+254700', receiverMobile: '+254711', dropoffPhotoRef: 'drop.jpg' }).expect(201);
-    await request(http).post('/v1/pudo/parcels/handover').set(auth).send({ agentDid: origin, driverBadgeId: driver.body.badgeId, parcelIds: ['E2E-QR-1'] }).expect(201);
-    const arrival = await request(http).post('/v1/pudo/parcels/E2E-QR-1/arrive').set(auth).send({ destAgentDid: dest }).expect(201);
-    const delivered = await request(http).post('/v1/pudo/parcels/E2E-QR-1/pickup').set(auth).send({ agentDid: dest, otp: arrival.body.otp, deliveredPhotoRef: 'del.jpg' }).expect(201);
+    await request(http).post('/v1/sbg/parcels/accept').set(auth).send({ agentDid: origin, parcelId: 'E2E-QR-1', size: 'M', destZone: 'SouthTown', senderMobile: '+254700', receiverMobile: '+254711', dropoffPhotoRef: 'drop.jpg' }).expect(201);
+    await request(http).post('/v1/sbg/parcels/handover').set(auth).send({ agentDid: origin, driverBadgeId: driver.body.badgeId, parcelIds: ['E2E-QR-1'] }).expect(201);
+    const arrival = await request(http).post('/v1/sbg/parcels/E2E-QR-1/arrive').set(auth).send({ destAgentDid: dest }).expect(201);
+    const delivered = await request(http).post('/v1/sbg/parcels/E2E-QR-1/pickup').set(auth).send({ agentDid: dest, otp: arrival.body.otp, deliveredPhotoRef: 'del.jpg' }).expect(201);
     expect(delivered.body.status).toBe('Delivered');
 
     // Tier-1 customer rates → graduates into the shared reputation core.
-    const rated = await request(http).post('/v1/pudo/parcels/E2E-QR-1/rate').set(auth).send({ stars: 5, raterMobile: '+254711' }).expect(201);
+    const rated = await request(http).post('/v1/sbg/parcels/E2E-QR-1/rate').set(auth).send({ stars: 5, raterMobile: '+254711' }).expect(201);
     expect(rated.body.agentComposite).toBe(5);
 
     // Operator dashboard reflects the float + activity.
-    const dash = await request(http).get('/v1/pudo/dashboard').set(auth).expect(200);
+    const dash = await request(http).get('/v1/sbg/dashboard').set(auth).expect(200);
     expect(dash.body.agentsTotal).toBeGreaterThanOrEqual(2);
     expect(dash.body.systemFloat).toBeGreaterThan(0);
 
@@ -646,45 +646,45 @@ describe('GLOS backend (e2e)', () => {
 
     async function onboard(shop: string, zone: string) {
       const u = Math.random().toString(16).slice(2, 10);
-      const reg = await request(http).post('/v1/pudo/agents').set(auth).send({ shopName: shop, zone, location: { lat: -1.2, lng: 36.8 }, landmark: 'x', shelf: { rows: 3, cols: 3 }, openingHours: { mon: { open: '08:00', close: '18:00' }, tue: { open: '08:00', close: '18:00' }, wed: { open: '08:00', close: '18:00' }, thu: { open: '08:00', close: '18:00' }, fri: { open: '08:00', close: '18:00' }, sat: { open: '08:00', close: '18:00' }, sun: null }, fullName: `${shop} o`, nationalId: `ID-${u}`, mobile: `+254${u}`, deviceImei: `IMEI-${u}`, requirements: { androidVersion: 13, reliablePower: true, tradingLicence: 'TL-1', criminalRecordClear: true } }).expect(201);
+      const reg = await request(http).post('/v1/sbg/agents').set(auth).send({ shopName: shop, zone, location: { lat: -1.2, lng: 36.8 }, landmark: 'x', shelf: { rows: 3, cols: 3 }, openingHours: { mon: { open: '08:00', close: '18:00' }, tue: { open: '08:00', close: '18:00' }, wed: { open: '08:00', close: '18:00' }, thu: { open: '08:00', close: '18:00' }, fri: { open: '08:00', close: '18:00' }, sat: { open: '08:00', close: '18:00' }, sun: null }, fullName: `${shop} o`, nationalId: `ID-${u}`, mobile: `+254${u}`, deviceImei: `IMEI-${u}`, requirements: { androidVersion: 13, reliablePower: true, tradingLicence: 'TL-1', criminalRecordClear: true } }).expect(201);
       const did = reg.body.did as string;
-      await request(http).post(`/v1/pudo/agents/${did}/submit-kyc`).set(auth).send({ idCopyRef: 'id.jpg', tradingLicenceRef: 'lic.pdf', shopPhotoRefs: ['shop.jpg'] }).expect(201);
-      await request(http).post(`/v1/pudo/agents/${did}/kyc-decision`).set(auth).send({ approve: true }).expect(201);
-      await request(http).post(`/v1/pudo/agents/${did}/top-up`).set(auth).send({ amount: 20 }).expect(201);
+      await request(http).post(`/v1/sbg/agents/${did}/submit-kyc`).set(auth).send({ idCopyRef: 'id.jpg', tradingLicenceRef: 'lic.pdf', shopPhotoRefs: ['shop.jpg'] }).expect(201);
+      await request(http).post(`/v1/sbg/agents/${did}/kyc-decision`).set(auth).send({ approve: true }).expect(201);
+      await request(http).post(`/v1/sbg/agents/${did}/top-up`).set(auth).send({ amount: 20 }).expect(201);
       return did;
     }
     const origin = await onboard('Origin PUDO', 'NorthTown');
     const dest = await onboard('Dest PUDO', 'SouthTown');
-    const corridor = await request(http).post('/v1/pudo/corridors').set(auth).send({ name: 'N-S', originZone: 'NorthTown', destZone: 'SouthTown' }).expect(201);
-    const driver = await request(http).post('/v1/pudo/drivers').set(auth).send({ driverDid: 'did:glos:invan', name: 'Joe', corridorId: corridor.body.corridorId }).expect(201);
+    const corridor = await request(http).post('/v1/sbg/corridors').set(auth).send({ name: 'N-S', originZone: 'NorthTown', destZone: 'SouthTown' }).expect(201);
+    const driver = await request(http).post('/v1/sbg/drivers').set(auth).send({ driverDid: 'did:glos:invan', name: 'Joe', corridorId: corridor.body.corridorId }).expect(201);
 
     // Vendor onboarding + the shipment webhook.
-    const vendor = await request(http).post('/v1/pudo/vendors').set(auth).send({ name: 'ACME Store', callbackUrl: 'https://acme.example/hook' }).expect(201);
+    const vendor = await request(http).post('/v1/sbg/vendors').set(auth).send({ name: 'ACME Store', callbackUrl: 'https://acme.example/hook' }).expect(201);
     expect(vendor.body.secret).toMatch(/^whsec_/); // issued exactly once, at registration
     // But a later fetch must NOT re-expose the signing secret (a guessed vendorId would leak the key).
-    const reFetched = await request(http).get(`/v1/pudo/vendors/${vendor.body.vendorId}`).set(auth).expect(200);
+    const reFetched = await request(http).get(`/v1/sbg/vendors/${vendor.body.vendorId}`).set(auth).expect(200);
     expect(reFetched.body.secret).toBeUndefined();
-    const topped = await request(http).post(`/v1/pudo/vendors/${vendor.body.vendorId}/top-up`).set(auth).send({ amount: 50 }).expect(201); // prepay the daughter co
+    const topped = await request(http).post(`/v1/sbg/vendors/${vendor.body.vendorId}/top-up`).set(auth).send({ amount: 50 }).expect(201); // prepay the daughter co
     expect(topped.body.secret).toBeUndefined();
-    const order = await request(http).post('/v1/pudo/inbound/orders').set(auth).send({ vendorId: vendor.body.vendorId, externalOrderId: 'ORD-77', originPudoDid: origin, destPudoDid: dest, buyerMobile: '+254700999', size: 'M', contentPhotoRef: 'content.jpg', items: [{ name: 'Books', qty: 3 }] }).expect(201);
+    const order = await request(http).post('/v1/sbg/inbound/orders').set(auth).send({ vendorId: vendor.body.vendorId, externalOrderId: 'ORD-77', originPudoDid: origin, destPudoDid: dest, buyerMobile: '+254700999', size: 'M', contentPhotoRef: 'content.jpg', items: [{ name: 'Books', qty: 3 }] }).expect(201);
     const parcelId = order.body.parcel.parcelId as string;
     const collectionCode = order.body.parcel.collectionCode as string;
     expect(order.body.label.svg).toContain('<svg');
 
     // Field flow.
-    await request(http).post(`/v1/pudo/parcels/${parcelId}/intake`).set(auth).send({ agentDid: origin }).expect(201);
-    await request(http).post('/v1/pudo/parcels/handover').set(auth).send({ agentDid: origin, driverBadgeId: driver.body.badgeId, parcelIds: [parcelId] }).expect(201);
-    const shelf = await request(http).post(`/v1/pudo/parcels/${parcelId}/shelve`).set(auth).send({ agentDid: dest }).expect(201);
+    await request(http).post(`/v1/sbg/parcels/${parcelId}/intake`).set(auth).send({ agentDid: origin }).expect(201);
+    await request(http).post('/v1/sbg/parcels/handover').set(auth).send({ agentDid: origin, driverBadgeId: driver.body.badgeId, parcelIds: [parcelId] }).expect(201);
+    const shelf = await request(http).post(`/v1/sbg/parcels/${parcelId}/shelve`).set(auth).send({ agentDid: dest }).expect(201);
     expect(shelf.body.binSlot).toMatch(/^[A-Za-z]+-[1-9]$/);
 
     // Buyer collection.
-    const found = await request(http).post('/v1/pudo/parcels/collect').set(auth).send({ agentDid: dest, collectionCode }).expect(201);
+    const found = await request(http).post('/v1/sbg/parcels/collect').set(auth).send({ agentDid: dest, collectionCode }).expect(201);
     expect(found.body.parcel.parcelId).toBe(parcelId);
-    const delivered = await request(http).post(`/v1/pudo/parcels/${parcelId}/collect-confirm`).set(auth).send({ agentDid: dest, collectionCode }).expect(201);
+    const delivered = await request(http).post(`/v1/sbg/parcels/${parcelId}/collect-confirm`).set(auth).send({ agentDid: dest, collectionCode }).expect(201);
     expect(delivered.body.status).toBe('Delivered');
 
     // Vendor received signed status callbacks.
-    const cbs = await request(http).get(`/v1/pudo/vendors/${vendor.body.vendorId}/callbacks`).set(auth).expect(200);
+    const cbs = await request(http).get(`/v1/sbg/vendors/${vendor.body.vendorId}/callbacks`).set(auth).expect(200);
     expect(cbs.body.map((c: { event: string }) => c.event)).toEqual(expect.arrayContaining(['ready_for_pickup', 'collected']));
   });
 
@@ -695,56 +695,56 @@ describe('GLOS backend (e2e)', () => {
 
     async function onboard(shop: string, zone: string) {
       const u = Math.random().toString(16).slice(2, 10);
-      const reg = await request(http).post('/v1/pudo/agents').set(auth).send({ shopName: shop, zone, location: { lat: -1.2, lng: 36.8 }, landmark: 'x', shelf: { rows: 3, cols: 3 }, openingHours: { mon: { open: '08:00', close: '18:00' }, tue: { open: '08:00', close: '18:00' }, wed: { open: '08:00', close: '18:00' }, thu: { open: '08:00', close: '18:00' }, fri: { open: '08:00', close: '18:00' }, sat: { open: '08:00', close: '18:00' }, sun: null }, fullName: `${shop} o`, nationalId: `ID-${u}`, mobile: `+254${u}`, deviceImei: `IMEI-${u}`, requirements: { androidVersion: 13, reliablePower: true, tradingLicence: 'TL-1', criminalRecordClear: true } }).expect(201);
+      const reg = await request(http).post('/v1/sbg/agents').set(auth).send({ shopName: shop, zone, location: { lat: -1.2, lng: 36.8 }, landmark: 'x', shelf: { rows: 3, cols: 3 }, openingHours: { mon: { open: '08:00', close: '18:00' }, tue: { open: '08:00', close: '18:00' }, wed: { open: '08:00', close: '18:00' }, thu: { open: '08:00', close: '18:00' }, fri: { open: '08:00', close: '18:00' }, sat: { open: '08:00', close: '18:00' }, sun: null }, fullName: `${shop} o`, nationalId: `ID-${u}`, mobile: `+254${u}`, deviceImei: `IMEI-${u}`, requirements: { androidVersion: 13, reliablePower: true, tradingLicence: 'TL-1', criminalRecordClear: true } }).expect(201);
       const did = reg.body.did as string;
-      await request(http).post(`/v1/pudo/agents/${did}/submit-kyc`).set(auth).send({ idCopyRef: 'id.jpg', tradingLicenceRef: 'lic.pdf', shopPhotoRefs: ['shop.jpg'] }).expect(201);
-      await request(http).post(`/v1/pudo/agents/${did}/kyc-decision`).set(auth).send({ approve: true }).expect(201);
-      await request(http).post(`/v1/pudo/agents/${did}/top-up`).set(auth).send({ amount: 20 }).expect(201);
+      await request(http).post(`/v1/sbg/agents/${did}/submit-kyc`).set(auth).send({ idCopyRef: 'id.jpg', tradingLicenceRef: 'lic.pdf', shopPhotoRefs: ['shop.jpg'] }).expect(201);
+      await request(http).post(`/v1/sbg/agents/${did}/kyc-decision`).set(auth).send({ approve: true }).expect(201);
+      await request(http).post(`/v1/sbg/agents/${did}/top-up`).set(auth).send({ amount: 20 }).expect(201);
       return did;
     }
     const origin = await onboard('MDP Origin', 'NorthTown');
     const dest = await onboard('MDP Dest', 'EastTown');
-    const vendor = await request(http).post('/v1/pudo/vendors').set(auth).send({ name: 'HubShop' }).expect(201);
-    await request(http).post(`/v1/pudo/vendors/${vendor.body.vendorId}/top-up`).set(auth).send({ amount: 50 }).expect(201); // prepay the daughter co
+    const vendor = await request(http).post('/v1/sbg/vendors').set(auth).send({ name: 'HubShop' }).expect(201);
+    await request(http).post(`/v1/sbg/vendors/${vendor.body.vendorId}/top-up`).set(auth).send({ amount: 50 }).expect(201); // prepay the daughter co
 
     // An MDP hub that last-mile-serves the destination zone.
-    const hub = await request(http).post('/v1/pudo/mdps').set(auth).send({ name: 'East Sort Hub', zones: ['EastTown'], location: { lat: -1.25, lng: 36.95 } }).expect(201);
+    const hub = await request(http).post('/v1/sbg/mdps').set(auth).send({ name: 'East Sort Hub', zones: ['EastTown'], location: { lat: -1.25, lng: 36.95 } }).expect(201);
     const hubId = hub.body.mdpId as string;
 
     // Two inbound parcels, intaken at the origin.
     const ids: string[] = [];
     for (let i = 0; i < 2; i += 1) {
-      const order = await request(http).post('/v1/pudo/inbound/orders').set(auth).send({ vendorId: vendor.body.vendorId, originPudoDid: origin, destPudoDid: dest, buyerMobile: `+25470${i}`, size: 'M', contentPhotoRef: 'content.jpg' }).expect(201);
+      const order = await request(http).post('/v1/sbg/inbound/orders').set(auth).send({ vendorId: vendor.body.vendorId, originPudoDid: origin, destPudoDid: dest, buyerMobile: `+25470${i}`, size: 'M', contentPhotoRef: 'content.jpg' }).expect(201);
       const pid = order.body.parcel.parcelId as string;
-      await request(http).post(`/v1/pudo/parcels/${pid}/intake`).set(auth).send({ agentDid: origin }).expect(201);
+      await request(http).post(`/v1/sbg/parcels/${pid}/intake`).set(auth).send({ agentDid: origin }).expect(201);
       ids.push(pid);
     }
 
     // The journey plan routes through the hub.
-    const plan = await request(http).post('/v1/pudo/routing/plan-journey').set(auth).send({ originAgentDid: origin, destAgentDid: dest, weightKg: 5 }).expect(201);
+    const plan = await request(http).post('/v1/sbg/routing/plan-journey').set(auth).send({ originAgentDid: origin, destAgentDid: dest, weightKg: 5 }).expect(201);
     expect(plan.body.mdpRouted).toBe(true);
     expect(plan.body.hops.map((h: { type: string }) => h.type)).toEqual(['pudo', 'mdp', 'pudo']);
 
     // Origin packs a bag toward the hub; the driver scans the BAG (one scan).
-    const bag = await request(http).post(`/v1/pudo/mdps/${hubId}/totes`).set(auth).expect(201); // pool tote; physically at the origin
+    const bag = await request(http).post(`/v1/sbg/mdps/${hubId}/totes`).set(auth).expect(201); // pool tote; physically at the origin
     const code = bag.body.code as string;
-    await request(http).post(`/v1/pudo/totes/${code}/assign`).set(auth).send({ destinationNodeId: hubId, destinationLabel: 'East Sort Hub' }).expect(201);
-    for (const id of ids) await request(http).post(`/v1/pudo/totes/${code}/fill`).set(auth).send({ parcelId: id }).expect(201);
-    const loaded = await request(http).post(`/v1/pudo/totes/${code}/load`).set(auth).send({ driverBadgeId: 'BUS-9' }).expect(201);
+    await request(http).post(`/v1/sbg/totes/${code}/assign`).set(auth).send({ destinationNodeId: hubId, destinationLabel: 'East Sort Hub' }).expect(201);
+    for (const id of ids) await request(http).post(`/v1/sbg/totes/${code}/fill`).set(auth).send({ parcelId: id }).expect(201);
+    const loaded = await request(http).post(`/v1/sbg/totes/${code}/load`).set(auth).send({ driverBadgeId: 'BUS-9' }).expect(201);
     expect(loaded.body.moved).toHaveLength(2);
 
     // Bus drops the bag at the hub → empty it.
-    const dropped = await request(http).post(`/v1/pudo/mdps/${hubId}/drop-bag`).set(auth).send({ code }).expect(201);
+    const dropped = await request(http).post(`/v1/sbg/mdps/${hubId}/drop-bag`).set(auth).send({ code }).expect(201);
     expect(dropped.body.emptied).toHaveLength(2);
 
     // Worker sorts each parcel → next destination + a destination bag code.
-    const s0 = await request(http).post(`/v1/pudo/mdps/${hubId}/sort`).set(auth).send({ parcelId: ids[0] }).expect(201);
+    const s0 = await request(http).post(`/v1/sbg/mdps/${hubId}/sort`).set(auth).send({ parcelId: ids[0] }).expect(201);
     expect(s0.body.nextDestination.id).toBe(dest);
-    const s1 = await request(http).post(`/v1/pudo/mdps/${hubId}/sort`).set(auth).send({ parcelId: ids[1] }).expect(201);
+    const s1 = await request(http).post(`/v1/sbg/mdps/${hubId}/sort`).set(auth).send({ parcelId: ids[1] }).expect(201);
     expect(s1.body.toteCode).toBe(s0.body.toteCode); // same destination → same bag
 
     // The destination bag carries both parcels.
-    const destBag = await request(http).get(`/v1/pudo/totes/${s0.body.toteCode}`).set(auth).expect(200);
+    const destBag = await request(http).get(`/v1/sbg/totes/${s0.body.toteCode}`).set(auth).expect(200);
     expect(destBag.body.parcels).toHaveLength(2);
   });
 
@@ -755,28 +755,28 @@ describe('GLOS backend (e2e)', () => {
     const u = Math.random().toString(16).slice(2, 10);
 
     // Origin PUDO + a corridor for the feeder leg.
-    const reg = await request(http).post('/v1/pudo/agents').set(auth).send({ shopName: 'Fleet Origin', zone: 'NorthTown', location: { lat: -1.2, lng: 36.8 }, landmark: 'x', shelf: { rows: 3, cols: 3 }, openingHours: { mon: { open: '08:00', close: '18:00' }, tue: { open: '08:00', close: '18:00' }, wed: { open: '08:00', close: '18:00' }, thu: { open: '08:00', close: '18:00' }, fri: { open: '08:00', close: '18:00' }, sat: { open: '08:00', close: '18:00' }, sun: null }, fullName: 'Fleet o', nationalId: `ID-${u}`, mobile: `+254${u}`, deviceImei: `IMEI-${u}`, requirements: { androidVersion: 13, reliablePower: true, tradingLicence: 'TL-1', criminalRecordClear: true } }).expect(201);
+    const reg = await request(http).post('/v1/sbg/agents').set(auth).send({ shopName: 'Fleet Origin', zone: 'NorthTown', location: { lat: -1.2, lng: 36.8 }, landmark: 'x', shelf: { rows: 3, cols: 3 }, openingHours: { mon: { open: '08:00', close: '18:00' }, tue: { open: '08:00', close: '18:00' }, wed: { open: '08:00', close: '18:00' }, thu: { open: '08:00', close: '18:00' }, fri: { open: '08:00', close: '18:00' }, sat: { open: '08:00', close: '18:00' }, sun: null }, fullName: 'Fleet o', nationalId: `ID-${u}`, mobile: `+254${u}`, deviceImei: `IMEI-${u}`, requirements: { androidVersion: 13, reliablePower: true, tradingLicence: 'TL-1', criminalRecordClear: true } }).expect(201);
     const origin = reg.body.did as string;
-    await request(http).post(`/v1/pudo/agents/${origin}/submit-kyc`).set(auth).send({ idCopyRef: 'id', tradingLicenceRef: 'l', shopPhotoRefs: ['s'] }).expect(201);
-    await request(http).post(`/v1/pudo/agents/${origin}/kyc-decision`).set(auth).send({ approve: true }).expect(201);
-    await request(http).post(`/v1/pudo/agents/${origin}/top-up`).set(auth).send({ amount: 50 }).expect(201);
-    const corridor = await request(http).post('/v1/pudo/corridors').set(auth).send({ name: 'feeder', originZone: 'NorthTown', destZone: 'SouthTown' }).expect(201);
+    await request(http).post(`/v1/sbg/agents/${origin}/submit-kyc`).set(auth).send({ idCopyRef: 'id', tradingLicenceRef: 'l', shopPhotoRefs: ['s'] }).expect(201);
+    await request(http).post(`/v1/sbg/agents/${origin}/kyc-decision`).set(auth).send({ approve: true }).expect(201);
+    await request(http).post(`/v1/sbg/agents/${origin}/top-up`).set(auth).send({ amount: 50 }).expect(201);
+    const corridor = await request(http).post('/v1/sbg/corridors').set(auth).send({ name: 'feeder', originZone: 'NorthTown', destZone: 'SouthTown' }).expect(201);
 
     // A bike courier (light registry → ACTIVE immediately) + a bike (own IDs).
-    const driver = await request(http).post('/v1/pudo/drivers/onboard').set(auth).send({ displayName: 'Boda', fullName: 'Boda B', nationalId: `DRV-${u}`, mobile: `+254d${u}`, licenceClasses: ['bike'] }).expect(201);
+    const driver = await request(http).post('/v1/sbg/drivers/onboard').set(auth).send({ displayName: 'Boda', fullName: 'Boda B', nationalId: `DRV-${u}`, mobile: `+254d${u}`, licenceClasses: ['bike'] }).expect(201);
     expect(driver.body.registry).toBe('light');
     expect(driver.body.status).toBe('ACTIVE');
-    const bike = await request(http).post('/v1/pudo/vehicles').set(auth).send({ plate: `BD-${u}`, vehicleClass: 'bike', ownerName: 'Boda B' }).expect(201);
+    const bike = await request(http).post('/v1/sbg/vehicles').set(auth).send({ plate: `BD-${u}`, vehicleClass: 'bike', ownerName: 'Boda B' }).expect(201);
     expect(bike.body.capacityKg).toBe(20);
 
     // Couple driver ↔ bike on the corridor (flexible).
-    await request(http).post(`/v1/pudo/fleet/drivers/${driver.body.did}/couple`).set(auth).send({ vehicleId: bike.body.vehicleId, corridorId: corridor.body.corridorId }).expect(201);
+    await request(http).post(`/v1/sbg/fleet/drivers/${driver.body.did}/couple`).set(auth).send({ vehicleId: bike.body.vehicleId, corridorId: corridor.body.corridorId }).expect(201);
 
     // Three parcels; only the small non-fragile one may ride the bike.
     for (const p of [{ id: `OK-${u}`, size: 'S' }, { id: `FR-${u}`, size: 'S', fragile: true }, { id: `HV-${u}`, size: 'HEAVY' }]) {
-      await request(http).post('/v1/pudo/parcels/accept').set(auth).send({ agentDid: origin, parcelId: p.id, size: p.size, destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'd.jpg', fragile: p.fragile }).expect(201);
+      await request(http).post('/v1/sbg/parcels/accept').set(auth).send({ agentDid: origin, parcelId: p.id, size: p.size, destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'd.jpg', fragile: p.fragile }).expect(201);
     }
-    const h = await request(http).post('/v1/pudo/parcels/handover').set(auth).send({ agentDid: origin, driverBadgeId: driver.body.badgeId, parcelIds: [`OK-${u}`, `FR-${u}`, `HV-${u}`] }).expect(201);
+    const h = await request(http).post('/v1/sbg/parcels/handover').set(auth).send({ agentDid: origin, driverBadgeId: driver.body.badgeId, parcelIds: [`OK-${u}`, `FR-${u}`, `HV-${u}`] }).expect(201);
     expect(h.body.handed).toEqual([`OK-${u}`]);
     expect(h.body.rejected).toHaveLength(2);
     expect(h.body.vehicle).toBe('bus');
@@ -789,48 +789,48 @@ describe('GLOS backend (e2e)', () => {
     const u = Math.random().toString(16).slice(2, 10);
 
     const loc = { lat: -1.2, lng: 36.8 };
-    const reg = await request(http).post('/v1/pudo/agents').set(auth).send({ shopName: 'Dispatch PUDO', zone: 'NorthTown', location: loc, landmark: 'x', shelf: { rows: 3, cols: 3 }, openingHours: { mon: { open: '08:00', close: '18:00' }, tue: { open: '08:00', close: '18:00' }, wed: { open: '08:00', close: '18:00' }, thu: { open: '08:00', close: '18:00' }, fri: { open: '08:00', close: '18:00' }, sat: { open: '08:00', close: '18:00' }, sun: null }, fullName: 'D o', nationalId: `ID-${u}`, mobile: `+254${u}`, deviceImei: `IMEI-${u}`, requirements: { androidVersion: 13, reliablePower: true, tradingLicence: 'TL-1', criminalRecordClear: true } }).expect(201);
+    const reg = await request(http).post('/v1/sbg/agents').set(auth).send({ shopName: 'Dispatch PUDO', zone: 'NorthTown', location: loc, landmark: 'x', shelf: { rows: 3, cols: 3 }, openingHours: { mon: { open: '08:00', close: '18:00' }, tue: { open: '08:00', close: '18:00' }, wed: { open: '08:00', close: '18:00' }, thu: { open: '08:00', close: '18:00' }, fri: { open: '08:00', close: '18:00' }, sat: { open: '08:00', close: '18:00' }, sun: null }, fullName: 'D o', nationalId: `ID-${u}`, mobile: `+254${u}`, deviceImei: `IMEI-${u}`, requirements: { androidVersion: 13, reliablePower: true, tradingLicence: 'TL-1', criminalRecordClear: true } }).expect(201);
     const origin = reg.body.did as string;
-    await request(http).post(`/v1/pudo/agents/${origin}/submit-kyc`).set(auth).send({ idCopyRef: 'id', tradingLicenceRef: 'l', shopPhotoRefs: ['s'] }).expect(201);
-    await request(http).post(`/v1/pudo/agents/${origin}/kyc-decision`).set(auth).send({ approve: true }).expect(201);
-    await request(http).post(`/v1/pudo/agents/${origin}/top-up`).set(auth).send({ amount: 50 }).expect(201);
-    const hub = await request(http).post('/v1/pudo/mdps').set(auth).send({ name: 'Hub', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } }).expect(201);
+    await request(http).post(`/v1/sbg/agents/${origin}/submit-kyc`).set(auth).send({ idCopyRef: 'id', tradingLicenceRef: 'l', shopPhotoRefs: ['s'] }).expect(201);
+    await request(http).post(`/v1/sbg/agents/${origin}/kyc-decision`).set(auth).send({ approve: true }).expect(201);
+    await request(http).post(`/v1/sbg/agents/${origin}/top-up`).set(auth).send({ amount: 50 }).expect(201);
+    const hub = await request(http).post('/v1/sbg/mdps').set(auth).send({ name: 'Hub', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } }).expect(201);
 
     // A motorcycle courier (light → ACTIVE) coupled to a motorcycle.
-    const driver = await request(http).post('/v1/pudo/drivers/onboard').set(auth).send({ displayName: 'Moto', fullName: 'Mo', nationalId: `DRV-${u}`, mobile: `+254d${u}`, licenceClasses: ['motorcycle'] }).expect(201);
-    const moto = await request(http).post('/v1/pudo/vehicles').set(auth).send({ plate: `MT-${u}`, vehicleClass: 'motorcycle', ownerName: 'Mo' }).expect(201);
-    await request(http).post(`/v1/pudo/fleet/drivers/${driver.body.did}/couple`).set(auth).send({ vehicleId: moto.body.vehicleId }).expect(201);
+    const driver = await request(http).post('/v1/sbg/drivers/onboard').set(auth).send({ displayName: 'Moto', fullName: 'Mo', nationalId: `DRV-${u}`, mobile: `+254d${u}`, licenceClasses: ['motorcycle'] }).expect(201);
+    const moto = await request(http).post('/v1/sbg/vehicles').set(auth).send({ plate: `MT-${u}`, vehicleClass: 'motorcycle', ownerName: 'Mo' }).expect(201);
+    await request(http).post(`/v1/sbg/fleet/drivers/${driver.body.did}/couple`).set(auth).send({ vehicleId: moto.body.vehicleId }).expect(201);
 
     // Agent bags two parcels in an outbound tote bound for the hub, then releases it for claim.
-    const bag = await request(http).post(`/v1/pudo/agents/${origin}/totes`).set(auth).expect(201);
-    await request(http).post(`/v1/pudo/totes/${bag.body.code}/assign`).set(auth).send({ destinationNodeId: hub.body.mdpId, destinationLabel: 'Hub' }).expect(201);
+    const bag = await request(http).post(`/v1/sbg/agents/${origin}/totes`).set(auth).expect(201);
+    await request(http).post(`/v1/sbg/totes/${bag.body.code}/assign`).set(auth).send({ destinationNodeId: hub.body.mdpId, destinationLabel: 'Hub' }).expect(201);
     for (const id of [`P1-${u}`, `P2-${u}`]) {
-      await request(http).post('/v1/pudo/parcels/accept').set(auth).send({ agentDid: origin, parcelId: id, size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'd.jpg', paymentMode: 'prepaid' }).expect(201);
-      await request(http).post(`/v1/pudo/totes/${bag.body.code}/fill`).set(auth).send({ parcelId: id }).expect(201);
+      await request(http).post('/v1/sbg/parcels/accept').set(auth).send({ agentDid: origin, parcelId: id, size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'd.jpg', paymentMode: 'prepaid' }).expect(201);
+      await request(http).post(`/v1/sbg/totes/${bag.body.code}/fill`).set(auth).send({ parcelId: id }).expect(201);
     }
-    await request(http).post(`/v1/pudo/totes/${bag.body.code}/release`).set(auth).expect(201);
+    await request(http).post(`/v1/sbg/totes/${bag.body.code}/release`).set(auth).expect(201);
 
     // The driver declares a route past the PUDO → gets a sized suggestion.
-    const sug = await request(http).post(`/v1/pudo/fleet/drivers/${driver.body.did}/suggest-work`).set(auth).send({ from: loc, to: { lat: -1.3, lng: 36.95 } }).expect(201);
+    const sug = await request(http).post(`/v1/sbg/fleet/drivers/${driver.body.did}/suggest-work`).set(auth).send({ from: loc, to: { lat: -1.3, lng: 36.95 } }).expect(201);
     expect(sug.body.remainingCapacityKg).toBe(50);
     expect(sug.body.offers).toHaveLength(1);
     expect(sug.body.offers[0].weightKg).toBe(10);
 
     // Claim it → reserves 10 kg; then load the bag (claimer only).
-    await request(http).post(`/v1/pudo/dispatch/offers/${sug.body.offers[0].offerId}/claim`).set(auth).expect(201);
-    const claims = await request(http).get(`/v1/pudo/fleet/drivers/${driver.body.did}/claims`).set(auth).expect(200);
+    await request(http).post(`/v1/sbg/dispatch/offers/${sug.body.offers[0].offerId}/claim`).set(auth).expect(201);
+    const claims = await request(http).get(`/v1/sbg/fleet/drivers/${driver.body.did}/claims`).set(auth).expect(200);
     expect(claims.body.remainingCapacityKg).toBe(40);
-    const loaded = await request(http).post(`/v1/pudo/totes/${bag.body.code}/load`).set(auth).send({ driverBadgeId: driver.body.badgeId }).expect(201);
+    const loaded = await request(http).post(`/v1/sbg/totes/${bag.body.code}/load`).set(auth).send({ driverBadgeId: driver.body.badgeId }).expect(201);
     expect(loaded.body.moved).toHaveLength(2);
 
     // Fleet-manager dashboard reflects the on-shift driver (located via suggest-work) + active cargo.
-    const dash = await request(http).get('/v1/pudo/fleet/dashboard').set(auth).expect(200);
+    const dash = await request(http).get('/v1/sbg/fleet/dashboard').set(auth).expect(200);
     expect(dash.body.sessions.active).toBeGreaterThanOrEqual(1);
     expect(dash.body.positions.length).toBeGreaterThanOrEqual(1);
     expect(dash.body.cargo.count).toBeGreaterThanOrEqual(1);
     expect(dash.body.cargo.items[0].driver).toBeDefined();
     // The truck sub-type catalog is rich (>15 bodies) for registration UIs.
-    const subs = await request(http).get('/v1/pudo/vehicles/truck-subtypes').set(auth).expect(200);
+    const subs = await request(http).get('/v1/sbg/vehicles/truck-subtypes').set(auth).expect(200);
     expect(subs.body.length).toBeGreaterThan(15);
     expect(subs.body.some((s: { id: string }) => s.id === 'fuel_tanker')).toBe(true);
   });
@@ -841,19 +841,19 @@ describe('GLOS backend (e2e)', () => {
     const auth = { Authorization: `Bearer ${tokenRes.body.access_token}` };
     const u = Math.random().toString(16).slice(2, 10);
 
-    const veh = await request(http).post('/v1/pudo/vehicles').set(auth).send({ plate: `SS-${u}`, vehicleClass: 'motorcycle', ownerName: 'Sh' }).expect(201);
+    const veh = await request(http).post('/v1/sbg/vehicles').set(auth).send({ plate: `SS-${u}`, vehicleClass: 'motorcycle', ownerName: 'Sh' }).expect(201);
     expect(veh.body.qr).toMatch(/^VEH-/);
-    const driver = await request(http).post('/v1/pudo/drivers/onboard').set(auth).send({ displayName: 'Shift', fullName: 'Sh', nationalId: `SES-${u}`, mobile: `+254s${u}`, licenceClasses: ['motorcycle'] }).expect(201);
+    const driver = await request(http).post('/v1/sbg/drivers/onboard').set(auth).send({ displayName: 'Shift', fullName: 'Sh', nationalId: `SES-${u}`, mobile: `+254s${u}`, licenceClasses: ['motorcycle'] }).expect(201);
 
-    await request(http).post(`/v1/pudo/fleet/drivers/${driver.body.did}/start-session`).set(auth).send({ vehicleQr: 'VEH-NOPE' }).expect(404);
-    await request(http).post(`/v1/pudo/fleet/drivers/${driver.body.did}/start-session`).set(auth).send({ vehicleQr: veh.body.qr }).expect(201);
+    await request(http).post(`/v1/sbg/fleet/drivers/${driver.body.did}/start-session`).set(auth).send({ vehicleQr: 'VEH-NOPE' }).expect(404);
+    await request(http).post(`/v1/sbg/fleet/drivers/${driver.body.did}/start-session`).set(auth).send({ vehicleQr: veh.body.qr }).expect(201);
 
-    const on = await request(http).get(`/v1/pudo/fleet/drivers/${driver.body.did}/session`).set(auth).expect(200);
+    const on = await request(http).get(`/v1/sbg/fleet/drivers/${driver.body.did}/session`).set(auth).expect(200);
     expect(on.body.active).toBe(true);
     expect(on.body.vehicle.plate).toBe(`SS-${u}`.toUpperCase());
 
-    await request(http).post(`/v1/pudo/fleet/drivers/${driver.body.did}/end-session`).set(auth).expect(201);
-    const off = await request(http).get(`/v1/pudo/fleet/drivers/${driver.body.did}/session`).set(auth).expect(200);
+    await request(http).post(`/v1/sbg/fleet/drivers/${driver.body.did}/end-session`).set(auth).expect(201);
+    const off = await request(http).get(`/v1/sbg/fleet/drivers/${driver.body.did}/session`).set(auth).expect(200);
     expect(off.body.active).toBe(false);
   });
 
@@ -864,35 +864,35 @@ describe('GLOS backend (e2e)', () => {
     const u = Math.random().toString(16).slice(2, 10);
 
     // Eligibility filter blocks a missing operator licence — with a domain code the codemod attached.
-    const ineligible = await request(http).post('/v1/pudo/fleet/managers').set(auth).send({ companyName: 'BadCo', contactPhone: `+254${u}`, ownerFullName: 'O', ownerNationalId: `MGR-${u}`, location: { lat: -1.2, lng: 36.8 }, requirements: { businessRegistrationNo: `BRN-${u}`, transportOperatorLicence: '', taxId: `TAX-${u}` } }).expect(400);
+    const ineligible = await request(http).post('/v1/sbg/fleet/managers').set(auth).send({ companyName: 'BadCo', contactPhone: `+254${u}`, ownerFullName: 'O', ownerNationalId: `MGR-${u}`, location: { lat: -1.2, lng: 36.8 }, requirements: { businessRegistrationNo: `BRN-${u}`, transportOperatorLicence: '', taxId: `TAX-${u}` } }).expect(400);
     expect(ineligible.body.code).toBe('REQUIREMENTS_NOT_MET');
 
-    const reg = await request(http).post('/v1/pudo/fleet/managers').set(auth).send({ companyName: 'Acme Haulage', contactPhone: `+254${u}`, ownerFullName: 'A Owner', ownerNationalId: `MGR-${u}`, location: { lat: -1.2, lng: 36.8 }, requirements: { businessRegistrationNo: `BRN-${u}`, transportOperatorLicence: `TOL-${u}`, taxId: `TAX-${u}` } }).expect(201);
+    const reg = await request(http).post('/v1/sbg/fleet/managers').set(auth).send({ companyName: 'Acme Haulage', contactPhone: `+254${u}`, ownerFullName: 'A Owner', ownerNationalId: `MGR-${u}`, location: { lat: -1.2, lng: 36.8 }, requirements: { businessRegistrationNo: `BRN-${u}`, transportOperatorLicence: `TOL-${u}`, taxId: `TAX-${u}` } }).expect(201);
     const mDid = reg.body.did as string;
     expect(reg.body.status).toBe('DRAFT');
 
     // Cannot build a fleet until ACTIVE — an INVALID_STATE, not a generic bad request.
-    const tooEarly = await request(http).post('/v1/pudo/vehicles').set(auth).send({ plate: `MV-${u}`, vehicleClass: 'van', ownerName: 'A', managerDid: mDid }).expect(400);
+    const tooEarly = await request(http).post('/v1/sbg/vehicles').set(auth).send({ plate: `MV-${u}`, vehicleClass: 'van', ownerName: 'A', managerDid: mDid }).expect(400);
     expect(tooEarly.body.code).toBe('INVALID_STATE');
 
-    await request(http).post(`/v1/pudo/fleet/managers/${mDid}/submit-kyc`).set(auth).send({ businessRegCertRef: 'r.pdf', operatorLicenceRef: 'l.pdf', ownerIdRef: 'id.jpg', proofOfAddressRef: 'a.pdf' }).expect(201);
-    const queue = await request(http).get('/v1/pudo/fleet/managers/kyc-queue').set(auth).expect(200);
+    await request(http).post(`/v1/sbg/fleet/managers/${mDid}/submit-kyc`).set(auth).send({ businessRegCertRef: 'r.pdf', operatorLicenceRef: 'l.pdf', ownerIdRef: 'id.jpg', proofOfAddressRef: 'a.pdf' }).expect(201);
+    const queue = await request(http).get('/v1/sbg/fleet/managers/kyc-queue').set(auth).expect(200);
     expect(queue.body.some((m: { did: string }) => m.did === mDid)).toBe(true);
-    await request(http).post(`/v1/pudo/fleet/managers/${mDid}/kyc-decision`).set(auth).send({ approve: true, by: 'ops' }).expect(201);
-    const active = await request(http).post(`/v1/pudo/fleet/managers/${mDid}/bond`).set(auth).expect(201);
+    await request(http).post(`/v1/sbg/fleet/managers/${mDid}/kyc-decision`).set(auth).send({ approve: true, by: 'ops' }).expect(201);
+    const active = await request(http).post(`/v1/sbg/fleet/managers/${mDid}/bond`).set(auth).expect(201);
     expect(active.body.status).toBe('ACTIVE');
     expect(active.body.loginCode).toMatch(/^FM-/);
 
     // The manager can sign into the console with the issued code; a bad code is rejected.
-    const signin = await request(http).post('/v1/pudo/fleet/managers/login').set(auth).send({ code: active.body.loginCode }).expect(201);
+    const signin = await request(http).post('/v1/sbg/fleet/managers/login').set(auth).send({ code: active.body.loginCode }).expect(201);
     expect(signin.body.did).toBe(mDid);
-    const badCode = await request(http).post('/v1/pudo/fleet/managers/login').set(auth).send({ code: 'FM-NOPE' }).expect(401);
+    const badCode = await request(http).post('/v1/sbg/fleet/managers/login').set(auth).send({ code: 'FM-NOPE' }).expect(401);
     expect(badCode.body.code).toBe('AUTH_CODE_INVALID');
 
     // Now the manager can register a vehicle, and the dashboard scopes to their fleet.
-    const veh = await request(http).post('/v1/pudo/vehicles').set(auth).send({ plate: `MV-${u}`, vehicleClass: 'van', ownerName: 'Acme', managerDid: mDid }).expect(201);
+    const veh = await request(http).post('/v1/sbg/vehicles').set(auth).send({ plate: `MV-${u}`, vehicleClass: 'van', ownerName: 'Acme', managerDid: mDid }).expect(201);
     expect(veh.body.managerDid).toBe(mDid);
-    const dash = await request(http).get('/v1/pudo/fleet/dashboard').query({ manager: mDid }).set(auth).expect(200);
+    const dash = await request(http).get('/v1/sbg/fleet/dashboard').query({ manager: mDid }).set(auth).expect(200);
     expect(dash.body.managerDid).toBe(mDid);
     expect(dash.body.vehicles.total).toBe(1);
   });
@@ -904,11 +904,11 @@ describe('GLOS backend (e2e)', () => {
 
     // Onboard + activate two fleet managers, each with one vehicle (operator actions).
     const onboardManager = async (name: string) => {
-      const m = (await request(http).post('/v1/pudo/fleet/managers').set(operator).send({ companyName: name, tradingName: name, contactPhone: `+2547${u}${name.length}`, contactEmail: `ops@${name}.example`, ownerFullName: 'Owner', ownerNationalId: `MGR-${u}-${name}`, depotAddress: '1 Depot Rd', location: { lat: -1.3, lng: 36.8 }, requirements: { businessRegistrationNo: `BRN-${u}-${name}`, transportOperatorLicence: `TOL-${u}-${name}`, taxId: `TAX-${u}-${name}`, declaredFleetSize: 3 } }).expect(201)).body;
-      await request(http).post(`/v1/pudo/fleet/managers/${m.did}/submit-kyc`).set(operator).send({ businessRegCertRef: 'r.pdf', operatorLicenceRef: 'l.pdf', ownerIdRef: 'id.jpg', proofOfAddressRef: 'a.pdf' }).expect(201);
-      await request(http).post(`/v1/pudo/fleet/managers/${m.did}/kyc-decision`).set(operator).send({ approve: true }).expect(201);
-      await request(http).post(`/v1/pudo/fleet/managers/${m.did}/bond`).set(operator).expect(201);
-      await request(http).post('/v1/pudo/vehicles').set(operator).send({ plate: `${name}-${u}`, vehicleClass: 'van', ownerName: name, managerDid: m.did }).expect(201);
+      const m = (await request(http).post('/v1/sbg/fleet/managers').set(operator).send({ companyName: name, tradingName: name, contactPhone: `+2547${u}${name.length}`, contactEmail: `ops@${name}.example`, ownerFullName: 'Owner', ownerNationalId: `MGR-${u}-${name}`, depotAddress: '1 Depot Rd', location: { lat: -1.3, lng: 36.8 }, requirements: { businessRegistrationNo: `BRN-${u}-${name}`, transportOperatorLicence: `TOL-${u}-${name}`, taxId: `TAX-${u}-${name}`, declaredFleetSize: 3 } }).expect(201)).body;
+      await request(http).post(`/v1/sbg/fleet/managers/${m.did}/submit-kyc`).set(operator).send({ businessRegCertRef: 'r.pdf', operatorLicenceRef: 'l.pdf', ownerIdRef: 'id.jpg', proofOfAddressRef: 'a.pdf' }).expect(201);
+      await request(http).post(`/v1/sbg/fleet/managers/${m.did}/kyc-decision`).set(operator).send({ approve: true }).expect(201);
+      await request(http).post(`/v1/sbg/fleet/managers/${m.did}/bond`).set(operator).expect(201);
+      await request(http).post('/v1/sbg/vehicles').set(operator).send({ plate: `${name}-${u}`, vehicleClass: 'van', ownerName: name, managerDid: m.did }).expect(201);
       return m.did as string;
     };
     const mA = await onboardManager('AlphaCo');
@@ -916,24 +916,24 @@ describe('GLOS backend (e2e)', () => {
 
     // Actor tokens: manager A (fleet_manager, tenant=mA) and a driver under A (field role).
     const aToken = { Authorization: `Bearer ${(await request(http).post('/v1/auth/token').send({ role: 'fleet_manager', did: mA, tenant: mA, type: 'client_credentials' }).expect(201)).body.access_token}` };
-    const driver = (await request(http).post('/v1/pudo/drivers/onboard').set(operator).send({ displayName: 'Boda', fullName: 'Boda Rider', nationalId: `DRV-${u}`, mobile: `+254d${u}`, licenceClasses: ['motorcycle'], managerDid: mA }).expect(201)).body;
+    const driver = (await request(http).post('/v1/sbg/drivers/onboard').set(operator).send({ displayName: 'Boda', fullName: 'Boda Rider', nationalId: `DRV-${u}`, mobile: `+254d${u}`, licenceClasses: ['motorcycle'], managerDid: mA }).expect(201)).body;
     const dToken = { Authorization: `Bearer ${(await request(http).post('/v1/auth/token').send({ role: 'driver', did: driver.did, tenant: mA, type: 'client_credentials' }).expect(201)).body.access_token}` };
 
     // 1) A driver (field) token is FORBIDDEN from operator actions — the core S3 hole, now closed.
-    await request(http).post(`/v1/pudo/fleet/managers/${mB}/bond`).set(dToken).expect(403);
-    await request(http).post(`/v1/pudo/fleet/managers/${mB}/kyc-decision`).set(dToken).send({ approve: true }).expect(403);
-    await request(http).get('/v1/pudo/finance').set(dToken).expect(403);
-    await request(http).get('/v1/pudo/agents/kyc-queue').set(dToken).expect(403);
+    await request(http).post(`/v1/sbg/fleet/managers/${mB}/bond`).set(dToken).expect(403);
+    await request(http).post(`/v1/sbg/fleet/managers/${mB}/kyc-decision`).set(dToken).send({ approve: true }).expect(403);
+    await request(http).get('/v1/sbg/finance').set(dToken).expect(403);
+    await request(http).get('/v1/sbg/agents/kyc-queue').set(dToken).expect(403);
 
     // 2) Tenant isolation — manager A sees ONLY their own vehicle, never BetaCo's, and cannot widen
     //    the scope with ?manager=<competitor> (the query is ignored for a non-operator).
-    const own = await request(http).get('/v1/pudo/vehicles').set(aToken).expect(200);
+    const own = await request(http).get('/v1/sbg/vehicles').set(aToken).expect(200);
     expect(own.body.every((v: { managerDid?: string }) => v.managerDid === mA)).toBe(true);
-    const spoof = await request(http).get('/v1/pudo/vehicles').query({ manager: mB }).set(aToken).expect(200);
+    const spoof = await request(http).get('/v1/sbg/vehicles').query({ manager: mB }).set(aToken).expect(200);
     expect(spoof.body.every((v: { managerDid?: string }) => v.managerDid === mA)).toBe(true); // query did NOT widen scope
 
     // 3) The operator still sees everything.
-    const all = await request(http).get('/v1/pudo/vehicles').set(operator).expect(200);
+    const all = await request(http).get('/v1/sbg/vehicles').set(operator).expect(200);
     expect(all.body.length).toBeGreaterThanOrEqual(2);
   });
 
@@ -942,7 +942,7 @@ describe('GLOS backend (e2e)', () => {
     const auth = { Authorization: `Bearer ${(await request(http).post('/v1/auth/token').send({ role: 'operator', type: 'client_credentials' }).expect(201)).body.access_token}` };
 
     // A 404 renders RFC 9457 with a stable machine code (still status 404) — not a bare Nest body.
-    const notFound = await request(http).get('/v1/pudo/vendors/ven_does_not_exist').set(auth).expect(404);
+    const notFound = await request(http).get('/v1/sbg/vendors/ven_does_not_exist').set(auth).expect(404);
     expect(notFound.body.code).toBe('NOT_FOUND');
     expect(notFound.body.status).toBe(404);
     expect(notFound.body.retryable).toBe(false);
@@ -951,7 +951,7 @@ describe('GLOS backend (e2e)', () => {
     expect(typeof notFound.body.detail).toBe('string');
 
     // ValidationPipe failures normalize to VALIDATION_FAILED with the violations surfaced structurally.
-    const badBody = await request(http).post('/v1/pudo/vendors').set(auth).send({ callbackUrl: 123 }).expect(400);
+    const badBody = await request(http).post('/v1/sbg/vendors').set(auth).send({ callbackUrl: 123 }).expect(400);
     expect(badBody.body.code).toBe('VALIDATION_FAILED');
     expect(Array.isArray(badBody.body.params.violations)).toBe(true);
   });

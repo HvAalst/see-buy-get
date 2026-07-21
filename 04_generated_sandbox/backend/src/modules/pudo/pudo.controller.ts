@@ -41,8 +41,8 @@ interface ModuleInfo {
  * Surface = the operator Control Tower (agents / finance / corridors / dashboard / support) + the
  * 3-screen agent app (accept / handover / pickup) over the pre-paid wallet gate.
  */
-@Controller('pudo')
-export class PudoController {
+@Controller('sbg')
+export class SbgController {
   constructor(
     private readonly agents: AgentService,
     private readonly gate: WalletGateService,

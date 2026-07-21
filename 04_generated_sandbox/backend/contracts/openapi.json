@@ -3506,9 +3506,9 @@
         }
       }
     },
-    "/v1/pudo/auth/phone/request": {
+    "/v1/sbg/auth/phone/request": {
       "post": {
-        "operationId": "Pudo.phoneRequest",
+        "operationId": "Sbg.phoneRequest",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -3527,9 +3527,9 @@
         }
       }
     },
-    "/v1/pudo/auth/phone/verify": {
+    "/v1/sbg/auth/phone/verify": {
       "post": {
-        "operationId": "Pudo.phoneVerify",
+        "operationId": "Sbg.phoneVerify",
         "summary": "",
         "description": "Confirm the code → marks the phone verified for sign-up.",
         "parameters": [],
@@ -3550,9 +3550,9 @@
         }
       }
     },
-    "/v1/pudo/auth/signup": {
+    "/v1/sbg/auth/signup": {
       "post": {
-        "operationId": "Pudo.signup",
+        "operationId": "Sbg.signup",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -3571,9 +3571,9 @@
         }
       }
     },
-    "/v1/pudo/auth/login": {
+    "/v1/sbg/auth/login": {
       "post": {
-        "operationId": "Pudo.authLogin",
+        "operationId": "Sbg.authLogin",
         "summary": "",
         "description": "Sign in with email + password → an actor-scoped token the app carries.",
         "parameters": [],
@@ -3594,9 +3594,9 @@
         }
       }
     },
-    "/v1/pudo/auth/forgot": {
+    "/v1/sbg/auth/forgot": {
       "post": {
-        "operationId": "Pudo.authForgot",
+        "operationId": "Sbg.authForgot",
         "summary": "",
         "description": "Request a password reset (the token is returned for the sandbox; emailed in production).",
         "parameters": [],
@@ -3617,9 +3617,9 @@
         }
       }
     },
-    "/v1/pudo/auth/reset": {
+    "/v1/sbg/auth/reset": {
       "post": {
-        "operationId": "Pudo.authReset",
+        "operationId": "Sbg.authReset",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -3638,9 +3638,9 @@
         }
       }
     },
-    "/v1/pudo/module-info": {
+    "/v1/sbg/module-info": {
       "get": {
-        "operationId": "Pudo.info",
+        "operationId": "Sbg.info",
         "parameters": [],
         "responses": {
           "200": {
@@ -3656,9 +3656,9 @@
         }
       }
     },
-    "/v1/pudo/agents": {
+    "/v1/sbg/agents": {
       "post": {
-        "operationId": "Pudo.register",
+        "operationId": "Sbg.register",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -3684,7 +3684,7 @@
         }
       },
       "get": {
-        "operationId": "Pudo.listAgents",
+        "operationId": "Sbg.listAgents",
         "parameters": [],
         "responses": {
           "200": {
@@ -3693,9 +3693,9 @@
         }
       }
     },
-    "/v1/pudo/agents/{did}/submit-kyc": {
+    "/v1/sbg/agents/{did}/submit-kyc": {
       "post": {
-        "operationId": "Pudo.submitKyc",
+        "operationId": "Sbg.submitKyc",
         "summary": "",
         "description": "Upload KYC documents (ID copy, trading licence, shop photos) → KYC_PENDING.",
         "parameters": [
@@ -3732,9 +3732,9 @@
         }
       }
     },
-    "/v1/pudo/agents/{did}/kyc-decision": {
+    "/v1/sbg/agents/{did}/kyc-decision": {
       "post": {
-        "operationId": "Pudo.decideKyc",
+        "operationId": "Sbg.decideKyc",
         "summary": "",
         "description": "Operator vetting decision — a field token must never approve/reject KYC.",
         "parameters": [
@@ -3771,9 +3771,9 @@
         }
       }
     },
-    "/v1/pudo/agents/{did}/deposit": {
+    "/v1/sbg/agents/{did}/deposit": {
       "post": {
-        "operationId": "Pudo.deposit",
+        "operationId": "Sbg.deposit",
         "summary": "",
         "description": "Record the refundable equipment/starter-kit deposit.",
         "parameters": [
@@ -3800,9 +3800,9 @@
         }
       }
     },
-    "/v1/pudo/agents/kyc-queue": {
+    "/v1/sbg/agents/kyc-queue": {
       "get": {
-        "operationId": "Pudo.kycQueue",
+        "operationId": "Sbg.kycQueue",
         "summary": "",
         "description": "Operator KYC review queue — agents awaiting a decision.",
         "parameters": [],
@@ -3823,9 +3823,9 @@
         }
       }
     },
-    "/v1/pudo/agents/{did}/ping": {
+    "/v1/sbg/agents/{did}/ping": {
       "post": {
-        "operationId": "Pudo.ping",
+        "operationId": "Sbg.ping",
         "parameters": [
           {
             "name": "did",
@@ -3850,9 +3850,9 @@
         }
       }
     },
-    "/v1/pudo/agents/{did}/availability": {
+    "/v1/sbg/agents/{did}/availability": {
       "post": {
-        "operationId": "Pudo.setAvailability",
+        "operationId": "Sbg.setAvailability",
         "summary": "",
         "description": "Agent marks the shop open or temporarily closed.",
         "parameters": [
@@ -3889,9 +3889,9 @@
         }
       }
     },
-    "/v1/pudo/agents/{did}/hours": {
+    "/v1/sbg/agents/{did}/hours": {
       "post": {
-        "operationId": "Pudo.setHours",
+        "operationId": "Sbg.setHours",
         "summary": "",
         "description": "Set the weekly opening schedule (pickup window + ETA constraint).",
         "parameters": [
@@ -3928,9 +3928,9 @@
         }
       }
     },
-    "/v1/pudo/agents/{did}/shelf": {
+    "/v1/sbg/agents/{did}/shelf": {
       "post": {
-        "operationId": "Pudo.setShelf",
+        "operationId": "Sbg.setShelf",
         "summary": "",
         "description": "Reconfigure the shelf grid (rows × columns).",
         "parameters": [
@@ -3967,7 +3967,7 @@
         }
       },
       "get": {
-        "operationId": "Pudo.getShelf",
+        "operationId": "Sbg.getShelf",
         "summary": "",
         "description": "The shelf grid + free-slot availability for a PUDO.",
         "parameters": [
@@ -3987,9 +3987,9 @@
         }
       }
     },
-    "/v1/pudo/agents/{did}": {
+    "/v1/sbg/agents/{did}": {
       "get": {
-        "operationId": "Pudo.getAgent",
+        "operationId": "Sbg.getAgent",
         "parameters": [
           {
             "name": "did",
@@ -4007,9 +4007,9 @@
         }
       }
     },
-    "/v1/pudo/agents/{did}/can-transact": {
+    "/v1/sbg/agents/{did}/can-transact": {
       "get": {
-        "operationId": "Pudo.canTransact",
+        "operationId": "Sbg.canTransact",
         "parameters": [
           {
             "name": "did",
@@ -4027,9 +4027,9 @@
         }
       }
     },
-    "/v1/pudo/agents/{did}/top-up": {
+    "/v1/sbg/agents/{did}/top-up": {
       "post": {
-        "operationId": "Pudo.topUp",
+        "operationId": "Sbg.topUp",
         "parameters": [
           {
             "name": "did",
@@ -4064,9 +4064,9 @@
         }
       }
     },
-    "/v1/pudo/agents/{did}/overdraft": {
+    "/v1/sbg/agents/{did}/overdraft": {
       "post": {
-        "operationId": "Pudo.overdraft",
+        "operationId": "Sbg.overdraft",
         "summary": "",
         "description": "Emergency admin credit — operator only (self-asserted adminId is no longer trusted).",
         "parameters": [
@@ -4103,9 +4103,9 @@
         }
       }
     },
-    "/v1/pudo/agents/{did}/ledger": {
+    "/v1/sbg/agents/{did}/ledger": {
       "get": {
-        "operationId": "Pudo.agentLedger",
+        "operationId": "Sbg.agentLedger",
         "parameters": [
           {
             "name": "did",
@@ -4133,9 +4133,9 @@
         }
       }
     },
-    "/v1/pudo/corridors": {
+    "/v1/sbg/corridors": {
       "post": {
-        "operationId": "Pudo.addCorridor",
+        "operationId": "Sbg.addCorridor",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -4161,7 +4161,7 @@
         }
       },
       "get": {
-        "operationId": "Pudo.listCorridors",
+        "operationId": "Sbg.listCorridors",
         "parameters": [],
         "responses": {
           "200": {
@@ -4180,9 +4180,9 @@
         }
       }
     },
-    "/v1/pudo/corridors/{id}/status": {
+    "/v1/sbg/corridors/{id}/status": {
       "post": {
-        "operationId": "Pudo.setCorridorStatus",
+        "operationId": "Sbg.setCorridorStatus",
         "parameters": [
           {
             "name": "id",
@@ -4217,9 +4217,9 @@
         }
       }
     },
-    "/v1/pudo/drivers": {
+    "/v1/sbg/drivers": {
       "post": {
-        "operationId": "Pudo.addDriver",
+        "operationId": "Sbg.addDriver",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -4245,7 +4245,7 @@
         }
       },
       "get": {
-        "operationId": "Pudo.listDrivers",
+        "operationId": "Sbg.listDrivers",
         "parameters": [],
         "responses": {
           "200": {
@@ -4264,9 +4264,9 @@
         }
       }
     },
-    "/v1/pudo/drivers/payout": {
+    "/v1/sbg/drivers/payout": {
       "post": {
-        "operationId": "Pudo.driverPayout",
+        "operationId": "Sbg.driverPayout",
         "summary": "",
         "description": "Weekly driver settlement (Finance · DRIVER_PAYOUT) — operator only.",
         "parameters": [],
@@ -4294,9 +4294,9 @@
         }
       }
     },
-    "/v1/pudo/parcels/accept": {
+    "/v1/sbg/parcels/accept": {
       "post": {
-        "operationId": "Pudo.accept",
+        "operationId": "Sbg.accept",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -4322,9 +4322,9 @@
         }
       }
     },
-    "/v1/pudo/parcels/handover": {
+    "/v1/sbg/parcels/handover": {
       "post": {
-        "operationId": "Pudo.handover",
+        "operationId": "Sbg.handover",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -4350,9 +4350,9 @@
         }
       }
     },
-    "/v1/pudo/parcels/{id}/arrive": {
+    "/v1/sbg/parcels/{id}/arrive": {
       "post": {
-        "operationId": "Pudo.arrive",
+        "operationId": "Sbg.arrive",
         "parameters": [
           {
             "name": "id",
@@ -4380,9 +4380,9 @@
         }
       }
     },
-    "/v1/pudo/parcels/{id}/pickup": {
+    "/v1/sbg/parcels/{id}/pickup": {
       "post": {
-        "operationId": "Pudo.pickup",
+        "operationId": "Sbg.pickup",
         "parameters": [
           {
             "name": "id",
@@ -4417,9 +4417,9 @@
         }
       }
     },
-    "/v1/pudo/parcels/{id}/void": {
+    "/v1/sbg/parcels/{id}/void": {
       "post": {
-        "operationId": "Pudo.voidParcel",
+        "operationId": "Sbg.voidParcel",
         "parameters": [
           {
             "name": "id",
@@ -4454,9 +4454,9 @@
         }
       }
     },
-    "/v1/pudo/parcels": {
+    "/v1/sbg/parcels": {
       "get": {
-        "operationId": "Pudo.listParcels",
+        "operationId": "Sbg.listParcels",
         "parameters": [
           {
             "name": "status",
@@ -4492,9 +4492,9 @@
         }
       }
     },
-    "/v1/pudo/parcels/{id}": {
+    "/v1/sbg/parcels/{id}": {
       "get": {
-        "operationId": "Pudo.getParcel",
+        "operationId": "Sbg.getParcel",
         "parameters": [
           {
             "name": "id",
@@ -4512,9 +4512,9 @@
         }
       }
     },
-    "/v1/pudo/parcels/{id}/route": {
+    "/v1/sbg/parcels/{id}/route": {
       "get": {
-        "operationId": "Pudo.parcelRoute",
+        "operationId": "Sbg.parcelRoute",
         "summary": "",
         "description": "The planned route for a parcel (origin PUDO → MDP(s) → dest PUDO), once a destination is known.",
         "parameters": [
@@ -4541,9 +4541,9 @@
         }
       }
     },
-    "/v1/pudo/parcels/{id}/cancel": {
+    "/v1/sbg/parcels/{id}/cancel": {
       "post": {
-        "operationId": "Pudo.cancelParcel",
+        "operationId": "Sbg.cancelParcel",
         "summary": "",
         "description": "Reverse logistics: cancel a not-yet-delivered parcel (Created / At_PUDO / At_MDP) — operator only.",
         "parameters": [
@@ -4580,9 +4580,9 @@
         }
       }
     },
-    "/v1/pudo/agents/{did}/receive-bag": {
+    "/v1/sbg/agents/{did}/receive-bag": {
       "post": {
-        "operationId": "Pudo.receiveBag",
+        "operationId": "Sbg.receiveBag",
         "summary": "",
         "description": "Destination PUDO receives a whole bag → shelves each parcel + frees the tote (closes the tote leg).",
         "parameters": [
@@ -4612,9 +4612,9 @@
         }
       }
     },
-    "/v1/pudo/vendors": {
+    "/v1/sbg/vendors": {
       "post": {
-        "operationId": "Pudo.registerVendor",
+        "operationId": "Sbg.registerVendor",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -4640,7 +4640,7 @@
         }
       },
       "get": {
-        "operationId": "Pudo.listVendors",
+        "operationId": "Sbg.listVendors",
         "parameters": [],
         "responses": {
           "200": {
@@ -4659,9 +4659,9 @@
         }
       }
     },
-    "/v1/pudo/vendors/{id}": {
+    "/v1/sbg/vendors/{id}": {
       "get": {
-        "operationId": "Pudo.getVendor",
+        "operationId": "Sbg.getVendor",
         "summary": "",
         "description": "Load a single vendor (so the merchant console can sign back into an existing store via ?vendor=).\nReturns the public view — the signing secret is issued once at registration and never re-exposed.",
         "parameters": [
@@ -4688,7 +4688,7 @@
         }
       },
       "patch": {
-        "operationId": "Pudo.updateVendor",
+        "operationId": "Sbg.updateVendor",
         "summary": "",
         "description": "Update the store profile: map pin (origin-PUDO ranking), address, callback URL, split policy.",
         "parameters": [
@@ -4725,9 +4725,9 @@
         }
       }
     },
-    "/v1/pudo/vendors/{id}/orders": {
+    "/v1/sbg/vendors/{id}/orders": {
       "get": {
-        "operationId": "Pudo.vendorOrders",
+        "operationId": "Sbg.vendorOrders",
         "summary": "",
         "description": "A vendor's orders (their inbound parcels) for the merchant console.",
         "parameters": [
@@ -4747,9 +4747,9 @@
         }
       }
     },
-    "/v1/pudo/vendors/{id}/orders/{parcelId}": {
+    "/v1/sbg/vendors/{id}/orders/{parcelId}": {
       "get": {
-        "operationId": "Pudo.vendorOrder",
+        "operationId": "Sbg.vendorOrder",
         "summary": "",
         "description": "Full detail for one order (the watch-only status screen's drill-down). Validates it belongs to the vendor.",
         "parameters": [
@@ -4784,9 +4784,9 @@
         }
       }
     },
-    "/v1/pudo/vendors/{id}/checkouts": {
+    "/v1/sbg/vendors/{id}/checkouts": {
       "get": {
-        "operationId": "Pudo.vendorCheckouts",
+        "operationId": "Sbg.vendorCheckouts",
         "summary": "",
         "description": "The buyer's checkout selections waiting to be shipped (the console's incoming-orders inbox).",
         "parameters": [
@@ -4816,9 +4816,9 @@
         }
       }
     },
-    "/v1/pudo/vendors/{id}/checkout": {
+    "/v1/sbg/vendors/{id}/checkout": {
       "post": {
-        "operationId": "Pudo.captureCheckout",
+        "operationId": "Sbg.captureCheckout",
         "summary": "",
         "description": "The embedded PUDO-picker node (or a webhook, or manual entry): capture the buyer's destination-PUDO\nchoice + email so it can pre-fill a shipment in the console. This is what hooks into the vendor's checkout.",
         "parameters": [
@@ -4855,9 +4855,9 @@
         }
       }
     },
-    "/v1/pudo/vendors/{id}/callbacks": {
+    "/v1/sbg/vendors/{id}/callbacks": {
       "get": {
-        "operationId": "Pudo.vendorCallbacks",
+        "operationId": "Sbg.vendorCallbacks",
         "summary": "",
         "description": "Vendor status-callback outbox (HMAC-signed ready_for_pickup / collected / disputed).",
         "parameters": [
@@ -4887,9 +4887,9 @@
         }
       }
     },
-    "/v1/pudo/size/classify": {
+    "/v1/sbg/size/classify": {
       "post": {
-        "operationId": "Pudo.classify",
+        "operationId": "Sbg.classify",
         "summary": "",
         "description": "Derive the size tier from dimensions (cm) + weight (kg) — live preview for the mint form.",
         "parameters": [],
@@ -4910,9 +4910,9 @@
         }
       }
     },
-    "/v1/pudo/quote": {
+    "/v1/sbg/quote": {
       "get": {
-        "operationId": "Pudo.quote",
+        "operationId": "Sbg.quote",
         "summary": "",
         "description": "Quote a shipment from the open-data participant rates: flexible (any carrier) vs locked (cheapest).",
         "parameters": [
@@ -4955,9 +4955,9 @@
         }
       }
     },
-    "/v1/pudo/quote/options": {
+    "/v1/sbg/quote/options": {
       "get": {
-        "operationId": "Pudo.quoteOptions",
+        "operationId": "Sbg.quoteOptions",
         "summary": "",
         "description": "Quote many candidates at once so each PUDO pin on the map carries a real total. Either fix the origin\nand vary the destinations (buyer's map) or fix the destination and vary the origins (vendor's drop-off map).",
         "parameters": [
@@ -5009,9 +5009,9 @@
         }
       }
     },
-    "/v1/pudo/pricing/near": {
+    "/v1/sbg/pricing/near": {
       "get": {
-        "operationId": "Pudo.pricingNear",
+        "operationId": "Sbg.pricingNear",
         "summary": "",
         "description": "Competitive price discovery, BOUNDED so it scales to 30k PUDOs. Returns a local **benchmark**\n(median / p25–p75 / min–max / count of nearby same-type rates) + a **capped** set of nearby price\npins for the map — never the whole network. With `type` → that one service (PUDO/MDP per-parcel,\nvehicle per-km); without `type` → just the three network benchmarks (the public hub summary).\nWithout lat/lng → network-wide (no radius filter). In-memory haversine here; a geo-index at real scale.",
         "parameters": [
@@ -5070,9 +5070,9 @@
         }
       }
     },
-    "/v1/pudo/pricing": {
+    "/v1/sbg/pricing": {
       "get": {
-        "operationId": "Pudo.pricing",
+        "operationId": "Sbg.pricing",
         "summary": "",
         "description": "Open pricing feed — every PUDO, MDP and vehicle's advertised rate. DEBUG/small-network only — at scale use /pricing/near.",
         "parameters": [],
@@ -5083,9 +5083,9 @@
         }
       }
     },
-    "/v1/pudo/agents/{did}/pricing": {
+    "/v1/sbg/agents/{did}/pricing": {
       "patch": {
-        "operationId": "Pudo.setAgentPrice",
+        "operationId": "Sbg.setAgentPrice",
         "summary": "",
         "description": "A PUDO agent sets its open-data per-parcel handling price.",
         "parameters": [
@@ -5122,9 +5122,9 @@
         }
       }
     },
-    "/v1/pudo/mdps/{id}/pricing": {
+    "/v1/sbg/mdps/{id}/pricing": {
       "patch": {
-        "operationId": "Pudo.setMdpPrice",
+        "operationId": "Sbg.setMdpPrice",
         "summary": "",
         "description": "An MDP sets its open-data per-parcel sort price.",
         "parameters": [
@@ -5161,9 +5161,9 @@
         }
       }
     },
-    "/v1/pudo/vehicles/{id}/pricing": {
+    "/v1/sbg/vehicles/{id}/pricing": {
       "patch": {
-        "operationId": "Pudo.setVehiclePrice",
+        "operationId": "Sbg.setVehiclePrice",
         "summary": "",
         "description": "A driver / fleet manager sets a vehicle's open-data per-km transport rate.",
         "parameters": [
@@ -5200,9 +5200,9 @@
         }
       }
     },
-    "/v1/pudo/vendors/{id}/top-up": {
+    "/v1/sbg/vendors/{id}/top-up": {
       "post": {
-        "operationId": "Pudo.topUpVendor",
+        "operationId": "Sbg.topUpVendor",
         "summary": "",
         "description": "Vendor prepays its balance with the per-country daughter company.",
         "parameters": [
@@ -5239,9 +5239,9 @@
         }
       }
     },
-    "/v1/pudo/vendors/{id}/settlement": {
+    "/v1/sbg/vendors/{id}/settlement": {
       "get": {
-        "operationId": "Pudo.vendorSettlement",
+        "operationId": "Sbg.vendorSettlement",
         "summary": "",
         "description": "A vendor's prepaid balance + settlement book (top-ups / billings / rebates).",
         "parameters": [
@@ -5261,9 +5261,9 @@
         }
       }
     },
-    "/v1/pudo/parcels/{id}/settle": {
+    "/v1/sbg/parcels/{id}/settle": {
       "post": {
-        "operationId": "Pudo.settleParcel",
+        "operationId": "Sbg.settleParcel",
         "summary": "",
         "description": "Retry the prepaid gate on an unpaid shipment after a top-up → issue the label + ParcelPaid.",
         "parameters": [
@@ -5283,9 +5283,9 @@
         }
       }
     },
-    "/v1/pudo/track/{key}": {
+    "/v1/sbg/track/{key}": {
       "get": {
-        "operationId": "Pudo.track",
+        "operationId": "Sbg.track",
         "summary": "",
         "description": "Public track-and-trace by the shareable tracking key (no PII, no handover code).",
         "parameters": [
@@ -5305,9 +5305,9 @@
         }
       }
     },
-    "/v1/pudo/inbound/orders": {
+    "/v1/sbg/inbound/orders": {
       "post": {
-        "operationId": "Pudo.createInbound",
+        "operationId": "Sbg.createInbound",
         "summary": "",
         "description": "Vendor mint: an order ships → create the inbound parcel + phygital label + collection code + tracking key.",
         "parameters": [],
@@ -5328,9 +5328,9 @@
         }
       }
     },
-    "/v1/pudo/parcels/{id}/intake": {
+    "/v1/sbg/parcels/{id}/intake": {
       "post": {
-        "operationId": "Pudo.intake",
+        "operationId": "Sbg.intake",
         "summary": "",
         "description": "Origin PUDO scans the vendor's parcel in.",
         "parameters": [
@@ -5367,9 +5367,9 @@
         }
       }
     },
-    "/v1/pudo/parcels/{id}/shelve": {
+    "/v1/sbg/parcels/{id}/shelve": {
       "post": {
-        "operationId": "Pudo.shelve",
+        "operationId": "Sbg.shelve",
         "summary": "",
         "description": "Destination PUDO shelves an arrived parcel → Ready_For_Pickup + buyer notified.",
         "parameters": [
@@ -5399,9 +5399,9 @@
         }
       }
     },
-    "/v1/pudo/parcels/collect": {
+    "/v1/sbg/parcels/collect": {
       "post": {
-        "operationId": "Pudo.collect",
+        "operationId": "Sbg.collect",
         "summary": "",
         "description": "Buyer presents the collection QR → resolve the parcel + shelf slot (opens the handover screen).",
         "parameters": [],
@@ -5422,9 +5422,9 @@
         }
       }
     },
-    "/v1/pudo/parcels/{id}/collect-confirm": {
+    "/v1/sbg/parcels/{id}/collect-confirm": {
       "post": {
-        "operationId": "Pudo.collectConfirm",
+        "operationId": "Sbg.collectConfirm",
         "summary": "",
         "description": "Buyer confirms the parcel is correct → Delivered, order closed.",
         "parameters": [
@@ -5461,9 +5461,9 @@
         }
       }
     },
-    "/v1/pudo/parcels/{id}/dispute": {
+    "/v1/sbg/parcels/{id}/dispute": {
       "post": {
-        "operationId": "Pudo.dispute",
+        "operationId": "Sbg.dispute",
         "summary": "",
         "description": "Buyer reports a discrepancy at collection → Disputed, with mandatory photo proof.",
         "parameters": [
@@ -5500,9 +5500,9 @@
         }
       }
     },
-    "/v1/pudo/parcels/{id}/rate": {
+    "/v1/sbg/parcels/{id}/rate": {
       "post": {
-        "operationId": "Pudo.rate",
+        "operationId": "Sbg.rate",
         "summary": "",
         "description": "Tier-1 customer rates a delivered parcel → writes the agent composite to the shared core (graduation).",
         "parameters": [
@@ -5532,9 +5532,9 @@
         }
       }
     },
-    "/v1/pudo/agents/{did}/rating": {
+    "/v1/sbg/agents/{did}/rating": {
       "get": {
-        "operationId": "Pudo.agentRating",
+        "operationId": "Sbg.agentRating",
         "parameters": [
           {
             "name": "did",
@@ -5552,9 +5552,9 @@
         }
       }
     },
-    "/v1/pudo/dashboard": {
+    "/v1/sbg/dashboard": {
       "get": {
-        "operationId": "Pudo.dashboard",
+        "operationId": "Sbg.dashboard",
         "parameters": [],
         "responses": {
           "200": {
@@ -5563,9 +5563,9 @@
         }
       }
     },
-    "/v1/pudo/flags": {
+    "/v1/sbg/flags": {
       "get": {
-        "operationId": "Pudo.flags",
+        "operationId": "Sbg.flags",
         "parameters": [],
         "responses": {
           "200": {
@@ -5584,9 +5584,9 @@
         }
       }
     },
-    "/v1/pudo/heatmap": {
+    "/v1/sbg/heatmap": {
       "get": {
-        "operationId": "Pudo.heatmap",
+        "operationId": "Sbg.heatmap",
         "summary": "",
         "description": "PUDO coverage heatmap — points + density + open/closed counts (feeds journey-leg planning).",
         "parameters": [],
@@ -5597,9 +5597,9 @@
         }
       }
     },
-    "/v1/pudo/routing/assign-node": {
+    "/v1/sbg/routing/assign-node": {
       "post": {
-        "operationId": "Pudo.assignNode",
+        "operationId": "Sbg.assignNode",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -5625,9 +5625,9 @@
         }
       }
     },
-    "/v1/pudo/routing/plan-journey": {
+    "/v1/sbg/routing/plan-journey": {
       "post": {
-        "operationId": "Pudo.planJourney",
+        "operationId": "Sbg.planJourney",
         "summary": "",
         "description": "Plan the journey: commit a first-mile node (given or assigned) and compute the legs + ETA.",
         "parameters": [],
@@ -5648,9 +5648,9 @@
         }
       }
     },
-    "/v1/pudo/finance": {
+    "/v1/sbg/finance": {
       "get": {
-        "operationId": "Pudo.finance",
+        "operationId": "Sbg.finance",
         "summary": "",
         "description": "Network revenue / float / ledger — operator only. A field token must never read this.",
         "parameters": [],
@@ -5661,9 +5661,9 @@
         }
       }
     },
-    "/v1/pudo/mdps": {
+    "/v1/sbg/mdps": {
       "post": {
-        "operationId": "Pudo.registerMdp",
+        "operationId": "Sbg.registerMdp",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -5689,7 +5689,7 @@
         }
       },
       "get": {
-        "operationId": "Pudo.listMdps",
+        "operationId": "Sbg.listMdps",
         "parameters": [],
         "responses": {
           "200": {
@@ -5698,9 +5698,9 @@
         }
       }
     },
-    "/v1/pudo/mdps/{id}/totes": {
+    "/v1/sbg/mdps/{id}/totes": {
       "post": {
-        "operationId": "Pudo.registerTote",
+        "operationId": "Sbg.registerTote",
         "summary": "",
         "description": "Register a fresh laminated tote (QR + human code) into the pool at this MDP.",
         "parameters": [
@@ -5727,9 +5727,9 @@
         }
       }
     },
-    "/v1/pudo/totes": {
+    "/v1/sbg/totes": {
       "get": {
-        "operationId": "Pudo.listTotes",
+        "operationId": "Sbg.listTotes",
         "summary": "",
         "description": "Totes currently at a location (MDP id or agent did).",
         "parameters": [
@@ -5767,9 +5767,9 @@
         }
       }
     },
-    "/v1/pudo/totes/{code}": {
+    "/v1/sbg/totes/{code}": {
       "get": {
-        "operationId": "Pudo.getTote",
+        "operationId": "Sbg.getTote",
         "parameters": [
           {
             "name": "code",
@@ -5794,9 +5794,9 @@
         }
       }
     },
-    "/v1/pudo/totes/{code}/assign": {
+    "/v1/sbg/totes/{code}/assign": {
       "post": {
-        "operationId": "Pudo.assignTote",
+        "operationId": "Sbg.assignTote",
         "summary": "",
         "description": "Link a free bag to a single next destination so it can start taking parcels.",
         "parameters": [
@@ -5833,9 +5833,9 @@
         }
       }
     },
-    "/v1/pudo/totes/{code}/fill": {
+    "/v1/sbg/totes/{code}/fill": {
       "post": {
-        "operationId": "Pudo.fillTote",
+        "operationId": "Sbg.fillTote",
         "summary": "",
         "description": "Drop a parcel into a bag (capacity-checked) — connects bag ↔ parcel.",
         "parameters": [
@@ -5865,9 +5865,9 @@
         }
       }
     },
-    "/v1/pudo/totes/{code}/load": {
+    "/v1/sbg/totes/{code}/load": {
       "post": {
-        "operationId": "Pudo.loadBag",
+        "operationId": "Sbg.loadBag",
         "summary": "",
         "description": "Scan the bag onto a bus — one scan moves the whole tote + every parcel to On_Bus.",
         "parameters": [
@@ -5897,9 +5897,9 @@
         }
       }
     },
-    "/v1/pudo/mdps/{id}/drop-bag": {
+    "/v1/sbg/mdps/{id}/drop-bag": {
       "post": {
-        "operationId": "Pudo.dropBag",
+        "operationId": "Sbg.dropBag",
         "summary": "",
         "description": "A bus drops a bag at an MDP → scan the bag code, empty it; parcels become unsorted (At_MDP).",
         "parameters": [
@@ -5929,9 +5929,9 @@
         }
       }
     },
-    "/v1/pudo/mdps/{id}/sort": {
+    "/v1/sbg/mdps/{id}/sort": {
       "post": {
-        "operationId": "Pudo.sortParcel",
+        "operationId": "Sbg.sortParcel",
         "summary": "",
         "description": "Sort a parcel at an MDP → returns its next destination + the bag code to drop it in.",
         "parameters": [
@@ -5961,9 +5961,9 @@
         }
       }
     },
-    "/v1/pudo/fleet/managers": {
+    "/v1/sbg/fleet/managers": {
       "post": {
-        "operationId": "Pudo.registerManager",
+        "operationId": "Sbg.registerManager",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -5989,7 +5989,7 @@
         }
       },
       "get": {
-        "operationId": "Pudo.listManagers",
+        "operationId": "Sbg.listManagers",
         "parameters": [],
         "responses": {
           "200": {
@@ -6008,9 +6008,9 @@
         }
       }
     },
-    "/v1/pudo/fleet/managers/login": {
+    "/v1/sbg/fleet/managers/login": {
       "post": {
-        "operationId": "Pudo.managerLogin",
+        "operationId": "Sbg.managerLogin",
         "summary": "",
         "description": "Fleet-console sign-in — resolve an ACTIVE manager from their login code, mint their actor token.\nA manager's own DID is both their identity and their tenant boundary (they see only their fleet).",
         "parameters": [],
@@ -6031,9 +6031,9 @@
         }
       }
     },
-    "/v1/pudo/fleet/managers/kyc-queue": {
+    "/v1/sbg/fleet/managers/kyc-queue": {
       "get": {
-        "operationId": "Pudo.managerKycQueue",
+        "operationId": "Sbg.managerKycQueue",
         "summary": "",
         "description": "Managers awaiting a KYC decision (the GLOS operator review queue).",
         "parameters": [],
@@ -6054,9 +6054,9 @@
         }
       }
     },
-    "/v1/pudo/fleet/managers/{did}": {
+    "/v1/sbg/fleet/managers/{did}": {
       "get": {
-        "operationId": "Pudo.getManager",
+        "operationId": "Sbg.getManager",
         "parameters": [
           {
             "name": "did",
@@ -6081,9 +6081,9 @@
         }
       }
     },
-    "/v1/pudo/fleet/managers/{did}/submit-kyc": {
+    "/v1/sbg/fleet/managers/{did}/submit-kyc": {
       "post": {
-        "operationId": "Pudo.managerSubmitKyc",
+        "operationId": "Sbg.managerSubmitKyc",
         "summary": "",
         "description": "Upload business KYC (registration cert, operator licence, owner ID, proof of address) → KYC_PENDING.",
         "parameters": [
@@ -6120,9 +6120,9 @@
         }
       }
     },
-    "/v1/pudo/fleet/managers/{did}/kyc-decision": {
+    "/v1/sbg/fleet/managers/{did}/kyc-decision": {
       "post": {
-        "operationId": "Pudo.managerDecideKyc",
+        "operationId": "Sbg.managerDecideKyc",
         "summary": "",
         "description": "GLOS operator vetting of a fleet manager — a manager/driver token must never self-approve.",
         "parameters": [
@@ -6159,9 +6159,9 @@
         }
       }
     },
-    "/v1/pudo/fleet/managers/{did}/bond": {
+    "/v1/sbg/fleet/managers/{did}/bond": {
       "post": {
-        "operationId": "Pudo.managerBond",
+        "operationId": "Sbg.managerBond",
         "summary": "",
         "description": "Record the refundable operating bond → ACTIVE — operator only (the fleet console recorded its\nown bond before S3: a self-approval loop wired into shipped UI).",
         "parameters": [
@@ -6188,9 +6188,9 @@
         }
       }
     },
-    "/v1/pudo/fleet/managers/{did}/suspend": {
+    "/v1/sbg/fleet/managers/{did}/suspend": {
       "post": {
-        "operationId": "Pudo.suspendManager",
+        "operationId": "Sbg.suspendManager",
         "parameters": [
           {
             "name": "did",
@@ -6215,9 +6215,9 @@
         }
       }
     },
-    "/v1/pudo/vehicles": {
+    "/v1/sbg/vehicles": {
       "post": {
-        "operationId": "Pudo.registerVehicle",
+        "operationId": "Sbg.registerVehicle",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -6243,7 +6243,7 @@
         }
       },
       "get": {
-        "operationId": "Pudo.listVehicles",
+        "operationId": "Sbg.listVehicles",
         "summary": "",
         "description": "A fleet manager sees only their own vehicles (actor.tenant); operator sees all.",
         "parameters": [
@@ -6281,9 +6281,9 @@
         }
       }
     },
-    "/v1/pudo/vehicles/truck-subtypes": {
+    "/v1/sbg/vehicles/truck-subtypes": {
       "get": {
-        "operationId": "Pudo.truckSubtypes",
+        "operationId": "Sbg.truckSubtypes",
         "summary": "",
         "description": "The truck sub-type catalog (label + capacity + handling capabilities) for registration UIs.",
         "parameters": [],
@@ -6304,9 +6304,9 @@
         }
       }
     },
-    "/v1/pudo/vehicles/{id}": {
+    "/v1/sbg/vehicles/{id}": {
       "get": {
-        "operationId": "Pudo.getVehicle",
+        "operationId": "Sbg.getVehicle",
         "parameters": [
           {
             "name": "id",
@@ -6331,9 +6331,9 @@
         }
       }
     },
-    "/v1/pudo/vehicles/{id}/documents": {
+    "/v1/sbg/vehicles/{id}/documents": {
       "post": {
-        "operationId": "Pudo.updateVehicleDocs",
+        "operationId": "Sbg.updateVehicleDocs",
         "summary": "",
         "description": "Upload / update registration docs — re-evaluates the verified (dispatch-priority) flag.",
         "parameters": [
@@ -6370,9 +6370,9 @@
         }
       }
     },
-    "/v1/pudo/vehicles/{id}/ground": {
+    "/v1/sbg/vehicles/{id}/ground": {
       "post": {
-        "operationId": "Pudo.groundVehicle",
+        "operationId": "Sbg.groundVehicle",
         "parameters": [
           {
             "name": "id",
@@ -6397,9 +6397,9 @@
         }
       }
     },
-    "/v1/pudo/vehicles/{id}/retire": {
+    "/v1/sbg/vehicles/{id}/retire": {
       "post": {
-        "operationId": "Pudo.retireVehicle",
+        "operationId": "Sbg.retireVehicle",
         "parameters": [
           {
             "name": "id",
@@ -6424,9 +6424,9 @@
         }
       }
     },
-    "/v1/pudo/drivers/onboard": {
+    "/v1/sbg/drivers/onboard": {
       "post": {
-        "operationId": "Pudo.registerDriver",
+        "operationId": "Sbg.registerDriver",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -6452,9 +6452,9 @@
         }
       }
     },
-    "/v1/pudo/fleet/drivers": {
+    "/v1/sbg/fleet/drivers": {
       "get": {
-        "operationId": "Pudo.listFleetDrivers",
+        "operationId": "Sbg.listFleetDrivers",
         "summary": "",
         "description": "A fleet manager sees only their own drivers (actor.tenant); operator sees all.",
         "parameters": [],
@@ -6475,9 +6475,9 @@
         }
       }
     },
-    "/v1/pudo/fleet/drivers/kyc-queue": {
+    "/v1/sbg/fleet/drivers/kyc-queue": {
       "get": {
-        "operationId": "Pudo.driverKycQueue",
+        "operationId": "Sbg.driverKycQueue",
         "parameters": [],
         "responses": {
           "200": {
@@ -6496,9 +6496,9 @@
         }
       }
     },
-    "/v1/pudo/fleet/drivers/{did}": {
+    "/v1/sbg/fleet/drivers/{did}": {
       "get": {
-        "operationId": "Pudo.getFleetDriver",
+        "operationId": "Sbg.getFleetDriver",
         "parameters": [
           {
             "name": "did",
@@ -6523,9 +6523,9 @@
         }
       }
     },
-    "/v1/pudo/fleet/drivers/{did}/submit-kyc": {
+    "/v1/sbg/fleet/drivers/{did}/submit-kyc": {
       "post": {
-        "operationId": "Pudo.driverSubmitKyc",
+        "operationId": "Sbg.driverSubmitKyc",
         "summary": "",
         "description": "Heavy registry: upload ID + licence copy → KYC_PENDING.",
         "parameters": [
@@ -6562,9 +6562,9 @@
         }
       }
     },
-    "/v1/pudo/fleet/drivers/{did}/kyc-decision": {
+    "/v1/sbg/fleet/drivers/{did}/kyc-decision": {
       "post": {
-        "operationId": "Pudo.driverDecideKyc",
+        "operationId": "Sbg.driverDecideKyc",
         "parameters": [
           {
             "name": "did",
@@ -6599,9 +6599,9 @@
         }
       }
     },
-    "/v1/pudo/fleet/drivers/{did}/suspend": {
+    "/v1/sbg/fleet/drivers/{did}/suspend": {
       "post": {
-        "operationId": "Pudo.suspendDriver",
+        "operationId": "Sbg.suspendDriver",
         "parameters": [
           {
             "name": "did",
@@ -6626,9 +6626,9 @@
         }
       }
     },
-    "/v1/pudo/fleet/drivers/{did}/ping": {
+    "/v1/sbg/fleet/drivers/{did}/ping": {
       "post": {
-        "operationId": "Pudo.pingDriver",
+        "operationId": "Sbg.pingDriver",
         "parameters": [
           {
             "name": "did",
@@ -6653,9 +6653,9 @@
         }
       }
     },
-    "/v1/pudo/fleet/drivers/{did}/couple": {
+    "/v1/sbg/fleet/drivers/{did}/couple": {
       "post": {
-        "operationId": "Pudo.couple",
+        "operationId": "Sbg.couple",
         "parameters": [
           {
             "name": "did",
@@ -6690,9 +6690,9 @@
         }
       }
     },
-    "/v1/pudo/fleet/drivers/{did}/uncouple": {
+    "/v1/sbg/fleet/drivers/{did}/uncouple": {
       "post": {
-        "operationId": "Pudo.uncouple",
+        "operationId": "Sbg.uncouple",
         "parameters": [
           {
             "name": "did",
@@ -6717,9 +6717,9 @@
         }
       }
     },
-    "/v1/pudo/fleet/drivers/{did}/start-session": {
+    "/v1/sbg/fleet/drivers/{did}/start-session": {
       "post": {
-        "operationId": "Pudo.startSession",
+        "operationId": "Sbg.startSession",
         "summary": "",
         "description": "Driver starts a shift by scanning the vehicle's dashboard QR → couples them for the day.",
         "parameters": [
@@ -6756,9 +6756,9 @@
         }
       }
     },
-    "/v1/pudo/fleet/drivers/{did}/end-session": {
+    "/v1/sbg/fleet/drivers/{did}/end-session": {
       "post": {
-        "operationId": "Pudo.endSession",
+        "operationId": "Sbg.endSession",
         "summary": "",
         "description": "Driver closes the shift → decouples driver + vehicle.",
         "parameters": [
@@ -6785,9 +6785,9 @@
         }
       }
     },
-    "/v1/pudo/fleet/drivers/{did}/session": {
+    "/v1/sbg/fleet/drivers/{did}/session": {
       "get": {
-        "operationId": "Pudo.driverSession",
+        "operationId": "Sbg.driverSession",
         "summary": "",
         "description": "The driver's current shift session (active coupling + vehicle), or { active:false } off duty.",
         "parameters": [
@@ -6814,9 +6814,9 @@
         }
       }
     },
-    "/v1/pudo/fleet/drivers/{did}/assign-corridor": {
+    "/v1/sbg/fleet/drivers/{did}/assign-corridor": {
       "post": {
-        "operationId": "Pudo.assignDriverCorridor",
+        "operationId": "Sbg.assignDriverCorridor",
         "parameters": [
           {
             "name": "did",
@@ -6851,9 +6851,9 @@
         }
       }
     },
-    "/v1/pudo/fleet/assignments": {
+    "/v1/sbg/fleet/assignments": {
       "get": {
-        "operationId": "Pudo.listAssignments",
+        "operationId": "Sbg.listAssignments",
         "parameters": [
           {
             "name": "status",
@@ -6881,9 +6881,9 @@
         }
       }
     },
-    "/v1/pudo/agents/{did}/totes": {
+    "/v1/sbg/agents/{did}/totes": {
       "post": {
-        "operationId": "Pudo.registerAgentTote",
+        "operationId": "Sbg.registerAgentTote",
         "parameters": [
           {
             "name": "did",
@@ -6908,9 +6908,9 @@
         }
       }
     },
-    "/v1/pudo/totes/{code}/release": {
+    "/v1/sbg/totes/{code}/release": {
       "post": {
-        "operationId": "Pudo.releaseTote",
+        "operationId": "Sbg.releaseTote",
         "summary": "",
         "description": "Publish a filling tote to the claim marketplace early (before it is full / 24 h).",
         "parameters": [
@@ -6930,9 +6930,9 @@
         }
       }
     },
-    "/v1/pudo/dispatch/publish-ready": {
+    "/v1/sbg/dispatch/publish-ready": {
       "post": {
-        "operationId": "Pudo.publishReady",
+        "operationId": "Sbg.publishReady",
         "summary": "",
         "description": "Sweep: publish every tote that is full or has waited ≥ 24 h.",
         "parameters": [],
@@ -6943,9 +6943,9 @@
         }
       }
     },
-    "/v1/pudo/dispatch/freight": {
+    "/v1/sbg/dispatch/freight": {
       "post": {
-        "operationId": "Pudo.registerFreight",
+        "operationId": "Sbg.registerFreight",
         "summary": "",
         "description": "Register a bulk freight job (trucks only) into the same marketplace as totes.",
         "parameters": [],
@@ -6973,7 +6973,7 @@
         }
       },
       "get": {
-        "operationId": "Pudo.listFreight",
+        "operationId": "Sbg.listFreight",
         "parameters": [
           {
             "name": "status",
@@ -7001,9 +7001,9 @@
         }
       }
     },
-    "/v1/pudo/dispatch/freight/{id}/pickup": {
+    "/v1/sbg/dispatch/freight/{id}/pickup": {
       "post": {
-        "operationId": "Pudo.freightPickup",
+        "operationId": "Sbg.freightPickup",
         "summary": "",
         "description": "Bulk freight pickup (claimed → in_transit).",
         "parameters": [
@@ -7030,9 +7030,9 @@
         }
       }
     },
-    "/v1/pudo/dispatch/freight/{id}/deliver": {
+    "/v1/sbg/dispatch/freight/{id}/deliver": {
       "post": {
-        "operationId": "Pudo.freightDeliver",
+        "operationId": "Sbg.freightDeliver",
         "summary": "",
         "description": "Bulk freight delivery (in_transit → delivered; releases the driver's reserved capacity).",
         "parameters": [
@@ -7059,9 +7059,9 @@
         }
       }
     },
-    "/v1/pudo/fleet/drivers/{did}/suggest-work": {
+    "/v1/sbg/fleet/drivers/{did}/suggest-work": {
       "post": {
-        "operationId": "Pudo.suggestWork",
+        "operationId": "Sbg.suggestWork",
         "summary": "",
         "description": "A driver declares a route A→B → the platform suggests the loads sitting on the way.",
         "parameters": [
@@ -7091,9 +7091,9 @@
         }
       }
     },
-    "/v1/pudo/fleet/drivers/{did}/locate": {
+    "/v1/sbg/fleet/drivers/{did}/locate": {
       "post": {
-        "operationId": "Pudo.locate",
+        "operationId": "Sbg.locate",
         "summary": "",
         "description": "Driver GPS heartbeat — updates the vehicle's position on the live fleet map.",
         "parameters": [
@@ -7123,9 +7123,9 @@
         }
       }
     },
-    "/v1/pudo/fleet/dashboard": {
+    "/v1/sbg/fleet/dashboard": {
       "get": {
-        "operationId": "Pudo.fleetDashboard",
+        "operationId": "Sbg.fleetDashboard",
         "summary": "",
         "description": "Fleet-manager dashboard: vehicle/driver/session counts, working hours, live positions + cargo.\nA fleet manager sees ONLY their own fleet (actor.tenant); the ?manager= scope and the omit-for-all\nview are operator-only. Before S3 anyone could pass ?manager= to read a competitor's fleet.",
         "parameters": [
@@ -7145,9 +7145,9 @@
         }
       }
     },
-    "/v1/pudo/fleet/drivers/{did}/offers": {
+    "/v1/sbg/fleet/drivers/{did}/offers": {
       "get": {
-        "operationId": "Pudo.driverOffers",
+        "operationId": "Sbg.driverOffers",
         "parameters": [
           {
             "name": "did",
@@ -7175,9 +7175,9 @@
         }
       }
     },
-    "/v1/pudo/fleet/drivers/{did}/claims": {
+    "/v1/sbg/fleet/drivers/{did}/claims": {
       "get": {
-        "operationId": "Pudo.driverClaims",
+        "operationId": "Sbg.driverClaims",
         "parameters": [
           {
             "name": "did",
@@ -7195,9 +7195,9 @@
         }
       }
     },
-    "/v1/pudo/dispatch/offers/{id}/claim": {
+    "/v1/sbg/dispatch/offers/{id}/claim": {
       "post": {
-        "operationId": "Pudo.claimOffer",
+        "operationId": "Sbg.claimOffer",
         "summary": "",
         "description": "Driver accepts a suggestion → reserves the load + its weight against the vehicle's capacity.",
         "parameters": [
@@ -7224,9 +7224,9 @@
         }
       }
     },
-    "/v1/pudo/dispatch/offers/{id}/ignore": {
+    "/v1/sbg/dispatch/offers/{id}/ignore": {
       "post": {
-        "operationId": "Pudo.ignoreOffer",
+        "operationId": "Sbg.ignoreOffer",
         "summary": "",
         "description": "Driver declines a suggestion.",
         "parameters": [

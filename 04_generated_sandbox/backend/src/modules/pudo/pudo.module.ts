@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { M1Module } from '../m1/m1.module';
 import { M4Module } from '../m4/m4.module';
 import { M7Module } from '../m7/m7.module';
-import { PudoController } from './pudo.controller';
+import { SbgController } from './pudo.controller';
 import { AgentService } from './agent.service';
 import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
@@ -34,7 +34,7 @@ import { OtpService } from './otp.service';
  */
 @Module({
   imports: [M1Module, M4Module, M7Module],
-  controllers: [PudoController],
+  controllers: [SbgController],
   providers: [AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService, GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, ToteService, VehicleService, DriverService, FleetService, DispatchService, FleetManagerService, AccountService, OtpService],
   exports: [AgentService, ParcelService, MonitorService, RatingService, MdpService, ToteService, VehicleService, DriverService, FleetService, DispatchService, FleetManagerService, AccountService, OtpService],
 })

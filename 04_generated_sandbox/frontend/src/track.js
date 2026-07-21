@@ -52,7 +52,7 @@ async function track() {
   mount(out, [el('p', { className: 'tr__route', text: 'Looking up…' })]);
   try {
     const t = await getToken();
-    const res = await fetch(`${API}/pudo/track/${encodeURIComponent(key)}`, { headers: { Authorization: `Bearer ${t}` } });
+    const res = await fetch(`${API}/sbg/track/${encodeURIComponent(key)}`, { headers: { Authorization: `Bearer ${t}` } });
     if (!res.ok) { mount(out, [el('div', { className: 'tr__err', text: res.status === 404 ? 'No parcel found with that tracking key. Check the key and try again.' : `Could not look that up (error ${res.status}).` })]); return; }
     const p = await res.json();
     renderResult(p);
