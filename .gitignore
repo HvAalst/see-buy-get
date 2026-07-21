@@ -21,8 +21,8 @@ coverage/
 *.sqlite-shm
 data/
 
-# Generated API contract client types (S7 — regenerated from contracts/openapi.json)
-04_generated_sandbox/frontend/src/lib/glos/schema.d.ts
+# Generated API contract client types (S7 — regenerated from contracts/openapi.json via `npm run types`)
+04_generated_sandbox/frontend/src/lib/sbg/schema.d.ts
 
 # Editor / OS noise
 .DS_Store

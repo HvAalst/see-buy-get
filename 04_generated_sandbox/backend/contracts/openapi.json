@@ -5017,15 +5017,20 @@
         "parameters": [
           {
             "name": "type",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
+              "enum": [
+                "pudo",
+                "mdp",
+                "vehicle"
+              ],
               "type": "string"
             }
           },
           {
             "name": "lat",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
               "type": "string"
@@ -5033,7 +5038,7 @@
           },
           {
             "name": "lng",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
               "type": "string"
@@ -5041,7 +5046,7 @@
           },
           {
             "name": "radiusKm",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
               "type": "string"
@@ -5049,7 +5054,7 @@
           },
           {
             "name": "limit",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
               "type": "string"

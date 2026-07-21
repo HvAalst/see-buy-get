@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { ApiQuery } from '@nestjs/swagger';
 import { GlosError } from '../../foundation/http/glos-error';
 import { Public } from '../../foundation/auth/public.decorator';
 import { Roles } from '../../foundation/auth/scopes.decorator';
@@ -417,6 +418,11 @@ export class SbgController {
    * Without lat/lng → network-wide (no radius filter). In-memory haversine here; a geo-index at real scale.
    */
   @Get('pricing/near')
+  @ApiQuery({ name: 'type', required: false, enum: ['pudo', 'mdp', 'vehicle'] })
+  @ApiQuery({ name: 'lat', required: false })
+  @ApiQuery({ name: 'lng', required: false })
+  @ApiQuery({ name: 'radiusKm', required: false })
+  @ApiQuery({ name: 'limit', required: false })
   pricingNear(@Query('type') type?: string, @Query('lat') lat?: string, @Query('lng') lng?: string, @Query('radiusKm') radiusKm?: string, @Query('limit') limit?: string) {
     const R = Number(radiusKm) || 25;
     const L = Math.min(Number(limit) || 50, 200);

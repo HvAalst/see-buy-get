@@ -1,10 +1,22 @@
 {
-  "name": "glos-frontend",
+  "name": "seebuyget-frontend",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "npx http-server src -p 4173 -c-1",
-    "preview": "npx http-server src -p 4173 -c-1"
+    "preview": "npx http-server src -p 4173 -c-1",
+    "types": "openapi-typescript ../backend/contracts/openapi.json -o src/lib/sbg/schema.d.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.4.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  },
+  "dependencies": {
+    "openapi-fetch": "^0.13.0"
   }
 }
