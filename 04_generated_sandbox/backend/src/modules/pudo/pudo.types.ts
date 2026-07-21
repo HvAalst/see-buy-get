@@ -1,12 +1,31 @@
 // PUDO Light domain (Compendium Ch 12–19). The emerging-market Tier 1/2 on-ramp. Reuses the GLOS
 // backbone (DID, vault, wallet, ledger, events) but models its own light parcel/agent/corridor flow.
 
+/** A map pin. Named (not an inline literal) so it is one reusable schema in the contract. */
+export class GeoPoint {
+  lat: number;
+  lng: number;
+}
+
+/** One line in an order — the buyer's cart as it travels to the merchant console. */
+export class LineItem {
+  name: string;
+  qty: number;
+}
+
+/** Declared parcel dimensions (cm) that derive the size tier. */
+export class Dimensions {
+  l: number;
+  w: number;
+  h: number;
+}
+
 export type AgentStatus = 'DRAFT' | 'KYC_PENDING' | 'APPROVED_UNFUNDED' | 'ACTIVE' | 'LOCKED';
 /** Business availability the agent controls (Risk #30 store closure), distinct from the lifecycle status. */
 export type OpenState = 'open' | 'closed';
 
 /** The agent-eligibility "filter" (Compendium 18.1). Hard requirements gate onboarding. */
-export interface AgentRequirements {
+export class AgentRequirements {
   androidVersion: number; // ≥ 10
   reliablePower: boolean;
   tradingLicence: string; // licence number/reference (must be present)
@@ -15,7 +34,7 @@ export interface AgentRequirements {
 }
 
 export type Weekday = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
-export interface DayHours {
+export class DayHours {
   open: string; // "HH:MM"
   close: string; // "HH:MM"
 }
@@ -23,11 +42,11 @@ export interface DayHours {
 export type WeeklyHours = Partial<Record<Weekday, DayHours | null>>;
 
 /** Shelf as a grid: columns are colour-coded, rows numbered (e.g. slot "Green-3"). */
-export interface ShelfConfig {
+export class ShelfConfig {
   rows: number;
   cols: number;
 }
-export interface ShelfSlot {
+export class ShelfSlot {
   label: string; // e.g. "Green-3"
   color: string; // column colour
   row: number;
@@ -36,20 +55,20 @@ export interface ShelfSlot {
 }
 
 /** KYC documents collected to move DRAFT → KYC_PENDING (Compendium 18.5). */
-export interface KycDocuments {
+export class KycDocuments {
   idCopyRef: string;
   tradingLicenceRef: string;
   shopPhotoRefs: string[]; // at least one
   submittedAt: string;
 }
 
-export interface Agent {
+export class Agent {
   agentId: string;
   did: string;
   vaultRef: string; // Golden Record PII (name, national ID, mobile) in the IdentityVault
   shopName: string;
   zone: string;
-  location: { lat: number; lng: number }; // map pin (provided, or geocoded from the address)
+  location: GeoPoint; // map pin (provided, or geocoded from the address)
   physicalAddress?: string; // typed physical address (optional if a pin is given)
   landmark: string; // no street addresses — landmark + GPS
   openState: OpenState; // agent-controlled open / temporarily-closed
@@ -73,13 +92,13 @@ export type ParcelStatus = 'Created' | 'At_PUDO' | 'On_Bus' | 'At_MDP' | 'Ready_
  * shop: parcels are NOT shelved here, they are sorted into tote bags by next destination. One MDP
  * covers one or more zones; it sits in the middle of every multi-hop journey (PUDO → MDP → … → PUDO).
  */
-export interface Mdp {
+export class Mdp {
   mdpId: string;
   /** Real GLOS DID (S2). The mdpId stays the domain key; the DID is what an actor token binds to. */
   did: string;
   name: string;
   zones: string[]; // the delivery zones this hub serves (last-mile reach)
-  location: { lat: number; lng: number };
+  location: GeoPoint;
   contactPhone?: string; // operator contact (control-tower escalation + GPS anchor)
   address?: string; // physical address (the map pin gives the coordinates)
   pricePerParcel: number; // open-data sort fee the hub advertises (public)
@@ -99,7 +118,7 @@ export type ToteStatus = 'free' | 'filling' | 'available' | 'claimed' | 'in_tran
  * driver scans the bag (not each parcel); the receiving MDP empties it and the tote returns to free.
  * Full (or 24 h-aged) totes are published to the dispatch marketplace for a passing driver to claim.
  */
-export interface Tote {
+export class Tote {
   toteId: string; // the laminated QR payload
   code: string; // human-readable bag code
   status: ToteStatus;
@@ -115,7 +134,7 @@ export interface Tote {
 }
 
 /** The next hop the system computes for a parcel while sorting it at an MDP. */
-export interface NextHop {
+export class NextHop {
   type: 'pudo' | 'mdp';
   id: string;
   label: string;
@@ -130,19 +149,19 @@ export type ParcelDirection = 'outbound' | 'inbound';
  *   full   → the buyer pays the whole shipment price at checkout.
  *   capped → the buyer pays up to `buyerContributionCap` (free at/above `freeOverSubtotal`); vendor absorbs the rest.
  */
-export interface ShippingPolicy {
+export class ShippingPolicy {
   mode: 'full' | 'capped';
   freeOverSubtotal: number; // (capped) order value at/above which the buyer is charged nothing
   buyerContributionCap: number; // (capped) the most the buyer is charged at checkout
 }
 
 /** A registered e-commerce vendor that wires its checkout into PUDO for click-and-collect. */
-export interface Vendor {
+export class Vendor {
   vendorId: string;
   name: string;
   callbackUrl?: string; // GLOS pushes HMAC-signed status callbacks here
   secret: string;
-  location?: { lat: number; lng: number }; // store map pin — origin-PUDO suggestions are ranked from here
+  location?: GeoPoint; // store map pin — origin-PUDO suggestions are ranked from here
   address?: string;
   country: string; // which per-country daughter company settles this vendor
   balance: number; // prepaid balance held with the daughter company ('no prepay, no label' gate)
@@ -155,14 +174,14 @@ export interface Vendor {
  * the destination PUDO the buyer chose + the email for the collection code. It travels from the buyer's
  * checkout, across the auth boundary, into the merchant console where it pre-fills a shipment (no dropdown).
  */
-export interface CheckoutHandoff {
+export class CheckoutHandoff {
   id: string;
   vendorId: string;
   destAgentDid: string; // the PUDO the buyer picked at checkout
   buyerEmail: string;
   buyerMobile?: string;
   externalOrderId?: string;
-  items?: Array<{ name: string; qty: number }>;
+  items?: LineItem[];
   subtotal?: number; // order value — drives the buyer/vendor split
   source: 'node' | 'webhook' | 'manual';
   consumed: boolean; // flipped once a shipment is minted from it
@@ -170,13 +189,13 @@ export interface CheckoutHandoff {
   at: string;
 }
 
-export interface PhygitalLabel {
+export class PhygitalLabel {
   parcelId: string;
   qrPayload: string; // what the printed QR encodes
   svg: string; // a simple printable label
 }
 
-export interface ParcelScan {
+export class ParcelScan {
   at: string;
   status: ParcelStatus | 'CREATED';
   by: string; // agent or driver did/badge
@@ -184,11 +203,11 @@ export interface ParcelScan {
   anchorTxId?: string;
 }
 
-export interface Parcel {
+export class Parcel {
   parcelId: string; // pre-printed QR sticker id
   direction: ParcelDirection;
   size: ParcelSize;
-  dimensionsCm?: { l: number; w: number; h: number }; // declared dims that derived the size tier
+  dimensionsCm?: Dimensions; // declared dims that derived the size tier
   weightKg: number; // implied by size tier (Heavy > 20 kg)
   fragile?: boolean; // cannot ride a bike/motorcycle (no fragile on a two-wheeler)
   originAgentDid: string;
@@ -222,7 +241,7 @@ export interface Parcel {
   collectionCode?: string; // the buyer's QR collection token (presented at the destination PUDO — the handover secret)
   trackingKey?: string; // PUBLIC track-and-trace token (safe to share — no PII, drives "track my parcel")
   binSlot?: string; // chaos-shelf slot at the destination PUDO
-  items?: Array<{ name: string; qty: number }>;
+  items?: LineItem[];
   contentPhotoRef?: string; // photo of the contents at mint — the baseline a dispute is judged against
   label?: PhygitalLabel; // the generated label, persisted so the order detail can reprint it
   // --- pricing + prepaid settlement (open-data quote; GLOS holds no fiat, bills the vendor full) ---
@@ -249,7 +268,7 @@ export interface Parcel {
 
 export type LedgerType = 'TOP_UP' | 'FEE' | 'LABOR_PAYOUT' | 'DRIVER_PAYOUT' | 'REFUND' | 'OVERDRAFT' | 'SETTLEMENT' | 'BILLING' | 'REBATE';
 
-export interface PudoLedgerEntry {
+export class PudoLedgerEntry {
   id: string;
   type: LedgerType;
   sign: '+' | '-';
@@ -260,7 +279,7 @@ export interface PudoLedgerEntry {
   at: string;
 }
 
-export interface Corridor {
+export class Corridor {
   corridorId: string;
   name: string;
   originZone: string;
@@ -270,7 +289,7 @@ export interface Corridor {
   status: 'active' | 'blocked';
 }
 
-export interface Driver {
+export class Driver {
   driverDid: string;
   badgeId: string;
   name: string;

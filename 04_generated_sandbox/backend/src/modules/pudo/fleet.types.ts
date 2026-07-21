@@ -3,11 +3,12 @@
 // the MDP→PUDO feeder today and a van tomorrow, and a vehicle may change hands between drivers.
 
 import { TruckSubtype, VehicleClass } from './fleet.config';
+import { GeoPoint } from './pudo.types';
 
 export type FleetManagerStatus = 'DRAFT' | 'KYC_PENDING' | 'APPROVED' | 'ACTIVE' | 'SUSPENDED';
 
 /** The fleet-manager eligibility filter (Ch 19) — hard requirements gate onboarding a fleet operator. */
-export interface FleetManagerRequirements {
+export class FleetManagerRequirements {
   businessRegistrationNo: string; // registered company / business number
   transportOperatorLicence: string; // the regulated transport-operator / PSV licence
   taxId: string; // tax identification number
@@ -15,7 +16,7 @@ export interface FleetManagerRequirements {
 }
 
 /** KYC documents collected to move a manager DRAFT → KYC_PENDING. */
-export interface FleetManagerKyc {
+export class FleetManagerKyc {
   businessRegCertRef: string;
   operatorLicenceRef: string;
   ownerIdRef: string;
@@ -23,7 +24,7 @@ export interface FleetManagerKyc {
   submittedAt: string;
 }
 
-export interface FleetManager {
+export class FleetManager {
   managerId: string;
   did: string;
   vaultRef: string; // Golden Record PII (owner name, national ID, contact) in the vault
@@ -32,7 +33,7 @@ export interface FleetManager {
   contactPhone: string;
   contactEmail?: string;
   depotAddress?: string; // physical depot/office (pin and/or address)
-  location: { lat: number; lng: number };
+  location: GeoPoint;
   requirements: FleetManagerRequirements;
   kyc?: FleetManagerKyc;
   bondPaid: boolean; // refundable operating bond (activation gate)
@@ -45,14 +46,14 @@ export type VehicleStatus = 'ACTIVE' | 'GROUNDED' | 'RETIRED';
 export type VehicleOwnerType = 'driver_owned' | 'fleet_owned' | 'third_party';
 
 /** Registration documents — a PRIORITY signal (verified vehicles are preferred for dispatch). */
-export interface VehicleDocuments {
+export class VehicleDocuments {
   registrationPhotoRef?: string; // photo of the registration papers
   factoryId?: string; // VIN / chassis / factory number
   insuranceRef?: string; // optional — insurance is government-regulated, not enforced here
   insuranceExpiresAt?: string;
 }
 
-export interface Vehicle {
+export class Vehicle {
   vehicleId: string;
   managerDid?: string; // the fleet manager that owns this vehicle (undefined = unmanaged/legacy)
   qr: string; // the dashboard QR sticker the driver scans to start a shift
@@ -80,19 +81,19 @@ export type DriverStatus = 'DRAFT' | 'KYC_PENDING' | 'ACTIVE' | 'SUSPENDED';
 export type DriverRegistry = 'light' | 'heavy';
 
 /** Driver licence (required + verified for heavy registry; bikes need none). */
-export interface DriverLicence {
+export class DriverLicence {
   number: string;
   classes: VehicleClass[]; // vehicle classes the driver is cleared to operate
   expiresAt?: string; // heavy registry: enforced (expired ⇒ cannot operate)
 }
 
-export interface DriverKyc {
+export class DriverKyc {
   idCopyRef: string;
   licenceCopyRef: string;
   submittedAt: string;
 }
 
-export interface FleetDriver {
+export class FleetDriver {
   driverId: string;
   did: string;
   managerDid?: string; // the fleet manager that employs this driver (undefined = unmanaged/legacy)
@@ -113,7 +114,7 @@ export interface FleetDriver {
 export type AssignmentStatus = 'active' | 'ended';
 
 /** The flexible coupling: which driver is operating which vehicle (and on which corridor) right now. */
-export interface Assignment {
+export class Assignment {
   assignmentId: string;
   driverDid: string;
   vehicleId: string;
@@ -121,12 +122,12 @@ export interface Assignment {
   status: AssignmentStatus;
   startedAt: string;
   endedAt?: string;
-  location?: { lat: number; lng: number }; // last reported GPS position (live fleet map)
+  location?: GeoPoint; // last reported GPS position (live fleet map)
   lastLocatedAt?: string;
 }
 
 /** What the handover/bag-load flow needs once a badge is scanned. */
-export interface ResolvedBadge {
+export class ResolvedBadge {
   driverDid: string;
   badgeId: string;
   vehicle: Vehicle;

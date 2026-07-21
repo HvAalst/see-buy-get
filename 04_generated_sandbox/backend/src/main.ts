@@ -1,6 +1,8 @@
 import { NestFactory } from '@nestjs/core';
 import { Logger, ValidationPipe } from '@nestjs/common';
+import { SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { buildOpenApiDocument } from './spec/openapi';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -11,8 +13,11 @@ async function bootstrap() {
   // Global input validation — every DTO is validated at the edge.
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
-  // All GLOS APIs are versioned under /v1 (APIG-010, APIG-015).
+  // All SeeBuyGet APIs are versioned under /v1 (APIG-010, APIG-015).
   app.setGlobalPrefix('v1');
+
+  // Live contract docs at /v1/docs (the same document `npm run spec` emits to contracts/openapi.json).
+  SwaggerModule.setup('v1/docs', app, buildOpenApiDocument(app));
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
