@@ -6,7 +6,7 @@
   "private": true,
   "scripts": {
     "build": "nest build",
-    "spec": "nest build && node dist/spec/emit.js",
+    "spec": "nest build && node dist/spec/emit.js && node dist/spec/gate.js",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main.js",
