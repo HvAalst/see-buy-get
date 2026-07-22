@@ -1,0 +1,170 @@
+/* ==========================================================================
+   Fleet PWA — the console-specific pieces only. The generic scaffold lives in
+   shared/screens.css; component looks in shared/ui. Light only, no dark block.
+   ========================================================================== */
+
+.mono {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+/* ----------------------------------------------------------------- tiles -- */
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.tiles--5 {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+@media (max-width: 420px) {
+  .tiles--5 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.tile {
+  background: var(--card);
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-card);
+  box-shadow: var(--sh-sm);
+  padding: 12px 8px;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+}
+
+.tile__v {
+  font-size: 26px;
+  line-height: 1.1;
+  font-weight: 800;
+  color: var(--navy);
+  font-variant-numeric: tabular-nums;
+}
+
+.tile__v--sm {
+  font-size: 20px;
+}
+
+.tile__l {
+  font-size: 14px;
+  color: var(--tx3);
+  text-align: center;
+}
+
+/* ------------------------------------------------------------- two-column -- */
+
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 420px) {
+  .grid2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ----------------------------------------------------------------- chips -- */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1.5px solid var(--bd);
+  background: var(--bg);
+  color: var(--navy);
+  font-size: 14px;
+}
+
+.chip--tap {
+  cursor: pointer;
+}
+
+.chip--on {
+  border-color: var(--blue);
+  background: var(--blue-light);
+  color: var(--blue-dark);
+}
+
+/* -------------------------------------------------------------- checkline -- */
+
+.checkline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  color: var(--tx2);
+  min-height: var(--tap);
+}
+
+.checkline input {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--blue);
+}
+
+/* ------------------------------------------------------------- fleet map -- */
+
+/* The live-position surface: a bounded relative plot, not a tile map — the point is
+   WHO is out and roughly where, at a glance, with zero network dependencies. */
+.fmap {
+  position: relative;
+  height: 200px;
+  border: 1.5px solid var(--bd);
+  border-radius: var(--r-ctl);
+  overflow: hidden;
+  background:
+    repeating-linear-gradient(0deg, var(--appbg) 0 23px, var(--panel) 23px 24px),
+    repeating-linear-gradient(90deg, var(--appbg) 0 23px, var(--panel) 23px 24px);
+  margin-top: 10px;
+}
+
+.fmap__empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  color: var(--tx3);
+}
+
+.fmap__pt {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+}
+
+.fmap__dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--blue);
+  border: 2.5px solid var(--bg);
+  box-shadow: var(--sh-sm);
+}
+
+.fmap__lbl {
+  font-size: 14px;
+  color: var(--navy);
+  background: var(--bg);
+  border: 1px solid var(--bd-soft);
+  border-radius: 999px;
+  padding: 0 8px;
+  white-space: nowrap;
+}

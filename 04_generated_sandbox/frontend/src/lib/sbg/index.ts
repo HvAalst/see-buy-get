@@ -38,4 +38,5 @@ export {
 export { createDriverApi, type DriverApi } from './personas/driver';
 export { createAgentApi, type AgentApi } from './personas/agent';
 export { createMdpApi, type MdpApi } from './personas/mdp';
+export { createFleetApi, type FleetApi } from './personas/fleet';
 export type { paths, components, operations } from './schema';

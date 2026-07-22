@@ -190,11 +190,12 @@ describe('createMintedClient', () => {
   it('mints once, then calls the endpoint with the bearer', async () => {
     const calls: string[] = [];
     const client = createMintedClient(cfg(), 'fleet_manager', 'did:m', 'sbg:fleet:did:m', {
+      tenant: 'did:m',
       fetch: async (input, init) => {
         const url = String(input instanceof Request ? input.url : input);
         calls.push(url);
         if (url.endsWith('/v1/auth/token')) {
-          expect(JSON.parse(String((init as RequestInit).body))).toMatchObject({ role: 'fleet_manager', did: 'did:m' });
+          expect(JSON.parse(String((init as RequestInit).body))).toMatchObject({ role: 'fleet_manager', did: 'did:m', tenant: 'did:m' });
           return json({ access_token: 'minted-1', expires_in: 3600 });
         }
         const headers = new Headers((init as RequestInit | undefined)?.headers ?? (input as Request).headers);

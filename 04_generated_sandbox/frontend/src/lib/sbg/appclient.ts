@@ -280,7 +280,7 @@ export function createMintedClient(
   role: string,
   did: string,
   storageKey: string,
-  opts?: { fetch?: typeof fetch; traceId?: () => string },
+  opts?: { fetch?: typeof fetch; traceId?: () => string; tenant?: string },
 ): AppClient {
   let mintFailure: SbgError | null = null;
   const doFetch = opts?.fetch ?? fetch;
@@ -295,7 +295,9 @@ export function createMintedClient(
         res = await doFetch(`${config.baseUrl}/v1/auth/token`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ role, did, type: 'client_credentials' }),
+          // `tenant` scopes the token's :own reach server-side (a fleet manager sees only
+          // their fleet) — it must ride the mint, no request can add it later.
+          body: JSON.stringify({ role, did, type: 'client_credentials', ...(opts?.tenant ? { tenant: opts.tenant } : {}) }),
           signal: ctl.signal,
         });
       } catch (e) {
