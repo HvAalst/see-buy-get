@@ -32,7 +32,12 @@ export type IconName =
   | 'close'
   | 'badge'
   | 'weight'
-  | 'power';
+  | 'power'
+  | 'star'
+  | 'person'
+  | 'bag'
+  | 'send'
+  | 'grid';
 
 const PATHS: Record<IconName, JSX.Element> = {
   chevronRight: <path d="m9 5 7 7-7 7" />,
@@ -77,6 +82,28 @@ const PATHS: Record<IconName, JSX.Element> = {
   ),
   weight: <path d="M8.6 7.4h6.8l2.6 12.1H6L8.6 7.4ZM9.6 7.4a2.4 2.4 0 1 1 4.8 0" />,
   power: <path d="M12 4v8M7.4 6.9a7.4 7.4 0 1 0 9.2 0" />,
+  star: <path d="m12 4.4 2.3 4.9 5.2.7-3.8 3.7.9 5.3L12 16.5 7.4 19l.9-5.3-3.8-3.7 5.2-.7L12 4.4Z" />,
+  person: (
+    <>
+      <circle cx="12" cy="8.2" r="3.6" />
+      <path d="M4.8 20a7.2 7.2 0 0 1 14.4 0" />
+    </>
+  ),
+  bag: (
+    <>
+      <path d="M6.2 8.2h11.6l-1.1 11a1.6 1.6 0 0 1-1.6 1.4H8.9a1.6 1.6 0 0 1-1.6-1.4l-1.1-11Z" />
+      <path d="M8.9 8.2V6.6a3.1 3.1 0 0 1 6.2 0v1.6" />
+    </>
+  ),
+  send: <path d="M20.4 3.6 3.6 10.3l7 2.6 2.6 7 7.2-16.3ZM10.6 12.9l4.6-4.6" />,
+  grid: (
+    <>
+      <rect x="3.6" y="3.6" width="7" height="7" rx="1.5" />
+      <rect x="13.4" y="3.6" width="7" height="7" rx="1.5" />
+      <rect x="3.6" y="13.4" width="7" height="7" rx="1.5" />
+      <rect x="13.4" y="13.4" width="7" height="7" rx="1.5" />
+    </>
+  ),
 
   /* --- symbols an error presentation can ask for (ErrorIconName) ----------- */
 

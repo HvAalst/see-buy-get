@@ -236,7 +236,9 @@
   color: var(--tx2);
 }
 
-/* The ONLY place orange is allowed to appear as a mark. */
+/* Orange appears as a MARK in exactly three sanctioned places: this tick, the active
+   nav indicator, and the band scale's "you" position dot (S10). Indicators, never
+   decoration, never text, never a field. */
 .checklist__tick {
   flex: none;
   margin-top: 2px;
@@ -727,4 +729,66 @@
 
 .note__retry {
   margin-top: 4px;
+}
+
+/* ------------------------------------------------------------ band scale -- */
+
+/* "You against the market": grey range track, soft-blue typical band, navy median
+   tick, and the ONE orange dot for "you" — the accent used as a locator, not an alarm. */
+.band {
+  position: relative;
+  height: 44px;
+  margin: 8px 0 2px;
+}
+
+.band__track {
+  position: absolute;
+  top: 22px;
+  left: 0;
+  right: 0;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--bd-soft);
+}
+
+.band__typical {
+  position: absolute;
+  top: 22px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--blue-light);
+}
+
+.band__median {
+  position: absolute;
+  top: 15px;
+  width: 3px;
+  height: 20px;
+  border-radius: 2px;
+  background: var(--navy);
+  transform: translateX(-1.5px);
+}
+
+.band__you {
+  position: absolute;
+  top: 6px;
+  display: grid;
+  justify-items: center;
+  transform: translateX(-50%);
+}
+
+.band__you-dot {
+  width: 15px;
+  height: 15px;
+  border-radius: 999px;
+  background: var(--org);
+  border: 2.5px solid var(--bg);
+  box-shadow: var(--sh-sm);
+}
+
+.band__you-label {
+  margin-top: 1px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--tx2);
 }

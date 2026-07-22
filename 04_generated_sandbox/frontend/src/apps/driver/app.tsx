@@ -6,6 +6,7 @@ import { OffersScreen } from './screens/OffersScreen';
 import { RouteScreen } from './screens/RouteScreen';
 import { SignInScreen } from './screens/SignInScreen';
 import { useDriverApp, type DriverActions, type DriverState, type Screen } from './useDriverApp';
+import '../../shared/screens.css';
 import './driver.css';
 
 type Tab = 'home' | 'route' | 'loads';

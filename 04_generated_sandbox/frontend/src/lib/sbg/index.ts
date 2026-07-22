@@ -17,5 +17,24 @@ export { makeConfig, resolveBaseUrl, type SbgConfig } from './config';
 export { Session, type MintFn, type MintedToken } from './session';
 export { createSbgClient, type SbgClient, type Result, type Ok, type Err } from './client';
 export { toSbgError, clientError, presentationFor, type SbgError, type SbgErrorCode, type ErrorPresentation } from './errors';
+export {
+  createMintedClient,
+  createSeededClient,
+  isMintSourced,
+  isSignInRequired,
+  isUnknownIdentity,
+  narrow,
+  preferMintFailure,
+  publicRequest,
+  purgeTokens,
+  sbgForgot,
+  sbgLogin,
+  sbgReset,
+  tokenKeyFor,
+  type AppClient,
+  type LoginView,
+  type SeededAppClient,
+} from './appclient';
 export { createDriverApi, type DriverApi } from './personas/driver';
+export { createAgentApi, type AgentApi } from './personas/agent';
 export type { paths, components, operations } from './schema';

@@ -1,0 +1,237 @@
+/* ==========================================================================
+   Agent PWA — the shop-specific screen pieces only. The generic scaffold lives
+   in shared/screens.css; component looks in shared/ui. Light only, no dark block.
+   ========================================================================== */
+
+/* ------------------------------------------------------------------ home -- */
+
+.home__shopactions {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+/* ------------------------------------------------------------ size chips -- */
+
+.sizes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.size {
+  min-height: 72px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  text-align: left;
+  background: var(--bg);
+  border: 1.5px solid var(--bd);
+  border-radius: var(--r-ctl);
+  color: var(--tx);
+}
+
+.size--on {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+  box-shadow: 0 0 0 2px var(--blue-light);
+}
+
+.size__k {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--navy);
+}
+
+.size__h {
+  font-size: 14px;
+  color: var(--tx3);
+}
+
+/* -------------------------------------------------------------- picklist -- */
+
+.picklist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pick {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 60px;
+  padding: 10px 12px;
+  text-align: left;
+  background: var(--bg);
+  border: 1.5px solid var(--bd);
+  border-radius: var(--r-ctl);
+  color: var(--tx);
+}
+
+.pick--on {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+}
+
+.pick__tick {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1.5px solid var(--bd);
+  background: var(--bg);
+  color: var(--blue-dark);
+}
+
+.pick--on .pick__tick {
+  border-color: var(--blue);
+  background: var(--blue-light);
+}
+
+.pick__body {
+  min-width: 0;
+}
+
+.pick__t,
+.pick__s {
+  display: block;
+}
+
+.pick__t {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--navy);
+}
+
+.pick__s {
+  font-size: 14px;
+  color: var(--tx3);
+}
+
+/* ------------------------------------------------------------- otp input -- */
+
+.otp {
+  font-family: var(--font-mono);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.4em;
+  text-align: center;
+}
+
+/* ----------------------------------------------------------------- stars -- */
+
+.stars {
+  display: flex;
+  gap: 10px;
+  margin: 8px 0 4px;
+}
+
+.starbtn {
+  width: var(--tap);
+  height: var(--tap);
+  border-radius: 999px;
+  border: 1.5px solid var(--bd);
+  background: var(--bg);
+  color: var(--tx2);
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.starbtn--on {
+  border-color: var(--blue);
+  background: var(--blue-light);
+  color: var(--blue-dark);
+}
+
+/* ------------------------------------------------------------ shelf slot -- */
+
+/* The one thing the shopkeeper needs mid-collect, readable from a step back. */
+.slot {
+  background: var(--card);
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-card);
+  box-shadow: var(--sh-sm);
+  padding: 18px;
+  text-align: center;
+}
+
+.slot__label {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--tx2);
+}
+
+.slot__value {
+  font-size: 44px;
+  line-height: 1.1;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--navy);
+  font-variant-numeric: tabular-nums;
+  margin-top: 4px;
+}
+
+.slot__sub {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  color: var(--tx3);
+  margin-top: 4px;
+}
+
+/* ----------------------------------------------------------- photo field -- */
+
+.photo__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.photo__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 14px 16px;
+  border: 1.5px dashed var(--bd);
+  border-radius: var(--r-ctl);
+  background: var(--bg);
+  color: var(--tx2);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.photo__btn--done {
+  border-style: solid;
+  border-color: var(--ok);
+  background: var(--ok-light);
+  color: var(--ok);
+}
+
+/* ----------------------------------------------------------------- rates -- */
+
+.rates__median {
+  font-size: 40px;
+  line-height: 1.1;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--navy);
+  font-variant-numeric: tabular-nums;
+}

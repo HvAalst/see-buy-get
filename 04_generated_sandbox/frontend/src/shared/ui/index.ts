@@ -18,3 +18,4 @@ export { BottomNav, type BottomNavProps, type NavItem } from './BottomNav';
 export { ReadAloud, speak, stopSpeaking, isSpeechSupported, type ReadAloudProps } from './ReadAloud';
 export { ErrorNote, Note, errorSentence, type ErrorNoteProps, type NoteProps } from './ErrorNote';
 export { Icon, type IconName, type IconProps } from './Icon';
+export { BandScale, type BandScaleProps } from './BandScale';

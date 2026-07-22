@@ -1,0 +1,195 @@
+/**
+ * Pure agent domain logic — no DOM, no fetch, no Preact. Deterministic and unit-tested,
+ * because these lines decide whether a shopkeeper may take a parcel (and someone's money).
+ *
+ * The gate messaging and the price-vs-market maths are harvested from the legacy agent.js
+ * so the PWA and the old page can never disagree about what "locked" or "12% above" means.
+ */
+
+import type { AgentStatus, AgentView, Benchmark, CorridorRow, GateView, ParcelSize, ParcelStatus } from './types';
+
+/* ------------------------------------------------------------------- gate -- */
+
+export interface GateNotice {
+  tone: 'warn' | 'danger';
+  title: string;
+  detail: string;
+}
+
+/**
+ * What the shopkeeper is told when the wallet gate says no. The legacy page had one
+ * sentence for both cases; the S4 error contract gives us the machine code, so a locked
+ * account and a thin wallet get their own words (and their own icons upstream).
+ */
+export function gateNotice(agent: Pick<AgentView, 'status'> | null, gate: GateView | null): GateNotice | null {
+  if (!agent || !gate || gate.ok) return null;
+  if (agent.status === 'LOCKED' || gate.code === 'AGENT_LOCKED') {
+    return {
+      tone: 'danger',
+      title: 'Account locked',
+      detail: 'Top up your wallet to start accepting parcels again.',
+    };
+  }
+  return {
+    tone: 'warn',
+    title: 'Wallet is low',
+    detail:
+      gate.shortfall && gate.shortfall > 0
+        ? `Top up at least ${money(gate.shortfall)} to keep accepting parcels.`
+        : 'Top up to keep accepting parcels.',
+  };
+}
+
+/** Accepting is possible only when the gate says so — every accept costs wallet money. */
+export function canAccept(gate: GateView | null): boolean {
+  return Boolean(gate?.ok);
+}
+
+/** The shop must be through onboarding before the counter flows make sense. */
+export function statusNotice(status: AgentStatus | undefined): string | null {
+  if (!status || status === 'ACTIVE' || status === 'LOCKED') return null;
+  return `Your shop is ${status.replace(/_/g, ' ').toLowerCase()}. GLOS must activate it before you can take parcels.`;
+}
+
+/* ------------------------------------------------------------------ money -- */
+
+/** Money is always shown with two decimals — a shopkeeper reconciles against this figure. */
+export function money(v: number | null | undefined): string {
+  return (Number(v) || 0).toFixed(2);
+}
+
+/* ------------------------------------------------------------------ zones -- */
+
+/** Destinations this shop can send toward: active corridors leaving the shop's zone. */
+export function destinationZones(corridors: CorridorRow[] | null, myZone: string | undefined): string[] {
+  if (!corridors || !myZone) return [];
+  return [...new Set(corridors.filter((c) => c.originZone === myZone && c.status === 'active').map((c) => c.destZone))];
+}
+
+/* ----------------------------------------------------------------- accept -- */
+
+export const SIZES: Array<{ key: ParcelSize; label: string; hint: string }> = [
+  { key: 'S', label: 'Small', hint: 'Fits in one hand' },
+  { key: 'M', label: 'Medium', hint: 'Shoebox' },
+  { key: 'L', label: 'Large', hint: 'Needs both arms' },
+  { key: 'HEAVY', label: 'Heavy', hint: 'Over 20 kg' },
+];
+
+export interface AcceptForm {
+  parcelId: string;
+  size: ParcelSize | '';
+  destZone: string;
+  senderMobile: string;
+  receiverMobile: string;
+  photoRef: string;
+}
+
+export const EMPTY_ACCEPT: AcceptForm = {
+  parcelId: '',
+  size: '',
+  destZone: '',
+  senderMobile: '',
+  receiverMobile: '',
+  photoRef: '',
+};
+
+/**
+ * What still blocks the accept. Ordered by the physical flow at the counter, so the first
+ * missing thing is the next thing to do — the CTA subtitle reads it out.
+ */
+export function acceptMissing(f: AcceptForm): string | null {
+  if (!f.parcelId.trim()) return 'Scan the parcel sticker first.';
+  if (!f.size) return 'Tap the size of the parcel.';
+  if (!f.destZone.trim()) return 'Pick where it is going.';
+  if (!f.photoRef) return 'Take the proof photo.';
+  return null;
+}
+
+/* ---------------------------------------------------------------- release -- */
+
+export type ReleaseStage = 'arrive' | 'otp' | 'rate' | 'blocked';
+
+/**
+ * Which release step a found parcel is on. The legacy page buried this in render branches;
+ * making it a value keeps the screen a dumb switch and makes the state machine testable.
+ */
+export function releaseStage(status: ParcelStatus): ReleaseStage {
+  if (status === 'On_Bus') return 'arrive';
+  if (status === 'Ready_For_Pickup') return 'otp';
+  if (status === 'Delivered') return 'rate';
+  return 'blocked';
+}
+
+export function releaseBlockedDetail(status: ParcelStatus): string {
+  return `This parcel is ${status.replace(/_/g, ' ').toLowerCase()} — nothing to hand over here.`;
+}
+
+/** The pickup code: exactly four digits, as the backend issues them. */
+export function otpValid(otp: string): boolean {
+  return /^\d{4}$/.test(otp.trim());
+}
+
+/* ------------------------------------------------------------------ rates -- */
+
+export interface PriceBand {
+  pct: number;
+  headline: string;
+  detail: string;
+  showMatch: boolean;
+  matchPrice: number;
+  matchLabel: string;
+}
+
+/** Prices per parcel carry two decimals end-to-end (display AND the PATCH body). */
+export function roundMoney(v: number): number {
+  return Math.round(v * 100) / 100;
+}
+
+/**
+ * The shop's handling fee against nearby shops. Same shape and dead zone as the driver's
+ * per-km band, but 2-decimal money and "shops" wording. Null without a usable benchmark —
+ * a median of one shop would talk an agent into repricing against themselves.
+ */
+export function priceBand(pricePerParcel: number | null | undefined, benchmark: Benchmark | null | undefined): PriceBand | null {
+  if (!benchmark || !benchmark.count) return null;
+
+  const mine = Number(pricePerParcel ?? 0);
+  const pct = benchmark.median > 0 ? Math.round(((mine - benchmark.median) / benchmark.median) * 100) : 0;
+
+  const headline =
+    pct > 1
+      ? `You charge ${pct}% more than nearby shops.`
+      : pct < -1
+        ? `You charge ${-pct}% less than nearby shops.`
+        : 'You charge about the same as nearby shops.';
+
+  const detail =
+    `Your price ${money(mine)} per parcel. Nearby shops charge ${money(benchmark.median)} ` +
+    `(${money(benchmark.min)}–${money(benchmark.max)} across ${benchmark.count} shops).`;
+
+  return {
+    pct,
+    headline,
+    detail,
+    showMatch: Math.abs(pct) > 1,
+    matchPrice: roundMoney(benchmark.median),
+    matchLabel: `Match ${money(benchmark.median)}`,
+  };
+}
+
+/* --------------------------------------------------------------- speaking -- */
+
+export function homeSummary(agent: AgentView | null, gate: GateView | null): string {
+  if (!agent) return 'Connecting to your shop.';
+  const canScan = Boolean(gate?.ok);
+  return (
+    `Wallet balance ${money(agent.balance)}. ` +
+    (canScan ? 'You can accept parcels.' : 'Top up to accept parcels.') +
+    (agent.openState === 'closed' ? ' Your shop is marked closed.' : '')
+  );
+}
+
+export function handoverSummary(count: number, selected: number): string {
+  if (count === 0) return 'No parcels are waiting for the bus.';
+  return `${count} parcels waiting. ${selected} selected. Scan the driver badge, then finish the handover.`;
+}
