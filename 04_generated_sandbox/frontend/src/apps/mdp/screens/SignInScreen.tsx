@@ -73,7 +73,7 @@ export function SignInScreen({ actions, error, busy }: SignInScreenProps) {
 
       <Card title="One sign-in runs the floor" tone="soft">
         <Checklist
-          items={['Any worker on shift can use this tablet', 'Signing out removes the key from it', 'GLOS staff never ask for your password']}
+          items={['Any worker on shift can use this tablet', 'Signing out removes the key from it', 'SeeBuyGet staff never ask for your password']}
         />
       </Card>
 

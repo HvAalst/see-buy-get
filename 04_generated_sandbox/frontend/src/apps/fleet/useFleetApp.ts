@@ -347,7 +347,7 @@ export function useFleetApp() {
         // exactly as the legacy console recorded them.
         const r = await client.api.submitDriverKyc(did, 'id.jpg', 'licence.jpg');
         if (r.error) return fail(r.error);
-        pushToast({ tone: 'ok', icon: 'badge', title: 'KYC papers submitted', detail: 'GLOS checks them and issues the badge.' });
+        pushToast({ tone: 'ok', icon: 'badge', title: 'KYC papers submitted', detail: 'SeeBuyGet checks them and issues the badge.' });
         await refresh();
       });
     },

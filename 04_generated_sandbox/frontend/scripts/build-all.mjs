@@ -25,7 +25,14 @@ const discovered = readdirSync(APPS_DIR, { withFileTypes: true })
   .filter((e) => e.isDirectory() && existsSync(resolve(APPS_DIR, e.name, 'index.html')))
   .map((e) => e.name)
   // driver first: it is the reference build, so a regression shows up in the first line.
-  .sort((a, b) => (a === 'driver' ? -1 : b === 'driver' ? 1 : a.localeCompare(b)));
+  // `home` LAST: it ships at the web root (outDir is dist/ itself), so building it last
+  // keeps the root index.html newer than the leaf apps it links to — and makes the
+  // ordering intent explicit next to the emptyOutDir carve-out in vite.config.ts.
+  .sort((a, b) => {
+    if (a === 'driver' || b === 'driver') return a === 'driver' ? -1 : 1;
+    if (a === 'home' || b === 'home') return a === 'home' ? 1 : -1;
+    return a.localeCompare(b);
+  });
 
 const wanted = process.argv.slice(2);
 const unknown = wanted.filter((w) => !discovered.includes(w));

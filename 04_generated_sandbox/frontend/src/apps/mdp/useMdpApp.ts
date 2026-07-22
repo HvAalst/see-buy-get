@@ -154,7 +154,7 @@ export function useMdpApp() {
           code: 'NOT_FOUND',
           status: 404,
           title: 'Hub not found',
-          detail: 'Your sign-in works, but no hub is registered under it. Ask GLOS to check the hub record.',
+          detail: 'Your sign-in works, but no hub is registered under it. Ask SeeBuyGet to check the hub record.',
           retryable: true,
         });
         return;

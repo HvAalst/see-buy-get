@@ -10,8 +10,8 @@ export interface DriversScreenProps {
 
 /**
  * The drivers pool: onboard (light = active now, heavy = papers first) and follow each
- * driver's stage. The KYC DECISION is GLOS ops' — this screen submits papers and then
- * says "GLOS is checking", it never offers an approve button that would 403.
+ * driver's stage. The KYC DECISION is SeeBuyGet ops' — this screen submits papers and then
+ * says "SeeBuyGet is checking", it never offers an approve button that would 403.
  */
 export function DriversScreen({ state, actions }: DriversScreenProps) {
   const f = state.dForm;
@@ -23,7 +23,7 @@ export function DriversScreen({ state, actions }: DriversScreenProps) {
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
 
       <Card title="Onboard a driver">
-        <p class="card__note">Bike and motorcycle riders start immediately. Any heavier class needs a licence and a GLOS check first.</p>
+        <p class="card__note">Bike and motorcycle riders start immediately. Any heavier class needs a licence and a SeeBuyGet check first.</p>
         <div class="grid2">
           <div class="field">
             <label class="field__label" for="d-display">
@@ -88,7 +88,7 @@ export function DriversScreen({ state, actions }: DriversScreenProps) {
           </>
         ) : (
           <p class="hint" style="margin-top:12px">
-            Light registry — no licence or GLOS check needed.
+            Light registry — no licence or SeeBuyGet check needed.
           </p>
         )}
         <div style="margin-top:14px">
@@ -116,7 +116,7 @@ export function DriversScreen({ state, actions }: DriversScreenProps) {
                   </span>
                   <span class="row__end">
                     <Pill tone={statusTone(d.status)} dot>
-                      {d.status === 'KYC_PENDING' ? 'GLOS checking' : d.status.replace(/_/g, ' ').toLowerCase()}
+                      {d.status === 'KYC_PENDING' ? 'Being checked' : d.status.replace(/_/g, ' ').toLowerCase()}
                     </Pill>
                     {action === 'submit-kyc' ? (
                       <Button variant="link" full={false} busy={state.busy === `kyc:${d.did}`} onClick={() => void actions.submitKyc(d.did)}>
@@ -135,7 +135,7 @@ export function DriversScreen({ state, actions }: DriversScreenProps) {
         <ReadAloud
           text={() => {
             const pending = state.drivers.filter((d) => d.status === 'KYC_PENDING').length;
-            return `${state.drivers.length} drivers in the pool. ${pending ? `${pending} waiting on the GLOS check.` : ''}`;
+            return `${state.drivers.length} drivers in the pool. ${pending ? `${pending} waiting on the SeeBuyGet check.` : ''}`;
           }}
           label="Read this aloud"
         />

@@ -1,0 +1,84 @@
+/* ==========================================================================
+   Front door — the chooser and join wizard only. The generic scaffold lives in
+   shared/screens.css; component looks in shared/ui. Light only, no dark block.
+   ========================================================================== */
+
+/* ------------------------------------------------------------- role cards -- */
+
+/* A role row carries a third line the generic row does not: the PROMISE — the
+   reason to tap, in the person's own terms. */
+.role__promise {
+  display: block;
+  margin-top: 4px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--blue-dark);
+  line-height: 1.35;
+}
+
+/* ------------------------------------------------------------- step dots -- */
+
+.dots {
+  display: flex;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.dots__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--bd-soft);
+}
+
+.dots__dot--done {
+  background: var(--blue-light);
+}
+
+/* The active step marker — the nav-indicator use of the accent. */
+.dots__dot--on {
+  background: var(--org);
+}
+
+/* ----------------------------------------------------------------- chips -- */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1.5px solid var(--bd);
+  background: var(--bg);
+  color: var(--navy);
+  font-size: 14px;
+}
+
+.chip--tap {
+  cursor: pointer;
+}
+
+.chip--on {
+  border-color: var(--blue);
+  background: var(--blue-light);
+  color: var(--blue-dark);
+}
+
+/* ----------------------------------------------------------- credentials -- */
+
+/* Shown exactly once, so it must be selectable and unmissable. */
+.cred {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--navy);
+  word-break: break-all;
+  user-select: all;
+}

@@ -41,7 +41,7 @@ export function SignInScreen({ state, actions, error }: SignInScreenProps) {
         </Card>
         <Card title="Keep it safe" tone="soft">
           <Checklist
-            items={['Write both down somewhere safe', 'The secret also signs your status callbacks', 'GLOS cannot show it again — only issue a new store']}
+            items={['Write both down somewhere safe', 'The secret also signs your status callbacks', 'SeeBuyGet cannot show it again — only issue a new store']}
           />
         </Card>
         <div class="scr__cta">

@@ -33,7 +33,7 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
       <PinCard state={state} actions={actions} />
 
       <Card title="Status callbacks">
-        <p class="card__note">GLOS signs every callback with your store secret — verify the signature before trusting one.</p>
+        <p class="card__note">SeeBuyGet signs every callback with your store secret — verify the signature before trusting one.</p>
         <div class="field" style="margin-top:8px">
           <label class="field__label" for="cb-url">
             Callback URL

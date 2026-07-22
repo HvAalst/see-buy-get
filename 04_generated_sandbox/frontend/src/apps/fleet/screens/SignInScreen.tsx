@@ -10,7 +10,7 @@ export interface SignInScreenProps {
   busy: boolean;
 }
 
-const SPOKEN = 'Type your fleet sign-in code. GLOS gave it to your company when the fleet was activated.';
+const SPOKEN = 'Type your fleet sign-in code. SeeBuyGet gave it to your company when the fleet was activated.';
 
 /** Manager sign-in by code (FM-XXXX) — the S2 fleet login; the app then works as that fleet only. */
 export function SignInScreen({ actions, error, busy }: SignInScreenProps) {
@@ -45,7 +45,7 @@ export function SignInScreen({ actions, error, busy }: SignInScreenProps) {
             enterkeyhint="go"
           />
         </div>
-        <p class="card__note">GLOS issued this code when your company was activated.</p>
+        <p class="card__note">SeeBuyGet issued this code when your company was activated.</p>
       </Card>
 
       <div class="scr__cta">
@@ -56,7 +56,7 @@ export function SignInScreen({ actions, error, busy }: SignInScreenProps) {
 
       <Card title="What you can do here" tone="soft">
         <Checklist
-          items={['Register vehicles and print their dashboard QRs', 'Onboard drivers and send their papers to GLOS', 'See who is on shift, where, with what cargo']}
+          items={['Register vehicles and print their dashboard QRs', 'Onboard drivers and send their papers to SeeBuyGet', 'See who is on shift, where, with what cargo']}
         />
       </Card>
 

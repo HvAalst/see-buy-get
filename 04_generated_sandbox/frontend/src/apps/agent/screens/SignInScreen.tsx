@@ -76,7 +76,7 @@ export function SignInScreen({ actions, error, busy }: SignInScreenProps) {
 
       <Card title="Your money stays safe" tone="soft">
         <Checklist
-          items={['Only this sign-in can touch the wallet', 'Signing out removes the key from this tablet', 'GLOS staff never ask for your password']}
+          items={['Only this sign-in can touch the wallet', 'Signing out removes the key from this tablet', 'SeeBuyGet staff never ask for your password']}
         />
       </Card>
 

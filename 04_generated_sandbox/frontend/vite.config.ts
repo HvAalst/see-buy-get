@@ -42,6 +42,19 @@ type AppSpec = {
 };
 
 const APPS = {
+  /**
+   * The front door. Ships at the web ROOT, so a visitor who types the domain lands on a
+   * chooser instead of a 404 — and it is the app that carries JOINING the network (every
+   * other app can only sign an existing participant in).
+   */
+  home: {
+    base: '/',
+    name: 'SeeBuyGet',
+    short: 'SeeBuyGet',
+    description: 'Send, track, collect — or join the SeeBuyGet network.',
+    devPort: 5180,
+    previewPort: 5190,
+  },
   driver: {
     base: '/driver/',
     name: 'SeeBuyGet Driver',
@@ -104,6 +117,13 @@ if (!(APP_ID in APPS)) {
 
 const app = APPS[APP_ID];
 const BASE = app.base;
+
+/** The root app ships at '/', so its output and service-worker scope cover every sibling. */
+const IS_ROOT = BASE === '/';
+/** Every OTHER app's deploy folder, e.g. ['driver', 'agent', …] — used to fence the root SW. */
+const SIBLING_DIRS = Object.values(APPS)
+  .map((a) => a.base.replace(/^\/|\/$/g, ''))
+  .filter(Boolean);
 const APP_DIR = resolve(ROOT, 'src/apps', APP_ID);
 // Output mirrors the deploy path, not the app id (genesis ships at /send/), so the
 // whole of dist/ can be copied to a web root and every base resolves as built.
@@ -166,9 +186,21 @@ export default defineConfig({
         clientsClaim: false,
         cleanupOutdatedCaches: true,
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        /**
+         * The root app (`home`) builds INTO dist/, so an unrestricted glob swept up all six
+         * sibling apps — 97 entries / 1.5 MB, including their service workers. That is bloat
+         * on first visit AND a staleness trap: the root worker would keep serving a cached
+         * copy of another app's index.html after that app shipped an update, fighting its own
+         * update prompt. A leaf app's outDir contains only itself, so it needs no ignores.
+         */
+        globIgnores: IS_ROOT ? SIBLING_DIRS.map((d) => `${d}/**`) : [],
         navigateFallback: `${BASE}index.html`,
-        // Never serve the app shell for an API path.
-        navigateFallbackDenylist: [/^\/v1\//],
+        /**
+         * Never serve an app shell for an API path — nor, from the root worker (whose scope
+         * is the WHOLE origin), for a sibling app's route: without this, navigating to
+         * /driver/ before that app is cached renders the LANDING page at the driver's URL.
+         */
+        navigateFallbackDenylist: [/^\/v1\//, ...(IS_ROOT ? SIBLING_DIRS.map((d) => new RegExp(`^/${d}/`)) : [])],
       },
 
       // Keep the service worker out of dev (also avoids writing an ungitignored dev-dist/).
@@ -181,8 +213,13 @@ export default defineConfig({
     // areas.html / area/*.html / sitemap.xml into it). An outDir inside src with
     // emptyOutDir would delete legacy and SEO-generated pages.
     outDir: OUT_DIR,
-    // Safe: each app owns a leaf of dist/, so a rebuild of one never touches another.
-    emptyOutDir: true,
+    /**
+     * Each app owns a LEAF of dist/, so emptying its own folder never touches another —
+     * except the root app (`home`, base '/'), whose outDir IS dist/. Emptying there would
+     * delete every sibling app that had already been built. Its own output is
+     * hash-named under dist/assets/, so leaving it non-empty is safe.
+     */
+    emptyOutDir: BASE !== '/',
     target: 'es2020',
     rollupOptions: {
       input: { [APP_ID]: resolve(APP_DIR, 'index.html') },

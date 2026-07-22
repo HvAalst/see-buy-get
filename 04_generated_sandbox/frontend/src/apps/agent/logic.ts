@@ -48,7 +48,7 @@ export function canAccept(gate: GateView | null): boolean {
 /** The shop must be through onboarding before the counter flows make sense. */
 export function statusNotice(status: AgentStatus | undefined): string | null {
   if (!status || status === 'ACTIVE' || status === 'LOCKED') return null;
-  return `Your shop is ${status.replace(/_/g, ' ').toLowerCase()}. GLOS must activate it before you can take parcels.`;
+  return `Your shop is ${status.replace(/_/g, ' ').toLowerCase()}. SeeBuyGet must activate it before you can take parcels.`;
 }
 
 /* ------------------------------------------------------------------ money -- */
