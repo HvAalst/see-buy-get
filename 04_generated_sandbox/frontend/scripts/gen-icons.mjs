@@ -119,6 +119,8 @@ const GLYPHS = {
     roundRect(0.14, 0.54, 0.46, 0.86, 0.08),
     roundRect(0.54, 0.54, 0.86, 0.86, 0.08),
   ),
+  // Storefront: the awning over the shop body — the merchant console.
+  vendor: union(roundRect(0.1, 0.14, 0.9, 0.34, 0.09), roundRect(0.18, 0.44, 0.82, 0.88, 0.09)),
 };
 
 /** Emitted per app. Maskable keeps the glyph inside the central safe circle. */

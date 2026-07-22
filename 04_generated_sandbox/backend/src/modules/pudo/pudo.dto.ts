@@ -163,6 +163,11 @@ export class RegisterVendorDto {
   @IsOptional() @ValidateNested() @Type(() => ShippingPolicyDto) shippingPolicy?: ShippingPolicyDto;
 }
 
+export class VendorLoginDto {
+  @IsString() vendorId!: string;
+  @IsString() secret!: string;
+}
+
 export class UpdateVendorDto {
   @IsOptional() @IsString() callbackUrl?: string;
   @IsOptional() @ValidateNested() @Type(() => GeoDto) location?: GeoDto;

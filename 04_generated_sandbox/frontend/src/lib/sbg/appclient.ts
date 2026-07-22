@@ -262,6 +262,58 @@ export function createSeededClient(config: SbgConfig, storageKey: string, opts?:
   };
 }
 
+/* ----------------------------------------------------- credentialed session -- */
+
+/**
+ * The client for an app whose CREDENTIAL lives on the device (the vendor console's store
+ * ID + signing secret): unlike a password login, the session can re-mint by itself, so an
+ * expired token never bounces the user to sign-in — the mint fn just logs in again. The
+ * login is any Result-returning call ending in a token; its typed failure (AUTH_FAILED,
+ * TIMEOUT, …) is recorded as the mint failure so the shell reports the truth, not
+ * "no signal".
+ */
+type TokenShape = { access_token: string; expires_in?: number };
+
+export function createCredentialedClient(
+  config: SbgConfig,
+  storageKey: string,
+  login: () => Promise<Result<{ token: TokenShape } | TokenShape>>,
+  opts?: { fetch?: typeof fetch; traceId?: () => string },
+): AppClient {
+  let mintFailure: SbgError | null = null;
+
+  const session = new Session(storageKey, async () => {
+    mintFailure = null;
+    const r = await login();
+    if (r.error) {
+      mintFailure = fromMint(r.error);
+      // TIMEOUT must classify as TIMEOUT downstream; everything else may wear the NETWORK
+      // cover story, which preferMintFailure swaps back for the recorded truth.
+      throw r.error.code === 'TIMEOUT' ? abortError(r.error.detail) : new Error(r.error.detail || r.error.title);
+    }
+    const raw = r.data as { token?: TokenShape; access_token?: string; expires_in?: number };
+    const token = raw.token ?? (raw as TokenShape);
+    if (!token?.access_token) {
+      mintFailure = fromMint(toSbgError({ code: 'INTERNAL', detail: 'Sign-in returned no token.' }, 200));
+      throw new Error('Login returned no access_token');
+    }
+    return { access_token: token.access_token, expires_in: token.expires_in ?? 3600 };
+  });
+
+  const base = createSbgClient({ config, session, fetch: opts?.fetch, traceId: opts?.traceId });
+  const sbg: SbgClient = {
+    raw: base.raw,
+    request: (fn) =>
+      base.request(fn).then((r) => {
+        if (!r.error) return r;
+        const error = preferMintFailure(r.error, mintFailure);
+        return error === r.error ? r : { data: null, error, status: error.status };
+      }),
+  };
+
+  return { sbg, session };
+}
+
 /* ---------------------------------------------------------- minted session -- */
 
 /**

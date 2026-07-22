@@ -82,6 +82,14 @@ const APPS = {
     devPort: 5178,
     previewPort: 5188,
   },
+  vendor: {
+    base: '/vendor/',
+    name: 'SeeBuyGet Vendor',
+    short: 'Vendor',
+    description: 'Mint and follow your store orders on the SeeBuyGet network.',
+    devPort: 5179,
+    previewPort: 5189,
+  },
 } satisfies Record<string, AppSpec>;
 
 type AppId = keyof typeof APPS;

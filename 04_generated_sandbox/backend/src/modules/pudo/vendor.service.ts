@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
-import { createHmac, randomBytes } from 'crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
+import { PersistentMap } from '../../foundation/store/persistent-map';
+import { DidService } from '../../foundation/did/did.service';
+import { OperationalStore } from '../../foundation/data-firewall/operational-store.service';
 import { CheckoutHandoff, ShippingPolicy, Vendor } from './pudo.types';
 import { DEFAULT_VENDOR_COUNTRY } from './pudo.config';
 
@@ -36,18 +39,54 @@ export interface VendorCallback {
  */
 @Injectable()
 export class VendorService {
-  private readonly vendors = new Map<string, Vendor>();
+  /**
+   * Durable (S15, catching up with the S1 principle): a vendor record IS a credential (the
+   * HMAC secret, issued exactly once) and money (the prepaid balance) — a restart must not
+   * delete either. The outbox and settlement book stay in-memory: they are history the record
+   * itself already summarises, not the money.
+   */
+  private readonly vendors = new PersistentMap<string, Vendor>('pudo-vendors');
+  /** Durable too: a pending handoff is a BUYER'S ORDER that has not shipped yet. */
+  private readonly checkouts = new PersistentMap<string, CheckoutHandoff>('pudo-vendor-checkouts');
   private readonly outbox: VendorCallback[] = [];
-  private readonly checkouts: CheckoutHandoff[] = [];
   private readonly settlements: VendorSettlement[] = [];
+
+  constructor(
+    private readonly dids: DidService,
+    private readonly core: OperationalStore,
+  ) {}
 
   private static policy(p?: Partial<ShippingPolicy>): ShippingPolicy {
     return { mode: p?.mode === 'full' ? 'full' : 'capped', freeOverSubtotal: p?.freeOverSubtotal ?? 50, buyerContributionCap: p?.buyerContributionCap ?? 3 };
   }
 
   register(input: { name: string; callbackUrl?: string; secret?: string; location?: { lat: number; lng: number }; address?: string; country?: string; shippingPolicy?: Partial<ShippingPolicy> }): Vendor {
-    const vendor: Vendor = { vendorId: `ven_${randomBytes(6).toString('hex')}`, name: input.name, callbackUrl: input.callbackUrl, secret: input.secret ?? `whsec_${randomBytes(12).toString('hex')}`, location: input.location, address: input.address, country: input.country || DEFAULT_VENDOR_COUNTRY, balance: 0, shippingPolicy: VendorService.policy(input.shippingPolicy), createdAt: new Date().toISOString() };
+    // A real DID (S2 pattern — mdp got the same treatment): the vendorId stays the domain
+    // key; the DID is what the vendors/login token binds to. No PII goes to the core.
+    const did = this.dids.generate(`vendor:${input.name}`, { role: 'vendor' }).id;
+    this.core.upsert({ did, tier: 2, status: 'active', capabilities: ['vendor'], metadata: { country: input.country || DEFAULT_VENDOR_COUNTRY } });
+    const vendor: Vendor = { vendorId: `ven_${randomBytes(6).toString('hex')}`, did, name: input.name, callbackUrl: input.callbackUrl, secret: input.secret ?? `whsec_${randomBytes(12).toString('hex')}`, location: input.location, address: input.address, country: input.country || DEFAULT_VENDOR_COUNTRY, balance: 0, shippingPolicy: VendorService.policy(input.shippingPolicy), createdAt: new Date().toISOString() };
     this.vendors.set(vendor.vendorId, vendor);
+    return vendor;
+  }
+
+  /**
+   * Sign a merchant console in: vendorId + the signing secret (issued once, at registration).
+   * One AUTH_FAILED for both an unknown id and a wrong secret — no oracle for guessing ids.
+   * Constant-time compare, same as the account service's password check.
+   */
+  login(vendorId: string, secret: string): Vendor {
+    const vendor = this.vendors.get(vendorId);
+    if (!vendor) throw new GlosError('AUTH_FAILED', 'Wrong store ID or secret');
+    const a = Buffer.from(String(secret ?? ''));
+    const b = Buffer.from(vendor.secret);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) throw new GlosError('AUTH_FAILED', 'Wrong store ID or secret');
+    // Backfill for records created before vendors carried DIDs (pre-S15 in-memory worlds).
+    if (!vendor.did) {
+      vendor.did = this.dids.generate(`vendor:${vendor.name}`, { role: 'vendor' }).id;
+      this.core.upsert({ did: vendor.did, tier: 2, status: 'active', capabilities: ['vendor'], metadata: { country: vendor.country } });
+      this.vendors.set(vendor.vendorId, vendor);
+    }
     return vendor;
   }
 
@@ -65,6 +104,7 @@ export class VendorService {
     const vendor = this.get(vendorId);
     vendor.balance = Math.round((vendor.balance + amount) * 100) / 100;
     this.book(vendor, 'TOP_UP', '+', amount, undefined, 'prepay');
+    this.vendors.set(vendor.vendorId, vendor); // durable money
     return vendor;
   }
 
@@ -74,6 +114,7 @@ export class VendorService {
     if (vendor.balance + 1e-9 < amount) return { paid: false, balance: vendor.balance };
     vendor.balance = Math.round((vendor.balance - amount) * 100) / 100;
     this.book(vendor, 'BILLING', '-', amount, parcelId, 'shipment');
+    this.vendors.set(vendor.vendorId, vendor); // durable money
     return { paid: true, balance: vendor.balance };
   }
 
@@ -83,6 +124,7 @@ export class VendorService {
     if (amount <= 0) return vendor;
     vendor.balance = Math.round((vendor.balance + amount) * 100) / 100;
     this.book(vendor, 'REBATE', '+', amount, parcelId, 'flexible-route rebate');
+    this.vendors.set(vendor.vendorId, vendor); // durable money
     return vendor;
   }
 
@@ -101,6 +143,7 @@ export class VendorService {
     if (patch.location !== undefined) vendor.location = patch.location;
     if (patch.address !== undefined) vendor.address = patch.address || undefined;
     if (patch.shippingPolicy !== undefined) vendor.shippingPolicy = VendorService.policy({ ...vendor.shippingPolicy, ...patch.shippingPolicy });
+    this.vendors.set(vendor.vendorId, vendor);
     return vendor;
   }
 
@@ -136,17 +179,17 @@ export class VendorService {
   captureCheckout(input: { vendorId: string; destAgentDid: string; buyerEmail: string; buyerMobile?: string; externalOrderId?: string; items?: Array<{ name: string; qty: number }>; subtotal?: number; source?: CheckoutHandoff['source'] }): CheckoutHandoff {
     this.get(input.vendorId); // 404 if unknown
     const handoff: CheckoutHandoff = { id: `chk_${randomBytes(6).toString('hex')}`, vendorId: input.vendorId, destAgentDid: input.destAgentDid, buyerEmail: input.buyerEmail, buyerMobile: input.buyerMobile, externalOrderId: input.externalOrderId, items: input.items, subtotal: input.subtotal, source: input.source ?? 'node', consumed: false, at: new Date().toISOString() };
-    this.checkouts.push(handoff);
+    this.checkouts.set(handoff.id, handoff);
     return handoff;
   }
 
   /** Open (not-yet-shipped) checkout handoffs for a vendor — the console's incoming-orders inbox. */
   checkoutsFor(vendorId: string, includeConsumed = false): CheckoutHandoff[] {
-    return this.checkouts.filter((c) => c.vendorId === vendorId && (includeConsumed || !c.consumed)).slice().reverse();
+    return [...this.checkouts.values()].filter((c) => c.vendorId === vendorId && (includeConsumed || !c.consumed)).sort((x, y) => y.at.localeCompare(x.at));
   }
 
   checkout(id: string): CheckoutHandoff {
-    const c = this.checkouts.find((x) => x.id === id);
+    const c = this.checkouts.get(id);
     if (!c) throw new GlosError('NOT_FOUND', `Checkout not found: ${id}`);
     return c;
   }
@@ -156,6 +199,7 @@ export class VendorService {
     const c = this.checkout(id);
     c.consumed = true;
     c.parcelId = parcelId;
+    this.checkouts.set(c.id, c); // durable order state
     return c;
   }
 

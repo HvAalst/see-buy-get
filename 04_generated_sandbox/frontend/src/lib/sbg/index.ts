@@ -18,6 +18,7 @@ export { Session, type MintFn, type MintedToken } from './session';
 export { createSbgClient, type SbgClient, type Result, type Ok, type Err } from './client';
 export { toSbgError, clientError, presentationFor, type SbgError, type SbgErrorCode, type ErrorPresentation } from './errors';
 export {
+  createCredentialedClient,
   createMintedClient,
   createSeededClient,
   isMintSourced,
@@ -39,4 +40,5 @@ export { createDriverApi, type DriverApi } from './personas/driver';
 export { createAgentApi, type AgentApi } from './personas/agent';
 export { createMdpApi, type MdpApi } from './personas/mdp';
 export { createFleetApi, type FleetApi } from './personas/fleet';
+export { createVendorApi, type VendorApi } from './personas/vendor';
 export type { paths, components, operations } from './schema';

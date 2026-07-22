@@ -26,7 +26,7 @@ import { FleetManagerService } from './fleet-manager.service';
 import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
-import { AcceptParcelDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, CoupleDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, OverdraftDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetPriceDto, ShelfDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, TopUpDto, UpdateVendorDto, VehicleDocsDto, VoidDto } from './pudo.dto';
+import { AcceptParcelDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, CoupleDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, OverdraftDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetPriceDto, ShelfDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto } from './pudo.dto';
 import { classifySize, SIZE_WEIGHT_KG } from './pudo.config';
 import { haversineKm } from './geo';
 
@@ -315,10 +315,25 @@ export class SbgController {
 
   // --- e-commerce vendors + inbound pickup-at-PUDO ---
 
-  /** Register an e-commerce vendor (returns a signing secret for callback verification). */
+  /** Register an e-commerce vendor (returns a signing secret for callback verification).
+   *  @Public (S15): this IS a signup — the same pre-auth reasoning as auth/signup. The
+   *  secret is in the response exactly once; vendors/login is how it is used ever after. */
+  @Public()
   @Post('vendors')
   registerVendor(@Body() dto: RegisterVendorDto) {
     return this.vendors.register(dto);
+  }
+
+  /**
+   * Merchant console sign-in (S15): store ID + the signing secret (issued once, at
+   * registration) → a genesis-role actor token bound to the vendor's DID. @Public for the
+   * same reason auth/login is: a caller cannot hold an actor token before signing in.
+   */
+  @Public()
+  @Post('vendors/login')
+  vendorLogin(@Body() dto: VendorLoginDto) {
+    const vendor = this.vendors.login(dto.vendorId, dto.secret);
+    return { ...VendorService.publicView(vendor), token: this.auth.mintActorToken({ role: 'genesis', did: vendor.did }) };
   }
 
   @Get('vendors')

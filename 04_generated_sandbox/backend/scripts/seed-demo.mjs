@@ -326,6 +326,69 @@ const run = async () => {
   );
   say(`hub floor: ${p4.parcelId} waiting to sort · ${p5.parcelId} sorted into ${sorted.toteCode} → ${sorted.nextDestination.label}`);
 
+  /* ------------------------------------------------------------- vendor --- */
+  const VENDOR_SECRET = 'whsec_demo_nairobi_threads';
+  let shop = need(await req('GET', '/v1/sbg/vendors', { token: op }), 'vendors').find((v) => v.name === 'Nairobi Threads');
+  if (!shop) {
+    shop = need(
+      await req('POST', '/v1/sbg/vendors', {
+        body: {
+          name: 'Nairobi Threads',
+          country: 'KE',
+          address: 'Biashara St 12',
+          location: { lat: -1.284, lng: 36.824 },
+          secret: VENDOR_SECRET,
+        },
+      }),
+      'vendor register',
+    );
+  }
+  const vLogin = need(await req('POST', '/v1/sbg/vendors/login', { body: { vendorId: shop.vendorId, secret: VENDOR_SECRET } }), 'vendor login');
+  const tokV = vLogin.token.access_token;
+
+  if ((vLogin.balance ?? 0) < 40) {
+    need(await req('POST', `/v1/sbg/vendors/${shop.vendorId}/top-up`, { token: tokV, body: { amount: 120 } }), 'vendor top-up');
+    say('vendor balance topped up: Nairobi Threads');
+  }
+
+  // Two buyer checkouts waiting to ship (the console's inbox) + one order minted end-to-end.
+  for (const [ref, email, items, subtotal] of [
+    [`SO-${stamp}-A`, 'amina@example.com', [{ name: 'Ankara shirt', qty: 2 }], 38],
+    [`SO-${stamp}-B`, 'brian@example.com', [{ name: 'Kitenge scarf', qty: 1 }], 14],
+  ]) {
+    need(
+      await req('POST', `/v1/sbg/vendors/${shop.vendorId}/checkout`, {
+        token: tokV,
+        body: { destPudoDid: a2.did, buyerEmail: email, buyerMobile: '+254700300300', externalOrderId: ref, items, subtotal, source: 'node' },
+      }),
+      `checkout ${ref}`,
+    );
+  }
+  const minted = need(
+    await req('POST', '/v1/sbg/inbound/orders', {
+      token: tokV,
+      body: {
+        vendorId: shop.vendorId,
+        originPudoDid: a1.did,
+        destPudoDid: a2.did,
+        buyerMobile: '+254700400400',
+        buyerEmail: 'clara@example.com',
+        externalOrderId: `SO-${stamp}-C`,
+        dimensionsCm: { l: 30, w: 20, h: 10 },
+        weightKg: 1.6,
+        contentPhotoRef: `SO-${stamp}-C-contents.jpg`,
+        routeMode: 'locked',
+        items: [{ name: 'Denim jacket', qty: 1 }],
+        subtotal: 55,
+      },
+    }),
+    'vendor mint',
+  );
+  need(await req('POST', `/v1/sbg/parcels/${encodeURIComponent(minted.parcel.parcelId)}/intake`, { token: tokA1, body: {} }), 'intake minted');
+  say(
+    `vendor Nairobi Threads: 2 checkouts waiting · ${minted.parcel.parcelId} minted (${minted.paid ? 'paid' : 'UNPAID'}), at the drop-off shop`,
+  );
+
   /* -------------------------------------------------------------- sheet --- */
   out.push('', '='.repeat(64), '  SEEBUYGET DEMO — SIGN-IN SHEET', '='.repeat(64));
   out.push('  Agent app   /agent/   agent1@sbg.test / seebuyget   (Mama Sarah Shop)');
@@ -334,12 +397,15 @@ const run = async () => {
   out.push(`  Fleet app   /fleet/   sign-in code ${fleetCode}            (Kilima Logistics)`);
   out.push(`  Driver app  /driver/  driver ID ${amos.did}`);
   out.push('  Send app    /send/    no sign-in needed');
+  out.push(`  Vendor app  /vendor/  store ID ${shop.vendorId}`);
+  out.push(`                        secret   ${VENDOR_SECRET}`);
   out.push('-'.repeat(64));
   out.push(`  Handover demo   ${p1.parcelId}, ${p2.parcelId} wait for badge ${amos.badgeId}`);
   out.push(`  Release demo    ${p3.parcelId} is On_Bus at Riverside (mark arrived)`);
   out.push(`  Pickup demo     ${p6.parcelId} — code ${arrived.otp}${p6Now.binSlot ? ` · shelf ${p6Now.binSlot}` : ''}`);
   out.push(`  Track demo      ${p6.trackingKey} (ready) · ${p3.trackingKey} (on the bus)`);
   out.push(`  Hub sort demo   ${p4.parcelId} queued · bag ${sorted.toteCode} ready to load`);
+  out.push(`  Vendor demo     ${minted.parcel.parcelId} minted · collection ${minted.parcel.collectionCode ?? '—'} · track ${minted.parcel.trackingKey ?? '—'}`);
   out.push('='.repeat(64));
   say(out.join('\n'));
 };

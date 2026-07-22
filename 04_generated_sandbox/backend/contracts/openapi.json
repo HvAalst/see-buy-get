@@ -4659,6 +4659,29 @@
         }
       }
     },
+    "/v1/sbg/vendors/login": {
+      "post": {
+        "operationId": "Sbg.vendorLogin",
+        "summary": "",
+        "description": "Merchant console sign-in (S15): store ID + the signing secret (issued once, at\nregistration) → a genesis-role actor token bound to the vendor's DID.  for the\nsame reason auth/login is: a caller cannot hold an actor token before signing in.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VendorLoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/vendors/{id}": {
       "get": {
         "operationId": "Sbg.getVendor",
@@ -9971,6 +9994,10 @@
           "vendorId": {
             "type": "string"
           },
+          "did": {
+            "type": "string",
+            "description": "Real GLOS DID (S15). The vendorId stays the domain key; the DID is what an actor token binds to."
+          },
           "name": {
             "type": "string"
           },
@@ -10001,12 +10028,28 @@
         },
         "required": [
           "vendorId",
+          "did",
           "name",
           "secret",
           "country",
           "balance",
           "shippingPolicy",
           "createdAt"
+        ]
+      },
+      "VendorLoginDto": {
+        "type": "object",
+        "properties": {
+          "vendorId": {
+            "type": "string"
+          },
+          "secret": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "vendorId",
+          "secret"
         ]
       },
       "UpdateVendorDto": {

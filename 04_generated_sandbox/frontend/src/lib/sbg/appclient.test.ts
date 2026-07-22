@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  createCredentialedClient,
   createMintedClient,
   createSeededClient,
   isMintSourced,
@@ -183,6 +184,42 @@ describe('createSeededClient', () => {
     const dead = await client.sbg.request((c) => c.GET('/v1/sbg/agents', {}));
     expect(dead.error?.code).toBe('UNAUTHORIZED');
     expect(isSignInRequired(dead.error)).toBe(true);
+  });
+});
+
+describe('createCredentialedClient', () => {
+  it('re-mints through the stored-credential login and reports its typed failure', async () => {
+    let logins = 0;
+    const client = createCredentialedClient(
+      cfg(),
+      'sbg:vendor:v1',
+      async () => {
+        logins++;
+        if (logins === 1) return { data: { token: { access_token: 'vt-1', expires_in: 3600 } }, error: null, status: 200 };
+        return {
+          data: null,
+          error: { code: 'AUTH_FAILED', status: 401, title: 'Wrong store ID or secret', detail: '', retryable: false },
+          status: 401,
+        };
+      },
+      {
+        fetch: async (input, init) => {
+          const headers = new Headers((init as RequestInit | undefined)?.headers ?? (input as Request).headers);
+          expect(headers.get('authorization')).toBe('Bearer vt-1');
+          return json([]);
+        },
+      },
+    );
+
+    const ok = await client.sbg.request((c) => c.GET('/v1/sbg/agents', {}));
+    expect(ok.error).toBeNull();
+    expect(logins).toBe(1);
+
+    // Token dies; the next mint's real rejection must surface, never a NETWORK cover story.
+    client.session.clear();
+    const dead = await client.sbg.request((c) => c.GET('/v1/sbg/agents', {}));
+    expect(dead.error?.code).toBe('AUTH_FAILED');
+    expect(isMintSourced(dead.error)).toBe(true);
   });
 });
 

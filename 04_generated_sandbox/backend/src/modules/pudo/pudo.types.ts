@@ -158,6 +158,8 @@ export class ShippingPolicy {
 /** A registered e-commerce vendor that wires its checkout into PUDO for click-and-collect. */
 export class Vendor {
   vendorId: string;
+  /** Real GLOS DID (S15). The vendorId stays the domain key; the DID is what an actor token binds to. */
+  did: string;
   name: string;
   callbackUrl?: string; // GLOS pushes HMAC-signed status callbacks here
   secret: string;
