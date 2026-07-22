@@ -95,6 +95,10 @@ export class ParcelService {
       paymentMode: mode,
       status: 'At_PUDO',
       acceptedAt: now,
+      // Walk-up parcels track too (S14): the sender SMS carries this key, exactly as the
+      // vendor flow's does. Public surface, no PII — inbound parcels had it since day one
+      // and the counter flow simply never minted one.
+      trackingKey: `T-${randomBytes(5).toString('hex').toUpperCase()}`,
       scans: [{ at: now, status: 'CREATED', by: input.agentDid, note: agent.shopName, anchorTxId }],
     };
     this.parcels.set(parcel.parcelId, parcel);
@@ -336,7 +340,17 @@ export class ParcelService {
   }
 
   /** Public track-and-trace by the shareable tracking key — no PII, no handover secret (Risk: code leak). */
-  track(trackingKey: string): { ref: string; status: ParcelStatus; size: ParcelSize; destination: string; destZone: string; steps: Array<{ status: string; at: string; note?: string }>; binSlot?: string } {
+  track(trackingKey: string): {
+    ref: string;
+    status: ParcelStatus;
+    size: ParcelSize;
+    destination: string;
+    destZone: string;
+    steps: Array<{ status: string; at: string; note?: string }>;
+    binSlot?: string;
+    destinationLandmark?: string;
+    destinationLocation?: { lat: number; lng: number };
+  } {
     const parcel = [...this.parcels.values()].find((p) => p.trackingKey === trackingKey);
     if (!parcel) throw new GlosError('NOT_FOUND', 'No parcel for that tracking key');
     const dest = parcel.destAgentDid ? this.agents.list().find((a) => a.did === parcel.destAgentDid) : undefined;
@@ -347,6 +361,11 @@ export class ParcelService {
       destination: dest?.shopName ?? parcel.destZone,
       destZone: parcel.destZone,
       binSlot: parcel.status === 'Ready_For_Pickup' ? parcel.binSlot : undefined,
+      // The collect card (rev 5 "show me the way"): landmark + pin of the destination shop.
+      // Both are already public via GET /network/points, so this adds no new exposure —
+      // still no PII and no collection code on this surface. Additive for the legacy page.
+      destinationLandmark: dest?.landmark,
+      destinationLocation: dest?.location,
       steps: parcel.scans.map((s) => ({ status: s.status, at: s.at, note: s.note })),
     };
   }

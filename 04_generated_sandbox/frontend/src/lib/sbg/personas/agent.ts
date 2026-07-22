@@ -67,9 +67,14 @@ export function createAgentApi(sbg: SbgClient) {
     arrive: (parcelId: string, destAgentDid: string) =>
       sbg.request((c) => c.POST('/v1/sbg/parcels/{id}/arrive', { params: { path: { id: parcelId } }, body: { destAgentDid } })),
 
-    /** Verify the customer's 4-digit code and hand the parcel over. */
-    pickup: (parcelId: string, agentDid: string, otp: string) =>
-      sbg.request((c) => c.POST('/v1/sbg/parcels/{id}/pickup', { params: { path: { id: parcelId } }, body: { agentDid, otp } })),
+    /** Verify the customer's 4-digit code and hand the parcel over (photo optional, kept as proof). */
+    pickup: (parcelId: string, agentDid: string, otp: string, deliveredPhotoRef?: string) =>
+      sbg.request((c) =>
+        c.POST('/v1/sbg/parcels/{id}/pickup', {
+          params: { path: { id: parcelId } },
+          body: { agentDid, otp, ...(deliveredPhotoRef ? { deliveredPhotoRef } : {}) },
+        }),
+      ),
 
     /** Record the customer's rating of a delivered parcel. */
     rate: (parcelId: string, stars: number, raterMobile: string) =>

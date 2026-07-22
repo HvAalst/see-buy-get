@@ -53,13 +53,13 @@ export interface AgentState {
 
   accept: AcceptForm;
   handover: { badge: string; selected: string[] };
-  release: { stickerId: string; parcel: ParcelView | null; otp: string; issuedOtp: string | null; stars: number };
+  release: { stickerId: string; parcel: ParcelView | null; otp: string; issuedOtp: string | null; stars: number; photoRef: string };
   collect: { code: string; found: CollectView | null; disputing: boolean; reason: string; photoRef: string };
   receivebag: { code: string };
 }
 
 const EMPTY_HANDOVER = { badge: '', selected: [] as string[] };
-const EMPTY_RELEASE = { stickerId: '', parcel: null, otp: '', issuedOtp: null, stars: 0 };
+const EMPTY_RELEASE = { stickerId: '', parcel: null, otp: '', issuedOtp: null, stars: 0, photoRef: '' };
 const EMPTY_COLLECT = { code: '', found: null, disputing: false, reason: '', photoRef: '' };
 
 const INITIAL: AgentState = {
@@ -530,7 +530,7 @@ export function useAgentApp() {
     const f = stateRef.current.release;
     if (!f.parcel || !otpValid(f.otp)) return;
     await run('pickup', async () => {
-      const r = await client.api.pickup(f.parcel!.parcelId, did, f.otp.trim());
+      const r = await client.api.pickup(f.parcel!.parcelId, did, f.otp.trim(), f.photoRef || undefined);
       if (r.error) return fail(r.error);
       buzz();
       const again = await client.api.parcel(f.parcel!.parcelId);

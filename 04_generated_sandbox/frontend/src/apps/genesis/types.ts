@@ -71,4 +71,7 @@ export interface TrackView {
   destZone: string;
   steps: TrackStep[];
   binSlot?: string;
+  /** The collect card (rev 5): where the shop is, in words and as a pin. */
+  destinationLandmark?: string;
+  destinationLocation?: { lat: number; lng: number };
 }

@@ -19,3 +19,5 @@ export { ReadAloud, speak, stopSpeaking, isSpeechSupported, type ReadAloudProps 
 export { ErrorNote, Note, errorSentence, type ErrorNoteProps, type NoteProps } from './ErrorNote';
 export { Icon, type IconName, type IconProps } from './Icon';
 export { BandScale, type BandScaleProps } from './BandScale';
+export { CodeBoxes, type CodeBoxesProps } from './CodeBoxes';
+export { CodeCard, type CodeCardProps } from './CodeCard';

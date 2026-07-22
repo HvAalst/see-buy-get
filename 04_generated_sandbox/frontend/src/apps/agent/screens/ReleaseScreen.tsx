@@ -1,6 +1,7 @@
-import { Button, Card, Checklist, ErrorNote, Note, ReadAloud } from '../../../shared/ui';
+import { Button, Card, Checklist, CodeBoxes, CodeCard, ErrorNote, Note, ReadAloud } from '../../../shared/ui';
 import { otpValid, releaseBlockedDetail, releaseStage } from '../logic';
 import type { AgentActions, AgentState } from '../useAgentApp';
+import { PhotoField } from './PhotoField';
 
 export interface ReleaseScreenProps {
   state: AgentState;
@@ -60,30 +61,30 @@ export function ReleaseScreen({ state, actions }: ReleaseScreenProps) {
       ) : null}
 
       {p && stage === 'otp' ? (
-        <Card title="Ask for the 4-digit code" label={p.parcelId}>
+        <Card title="Confirm handover" label={p.parcelId}>
           {p.binSlot ? <p class="t-body">{`Fetch it from shelf ${p.binSlot} first.`}</p> : null}
           <div class="field" style="margin-top:8px">
-            <label class="field__label" for="otp">
-              The customer's code
-            </label>
-            <input
-              id="otp"
-              class="input otp"
-              value={f.otp}
-              onInput={(e) => actions.setRelease({ otp: e.currentTarget.value })}
-              inputMode="numeric"
-              maxLength={4}
-              placeholder="0000"
-              autocomplete="one-time-code"
+            <span class="field__label">Enter the code the customer shows you</span>
+            <CodeBoxes id="otp" label="The customer's 4-digit code" value={f.otp} onInput={(otp) => actions.setRelease({ otp })} />
+          </div>
+          <div style="margin-top:12px">
+            <PhotoField
+              id="handover-photo"
+              value={f.photoRef}
+              label="Handover photo (optional)"
+              onCapture={(ref) => actions.setRelease({ photoRef: ref })}
             />
           </div>
-          {f.issuedOtp ? <p class="hint">{`Sandbox: the code sent to the customer is ${f.issuedOtp}`}</p> : null}
           <div style="margin-top:12px">
-            <Button chevron={false} onClick={() => void actions.submitPickup()} disabled={!otpValid(f.otp)} busy={state.busy === 'pickup'}>
-              Confirm and hand over
+            <Button chevron onClick={() => void actions.submitPickup()} disabled={!otpValid(f.otp)} busy={state.busy === 'pickup'}>
+              Confirm handover
             </Button>
           </div>
         </Card>
+      ) : null}
+
+      {p && stage === 'otp' && f.issuedOtp ? (
+        <CodeCard label="Sandbox — the code sent to the customer" code={f.issuedOtp} />
       ) : null}
 
       {p && stage === 'rate' ? (

@@ -3,12 +3,14 @@ import {
   LADDER,
   journeyLine,
   ladderIndex,
+  mapsHref,
   money,
   normalizeKey,
   pointLine,
   priceCards,
   quoteSummary,
   selectablePoints,
+  showCollectCard,
   statusPresentation,
   stepTime,
   trackSummary,
@@ -114,5 +116,15 @@ describe('track', () => {
   it('stepTime falls back to the raw string on garbage', () => {
     expect(stepTime('not-a-date')).toBe('not-a-date');
     expect(money(4.4)).toBe('4.40');
+  });
+
+  it('the collect card shows only when a receiver can act, and the way link needs a pin', () => {
+    expect(showCollectCard('Ready_For_Pickup')).toBe(true);
+    expect(showCollectCard('Delivered')).toBe(true);
+    expect(showCollectCard('On_Bus')).toBe(false);
+    expect(mapsHref({ destination: 'Riverside', destinationLocation: { lat: -1.3, lng: 36.84 } })).toBe(
+      'https://www.google.com/maps?q=-1.3%2C36.84',
+    );
+    expect(mapsHref({ destination: 'Riverside' })).toBeNull();
   });
 });

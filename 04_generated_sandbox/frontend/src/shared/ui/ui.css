@@ -792,3 +792,86 @@
   font-weight: 800;
   color: var(--tx2);
 }
+
+/* ------------------------------------------------------------ code entry -- */
+
+/* Rev-5 segmented code boxes: filled solid, the NEXT one dashed so a non-reader
+   sees how many digits are missing. The real input sits invisibly on top. */
+.codeboxes {
+  position: relative;
+}
+
+.codeboxes__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  z-index: 1;
+  font-size: 16px; /* iOS refuses to zoom-jump only at ≥16px */
+}
+
+.codeboxes__row {
+  display: flex;
+  gap: 10px;
+}
+
+.codebox {
+  width: 56px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--bd);
+  border-radius: var(--r-ctl);
+  background: var(--bg);
+  font-family: var(--font-mono);
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--blue-dark);
+}
+
+.codebox--filled {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+}
+
+.codebox--next {
+  border-style: dashed;
+}
+
+.codeboxes[data-disabled='true'] .codebox {
+  opacity: 0.65;
+}
+
+/* ------------------------------------------------------------- code card -- */
+
+/* Rev-5 "moment of truth": the code at 46px mono in blue on white, with a listen
+   control. Blue carries this one number because the code IS the action. */
+.codecard {
+  background: var(--card);
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-card);
+  box-shadow: var(--sh-sm);
+  border-top: 3px solid var(--blue);
+  padding: 16px 18px;
+}
+
+.codecard__label {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--tx2);
+}
+
+.codecard__code {
+  font-family: var(--font-mono);
+  font-size: 46px;
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--blue);
+  font-variant-numeric: tabular-nums;
+  margin: 2px 0 4px;
+}

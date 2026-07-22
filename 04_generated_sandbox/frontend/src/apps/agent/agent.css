@@ -119,16 +119,6 @@
   color: var(--tx3);
 }
 
-/* ------------------------------------------------------------- otp input -- */
-
-.otp {
-  font-family: var(--font-mono);
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: 0.4em;
-  text-align: center;
-}
-
 /* ----------------------------------------------------------------- stars -- */
 
 .stars {

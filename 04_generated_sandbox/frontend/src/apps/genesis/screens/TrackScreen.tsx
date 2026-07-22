@@ -1,5 +1,5 @@
 import { Button, Card, ErrorNote, Icon, Note, ReadAloud } from '../../../shared/ui';
-import { LADDER, ladderIndex, statusPresentation, stepTime, trackSummary } from '../logic';
+import { LADDER, ladderIndex, mapsHref, showCollectCard, statusPresentation, stepTime, trackSummary } from '../logic';
 import type { SendActions, SendState } from '../useSendApp';
 
 export interface TrackScreenProps {
@@ -46,7 +46,14 @@ export function TrackScreen({ state, actions }: TrackScreenProps) {
           />
         </div>
         <div style="margin-top:12px">
-          <Button chevron={false} onClick={() => void actions.runTrack()} disabled={!state.key.trim()} busy={state.trackState === 'loading'}>
+          {/* Once a result is on screen, the way-finding CTA takes the solid slot (one per screen). */}
+          <Button
+            variant={t ? 'outline' : 'primary'}
+            chevron={false}
+            onClick={() => void actions.runTrack()}
+            disabled={!state.key.trim()}
+            busy={state.trackState === 'loading'}
+          >
             Find my parcel
           </Button>
         </div>
@@ -78,6 +85,28 @@ export function TrackScreen({ state, actions }: TrackScreenProps) {
               </span>
             </span>
           </section>
+
+          {showCollectCard(t.status) ? (
+            <>
+              <div class="row row--static" role="group" aria-label="Where to collect">
+                <span class="row__ic">
+                  <Icon name="home" size={24} />
+                </span>
+                <span class="row__body">
+                  <span class="row__t">{t.destination}</span>
+                  <span class="row__s">{t.destinationLandmark ?? `Zone ${t.destZone}`}</span>
+                </span>
+              </div>
+              {t.status === 'Ready_For_Pickup' && mapsHref(t) ? (
+                <div class="scr__cta">
+                  <a class="btn btn--primary btn--full" href={mapsHref(t)!} target="_blank" rel="noopener">
+                    Show me the way
+                    <Icon name="chevronRight" size={20} class="btn__chev" />
+                  </a>
+                </div>
+              ) : null}
+            </>
+          ) : null}
 
           <Card label="The journey so far">
             <ol class="ladder">

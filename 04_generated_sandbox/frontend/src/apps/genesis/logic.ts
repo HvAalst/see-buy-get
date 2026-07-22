@@ -132,3 +132,18 @@ export function stepTime(iso: string): string {
     return iso;
   }
 }
+
+/**
+ * "Show me the way" — a maps link for the destination pin, or null without one. A plain
+ * geo query URL: it opens whatever maps app the phone has, and degrades to the browser.
+ */
+export function mapsHref(t: Pick<TrackView, 'destinationLocation' | 'destination'>): string | null {
+  const loc = t.destinationLocation;
+  if (!loc) return null;
+  return `https://www.google.com/maps?q=${encodeURIComponent(`${loc.lat},${loc.lng}`)}`;
+}
+
+/** The collect card renders once the parcel is somewhere a receiver can act on. */
+export function showCollectCard(status: ParcelStatus): boolean {
+  return status === 'Ready_For_Pickup' || status === 'Delivered';
+}
