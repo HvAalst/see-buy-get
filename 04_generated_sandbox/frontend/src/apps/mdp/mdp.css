@@ -1,0 +1,285 @@
+/* ==========================================================================
+   Hub (MDP) PWA — the sort-floor pieces only. The generic scaffold lives in
+   shared/screens.css; component looks in shared/ui. Light only, no dark block.
+   ========================================================================== */
+
+.mono {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+/* ----------------------------------------------------------------- tiles -- */
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.tile {
+  background: var(--card);
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-card);
+  box-shadow: var(--sh-sm);
+  padding: 12px 8px;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+}
+
+/* The one tile that means WORK: a blue key, not an alarm — sorting is the job. */
+.tile--alert {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+}
+
+.tile__v {
+  font-size: 26px;
+  line-height: 1.1;
+  font-weight: 800;
+  color: var(--navy);
+  font-variant-numeric: tabular-nums;
+}
+
+.tile__l {
+  font-size: 14px;
+  color: var(--tx3);
+  text-align: center;
+}
+
+/* ---------------------------------------------------------------- button row */
+
+.btnrow {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+/* ----------------------------------------------------------------- chips -- */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1.5px solid var(--bd);
+  background: var(--bg);
+  color: var(--navy);
+  font-size: 14px;
+}
+
+.chip--tap {
+  cursor: pointer;
+}
+
+.chip--on {
+  border-color: var(--blue);
+  background: var(--blue-light);
+  color: var(--blue-dark);
+}
+
+/* -------------------------------------------------------- destination bags -- */
+
+.bags {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bagrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 64px;
+  padding: 10px 12px;
+  text-align: left;
+  background: var(--bg);
+  border: 1.5px solid var(--bd);
+  border-radius: var(--r-ctl);
+  color: var(--tx);
+}
+
+.bagrow--static {
+  border-color: var(--bd-soft);
+}
+
+.bagrow--on {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+}
+
+.bagrow__tick {
+  flex: none;
+  color: var(--blue-dark);
+}
+
+.bagrow__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.bagrow__code,
+.bagrow__dest {
+  display: block;
+}
+
+.bagrow__code {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--navy);
+}
+
+.bagrow__dest {
+  font-size: 14px;
+  color: var(--tx3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fillbar {
+  display: block;
+  height: 6px;
+  margin-top: 6px;
+  border-radius: 999px;
+  background: var(--bd-soft);
+  overflow: hidden;
+}
+
+.fillbar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--blue);
+}
+
+/* --------------------------------------------------------------- swatches -- */
+
+/* A stable colour per DESTINATION so a worker matches bag ↔ instruction at a glance.
+   Functional colour-coding (data), not chrome: it appears only as this key square and
+   the placement panel's edge. All eight read against white and never carry text. */
+.swatch {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+}
+
+.swatch--0 { background: #0e7c5a; }
+.swatch--1 { background: #2563eb; }
+.swatch--2 { background: #d97706; }
+.swatch--3 { background: #7c3aed; }
+.swatch--4 { background: #db2777; }
+.swatch--5 { background: #0891b2; }
+.swatch--6 { background: #65a30d; }
+.swatch--7 { background: #dc2626; }
+
+/* ------------------------------------------------------- placement panel -- */
+
+/* The sort answer, readable from a step back: white card, destination-coloured edge. */
+.place {
+  background: var(--card);
+  border: 1px solid var(--bd-soft);
+  border-left-width: 8px;
+  border-radius: var(--r-card);
+  box-shadow: var(--sh-sm);
+  padding: 18px;
+}
+
+.place--0 { border-left-color: #0e7c5a; }
+.place--1 { border-left-color: #2563eb; }
+.place--2 { border-left-color: #d97706; }
+.place--3 { border-left-color: #7c3aed; }
+.place--4 { border-left-color: #db2777; }
+.place--5 { border-left-color: #0891b2; }
+.place--6 { border-left-color: #65a30d; }
+.place--7 { border-left-color: #dc2626; }
+
+.place__k {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--tx2);
+}
+
+.place__bag {
+  font-family: var(--font-mono);
+  font-size: 44px;
+  line-height: 1.1;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--navy);
+  margin-top: 4px;
+}
+
+.place__dest {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--navy);
+  margin-top: 6px;
+}
+
+.place__meta {
+  font-size: 15px;
+  color: var(--tx3);
+  margin-top: 4px;
+}
+
+/* --------------------------------------------------------- new-tote card -- */
+
+.slotcard {
+  background: var(--card);
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-card);
+  box-shadow: var(--sh-sm);
+  padding: 18px;
+  text-align: center;
+}
+
+.slotcard__label {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--tx2);
+}
+
+.slotcard__value {
+  font-size: 40px;
+  line-height: 1.1;
+  font-weight: 800;
+  color: var(--navy);
+  margin-top: 4px;
+}
+
+.slotcard__sub {
+  font-size: 15px;
+  color: var(--tx3);
+  margin-top: 4px;
+  font-weight: 400;
+}
+
+/* ----------------------------------------------------------------- rates -- */
+
+.rates__median {
+  font-size: 40px;
+  line-height: 1.1;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--navy);
+  font-variant-numeric: tabular-nums;
+}
