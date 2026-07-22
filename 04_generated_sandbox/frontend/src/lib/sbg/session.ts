@@ -19,6 +19,13 @@ export type MintFn = () => Promise<MintedToken>;
 export class Session {
   private token: string | null;
   private softDeadlineMono = 0; // performance.now() ms; 0 = unknown (trust until a 401)
+  /**
+   * The mint currently on the wire, if any. Without this, concurrent callers (a Promise.all, or a
+   * fire-and-forget ping racing a refresh) each cross the soft deadline and each POST a fresh mint:
+   * duplicate round trips on a metered link, and — because a mint records WHY it failed in a single
+   * slot — one request's failure can be reported against another's. All callers share one mint.
+   */
+  private inFlight: Promise<string> | null = null;
 
   constructor(
     private readonly storageKey: string,
@@ -33,8 +40,16 @@ export class Session {
     return this.refresh();
   }
 
-  /** Force a fresh mint (called on 401, or proactively near the soft deadline). */
+  /** Force a fresh mint (called on 401, or proactively near the soft deadline). Single-flighted. */
   async refresh(): Promise<string> {
+    if (this.inFlight) return this.inFlight;
+    this.inFlight = this.mintOnce().finally(() => {
+      this.inFlight = null;
+    });
+    return this.inFlight;
+  }
+
+  private async mintOnce(): Promise<string> {
     const { access_token, expires_in } = await this.mint();
     this.token = access_token;
     // Refresh at 90% of the lifetime so a request never starts on an about-to-expire token. Monotonic

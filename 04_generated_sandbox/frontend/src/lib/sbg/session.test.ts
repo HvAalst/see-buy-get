@@ -47,6 +47,19 @@ describe('Session', () => {
     now.mockRestore();
   });
 
+  it('single-flights the mint — concurrent callers share one round trip', async () => {
+    let resolveMint: ((v: { access_token: string; expires_in: number }) => void) | undefined;
+    const mint = vi.fn().mockImplementation(() => new Promise((res) => { resolveMint = res; }));
+    const s = new Session('sbg:test', mint);
+
+    // A Promise.all (or a fire-and-forget ping racing a refresh) must not fire two mints: that is a
+    // duplicate round trip on a metered link, and the failure of one can be misattributed to the other.
+    const both = Promise.all([s.getToken(), s.getToken()]);
+    resolveMint?.({ access_token: 'tok-1', expires_in: 3600 });
+    expect(await both).toEqual(['tok-1', 'tok-1']);
+    expect(mint).toHaveBeenCalledTimes(1);
+  });
+
   it('clear() drops the token and forces a fresh mint', async () => {
     const mint = vi.fn().mockResolvedValueOnce({ access_token: 'tok-1', expires_in: 3600 }).mockResolvedValueOnce({ access_token: 'tok-2', expires_in: 3600 });
     const s = new Session('sbg:test', mint);

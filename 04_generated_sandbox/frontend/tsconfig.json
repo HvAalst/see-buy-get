@@ -12,7 +12,9 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "types": ["vitest/globals"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact",
     "noEmit": true
   },
-  "include": ["src/lib"]
+  "include": ["src/lib", "src/apps", "src/shared"]
 }

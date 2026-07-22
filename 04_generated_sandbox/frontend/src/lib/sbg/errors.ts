@@ -34,41 +34,67 @@ export interface SbgError {
   traceId?: string;
 }
 
-/** How a code is shown to a non-reader: an icon glyph, a tone, and a read-aloud clip key. */
+/**
+ * The monoline icon symbols an error may ask for.
+ *
+ * These are NAMES, not glyphs. Emoji were used here once and were wrong twice over: they render
+ * in a different typeface (and a different palette) on every device, and the newer ones (the
+ * ID-card glyph is Unicode 14) are plain tofu on the cheap Androids this app targets. The name is
+ * resolved by the shared `<Icon>` set, whose `IconName` union is defined as a superset of this
+ * one, so the compiler guarantees every code below has a drawable symbol.
+ */
+export type ErrorIconName =
+  | 'wallet'
+  | 'lock'
+  | 'keypad'
+  | 'camera'
+  | 'search'
+  | 'pin'
+  | 'clock'
+  | 'scale'
+  | 'block'
+  | 'box'
+  | 'key'
+  | 'edit'
+  | 'offline'
+  | 'refresh'
+  | 'warning';
+
+/** How a code is shown to a non-reader: an icon name, a tone, and a read-aloud clip key. */
 export interface ErrorPresentation {
-  icon: string;
+  icon: ErrorIconName;
   tone: 'info' | 'warn' | 'danger';
   /** Key into the app's pre-recorded audio clips (read-aloud for non-readers). */
   say: string;
 }
 
-const GENERIC: ErrorPresentation = { icon: '⚠️', tone: 'danger', say: 'error.generic' };
+const GENERIC: ErrorPresentation = { icon: 'warning', tone: 'danger', say: 'error.generic' };
 
 /** Curated presentation for the user-facing codes; anything else falls back to GENERIC. */
 const PRESENTATION: Partial<Record<SbgErrorCode, ErrorPresentation>> = {
-  WALLET_INSUFFICIENT: { icon: '💳', tone: 'warn', say: 'error.top_up' },
-  PAYMENT_REQUIRED: { icon: '💳', tone: 'warn', say: 'error.top_up' },
-  AGENT_LOCKED: { icon: '🔒', tone: 'warn', say: 'error.locked' },
-  SHIPMENT_NOT_PAID: { icon: '💳', tone: 'warn', say: 'error.unpaid' },
-  OTP_INVALID: { icon: '🔢', tone: 'warn', say: 'error.wrong_code' },
-  CODE_MISMATCH: { icon: '🔢', tone: 'warn', say: 'error.wrong_code' },
-  OTP_LOCKED: { icon: '🚫', tone: 'danger', say: 'error.code_locked' },
-  PHOTO_REQUIRED: { icon: '📷', tone: 'warn', say: 'error.photo_needed' },
-  NOT_FOUND: { icon: '🔍', tone: 'warn', say: 'error.not_found' },
-  WRONG_PUDO: { icon: '📍', tone: 'warn', say: 'error.wrong_place' },
-  INVALID_STATE: { icon: '⏳', tone: 'info', say: 'error.not_now' },
-  WINDOW_EXPIRED: { icon: '⌛', tone: 'warn', say: 'error.too_late' },
-  CAPACITY_EXCEEDED: { icon: '⚖️', tone: 'warn', say: 'error.too_heavy' },
-  FRAGILE_NOT_ALLOWED: { icon: '🥚', tone: 'warn', say: 'error.no_fragile' },
-  BAG_FULL: { icon: '🎒', tone: 'warn', say: 'error.bag_full' },
-  SHELF_FULL: { icon: '📦', tone: 'warn', say: 'error.shelf_full' },
-  RATE_LIMITED: { icon: '🐢', tone: 'info', say: 'error.slow_down' },
-  UNAUTHORIZED: { icon: '🔑', tone: 'danger', say: 'error.sign_in' },
-  FORBIDDEN: { icon: '⛔', tone: 'danger', say: 'error.not_allowed' },
-  VALIDATION_FAILED: { icon: '✏️', tone: 'warn', say: 'error.check_fields' },
-  NETWORK: { icon: '📶', tone: 'warn', say: 'error.offline' },
-  TIMEOUT: { icon: '📶', tone: 'warn', say: 'error.slow_network' },
-  CLIENT_OUTDATED: { icon: '⬆️', tone: 'danger', say: 'error.update_app' },
+  WALLET_INSUFFICIENT: { icon: 'wallet', tone: 'warn', say: 'error.top_up' },
+  PAYMENT_REQUIRED: { icon: 'wallet', tone: 'warn', say: 'error.top_up' },
+  AGENT_LOCKED: { icon: 'lock', tone: 'warn', say: 'error.locked' },
+  SHIPMENT_NOT_PAID: { icon: 'wallet', tone: 'warn', say: 'error.unpaid' },
+  OTP_INVALID: { icon: 'keypad', tone: 'warn', say: 'error.wrong_code' },
+  CODE_MISMATCH: { icon: 'keypad', tone: 'warn', say: 'error.wrong_code' },
+  OTP_LOCKED: { icon: 'lock', tone: 'danger', say: 'error.code_locked' },
+  PHOTO_REQUIRED: { icon: 'camera', tone: 'warn', say: 'error.photo_needed' },
+  NOT_FOUND: { icon: 'search', tone: 'warn', say: 'error.not_found' },
+  WRONG_PUDO: { icon: 'pin', tone: 'warn', say: 'error.wrong_place' },
+  INVALID_STATE: { icon: 'clock', tone: 'info', say: 'error.not_now' },
+  WINDOW_EXPIRED: { icon: 'clock', tone: 'warn', say: 'error.too_late' },
+  CAPACITY_EXCEEDED: { icon: 'scale', tone: 'warn', say: 'error.too_heavy' },
+  FRAGILE_NOT_ALLOWED: { icon: 'block', tone: 'warn', say: 'error.no_fragile' },
+  BAG_FULL: { icon: 'box', tone: 'warn', say: 'error.bag_full' },
+  SHELF_FULL: { icon: 'box', tone: 'warn', say: 'error.shelf_full' },
+  RATE_LIMITED: { icon: 'clock', tone: 'info', say: 'error.slow_down' },
+  UNAUTHORIZED: { icon: 'key', tone: 'danger', say: 'error.sign_in' },
+  FORBIDDEN: { icon: 'block', tone: 'danger', say: 'error.not_allowed' },
+  VALIDATION_FAILED: { icon: 'edit', tone: 'warn', say: 'error.check_fields' },
+  NETWORK: { icon: 'offline', tone: 'warn', say: 'error.offline' },
+  TIMEOUT: { icon: 'offline', tone: 'warn', say: 'error.slow_network' },
+  CLIENT_OUTDATED: { icon: 'refresh', tone: 'danger', say: 'error.update_app' },
 };
 
 export function presentationFor(code: SbgErrorCode | string): ErrorPresentation {

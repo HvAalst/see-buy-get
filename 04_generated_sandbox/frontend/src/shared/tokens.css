@@ -1,0 +1,328 @@
+/* ==========================================================================
+   SeeBuyGet — shared design tokens + base layer.
+
+   LIGHT ONLY, DELIBERATELY. These apps are read in direct sun, in dusty shops
+   and in moving vehicles, on cheap low-nit screens. A dark variant is not a
+   preference here, it is unreadable. There is therefore NO
+   `prefers-color-scheme: dark` block anywhere in this file, and none may be
+   added: `color-scheme: only light` pins the UA form controls and scrollbars
+   to light too, and the `[data-theme]` overrides below defeat any host theme
+   toggle that tries to stamp dark onto the document.
+
+   Self-hosted Inter (latin subset only — never index.css / 400.css, those drag
+   cyrillic + greek + vietnamese onto a 2G phone for glyphs we never render).
+   ========================================================================== */
+
+@import '@fontsource/inter/latin-400.css';
+@import '@fontsource/inter/latin-600.css';
+@import '@fontsource/inter/latin-700.css';
+@import '@fontsource/inter/latin-800.css';
+
+:root {
+  /* --- brand ---------------------------------------------------------- */
+  --navy: #0b1f5c;          /* headlines + primary text */
+  --blue: #4c46e0;          /* THE one action + links */
+  --blue-dark: #3a34c4;
+  --blue-light: #ecebfc;
+  --blue-soft: #f5f5fe;
+  --org: #ff6200;           /* ONLY the ✓ tick / active indicator */
+  --org-light: #fff1e8;
+
+  /* --- surfaces ------------------------------------------------------- */
+  --bg: #ffffff;
+  --panel: #f2f3f5;
+  --appbg: #f4f6f8;         /* app screen ground */
+  --card: #ffffff;
+
+  /* --- lines ---------------------------------------------------------- */
+  --bd: #c9cfd7;
+  --bd-soft: #dfe3e8;
+
+  /* --- text ----------------------------------------------------------- */
+  --tx: #14181f;
+  --tx2: #4a5261;
+  --tx3: #6e7684;
+
+  /* --- semantic ------------------------------------------------------- */
+  --ok: #2e7d32;
+  --ok-light: #e8f5e9;
+  --dang: #dc2626;
+
+  /* --- elevation ------------------------------------------------------ */
+  --sh-sm: 0 2px 8px rgba(11, 31, 92, 0.05);
+  --sh-lg: 0 14px 36px rgba(11, 31, 92, 0.16);
+
+  /* --- geometry ------------------------------------------------------- */
+  --r-ctl: 9px;             /* controls */
+  --r-card: 13px;           /* cards */
+  --r-sheet: 22px;          /* sheet top corners */
+
+  /* --- chrome --------------------------------------------------------- */
+  --topbar-h: 60px;
+  --bottomnav-h: 68px;
+  --tap: 48px;              /* minimum touch target */
+
+  /* --- type ----------------------------------------------------------- */
+  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', 'Roboto Mono', Menlo, Consolas, monospace;
+
+  /* --- safe areas (0 on desktop, notch-aware on device) ---------------- */
+  --sa-t: env(safe-area-inset-top, 0px);
+  --sa-r: env(safe-area-inset-right, 0px);
+  --sa-b: env(safe-area-inset-bottom, 0px);
+  --sa-l: env(safe-area-inset-left, 0px);
+
+  color-scheme: only light;
+}
+
+/* A host/browser theme toggle stamps data-theme on the root. Both directions are
+   pinned back to the light palette — dark must not win, ever. */
+:root[data-theme='dark'],
+:root[data-theme='light'] {
+  color-scheme: only light;
+}
+
+html {
+  color-scheme: only light;
+  background: var(--appbg);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* ==========================================================================
+   Reset — small, opinionated, only what the app relies on.
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--appbg);
+  color: var(--tx);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.6;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* Native feel: no blue flash on tap, no double-tap zoom delay, no rubber-band
+     horizontal drift, no accidental text selection while swiping a card. */
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  overscroll-behavior-y: none;
+  overflow-x: hidden;
+}
+
+h1,
+h2,
+h3,
+h4,
+p,
+figure,
+blockquote {
+  margin: 0;
+}
+
+ul,
+ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+  margin: 0;
+}
+
+button {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+a {
+  color: var(--blue);
+  text-decoration: none;
+}
+
+b,
+strong {
+  font-weight: 700;
+}
+
+/* Numbers must not jitter as they tick — every figure is tabular. */
+[data-num],
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* ==========================================================================
+   Type scale. Floor is 14px — a user with poor eyesight flagged anything
+   smaller as unreadable, so 14px is a hard minimum across the whole system.
+   ========================================================================== */
+
+.t-screen {
+  font-size: 30px;
+  line-height: 1.16;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  color: var(--navy);
+}
+
+.t-card {
+  font-size: 18px;
+  line-height: 1.35;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--navy);
+}
+
+.t-glance {
+  font-size: 64px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  color: var(--navy);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+.t-code {
+  font-family: var(--font-mono);
+  font-size: 46px;
+  line-height: 1.05;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--navy);
+}
+
+.t-label {
+  font-size: 14px;
+  line-height: 1.4;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--tx2);
+}
+
+.t-body {
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--tx2);
+}
+
+.t-sub {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--tx3);
+}
+
+.t-mono {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+/* ==========================================================================
+   Focus + accessibility helpers.
+   ========================================================================== */
+
+:focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ==========================================================================
+   App shell scaffolding — safe-area aware. The top bar and bottom nav are
+   fixed, so the scrolling body is padded by their heights PLUS the insets.
+   ========================================================================== */
+
+.app {
+  min-height: 100dvh;
+  background: var(--appbg);
+}
+
+.app__scroll {
+  padding-top: calc(var(--topbar-h) + var(--sa-t));
+  padding-bottom: calc(var(--bottomnav-h) + var(--sa-b) + 20px);
+  padding-left: calc(16px + var(--sa-l));
+  padding-right: calc(16px + var(--sa-r));
+  max-width: 560px;
+  margin: 0 auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.app__scroll--nonav {
+  padding-bottom: calc(var(--sa-b) + 28px);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 18px;
+}
+
+/* ==========================================================================
+   Reduced motion.
+
+   Decorative motion is removed wholesale. Loading indicators are NOT
+   decorative: a spinner frozen mid-rotation by `animation-duration: 0.01ms`
+   renders as a broken partial ring, which reads as a crashed app rather than
+   as "working" — the opposite of the feedback it exists to give. The universal
+   rule therefore skips genuine busy indicators, which then keep the slow,
+   small, non-travelling spin their own rules give them (2s, in ui.css and
+   driver.css). A constant slow rotation of an 18–34px ring has no vestibular
+   trigger — no parallax, no scaling, no travel across the viewport.
+
+   Opt a new busy indicator out by giving it `data-spin` (markup) or by
+   naming it here. Anything else stays covered by the reset.
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *:not([data-spin]):not(.btn__spin):not(.boot__spin),
+  *:not([data-spin]):not(.btn__spin):not(.boot__spin)::before,
+  *:not([data-spin]):not(.btn__spin):not(.boot__spin)::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

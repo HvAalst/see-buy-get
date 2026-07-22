@@ -1,0 +1,599 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import type { SbgError } from '../../lib/sbg';
+import type { IconName } from '../../shared/ui/Icon';
+import { createDriverClient, isMintSourced, isUnknownIdentity, narrow, purgeDriverTokens } from './api';
+import { adoptDidFromUrl, clearDid, saveDid, saveRoute, savedRoute } from './storage';
+import type {
+  AgentRow,
+  ClaimsView,
+  DriverRecord,
+  LoadBagView,
+  MdpRow,
+  NodeOption,
+  OfferView,
+  RatesView,
+  SavedRoute,
+  SessionView,
+  SuggestView,
+  VehicleView,
+} from './types';
+import { nodeOptions } from './logic';
+
+export type Screen = 'home' | 'route' | 'offers' | 'loads';
+export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
+
+export interface Toast {
+  id: number;
+  tone: 'ok' | 'info' | 'warn' | 'danger';
+  /** A name from the monoline set — never a glyph, so an emoji cannot reach the icon slot. */
+  icon?: IconName;
+  title: string;
+  detail?: string;
+}
+
+export interface DriverState {
+  phase: Phase;
+  /* No `did` here on purpose: identity lives in the `did` useState alone. Two copies of the
+     same fact drift, and the copy nothing reads drifts silently. */
+  screen: Screen;
+  driver: DriverRecord | null;
+  session: SessionView;
+  vehicle: VehicleView | null;
+  remaining: number;
+  claims: ClaimsView['claims'];
+  rates: RatesView | null;
+  nodes: NodeOption[];
+  nodesState: 'idle' | 'loading' | 'ready' | 'error';
+  offers: OfferView[];
+  offerIndex: number;
+  route: SavedRoute | null;
+  /** Screen-level failure — rendered as an ErrorNote, never as a raw string. */
+  error: SbgError | null;
+  toasts: Toast[];
+  /** Key of the single in-flight mutation. Every mutating control reads this. */
+  busy: string | null;
+  refreshing: boolean;
+  /** A refresh failed for want of network; what is on screen is the last known truth. */
+  stale: boolean;
+  form: { vehicleQr: string; fromId: string; toId: string };
+}
+
+const EMPTY_FORM = { vehicleQr: '', fromId: '', toId: '' };
+
+const INITIAL: DriverState = {
+  phase: 'boot',
+  screen: 'home',
+  driver: null,
+  session: { active: false },
+  vehicle: null,
+  remaining: 0,
+  claims: [],
+  rates: null,
+  nodes: [],
+  nodesState: 'idle',
+  offers: [],
+  offerIndex: 0,
+  route: null,
+  error: null,
+  toasts: [],
+  busy: null,
+  refreshing: false,
+  stale: false,
+  form: { ...EMPTY_FORM },
+};
+
+const isOffline = (e: SbgError) => e.code === 'NETWORK' || e.code === 'TIMEOUT';
+
+/**
+ * Where a failure leaves the shell.
+ *
+ * 'boot' renders a bare spinner — no error, no retry, no sign-out. Leaving the app there was the
+ * boot hang: ANY non-NOT_FOUND failure of the first `me()` (offline cold start, timeout, 500, 403,
+ * a failed mint) pinned it forever, because nothing ever re-entered `refresh`. A failure must
+ * always land on a screen that can explain itself and offer a way out, so 'boot' is promoted to
+ * 'ready': the shell then renders the ErrorNote (with its Try again) and the sign-out control.
+ *
+ * Exported and pure so the rule is unit-tested rather than trusted.
+ */
+export function phaseAfterFailure(phase: Phase, code: string): Phase {
+  if (code === 'CLIENT_OUTDATED') return 'outdated'; // a 426 is a full-screen gate, never a note
+  return phase === 'boot' ? 'ready' : phase;
+}
+
+/** Haptic confirmation for a completed mutation — audible feedback a driver feels, not reads. */
+function buzz(): void {
+  try {
+    navigator.vibrate?.(120);
+  } catch {
+    /* unsupported */
+  }
+}
+
+export function useDriverApp() {
+  const [state, setState] = useState<DriverState>(INITIAL);
+
+  const [did, setDid] = useState<string | null>(null);
+  const client = useMemo(() => (did ? createDriverClient(did) : null), [did]);
+  const toastSeq = useRef(0);
+  const toastTimers = useRef(new Set<number>());
+
+  /* ---------------------------------------------------------------- toasts */
+
+  const pushToast = useCallback((t: Omit<Toast, 'id'>) => {
+    const id = ++toastSeq.current;
+    setState((s) => ({ ...s, toasts: [...s.toasts, { ...t, id }] }));
+    // A queue, not the legacy one-shot banner: the old `state.msg` was spliced in at render
+    // and cleared immediately, so any unrelated re-render ate the message before it was read.
+    // The handle is tracked so unmount can cancel it — an uncancelled 5.2s timer fires setState
+    // on a dead component (and a sign-out leaves a queue of them still pending).
+    const handle = window.setTimeout(() => {
+      toastTimers.current.delete(handle);
+      setState((s) => ({ ...s, toasts: s.toasts.filter((x) => x.id !== id) }));
+    }, 5200);
+    toastTimers.current.add(handle);
+  }, []);
+
+  useEffect(() => {
+    const timers = toastTimers.current;
+    return () => {
+      for (const h of timers) window.clearTimeout(h);
+      timers.clear();
+    };
+  }, []);
+
+  const dismissToast = useCallback((id: number) => {
+    setState((s) => ({ ...s, toasts: s.toasts.filter((x) => x.id !== id) }));
+  }, []);
+
+  /* ---------------------------------------------------------------- errors */
+
+  /**
+   * One place decides what a failure means to the shell:
+   *  - 426 CLIENT_OUTDATED is a full-screen gate, never a toast — the app is not usable;
+   *  - offline/timeout marks the screen stale and KEEPS the last known data, because
+   *    wiping a driver's claimed loads because a tunnel ate one request is unacceptable;
+   *  - anything else becomes a rendered ErrorNote;
+   *  - and it ALWAYS lands on a screen that renders (see `phaseAfterFailure`).
+   *
+   * It deliberately does NOT touch `busy`. Releasing the single-flight lock here freed every
+   * control while the action was still running — a failed claim re-enabled the deck during its
+   * own trailing refresh, so a second claim could be fired into the same offer. `run()`'s
+   * `finally` owns that lock, from first tap to last await, and nothing else may clear it.
+   */
+  const fail = useCallback((error: SbgError) => {
+    setState((s) => {
+      const phase = phaseAfterFailure(s.phase, error.code);
+      if (phase === 'outdated') return { ...s, phase, refreshing: false };
+      return { ...s, phase, error, stale: isOffline(error) ? true : s.stale, refreshing: false };
+    });
+  }, []);
+
+  /* --------------------------------------------------------------- refresh */
+
+  /** Ticket of the newest refresh. An older one that finishes late is not allowed to commit. */
+  const refreshEpoch = useRef(0);
+  /** How many refreshes are on the wire — background recovery never stacks another one. */
+  const refreshesRunning = useRef(0);
+
+  /**
+   * The boot/refresh sequence, in the legacy order: me → session → (claims, rates) → ping.
+   * Rates soft-fail (the screen is still usable without a benchmark) and ping is
+   * fire-and-forget (it feeds the fleet map; a driver never waits on it).
+   *
+   * Re-entrancy: refreshes DO overlap — a mutation's trailing refresh can race a foreground or
+   * `online` retry — so each takes an epoch and only the newest may write. Without that, an
+   * older refresh reaching its terminal setState after a newer one resurrects the data it read
+   * before the mutation landed (claims that are gone, capacity that is wrong).
+   */
+  const refresh = useCallback(async () => {
+    if (!client || !did) return;
+    const epoch = ++refreshEpoch.current;
+    const superseded = () => epoch !== refreshEpoch.current;
+
+    refreshesRunning.current += 1;
+    setState((s) => ({ ...s, refreshing: true }));
+    try {
+      const meR = await client.api.me(did);
+      if (superseded()) return;
+      if (meR.error) {
+        /**
+         * Erasing the driver's ID is destructive, so it must fire ONLY on a real identity problem:
+         *  - the endpoint itself answered NOT_FOUND (the driver record is genuinely gone), or
+         *  - the MINT rejected the ID as unknown (the backend answers 400 there, not 404).
+         * A mint-sourced 404 must NOT qualify: a wrong VITE_SBG_API, a moved proxy path or an HTML
+         * 404 page looks identical to a deleted driver, and one misrouted deploy would then sign out
+         * every driver in the field and delete the ID they signed in with.
+         */
+        const identityGone = isUnknownIdentity(meR.error) || (meR.error.code === 'NOT_FOUND' && !isMintSourced(meR.error));
+        if (identityGone) {
+          clearDid();
+          client.session.clear();
+          purgeDriverTokens(null);
+          setState((s) => ({ ...INITIAL, phase: 'signin', error: meR.error, toasts: s.toasts }));
+          setDid(null);
+          return;
+        }
+        fail(meR.error);
+        return;
+      }
+      const driver = narrow<DriverRecord>(meR.data);
+
+      const sesR = await client.api.session(did);
+      if (superseded()) return;
+      if (sesR.error) {
+        setState((s) => ({ ...s, driver, phase: 'ready' }));
+        fail(sesR.error);
+        return;
+      }
+      const session = narrow<SessionView>(sesR.data) ?? { active: false };
+
+      let vehicle: VehicleView | null = null;
+      let remaining = 0;
+      let claims: ClaimsView['claims'] = [];
+      let rates: RatesView | null = null;
+
+      if (session.active && session.vehicle) {
+        vehicle = session.vehicle;
+        const clR = await client.api.claims(did);
+        if (superseded()) return;
+        if (clR.error) {
+          setState((s) => ({ ...s, driver, session, vehicle, phase: 'ready' }));
+          fail(clR.error);
+          return;
+        }
+        const cv = narrow<ClaimsView>(clR.data);
+        remaining = cv?.remainingCapacityKg ?? 0;
+        claims = cv?.claims ?? [];
+
+        // Network per-km benchmark (vehicles roam, so no lat/lng). Soft-fail by design.
+        const rtR = await client.api.vehicleRates();
+        if (superseded()) return;
+        rates = rtR.error ? null : narrow<RatesView>(rtR.data);
+      }
+
+      setState((s) => ({
+        ...s,
+        phase: 'ready',
+        driver,
+        session,
+        vehicle,
+        remaining,
+        claims,
+        rates,
+        route: savedRoute(did),
+        error: null,
+        stale: false,
+        refreshing: false,
+        // A stale tab can still be sitting on offers/loads after the shift ended.
+        screen: !session.active && s.screen !== 'home' ? 'home' : s.screen,
+        offers: session.active ? s.offers : [],
+      }));
+
+      void client.api.ping(did);
+    } finally {
+      refreshesRunning.current -= 1;
+    }
+  }, [client, did, fail]);
+
+  /* -------------------------------------------------------------- recovery */
+
+  // Always-current handles, so the recovery listeners can be attached ONCE and still call the
+  // newest refresh and read the newest state. Re-subscribing on every state change would
+  // otherwise add and remove two window listeners on every keystroke.
+  const refreshRef = useRef(refresh);
+  const stateRef = useRef(state);
+  useEffect(() => {
+    refreshRef.current = refresh;
+    stateRef.current = state;
+  });
+
+  /**
+   * The way back in.
+   *
+   * A driver who opens the app in a dead spot, or whose phone slept through the failure, gets a
+   * screen that has already given up. Coming back online, or bringing the app to the front, is
+   * the moment to try again — and it costs one request. It stands down while a mutation owns the
+   * app (its own trailing refresh is coming) and while a refresh is already on the wire.
+   */
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const retry = () => {
+      const s = stateRef.current;
+      if (s.phase === 'signin' || s.phase === 'outdated') return; // nothing to retry into
+      if (s.busy || refreshesRunning.current > 0) return;
+      void refreshRef.current();
+    };
+    const onVisible = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      retry();
+    };
+
+    window.addEventListener('online', retry);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('online', retry);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
+
+  /* ------------------------------------------------------------- identity */
+
+  useEffect(() => {
+    // A DID arriving in `?driver=` is a (re-)sign-in — a shared phone may be changing hands — so
+    // no token from an earlier driver may survive it. `adoptDidFromUrl()` also returns the STORED
+    // DID on an ordinary cold start, which must keep its token (that is what makes the token
+    // survive a navigation), hence the explicit look at the query string first.
+    const fromUrl = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('driver') : null;
+    const stored = adoptDidFromUrl();
+    if (fromUrl) purgeDriverTokens(null);
+    if (stored) setDid(stored);
+    else setState((s) => ({ ...s, phase: 'signin' }));
+  }, []);
+
+  useEffect(() => {
+    // Identity settled: drop every other driver's stored token. The per-DID key already stops a
+    // foreign token being read; this stops it being kept.
+    //
+    // Guarded on `did`: this effect also runs on the FIRST render, when `did` is still null and
+    // purging "all but null" would wipe the very token we just persisted — defeating the
+    // survives-navigation guarantee and forcing a fresh mint on every cold start, which is a second
+    // failure point on exactly the flaky links this app is built for.
+    if (did) purgeDriverTokens(did);
+    if (client && did) void refresh();
+    // refresh is stable per (client, did)
+  }, [client, did, refresh]);
+
+  const signIn = useCallback((value: string) => {
+    const next = value.trim();
+    if (!next) return;
+    // An explicit sign-in always mints fresh: whatever is in sessionStorage belongs to whoever
+    // used this tab before — including an earlier DID of this same driver.
+    client?.session.clear();
+    purgeDriverTokens(null);
+    saveDid(next);
+    setDid(next);
+    setState((s) => ({ ...INITIAL, phase: 'boot', toasts: s.toasts }));
+  }, [client]);
+
+  const signOut = useCallback(() => {
+    client?.session.clear();
+    purgeDriverTokens(null);
+    clearDid();
+    setDid(null);
+    setState(() => ({ ...INITIAL, phase: 'signin' }));
+  }, [client]);
+
+  /* ------------------------------------------------------------ navigation */
+
+  const loadNodes = useCallback(async () => {
+    if (!client) return;
+    setState((s) => ({ ...s, nodesState: 'loading' }));
+    const [mdpR, agentR] = await Promise.all([client.api.mdps(), client.api.agents()]);
+    if (mdpR.error && agentR.error) {
+      // Two empty selects and a button that always fails is not an empty state — say so.
+      setState((s) => ({ ...s, nodes: [], nodesState: 'error' }));
+      fail(mdpR.error);
+      return;
+    }
+    const nodes = nodeOptions(narrow<MdpRow[]>(mdpR.data), narrow<AgentRow[]>(agentR.data));
+    setState((s) => ({ ...s, nodes, nodesState: nodes.length ? 'ready' : 'error' }));
+
+    // Half a list is not a list. If only /mdps failed, the pick-list silently loses every hub —
+    // a driver standing IN one would scroll past shops looking for it and conclude the app is
+    // broken. Keep what arrived, and say what is missing (RouteScreen's note retries this).
+    const partial = mdpR.error ?? agentR.error;
+    if (partial) fail(partial);
+  }, [client, fail]);
+
+  const go = useCallback(
+    (screen: Screen) => {
+      setState((s) => ({ ...s, screen, error: null, form: screen === 'route' ? { ...s.form } : s.form }));
+      if (screen === 'route') void loadNodes();
+    },
+    [loadNodes],
+  );
+
+  const setForm = useCallback(
+    (p: Partial<DriverState['form']>) => setState((s) => ({ ...s, form: { ...s.form, ...p } })),
+    [],
+  );
+
+  /* -------------------------------------------------------------- mutations */
+
+  const run = useCallback(
+    async (key: string, fn: () => Promise<void>) => {
+      // Single-flight: every mutating control in this app is double-tappable on a slow
+      // network, and a duplicate start-session or claim is a real dispatch incident.
+      let blocked = false;
+      setState((s) => {
+        if (s.busy) {
+          blocked = true;
+          return s;
+        }
+        return { ...s, busy: key, error: null };
+      });
+      if (blocked) return;
+      try {
+        await fn();
+      } finally {
+        // Never leave the app wedged: an unexpected throw must still free the control.
+        setState((s) => (s.busy === key ? { ...s, busy: null } : s));
+      }
+    },
+    [],
+  );
+
+  const startShift = useCallback(async () => {
+    if (!client || !did) return;
+    const qr = state.form.vehicleQr.trim();
+    if (!qr) {
+      pushToast({ tone: 'warn', icon: 'scan', title: 'Scan the vehicle QR first.' });
+      return;
+    }
+    await run('start', async () => {
+      const r = await client.api.startSession(did, qr);
+      if (r.error) return fail(r.error);
+      buzz();
+      setState((s) => ({ ...s, form: { ...EMPTY_FORM } }));
+      pushToast({ tone: 'ok', icon: 'truck', title: 'Shift started', detail: 'You are coupled to this vehicle.' });
+      await refresh();
+    });
+  }, [client, did, state.form.vehicleQr, run, fail, pushToast, refresh]);
+
+  const endShift = useCallback(async () => {
+    if (!client || !did) return;
+    await run('end', async () => {
+      const r = await client.api.endSession(did);
+      if (r.error) return fail(r.error);
+      buzz();
+      pushToast({ tone: 'ok', icon: 'check', title: 'Shift closed', detail: 'The vehicle is released.' });
+      await refresh();
+    });
+  }, [client, did, run, fail, pushToast, refresh]);
+
+  const matchRate = useCallback(
+    async (vehicleId: string, price: number) => {
+      if (!client) return;
+      await run('rate', async () => {
+        const r = await client.api.setVehiclePrice(vehicleId, price);
+        if (r.error) return fail(r.error);
+        buzz();
+        pushToast({ tone: 'ok', icon: 'wallet', title: 'Rate updated', detail: 'You now charge the market rate.' });
+        await refresh();
+      });
+    },
+    [client, run, fail, pushToast, refresh],
+  );
+
+  const runSuggest = useCallback(
+    async (from: { lat: number; lng: number }, to: { lat: number; lng: number }) => {
+      if (!client || !did) return;
+      await run('suggest', async () => {
+        const r = await client.api.suggestWork(did, { from, to });
+        if (r.error) return fail(r.error);
+        const v = narrow<SuggestView>(r.data);
+        setState((s) => ({
+          ...s,
+          remaining: v?.remainingCapacityKg ?? s.remaining,
+          offers: v?.offers ?? [],
+          offerIndex: 0,
+          screen: 'offers',
+        }));
+      });
+    },
+    [client, did, run, fail],
+  );
+
+  const submitRoute = useCallback(async () => {
+    const from = state.nodes.find((n) => n.id === state.form.fromId);
+    const to = state.nodes.find((n) => n.id === state.form.toId);
+    if (!from || !to) {
+      pushToast({ tone: 'warn', icon: 'pin', title: 'Pick where you start and where you are heading.' });
+      return;
+    }
+    if (did) {
+      const route: SavedRoute = {
+        from: { lat: from.lat, lng: from.lng },
+        to: { lat: to.lat, lng: to.lng },
+        fromLabel: from.label,
+        toLabel: to.label,
+      };
+      saveRoute(did, route);
+      setState((s) => ({ ...s, route }));
+    }
+    await runSuggest({ lat: from.lat, lng: from.lng }, { lat: to.lat, lng: to.lng });
+  }, [state.nodes, state.form.fromId, state.form.toId, did, pushToast, runSuggest]);
+
+  const repeatRoute = useCallback(async () => {
+    const r = did ? savedRoute(did) : null;
+    if (!r) return go('route');
+    await runSuggest(r.from, r.to);
+  }, [did, go, runSuggest]);
+
+  const setOfferIndex = useCallback((offerIndex: number) => setState((s) => ({ ...s, offerIndex })), []);
+
+  const dropOffer = (offerId: string) =>
+    setState((s) => {
+      const offers = s.offers.filter((o) => o.offerId !== offerId);
+      return { ...s, offers, offerIndex: Math.max(0, Math.min(s.offerIndex, offers.length - 1)) };
+    });
+
+  const answerOffer = useCallback(
+    async (offer: OfferView, take: boolean) => {
+      if (!client) return;
+      await run(`${take ? 'claim' : 'ignore'}:${offer.offerId}`, async () => {
+        const r = take ? await client.api.claimOffer(offer.offerId) : await client.api.ignoreOffer(offer.offerId);
+        if (r.error) {
+          // A lapsed or already-taken offer is DEAD: the legacy page left the card on screen,
+          // so the next tap failed the same way. Drop it and say why.
+          if (r.error.code === 'WINDOW_EXPIRED' || r.error.code === 'INVALID_STATE' || r.error.code === 'CONFLICT') {
+            dropOffer(offer.offerId);
+          }
+          // Reconcile FIRST, then report. A successful refresh ends with `error: null`, so
+          // failing before it erased the whole explanation: the card vanished from the deck and
+          // the driver was never told why their claim was refused.
+          await refresh();
+          fail(r.error);
+          return;
+        }
+        buzz();
+        dropOffer(offer.offerId);
+        if (take) {
+          pushToast({
+            tone: 'ok',
+            icon: 'box',
+            title: `Claimed ${offer.weightKg} kg`,
+            detail: `Heading to ${offer.destLabel}.`,
+          });
+          await refresh();
+        }
+      });
+    },
+    [client, run, fail, pushToast, refresh],
+  );
+
+  const loadBag = useCallback(
+    async (ref: string) => {
+      if (!client || !state.driver?.badgeId) return;
+      await run(`load:${ref}`, async () => {
+        const r = await client.api.loadBag(ref, state.driver!.badgeId!);
+        if (r.error) return fail(r.error);
+        buzz();
+        const moved = narrow<LoadBagView>(r.data)?.moved?.length ?? 0;
+        pushToast({
+          tone: 'ok',
+          icon: 'box',
+          title: `${ref} is on board`,
+          detail: `${moved} parcel${moved === 1 ? '' : 's'} loaded.`,
+        });
+        await refresh();
+      });
+    },
+    [client, state.driver, run, fail, pushToast, refresh],
+  );
+
+  return {
+    state,
+    actions: {
+      refresh,
+      signIn,
+      signOut,
+      go,
+      setForm,
+      loadNodes,
+      startShift,
+      endShift,
+      matchRate,
+      submitRoute,
+      repeatRoute,
+      setOfferIndex,
+      answerOffer,
+      loadBag,
+      pushToast,
+      dismissToast,
+    },
+  };
+}
+
+export type DriverActions = ReturnType<typeof useDriverApp>['actions'];
