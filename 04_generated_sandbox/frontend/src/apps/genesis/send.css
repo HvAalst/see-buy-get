@@ -1,0 +1,246 @@
+/* ==========================================================================
+   Send PWA — the consumer-specific pieces only. The generic scaffold lives in
+   shared/screens.css; component looks in shared/ui. Light only, no dark block.
+   ========================================================================== */
+
+.mono-t {
+  font-family: var(--font-mono);
+  letter-spacing: 0.05em;
+}
+
+/* ------------------------------------------------------------- step dots -- */
+
+.dots {
+  display: flex;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.dots__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--bd-soft);
+}
+
+.dots__dot--done {
+  background: var(--blue-light);
+}
+
+/* The active step marker — the nav-indicator use of the accent. */
+.dots__dot--on {
+  background: var(--org);
+}
+
+/* ------------------------------------------------------------ size chips -- */
+
+.sizes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.size {
+  min-height: 84px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  text-align: left;
+  background: var(--card);
+  border: 1.5px solid var(--bd);
+  border-radius: var(--r-card);
+  color: var(--tx);
+  box-shadow: var(--sh-sm);
+}
+
+.size--on {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+  box-shadow: 0 0 0 2px var(--blue-light);
+}
+
+.size__k {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--navy);
+}
+
+.size__h {
+  font-size: 15px;
+  color: var(--tx3);
+}
+
+/* ---------------------------------------------------------- price cards -- */
+
+.prices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.price {
+  background: var(--card);
+  border: 1.5px solid var(--bd-soft);
+  border-radius: var(--r-card);
+  box-shadow: var(--sh-sm);
+  padding: 16px;
+  display: grid;
+  gap: 2px;
+}
+
+/* The cheapest option leads — outlined, not shouted. */
+.price--lead {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+}
+
+.price__title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--tx2);
+}
+
+.price__total {
+  font-size: 36px;
+  line-height: 1.1;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--navy);
+  font-variant-numeric: tabular-nums;
+}
+
+.price__sub {
+  font-size: 14px;
+  color: var(--tx3);
+}
+
+/* -------------------------------------------------------------- now card -- */
+
+.now {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--card);
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-card);
+  box-shadow: var(--sh-sm);
+  padding: 18px;
+}
+
+.now--ok {
+  border-color: var(--ok);
+  background: var(--ok-light);
+}
+
+.now__ic {
+  flex: none;
+  color: var(--navy);
+}
+
+.now--ok .now__ic {
+  color: var(--ok);
+}
+
+.now__body {
+  min-width: 0;
+}
+
+.now__word,
+.now__sub {
+  display: block;
+}
+
+.now__word {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  color: var(--navy);
+  line-height: 1.2;
+}
+
+.now__sub {
+  font-size: 15px;
+  color: var(--tx2);
+  margin-top: 2px;
+}
+
+/* ---------------------------------------------------------------- ladder -- */
+
+.ladder {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.ladder__rung {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  color: var(--tx3);
+}
+
+.ladder__rung + .ladder__rung {
+  border-top: 1px solid var(--bd-soft);
+}
+
+.ladder__ic {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1.5px solid var(--bd-soft);
+  background: var(--bg);
+}
+
+.ladder__rung--done {
+  color: var(--tx2);
+}
+
+/* The completed rung's tick is the checklist's orange mark — same meaning, same colour. */
+.ladder__rung--done .ladder__ic {
+  border-color: var(--org);
+  color: var(--org);
+}
+
+.ladder__rung--now {
+  color: var(--tx);
+}
+
+.ladder__rung--now .ladder__ic {
+  border-color: var(--blue);
+  background: var(--blue-light);
+  color: var(--blue-dark);
+}
+
+.ladder__body {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ladder__word {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.ladder__rung--now .ladder__word {
+  font-weight: 800;
+  color: var(--navy);
+}
+
+.ladder__time {
+  font-size: 14px;
+  color: var(--tx3);
+  font-variant-numeric: tabular-nums;
+}

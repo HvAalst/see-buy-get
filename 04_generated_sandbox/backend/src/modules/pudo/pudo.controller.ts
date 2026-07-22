@@ -385,7 +385,10 @@ export class SbgController {
     return { size: classifySize(dto) };
   }
 
-  /** Quote a shipment from the open-data participant rates: flexible (any carrier) vs locked (cheapest). */
+  /** Quote a shipment from the open-data participant rates: flexible (any carrier) vs locked (cheapest).
+   *  @Public (S13): the quote is derived ONLY from open-data prices — it is the SEE of See-Buy-Get,
+   *  and a consumer holds no account to authenticate with. */
+  @Public()
   @Get('quote')
   quote(@Query('origin') origin: string, @Query('dest') dest: string, @Query('size') size?: string) {
     if (!origin || !dest) throw new GlosError('FIELD_REQUIRED', 'origin and dest are required');
@@ -396,6 +399,7 @@ export class SbgController {
    * Quote many candidates at once so each PUDO pin on the map carries a real total. Either fix the origin
    * and vary the destinations (buyer's map) or fix the destination and vary the origins (vendor's drop-off map).
    */
+  @Public()
   @Get('quote/options')
   quoteOptions(@Query('origin') origin: string, @Query('dest') dest: string, @Query('origins') origins: string, @Query('dests') dests: string, @Query('size') size?: string) {
     const sz = (size as 'S' | 'M' | 'L' | 'HEAVY') || 'M';
@@ -498,10 +502,37 @@ export class SbgController {
     return this.parcels.settleUnpaid(id);
   }
 
-  /** Public track-and-trace by the shareable tracking key (no PII, no handover code). */
+  /** Public track-and-trace by the shareable tracking key (no PII, no handover code).
+   *  @Public (S13): the comment above was always the intent — the KEY is the credential; the
+   *  response carries no PII and no collection code, and the GET of See-Buy-Get cannot ask a
+   *  consumer for an account it has no way to hold. */
+  @Public()
   @Get('track/:key')
   track(@Param('key') key: string) {
     return this.parcels.track(key);
+  }
+
+  /**
+   * The public network directory — the sanitized slice of the agent register a SENDER needs to
+   * choose a drop-off or delivery point: name, zone, pin, open state, the open-data handling
+   * price, rating and free shelf slots. NOTHING operational leaves here: no balance, no device,
+   * no vault refs, no requirements — that is what keeps this @Public while GET /agents stays
+   * token-gated (S3).
+   */
+  @Public()
+  @Get('network/points')
+  networkPoints() {
+    return this.agents.list().map((a) => ({
+      did: a.did,
+      shopName: a.shopName,
+      zone: a.zone,
+      location: a.location,
+      landmark: a.landmark,
+      openState: a.openState,
+      pricePerParcel: a.pricePerParcel,
+      rating: this.ratings.agentRating(a.did),
+      freeSlots: this.shelf.available(a.did),
+    }));
   }
 
   /** Vendor mint: an order ships → create the inbound parcel + phygital label + collection code + tracking key. */

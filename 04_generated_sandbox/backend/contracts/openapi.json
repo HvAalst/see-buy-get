@@ -4914,7 +4914,7 @@
       "get": {
         "operationId": "Sbg.quote",
         "summary": "",
-        "description": "Quote a shipment from the open-data participant rates: flexible (any carrier) vs locked (cheapest).",
+        "description": "Quote a shipment from the open-data participant rates: flexible (any carrier) vs locked (cheapest).\n  (S13): the quote is derived ONLY from open-data prices — it is the SEE of See-Buy-Get,\n and a consumer holds no account to authenticate with.",
         "parameters": [
           {
             "name": "origin",
@@ -5292,7 +5292,7 @@
       "get": {
         "operationId": "Sbg.track",
         "summary": "",
-        "description": "Public track-and-trace by the shareable tracking key (no PII, no handover code).",
+        "description": "Public track-and-trace by the shareable tracking key (no PII, no handover code).\n  (S13): the comment above was always the intent — the KEY is the credential; the\n response carries no PII and no collection code, and the GET of See-Buy-Get cannot ask a\n consumer for an account it has no way to hold.",
         "parameters": [
           {
             "name": "key",
@@ -5303,6 +5303,19 @@
             }
           }
         ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/network/points": {
+      "get": {
+        "operationId": "Sbg.networkPoints",
+        "summary": "",
+        "description": "The public network directory — the sanitized slice of the agent register a SENDER needs to\nchoose a drop-off or delivery point: name, zone, pin, open state, the open-data handling\nprice, rating and free shelf slots. NOTHING operational leaves here: no balance, no device,\nno vault refs, no requirements — that is what keeps this  while GET /agents stays\ntoken-gated (S3).",
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
