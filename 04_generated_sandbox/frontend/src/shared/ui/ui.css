@@ -996,3 +996,53 @@
   color: var(--navy);
   word-spacing: 0.4em;
 }
+
+/* -------------------------------------------------------------- QR block -- */
+
+/* A real scannable code. Always pure black on pure white — a tinted QR is the
+   classic silent failure: it looks designed and never scans. */
+.qr {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+.qr__svg {
+  display: block;
+  border-radius: 6px;
+  background: #fff;
+  max-width: 100%;
+  height: auto;
+}
+
+.qr__cap {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--navy);
+  text-align: center;
+  word-break: break-all;
+}
+
+.qr__fail {
+  font-size: 15px;
+  color: var(--tx3);
+}
+
+/* Print: a code being printed must be black, full size, and never split across pages. */
+@media print {
+  .qr {
+    break-inside: avoid;
+  }
+}
+
+/* The code + its scannable twin, side by side (rev 5's collect card). Wraps on a
+   narrow phone so the digits never shrink — reading them is the fallback path. */
+.codecard__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}

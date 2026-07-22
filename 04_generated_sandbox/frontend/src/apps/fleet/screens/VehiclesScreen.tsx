@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
-import { Button, Card, ErrorNote, Pill, ReadAloud, Sheet } from '../../../shared/ui';
+import { Button, Card, ErrorNote, Pill, QrBlock, ReadAloud, Sheet } from '../../../shared/ui';
+import { qrPayload } from '../../../shared/qr';
 import { subtypeLine, vehicleMissing } from '../logic';
 import { VEHICLE_CLASSES, type VehicleRow } from '../types';
 import type { FleetActions, FleetState } from '../useFleetApp';
@@ -12,6 +13,7 @@ export interface VehiclesScreenProps {
 /** Fleet data: register vehicles (QR for the dashboard) and manage the open per-km rate. */
 export function VehiclesScreen({ state, actions }: VehiclesScreenProps) {
   const [priceFor, setPriceFor] = useState<VehicleRow | null>(null);
+  const [qrFor, setQrFor] = useState<VehicleRow | null>(null);
   const f = state.vForm;
   const missing = vehicleMissing(f);
   const isTruck = f.vehicleClass === 'truck';
@@ -134,6 +136,9 @@ export function VehiclesScreen({ state, actions }: VehiclesScreenProps) {
                   <Pill tone={v.status === 'ACTIVE' ? 'ok' : 'idle'} dot>
                     {v.verified ? 'Verified' : v.status.toLowerCase()}
                   </Pill>
+                  <Button variant="link" full={false} onClick={() => setQrFor(v)}>
+                    QR
+                  </Button>
                   <Button variant="link" full={false} onClick={() => setPriceFor(v)}>
                     Rate
                   </Button>
@@ -147,6 +152,28 @@ export function VehiclesScreen({ state, actions }: VehiclesScreenProps) {
       <div class="scr__foot">
         <ReadAloud text={() => `${state.vehicles.length} vehicles in the fleet.`} label="Read this aloud" />
       </div>
+
+      {/* The dashboard sticker: this is the code a driver scans to start their shift, so
+          the console has to be able to PRINT it — not just display the string. */}
+      <Sheet open={Boolean(qrFor)} onClose={() => setQrFor(null)} title={qrFor ? `Dashboard QR — ${qrFor.plate}` : ''}>
+        {qrFor ? (
+          <>
+            <p class="t-body">Print this and stick it on the dashboard. Drivers scan it to start a shift on this vehicle.</p>
+            <QrBlock
+              value={qrPayload('vehicle', qrFor.qr)}
+              size={200}
+              caption={qrFor.qr}
+              label={`Dashboard code for ${qrFor.plate}`}
+            />
+            <Button chevron={false} onClick={() => window.print()}>
+              Print this sticker
+            </Button>
+            <Button variant="link" onClick={() => setQrFor(null)}>
+              Close
+            </Button>
+          </>
+        ) : null}
+      </Sheet>
 
       <PriceSheet vehicle={priceFor} onClose={() => setPriceFor(null)} state={state} actions={actions} />
     </div>

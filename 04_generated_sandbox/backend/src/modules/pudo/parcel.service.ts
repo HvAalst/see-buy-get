@@ -15,6 +15,7 @@ import { Parcel, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabe
 import { VendorService } from './vendor.service';
 import { VehicleService } from './vehicle.service';
 import type { ShipmentQuote } from './routing.service';
+import { qrSvgGroup } from '../../foundation/label/qr';
 
 interface AcceptInput {
   agentDid: string;
@@ -469,18 +470,32 @@ export class ParcelService {
     return parcel;
   }
 
+  /**
+   * The phygital label.
+   *
+   * Until S18 the "QR" here was a black square with the letters QR drawn in it — the whole
+   * product is scan-driven and nothing in it was scannable. It is now a real, spec-correct
+   * QR (level Q, ~25% recovery, because this gets printed on cheap thermal stock, taped to
+   * a box and scanned in a dusty shop). The payload is namespaced `sbg:parcel:<id>` so a
+   * scanner can tell a parcel from a bag, a badge or a vehicle.
+   *
+   * XML-escaped: a shop name is operator-entered text and would otherwise break the SVG
+   * (or inject into it) the first time someone typed an ampersand.
+   */
   private label(parcel: Parcel, destShop: string): PhygitalLabel {
-    const qrPayload = `glos-pudo:${parcel.parcelId}`;
+    const qrPayload = `sbg:parcel:${parcel.parcelId}`;
+    const esc = (s: string) => s.replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[c] as string);
     const svg = [
       `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180">`,
-      `<rect width="320" height="180" fill="#fff" stroke="#0E3B2D"/>`,
-      `<rect x="12" y="12" width="80" height="80" fill="#0E3B2D"/><text x="52" y="58" fill="#fff" font-size="9" text-anchor="middle">QR</text>`,
-      `<text x="104" y="30" font-family="Arial" font-size="14" font-weight="bold">GLOS PUDO</text>`,
-      `<text x="104" y="50" font-family="Arial" font-size="11">${parcel.parcelId}</text>`,
-      `<text x="104" y="70" font-family="Arial" font-size="10">To: ${destShop}</text>`,
-      `<text x="12" y="118" font-family="Arial" font-size="10">Collect at destination PUDO with code:</text>`,
-      `<text x="12" y="138" font-family="monospace" font-size="14" font-weight="bold">${parcel.collectionCode}</text>`,
-      `<text x="12" y="166" font-family="Arial" font-size="8" fill="#6B7280">Pre-paid · pick-up/drop-off · ${qrPayload}</text>`,
+      `<rect width="320" height="180" fill="#fff" stroke="#0B1F5C"/>`,
+      qrSvgGroup(qrPayload, 12, 12, 96),
+      `<text x="120" y="32" font-family="Arial" font-size="15" font-weight="bold" fill="#0B1F5C">SeeBuyGet</text>`,
+      `<text x="120" y="52" font-family="monospace" font-size="11">${esc(parcel.parcelId)}</text>`,
+      `<text x="120" y="72" font-family="Arial" font-size="10">To: ${esc(destShop)}</text>`,
+      `<text x="120" y="92" font-family="Arial" font-size="9" fill="#4A5261">${esc(parcel.destZone)}</text>`,
+      `<text x="12" y="130" font-family="Arial" font-size="10" fill="#4A5261">Collect at the shop with this code:</text>`,
+      `<text x="12" y="152" font-family="monospace" font-size="16" font-weight="bold" fill="#0B1F5C">${esc(parcel.collectionCode ?? '')}</text>`,
+      `<text x="12" y="171" font-family="Arial" font-size="8" fill="#6E7684">Pre-paid · pick-up and drop-off · ${esc(qrPayload)}</text>`,
       `</svg>`,
     ].join('');
     return { parcelId: parcel.parcelId, qrPayload, svg };

@@ -1,4 +1,5 @@
-import { Button, Card, Checklist, ErrorNote, ReadAloud, Sheet } from '../../../shared/ui';
+import { Button, Card, Checklist, ErrorNote, QrBlock, ReadAloud, Sheet } from '../../../shared/ui';
+import { qrPayload } from '../../../shared/qr';
 import type { AgentActions, AgentState } from '../useAgentApp';
 import { PhotoField } from './PhotoField';
 
@@ -56,6 +57,17 @@ export function CollectScreen({ state, actions }: CollectScreenProps) {
             <p class="slot__value">{slot ?? '—'}</p>
             <p class="slot__sub">{found.parcel.parcelId}</p>
           </section>
+
+          {/* The parcel's own code, so a shelf search can be a scan rather than a squint
+              at a sticker in bad light. */}
+          <Card label="Parcel code">
+            <QrBlock
+              value={qrPayload('parcel', found.parcel.parcelId)}
+              size={132}
+              caption={found.parcel.parcelId}
+              label={`Parcel ${found.parcel.parcelId} as a scannable code`}
+            />
+          </Card>
 
           <Card label="Let the buyer check the contents">
             {items.length ? (

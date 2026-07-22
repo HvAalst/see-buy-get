@@ -162,7 +162,7 @@ function OrderSheet({ state, actions }: { state: VendorState; actions: VendorAct
               Pay now from the balance
             </Button>
           ) : null}
-          {d.collectionCode ? <CodeCard label="Buyer's collection code" code={d.collectionCode} /> : null}
+          {d.collectionCode ? <CodeCard label="Buyer's collection code" code={d.collectionCode} scanAs="collect" /> : null}
           {d.scans?.length ? (
             <div>
               {d.scans.map((s) => (

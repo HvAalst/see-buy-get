@@ -416,7 +416,7 @@ function LabelStep({ state, actions }: MintScreenProps) {
         </>
       ) : null}
 
-      {m.parcel.collectionCode ? <CodeCard label="Buyer's collection code" code={m.parcel.collectionCode} /> : null}
+      {m.parcel.collectionCode ? <CodeCard label="Buyer's collection code" code={m.parcel.collectionCode} scanAs="collect" /> : null}
 
       <Card label="Keep for your records">
         <div class="kv">

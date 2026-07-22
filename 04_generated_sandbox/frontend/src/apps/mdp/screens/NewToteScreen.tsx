@@ -1,4 +1,5 @@
-import { Button, Card, Checklist, ErrorNote, ReadAloud } from '../../../shared/ui';
+import { Button, Card, Checklist, ErrorNote, QrBlock, ReadAloud } from '../../../shared/ui';
+import { qrPayload } from '../../../shared/qr';
 import type { MdpActions, MdpState } from '../useMdpApp';
 
 export interface NewToteScreenProps {
@@ -31,7 +32,21 @@ export function NewToteScreen({ state, actions }: NewToteScreenProps) {
         <section class="slotcard" aria-live="polite">
           <p class="slotcard__label">Print and laminate this</p>
           <p class="slotcard__value mono">{t.code}</p>
-          <p class="slotcard__sub mono">{t.toteId}</p>
+          {/* The laminated QR the bag carries for the rest of its life — the tote id is
+              the payload, the human code is printed under it for when a scan fails. */}
+          <div style="margin-top:12px">
+            <QrBlock
+              value={qrPayload('tote', t.toteId)}
+              size={200}
+              caption={t.code}
+              label={`Bag ${t.code} as a scannable code`}
+            />
+          </div>
+          <div style="margin-top:12px">
+            <Button variant="outline" chevron={false} onClick={() => window.print()}>
+              Print this bag tag
+            </Button>
+          </div>
         </section>
       ) : null}
 

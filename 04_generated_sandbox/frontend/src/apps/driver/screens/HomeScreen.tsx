@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
-import { Button, Card, Checklist, ErrorNote, GlanceNumber, Icon, Note, Pill, ReadAloud, Sheet } from '../../../shared/ui';
+import { Button, Card, Checklist, ErrorNote, GlanceNumber, Icon, Note, Pill, QrBlock, ReadAloud, Sheet } from '../../../shared/ui';
+import { qrPayload } from '../../../shared/qr';
 import {
   canStartShift,
   capacitySubLine,
@@ -86,6 +87,7 @@ function OffShift({ state, actions }: HomeScreenProps) {
 
 function OnShift({ state, actions }: HomeScreenProps) {
   const [confirm, setConfirm] = useState<'end' | 'rate' | null>(null);
+  const [badgeOpen, setBadgeOpen] = useState(false);
   const v = state.vehicle!;
   const band = rateBand(v.pricePerKm, state.rates?.benchmark);
   const pct = usedPercent(v.capacityKg, state.remaining);
@@ -155,9 +157,40 @@ function OnShift({ state, actions }: HomeScreenProps) {
         </span>
       </button>
 
+      {/* The badge is what a shop or hub scans to hand parcels over — it must be
+          showable, not just stored. Typing it was the only way until now. */}
+      {state.driver?.badgeId ? (
+        <button type="button" class="row" onClick={() => setBadgeOpen(true)}>
+          <span class="row__ic">
+            <Icon name="badge" size={24} />
+          </span>
+          <span class="row__body">
+            <span class="row__t">Show my badge</span>
+            <span class="row__s">For the shop or hub to scan at pick-up</span>
+          </span>
+          <span class="row__end">
+            <Icon name="chevronRight" size={22} />
+          </span>
+        </button>
+      ) : null}
+
       <div class="scr__foot">
         <ReadAloud text={() => shiftSummary(v.plate, state.remaining, state.claims.length)} />
       </div>
+
+      <Sheet open={badgeOpen} onClose={() => setBadgeOpen(false)} title="Your driver badge">
+        <p class="t-body">Hold this up at the counter. The shop or hub scans it to hand you their parcels.</p>
+        <QrBlock
+          value={qrPayload('badge', state.driver!.badgeId!)}
+          size={188}
+          caption={state.driver!.badgeId}
+          label={`Driver badge ${state.driver!.badgeId} as a scannable code`}
+        />
+        <Checklist items={['Works with no signal', 'They can also type the code under it']} />
+        <Button variant="link" onClick={() => setBadgeOpen(false)}>
+          Close
+        </Button>
+      </Sheet>
 
       <Sheet open={confirm === 'end'} onClose={() => setConfirm(null)} title="End your shift?">
         <p class="t-body">{`${v.plate} goes back to the fleet. You will not be offered any more work today.`}</p>
