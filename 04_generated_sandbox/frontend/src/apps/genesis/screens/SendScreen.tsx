@@ -1,5 +1,7 @@
-import { Button, Card, Checklist, ErrorNote, Icon, Pill, ReadAloud } from '../../../shared/ui';
-import { SIZES, journeyLine, money, pointLine, priceCards, quoteSummary, selectablePoints } from '../logic';
+import { useState } from 'preact/hooks';
+import { Button, Card, Checklist, ErrorNote, Icon, PlaceMap, Pill, ReadAloud } from '../../../shared/ui';
+import { fromPlaceWords } from '../../../shared/placewords';
+import { SIZES, journeyLine, money, pointDistance, pointLine, priceCards, quoteSummary, selectablePoints } from '../logic';
 import type { NetworkPoint } from '../types';
 import type { SendActions, SendState } from '../useSendApp';
 
@@ -75,14 +77,22 @@ function SizeStep({ state, actions }: SendScreenProps) {
 
 function PointStep({ state, actions, kind }: SendScreenProps & { kind: 'from' | 'to' }) {
   const from = kind === 'from';
-  const points = selectablePoints(state.points, from ? undefined : (state.fromDid ?? undefined));
+  /**
+   * The three words are the address substitute: type (or repeat aloud) where you are —
+   * or where the receiver is — and the shops re-order nearest-first with distances.
+   * No street address anywhere in the flow.
+   */
+  const [wordsText, setWordsText] = useState('');
+  const near = fromPlaceWords(wordsText);
+  const points = selectablePoints(state.points, from ? undefined : (state.fromDid ?? undefined), near);
   const picked = from ? state.fromDid : state.toDid;
+  const pick = (did: string) => (from ? actions.pickFrom(did) : actions.pickTo(did));
 
   return (
     <div class="scr">
       <StepDots at={from ? 2 : 3} />
       <h1 class="scr__title">{from ? 'Where will you drop it off?' : 'Where is it going?'}</h1>
-      <p class="scr__lede">{from ? 'Pick the shop nearest to you.' : 'Pick the shop nearest to the person receiving it.'}</p>
+      <p class="scr__lede">{from ? 'Tap the shop nearest to you — on the map or in the list.' : 'Tap the shop nearest to the person receiving it.'}</p>
 
       {state.pointsState === 'loading' ? <p class="hint">Finding shops…</p> : null}
       {state.pointsState === 'error' && state.pointsError ? <ErrorNote error={state.pointsError} onRetry={() => void actions.loadPoints()} /> : null}
@@ -92,9 +102,38 @@ function PointStep({ state, actions, kind }: SendScreenProps & { kind: 'from' | 
         </Card>
       ) : null}
 
+      {points.length ? (
+        <PlaceMap
+          label={`Map of ${points.length} shops${near ? ' with your three-words place marked' : ''}`}
+          pins={points.filter((p) => p.location && p.openState === 'open').map((p) => ({ id: p.did, label: p.shopName, point: p.location! }))}
+          selectedId={picked}
+          onPick={pick}
+          reference={near}
+        />
+      ) : null}
+
+      <Card label={from ? 'Where are you? Say it in three words' : 'Where is the receiver? Say it in three words'}>
+        <input
+          class="input"
+          value={wordsText}
+          onInput={(e) => setWordsText(e.currentTarget.value)}
+          placeholder="goldfox calmriver blueowl"
+          autocapitalize="none"
+          autocomplete="off"
+          spellcheck={false}
+        />
+        <p class="card__note">
+          {near
+            ? 'Found it — the nearest shops are now first.'
+            : wordsText.trim()
+              ? 'Not a place yet — three words, like on a shop sign.'
+              : 'Every place has three words — shops show theirs on a sign. No street name needed.'}
+        </p>
+      </Card>
+
       <div class="rows" role="list">
         {points.map((p) => (
-          <PointRow key={p.did} point={p} picked={picked === p.did} onPick={() => (from ? actions.pickFrom(p.did) : actions.pickTo(p.did))} />
+          <PointRow key={p.did} point={p} picked={picked === p.did} away={pointDistance(p, near)} onPick={() => pick(p.did)} />
         ))}
       </div>
 
@@ -103,7 +142,9 @@ function PointStep({ state, actions, kind }: SendScreenProps & { kind: 'from' | 
           Go back a step
         </Button>
         <ReadAloud
-          text={() => `${points.length} shops to choose from. ${from ? 'Pick where you will drop the parcel off.' : 'Pick where it is going.'}`}
+          text={() =>
+            `${points.length} shops to choose from. ${near ? 'The nearest is first.' : ''} ${from ? 'Pick where you will drop the parcel off.' : 'Pick where it is going.'}`
+          }
           label="Read this aloud"
         />
       </div>
@@ -111,7 +152,7 @@ function PointStep({ state, actions, kind }: SendScreenProps & { kind: 'from' | 
   );
 }
 
-function PointRow({ point, picked, onPick }: { point: NetworkPoint; picked: boolean; onPick: () => void }) {
+function PointRow({ point, picked, away, onPick }: { point: NetworkPoint; picked: boolean; away: string | null; onPick: () => void }) {
   const closed = point.openState === 'closed';
   return (
     <button type="button" class="row" disabled={closed} aria-pressed={picked} onClick={onPick}>
@@ -120,7 +161,7 @@ function PointRow({ point, picked, onPick }: { point: NetworkPoint; picked: bool
       </span>
       <span class="row__body">
         <span class="row__t">{point.shopName}</span>
-        <span class="row__s">{closed ? 'Closed right now' : pointLine(point)}</span>
+        <span class="row__s">{closed ? 'Closed right now' : `${away ? `${away} · ` : ''}${pointLine(point)}`}</span>
       </span>
       <span class="row__end">
         {closed ? (

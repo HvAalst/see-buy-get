@@ -6,6 +6,7 @@ import {
   mapsHref,
   money,
   normalizeKey,
+  pointDistance,
   pointLine,
   priceCards,
   quoteSummary,
@@ -54,6 +55,18 @@ describe('selectablePoints', () => {
     ];
     expect(selectablePoints(pts, 'x').map((p) => p.shopName)).toEqual(['Apex', 'Bees', 'Zed']);
     expect(selectablePoints(null)).toEqual([]);
+  });
+
+  it('with a reference point (typed place words), open shops sort nearest-first with a distance label', () => {
+    const near = { lat: -1.3, lng: 36.84 };
+    const pts = [
+      point({ did: 'far', shopName: 'Far', location: { lat: -1.2, lng: 36.7 } }),
+      point({ did: 'close', shopName: 'Close', location: { lat: -1.301, lng: 36.841 } }),
+      point({ did: 'nowhere', shopName: 'NoPin' }),
+    ];
+    expect(selectablePoints(pts, undefined, near).map((p) => p.did)).toEqual(['close', 'far', 'nowhere']);
+    expect(pointDistance(pts[1], near)).toContain('m away');
+    expect(pointDistance(pts[2], near)).toBeNull();
   });
 
   it('pointLine folds zone, landmark, price and rating into one sentence', () => {

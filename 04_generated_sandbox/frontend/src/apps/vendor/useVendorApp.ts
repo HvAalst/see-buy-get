@@ -310,7 +310,11 @@ export function useVendorApp() {
   const go = useCallback(
     (screen: Screen) => {
       setState((s) => ({ ...s, screen, error: null }));
-      if (screen === 'store') void loadStore();
+      if (screen === 'store') {
+        void loadStore();
+        // The pin editor draws the network as context; fetch once.
+        if (stateRef.current.pointsState !== 'ready') void loadPointsRef.current();
+      }
       if (screen === 'orders') void refresh();
     },
     [loadStore, refresh],
@@ -328,6 +332,10 @@ export function useVendorApp() {
     }
     setState((s) => ({ ...s, points: r.data ?? [], pointsState: 'ready' }));
   }, [fail]);
+  const loadPointsRef = useRef(loadPoints);
+  useEffect(() => {
+    loadPointsRef.current = loadPoints;
+  }, [loadPoints]);
 
   const startMint = useCallback(
     (checkout?: CheckoutRow) => {
@@ -480,6 +488,20 @@ export function useVendorApp() {
     [client, creds, run, fail, pushToast, refresh],
   );
 
+  /** Move the store's map pin — the origin ranking and "near your store" all key off it. */
+  const saveLocation = useCallback(
+    async (location: { lat: number; lng: number }) => {
+      if (!client || !creds) return;
+      await run('location', async () => {
+        const r = await client.api.update(creds.vendorId, { location });
+        if (r.error) return fail(r.error);
+        pushToast({ tone: 'ok', icon: 'pin', title: 'Store pin saved' });
+        await refresh();
+      });
+    },
+    [client, creds, run, fail, pushToast, refresh],
+  );
+
   /* ---------------------------------------------------------------- orders */
 
   const openOrder = useCallback(
@@ -547,6 +569,7 @@ export function useVendorApp() {
       submitMint,
       settleOrder,
       topUp,
+      saveLocation,
       openOrder,
       closeOrder,
       savePolicy,

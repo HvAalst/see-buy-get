@@ -875,3 +875,124 @@
   font-variant-numeric: tabular-nums;
   margin: 2px 0 4px;
 }
+
+/* ------------------------------------------------------------- place map -- */
+
+/* The shared dependency-free plot: relative positions on a grid ground, no tiles.
+   Pins are buttons; the list beside the map stays the screen-reader path. */
+.pmap {
+  position: relative;
+  height: 220px;
+  border: 1.5px solid var(--bd);
+  border-radius: var(--r-ctl);
+  overflow: hidden;
+  background:
+    repeating-linear-gradient(0deg, var(--appbg) 0 23px, var(--panel) 23px 24px),
+    repeating-linear-gradient(90deg, var(--appbg) 0 23px, var(--panel) 23px 24px);
+}
+
+.pmap--drop {
+  cursor: crosshair;
+}
+
+.pmap__empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  color: var(--tx3);
+}
+
+.pmap__pin {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  background: none;
+  padding: 6px; /* widens the tap target without moving the dot */
+}
+
+.pmap__dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--blue);
+  border: 2.5px solid var(--bg);
+  box-shadow: var(--sh-sm);
+}
+
+.pmap__pin--on .pmap__dot {
+  background: var(--navy);
+  box-shadow: 0 0 0 3px var(--blue-light);
+}
+
+.pmap__lbl {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--navy);
+  background: var(--bg);
+  border: 1px solid var(--bd-soft);
+  border-radius: 999px;
+  padding: 0 8px;
+  white-space: nowrap;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pmap__pin--on .pmap__lbl {
+  border-color: var(--navy);
+  font-weight: 700;
+}
+
+/* The locator marks. `ref` is the person (orange position dot — the sanctioned
+   indicator use); `dropped` is the pin being placed (navy). */
+.pmap__mark {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  pointer-events: none;
+}
+
+.pmap__mark-dot {
+  width: 15px;
+  height: 15px;
+  border-radius: 999px;
+  border: 2.5px solid var(--bg);
+  box-shadow: var(--sh-sm);
+}
+
+.pmap__mark--ref .pmap__mark-dot {
+  background: var(--org);
+}
+
+.pmap__mark--dropped .pmap__mark-dot {
+  background: var(--navy);
+}
+
+.pmap__mark-lbl {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--tx2);
+  background: var(--bg);
+  border: 1px solid var(--bd-soft);
+  border-radius: 999px;
+  padding: 0 8px;
+  white-space: nowrap;
+}
+
+/* ----------------------------------------------------------- place words -- */
+
+/* Three words that say a place. Mono keeps them scannable; the card stays quiet. */
+.words {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--navy);
+  word-spacing: 0.4em;
+}

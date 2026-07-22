@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
 import { Button, Card, ErrorNote, GlanceNumber, Icon, Note, Pill, ReadAloud, Sheet, type IconName } from '../../../shared/ui';
+import { toPlaceWords } from '../../../shared/placewords';
 import { canAccept, gateNotice, homeSummary, money, statusNotice } from '../logic';
 import type { AgentActions, AgentState, Screen } from '../useAgentApp';
 
@@ -66,6 +67,19 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
             Change my price
           </Button>
         </div>
+        {agent?.location ? (
+          <>
+            {/* The shop's three place words — what a customer with no street address is told.
+                Put them on the sign; say them over the phone. */}
+            <p class="words" style="margin-top:10px">
+              {toPlaceWords(agent.location)}
+            </p>
+            <ReadAloud
+              text={() => `Your shop's three words are: ${toPlaceWords(agent.location!).split(' ').join(', ')}. Customers can find you with them.`}
+              label="Say my three words"
+            />
+          </>
+        ) : null}
       </Card>
 
       <div class="rows" role="list">

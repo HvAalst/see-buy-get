@@ -1,4 +1,5 @@
 import { Button, Card, ErrorNote, Icon, Note, ReadAloud } from '../../../shared/ui';
+import { toPlaceWords } from '../../../shared/placewords';
 import { LADDER, ladderIndex, mapsHref, showCollectCard, statusPresentation, stepTime, trackSummary } from '../logic';
 import type { SendActions, SendState } from '../useSendApp';
 
@@ -95,8 +96,15 @@ export function TrackScreen({ state, actions }: TrackScreenProps) {
                 <span class="row__body">
                   <span class="row__t">{t.destination}</span>
                   <span class="row__s">{t.destinationLandmark ?? `Zone ${t.destZone}`}</span>
+                  {t.destinationLocation ? <span class="row__s words">{toPlaceWords(t.destinationLocation)}</span> : null}
                 </span>
               </div>
+              {t.destinationLocation ? (
+                <ReadAloud
+                  text={() => `The shop's three words are: ${toPlaceWords(t.destinationLocation!).split(' ').join(', ')}.`}
+                  label="Say where it is"
+                />
+              ) : null}
               {t.status === 'Ready_For_Pickup' && mapsHref(t) ? (
                 <div class="scr__cta">
                   <a class="btn btn--primary btn--full" href={mapsHref(t)!} target="_blank" rel="noopener">

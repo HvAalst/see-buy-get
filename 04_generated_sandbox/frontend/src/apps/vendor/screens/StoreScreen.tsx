@@ -1,5 +1,7 @@
 import { useState } from 'preact/hooks';
-import { Button, Card, ErrorNote, ReadAloud, Sheet } from '../../../shared/ui';
+import { Button, Card, ErrorNote, PlaceMap, ReadAloud, Sheet } from '../../../shared/ui';
+import { toPlaceWords } from '../../../shared/placewords';
+import type { GeoPoint } from '../../../shared/geo';
 import { money, policyLine } from '../logic';
 import type { VendorActions, VendorState } from '../useVendorApp';
 
@@ -27,6 +29,8 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
       <Card title="What the buyer pays" aside={<Button variant="link" full={false} onClick={() => setPolicyOpen(true)}>Change</Button>}>
         <p class="t-body">{v ? policyLine(v.shippingPolicy) : ''}</p>
       </Card>
+
+      <PinCard state={state} actions={actions} />
 
       <Card title="Status callbacks">
         <p class="card__note">GLOS signs every callback with your store secret — verify the signature before trusting one.</p>
@@ -77,6 +81,53 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
 
       <PolicySheet open={policyOpen} onClose={() => setPolicyOpen(false)} state={state} actions={actions} />
     </div>
+  );
+}
+
+/**
+ * The store's map pin — the thing an address cannot be relied on to provide here. Tap
+ * the map to move the pin; the three place words update with it, so the store can SAY
+ * where it is (on the phone, in a listing) with no street name at all.
+ */
+function PinCard({ state, actions }: { state: VendorState; actions: VendorActions }) {
+  const [draft, setDraft] = useState<GeoPoint | null>(null);
+  const current = draft ?? state.vendor?.location ?? null;
+
+  return (
+    <Card title="Where your store is">
+      <p class="card__note">Tap the map to drop the pin. The network's shops are shown for bearings.</p>
+      <div style="margin-top:10px">
+        <PlaceMap
+          label="Your store's pin — tap the map to move it"
+          pins={state.points.filter((p) => p.location).map((p) => ({ id: p.did, label: p.shopName, point: p.location! }))}
+          onDrop={setDraft}
+          dropped={draft}
+          reference={draft ? null : state.vendor?.location ?? null}
+        />
+      </div>
+      {current ? (
+        <>
+          <p class="words" style="margin-top:10px">
+            {toPlaceWords(current)}
+          </p>
+          <ReadAloud text={() => `Your store's three words are: ${toPlaceWords(current).split(' ').join(', ')}.`} label="Say my three words" />
+        </>
+      ) : (
+        <p class="hint" style="margin-top:10px">
+          No pin yet — tap the map.
+        </p>
+      )}
+      {draft ? (
+        <div style="margin-top:10px">
+          <Button chevron={false} full={false} busy={state.busy === 'location'} onClick={() => void actions.saveLocation(draft).then(() => setDraft(null))}>
+            Save the pin
+          </Button>
+          <Button variant="link" full={false} onClick={() => setDraft(null)}>
+            Undo
+          </Button>
+        </div>
+      ) : null}
+    </Card>
   );
 }
 

@@ -4,6 +4,7 @@
  * the quote presentation decides what a sender is told a journey costs.
  */
 
+import { distanceLabel, haversineKm, type GeoPoint } from '../../shared/geo';
 import type { IconName } from '../../shared/ui/Icon';
 import type { NetworkPoint, ParcelSize, ParcelStatus, QuoteView, TrackView } from './types';
 
@@ -24,14 +25,29 @@ export function money(v: number | null | undefined): string {
 
 /* ----------------------------------------------------------------- points -- */
 
-/** Shops a sender can choose: open ones first, each group A→Z by name. */
-export function selectablePoints(points: NetworkPoint[] | null, excludeDid?: string): NetworkPoint[] {
+/**
+ * Shops a sender can choose: open ones first. With a reference point (typed place
+ * words), NEAREST FIRST — that is the whole reason the words exist: "the shop closest
+ * to where I said" needs no address. Without one, A→Z by name.
+ */
+export function selectablePoints(points: NetworkPoint[] | null, excludeDid?: string, near?: GeoPoint | null): NetworkPoint[] {
   return (points ?? [])
     .filter((p) => p.did !== excludeDid)
     .sort((a, b) => {
       if (a.openState !== b.openState) return a.openState === 'open' ? -1 : 1;
+      if (near) {
+        const da = a.location ? haversineKm(near, a.location) : Number.POSITIVE_INFINITY;
+        const db = b.location ? haversineKm(near, b.location) : Number.POSITIVE_INFINITY;
+        if (da !== db) return da - db;
+      }
       return a.shopName.localeCompare(b.shopName);
     });
+}
+
+/** The "400 m away" suffix for a row, when both ends are known. */
+export function pointDistance(p: NetworkPoint, near: GeoPoint | null | undefined): string | null {
+  if (!near || !p.location) return null;
+  return distanceLabel(haversineKm(near, p.location));
 }
 
 export function pointLine(p: NetworkPoint): string {

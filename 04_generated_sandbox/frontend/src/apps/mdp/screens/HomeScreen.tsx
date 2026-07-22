@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
 import { Button, Card, ErrorNote, ReadAloud, Sheet } from '../../../shared/ui';
+import { toPlaceWords } from '../../../shared/placewords';
 import { bagLine, fillPercent, fillingBags, freeBags, homeSummary, money, swatchIndex, unsortedAt } from '../logic';
 import type { MdpActions, MdpState } from '../useMdpApp';
 
@@ -86,6 +87,17 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
           </Button>
         </div>
       </Card>
+
+      {hub?.location ? (
+        <Card label="Where this hub is">
+          {/* The hub's three place words — what a new driver is told, address or not. */}
+          <p class="words">{toPlaceWords(hub.location)}</p>
+          <ReadAloud
+            text={() => `This hub's three words are: ${toPlaceWords(hub.location!).split(' ').join(', ')}.`}
+            label="Say the three words"
+          />
+        </Card>
+      ) : null}
 
       <Card label="Your sort fee" aside={<b class="mono">{money(hub?.pricePerParcel)}</b>}>
         <p class="card__note">What the network pays this hub to sort one parcel. It is public — nearby hubs compete on it.</p>

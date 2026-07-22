@@ -1,4 +1,7 @@
-import { Button, Card, Checklist, CodeCard, ErrorNote, Icon, Note, Pill, ReadAloud } from '../../../shared/ui';
+import { useState } from 'preact/hooks';
+import { Button, Card, Checklist, CodeCard, ErrorNote, Icon, Note, PlaceMap, Pill, ReadAloud } from '../../../shared/ui';
+import { fromPlaceWords } from '../../../shared/placewords';
+import { distanceLabel, haversineKm } from '../../../shared/geo';
 import { PhotoField } from './PhotoField';
 import { dimsComplete, handoffLine, money, originRows, priceCards } from '../logic';
 import type { NetworkPoint } from '../types';
@@ -187,20 +190,59 @@ function ParcelStep({ state, actions }: MintScreenProps) {
 /* ------------------------------------------------------------------- dest -- */
 
 function DestStep({ state, actions }: MintScreenProps) {
-  const points = state.points.filter((p) => p.openState === 'open').sort((a, b) => a.shopName.localeCompare(b.shopName));
+  /** The buyer's place, in three words — the no-address way to sort shops nearest-first. */
+  const [wordsText, setWordsText] = useState('');
+  const near = fromPlaceWords(wordsText);
+  const points = state.points
+    .filter((p) => p.openState === 'open')
+    .sort((a, b) => {
+      if (near) {
+        const da = a.location ? haversineKm(near, a.location) : Number.POSITIVE_INFINITY;
+        const db = b.location ? haversineKm(near, b.location) : Number.POSITIVE_INFINITY;
+        if (da !== db) return da - db;
+      }
+      return a.shopName.localeCompare(b.shopName);
+    });
 
   return (
     <div class="scr">
       <StepDots at={2} />
       <h1 class="scr__title">Where does the buyer collect?</h1>
-      <p class="scr__lede">Pick the shop nearest to your buyer.</p>
+      <p class="scr__lede">Tap the shop nearest to your buyer — on the map or in the list.</p>
 
       {state.pointsState === 'loading' ? <p class="hint">Finding shops…</p> : null}
       {state.pointsState === 'error' && state.error ? <ErrorNote error={state.error} onRetry={() => void actions.loadPoints()} /> : null}
 
+      {points.length ? (
+        <PlaceMap
+          label={`Map of ${points.length} collection shops`}
+          pins={points.filter((p) => p.location).map((p) => ({ id: p.did, label: p.shopName, point: p.location! }))}
+          onPick={(did) => void actions.pickDest(did)}
+          reference={near}
+        />
+      ) : null}
+
+      <Card label="The buyer's place, in three words">
+        <input
+          class="input"
+          value={wordsText}
+          onInput={(e) => setWordsText(e.currentTarget.value)}
+          placeholder="goldfox calmriver blueowl"
+          autocapitalize="none"
+          autocomplete="off"
+          spellcheck={false}
+        />
+        <p class="card__note">{near ? 'Found it — the nearest shops are now first.' : 'Ask the buyer for their three words; no street address needed.'}</p>
+      </Card>
+
       <div class="rows" role="list">
         {points.map((p) => (
-          <PointRow key={p.did} point={p} onPick={() => void actions.pickDest(p.did)} />
+          <PointRow
+            key={p.did}
+            point={p}
+            sub={near && p.location ? distanceLabel(haversineKm(near, p.location)) : undefined}
+            onPick={() => void actions.pickDest(p.did)}
+          />
         ))}
       </div>
 
@@ -213,7 +255,7 @@ function DestStep({ state, actions }: MintScreenProps) {
   );
 }
 
-function PointRow({ point, onPick, price }: { point: NetworkPoint; onPick: () => void; price?: string | null }) {
+function PointRow({ point, onPick, price, sub }: { point: NetworkPoint; onPick: () => void; price?: string | null; sub?: string }) {
   return (
     <button type="button" class="row" onClick={onPick}>
       <span class="row__ic">
@@ -221,7 +263,7 @@ function PointRow({ point, onPick, price }: { point: NetworkPoint; onPick: () =>
       </span>
       <span class="row__body">
         <span class="row__t">{point.shopName}</span>
-        <span class="row__s">{`Zone ${point.zone}${point.landmark ? ` · ${point.landmark}` : ''}`}</span>
+        <span class="row__s">{`${sub ? `${sub} · ` : ''}Zone ${point.zone}${point.landmark ? ` · ${point.landmark}` : ''}`}</span>
       </span>
       <span class="row__end">
         {price !== undefined ? price === null ? <Pill tone="idle">No route</Pill> : <b class="mono-t">{price}</b> : null}
@@ -240,14 +282,29 @@ function OriginStep({ state, actions }: MintScreenProps) {
     <div class="scr">
       <StepDots at={3} />
       <h1 class="scr__title">Where will you drop it off?</h1>
-      <p class="scr__lede">Every shop is priced against the buyer's collection shop — cheapest first.</p>
+      <p class="scr__lede">Every shop is priced against the buyer's collection shop — cheapest first. Your store pin is the orange dot.</p>
 
       {state.originState === 'loading' ? <p class="hint">Pricing every drop-off…</p> : null}
       {state.originState === 'error' && state.error ? <ErrorNote error={state.error} onRetry={() => void actions.pickDest(state.form.destDid)} /> : null}
 
+      {rows.length ? (
+        <PlaceMap
+          label={`Map of ${rows.length} drop-off shops relative to your store`}
+          pins={rows.filter((r) => r.point.location).map((r) => ({ id: r.point.did, label: r.total === null ? r.point.shopName : `${r.point.shopName} · ${money(r.total)}`, point: r.point.location! }))}
+          onPick={(did) => void actions.pickOrigin(did)}
+          reference={state.vendor?.location ?? null}
+        />
+      ) : null}
+
       <div class="rows" role="list">
         {rows.map((r) => (
-          <PointRow key={r.point.did} point={r.point} price={r.total === null ? null : money(r.total)} onPick={() => void actions.pickOrigin(r.point.did)} />
+          <PointRow
+            key={r.point.did}
+            point={r.point}
+            price={r.total === null ? null : money(r.total)}
+            sub={state.vendor?.location && r.point.location ? distanceLabel(haversineKm(state.vendor.location, r.point.location)) : undefined}
+            onPick={() => void actions.pickOrigin(r.point.did)}
+          />
         ))}
       </div>
 
