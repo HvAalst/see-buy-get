@@ -131,6 +131,8 @@ export interface ConsumerParcelView {
   createdAt: string;
   updatedAt: string;
   timeline: Array<{ at: string; status: ParcelStatus | 'CREATED'; note?: string }>;
+  /** The in-app collection token (S22) — only on the single-parcel detail, for the receiver, when ready. */
+  collectToken?: { code: string; qrPayload: string };
 }
 
 export interface MyParcels {

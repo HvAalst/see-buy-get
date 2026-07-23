@@ -226,6 +226,13 @@ export interface ConsumerParcelView {
   createdAt: string;
   updatedAt: string; // last movement (for newest-first ordering)
   timeline: Array<{ at: string; status: ParcelStatus | 'CREATED'; note?: string }>;
+  /**
+   * The in-app collection token (S22) — present ONLY on the single-parcel detail, only for the RECEIVER,
+   * and only while the parcel is Ready_For_Pickup. The QR is what the PUDO scans; the code is the typed
+   * fallback for a dead camera. This is the one place the handover secret is exposed — in the owner's
+   * authenticated app, never on the public track and never in the list.
+   */
+  collectToken?: { code: string; qrPayload: string };
 }
 
 export class Parcel {
@@ -267,8 +274,9 @@ export class Parcel {
   // --- inbound (e-commerce pickup-at-PUDO) ---
   vendorId?: string;
   externalOrderId?: string;
-  buyerEmail?: string; // where the collection/verification code is sent
-  collectionCode?: string; // the buyer's QR collection token (presented at the destination PUDO — the handover secret)
+  buyerEmail?: string; // legacy order-notification channel; since S22 the collection token is delivered IN-APP
+  // to the receiver's authenticated twin (never SMS'd/emailed as the secret) — see ConsumerParcelView.collectToken.
+  collectionCode?: string; // the buyer's QR collection token (shown in their app, scanned at the destination PUDO — the handover secret)
   trackingKey?: string; // PUBLIC track-and-trace token (safe to share — no PII, drives "track my parcel")
   binSlot?: string; // chaos-shelf slot at the destination PUDO
   items?: LineItem[];

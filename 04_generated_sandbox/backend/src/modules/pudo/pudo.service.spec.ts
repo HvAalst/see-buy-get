@@ -445,10 +445,43 @@ describe('PUDO Light', () => {
     expect(parcel.rebate).toBeGreaterThanOrEqual(0);
     expect(vendors.balanceOf(vendor.vendorId)).toBeCloseTo(Math.round((balBefore + (parcel.rebate ?? 0)) * 100) / 100);
 
-    // Public track stays sanitized — steps, NOT the handover collection code.
+    // O2 audit (S22): the public track carries status + coarse location ONLY — no PII, no handover
+    // secret, no vendor order id. Steps expose status + time; the raw operator note (which carried the
+    // externalOrderId) is never on this surface.
     const view = parcels.track(parcel.trackingKey!);
     expect(view.steps.length).toBeGreaterThan(0);
-    expect(JSON.stringify(view)).not.toContain(parcel.collectionCode);
+    const json = JSON.stringify(view);
+    expect(json).not.toContain(parcel.collectionCode); // handover secret
+    expect(json).not.toContain('WEB-1'); // vendor externalOrderId (previously leaked via the step note)
+    expect(json).not.toContain('buyer@example.com'); // buyer email
+    expect(json).not.toContain('+254700'); // buyer mobile
+    expect(view.steps.every((s) => !('note' in s))).toBe(true);
+  });
+
+  it('S22 — the receiver gets an in-app collection token (QR + typed code) only when it is theirs to collect', () => {
+    const origin = onboardAgent('S22 Origin', 'NorthTown', 50);
+    const dest = onboardAgent('S22 Dest', 'SouthTown', 50);
+    const corridor = corridors.addCorridor({ name: 'S22', originZone: 'NorthTown', destZone: 'SouthTown' });
+    const driver = corridors.addDriver({ driverDid: 'did:glos:s22', name: 'D', corridorId: corridor.corridorId });
+    const vendor = vendors.register({ name: 'S22 Co' });
+    vendors.topUp(vendor.vendorId, 50);
+    const buyer = '+254700900500';
+    const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: 'ORD-S22', originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: buyer, size: 'M', contentPhotoRef: 'content.jpg', shippingPolicy: vendor.shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'M') });
+    const rx = hashPhone(buyer);
+
+    // Before it is collectable there is no token, even for the receiver.
+    parcels.intakeInbound(parcel.parcelId, origin.did);
+    expect(parcels.consumerParcel(parcel.parcelId, rx).collectToken).toBeUndefined();
+
+    // Shelved → Ready_For_Pickup: the receiver's DETAIL view now carries the QR + the typed COL code.
+    parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: [parcel.parcelId] });
+    parcels.shelve(parcel.parcelId, dest.did);
+    const twin = parcels.consumerParcel(parcel.parcelId, rx);
+    expect(twin.relation).toBe('received');
+    expect(twin.collectToken).toEqual({ code: parcel.collectionCode, qrPayload: `sbg:collect:${parcel.collectionCode}` });
+
+    // Exposure minimised: the token is NOT in the list view — only the owner-scoped detail carries it.
+    expect(parcels.forPhoneHash(rx).received[0].collectToken).toBeUndefined();
   });
 
   it('files a dispute with mandatory photo proof at collection (notifies the vendor)', async () => {

@@ -1,5 +1,5 @@
 import { useEffect } from 'preact/hooks';
-import { Button, Card, Checklist, ErrorNote, Icon, Pill, ReadAloud } from '../../../shared/ui';
+import { Button, Card, Checklist, CodeCard, ErrorNote, Icon, Pill, ReadAloud } from '../../../shared/ui';
 import { LADDER, isOffLadder, ladderIndex, parcelRowLine, relationWord, sortForPerson, statusPresentation, stepTime } from '../logic';
 import type { ConsumerParcelView, ParcelStatus } from '../types';
 import type { SendActions, SendState } from '../useSendApp';
@@ -22,8 +22,8 @@ export function MyParcelsScreen({ state, actions }: MyParcelsScreenProps) {
     if (state.parcelsState === 'idle') void actions.loadParcels();
   }, [state.parcelsState, actions]);
 
-  const open = openParcel(state);
-  if (open) return <ParcelDetail parcel={open} actions={actions} />;
+  const open = openParcelView(state);
+  if (open) return <ParcelDetail parcel={open} state={state} actions={actions} />;
 
   const received = sortForPerson(state.parcels?.received ?? []);
   const sent = sortForPerson(state.parcels?.sent ?? []);
@@ -70,7 +70,7 @@ function ParcelGroup({ title, items, actions }: { title: string; items: Consumer
         {items.map((p) => {
           const pres = statusPresentation(p.status);
           return (
-            <button key={p.parcelId} type="button" class="row" onClick={() => actions.openParcel(p.parcelId)}>
+            <button key={p.parcelId} type="button" class="row" onClick={() => void actions.openParcel(p.parcelId)}>
               <span class="row__ic">
                 <Icon name={pres.icon} size={24} />
               </span>
@@ -90,7 +90,7 @@ function ParcelGroup({ title, items, actions }: { title: string; items: Consumer
   );
 }
 
-function ParcelDetail({ parcel, actions }: { parcel: ConsumerParcelView; actions: SendActions }) {
+function ParcelDetail({ parcel, state, actions }: { parcel: ConsumerParcelView; state: SendState; actions: SendActions }) {
   const pres = statusPresentation(parcel.status);
   const at = ladderIndex(parcel.status);
   const off = isOffLadder(parcel.status);
@@ -122,6 +122,21 @@ function ParcelDetail({ parcel, actions }: { parcel: ConsumerParcelView; actions
           </span>
         </span>
       </section>
+
+      {/* The single-parcel twin (which carries the collect token) failed to load — surface it + let them
+          retry, instead of silently showing the token-less list row for a parcel that is ready to collect. */}
+      {state.openParcelState === 'error' && state.openParcelError ? (
+        <ErrorNote error={state.openParcelError} onRetry={() => void actions.openParcel(parcel.parcelId)} />
+      ) : null}
+
+      {/* S22: the in-app collection token — the receiver shows this QR (or reads the code) at the shop;
+          the PUDO scans it. Delivered in the app, never by SMS. Present only when it is theirs to collect. */}
+      {parcel.collectToken ? (
+        <>
+          <CodeCard label="Show this to collect" code={parcel.collectToken.code} scanAs="collect" sayLabel="Hear your code" />
+          <p class="hint">Show the code to the shop, or let them scan it.</p>
+        </>
+      ) : null}
 
       {parcel.items?.length ? (
         <Card label="What is inside">
@@ -162,9 +177,13 @@ function ParcelDetail({ parcel, actions }: { parcel: ConsumerParcelView; actions
   );
 }
 
-/** Resolve the open parcel from the loaded list (the twin, incl. timeline, is already in hand). */
-function openParcel(state: SendState): ConsumerParcelView | null {
-  if (!state.openParcelId || !state.parcels) return null;
-  const all = [...state.parcels.received, ...state.parcels.sent];
+/**
+ * Resolve the open parcel: prefer the freshly-fetched single-parcel twin (it carries the S22 collect
+ * token); fall back to the list row so the detail paints instantly while that fetch is in flight.
+ */
+function openParcelView(state: SendState): ConsumerParcelView | null {
+  if (!state.openParcelId) return null;
+  if (state.openParcelDetail?.parcelId === state.openParcelId) return state.openParcelDetail;
+  const all = [...(state.parcels?.received ?? []), ...(state.parcels?.sent ?? [])];
   return all.find((p) => p.parcelId === state.openParcelId) ?? null;
 }

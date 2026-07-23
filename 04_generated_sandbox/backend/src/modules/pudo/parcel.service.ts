@@ -105,13 +105,14 @@ export class ParcelService implements OnApplicationBootstrap {
     if (!p || !phoneHash || (p.receiverPhoneHash !== phoneHash && p.senderPhoneHash !== phoneHash)) {
       throw new GlosError('NOT_FOUND', 'No such parcel'); // do not confirm a parcel exists to a non-party
     }
-    return ParcelService.toConsumerView(p, phoneHash);
+    return ParcelService.toConsumerView(p, phoneHash, true); // detail: carries the in-app collect token
   }
 
-  private static toConsumerView(p: Parcel, phoneHash: string): ConsumerParcelView {
-    return {
+  private static toConsumerView(p: Parcel, phoneHash: string, withToken = false): ConsumerParcelView {
+    const relation = p.receiverPhoneHash === phoneHash ? 'received' : 'sent';
+    const view: ConsumerParcelView = {
       parcelId: p.parcelId,
-      relation: p.receiverPhoneHash === phoneHash ? 'received' : 'sent',
+      relation,
       direction: p.direction,
       status: p.status,
       originZone: p.originZone,
@@ -125,6 +126,13 @@ export class ParcelService implements OnApplicationBootstrap {
       updatedAt: p.scans.length ? p.scans[p.scans.length - 1].at : p.acceptedAt,
       timeline: p.scans.map((s) => ({ at: s.at, status: s.status, note: s.note })),
     };
+    // S22: the receiver's in-app collection token — QR (scanned) + the COL code (typed fallback). Only on
+    // the detail view, only for the receiver, only while collectable — the handover secret leaves the
+    // vault of the twin no wider than it must.
+    if (withToken && relation === 'received' && p.status === 'Ready_For_Pickup' && p.collectionCode) {
+      view.collectToken = { code: p.collectionCode, qrPayload: `sbg:collect:${p.collectionCode}` };
+    }
+    return view;
   }
 
   /** Screen 1 — Accept Parcel (ingest). */
@@ -414,7 +422,7 @@ export class ParcelService implements OnApplicationBootstrap {
     size: ParcelSize;
     destination: string;
     destZone: string;
-    steps: Array<{ status: string; at: string; note?: string }>;
+    steps: Array<{ status: string; at: string }>;
     binSlot?: string;
     destinationLandmark?: string;
     destinationLocation?: { lat: number; lng: number };
@@ -434,7 +442,10 @@ export class ParcelService implements OnApplicationBootstrap {
       // still no PII and no collection code on this surface. Additive for the legacy page.
       destinationLandmark: dest?.landmark,
       destinationLocation: dest?.location,
-      steps: parcel.scans.map((s) => ({ status: s.status, at: s.at, note: s.note })),
+      // O2 audit (S22): status + time ONLY — the raw operator scan NOTE is deliberately NOT exposed here.
+      // It carried the vendor's externalOrderId ("inbound · order …") and other operator text; the public
+      // track ladder derives its words from `status`, so dropping the note removes the leak with no UI cost.
+      steps: parcel.scans.map((s) => ({ status: s.status, at: s.at })),
     };
   }
 

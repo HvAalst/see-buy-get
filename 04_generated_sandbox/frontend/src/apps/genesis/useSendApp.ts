@@ -21,7 +21,7 @@ import {
   type ConsumerClient,
 } from './api';
 import { cleanPhone, codeReady, normalizeKey, phoneReady } from './logic';
-import type { AuthResult, MyParcels, NetworkPoint, ParcelSize, PersonRole, PersonView, QuoteView, SwitchResult, TrackView } from './types';
+import type { AuthResult, ConsumerParcelView, MyParcels, NetworkPoint, ParcelSize, PersonRole, PersonView, QuoteView, SwitchResult, TrackView } from './types';
 
 export type Screen = 'send' | 'track' | 'parcels' | 'account';
 export type WizardStep = 'size' | 'from' | 'to' | 'quote';
@@ -67,7 +67,10 @@ export interface SendState {
   parcels: MyParcels | null;
   parcelsState: 'idle' | 'loading' | 'ready' | 'error';
   parcelsError: SbgError | null;
-  openParcelId: string | null; // detail view; the twin is read from the loaded list
+  openParcelId: string | null; // detail view
+  openParcelDetail: ConsumerParcelView | null; // the single-parcel twin (carries the S22 collect token)
+  openParcelState: 'idle' | 'loading' | 'ready' | 'error';
+  openParcelError: SbgError | null;
 
   /* --- account / role switch --- */
   switchBusy: PersonRole | null;
@@ -107,6 +110,9 @@ const INITIAL: SendState = {
   parcelsState: 'idle',
   parcelsError: null,
   openParcelId: null,
+  openParcelDetail: null,
+  openParcelState: 'idle',
+  openParcelError: null,
   switchBusy: null,
   accountBusy: false,
   accountError: null,
@@ -418,8 +424,32 @@ export function useSendApp() {
 
   /* -------------------------------------------------- my parcels + account */
 
-  const openParcel = useCallback((id: string) => setState((s) => ({ ...s, openParcelId: id })), []);
-  const closeParcel = useCallback(() => setState((s) => ({ ...s, openParcelId: null })), []);
+  // Open the detail AND fetch the single-parcel twin — only that endpoint carries the S22 collect token.
+  // The list row shows instantly; the fetched twin enriches it (the QR + code) when it lands.
+  const openParcelEpoch = useRef(0);
+  const openParcel = useCallback(
+    async (id: string) => {
+      const epoch = ++openParcelEpoch.current;
+      setState((s) => ({ ...s, openParcelId: id, openParcelDetail: null, openParcelState: 'loading', openParcelError: null }));
+      if (!client) return;
+      const r = await client.api.parcel(id);
+      if (epoch !== openParcelEpoch.current) return;
+      if (r.error) {
+        if (isSignInRequired(r.error)) {
+          signOutRef.current(r.error);
+          return;
+        }
+        setState((s) => ({ ...s, openParcelState: 'error', openParcelError: r.error }));
+        return;
+      }
+      setState((s) => ({ ...s, openParcelDetail: narrow<ConsumerParcelView>(r.data), openParcelState: 'ready', openParcelError: null }));
+    },
+    [client],
+  );
+  const closeParcel = useCallback(() => {
+    openParcelEpoch.current++;
+    setState((s) => ({ ...s, openParcelId: null, openParcelDetail: null, openParcelState: 'idle', openParcelError: null }));
+  }, []);
 
   const switchRole = useCallback(
     async (role: PersonRole) => {
@@ -454,7 +484,10 @@ export function useSendApp() {
   /* ------------------------------------------------------------------- nav */
 
   const go = useCallback((screen: Screen) => {
-    setState((s) => ({ ...s, screen, accountError: null, accountNote: null }));
+    // Leaving a screen abandons any open parcel detail + its in-flight fetch, so returning to My parcels
+    // lands on the list and refetches the twin — never re-showing a stale (possibly already-collected) token.
+    openParcelEpoch.current++;
+    setState((s) => ({ ...s, screen, openParcelId: null, openParcelDetail: null, openParcelState: 'idle', openParcelError: null, accountError: null, accountNote: null }));
   }, []);
 
   return {
