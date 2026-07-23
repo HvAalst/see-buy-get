@@ -99,6 +99,10 @@ export function createAgentApi(sbg: SbgClient) {
     /** A bus dropped a bag here — one scan shelves every parcel inside for pickup. */
     receiveBag: (did: string, code: string) =>
       sbg.request((c) => c.POST('/v1/sbg/agents/{did}/receive-bag', { params: { path: { did } }, body: { code } })),
+
+    /** Reverse logistics: undo a drop-off within the 5-minute window with a torn-label photo → refund. */
+    voidParcel: (parcelId: string, agentDid: string, voidedPhotoRef: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/parcels/{id}/void', { params: { path: { id: parcelId } }, body: { agentDid, voidedPhotoRef } })),
   };
 }
 

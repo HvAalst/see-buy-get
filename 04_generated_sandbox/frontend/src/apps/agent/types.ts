@@ -64,6 +64,8 @@ export interface ParcelView {
   toteId?: string;
   items?: Array<{ name: string; qty: number }>;
   collectionCode?: string;
+  /** ISO time the parcel was accepted — drives the 5-minute void window countdown. */
+  acceptedAt?: string;
 }
 
 export interface HandoverView {

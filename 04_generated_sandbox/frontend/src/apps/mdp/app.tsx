@@ -1,5 +1,5 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
-import { BottomNav, Button, Checklist, Icon, Pill, TopBar, type NavItem } from '../../shared/ui';
+import { BottomNav, Button, Checklist, FeedbackFlash, Icon, Pill, TopBar, type NavItem } from '../../shared/ui';
 import { unsortedAt } from './logic';
 import { DropScreen } from './screens/DropScreen';
 import { HomeScreen } from './screens/HomeScreen';
@@ -83,6 +83,7 @@ export function App() {
       <BottomNav<Tab> items={tabs} active={tab} onSelect={(key) => actions.go(key as Screen)} />
 
       <Toasts state={state} actions={actions} />
+      <FeedbackFlash />
     </div>
   );
 }

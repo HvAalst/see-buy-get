@@ -1,20 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import {
   EMPTY_ACCEPT,
+  VOID_WINDOW_MS,
   acceptMissing,
   canAccept,
   destinationZones,
   gateNotice,
   handoverSummary,
   homeSummary,
+  isVoidable,
   money,
   otpValid,
   priceBand,
   releaseStage,
   roundMoney,
   statusNotice,
+  voidCountdownLabel,
+  voidRemainingMs,
+  voidableParcels,
 } from './logic';
-import type { AgentView, Benchmark, CorridorRow, GateView } from './types';
+import type { AgentView, Benchmark, CorridorRow, GateView, ParcelView } from './types';
 
 const agent = (over: Partial<AgentView> = {}): AgentView => ({
   agentId: 'ag_1',
@@ -150,5 +155,49 @@ describe('speaking', () => {
   it('handover summary counts the waiting and the chosen', () => {
     expect(handoverSummary(0, 0)).toContain('No parcels');
     expect(handoverSummary(3, 2)).toContain('3 parcels');
+  });
+});
+
+describe('void / reverse logistics', () => {
+  const NOW = Date.parse('2026-07-23T10:00:00Z');
+  const parcel = (over: Partial<ParcelView> = {}): ParcelView => ({
+    parcelId: 'P-1',
+    size: 'M',
+    status: 'At_PUDO',
+    destZone: 'Z-B',
+    acceptedAt: new Date(NOW - 60_000).toISOString(), // accepted 1 min ago
+    ...over,
+  });
+
+  it('remaining time counts down inside the window and clamps at zero', () => {
+    expect(voidRemainingMs(new Date(NOW).toISOString(), NOW)).toBe(VOID_WINDOW_MS);
+    expect(voidRemainingMs(new Date(NOW - 60_000).toISOString(), NOW)).toBe(VOID_WINDOW_MS - 60_000);
+    expect(voidRemainingMs(new Date(NOW - 6 * 60_000).toISOString(), NOW)).toBe(0);
+    expect(voidRemainingMs(undefined, NOW)).toBe(0);
+    expect(voidRemainingMs('not-a-date', NOW)).toBe(0);
+  });
+
+  it('only an At_PUDO parcel still inside the window is voidable', () => {
+    expect(isVoidable(parcel(), NOW)).toBe(true);
+    expect(isVoidable(parcel({ acceptedAt: new Date(NOW - 6 * 60_000).toISOString() }), NOW)).toBe(false);
+    expect(isVoidable(parcel({ status: 'On_Bus' }), NOW)).toBe(false);
+    expect(isVoidable(parcel({ status: 'Delivered' }), NOW)).toBe(false);
+  });
+
+  it('voidableParcels keeps only the eligible, soonest-to-expire first', () => {
+    const rows = [
+      parcel({ parcelId: 'fresh', acceptedAt: new Date(NOW - 30_000).toISOString() }),
+      parcel({ parcelId: 'expiring', acceptedAt: new Date(NOW - 4 * 60_000).toISOString() }),
+      parcel({ parcelId: 'gone', acceptedAt: new Date(NOW - 10 * 60_000).toISOString() }),
+      parcel({ parcelId: 'onbus', status: 'On_Bus' }),
+    ];
+    expect(voidableParcels(rows, NOW).map((p) => p.parcelId)).toEqual(['expiring', 'fresh']);
+    expect(voidableParcels(null, NOW)).toEqual([]);
+  });
+
+  it('the countdown speaks plainly and never shows a bare number', () => {
+    expect(voidCountdownLabel(VOID_WINDOW_MS)).toBe('5 min left to undo');
+    expect(voidCountdownLabel(45_000)).toBe('45 sec left to undo');
+    expect(voidCountdownLabel(0)).toBe('Window closed');
   });
 });

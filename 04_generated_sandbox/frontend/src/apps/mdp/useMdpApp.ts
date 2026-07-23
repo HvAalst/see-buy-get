@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { isSignInRequired, narrow, sbgForgot, sbgLogin, sbgReset, type SbgError } from '../../lib/sbg';
 import type { IconName } from '../../shared/ui/Icon';
+import { signal } from '../../shared/feedback';
 import { clearDid, createMdpClient, mdpConfig, purgeMdpTokens, readDid, readEmail, saveDid, saveEmail } from './api';
 import { addToQueue, dropFromQueue, findMyHub, unsortedAt } from './logic';
 import type { DropView, LoadView, MdpView, NewToteView, ParcelRow, RatesView, SortView, ToteView } from './types';
@@ -336,15 +337,20 @@ export function useMdpApp() {
     }
   }, []);
 
-  const submitDrop = useCallback(async () => {
+  // `override` carries a freshly scanned value: a camera read sets state AND calls here in
+  // the same tick, before stateRef catches up, so the scan passes its value straight in.
+  const submitDrop = useCallback(async (override?: string) => {
     if (!client) return;
     const hub = stateRef.current.hub;
-    const code = stateRef.current.form.dropCode.trim().toUpperCase();
+    const code = (override ?? stateRef.current.form.dropCode).trim().toUpperCase();
     if (!hub || !code) return;
     await run('drop', async () => {
       const r = await client.api.dropBag(hub.mdpId, code);
-      if (r.error) return fail(r.error);
-      buzz();
+      if (r.error) {
+        signal('error');
+        return fail(r.error);
+      }
+      signal('ok');
       const emptied = narrow<DropView>(r.data)?.emptied ?? [];
       setState((s) => ({
         ...s,
@@ -361,14 +367,15 @@ export function useMdpApp() {
     });
   }, [client, run, fail, pushToast, refresh]);
 
-  const submitSort = useCallback(async () => {
+  const submitSort = useCallback(async (override?: string) => {
     if (!client) return;
     const hub = stateRef.current.hub;
-    const id = stateRef.current.form.sortId.trim().toUpperCase();
+    const id = (override ?? stateRef.current.form.sortId).trim().toUpperCase();
     if (!hub || !id) return;
     await run('sort', async () => {
       const r = await client.api.sort(hub.mdpId, id);
       if (r.error) {
+        signal('error');
         // An unknown or mis-scanned sticker must not stay queued forever — but only a
         // definitive verdict (not found / wrong state) removes it.
         if (r.error.code === 'NOT_FOUND' || r.error.code === 'INVALID_STATE') {
@@ -376,7 +383,7 @@ export function useMdpApp() {
         }
         return fail(r.error);
       }
-      buzz();
+      signal('ok');
       const sorted = narrow<SortView>(r.data);
       setState((s) => ({
         ...s,

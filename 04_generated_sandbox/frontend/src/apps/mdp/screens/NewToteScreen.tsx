@@ -32,11 +32,13 @@ export function NewToteScreen({ state, actions }: NewToteScreenProps) {
         <section class="slotcard" aria-live="polite">
           <p class="slotcard__label">Print and laminate this</p>
           <p class="slotcard__value mono">{t.code}</p>
-          {/* The laminated QR the bag carries for the rest of its life — the tote id is
-              the payload, the human code is printed under it for when a scan fails. */}
+          {/* The laminated QR the bag carries for the rest of its life. It encodes the human
+              CODE (BAG-###), because every bag endpoint — drop, receive, load — keys on the
+              code, not the toteId; the printed code under it is the same value for when a
+              scan fails. (S18 encoded the toteId here, which no endpoint could resolve.) */}
           <div style="margin-top:12px">
             <QrBlock
-              value={qrPayload('tote', t.toteId)}
+              value={qrPayload('tote', t.code)}
               size={200}
               caption={t.code}
               label={`Bag ${t.code} as a scannable code`}

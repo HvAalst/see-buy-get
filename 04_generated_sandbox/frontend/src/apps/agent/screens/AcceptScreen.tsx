@@ -1,4 +1,4 @@
-import { Button, Card, ErrorNote, ReadAloud } from '../../../shared/ui';
+import { Button, Card, ErrorNote, ReadAloud, ScanField } from '../../../shared/ui';
 import { SIZES, acceptMissing } from '../logic';
 import type { AgentActions, AgentState } from '../useAgentApp';
 import { PhotoField } from './PhotoField';
@@ -24,21 +24,15 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
       {state.error ? <ErrorNote error={state.error} /> : null}
 
       <Card>
-        <div class="field">
-          <label class="field__label" for="sticker">
-            Parcel sticker
-          </label>
-          <input
-            id="sticker"
-            class="input input--mono"
-            value={f.parcelId}
-            onInput={(e) => actions.setAccept({ parcelId: e.currentTarget.value })}
-            placeholder="Scan or type the sticker ID"
-            autocapitalize="characters"
-            autocomplete="off"
-            spellcheck={false}
-          />
-        </div>
+        <ScanField
+          id="sticker"
+          label="Parcel sticker"
+          value={f.parcelId}
+          onValue={(v) => actions.setAccept({ parcelId: v })}
+          expect="parcel"
+          placeholder="Scan or type the sticker ID"
+          upper
+        />
       </Card>
 
       <Card label="How big is it?">

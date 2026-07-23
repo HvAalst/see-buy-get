@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { Button, Card, Checklist, ErrorNote, GlanceNumber, Icon, Note, Pill, QrBlock, ReadAloud, Sheet } from '../../../shared/ui';
+import { Button, Card, Checklist, ErrorNote, GlanceNumber, Icon, Note, Pill, QrBlock, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
 import { qrPayload } from '../../../shared/qr';
 import {
   canStartShift,
@@ -37,29 +37,21 @@ function OffShift({ state, actions }: HomeScreenProps) {
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
 
       <Card>
-        <div class="field">
-          <label class="field__label" for="qr">
-            Vehicle QR
-          </label>
-          <input
-            id="qr"
-            class="input input--mono"
-            value={state.form.vehicleQr}
-            onInput={(e) => actions.setForm({ vehicleQr: e.currentTarget.value.trim() })}
-            placeholder="Scan the code on the dashboard"
-            autocapitalize="characters"
-            autocomplete="off"
-            autocorrect="off"
-            spellcheck={false}
-            enterkeyhint="go"
-          />
-        </div>
+        <ScanField
+          id="qr"
+          label="Vehicle QR"
+          value={state.form.vehicleQr}
+          onValue={(v) => actions.setForm({ vehicleQr: v.trim() })}
+          expect="vehicle"
+          placeholder="Scan the code on the dashboard"
+          enterKeyHint="go"
+        />
         <p class="card__note">Scanning the dashboard sticker couples you to that vehicle for the day.</p>
       </Card>
 
       <div class="scr__cta">
         <Button onClick={() => void actions.startShift()} disabled={!ready} busy={state.busy === 'start'}>
-          Scan vehicle — start shift
+          Start shift
         </Button>
       </div>
 

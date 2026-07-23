@@ -1,4 +1,4 @@
-import { Button, Card, Checklist, ErrorNote, ReadAloud } from '../../../shared/ui';
+import { Button, Card, Checklist, ErrorNote, ReadAloud, ScanField } from '../../../shared/ui';
 import type { MdpActions, MdpState } from '../useMdpApp';
 
 export interface DropScreenProps {
@@ -18,22 +18,17 @@ export function DropScreen({ state, actions }: DropScreenProps) {
       {state.error ? <ErrorNote error={state.error} /> : null}
 
       <Card>
-        <div class="field">
-          <label class="field__label" for="drop-code">
-            Bag code
-          </label>
-          <input
-            id="drop-code"
-            class="input input--mono"
-            value={code}
-            onInput={(e) => actions.setForm({ dropCode: e.currentTarget.value })}
-            placeholder="BAG-000"
-            autocapitalize="characters"
-            autocomplete="off"
-            spellcheck={false}
-            enterkeyhint="go"
-          />
-        </div>
+        <ScanField
+          id="drop-code"
+          label="Bag code"
+          value={code}
+          onValue={(v) => actions.setForm({ dropCode: v })}
+          expect="tote"
+          placeholder="BAG-000"
+          upper
+          enterKeyHint="go"
+          onScan={(v) => void actions.submitDrop(v)}
+        />
       </Card>
 
       <div class="scr__cta">

@@ -1,4 +1,4 @@
-import { Button, Card, Checklist, CodeBoxes, CodeCard, ErrorNote, Note, ReadAloud } from '../../../shared/ui';
+import { Button, Card, Checklist, CodeBoxes, CodeCard, ErrorNote, Note, ReadAloud, ScanField } from '../../../shared/ui';
 import { otpValid, releaseBlockedDetail, releaseStage } from '../logic';
 import type { AgentActions, AgentState } from '../useAgentApp';
 import { PhotoField } from './PhotoField';
@@ -26,22 +26,17 @@ export function ReleaseScreen({ state, actions }: ReleaseScreenProps) {
       {state.error ? <ErrorNote error={state.error} /> : null}
 
       <Card>
-        <div class="field">
-          <label class="field__label" for="pick-id">
-            Parcel sticker
-          </label>
-          <input
-            id="pick-id"
-            class="input input--mono"
-            value={f.stickerId}
-            onInput={(e) => actions.setRelease({ stickerId: e.currentTarget.value })}
-            placeholder="Scan the sticker"
-            autocapitalize="characters"
-            autocomplete="off"
-            spellcheck={false}
-            enterkeyhint="search"
-          />
-        </div>
+        <ScanField
+          id="pick-id"
+          label="Parcel sticker"
+          value={f.stickerId}
+          onValue={(v) => actions.setRelease({ stickerId: v })}
+          expect="parcel"
+          placeholder="Scan the sticker"
+          upper
+          enterKeyHint="search"
+          onScan={(v) => void actions.findRelease(v)}
+        />
         <div style="margin-top:12px">
           <Button chevron={false} onClick={() => void actions.findRelease()} disabled={!f.stickerId.trim()} busy={state.busy === 'find'}>
             Find the parcel

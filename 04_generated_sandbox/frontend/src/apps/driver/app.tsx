@@ -1,5 +1,5 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
-import { BottomNav, Button, Checklist, Icon, Pill, TopBar, type NavItem } from '../../shared/ui';
+import { BottomNav, Button, Checklist, FeedbackFlash, Icon, Pill, TopBar, type NavItem } from '../../shared/ui';
 import { HomeScreen } from './screens/HomeScreen';
 import { LoadsScreen } from './screens/LoadsScreen';
 import { OffersScreen } from './screens/OffersScreen';
@@ -84,6 +84,7 @@ export function App() {
       />
 
       <Toasts state={state} actions={actions} />
+      <FeedbackFlash />
     </div>
   );
 }

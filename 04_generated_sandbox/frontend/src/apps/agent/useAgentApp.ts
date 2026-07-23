@@ -10,6 +10,7 @@ import {
 } from '../../lib/sbg';
 import type { IconName } from '../../shared/ui/Icon';
 import { agentConfig, clearDid, createAgentClient, purgeAgentTokens, readDid, readEmail, saveDid, saveEmail } from './api';
+import { signal } from '../../shared/feedback';
 import { EMPTY_ACCEPT, destinationZones, otpValid, type AcceptForm } from './logic';
 import type {
   AgentView,
@@ -23,7 +24,7 @@ import type {
   ReceiveBagView,
 } from './types';
 
-export type Screen = 'home' | 'accept' | 'handover' | 'release' | 'collect' | 'receivebag' | 'rates';
+export type Screen = 'home' | 'accept' | 'handover' | 'release' | 'collect' | 'receivebag' | 'rates' | 'void';
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
 
 export interface Toast {
@@ -56,6 +57,8 @@ export interface AgentState {
   release: { stickerId: string; parcel: ParcelView | null; otp: string; issuedOtp: string | null; stars: number; photoRef: string };
   collect: { code: string; found: CollectView | null; disputing: boolean; reason: string; photoRef: string };
   receivebag: { code: string };
+  /** The reverse-logistics window: which recent drop-off is being undone, + its torn-label photo. */
+  void: { parcelId: string | null; photoRef: string };
 }
 
 const EMPTY_HANDOVER = { badge: '', selected: [] as string[] };
@@ -82,6 +85,7 @@ const INITIAL: AgentState = {
   release: { ...EMPTY_RELEASE },
   collect: { ...EMPTY_COLLECT },
   receivebag: { code: '' },
+  void: { parcelId: null, photoRef: '' },
 };
 
 const isOffline = (e: SbgError) => e.code === 'NETWORK' || e.code === 'TIMEOUT';
@@ -351,8 +355,8 @@ export function useAgentApp() {
 
   const go = useCallback(
     (screen: Screen) => {
-      setState((s) => ({ ...s, screen, error: null }));
-      if (screen === 'handover') void loadShopParcels();
+      setState((s) => ({ ...s, screen, error: null, void: screen === 'void' ? { parcelId: null, photoRef: '' } : s.void }));
+      if (screen === 'handover' || screen === 'void') void loadShopParcels();
       if (screen === 'rates') void loadRates();
     },
     [loadShopParcels, loadRates],
@@ -381,6 +385,12 @@ export function useAgentApp() {
   }, []);
   const setReceiveBag = useCallback((code: string) => {
     setState((s) => ({ ...s, receivebag: { code } }));
+  }, []);
+  const openVoid = useCallback((parcelId: string | null) => {
+    setState((s) => ({ ...s, void: { parcelId, photoRef: '' }, error: null }));
+  }, []);
+  const setVoidPhoto = useCallback((photoRef: string) => {
+    setState((s) => ({ ...s, void: { ...s.void, photoRef } }));
   }, []);
 
   /* ------------------------------------------------------------ mutations */
@@ -456,7 +466,9 @@ export function useAgentApp() {
     await run('accept', async () => {
       const r = await client.api.accept({
         agentDid: did,
-        parcelId: f.parcelId.trim(),
+        // The created id becomes the canonical Map key; uppercase it so it matches the
+        // printed (uppercase) sticker on every later scan/lookup.
+        parcelId: f.parcelId.trim().toUpperCase(),
         size: f.size as 'S' | 'M' | 'L' | 'HEAVY',
         destZone: f.destZone.trim(),
         senderMobile: f.senderMobile.trim() || 'n/a',
@@ -476,7 +488,8 @@ export function useAgentApp() {
     const f = stateRef.current.handover;
     if (!f.badge.trim() || f.selected.length === 0) return;
     await run('handover', async () => {
-      const r = await client.api.handover(did, f.badge.trim(), f.selected);
+      // Driver badges are DRV-<uppercase hex>, resolved by a case-sensitive Map (byBadge).
+      const r = await client.api.handover(did, f.badge.trim().toUpperCase(), f.selected);
       if (r.error) {
         // Reconcile the list (some parcels may have moved), then explain.
         await loadShopParcels();
@@ -496,9 +509,13 @@ export function useAgentApp() {
     });
   }, [client, did, run, fail, pushToast, refresh, loadShopParcels]);
 
-  const findRelease = useCallback(async () => {
+  // `override` carries a freshly scanned value: a camera read sets state AND calls here in
+  // the same tick, and stateRef has not caught up yet, so the scan passes its value in.
+  const findRelease = useCallback(async (override?: string) => {
     if (!client) return;
-    const id = stateRef.current.release.stickerId.trim();
+    // Parcel ids are uppercase and resolved by a case-sensitive Map — a typed lowercase
+    // sticker would otherwise read as "not found".
+    const id = (override ?? stateRef.current.release.stickerId).trim().toUpperCase();
     if (!id) return;
     await run('find', async () => {
       const r = await client.api.parcel(id);
@@ -552,9 +569,10 @@ export function useAgentApp() {
     });
   }, [client, run, fail, pushToast]);
 
-  const findCollect = useCallback(async () => {
+  const findCollect = useCallback(async (override?: string) => {
     if (!client || !did) return;
-    const code = stateRef.current.collect.code.trim();
+    // Collection codes are COL-<uppercase hex> and matched case-sensitively server-side.
+    const code = (override ?? stateRef.current.collect.code).trim().toUpperCase();
     if (!code) return;
     await run('collect-find', async () => {
       const r = await client.api.collect(did, code);
@@ -592,14 +610,17 @@ export function useAgentApp() {
     });
   }, [client, did, run, fail, pushToast]);
 
-  const submitReceiveBag = useCallback(async () => {
+  const submitReceiveBag = useCallback(async (override?: string) => {
     if (!client || !did) return;
-    const code = stateRef.current.receivebag.code.trim().toUpperCase();
+    const code = (override ?? stateRef.current.receivebag.code).trim().toUpperCase();
     if (!code) return;
     await run('receivebag', async () => {
       const r = await client.api.receiveBag(did, code);
-      if (r.error) return fail(r.error);
-      buzz();
+      if (r.error) {
+        signal('error');
+        return fail(r.error);
+      }
+      signal('ok');
       const v = narrow<ReceiveBagView>(r.data);
       setState((s) => ({ ...s, receivebag: { code: '' }, screen: 'home' }));
       pushToast({
@@ -611,6 +632,30 @@ export function useAgentApp() {
       await refresh();
     });
   }, [client, did, run, fail, pushToast, refresh]);
+
+  /**
+   * Reverse logistics (compendium Ch 16.1): undo a drop-off inside the 5-minute window with
+   * a photo of the torn label, and the wallet is refunded. The server is the real clock —
+   * WINDOW_EXPIRED / WRONG_PUDO come back as typed errors and fire the red signal, so a
+   * worker who was a second too late hears it.
+   */
+  const submitVoid = useCallback(async () => {
+    if (!client || !did) return;
+    const { parcelId, photoRef } = stateRef.current.void;
+    if (!parcelId || !photoRef) return;
+    await run('void', async () => {
+      const r = await client.api.voidParcel(parcelId, did, photoRef);
+      if (r.error) {
+        signal('error');
+        await loadShopParcels();
+        return fail(r.error);
+      }
+      signal('ok');
+      setState((s) => ({ ...s, void: { parcelId: null, photoRef: '' }, screen: 'home' }));
+      pushToast({ tone: 'ok', icon: 'refresh', title: 'Drop-off undone', detail: 'Your wallet was refunded.' });
+      await refresh();
+    });
+  }, [client, did, run, fail, pushToast, refresh, loadShopParcels]);
 
   return {
     state,
@@ -641,6 +686,9 @@ export function useAgentApp() {
       confirmCollect,
       submitDispute,
       submitReceiveBag,
+      openVoid,
+      setVoidPhoto,
+      submitVoid,
       pushToast,
       dismissToast,
       readEmail,

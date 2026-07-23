@@ -1,4 +1,4 @@
-import { Button, Card, Checklist, ErrorNote, ReadAloud } from '../../../shared/ui';
+import { Button, Card, Checklist, ErrorNote, ReadAloud, ScanField } from '../../../shared/ui';
 import type { AgentActions, AgentState } from '../useAgentApp';
 
 export interface ReceiveBagScreenProps {
@@ -21,22 +21,17 @@ export function ReceiveBagScreen({ state, actions }: ReceiveBagScreenProps) {
       {state.error ? <ErrorNote error={state.error} /> : null}
 
       <Card>
-        <div class="field">
-          <label class="field__label" for="bag-code">
-            Bag code
-          </label>
-          <input
-            id="bag-code"
-            class="input input--mono"
-            value={code}
-            onInput={(e) => actions.setReceiveBag(e.currentTarget.value)}
-            placeholder="BAG-000"
-            autocapitalize="characters"
-            autocomplete="off"
-            spellcheck={false}
-            enterkeyhint="go"
-          />
-        </div>
+        <ScanField
+          id="bag-code"
+          label="Bag code"
+          value={code}
+          onValue={(v) => actions.setReceiveBag(v)}
+          expect="tote"
+          placeholder="BAG-000"
+          upper
+          enterKeyHint="go"
+          onScan={(v) => void actions.submitReceiveBag(v)}
+        />
       </Card>
 
       <div class="scr__cta">

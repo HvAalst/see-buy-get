@@ -6,7 +6,7 @@
  * so the PWA and the old page can never disagree about what "locked" or "12% above" means.
  */
 
-import type { AgentStatus, AgentView, Benchmark, CorridorRow, GateView, ParcelSize, ParcelStatus } from './types';
+import type { AgentStatus, AgentView, Benchmark, CorridorRow, GateView, ParcelSize, ParcelStatus, ParcelView } from './types';
 
 /* ------------------------------------------------------------------- gate -- */
 
@@ -192,4 +192,41 @@ export function homeSummary(agent: AgentView | null, gate: GateView | null): str
 export function handoverSummary(count: number, selected: number): string {
   if (count === 0) return 'No parcels are waiting for the bus.';
   return `${count} parcels waiting. ${selected} selected. Scan the driver badge, then finish the handover.`;
+}
+
+/* -------------------------------------------------------------------- void -- */
+
+/**
+ * Reverse-logistics window — must match backend VOID_WINDOW_MS (pudo.config.ts). The client
+ * computes the countdown so the list drops a parcel the moment its window closes; the server
+ * is still the authority and rejects a late void with WINDOW_EXPIRED.
+ */
+export const VOID_WINDOW_MS = 5 * 60 * 1000;
+
+/** Milliseconds left to undo this drop-off, clamped to zero (never negative). */
+export function voidRemainingMs(acceptedAt: string | undefined, now: number): number {
+  if (!acceptedAt) return 0;
+  const t = Date.parse(acceptedAt);
+  if (Number.isNaN(t)) return 0;
+  return Math.max(0, VOID_WINDOW_MS - (now - t));
+}
+
+/** Only an At_PUDO parcel still inside its window can be voided — mirrors the server's guard. */
+export function isVoidable(p: Pick<ParcelView, 'status' | 'acceptedAt'>, now: number): boolean {
+  return p.status === 'At_PUDO' && voidRemainingMs(p.acceptedAt, now) > 0;
+}
+
+/** The recent drop-offs a shop may still undo, soonest-to-expire first. */
+export function voidableParcels(parcels: ParcelView[] | null, now: number): ParcelView[] {
+  return (parcels ?? [])
+    .filter((p) => isVoidable(p, now))
+    .sort((a, b) => voidRemainingMs(a.acceptedAt, now) - voidRemainingMs(b.acceptedAt, now));
+}
+
+/** "3 min left to undo" / "45 sec left to undo" — never a bare number. */
+export function voidCountdownLabel(ms: number): string {
+  if (ms <= 0) return 'Window closed';
+  const seconds = Math.ceil(ms / 1000);
+  if (seconds < 60) return `${seconds} sec left to undo`;
+  return `${Math.ceil(seconds / 60)} min left to undo`;
 }

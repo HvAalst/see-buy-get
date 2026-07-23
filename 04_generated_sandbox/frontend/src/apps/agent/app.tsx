@@ -1,5 +1,5 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
-import { BottomNav, Button, Checklist, Icon, Pill, TopBar, type NavItem } from '../../shared/ui';
+import { BottomNav, Button, Checklist, FeedbackFlash, Icon, Pill, TopBar, type NavItem } from '../../shared/ui';
 import { AcceptScreen } from './screens/AcceptScreen';
 import { CollectScreen } from './screens/CollectScreen';
 import { HandoverScreen } from './screens/HandoverScreen';
@@ -8,6 +8,7 @@ import { RatesScreen } from './screens/RatesScreen';
 import { ReceiveBagScreen } from './screens/ReceiveBagScreen';
 import { ReleaseScreen } from './screens/ReleaseScreen';
 import { SignInScreen } from './screens/SignInScreen';
+import { VoidScreen } from './screens/VoidScreen';
 import { useAgentApp, type AgentActions, type AgentState, type Screen } from './useAgentApp';
 import '../../shared/screens.css';
 import './agent.css';
@@ -83,6 +84,7 @@ export function App() {
       <BottomNav<Tab> items={tabs} active={tab} onSelect={(key) => actions.go(key as Screen)} />
 
       <Toasts state={state} actions={actions} />
+      <FeedbackFlash />
     </div>
   );
 }
@@ -99,6 +101,8 @@ function ScreenRouter({ screen, state, actions }: { screen: Screen; state: Agent
       return <CollectScreen state={state} actions={actions} />;
     case 'receivebag':
       return <ReceiveBagScreen state={state} actions={actions} />;
+    case 'void':
+      return <VoidScreen state={state} actions={actions} />;
     case 'rates':
       return <RatesScreen state={state} actions={actions} />;
     default:

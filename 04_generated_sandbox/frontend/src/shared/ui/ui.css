@@ -1046,3 +1046,227 @@
   gap: 16px;
   flex-wrap: wrap;
 }
+
+/* ---------------------------------------------------------- feedback flash -- */
+
+/* The screen-flash channel: a single translucent wash on a scan/void result. One pulse
+   per event (never a strobe), above the toasts, click-through. FeedbackFlash renders it
+   only when motion is allowed and clears it on a timer, so it can never stick. */
+/* Above EVERYTHING, including the full-screen Scanner (z 200): the red mismatch wash and
+   the green success wash are the topmost feedback layer, and being click-through they never
+   trap a tap. Below this and a scan-time mismatch flash would render behind the opaque
+   camera and be invisible to a deaf worker. */
+.flash {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  pointer-events: none;
+  opacity: 0;
+  animation: flash-pulse 0.44s ease-out;
+}
+
+.flash--ok {
+  background: var(--ok);
+}
+
+.flash--warn {
+  background: var(--navy);
+}
+
+.flash--error {
+  background: var(--dang);
+}
+
+@keyframes flash-pulse {
+  0% {
+    opacity: 0;
+  }
+  22% {
+    opacity: 0.32;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ------------------------------------------------------------- scan field -- */
+
+.scanfield {
+  display: flex;
+  gap: 10px;
+}
+
+.scanfield__input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The camera shortcut beside the input — outline weight, never a second solid CTA. */
+.scanfield__btn {
+  flex: none;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 68px;
+  min-height: 56px;
+  padding: 6px 10px;
+  border: 1.5px solid var(--blue);
+  border-radius: var(--r-ctl);
+  background: var(--bg);
+  color: var(--blue);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.scanfield__btn:active {
+  background: var(--blue-soft);
+  transform: translateY(1px);
+}
+
+/* --------------------------------------------------------------- scanner -- */
+
+/* The full-screen camera. Black ground so the viewfinder is the whole surface; a bright
+   navy reticle to aim into; controls float over the top and bottom edges. */
+.scanner {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.scanner__video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.scanner__top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: calc(14px + var(--sa-t)) calc(16px + var(--sa-r)) 14px calc(16px + var(--sa-l));
+  background: linear-gradient(#000000cc, #0000);
+  color: #fff;
+}
+
+.scanner__title {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.scanner__x {
+  flex: none;
+  width: var(--tap);
+  height: var(--tap);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  color: #fff;
+  border-radius: 999px;
+}
+
+.scanner__x:active {
+  background: #ffffff2a;
+}
+
+/* The aim frame: a square with a bright edge, centred. */
+.scanner__reticle {
+  position: relative;
+  z-index: 1;
+  width: min(66vw, 260px);
+  aspect-ratio: 1;
+  border: 3px solid var(--blue);
+  border-radius: 18px;
+  box-shadow: 0 0 0 100vmax #00000066;
+}
+
+.scanner__hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(120px + var(--sa-b));
+  z-index: 2;
+  margin: 0 auto;
+  max-width: 320px;
+  padding: 10px 16px;
+  text-align: center;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-shadow: 0 1px 3px #000000cc;
+}
+
+.scanner__torch {
+  position: absolute;
+  bottom: calc(40px + var(--sa-b));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--tap);
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1.5px solid #ffffff66;
+  background: #00000066;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.scanner__torch--on {
+  background: var(--bg);
+  color: var(--navy);
+  border-color: var(--bg);
+}
+
+/* Denied / unsupported: a readable card, never a blank black screen — with the way back
+   to the keyboard, so the camera is never a dead end. */
+.scanner__fallback {
+  position: relative;
+  z-index: 2;
+  max-width: 340px;
+  margin: 0 24px;
+  padding: 28px 24px;
+  border-radius: var(--r-card);
+  background: var(--bg);
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.scanner__fallback-ic {
+  color: var(--tx3);
+}
+
+.scanner__fallback-t {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--navy);
+}
+
+.scanner__fallback-s {
+  font-size: 15px;
+  color: var(--tx2);
+  line-height: 1.5;
+  margin-bottom: 8px;
+}

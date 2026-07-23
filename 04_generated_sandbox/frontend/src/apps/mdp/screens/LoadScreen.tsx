@@ -1,4 +1,4 @@
-import { Button, Card, ErrorNote, Icon, ReadAloud } from '../../../shared/ui';
+import { Button, Card, ErrorNote, Icon, ReadAloud, ScanField } from '../../../shared/ui';
 import { bagLine, fillPercent, loadableBags, swatchIndex } from '../logic';
 import type { MdpActions, MdpState } from '../useMdpApp';
 
@@ -54,21 +54,15 @@ export function LoadScreen({ state, actions }: LoadScreenProps) {
           </Card>
 
           <Card>
-            <div class="field">
-              <label class="field__label" for="load-badge">
-                Driver badge
-              </label>
-              <input
-                id="load-badge"
-                class="input input--mono"
-                value={f.badge}
-                onInput={(e) => actions.setForm({ badge: e.currentTarget.value })}
-                placeholder="Scan the badge"
-                autocapitalize="characters"
-                autocomplete="off"
-                spellcheck={false}
-              />
-            </div>
+            <ScanField
+              id="load-badge"
+              label="Driver badge"
+              value={f.badge}
+              onValue={(v) => actions.setForm({ badge: v })}
+              expect="badge"
+              placeholder="Scan the badge"
+              upper
+            />
             <p class="card__note">One scan moves the whole bag — every parcel inside goes on the bus.</p>
           </Card>
 

@@ -1,4 +1,4 @@
-import { Button, Card, Checklist, ErrorNote, QrBlock, ReadAloud, Sheet } from '../../../shared/ui';
+import { Button, Card, Checklist, ErrorNote, QrBlock, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
 import { qrPayload } from '../../../shared/qr';
 import type { AgentActions, AgentState } from '../useAgentApp';
 import { PhotoField } from './PhotoField';
@@ -27,22 +27,17 @@ export function CollectScreen({ state, actions }: CollectScreenProps) {
       {state.error ? <ErrorNote error={state.error} /> : null}
 
       <Card>
-        <div class="field">
-          <label class="field__label" for="collect-code">
-            Collection code
-          </label>
-          <input
-            id="collect-code"
-            class="input input--mono"
-            value={f.code}
-            onInput={(e) => actions.setCollect({ code: e.currentTarget.value })}
-            placeholder="Scan or type the code"
-            autocapitalize="characters"
-            autocomplete="off"
-            spellcheck={false}
-            enterkeyhint="search"
-          />
-        </div>
+        <ScanField
+          id="collect-code"
+          label="Collection code"
+          value={f.code}
+          onValue={(v) => actions.setCollect({ code: v })}
+          expect="collect"
+          placeholder="Scan or type the code"
+          upper
+          enterKeyHint="search"
+          onScan={(v) => void actions.findCollect(v)}
+        />
         <div style="margin-top:12px">
           <Button chevron={false} onClick={() => void actions.findCollect()} disabled={!f.code.trim()} busy={state.busy === 'collect-find'}>
             Find the order

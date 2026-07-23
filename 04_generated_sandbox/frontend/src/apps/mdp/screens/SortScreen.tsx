@@ -1,4 +1,4 @@
-import { Button, Card, ErrorNote, ReadAloud } from '../../../shared/ui';
+import { Button, Card, ErrorNote, ReadAloud, ScanField } from '../../../shared/ui';
 import { bagLine, fillPercent, fillingBags, placeLine, sortSummary, swatchIndex } from '../logic';
 import type { MdpActions, MdpState } from '../useMdpApp';
 
@@ -33,22 +33,17 @@ export function SortScreen({ state, actions }: SortScreenProps) {
       ) : null}
 
       <Card>
-        <div class="field">
-          <label class="field__label" for="sort-id">
-            {`Next parcel (${state.queue.length} queued)`}
-          </label>
-          <input
-            id="sort-id"
-            class="input input--mono"
-            value={state.form.sortId}
-            onInput={(e) => actions.setForm({ sortId: e.currentTarget.value })}
-            placeholder="Scan the sticker"
-            autocapitalize="characters"
-            autocomplete="off"
-            spellcheck={false}
-            enterkeyhint="go"
-          />
-        </div>
+        <ScanField
+          id="sort-id"
+          label={`Next parcel (${state.queue.length} queued)`}
+          value={state.form.sortId}
+          onValue={(v) => actions.setForm({ sortId: v })}
+          expect="parcel"
+          placeholder="Scan the sticker"
+          upper
+          enterKeyHint="go"
+          onScan={(v) => void actions.submitSort(v)}
+        />
         <div style="margin-top:12px">
           <Button chevron={false} onClick={() => void actions.submitSort()} disabled={!state.form.sortId.trim()} busy={state.busy === 'sort'}>
             Sort — where does it go?

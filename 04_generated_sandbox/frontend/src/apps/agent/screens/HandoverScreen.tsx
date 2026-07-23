@@ -1,4 +1,4 @@
-import { Button, Card, ErrorNote, Icon, Note, ReadAloud } from '../../../shared/ui';
+import { Button, Card, ErrorNote, Icon, Note, ReadAloud, ScanField } from '../../../shared/ui';
 import { handoverSummary } from '../logic';
 import type { AgentActions, AgentState } from '../useAgentApp';
 
@@ -24,21 +24,15 @@ export function HandoverScreen({ state, actions }: HandoverScreenProps) {
       {state.error ? <ErrorNote error={state.error} onRetry={() => actions.go('handover')} /> : null}
 
       <Card>
-        <div class="field">
-          <label class="field__label" for="badge">
-            Driver badge
-          </label>
-          <input
-            id="badge"
-            class="input input--mono"
-            value={f.badge}
-            onInput={(e) => actions.setHandover({ badge: e.currentTarget.value })}
-            placeholder="Scan the badge"
-            autocapitalize="characters"
-            autocomplete="off"
-            spellcheck={false}
-          />
-        </div>
+        <ScanField
+          id="badge"
+          label="Driver badge"
+          value={f.badge}
+          onValue={(v) => actions.setHandover({ badge: v })}
+          expect="badge"
+          placeholder="Scan the badge"
+          upper
+        />
       </Card>
 
       <Card label={`Waiting at your shop (${rows.length})`}>
