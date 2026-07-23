@@ -133,6 +133,10 @@ export interface ConsumerParcelView {
   timeline: Array<{ at: string; status: ParcelStatus | 'CREATED'; note?: string }>;
   /** The in-app collection token (S22) — only on the single-parcel detail, for the receiver, when ready. */
   collectToken?: { code: string; qrPayload: string };
+  /** S23: the receiver's own photos + reason (present only on their own — received — view). */
+  podPhotoRef?: string;
+  disputePhotoRef?: string;
+  disputeReason?: string;
 }
 
 export interface MyParcels {

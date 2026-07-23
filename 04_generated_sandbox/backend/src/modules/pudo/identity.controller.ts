@@ -7,7 +7,7 @@ import { PersonService } from './person.service';
 import { OtpService } from './otp.service';
 import { ParcelService } from './parcel.service';
 import { toView } from './person.types';
-import { EnrollDto, PinLoginDto, SetPinDto, SwitchRoleDto } from './pudo.dto';
+import { BuyerDisputeDto, EnrollDto, PinLoginDto, PodDto, SetPinDto, SwitchRoleDto } from './pudo.dto';
 
 /**
  * Identity — the authenticated consumer surface (S20). "One person, one account, many roles."
@@ -90,5 +90,21 @@ export class IdentityController {
   parcel(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
     const person = this.persons.requireByDid(actor.did!);
     return this.parcels.consumerParcel(id, person.phoneHash);
+  }
+
+  /** The receiver attaches their own delivered-state photo (proof of what they received) — S23. */
+  @Roles('consumer')
+  @Post('parcels/:id/pod')
+  addPod(@Param('id') id: string, @Body() dto: PodDto, @Actor() actor: IntrospectionResult) {
+    const person = this.persons.requireByDid(actor.did!);
+    return this.parcels.attachPod(id, person.phoneHash, person.personDid, dto.photoRef);
+  }
+
+  /** The receiver files a delivery dispute (reason + photo) → routed to the vendor / sender + control tower. */
+  @Roles('consumer')
+  @Post('parcels/:id/dispute')
+  disputeParcel(@Param('id') id: string, @Body() dto: BuyerDisputeDto, @Actor() actor: IntrospectionResult) {
+    const person = this.persons.requireByDid(actor.did!);
+    return this.parcels.buyerDispute(id, person.phoneHash, person.personDid, dto.reason, dto.photoRef);
   }
 }

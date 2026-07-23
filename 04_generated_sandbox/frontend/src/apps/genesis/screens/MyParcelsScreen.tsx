@@ -1,5 +1,6 @@
-import { useEffect } from 'preact/hooks';
-import { Button, Card, Checklist, CodeCard, ErrorNote, Icon, Pill, ReadAloud } from '../../../shared/ui';
+import { useEffect, useState } from 'preact/hooks';
+import { Button, Card, Checklist, CodeCard, ErrorNote, Icon, Note, Pill, ReadAloud, Sheet } from '../../../shared/ui';
+import { PhotoField } from './PhotoField';
 import { LADDER, isOffLadder, ladderIndex, parcelRowLine, relationWord, sortForPerson, statusPresentation, stepTime } from '../logic';
 import type { ConsumerParcelView, ParcelStatus } from '../types';
 import type { SendActions, SendState } from '../useSendApp';
@@ -96,6 +97,16 @@ function ParcelDetail({ parcel, state, actions }: { parcel: ConsumerParcelView; 
   const off = isOffLadder(parcel.status);
   const stepFor = (s: ParcelStatus) => parcel.timeline.find((x) => x.status === s || (s === 'Created' && x.status === 'CREATED'));
 
+  // S23: the receiver's delivered-state actions live on a Delivered parcel that is theirs.
+  const canAct = parcel.relation === 'received' && parcel.status === 'Delivered';
+  const [disputeOpen, setDisputeOpen] = useState(false);
+  const [reason, setReason] = useState('');
+  const [photo, setPhoto] = useState('');
+  // Close the sheet once the dispute has landed (the twin flips to Disputed).
+  useEffect(() => {
+    if (parcel.status === 'Disputed') setDisputeOpen(false);
+  }, [parcel.status]);
+
   return (
     <div class="scr">
       <div class="scr__back">
@@ -138,6 +149,29 @@ function ParcelDetail({ parcel, state, actions }: { parcel: ConsumerParcelView; 
         </>
       ) : null}
 
+      {/* S23: a problem was reported on this parcel — the seller and the control tower have been told. */}
+      {parcel.relation === 'received' && parcel.status === 'Disputed' ? (
+        <Note
+          tone="danger"
+          icon="warning"
+          title="Problem reported"
+          detail={parcel.disputeReason ? `You reported: ${parcel.disputeReason}` : 'The seller and our team have been told.'}
+        />
+      ) : null}
+
+      {/* S23: once it is delivered, the receiver keeps their own proof of what arrived, and can report a
+          problem — a reason + a photo — which routes to the seller (or the sender) and the control tower. */}
+      {canAct ? (
+        <Card label="Got your parcel?">
+          <PhotoField id="pod-photo" value={parcel.podPhotoRef ?? ''} label="Add a photo of what you received" onCapture={(ref) => void actions.submitPod(ref)} disabled={state.podBusy} />
+          <div style="margin-top:10px">
+            <Button variant="outline" chevron={false} onClick={() => { setReason(''); setPhoto(parcel.podPhotoRef ?? ''); setDisputeOpen(true); }}>
+              Report a problem
+            </Button>
+          </div>
+        </Card>
+      ) : null}
+
       {parcel.items?.length ? (
         <Card label="What is inside">
           <Checklist items={parcel.items.map((it) => `${it.qty} × ${it.name}`)} />
@@ -173,6 +207,25 @@ function ParcelDetail({ parcel, state, actions }: { parcel: ConsumerParcelView; 
       <div class="scr__foot">
         <ReadAloud text={() => `Parcel ${parcel.parcelId}: ${pres.word.toLowerCase()}.`} label="Read this aloud" />
       </div>
+
+      <Sheet open={disputeOpen} onClose={() => setDisputeOpen(false)} title="Report a problem">
+        {state.disputeError ? <ErrorNote error={state.disputeError} /> : null}
+        <div class="field">
+          <label class="field__label" for="dispute-reason">What is wrong?</label>
+          <input
+            id="dispute-reason"
+            class="input"
+            value={reason}
+            onInput={(e) => setReason(e.currentTarget.value)}
+            placeholder="e.g. the box was empty"
+          />
+        </div>
+        <PhotoField id="dispute-photo" value={photo} label="Photo of what you received" onCapture={setPhoto} disabled={state.disputeBusy} />
+        <Button chevron={false} disabled={!reason.trim() || !photo} busy={state.disputeBusy} onClick={() => void actions.submitDispute(reason, photo)}>
+          Send the report
+        </Button>
+        <Button variant="link" onClick={() => setDisputeOpen(false)}>Cancel</Button>
+      </Sheet>
     </div>
   );
 }

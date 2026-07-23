@@ -383,6 +383,17 @@ export class SwitchRoleDto {
   @IsIn(PERSON_ROLES) role!: (typeof PERSON_ROLES)[number];
 }
 
+/** The receiver's delivered-state proof photo (S23). */
+export class PodDto {
+  @IsString() photoRef!: string;
+}
+
+/** The receiver files a delivery dispute from their app (S23): reason + delivered-state photo. */
+export class BuyerDisputeDto {
+  @IsString() reason!: string;
+  @IsString() photoRef!: string;
+}
+
 // --- drivers + fleet (Ch 19) ---
 
 const VEHICLE_CLASSES = ['bike', 'motorcycle', 'tuktuk', 'car', 'van', 'bus', 'truck'] as const;

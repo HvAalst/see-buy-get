@@ -7448,6 +7448,84 @@
         }
       }
     },
+    "/v1/sbg/identity/parcels/{id}/pod": {
+      "post": {
+        "operationId": "Identity.addPod",
+        "summary": "",
+        "description": "The receiver attaches their own delivered-state photo (proof of what they received) — S23.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PodDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/identity/parcels/{id}/dispute": {
+      "post": {
+        "operationId": "Identity.disputeParcel",
+        "summary": "",
+        "description": "The receiver files a delivery dispute (reason + photo) → routed to the vendor / sender + control tower.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuyerDisputeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/settlement/module-info": {
       "get": {
         "operationId": "Sse.info",
@@ -9966,6 +10044,15 @@
           "disputePhotoRef": {
             "type": "string"
           },
+          "buyerPodPhotoRef": {
+            "type": "string"
+          },
+          "buyerDisputeReason": {
+            "type": "string"
+          },
+          "buyerDisputedBy": {
+            "type": "string"
+          },
           "acceptedAt": {
             "type": "string"
           },
@@ -11671,6 +11758,32 @@
         },
         "required": [
           "role"
+        ]
+      },
+      "PodDto": {
+        "type": "object",
+        "properties": {
+          "photoRef": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "photoRef"
+        ]
+      },
+      "BuyerDisputeDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "photoRef": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "photoRef"
         ]
       },
       "MilestoneTermDto": {

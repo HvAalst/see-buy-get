@@ -72,6 +72,9 @@ export interface SendState {
   openParcelDetail: ConsumerParcelView | null; // the single-parcel twin (carries the S22 collect token)
   openParcelState: 'idle' | 'loading' | 'ready' | 'error';
   openParcelError: SbgError | null;
+  podBusy: boolean; // S23: attaching the delivered-state photo
+  disputeBusy: boolean; // S23: filing a dispute
+  disputeError: SbgError | null;
 
   /* --- account / role switch --- */
   switchBusy: PersonRole | null;
@@ -114,6 +117,9 @@ const INITIAL: SendState = {
   openParcelDetail: null,
   openParcelState: 'idle',
   openParcelError: null,
+  podBusy: false,
+  disputeBusy: false,
+  disputeError: null,
   switchBusy: null,
   accountBusy: false,
   accountError: null,
@@ -468,8 +474,43 @@ export function useSendApp() {
   );
   const closeParcel = useCallback(() => {
     openParcelEpoch.current++;
-    setState((s) => ({ ...s, openParcelId: null, openParcelDetail: null, openParcelState: 'idle', openParcelError: null }));
+    setState((s) => ({ ...s, openParcelId: null, openParcelDetail: null, openParcelState: 'idle', openParcelError: null, disputeError: null }));
   }, []);
+
+  /** S23: attach the receiver's delivered-state photo to the open parcel (returns the updated twin). */
+  const submitPod = useCallback(
+    async (photoRef: string) => {
+      const id = stateRef.current.openParcelId;
+      if (!client || !id || !photoRef) return;
+      setState((s) => ({ ...s, podBusy: true, disputeError: null }));
+      const r = await client.api.pod(id, photoRef);
+      if (r.error) {
+        if (isSignInRequired(r.error)) return signOutRef.current(r.error);
+        setState((s) => ({ ...s, podBusy: false, disputeError: r.error }));
+        return;
+      }
+      setState((s) => ({ ...s, podBusy: false, openParcelDetail: narrow<ConsumerParcelView>(r.data) }));
+    },
+    [client],
+  );
+
+  /** S23: file a delivery dispute (reason + photo) on the open parcel → routed to vendor / sender + tower. */
+  const submitDispute = useCallback(
+    async (reason: string, photoRef: string) => {
+      const id = stateRef.current.openParcelId;
+      if (!client || !id || !reason.trim() || !photoRef) return;
+      setState((s) => ({ ...s, disputeBusy: true, disputeError: null }));
+      const r = await client.api.dispute(id, reason, photoRef);
+      if (r.error) {
+        if (isSignInRequired(r.error)) return signOutRef.current(r.error);
+        setState((s) => ({ ...s, disputeBusy: false, disputeError: r.error }));
+        return;
+      }
+      setState((s) => ({ ...s, disputeBusy: false, openParcelDetail: narrow<ConsumerParcelView>(r.data) }));
+      void loadParcels(); // the status flips to Disputed on the list (and the sender sees it on theirs)
+    },
+    [client, loadParcels],
+  );
 
   const switchRole = useCallback(
     async (role: PersonRole) => {
@@ -539,6 +580,8 @@ export function useSendApp() {
       loadParcels,
       openParcel,
       closeParcel,
+      submitPod,
+      submitDispute,
       switchRole,
       changePin,
     },

@@ -108,6 +108,48 @@ export class ParcelService implements OnApplicationBootstrap {
     return ParcelService.toConsumerView(p, phoneHash, true); // detail: carries the in-app collect token
   }
 
+  /** The parcel a RECEIVER may act on (PoD / dispute) — receiver-scoped, or 404 (existence not confirmed). */
+  private receiverParcel(id: string, phoneHash: string): Parcel {
+    const p = this.parcels.get(id);
+    if (!p || !phoneHash || p.receiverPhoneHash !== phoneHash) throw new GlosError('NOT_FOUND', 'No such parcel');
+    return p;
+  }
+
+  /**
+   * S23 — the receiver attaches their own delivered-state photo (proof of what they received). Their
+   * record, kept alongside the agent's handover photo; not a dispute. Only after delivery, only theirs.
+   */
+  attachPod(id: string, phoneHash: string, byDid: string, photoRef: string): ConsumerParcelView {
+    const p = this.receiverParcel(id, phoneHash);
+    if (p.status !== 'Delivered') throw new GlosError('INVALID_STATE', 'Add a photo once the parcel is delivered');
+    if (!photoRef) throw new GlosError('PHOTO_REQUIRED', 'A photo is required');
+    p.buyerPodPhotoRef = photoRef;
+    this.persist(p);
+    return ParcelService.toConsumerView(p, phoneHash, true);
+  }
+
+  /**
+   * S23 — the receiver files a delivery dispute from their app (reason + delivered-state photo) → Disputed.
+   * Routed by origin (O3): a VENDOR order notifies the vendor via the S15 HMAC outbox (the ParcelDisputed
+   * relay skips non-vendor parcels); a PEER send routes to the control tower (the Buyer_Dispute flag) and
+   * the sender (their sent twin flips to Disputed). Adjudication stays control-tower/ops.
+   */
+  buyerDispute(id: string, phoneHash: string, byDid: string, reason: string, photoRef: string): ConsumerParcelView {
+    const p = this.receiverParcel(id, phoneHash);
+    if (p.status !== 'Delivered') throw new GlosError('INVALID_STATE', 'You can report a problem once the parcel is delivered');
+    if (!reason?.trim() || !photoRef) throw new GlosError('DISPUTE_INCOMPLETE', 'A reason and a photo are required to report a problem');
+    p.status = 'Disputed';
+    p.buyerDisputeReason = reason;
+    p.buyerDisputePhotoRef = photoRef; // the problem-photo gets its OWN durable home — never overwrites the PoD
+    p.buyerDisputedBy = byDid;
+    p.disputeReason = p.disputeReason ?? reason; // the vendor callback + control-tower flag read this field
+    // The scan note stays generic: the free-text reason lives in buyerDisputeReason (receiver-gated), so it
+    // is never copied into the timeline, which both parties (including the sender) can read.
+    this.scan(p, 'Disputed', byDid, 'buyer dispute');
+    void this.events.publish(GlosEvent.Pudo.ParcelDisputed, { parcelId: id, reason, photoProofRef: photoRef, vendorId: p.vendorId, externalOrderId: p.externalOrderId, origin: 'buyer' }, { source: 'pudo' }).catch(() => undefined);
+    return ParcelService.toConsumerView(p, phoneHash, true);
+  }
+
   private static toConsumerView(p: Parcel, phoneHash: string, withToken = false): ConsumerParcelView {
     const relation = p.receiverPhoneHash === phoneHash ? 'received' : 'sent';
     const view: ConsumerParcelView = {
@@ -125,6 +167,11 @@ export class ParcelService implements OnApplicationBootstrap {
       createdAt: p.acceptedAt,
       updatedAt: p.scans.length ? p.scans[p.scans.length - 1].at : p.acceptedAt,
       timeline: p.scans.map((s) => ({ at: s.at, status: s.status, note: s.note })),
+      // The receiver's OWN photos + free-text reason are theirs alone — the sender's sent-twin sees the
+      // status flip to Disputed, never the buyer's evidence or the words they wrote for the control tower.
+      podPhotoRef: relation === 'received' ? p.buyerPodPhotoRef : undefined,
+      disputePhotoRef: relation === 'received' ? p.buyerDisputePhotoRef : undefined,
+      disputeReason: relation === 'received' && p.status === 'Disputed' ? (p.buyerDisputeReason ?? p.disputeReason) : undefined,
     };
     // S22: the receiver's in-app collection token — QR (scanned) + the COL code (typed fallback). Only on
     // the detail view, only for the receiver, only while collectable — the handover secret leaves the

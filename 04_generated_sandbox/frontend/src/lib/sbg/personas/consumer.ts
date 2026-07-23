@@ -27,6 +27,13 @@ export function createConsumerApi(sbg: SbgClient) {
 
     /** One parcel the person is a party to — the authenticated twin + status timeline (404 to a non-party). */
     parcel: (id: string) => sbg.request((c) => c.GET('/v1/sbg/identity/parcels/{id}', { params: { path: { id } } })),
+
+    /** Attach the receiver's own delivered-state photo (proof of what they received). */
+    pod: (id: string, photoRef: string) => sbg.request((c) => c.POST('/v1/sbg/identity/parcels/{id}/pod', { params: { path: { id } }, body: { photoRef } })),
+
+    /** File a delivery dispute from the app (reason + delivered-state photo) → routed by origin. */
+    dispute: (id: string, reason: string, photoRef: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/identity/parcels/{id}/dispute', { params: { path: { id } }, body: { reason, photoRef } })),
   };
 }
 

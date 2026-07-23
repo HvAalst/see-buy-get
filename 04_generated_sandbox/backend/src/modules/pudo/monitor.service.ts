@@ -6,7 +6,7 @@ import { WalletGateService } from './wallet-gate.service';
 import { AGENT_ONLINE_H, CONNECTIVITY_LOSS_H, GHOST_BUS_H, MDP_DWELL_H, STAGNANT_INVENTORY_H } from './pudo.config';
 
 export interface PudoFlag {
-  type: 'Stagnant_Inventory' | 'Ghost_Bus' | 'Stuck_At_MDP' | 'Connectivity_Loss' | 'Blocked_Corridor';
+  type: 'Stagnant_Inventory' | 'Ghost_Bus' | 'Stuck_At_MDP' | 'Connectivity_Loss' | 'Blocked_Corridor' | 'Buyer_Dispute';
   subject: string;
   detail: string;
   ageHours?: number;
@@ -51,6 +51,12 @@ export class MonitorService {
     }
     for (const c of this.corridors.listCorridors()) {
       if (c.status === 'blocked') flags.push({ type: 'Blocked_Corridor', subject: c.name, detail: `${c.originZone} → ${c.destZone} blocked` });
+    }
+    // S23 (O3): every dispute — vendor order OR peer send — surfaces to the control tower here. The
+    // vendor is additionally notified out-of-band via the S15 callback; a peer send lands only here + on
+    // the sender's own parcel list, so this flag is the ops-side catch-all a buyer dispute routes to.
+    for (const p of this.parcels.list({ status: 'Disputed' })) {
+      flags.push({ type: 'Buyer_Dispute', subject: p.parcelId, detail: `${p.vendorId ? 'vendor order' : 'peer send'} · ${p.buyerDisputeReason ?? p.disputeReason ?? 'disputed'}` });
     }
     return flags;
   }

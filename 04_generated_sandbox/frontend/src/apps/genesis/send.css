@@ -258,3 +258,33 @@
   margin: 2px 0 6px;
   letter-spacing: 0.02em;
 }
+
+/* Delivered-state photo capture (S23). */
+.photo__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.photo__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 14px 16px;
+  border: 1.5px dashed var(--bd);
+  border-radius: var(--r-ctl);
+  background: var(--bg);
+  color: var(--tx2);
+  font-size: 16px;
+  font-weight: 600;
+}
+.photo__btn--done {
+  border-style: solid;
+  border-color: var(--ok);
+  background: var(--ok-light);
+  color: var(--ok);
+}

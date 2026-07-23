@@ -484,6 +484,88 @@ describe('PUDO Light', () => {
     expect(parcels.forPhoneHash(rx).received[0].collectToken).toBeUndefined();
   });
 
+  it('S23 — the receiver files a delivery dispute + PoD from their app; routed to the vendor + the control tower', async () => {
+    const flush = () => new Promise((r) => setImmediate(r));
+    vendorCallback.onModuleInit();
+    const origin = onboardAgent('S23 Origin', 'NorthTown', 50);
+    const dest = onboardAgent('S23 Dest', 'SouthTown', 50);
+    const corridor = corridors.addCorridor({ name: 'S23', originZone: 'NorthTown', destZone: 'SouthTown' });
+    const driver = corridors.addDriver({ driverDid: 'did:glos:s23d', name: 'D', corridorId: corridor.corridorId });
+    const vendor = vendors.register({ name: 'S23 Store', callbackUrl: 'https://s23.example/hook', secret: 'whsec23' });
+    vendors.topUp(vendor.vendorId, 50);
+    const buyer = '+254700930500';
+    const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: 'ORD-S23', originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: buyer, size: 'M', contentPhotoRef: 'content.jpg', shippingPolicy: vendor.shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'M') });
+    parcels.intakeInbound(parcel.parcelId, origin.did);
+    parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: [parcel.parcelId] });
+    parcels.shelve(parcel.parcelId, dest.did);
+    parcels.collectConfirm(parcel.parcelId, dest.did, parcel.collectionCode!);
+    await flush();
+    const rx = hashPhone(buyer);
+    const me = persons.ensurePerson(buyer).personDid;
+    expect(parcels.get(parcel.parcelId).status).toBe('Delivered');
+
+    // Proactive PoD: the receiver photographs what they got — kept alongside the agent's photos.
+    expect(parcels.attachPod(parcel.parcelId, rx, me, 'my-photo.jpg').podPhotoRef).toBe('my-photo.jpg');
+
+    // Guards: a non-receiver gets a 404 (existence not confirmed); a reason + photo are mandatory.
+    expect(() => parcels.buyerDispute(parcel.parcelId, hashPhone('+254700999999'), 'x', 'r', 'p.jpg')).toThrow(/No such parcel/);
+    expect(() => parcels.buyerDispute(parcel.parcelId, rx, me, '', 'p.jpg')).toThrow(/reason and a photo/);
+
+    // File the dispute → Disputed, buyer reason retained.
+    const disputed = parcels.buyerDispute(parcel.parcelId, rx, me, 'Wrong item inside', 'proof.jpg');
+    expect(disputed.status).toBe('Disputed');
+    expect(disputed.disputeReason).toBe('Wrong item inside');
+    // Both photos survive: the PoD (what arrived) AND the dispute evidence (the problem) — distinct homes.
+    expect(disputed.podPhotoRef).toBe('my-photo.jpg');
+    expect(disputed.disputePhotoRef).toBe('proof.jpg');
+    await flush();
+
+    // O3 routing: the VENDOR got an HMAC 'disputed' callback...
+    expect(vendors.outboxFor(vendor.vendorId).map((c) => c.event)).toContain('disputed');
+    // ...AND the control tower shows a Buyer_Dispute flag naming the origin.
+    const flag = monitor.flags().find((f) => f.type === 'Buyer_Dispute' && f.subject === parcel.parcelId);
+    expect(flag).toBeDefined();
+    expect(flag!.detail).toContain('vendor order');
+
+    // A delivered parcel is required — you cannot dispute one still in flight (or twice).
+    expect(() => parcels.buyerDispute(parcel.parcelId, rx, me, 'again', 'p.jpg')).toThrow(/once the parcel is delivered/);
+  });
+
+  it('S23 — a peer-send dispute never leaks the buyer reason or photos to the sender counterparty', () => {
+    const origin = onboardAgent('Peer Origin', 'NorthTown', 50);
+    const dest = onboardAgent('Peer Dest', 'SouthTown', 50);
+    const corridor = corridors.addCorridor({ name: 'Peer', originZone: 'NorthTown', destZone: 'SouthTown' });
+    const driver = corridors.addDriver({ driverDid: 'did:glos:peer', name: 'D', corridorId: corridor.corridorId });
+    const sender = '+254700940001';
+    const receiver = '+254700940002';
+    // Walk-up peer send: sender drops it, it rides the bus, arrives, the receiver collects with the OTP.
+    parcels.accept({ agentDid: origin.did, parcelId: 'PEER-1', size: 'M', destZone: 'SouthTown', destPudoDid: dest.did, senderMobile: sender, receiverMobile: receiver, dropoffPhotoRef: 'drop.jpg', paymentMode: 'cash' });
+    parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['PEER-1'] });
+    const { otp } = parcels.arrive('PEER-1', dest.did);
+    parcels.pickup('PEER-1', dest.did, otp);
+    expect(parcels.get('PEER-1').status).toBe('Delivered');
+
+    const rxHash = hashPhone(receiver);
+    const sndHash = hashPhone(sender);
+    parcels.buyerDispute('PEER-1', rxHash, 'did:glos:person:x', 'call me at 14 Acacia Rd 0712345678', 'damage.jpg');
+
+    // The RECEIVER (who wrote it) sees their reason + evidence.
+    const mine = parcels.consumerParcel('PEER-1', rxHash);
+    expect(mine.relation).toBe('received');
+    expect(mine.disputeReason).toContain('Acacia');
+    expect(mine.disputePhotoRef).toBe('damage.jpg');
+
+    // The SENDER sees the status flip to Disputed — but NOT the buyer's free-text reason, photos, or a
+    // timeline note carrying the reason (it was addressed to the control tower, not the counterparty).
+    const theirs = parcels.consumerParcel('PEER-1', sndHash);
+    expect(theirs.relation).toBe('sent');
+    expect(theirs.status).toBe('Disputed');
+    expect(theirs.disputeReason).toBeUndefined();
+    expect(theirs.disputePhotoRef).toBeUndefined();
+    expect(theirs.podPhotoRef).toBeUndefined();
+    expect(JSON.stringify(theirs)).not.toContain('Acacia');
+  });
+
   it('files a dispute with mandatory photo proof at collection (notifies the vendor)', async () => {
     const flush = () => new Promise((r) => setImmediate(r));
     vendorCallback.onModuleInit();

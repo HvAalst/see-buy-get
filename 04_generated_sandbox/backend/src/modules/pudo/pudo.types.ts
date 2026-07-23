@@ -226,6 +226,10 @@ export interface ConsumerParcelView {
   createdAt: string;
   updatedAt: string; // last movement (for newest-first ordering)
   timeline: Array<{ at: string; status: ParcelStatus | 'CREATED'; note?: string }>;
+  // S23 — the receiver's OWN evidence + reason (relation==='received' only; never shown to the sender).
+  podPhotoRef?: string; // their delivered-state photo, if they took one
+  disputePhotoRef?: string; // their dispute-evidence photo, if they disputed
+  disputeReason?: string; // what they reported (free text — kept off the counterparty's view)
   /**
    * The in-app collection token (S22) — present ONLY on the single-parcel detail, only for the RECEIVER,
    * and only while the parcel is Ready_For_Pickup. The QR is what the PUDO scans; the code is the typed
@@ -298,6 +302,12 @@ export class Parcel {
   paidStatus?: 'unpaid' | 'ParcelPaid'; // prepaid gate — label issues only when ParcelPaid
   disputeReason?: string;
   disputePhotoRef?: string;
+  // S23 — the buyer's own delivered-state proof + app-filed dispute, kept ALONGSIDE the agent's
+  // counter dispute above (both retained for adjudication). Filed by the authenticated receiver.
+  buyerPodPhotoRef?: string; // the receiver's photo of what they received (proof of state, happy path)
+  buyerDisputePhotoRef?: string; // the receiver's photo of THE PROBLEM (dispute evidence, kept distinct)
+  buyerDisputeReason?: string;
+  buyerDisputedBy?: string; // the person DID that filed the dispute
   acceptedAt: string;
   handedToBusAt?: string;
   deliveredAt?: string;
