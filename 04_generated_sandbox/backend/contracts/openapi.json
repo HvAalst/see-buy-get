@@ -7294,6 +7294,118 @@
         }
       }
     },
+    "/v1/sbg/identity/enroll": {
+      "post": {
+        "operationId": "Identity.enroll",
+        "summary": "",
+        "description": "Enroll (or return) the consumer for an OTP-verified phone; optionally set the PIN in the same step.\nRequires the phone to have been verified via `sbg/auth/phone/verify` first — the OTP is the identity\nproof; enroll consumes it (one verification → one enrolment), so a stale verification can't be reused.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnrollDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/identity/login": {
+      "post": {
+        "operationId": "Identity.login",
+        "summary": "",
+        "description": "Reopen the app: phone + 4-digit PIN, no OTP (locks after repeated wrong PINs — then OTP again).",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PinLoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/identity/pin": {
+      "post": {
+        "operationId": "Identity.setPin",
+        "summary": "",
+        "description": "Set or change the signed-in person's PIN.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetPinDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/identity/me": {
+      "get": {
+        "operationId": "Identity.me",
+        "summary": "",
+        "description": "The signed-in person + every role they hold (the role switcher reads this).",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/identity/switch": {
+      "post": {
+        "operationId": "Identity.switch",
+        "summary": "",
+        "description": "\"Act as\" a held role → an actor token carrying that role's scopes + tenant.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SwitchRoleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/settlement/module-info": {
       "get": {
         "operationId": "Sse.info",
@@ -9961,6 +10073,10 @@
           "country": {
             "type": "string"
           },
+          "ownerPhone": {
+            "type": "string",
+            "description": "The store operator's phone (S20). When present, this vendor is linked to the operator's person\n identity so the same human can also send, receive or drive under one account — never a duplicate."
+          },
           "shippingPolicy": {
             "$ref": "#/components/schemas/ShippingPolicyDto"
           }
@@ -11448,6 +11564,65 @@
           "createdAt",
           "expiresAt",
           "status"
+        ]
+      },
+      "EnrollDto": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string"
+          },
+          "pin": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "phone"
+        ]
+      },
+      "PinLoginDto": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string"
+          },
+          "pin": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "phone",
+          "pin"
+        ]
+      },
+      "SetPinDto": {
+        "type": "object",
+        "properties": {
+          "pin": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "pin"
+        ]
+      },
+      "SwitchRoleDto": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "consumer",
+              "driver",
+              "agent",
+              "mdp",
+              "fleet_manager",
+              "vendor"
+            ]
+          }
+        },
+        "required": [
+          "role"
         ]
       },
       "MilestoneTermDto": {

@@ -9,6 +9,18 @@ import { ActorRole } from './auth.types';
 export const WILDCARD_SCOPE = '*';
 
 export const ROLE_SCOPES: Record<ActorRole, string[]> = {
+  // The person, acting as themselves (S20). The consumer is authenticated for the whole Send/Buy/Get
+  // surface: create a shipment, read their own parcels (sent + received, matched by phoneHash), file a
+  // delivery dispute, and submit proof-of-delivery. `identity:self` gates the person's own account
+  // routes (me / role-switch). Routes for dispute:file / pod:submit land in S23; the scope is defined
+  // now so the token already carries the authority its future routes require.
+  consumer: [
+    'shipment:create',
+    'parcel:read:own',
+    'dispute:file',
+    'pod:submit',
+    'identity:self',
+  ],
   agent: [
     'parcel:accept',
     'parcel:handover',

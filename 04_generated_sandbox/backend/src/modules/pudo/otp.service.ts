@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
 import { randomInt, timingSafeEqual } from 'crypto';
+import { normalizePhone } from '../../foundation/identity/phone';
 
 /** 429 — a retryable rate-limit rejection (RATE_LIMITED carries status 429 + retryable in the registry). */
 const tooManyRequests = (message: string) => new GlosError('RATE_LIMITED', message);
@@ -15,9 +16,6 @@ const RESEND_COOLDOWN_MS = 60 * 1000;
 /** Codes per number per rolling day. */
 const MAX_PER_DAY = 10;
 const DAY_MS = 24 * 60 * 60 * 1000;
-/** Dial code applied to national-format numbers (leading 0 / bare). */
-const DEFAULT_DIAL_CODE = process.env.GLOS_DEFAULT_DIAL_CODE || '+254';
-
 interface CodeEntry {
   code: string;
   expires: number;
@@ -48,19 +46,13 @@ export class OtpService {
   private readonly rates = new Map<string, RateEntry>();
 
   /**
-   * Normalize to E.164. Without this, rate limits and the verified set are trivially bypassed by
-   * re-typing the same number in a different format.
+   * Normalize to E.164 via the shared normalizer (foundation/identity/phone). Without this, rate limits
+   * and the verified set are trivially bypassed by re-typing the same number in a different format — and,
+   * since S20, the OTP-verified number must hash to the SAME identity key the Person is stored under, so
+   * the two paths share one normalizer rather than each keeping their own.
    */
   private norm(phone: string): string {
-    let p = (phone || '').replace(/[\s\-()./]/g, '').trim();
-    if (p.startsWith('00')) p = `+${p.slice(2)}`;
-    if (p.startsWith('+')) return `+${p.slice(1).replace(/\D/g, '')}`;
-    p = p.replace(/\D/g, '');
-    if (!p) return '';
-    if (p.startsWith('0')) return `${DEFAULT_DIAL_CODE}${p.slice(1)}`;
-    const bare = DEFAULT_DIAL_CODE.replace(/\D/g, '');
-    if (p.startsWith(bare)) return `+${p}`;
-    return `${DEFAULT_DIAL_CODE}${p}`;
+    return normalizePhone(phone);
   }
 
   /** Issue a 6-digit code for a phone (returned here; SMS'd in production). */

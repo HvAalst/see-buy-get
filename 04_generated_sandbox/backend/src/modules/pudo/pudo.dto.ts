@@ -160,6 +160,9 @@ export class RegisterVendorDto {
   @IsOptional() @ValidateNested() @Type(() => GeoDto) location?: GeoDto;
   @IsOptional() @IsString() address?: string;
   @IsOptional() @IsString() country?: string;
+  /** The store operator's phone (S20). When present, this vendor is linked to the operator's person
+   *  identity so the same human can also send, receive or drive under one account — never a duplicate. */
+  @IsOptional() @IsString() ownerPhone?: string;
   @IsOptional() @ValidateNested() @Type(() => ShippingPolicyDto) shippingPolicy?: ShippingPolicyDto;
 }
 
@@ -352,6 +355,32 @@ export class ForgotDto {
 export class ResetDto {
   @IsString() token!: string;
   @IsString() password!: string;
+}
+
+// --- person identity (S20): one person, one account, many roles ---
+
+const PERSON_ROLES = ['consumer', 'driver', 'agent', 'mdp', 'fleet_manager', 'vendor'] as const;
+
+/** Enroll (or return) the consumer for an OTP-verified phone; optionally set the 4-digit PIN in one step. */
+export class EnrollDto {
+  @IsString() phone!: string;
+  @IsOptional() @IsString() pin?: string;
+}
+
+/** Reopen the app: phone + 4-digit PIN, no OTP. */
+export class PinLoginDto {
+  @IsString() phone!: string;
+  @IsString() pin!: string;
+}
+
+/** Set or change the signed-in person's 4-digit PIN. */
+export class SetPinDto {
+  @IsString() pin!: string;
+}
+
+/** Role switch — "act as" one of the roles the person holds. */
+export class SwitchRoleDto {
+  @IsIn(PERSON_ROLES) role!: (typeof PERSON_ROLES)[number];
 }
 
 // --- drivers + fleet (Ch 19) ---

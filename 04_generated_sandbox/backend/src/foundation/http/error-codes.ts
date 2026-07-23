@@ -71,9 +71,10 @@ export const ERROR_CODES = {
   SHELF_FULL: { status: 400, title: 'The shelf is full' },
   NO_CAPACITY_AVAILABLE: { status: 400, title: 'No pick-up point with free capacity' },
 
-  // --- 400 Bad Request: OTP --------------------------------------------------------------------
+  // --- 400 Bad Request: OTP + PIN --------------------------------------------------------------
   OTP_INVALID: { status: 400, title: 'Wrong or expired code' },
   OTP_LOCKED: { status: 400, title: 'Too many wrong codes' },
+  PIN_INVALID: { status: 400, title: 'PIN must be 4 digits' },
 
   // --- 401 Unauthorized ------------------------------------------------------------------------
   UNAUTHORIZED: { status: 401, title: 'Authentication required' },
@@ -89,6 +90,8 @@ export const ERROR_CODES = {
   FORBIDDEN: { status: 403, title: 'Not allowed' },
   WRONG_PUDO: { status: 403, title: 'This must happen at a different pick-up point' },
   AGENT_LOCKED: { status: 403, title: 'This account is locked' },
+  PIN_LOCKED: { status: 403, title: 'Too many wrong PINs — verify by code' },
+  ROLE_NOT_HELD: { status: 403, title: 'You do not hold that role' },
 
   // --- 404 Not Found ---------------------------------------------------------------------------
   NOT_FOUND: { status: 404, title: 'Not found' },

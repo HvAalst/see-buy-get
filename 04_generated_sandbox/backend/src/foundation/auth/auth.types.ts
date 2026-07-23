@@ -9,6 +9,7 @@ export type GrantType = 'client_credentials' | 'did';
  * gate individual routes. `anon` is the unauthenticated public (tracking, checkout).
  */
 export type ActorRole =
+  | 'consumer'
   | 'agent'
   | 'driver'
   | 'mdp'

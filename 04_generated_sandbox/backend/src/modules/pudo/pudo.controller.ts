@@ -25,6 +25,7 @@ import { DispatchService } from './dispatch.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
+import { PersonService } from './person.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
 import { AcceptParcelDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, CoupleDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, OverdraftDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetPriceDto, ShelfDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto } from './pudo.dto';
 import { classifySize, SIZE_WEIGHT_KG } from './pudo.config';
@@ -64,6 +65,7 @@ export class SbgController {
     private readonly accounts: AccountService,
     private readonly otp: OtpService,
     private readonly auth: AuthService,
+    private readonly persons: PersonService,
   ) {}
 
   // --- phone verification (mandatory at onboarding — control-tower contact + GPS) ---
@@ -321,7 +323,10 @@ export class SbgController {
   @Public()
   @Post('vendors')
   registerVendor(@Body() dto: RegisterVendorDto) {
-    return this.vendors.register(dto);
+    const vendor = this.vendors.register(dto);
+    // S20: if the operator gave a phone, link this store to their person identity — same human, one account.
+    if (dto.ownerPhone) this.persons.tryAttachRole(dto.ownerPhone, 'vendor', vendor.did);
+    return vendor;
   }
 
   /**
@@ -729,7 +734,10 @@ export class SbgController {
   /** Register a fleet manager (eligibility: business reg + transport-operator licence + tax ID + depot). */
   @Post('fleet/managers')
   registerManager(@Body() dto: RegisterFleetManagerDto) {
-    return this.managers.register(dto);
+    const manager = this.managers.register(dto);
+    // S20: link the fleet operator to their person identity by phone (a manager can also send/drive).
+    this.persons.tryAttachRole(manager.contactPhone, 'fleet_manager', manager.did, manager.did);
+    return manager;
   }
 
   @Get('fleet/managers')
@@ -743,6 +751,8 @@ export class SbgController {
   @Post('fleet/managers/login')
   managerLogin(@Body() dto: ManagerLoginDto) {
     const m = this.managers.login(dto.code);
+    // S20: resolve this fleet login to the operator's person (idempotent with registration).
+    this.persons.tryAttachRole(m.contactPhone, 'fleet_manager', m.did, m.did);
     const token = this.auth.mintActorToken({ role: 'fleet_manager', did: m.did, tenant: m.did });
     return { ...m, token };
   }

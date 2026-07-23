@@ -19,6 +19,7 @@ import { DispatchService } from './dispatch.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
+import { PersonService } from './person.service';
 import { createHmac } from 'crypto';
 import { DigitalTwinService } from '../m7/digital-twin.service';
 import { TrackingService } from '../m4/tracking.service';
@@ -55,6 +56,8 @@ describe('PUDO Light', () => {
   let managers: FleetManagerService;
   let accounts: AccountService;
   let otp: OtpService;
+  let persons: PersonService;
+  let auth: AuthService;
   let graduation: GraduationService;
   let vendors: VendorService;
   let vendorCallback: VendorCallbackService;
@@ -68,7 +71,7 @@ describe('PUDO Light', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
-        GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, ToteService, VehicleService, DriverService, FleetService, DispatchService, FleetManagerService, AccountService, OtpService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
+        GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, ToteService, VehicleService, DriverService, FleetService, DispatchService, FleetManagerService, AccountService, OtpService, PersonService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
@@ -91,6 +94,8 @@ describe('PUDO Light', () => {
     managers = moduleRef.get(FleetManagerService);
     accounts = moduleRef.get(AccountService);
     otp = moduleRef.get(OtpService);
+    persons = moduleRef.get(PersonService);
+    auth = moduleRef.get(AuthService);
     graduation = moduleRef.get(GraduationService);
     vendors = moduleRef.get(VendorService);
     vendorCallback = moduleRef.get(VendorCallbackService);
@@ -875,6 +880,41 @@ describe('PUDO Light', () => {
     const ph2 = '+254700602'; otp.verify(ph2, otp.request(ph2).code);
     const fleetDriver = accounts.signup({ role: 'driver', email: 'joiner@d.test', password: 'secret1', phone: ph2, profile: { fleetCode: active.loginCode, driver: { displayName: 'Joiner', fullName: 'J', nationalId: 'ID-D2', mobile: ph2, licenceClasses: ['bike'] } } });
     expect(drivers.get(fleetDriver.did).managerDid).toBe(m.did); // employed by the fleet
+  });
+
+  it('S20 — one person, many roles: a driver who signs up can enroll as a consumer and send, under one account', () => {
+    // A driver signs up through the existing PUDO account flow — which now links them to a person by phone.
+    const phone = '+254700711'; otp.verify(phone, otp.request(phone).code);
+    const driver = accounts.signup({ role: 'driver', email: 'multi@d.test', password: 'secret1', phone, profile: { driver: { displayName: 'Multi', fullName: 'M', nationalId: 'ID-M1', mobile: phone, licenceClasses: ['bike'] }, vehicle: { plate: 'MU-1', vehicleClass: 'motorcycle', ownerName: 'M' } } });
+
+    const linked = persons.findByPhone(phone);
+    expect(linked).toBeDefined();
+    expect(linked!.roles.map((r) => r.role)).toContain('driver');
+
+    // The SAME human later enrolls the SAME phone as a consumer (to send a parcel). No second account:
+    // the existing person gains a consumer role.
+    const { person, isNew, token } = persons.enroll(phone, true, '1234');
+    expect(isNew).toBe(false); // the driver already existed as a person
+    expect(person.personDid).toBe(linked!.personDid); // one identity
+    expect(person.roles.map((r) => r.role).sort()).toEqual(['consumer', 'driver']);
+
+    // The consumer token acts as the person, with the consumer scopes.
+    const asConsumer = auth.introspect(token.access_token);
+    expect(asConsumer.active).toBe(true);
+    expect(asConsumer.role).toBe('consumer');
+    expect(asConsumer.did).toBe(person.personDid);
+    expect(asConsumer.scopes).toContain('shipment:create');
+
+    // Switch to the driver role → a real driver actor token bound to the DRIVER's DID (not the person's).
+    const asDriver = auth.introspect(persons.mintForRole(person, 'driver').token.access_token);
+    expect(asDriver.role).toBe('driver');
+    expect(asDriver.did).toBe(driver.did);
+    expect(asDriver.scopes).toContain('offer:claim');
+
+    // Reopen with the 4-digit PIN (no OTP). Wrong PINs lock after 5 tries; the right PIN still works before that.
+    expect(persons.loginWithPin(phone, '1234').person.personDid).toBe(person.personDid);
+    for (let i = 0; i < 5; i++) expect(() => persons.loginWithPin(phone, '0000')).toThrow(/Wrong phone or PIN/);
+    expect(() => persons.loginWithPin(phone, '1234')).toThrow(/Too many wrong PINs/); // locked out → OTP required
   });
 
   it('closes the tote last mile: an outbound parcel nominates a dest PUDO, is MDP-sorted, and delivered as a bag', () => {

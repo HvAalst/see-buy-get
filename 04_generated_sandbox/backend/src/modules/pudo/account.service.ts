@@ -1,18 +1,25 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { AuthService } from '../../foundation/auth/auth.service';
 import { AccessToken } from '../../foundation/auth/auth.types';
+import { DidService } from '../../foundation/did/did.service';
+import { hashPhone, isPlausiblePhone } from '../../foundation/identity/phone';
 import { AgentService } from './agent.service';
 import { DriverService } from './driver.service';
 import { MdpService } from './mdp.service';
 import { VehicleService } from './vehicle.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { OtpService } from './otp.service';
+import { PersonService } from './person.service';
+import { PersonRole } from './person.types';
 import { actorRoleForAccount } from './roles.map';
 
 export type AccountRole = 'pudo' | 'driver' | 'mdp';
+
+/** A PUDO account role → the person-facing role it links to (a 'pudo' account IS an agent). */
+const ACCOUNT_TO_PERSON_ROLE: Record<AccountRole, PersonRole> = { pudo: 'agent', driver: 'driver', mdp: 'mdp' };
 
 interface Account {
   accountId: string;
@@ -22,6 +29,7 @@ interface Account {
   hash: string;
   did: string; // the linked domain entity's real DID (agent / driver / MDP)
   tenant?: string; // for a fleet driver: the owning manager's DID (the token's tenant boundary)
+  phoneHash?: string; // S20: the person join key captured at signup, so this login resolves to a person
   createdAt: string;
   resetToken?: string;
   resetExpires?: number;
@@ -37,7 +45,8 @@ const RESET_TTL_MS = 30 * 60 * 1000;
  * email/SMS infra in the sandbox). This is the entry gate; the apps still open by the resolved id.
  */
 @Injectable()
-export class AccountService {
+export class AccountService implements OnApplicationBootstrap {
+  private readonly logger = new Logger(AccountService.name);
   // Durable: these are real login credentials (scrypt salt + hash). A restart wiping them logs every
   // participant out permanently. Keyed by lower-cased email.
   private readonly accounts = new PersistentMap<string, Account>('pudo-accounts');
@@ -50,7 +59,34 @@ export class AccountService {
     private readonly managers: FleetManagerService,
     private readonly otp: OtpService,
     private readonly auth: AuthService,
+    private readonly persons: PersonService,
+    private readonly dids: DidService,
   ) {}
+
+  /**
+   * Migration (S20): fold every existing account onto a person identity by phone. New signups link
+   * inline (the phone is in hand); this catches accounts persisted before S20, deriving the phone from
+   * the linked entity's DID controller. Idempotent (attach dedups by role+entity) and best-effort — a
+   * link failure is logged, never fatal, so the existing role apps keep working exactly as before.
+   */
+  onApplicationBootstrap(): void {
+    let linked = 0;
+    let skipped = 0;
+    for (const account of this.accounts.values()) {
+      const phone = this.phoneForAccount(account);
+      if (phone && this.persons.tryAttachRole(phone, ACCOUNT_TO_PERSON_ROLE[account.role], account.did, account.tenant)) linked++;
+      else skipped++;
+    }
+    if (linked || skipped) this.logger.log(`Person migration: linked ${linked} account(s), skipped ${skipped}.`);
+  }
+
+  /** Best-effort raw phone for an account: the hash captured at signup can't be reversed, so fall back
+   *  to the phone embedded in the linked entity's DID controller (`pudo:<mobile>` etc.). */
+  private phoneForAccount(account: Account): string | undefined {
+    const controller = this.dids.resolve(account.did)?.controller ?? '';
+    const raw = controller.slice(controller.indexOf(':') + 1); // 'pudo-driver:+254…' → '+254…'
+    return isPlausiblePhone(raw) ? raw : undefined;
+  }
 
   /** Create a participant account + its domain entity from the sign-up wizard. Requires a verified phone. */
   signup(input: { role: AccountRole; email: string; password: string; phone: string; profile: Record<string, unknown> }): { accountId: string; role: AccountRole; did: string; email: string; entityStatus?: string; token: AccessToken } {
@@ -62,9 +98,12 @@ export class AccountService {
     if (this.accounts.has(email)) throw new GlosError('DUPLICATE', 'An account with this email already exists');
 
     const { did, entityStatus, tenant } = this.provision(input.role, input.profile);
+    // S20: link this role to the person identity by phone (best-effort — never blocks the signup) and
+    // remember the join key on the account so the same human is never asked to make a second account.
+    this.persons.tryAttachRole(input.phone, ACCOUNT_TO_PERSON_ROLE[input.role], did, tenant);
     this.otp.consume(input.phone); // one verification → one account
     const salt = randomBytes(16).toString('hex');
-    const account: Account = { accountId: `acc_${randomBytes(8).toString('hex')}`, email, role: input.role, salt, hash: this.hash(input.password, salt), did, tenant, createdAt: new Date().toISOString() };
+    const account: Account = { accountId: `acc_${randomBytes(8).toString('hex')}`, email, role: input.role, salt, hash: this.hash(input.password, salt), did, tenant, phoneHash: hashPhone(input.phone), createdAt: new Date().toISOString() };
     this.accounts.set(email, account);
     return { accountId: account.accountId, role: account.role, did, email, entityStatus, token: this.mint(account) };
   }
