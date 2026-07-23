@@ -20,6 +20,7 @@ import { FleetManagerService } from './fleet-manager.service';
 import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
+import { hashPhone } from '../../foundation/identity/phone';
 import { createHmac } from 'crypto';
 import { DigitalTwinService } from '../m7/digital-twin.service';
 import { TrackingService } from '../m4/tracking.service';
@@ -915,6 +916,31 @@ describe('PUDO Light', () => {
     expect(persons.loginWithPin(phone, '1234').person.personDid).toBe(person.personDid);
     for (let i = 0; i < 5; i++) expect(() => persons.loginWithPin(phone, '0000')).toThrow(/Wrong phone or PIN/);
     expect(() => persons.loginWithPin(phone, '1234')).toThrow(/Too many wrong PINs/); // locked out → OTP required
+  });
+
+  it('S21 — links a parcel to its sender + receiver by phone hash; the receiver sees a PII-free twin', () => {
+    const origin = onboardAgent('S21 Origin', 'NorthTown', 50);
+    const sender = '+254700811';
+    const receiver = '+254700822';
+    parcels.accept({ agentDid: origin.did, parcelId: 'S21-1', size: 'M', destZone: 'EastTown', senderMobile: sender, receiverMobile: receiver, dropoffPhotoRef: 'p.jpg', paymentMode: 'prepaid' });
+
+    // The receiver sees it as 'received'; the sender as 'sent' — one parcel, two authenticated views.
+    const recv = parcels.forPhoneHash(hashPhone(receiver));
+    expect(recv.received.map((v) => v.parcelId)).toContain('S21-1');
+    expect(recv.received[0].relation).toBe('received');
+    expect(recv.sent).toHaveLength(0);
+    expect(parcels.forPhoneHash(hashPhone(sender)).sent[0].relation).toBe('sent');
+
+    // Owner-scoped single fetch; a non-party gets 404 (the parcel's existence is not confirmed to them).
+    expect(parcels.consumerParcel('S21-1', hashPhone(receiver)).relation).toBe('received');
+    expect(() => parcels.consumerParcel('S21-1', hashPhone('+254700999'))).toThrow(/No such parcel/);
+
+    // The twin carries NO PII — neither mobile appears anywhere in it — but does carry a status timeline.
+    const view = parcels.consumerParcel('S21-1', hashPhone(sender));
+    const json = JSON.stringify(view);
+    expect(json).not.toContain('811');
+    expect(json).not.toContain('822');
+    expect(view.timeline.length).toBeGreaterThan(0);
   });
 
   it('closes the tote last mile: an outbound parcel nominates a dest PUDO, is MDP-sorted, and delivered as a bag', () => {

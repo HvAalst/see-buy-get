@@ -6,7 +6,7 @@
 
 import { distanceLabel, haversineKm, type GeoPoint } from '../../shared/geo';
 import type { IconName } from '../../shared/ui/Icon';
-import type { NetworkPoint, ParcelSize, ParcelStatus, QuoteView, TrackView } from './types';
+import type { ConsumerParcelView, NetworkPoint, ParcelSize, ParcelStatus, PersonRole, QuoteView, TrackView } from './types';
 
 /* ------------------------------------------------------------------ sizes -- */
 
@@ -162,4 +162,85 @@ export function mapsHref(t: Pick<TrackView, 'destinationLocation' | 'destination
 /** The collect card renders once the parcel is somewhere a receiver can act on. */
 export function showCollectCard(status: ParcelStatus): boolean {
   return status === 'Ready_For_Pickup' || status === 'Delivered';
+}
+
+/* -------------------------------------------------- identity (S20/S21) -- */
+
+/** Keep only digits and a single leading + as the user types a phone (the backend does the real E.164). */
+export function cleanPhone(raw: string): string {
+  const trimmed = (raw ?? '').trim();
+  const plus = trimmed.startsWith('+') ? '+' : '';
+  return plus + trimmed.replace(/\D/g, '');
+}
+
+/** A phone is ready to submit once it has enough digits to be a real number. */
+export function phoneReady(phone: string): boolean {
+  return cleanPhone(phone).replace(/\D/g, '').length >= 9;
+}
+
+/** The PIN/OTP is ready once exactly `length` digits are present. */
+export function codeReady(code: string, length = 4): boolean {
+  return new RegExp(`^\\d{${length}}$`).test(code ?? '');
+}
+
+/** What blocks the primary CTA on each auth step (empty string when nothing does). */
+export function phoneBlocker(phone: string): string {
+  return phoneReady(phone) ? '' : 'Enter your phone number';
+}
+export function pinBlocker(pin: string): string {
+  return codeReady(pin, 4) ? '' : 'Enter your 4-digit PIN';
+}
+
+export interface RoleMeta {
+  label: string;
+  icon: IconName;
+  blurb: string;
+}
+
+/** Plain, non-jargon presentation for each role in the switcher. */
+export const ROLE_META: Record<PersonRole, RoleMeta> = {
+  consumer: { label: 'You', icon: 'person', blurb: 'Send and receive parcels' },
+  driver: { label: 'Driver', icon: 'truck', blurb: 'Carry parcels on your route' },
+  agent: { label: 'Shop', icon: 'home', blurb: 'Run a pick-up point' },
+  mdp: { label: 'Sort hub', icon: 'grid', blurb: 'Sort parcels between towns' },
+  fleet_manager: { label: 'Fleet', icon: 'route', blurb: 'Manage your vehicles and drivers' },
+  vendor: { label: 'Store', icon: 'bag', blurb: 'Sell and ship to pick-up points' },
+};
+
+export function roleMeta(role: PersonRole): RoleMeta {
+  return ROLE_META[role] ?? { label: role, icon: 'person', blurb: '' };
+}
+
+/* -------------------------------------------------- my parcels (S21) -- */
+
+/** "You are sending" / "Coming to you" — the person's side of a parcel, in plain words. */
+export function relationWord(relation: 'sent' | 'received'): string {
+  return relation === 'received' ? 'Coming to you' : 'You are sending';
+}
+
+/** The one-line subtitle under a parcel row: where it is headed + the kind of send. */
+export function parcelRowLine(p: ConsumerParcelView): string {
+  const bits = [p.relation === 'received' ? `From ${p.originZone}` : `To ${p.destZone}`];
+  bits.push(p.vendorOrder ? 'Store order' : 'Personal send');
+  return bits.join(' · ');
+}
+
+/** Newest movement first isn't enough for a person — surface the parcels that still need them on top:
+ *  anything ready to collect, then in-flight, then finished. Pure + stable for testing. */
+export function sortForPerson(list: ConsumerParcelView[]): ConsumerParcelView[] {
+  const rank = (s: ParcelStatus): number => {
+    if (s === 'Ready_For_Pickup') return 0; // act now
+    if (s === 'Delivered' || s === 'Voided' || s === 'Disputed') return 2; // done
+    return 1; // in flight
+  };
+  return [...list].sort((a, b) => {
+    const r = rank(a.status) - rank(b.status);
+    if (r !== 0) return r;
+    return a.updatedAt < b.updatedAt ? 1 : -1; // newest first within a band
+  });
+}
+
+/** A parcel that is off the normal ladder (cancelled / disputed) renders as a note, not a rung. */
+export function isOffLadder(status: ParcelStatus): boolean {
+  return ladderIndex(status) === -1;
 }

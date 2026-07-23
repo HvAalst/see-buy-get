@@ -1,22 +1,32 @@
 import { describe, expect, it } from 'vitest';
 import {
   LADDER,
+  cleanPhone,
+  codeReady,
+  isOffLadder,
   journeyLine,
   ladderIndex,
   mapsHref,
   money,
   normalizeKey,
+  parcelRowLine,
+  phoneBlocker,
+  phoneReady,
+  pinBlocker,
   pointDistance,
   pointLine,
   priceCards,
   quoteSummary,
+  relationWord,
+  roleMeta,
   selectablePoints,
   showCollectCard,
+  sortForPerson,
   statusPresentation,
   stepTime,
   trackSummary,
 } from './logic';
-import type { NetworkPoint, QuoteView, TrackView } from './types';
+import type { ConsumerParcelView, NetworkPoint, QuoteView, TrackView } from './types';
 
 const point = (over: Partial<NetworkPoint> = {}): NetworkPoint => ({
   did: 'did:a',
@@ -141,3 +151,72 @@ describe('track', () => {
     expect(mapsHref({ destination: 'Riverside' })).toBeNull();
   });
 });
+
+describe('Send app — identity + my-parcels logic (S21)', () => {
+  it('cleans a typed phone to digits + a single leading plus', () => {
+    expect(cleanPhone('  0712 345 678 ')).toBe('0712345678');
+    expect(cleanPhone('+254 (712) 345-678')).toBe('+254712345678');
+    expect(cleanPhone('++12ab34')).toBe('+1234');
+  });
+
+  it('gates the phone and PIN CTAs on readiness', () => {
+    expect(phoneReady('0712345678')).toBe(true);
+    expect(phoneReady('12345')).toBe(false);
+    expect(phoneBlocker('0712345678')).toBe('');
+    expect(phoneBlocker('123')).toMatch(/phone/i);
+    expect(codeReady('1234', 4)).toBe(true);
+    expect(codeReady('123', 4)).toBe(false);
+    expect(codeReady('123456', 6)).toBe(true);
+    expect(codeReady('12a4', 4)).toBe(false);
+    expect(pinBlocker('1234')).toBe('');
+    expect(pinBlocker('12')).toMatch(/PIN/);
+  });
+
+  it('gives every role a plain label + a real icon name', () => {
+    expect(roleMeta('consumer').label).toBe('You');
+    expect(roleMeta('driver').icon).toBe('truck');
+    expect(roleMeta('fleet_manager').label).toBe('Fleet');
+  });
+
+  it('describes a parcel from the person\'s side', () => {
+    expect(relationWord('received')).toMatch(/you/i);
+    expect(relationWord('sent')).toMatch(/sending/i);
+    const recv = mkParcel({ relation: 'received', originZone: 'NorthTown', vendorOrder: true });
+    expect(parcelRowLine(recv)).toBe('From NorthTown · Store order');
+    const sent = mkParcel({ relation: 'sent', destZone: 'EastTown', vendorOrder: false });
+    expect(parcelRowLine(sent)).toBe('To EastTown · Personal send');
+  });
+
+  it('sorts a person\'s parcels: act-now first, then in-flight, then done — newest within each', () => {
+    const list = [
+      mkParcel({ parcelId: 'DONE', status: 'Delivered', updatedAt: '2026-07-20T10:00:00Z' }),
+      mkParcel({ parcelId: 'FLYING', status: 'On_Bus', updatedAt: '2026-07-21T10:00:00Z' }),
+      mkParcel({ parcelId: 'READY', status: 'Ready_For_Pickup', updatedAt: '2026-07-19T10:00:00Z' }),
+      mkParcel({ parcelId: 'FLYING2', status: 'At_MDP', updatedAt: '2026-07-22T10:00:00Z' }),
+    ];
+    expect(sortForPerson(list).map((p) => p.parcelId)).toEqual(['READY', 'FLYING2', 'FLYING', 'DONE']);
+  });
+
+  it('marks cancelled/disputed parcels as off the ladder', () => {
+    expect(isOffLadder('Voided')).toBe(true);
+    expect(isOffLadder('Disputed')).toBe(true);
+    expect(isOffLadder('On_Bus')).toBe(false);
+  });
+});
+
+function mkParcel(over: Partial<ConsumerParcelView>): ConsumerParcelView {
+  return {
+    parcelId: 'P-1',
+    relation: 'sent',
+    direction: 'outbound',
+    status: 'At_PUDO',
+    originZone: 'A',
+    destZone: 'B',
+    size: 'M',
+    vendorOrder: false,
+    createdAt: '2026-07-20T09:00:00Z',
+    updatedAt: '2026-07-20T09:00:00Z',
+    timeline: [],
+    ...over,
+  };
+}

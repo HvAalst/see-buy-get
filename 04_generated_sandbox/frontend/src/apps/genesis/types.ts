@@ -75,3 +75,65 @@ export interface TrackView {
   destinationLandmark?: string;
   destinationLocation?: { lat: number; lng: number };
 }
+
+/* ------------------------------------------------- identity (S20/S21) -- */
+
+/** The person-facing roles a consumer may hold (mirrors backend PersonRole / lib/sbg). */
+export type PersonRole = 'consumer' | 'driver' | 'agent' | 'mdp' | 'fleet_manager' | 'vendor';
+
+export interface RoleLinkView {
+  role: PersonRole;
+  entityDid: string;
+  status: 'active' | 'pending' | 'suspended';
+}
+
+/** The bearer an enroll/login returns (shape of the backend AccessToken). */
+export interface AccessTokenView {
+  access_token: string;
+  token_type?: string;
+  expires_in?: number;
+}
+
+/** The signed-in person + roles (GET /identity/me, and the enroll/login envelope minus the token). */
+export interface PersonView {
+  personId: string;
+  roles: RoleLinkView[];
+  hasPin: boolean;
+  createdAt: string;
+}
+
+/** enroll/login response = a PersonView + isNew + the actor token to seed. */
+export interface AuthResult extends PersonView {
+  isNew?: boolean;
+  token: AccessTokenView;
+}
+
+/** The role-switch response — a NEW actor token for the target role, bound to its entity. */
+export interface SwitchResult {
+  role: PersonRole;
+  entityDid: string;
+  token: AccessTokenView;
+}
+
+/** One authenticated parcel twin the consumer is a party to (PII-free; mirrors backend ConsumerParcelView). */
+export interface ConsumerParcelView {
+  parcelId: string;
+  relation: 'sent' | 'received';
+  direction: 'inbound' | 'outbound';
+  status: ParcelStatus;
+  originZone: string;
+  destZone: string;
+  size: ParcelSize;
+  fragile?: boolean;
+  items?: Array<{ name: string; qty: number }>;
+  trackingKey?: string;
+  vendorOrder: boolean;
+  createdAt: string;
+  updatedAt: string;
+  timeline: Array<{ at: string; status: ParcelStatus | 'CREATED'; note?: string }>;
+}
+
+export interface MyParcels {
+  sent: ConsumerParcelView[];
+  received: ConsumerParcelView[];
+}

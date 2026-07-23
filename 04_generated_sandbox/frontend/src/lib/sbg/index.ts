@@ -41,4 +41,5 @@ export { createAgentApi, type AgentApi } from './personas/agent';
 export { createMdpApi, type MdpApi } from './personas/mdp';
 export { createFleetApi, type FleetApi } from './personas/fleet';
 export { createVendorApi, type VendorApi } from './personas/vendor';
+export { createConsumerApi, type ConsumerApi, type PersonRole } from './personas/consumer';
 export type { paths, components, operations } from './schema';

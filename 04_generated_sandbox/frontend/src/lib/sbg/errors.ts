@@ -17,9 +17,9 @@ export type SbgErrorCode =
   | 'REQUIREMENTS_NOT_MET' | 'KYC_INCOMPLETE' | 'APPROVAL_BLOCKED' | 'INVALID_STATE' | 'WINDOW_EXPIRED'
   | 'NOT_INBOUND' | 'PARCEL_EXISTS' | 'SHIPMENT_NOT_PAID' | 'CODE_MISMATCH' | 'NOT_COUPLED' | 'ALREADY_COUPLED'
   | 'CANNOT_COUPLE' | 'CAPACITY_EXCEEDED' | 'FRAGILE_NOT_ALLOWED' | 'BAG_FULL' | 'BAG_EMPTY' | 'BAG_RESERVED'
-  | 'BAG_MISADDRESSED' | 'SHELF_FULL' | 'NO_CAPACITY_AVAILABLE' | 'OTP_INVALID' | 'OTP_LOCKED' | 'UNAUTHORIZED'
+  | 'BAG_MISADDRESSED' | 'SHELF_FULL' | 'NO_CAPACITY_AVAILABLE' | 'OTP_INVALID' | 'OTP_LOCKED' | 'PIN_INVALID' | 'UNAUTHORIZED'
   | 'AUTH_FAILED' | 'AUTH_CODE_INVALID' | 'AUTH_NOT_ACTIVE' | 'PAYMENT_REQUIRED' | 'WALLET_INSUFFICIENT'
-  | 'FORBIDDEN' | 'WRONG_PUDO' | 'AGENT_LOCKED' | 'NOT_FOUND' | 'CONFLICT' | 'DUPLICATE' | 'RATE_LIMITED'
+  | 'FORBIDDEN' | 'WRONG_PUDO' | 'AGENT_LOCKED' | 'PIN_LOCKED' | 'ROLE_NOT_HELD' | 'NOT_FOUND' | 'CONFLICT' | 'DUPLICATE' | 'RATE_LIMITED'
   | 'INTERNAL'
   | 'NETWORK' | 'TIMEOUT' | 'CLIENT_OUTDATED'; // client-synthesised (no HTTP response)
 
@@ -79,6 +79,13 @@ const PRESENTATION: Partial<Record<SbgErrorCode, ErrorPresentation>> = {
   OTP_INVALID: { icon: 'keypad', tone: 'warn', say: 'error.wrong_code' },
   CODE_MISMATCH: { icon: 'keypad', tone: 'warn', say: 'error.wrong_code' },
   OTP_LOCKED: { icon: 'lock', tone: 'danger', say: 'error.code_locked' },
+  // Identity (S20/S21): a phone-first consumer signs in with a 4-digit PIN over their verified phone.
+  AUTH_FAILED: { icon: 'keypad', tone: 'warn', say: 'error.wrong_pin' },
+  PIN_INVALID: { icon: 'keypad', tone: 'warn', say: 'error.pin_digits' },
+  PIN_LOCKED: { icon: 'lock', tone: 'danger', say: 'error.pin_locked' },
+  ROLE_NOT_HELD: { icon: 'block', tone: 'warn', say: 'error.role_not_held' },
+  PHONE_INVALID: { icon: 'keypad', tone: 'warn', say: 'error.phone_invalid' },
+  PHONE_NOT_VERIFIED: { icon: 'keypad', tone: 'warn', say: 'error.verify_phone' },
   PHOTO_REQUIRED: { icon: 'camera', tone: 'warn', say: 'error.photo_needed' },
   NOT_FOUND: { icon: 'search', tone: 'warn', say: 'error.not_found' },
   WRONG_PUDO: { icon: 'pin', tone: 'warn', say: 'error.wrong_place' },

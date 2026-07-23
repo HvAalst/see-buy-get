@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
 import { randomBytes } from 'crypto';
 import { PersistentMap } from '../../foundation/store/persistent-map';
+import { hashPhone } from '../../foundation/identity/phone';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { LedgerService } from '../../foundation/ledger/ledger.service';
@@ -11,7 +12,7 @@ import { CorridorService } from './corridor.service';
 import { ShelfService } from './shelf.service';
 import { FleetService } from './fleet.service';
 import { HANDOVER_FEE, LABOUR_FEE, OTP_MAX_ATTEMPTS, PICKUP_FEE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, VOID_WINDOW_MS, WHOLESALE, classifySize, withPlatformFee } from './pudo.config';
-import { Parcel, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy } from './pudo.types';
+import { ConsumerParcelView, Parcel, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy } from './pudo.types';
 import { VendorService } from './vendor.service';
 import { VehicleService } from './vehicle.service';
 import type { ShipmentQuote } from './routing.service';
@@ -47,7 +48,8 @@ export interface HandoverResult {
  * the shared event bus, so SSE/M5 can graduate onto these signals later.
  */
 @Injectable()
-export class ParcelService {
+export class ParcelService implements OnApplicationBootstrap {
+  private readonly logger = new Logger(ParcelService.name);
   // Durable: a parcel in flight (money charged, custody held) must survive a restart. Persistence is
   // driven through scan() — the near-universal transition point — plus the few post-scan mutations.
   private readonly parcels = new PersistentMap<string, Parcel>('pudo-parcels');
@@ -63,6 +65,67 @@ export class ParcelService {
     private readonly vendors: VendorService,
     private readonly vehicles: VehicleService,
   ) {}
+
+  /**
+   * O4 retroactive linking (S21): backfill sender/receiver phone hashes on parcels created before the
+   * hash existed, so a person's past sends and receipts surface the moment they verify the matching
+   * number. Idempotent (only stamps a missing hash) and best-effort — never blocks boot. A literal
+   * 'vendor' sender hashes to '' and is left unstamped (a vendor is not a person).
+   */
+  onApplicationBootstrap(): void {
+    let stamped = 0;
+    for (const p of this.parcels.values()) {
+      let changed = false;
+      if (p.senderPhoneHash === undefined) { const h = hashPhone(p.senderMobile); if (h) { p.senderPhoneHash = h; changed = true; } }
+      if (p.receiverPhoneHash === undefined) { const h = hashPhone(p.receiverMobile); if (h) { p.receiverPhoneHash = h; changed = true; } }
+      if (changed) { this.parcels.set(p.parcelId, p); stamped++; }
+    }
+    if (stamped) this.logger.log(`Backfilled phone hashes on ${stamped} parcel(s).`);
+  }
+
+  // --- the authenticated consumer's parcels (S21) ---
+
+  /** Every parcel the person (by phoneHash) is a party to, split by their side, newest first. */
+  forPhoneHash(phoneHash: string): { sent: ConsumerParcelView[]; received: ConsumerParcelView[] } {
+    if (!phoneHash) return { sent: [], received: [] };
+    const sent: ConsumerParcelView[] = [];
+    const received: ConsumerParcelView[] = [];
+    for (const p of this.parcels.values()) {
+      // Receiver takes precedence if (rarely) a person sends to themselves — it is the actionable side.
+      if (p.receiverPhoneHash === phoneHash) received.push(ParcelService.toConsumerView(p, phoneHash));
+      else if (p.senderPhoneHash === phoneHash) sent.push(ParcelService.toConsumerView(p, phoneHash));
+    }
+    const byNewest = (a: ConsumerParcelView, b: ConsumerParcelView) => (a.updatedAt < b.updatedAt ? 1 : -1);
+    return { sent: sent.sort(byNewest), received: received.sort(byNewest) };
+  }
+
+  /** One parcel the caller is a party to (owner-scoped) — the authenticated twin + timeline, or 404. */
+  consumerParcel(id: string, phoneHash: string): ConsumerParcelView {
+    const p = this.parcels.get(id);
+    if (!p || !phoneHash || (p.receiverPhoneHash !== phoneHash && p.senderPhoneHash !== phoneHash)) {
+      throw new GlosError('NOT_FOUND', 'No such parcel'); // do not confirm a parcel exists to a non-party
+    }
+    return ParcelService.toConsumerView(p, phoneHash);
+  }
+
+  private static toConsumerView(p: Parcel, phoneHash: string): ConsumerParcelView {
+    return {
+      parcelId: p.parcelId,
+      relation: p.receiverPhoneHash === phoneHash ? 'received' : 'sent',
+      direction: p.direction,
+      status: p.status,
+      originZone: p.originZone,
+      destZone: p.destZone,
+      size: p.size,
+      fragile: p.fragile,
+      items: p.items,
+      trackingKey: p.trackingKey,
+      vendorOrder: Boolean(p.vendorId),
+      createdAt: p.acceptedAt,
+      updatedAt: p.scans.length ? p.scans[p.scans.length - 1].at : p.acceptedAt,
+      timeline: p.scans.map((s) => ({ at: s.at, status: s.status, note: s.note })),
+    };
+  }
 
   /** Screen 1 — Accept Parcel (ingest). */
   accept(input: AcceptInput): Parcel {
@@ -92,6 +155,8 @@ export class ParcelService {
       destAgentDid: input.destPudoDid, // optional nominated destination PUDO (else set at arrive)
       senderMobile: input.senderMobile,
       receiverMobile: input.receiverMobile,
+      senderPhoneHash: hashPhone(input.senderMobile) || undefined,
+      receiverPhoneHash: hashPhone(input.receiverMobile) || undefined,
       dropoffPhotoRef: input.dropoffPhotoRef,
       paymentMode: mode,
       status: 'At_PUDO',
@@ -281,6 +346,8 @@ export class ParcelService {
       destAgentDid: input.destAgentDid,
       senderMobile: 'vendor',
       receiverMobile: input.buyerMobile,
+      // Vendor is not a person → no sender hash; the buyer (receiver) is, so they see this in their app.
+      receiverPhoneHash: hashPhone(input.buyerMobile) || undefined,
       buyerEmail: input.buyerEmail,
       paymentMode: 'prepaid',
       status: 'Created',

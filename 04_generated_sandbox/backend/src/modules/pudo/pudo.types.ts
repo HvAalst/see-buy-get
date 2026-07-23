@@ -205,6 +205,29 @@ export class ParcelScan {
   anchorTxId?: string;
 }
 
+/**
+ * The authenticated-twin projection a signed-in consumer sees for a parcel they are a party to (S21).
+ * PII-free: no mobiles, no counterparty identity, no collection code — only the caller's own relation
+ * to the parcel, its live status, and a status timeline. The receiver's collection token is a later
+ * (S22) surface, not this one.
+ */
+export interface ConsumerParcelView {
+  parcelId: string;
+  relation: 'sent' | 'received'; // the caller's side of this parcel
+  direction: ParcelDirection;
+  status: ParcelStatus;
+  originZone: string;
+  destZone: string;
+  size: ParcelSize;
+  fragile?: boolean;
+  items?: LineItem[];
+  trackingKey?: string; // the same shareable public key; handy for a quick-look link
+  vendorOrder: boolean; // a vendor/e-commerce order vs a walk-up peer send
+  createdAt: string;
+  updatedAt: string; // last movement (for newest-first ordering)
+  timeline: Array<{ at: string; status: ParcelStatus | 'CREATED'; note?: string }>;
+}
+
 export class Parcel {
   parcelId: string; // pre-printed QR sticker id
   direction: ParcelDirection;
@@ -218,6 +241,11 @@ export class Parcel {
   destAgentDid?: string;
   senderMobile: string;
   receiverMobile: string;
+  // S21: pseudonymous join keys to the person identity (peppered sha256 of the mobile, never the number).
+  // A signed-in consumer sees every parcel whose sender/receiver hash matches their verified phone —
+  // retroactively (O4). Absent when the counterpart is not a person (e.g. a vendor sender).
+  senderPhoneHash?: string;
+  receiverPhoneHash?: string;
   dropoffPhotoRef?: string; // mandatory for outbound drop-off (fraud defence)
   deliveredPhotoRef?: string;
   paymentMode: PaymentMode;

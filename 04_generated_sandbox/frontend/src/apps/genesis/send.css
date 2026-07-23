@@ -244,3 +244,8 @@
   color: var(--tx3);
   font-variant-numeric: tabular-nums;
 }
+
+/* Back link above a parcel detail (S21). */
+.scr__back {
+  margin: -4px 0 4px;
+}

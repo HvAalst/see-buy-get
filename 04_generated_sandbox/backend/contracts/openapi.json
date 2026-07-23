@@ -7406,6 +7406,48 @@
         }
       }
     },
+    "/v1/sbg/identity/parcels": {
+      "get": {
+        "operationId": "Identity.myParcels",
+        "summary": "",
+        "description": "The receiver/sender home: every parcel this person is a party to (sent + received), matched by their\nverified phone — retroactively (O4). PII-free authenticated twins; the counterpart stays hashed.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/identity/parcels/{id}": {
+      "get": {
+        "operationId": "Identity.parcel",
+        "summary": "",
+        "description": "One parcel the caller is a party to — the authenticated twin + status timeline (404 to a non-party).",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/settlement/module-info": {
       "get": {
         "operationId": "Sse.info",
@@ -9803,6 +9845,12 @@
             "type": "string"
           },
           "receiverMobile": {
+            "type": "string"
+          },
+          "senderPhoneHash": {
+            "type": "string"
+          },
+          "receiverPhoneHash": {
             "type": "string"
           },
           "dropoffPhotoRef": {

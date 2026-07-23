@@ -1,10 +1,11 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { Public } from '../../foundation/auth/public.decorator';
 import { Roles } from '../../foundation/auth/scopes.decorator';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { PersonService } from './person.service';
 import { OtpService } from './otp.service';
+import { ParcelService } from './parcel.service';
 import { toView } from './person.types';
 import { EnrollDto, PinLoginDto, SetPinDto, SwitchRoleDto } from './pudo.dto';
 
@@ -24,6 +25,7 @@ export class IdentityController {
   constructor(
     private readonly persons: PersonService,
     private readonly otp: OtpService,
+    private readonly parcels: ParcelService,
   ) {}
 
   /**
@@ -69,5 +71,24 @@ export class IdentityController {
   switch(@Body() dto: SwitchRoleDto, @Actor() actor: IntrospectionResult) {
     const person = this.persons.requireByDid(actor.did!);
     return this.persons.mintForRole(person, dto.role);
+  }
+
+  /**
+   * The receiver/sender home: every parcel this person is a party to (sent + received), matched by their
+   * verified phone — retroactively (O4). PII-free authenticated twins; the counterpart stays hashed.
+   */
+  @Roles('consumer')
+  @Get('parcels')
+  myParcels(@Actor() actor: IntrospectionResult) {
+    const person = this.persons.requireByDid(actor.did!);
+    return this.parcels.forPhoneHash(person.phoneHash);
+  }
+
+  /** One parcel the caller is a party to — the authenticated twin + status timeline (404 to a non-party). */
+  @Roles('consumer')
+  @Get('parcels/:id')
+  parcel(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    const person = this.persons.requireByDid(actor.did!);
+    return this.parcels.consumerParcel(id, person.phoneHash);
   }
 }

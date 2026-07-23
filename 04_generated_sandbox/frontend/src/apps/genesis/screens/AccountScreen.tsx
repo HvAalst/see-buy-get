@@ -1,0 +1,116 @@
+import { useState } from 'preact/hooks';
+import { Button, Card, CodeBoxes, ErrorNote, Icon, Note, Pill, ReadAloud, Sheet } from '../../../shared/ui';
+import { codeReady, roleMeta } from '../logic';
+import { ROLE_APPS } from '../api';
+import type { RoleLinkView } from '../types';
+import type { SendActions, SendState } from '../useSendApp';
+
+export interface AccountScreenProps {
+  state: SendState;
+  actions: SendActions;
+}
+
+/**
+ * The account home + role switcher (S21). "One person, one account, many roles" made visible: the
+ * person sees every role they hold and can act as any of them — tapping a role hands its token to that
+ * role's own app and opens it, so a sender who is also a driver never signs in twice. Change-PIN lives
+ * in a sheet (its own context, its own primary); sign-out is the outline action.
+ */
+export function AccountScreen({ state, actions }: AccountScreenProps) {
+  const [pinOpen, setPinOpen] = useState(false);
+  const [newPin, setNewPin] = useState('');
+  const id = state.identity;
+  if (!id) return null;
+
+  const roles = id.roles;
+  const others = roles.filter((r) => r.role !== 'consumer');
+
+  return (
+    <div class="scr">
+      <h1 class="scr__title">Your account</h1>
+      <p class="scr__lede">Signed in as {state.authPhone || 'your phone'}.</p>
+
+      {state.accountError ? <ErrorNote error={state.accountError} /> : null}
+      {state.accountNote ? <Note tone="ok" icon="check" title={state.accountNote} /> : null}
+
+      <Card title="Act as">
+        <div class="rows">
+          <div class="row row--static">
+            <span class="row__ic"><Icon name={roleMeta('consumer').icon} size={24} /></span>
+            <span class="row__body">
+              <span class="row__t">{roleMeta('consumer').label}</span>
+              <span class="row__s">{roleMeta('consumer').blurb}</span>
+            </span>
+            <span class="row__end"><Pill tone="ok" dot>This is you</Pill></span>
+          </div>
+
+          {others.map((r) => (
+            <RoleRow key={`${r.role}:${r.entityDid}`} link={r} busy={state.switchBusy === r.role} onSwitch={() => void actions.switchRole(r.role)} />
+          ))}
+        </div>
+        {others.length ? <p class="hint">Tap a role to open its app — no need to sign in again.</p> : <p class="hint">You only have the sender account for now.</p>}
+      </Card>
+
+      <Card title="Sign in">
+        <div class="rows">
+          <button type="button" class="row" onClick={() => { setNewPin(''); setPinOpen(true); }}>
+            <span class="row__ic"><Icon name="keypad" size={24} /></span>
+            <span class="row__body">
+              <span class="row__t">Change your PIN</span>
+              <span class="row__s">The 4 digits you use to sign in</span>
+            </span>
+            <span class="row__end"><Icon name="chevronRight" size={22} /></span>
+          </button>
+        </div>
+      </Card>
+
+      <div class="scr__cta">
+        <Button variant="outline" chevron={false} onClick={() => actions.signOut()}>
+          Sign out
+        </Button>
+      </div>
+
+      <div class="scr__foot">
+        <ReadAloud text={() => `You are signed in. You hold ${roles.length} ${roles.length === 1 ? 'role' : 'roles'}.`} label="Read this aloud" />
+      </div>
+
+      <Sheet open={pinOpen} onClose={() => setPinOpen(false)} title="Change your PIN">
+        <div class="field">
+          <span class="field__label">Your new 4-digit PIN</span>
+          <CodeBoxes id="change-pin" label="Your new 4-digit PIN" length={4} value={newPin} onInput={setNewPin} disabled={state.accountBusy} />
+        </div>
+        <Button
+          chevron={false}
+          disabled={!codeReady(newPin, 4)}
+          busy={state.accountBusy}
+          onClick={async () => {
+            await actions.changePin(newPin);
+            setPinOpen(false);
+          }}
+        >
+          Save PIN
+        </Button>
+        <Button variant="link" onClick={() => setPinOpen(false)}>Cancel</Button>
+      </Sheet>
+    </div>
+  );
+}
+
+function RoleRow({ link, busy, onSwitch }: { link: RoleLinkView; busy: boolean; onSwitch: () => void }) {
+  const meta = roleMeta(link.role);
+  const active = link.status === 'active';
+  const canOpen = active && Boolean(ROLE_APPS[link.role]);
+  return (
+    <button type="button" class="row" disabled={!canOpen || busy} onClick={onSwitch}>
+      <span class="row__ic"><Icon name={meta.icon} size={24} /></span>
+      <span class="row__body">
+        <span class="row__t">{meta.label}</span>
+        <span class="row__s">{meta.blurb}</span>
+      </span>
+      <span class="row__end">
+        {active ? null : <Pill tone="idle">{link.status === 'pending' ? 'Pending' : 'Paused'}</Pill>}
+        <Icon name="chevronRight" size={22} />
+      </span>
+    </button>
+  );
+}
