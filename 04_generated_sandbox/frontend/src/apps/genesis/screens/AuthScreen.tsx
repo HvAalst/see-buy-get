@@ -1,4 +1,5 @@
 import { Button, Card, Checklist, CodeBoxes, ErrorNote, ReadAloud } from '../../../shared/ui';
+import { canPickContact } from '../../../shared/device';
 import { codeReady, phoneReady } from '../logic';
 import type { SendActions, SendState } from '../useSendApp';
 
@@ -42,30 +43,50 @@ export function AuthScreen({ state, actions }: AuthScreenProps) {
   );
 }
 
+/** A phone-number field with the optional "pick from contacts" shortcut (Android only; hidden elsewhere). */
+function PhoneField({ id, state, actions, hint }: { id: string; state: SendState; actions: SendActions; hint: 'send' | 'next' }) {
+  return (
+    <div class="field">
+      <label class="field__label" for={id}>Your phone number</label>
+      <input
+        id={id}
+        class="input"
+        type="tel"
+        inputMode="tel"
+        autocomplete="tel"
+        value={state.authPhone}
+        onInput={(e) => actions.setAuthPhone(e.currentTarget.value)}
+        placeholder="+254 700 000 000"
+        enterkeyhint={hint}
+      />
+      {canPickContact() ? (
+        <Button variant="link" chevron={false} onClick={() => void actions.pickContact()}>Pick from my contacts</Button>
+      ) : null}
+    </div>
+  );
+}
+
 function LoginView({ state, actions, busy }: { state: SendState; actions: SendActions; busy: boolean }) {
+  // Once the number is confirmed (remembered on this device), signing back in is PIN-only.
+  const known = state.authPhone.trim().length > 0;
   const ready = phoneReady(state.authPhone) && codeReady(state.authPin, 4);
   return (
     <>
       <h1 class="scr__title">Your parcels</h1>
-      <p class="scr__lede">Sign in with your phone and PIN to see everything you send and receive.</p>
+      <p class="scr__lede">{known ? 'Enter your PIN to see everything you send and receive.' : 'Sign in with your phone and PIN.'}</p>
 
       {state.authError ? <ErrorNote error={state.authError} /> : null}
 
       <Card>
-        <div class="field">
-          <label class="field__label" for="auth-phone">Your phone number</label>
-          <input
-            id="auth-phone"
-            class="input"
-            type="tel"
-            inputMode="tel"
-            autocomplete="tel"
-            value={state.authPhone}
-            onInput={(e) => actions.setAuthPhone(e.currentTarget.value)}
-            placeholder="+254 700 000 000"
-            enterkeyhint="next"
-          />
-        </div>
+        {known ? (
+          <div class="field">
+            <span class="field__label">Your phone number</span>
+            <p class="signedas">{state.authPhone}</p>
+            <Button variant="link" chevron={false} onClick={() => actions.setAuthPhone('')}>Not you? Use a different number</Button>
+          </div>
+        ) : (
+          <PhoneField id="auth-phone" state={state} actions={actions} hint="next" />
+        )}
         <div class="field">
           <span class="field__label">Your 4-digit PIN</span>
           <CodeBoxes id="auth-pin" label="Your 4-digit PIN" length={4} value={state.authPin} onInput={actions.setAuthPin} disabled={busy} />
@@ -143,20 +164,7 @@ function EnrollView({ state, actions, busy }: { state: SendState; actions: SendA
       <p class="scr__lede">One account for everything you send and receive. We only use your number to reach you.</p>
       {state.authError ? <ErrorNote error={state.authError} /> : null}
       <Card>
-        <div class="field">
-          <label class="field__label" for="enroll-phone">Your phone number</label>
-          <input
-            id="enroll-phone"
-            class="input"
-            type="tel"
-            inputMode="tel"
-            autocomplete="tel"
-            value={state.authPhone}
-            onInput={(e) => actions.setAuthPhone(e.currentTarget.value)}
-            placeholder="+254 700 000 000"
-            enterkeyhint="send"
-          />
-        </div>
+        <PhoneField id="enroll-phone" state={state} actions={actions} hint="send" />
       </Card>
       <div class="scr__cta">
         <Button chevron={false} onClick={() => void actions.requestCode()} disabled={!phoneReady(state.authPhone)} busy={busy}>

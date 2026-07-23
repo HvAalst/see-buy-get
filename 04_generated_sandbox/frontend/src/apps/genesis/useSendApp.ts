@@ -20,6 +20,7 @@ import {
   verifyOtp,
   type ConsumerClient,
 } from './api';
+import { pickPhoneFromContacts, readSmsOtp } from '../../shared/device';
 import { cleanPhone, codeReady, normalizeKey, phoneReady } from './logic';
 import type { AuthResult, ConsumerParcelView, MyParcels, NetworkPoint, ParcelSize, PersonRole, PersonView, QuoteView, SwitchResult, TrackView } from './types';
 
@@ -348,9 +349,9 @@ export function useSendApp() {
     setState((s) => ({ ...s, authBusy: false, authStep: 'code', authCode: '', authDevCode: r.data?.code ?? null }));
   }, []);
 
-  const submitCode = useCallback(async () => {
+  const submitCode = useCallback(async (codeOverride?: string) => {
     const phone = cleanPhone(stateRef.current.authPhone);
-    const code = stateRef.current.authCode;
+    const code = codeOverride ?? stateRef.current.authCode;
     if (!codeReady(code, 6)) return;
     const epoch = ++authEpoch.current;
     setState((s) => ({ ...s, authBusy: true, authError: null }));
@@ -393,6 +394,25 @@ export function useSendApp() {
     }
     await completeSignIn(r.data as AuthResult, phone);
   }, [completeSignIn]);
+
+  // WebOTP (mobile): on the enroll code step, auto-read the SMS one-time code on Android and submit it.
+  // Feature-detected + aborted when the user leaves the step; the manual CodeBoxes is always the fallback.
+  useEffect(() => {
+    if (state.authStep !== 'code' || state.authMode !== 'enroll') return;
+    const ac = new AbortController();
+    void readSmsOtp(ac.signal).then((code) => {
+      if (!code || ac.signal.aborted) return;
+      setAuthCode(code);
+      void submitCode(code);
+    });
+    return () => ac.abort();
+  }, [state.authStep, state.authMode, setAuthCode, submitCode]);
+
+  /** Confirm the number by picking it from the address book (Android Contact Picker) instead of typing. */
+  const pickContact = useCallback(async () => {
+    const tel = await pickPhoneFromContacts();
+    if (tel) setState((s) => ({ ...s, authPhone: tel, authError: null }));
+  }, []);
 
   const signOut = useCallback(
     (error: SbgError | null = null) => {
@@ -509,6 +529,7 @@ export function useSendApp() {
       setAuthPin,
       setAuthMode,
       authBack,
+      pickContact,
       requestCode,
       submitCode,
       submitEnroll,
