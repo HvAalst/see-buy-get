@@ -1,4 +1,4 @@
-import { Button, Card, Checklist, CodeBoxes, ErrorNote, ReadAloud } from '../../../shared/ui';
+import { Button, Card, Checklist, CodeBoxes, ErrorNote, Note, ReadAloud } from '../../../shared/ui';
 import { canPickContact } from '../../../shared/device';
 import { codeReady, phoneReady } from '../logic';
 import type { SendActions, SendState } from '../useSendApp';
@@ -19,6 +19,8 @@ export function AuthScreen({ state, actions }: AuthScreenProps) {
 
   return (
     <div class="scr">
+      {state.invited ? <Note tone="ok" icon="person" title="You've been invited to SeeBuyGet" detail="Join to send, track and collect parcels." /> : null}
+
       {state.authMode === 'login' ? (
         <LoginView state={state} actions={actions} busy={busy} />
       ) : (

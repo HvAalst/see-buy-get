@@ -7526,6 +7526,76 @@
         }
       }
     },
+    "/v1/sbg/identity/invites": {
+      "post": {
+        "operationId": "Identity.createInvite",
+        "summary": "",
+        "description": "Create (or return) an invite for a contact → a token the app turns into a shareable /send/ link (S24).",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInviteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "Identity.myInvites",
+        "summary": "",
+        "description": "The inviter's sent invites + how many turned into joins (the growth credit) — PII-free.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/identity/invite/{token}": {
+      "get": {
+        "operationId": "Identity.invitePreview",
+        "summary": "",
+        "description": "The invite landing check — validates the token without exposing the inviter or the invitee.",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/settlement/module-info": {
       "get": {
         "operationId": "Sse.info",
@@ -10047,6 +10117,9 @@
           "buyerPodPhotoRef": {
             "type": "string"
           },
+          "buyerDisputePhotoRef": {
+            "type": "string"
+          },
           "buyerDisputeReason": {
             "type": "string"
           },
@@ -11709,6 +11782,10 @@
           },
           "pin": {
             "type": "string"
+          },
+          "inviteToken": {
+            "type": "string",
+            "description": "S24: if the person arrived via an invite link, credit the inviter on first join."
           }
         },
         "required": [
@@ -11785,6 +11862,17 @@
           "reason",
           "photoRef"
         ]
+      },
+      "CreateInviteDto": {
+        "type": "object",
+        "properties": {
+          "channels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
       },
       "MilestoneTermDto": {
         "type": "object",

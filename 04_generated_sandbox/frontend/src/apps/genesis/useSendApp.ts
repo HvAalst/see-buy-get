@@ -9,6 +9,7 @@ import {
   fetchTrack,
   handoffToRole,
   pinLogin,
+  previewInvite,
   purgeConsumerTokens,
   readDid,
   readPhone,
@@ -20,9 +21,9 @@ import {
   verifyOtp,
   type ConsumerClient,
 } from './api';
-import { pickPhoneFromContacts, readSmsOtp } from '../../shared/device';
+import { pickPhoneFromContacts, readSmsOtp, shareLink } from '../../shared/device';
 import { cleanPhone, codeReady, normalizeKey, phoneReady } from './logic';
-import type { AuthResult, ConsumerParcelView, MyParcels, NetworkPoint, ParcelSize, PersonRole, PersonView, QuoteView, SwitchResult, TrackView } from './types';
+import type { AuthResult, ConsumerParcelView, InviteSummary, InviteView, MyParcels, NetworkPoint, ParcelSize, PersonRole, PersonView, QuoteView, SwitchResult, TrackView } from './types';
 
 export type Screen = 'send' | 'track' | 'parcels' | 'account';
 export type WizardStep = 'size' | 'from' | 'to' | 'quote';
@@ -81,6 +82,14 @@ export interface SendState {
   accountBusy: boolean;
   accountError: SbgError | null;
   accountNote: string | null;
+
+  /* --- invites (S24) --- */
+  invites: InviteSummary | null;
+  invitesState: 'idle' | 'loading' | 'ready' | 'error';
+  inviteBusy: boolean;
+  inviteNote: string | null; // "Invite sent" / "Link copied" feedback
+  inviteToken: string | null; // captured from a ?invite= landing
+  invited: boolean; // the landing token validated → show the welcome
 }
 
 const INITIAL: SendState = {
@@ -124,6 +133,12 @@ const INITIAL: SendState = {
   accountBusy: false,
   accountError: null,
   accountNote: null,
+  invites: null,
+  invitesState: 'idle',
+  inviteBusy: false,
+  inviteNote: null,
+  inviteToken: null,
+  invited: false,
 };
 
 /**
@@ -141,6 +156,21 @@ export function useSendApp() {
 
   useEffect(() => {
     setState((s) => ({ ...s, recent: recentKeys(), authPhone: readPhone() ?? '' }));
+  }, []);
+
+  // S24: opened via an invite link (/send/?invite=<token>). A device that already holds a session is a
+  // member — the invite is a no-op for them, so we leave their restore alone (readDid is sync, so this is
+  // race-safe against the async session restore). For a fresh device we validate the token and welcome the
+  // newcomer straight into the enrol flow. A TRANSIENT preview failure keeps the token (enrol accept is
+  // best-effort anyway); only a definitive "invalid" drops it.
+  useEffect(() => {
+    const token = new URLSearchParams(globalThis.location?.search ?? '').get('invite');
+    if (!token || readDid()) return;
+    setState((s) => ({ ...s, inviteToken: token }));
+    void previewInvite(token).then((r) => {
+      if (r.data?.valid) setState((s) => ({ ...s, screen: 'account', authMode: 'enroll', invited: true }));
+      else if (r.data && !r.data.valid) setState((s) => ({ ...s, inviteToken: null }));
+    });
   }, []);
 
   /* ----------------------------------------------------------------- points */
@@ -322,6 +352,8 @@ export function useSendApp() {
       authStep: 'phone',
       parcels: null,
       parcelsState: 'idle',
+      inviteToken: null, // the invite (if any) was credited on the server at enrol; done with it now
+      invited: false,
     }));
     setDid(data.personId); // triggers restore() → loadParcels()
   }, []);
@@ -377,7 +409,7 @@ export function useSendApp() {
     if (!codeReady(pin, 4)) return;
     const epoch = ++authEpoch.current;
     setState((s) => ({ ...s, authBusy: true, authError: null }));
-    const r = await enroll(phone, pin);
+    const r = await enroll(phone, pin, stateRef.current.inviteToken ?? undefined);
     if (epoch !== authEpoch.current) return;
     if (r.error) {
       setState((s) => ({ ...s, authBusy: false, authError: r.error }));
@@ -439,6 +471,8 @@ export function useSendApp() {
         authCode: '',
         authPin: '',
         authError: error,
+        inviteToken: null, // a stale invite must not survive sign-out and credit the next person to enrol
+        invited: false,
       }));
     },
     [client],
@@ -542,6 +576,41 @@ export function useSendApp() {
     [client],
   );
 
+  /* -------------------------------------------------- invites (S24) */
+
+  const loadInvites = useCallback(async () => {
+    if (!client) return;
+    setState((s) => ({ ...s, invitesState: 'loading' }));
+    const r = await client.api.myInvites();
+    if (r.error) {
+      if (isSignInRequired(r.error)) return signOutRef.current(r.error);
+      setState((s) => ({ ...s, invitesState: 'error' }));
+      return;
+    }
+    setState((s) => ({ ...s, invites: narrow<InviteSummary>(r.data), invitesState: 'ready' }));
+  }, [client]);
+
+  /** Create an invite → a shareable /send/ link, opened in the OS share sheet (or copied). */
+  const createInvite = useCallback(async () => {
+    if (!client) return;
+    setState((s) => ({ ...s, inviteBusy: true, inviteNote: null }));
+    const r = await client.api.createInvite(['app']);
+    if (r.error) {
+      if (isSignInRequired(r.error)) return signOutRef.current(r.error);
+      setState((s) => ({ ...s, inviteBusy: false, inviteNote: 'Could not create an invite' }));
+      return;
+    }
+    const inv = narrow<InviteView>(r.data);
+    const url = `${globalThis.location?.origin ?? ''}/send/?invite=${inv.token}`;
+    const how = await shareLink('Join me on SeeBuyGet — send, track and collect parcels.', url);
+    setState((s) => ({
+      ...s,
+      inviteBusy: false,
+      inviteNote: how === 'copied' ? 'Link copied — paste it to a friend' : how === 'shared' ? 'Invite ready to send' : 'Could not share — try again',
+    }));
+    void loadInvites();
+  }, [client, loadInvites]);
+
   /* ------------------------------------------------------------------- nav */
 
   const go = useCallback((screen: Screen) => {
@@ -584,6 +653,8 @@ export function useSendApp() {
       submitDispute,
       switchRole,
       changePin,
+      loadInvites,
+      createInvite,
     },
   };
 }

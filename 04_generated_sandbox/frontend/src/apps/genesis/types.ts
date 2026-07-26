@@ -143,3 +143,18 @@ export interface MyParcels {
   sent: ConsumerParcelView[];
   received: ConsumerParcelView[];
 }
+
+/* ------------------------------------------------- invites (S24) -- */
+
+export interface InviteView {
+  inviteId: string;
+  token: string;
+  channels?: string[];
+  joined: number; // distinct people who joined through this link
+  createdAt: string;
+}
+
+export interface InviteSummary {
+  invites: InviteView[]; // the person's one reusable link (or empty)
+  joined: number; // total joins it drove
+}

@@ -34,6 +34,12 @@ export function createConsumerApi(sbg: SbgClient) {
     /** File a delivery dispute from the app (reason + delivered-state photo) → routed by origin. */
     dispute: (id: string, reason: string, photoRef: string) =>
       sbg.request((c) => c.POST('/v1/sbg/identity/parcels/{id}/dispute', { params: { path: { id } }, body: { reason, photoRef } })),
+
+    /** Create (or return) the person's reusable invite link — the app turns the token into a share link (S24). */
+    createInvite: (channels?: string[]) => sbg.request((c) => c.POST('/v1/sbg/identity/invites', { body: { channels } })),
+
+    /** The person's sent invites + how many joined (the growth credit). */
+    myInvites: () => sbg.request((c) => c.GET('/v1/sbg/identity/invites')),
   };
 }
 

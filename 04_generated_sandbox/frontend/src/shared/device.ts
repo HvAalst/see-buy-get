@@ -46,3 +46,32 @@ export async function pickPhoneFromContacts(): Promise<string | null> {
     return null;
   }
 }
+
+/** Is the native share sheet available (most mobile browsers)? Sync — safe for a render-time check. */
+export function canShare(): boolean {
+  return typeof navigator !== 'undefined' && 'share' in navigator;
+}
+
+/**
+ * Share a link (S24 invite). Opens the OS share sheet where available (the growth win — one tap into
+ * WhatsApp/SMS/…); otherwise copies the link to the clipboard. Returns which happened so the UI can say
+ * "copied". A cancelled share counts as done (the user chose not to send), never a copy behind their back.
+ */
+export async function shareLink(text: string, url: string): Promise<'shared' | 'copied' | 'failed'> {
+  const nav = navigator as unknown as { share?(d: { title?: string; text?: string; url?: string }): Promise<void> };
+  if (nav.share) {
+    try {
+      await nav.share({ title: 'SeeBuyGet', text, url });
+      return 'shared';
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return 'shared'; // user cancelled — do not silently copy
+      // any other share failure falls through to the clipboard
+    }
+  }
+  try {
+    await navigator.clipboard?.writeText(`${text} ${url}`);
+    return 'copied';
+  } catch {
+    return 'failed';
+  }
+}

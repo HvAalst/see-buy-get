@@ -365,6 +365,14 @@ const PERSON_ROLES = ['consumer', 'driver', 'agent', 'mdp', 'fleet_manager', 've
 export class EnrollDto {
   @IsString() phone!: string;
   @IsOptional() @IsString() pin?: string;
+  /** S24: if the person arrived via an invite link, credit the inviter on first join. */
+  @IsOptional() @IsString() inviteToken?: string;
+}
+
+/** Create (or return) the person's reusable invite link (S24) — channels = how it was shared. No phone:
+ *  the invite holds no invitee number, so it can never become a membership probe. */
+export class CreateInviteDto {
+  @IsOptional() @IsArray() @IsString({ each: true }) channels?: string[];
 }
 
 /** Reopen the app: phone + 4-digit PIN, no OTP. */

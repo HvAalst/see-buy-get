@@ -6,8 +6,10 @@ import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { PersonService } from './person.service';
 import { OtpService } from './otp.service';
 import { ParcelService } from './parcel.service';
+import { InviteService } from './invite.service';
 import { toView } from './person.types';
-import { BuyerDisputeDto, EnrollDto, PinLoginDto, PodDto, SetPinDto, SwitchRoleDto } from './pudo.dto';
+import { toInviteView } from './invite.types';
+import { BuyerDisputeDto, CreateInviteDto, EnrollDto, PinLoginDto, PodDto, SetPinDto, SwitchRoleDto } from './pudo.dto';
 
 /**
  * Identity — the authenticated consumer surface (S20). "One person, one account, many roles."
@@ -26,6 +28,7 @@ export class IdentityController {
     private readonly persons: PersonService,
     private readonly otp: OtpService,
     private readonly parcels: ParcelService,
+    private readonly invites: InviteService,
   ) {}
 
   /**
@@ -39,6 +42,8 @@ export class IdentityController {
     const verified = this.otp.isVerified(dto.phone);
     const { person, isNew, token } = this.persons.enroll(dto.phone, verified, dto.pin);
     this.otp.consume(dto.phone);
+    // S24: a first-time join through an invite link credits the inviter (best-effort — never blocks sign-up).
+    if (isNew && dto.inviteToken) this.invites.accept(dto.inviteToken, person.personDid);
     return { ...toView(person), isNew, token };
   }
 
@@ -106,5 +111,28 @@ export class IdentityController {
   disputeParcel(@Param('id') id: string, @Body() dto: BuyerDisputeDto, @Actor() actor: IntrospectionResult) {
     const person = this.persons.requireByDid(actor.did!);
     return this.parcels.buyerDispute(id, person.phoneHash, person.personDid, dto.reason, dto.photoRef);
+  }
+
+  /** Create (or return) an invite for a contact → a token the app turns into a shareable /send/ link (S24). */
+  @Roles('consumer')
+  @Post('invites')
+  createInvite(@Body() dto: CreateInviteDto, @Actor() actor: IntrospectionResult) {
+    const person = this.persons.requireByDid(actor.did!);
+    return toInviteView(this.invites.create(person.personDid, dto.channels));
+  }
+
+  /** The inviter's sent invites + how many turned into joins (the growth credit) — PII-free. */
+  @Roles('consumer')
+  @Get('invites')
+  myInvites(@Actor() actor: IntrospectionResult) {
+    const person = this.persons.requireByDid(actor.did!);
+    return this.invites.forInviter(person.personDid);
+  }
+
+  /** The invite landing check — validates the token without exposing the inviter or the invitee. */
+  @Public()
+  @Get('invite/:token')
+  invitePreview(@Param('token') token: string) {
+    return this.invites.preview(token);
   }
 }

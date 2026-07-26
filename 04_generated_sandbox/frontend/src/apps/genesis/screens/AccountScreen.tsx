@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, CodeBoxes, ErrorNote, Icon, Note, Pill, ReadAloud, Sheet } from '../../../shared/ui';
 import { codeReady, roleMeta } from '../logic';
 import { ROLE_APPS } from '../api';
@@ -25,6 +25,10 @@ export function AccountScreen({ state, actions }: AccountScreenProps) {
   const roles = id.roles;
   const others = roles.filter((r) => r.role !== 'consumer');
 
+  useEffect(() => {
+    if (state.invitesState === 'idle') void actions.loadInvites();
+  }, [state.invitesState, actions]);
+
   return (
     <div class="scr">
       <h1 class="scr__title">Your account</h1>
@@ -49,6 +53,20 @@ export function AccountScreen({ state, actions }: AccountScreenProps) {
           ))}
         </div>
         {others.length ? <p class="hint">Tap a role to open its app — no need to sign in again.</p> : <p class="hint">You only have the sender account for now.</p>}
+      </Card>
+
+      <Card title="Invite friends">
+        {state.invites && state.invites.joined > 0 ? (
+          <p class="hint">{state.invites.joined} {state.invites.joined === 1 ? 'friend has' : 'friends have'} joined from your link.</p>
+        ) : (
+          <p class="hint">Share SeeBuyGet — your friends can send and collect too.</p>
+        )}
+        {state.inviteNote ? <Note tone="ok" icon="check" title={state.inviteNote} /> : null}
+        <div style="margin-top:10px">
+          <Button variant="outline" chevron={false} busy={state.inviteBusy} onClick={() => void actions.createInvite()}>
+            Invite a friend
+          </Button>
+        </div>
       </Card>
 
       <Card title="Sign in">

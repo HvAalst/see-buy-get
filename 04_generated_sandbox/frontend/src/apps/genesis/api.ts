@@ -52,9 +52,14 @@ export function verifyOtp(phone: string, code: string): Promise<Result<{ verifie
   return publicRequest(sendConfig(), '/v1/sbg/auth/phone/verify', { body: { phone, code } });
 }
 
-/** Create (or refresh) the consumer for an OTP-verified phone; optionally set the PIN in one step. */
-export function enroll(phone: string, pin?: string): Promise<Result<AuthResult>> {
-  return publicRequest<AuthResult>(sendConfig(), '/v1/sbg/identity/enroll', { body: { phone, pin } });
+/** Create (or refresh) the consumer for an OTP-verified phone; optionally set the PIN + credit an invite. */
+export function enroll(phone: string, pin?: string, inviteToken?: string): Promise<Result<AuthResult>> {
+  return publicRequest<AuthResult>(sendConfig(), '/v1/sbg/identity/enroll', { body: { phone, pin, inviteToken } });
+}
+
+/** Validate an invite token at the landing (S24) — public, tells us only whether the link is real. */
+export function previewInvite(token: string): Promise<Result<{ valid: boolean }>> {
+  return publicRequest<{ valid: boolean }>(sendConfig(), `/v1/sbg/identity/invite/${encodeURIComponent(token)}`);
 }
 
 /** Reopen with phone + 4-digit PIN (no OTP). */

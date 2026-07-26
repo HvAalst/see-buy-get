@@ -20,6 +20,7 @@ import { FleetManagerService } from './fleet-manager.service';
 import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
+import { InviteService } from './invite.service';
 import { hashPhone } from '../../foundation/identity/phone';
 import { createHmac } from 'crypto';
 import { DigitalTwinService } from '../m7/digital-twin.service';
@@ -58,6 +59,7 @@ describe('PUDO Light', () => {
   let accounts: AccountService;
   let otp: OtpService;
   let persons: PersonService;
+  let invites: InviteService;
   let auth: AuthService;
   let graduation: GraduationService;
   let vendors: VendorService;
@@ -72,7 +74,7 @@ describe('PUDO Light', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
-        GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, ToteService, VehicleService, DriverService, FleetService, DispatchService, FleetManagerService, AccountService, OtpService, PersonService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
+        GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, ToteService, VehicleService, DriverService, FleetService, DispatchService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
@@ -96,6 +98,7 @@ describe('PUDO Light', () => {
     accounts = moduleRef.get(AccountService);
     otp = moduleRef.get(OtpService);
     persons = moduleRef.get(PersonService);
+    invites = moduleRef.get(InviteService);
     auth = moduleRef.get(AuthService);
     graduation = moduleRef.get(GraduationService);
     vendors = moduleRef.get(VendorService);
@@ -1031,6 +1034,45 @@ describe('PUDO Light', () => {
     expect(persons.loginWithPin(phone, '1234').person.personDid).toBe(person.personDid);
     for (let i = 0; i < 5; i++) expect(() => persons.loginWithPin(phone, '0000')).toThrow(/Wrong phone or PIN/);
     expect(() => persons.loginWithPin(phone, '1234')).toThrow(/Too many wrong PINs/); // locked out → OTP required
+  });
+
+  it('S24 — invite for exposure: one reusable link, multi-use + deduped credit, no oracle, no inflation', () => {
+    const inviter = persons.ensurePerson('+254700950001').personDid;
+
+    // ONE link per person: re-creating returns the SAME token (merging channels), never a second record.
+    const a = invites.create(inviter, ['share']);
+    const b = invites.create(inviter, ['copy']);
+    expect(b.token).toBe(a.token);
+    expect(b.channels).toEqual(expect.arrayContaining(['share', 'copy']));
+    expect(invites.forInviter(inviter).invites).toHaveLength(1);
+
+    // Multi-use: several NEW people join through the one link → each credited once; the same person, never twice.
+    const j1 = persons.ensurePerson('+254700950002').personDid;
+    const j2 = persons.ensurePerson('+254700950003').personDid;
+    invites.accept(a.token, j1);
+    invites.accept(a.token, j1); // idempotent — already credited
+    invites.accept(a.token, j2);
+    expect(invites.forInviter(inviter).joined).toBe(2);
+
+    // You cannot credit yourself.
+    invites.accept(a.token, inviter);
+    expect(invites.forInviter(inviter).joined).toBe(2);
+
+    // PII-free: the inviter's view exposes no number, no hash, no joiner identity.
+    const json = JSON.stringify(invites.forInviter(inviter));
+    expect(json).not.toContain('950002');
+    expect(json).not.toContain(j1);
+
+    // NO membership oracle + NO inflation: creating a link and READING it can never credit anyone — only an
+    // enrol-time accept() with the real token can. Re-creating never mints a second link to re-heal.
+    const attacker = persons.ensurePerson('+254700950007').personDid;
+    invites.create(attacker); // targets nobody — the model holds no phone to probe
+    expect(invites.forInviter(attacker).joined).toBe(0);
+    expect(invites.forInviter(attacker).joined).toBe(0); // reading again can never inflate
+
+    // The public landing preview validates the token, nothing more.
+    expect(invites.preview(a.token).valid).toBe(true);
+    expect(invites.preview('not-a-token').valid).toBe(false);
   });
 
   it('S21 — links a parcel to its sender + receiver by phone hash; the receiver sees a PII-free twin', () => {
