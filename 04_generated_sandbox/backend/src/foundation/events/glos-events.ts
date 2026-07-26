@@ -57,6 +57,7 @@ export const GlosEvent = {
     ParcelPaid: 'pudo.parcel_paid', // vendor prepaid the full cost → label unblocked + drop-off PUDO notified
     ParcelAccepted: 'pudo.parcel_accepted',
     ParcelHandedToBus: 'pudo.parcel_handed_to_bus',
+    ParcelShortShipped: 'pudo.parcel_short_shipped', // a waiting parcel knowingly left behind at handover (short-ship)
     ParcelReadyForPickup: 'pudo.parcel_ready_for_pickup',
     ParcelDelivered: 'pudo.parcel_delivered',
     ParcelDisputed: 'pudo.parcel_disputed',

@@ -110,6 +110,9 @@ export class HandoverDto {
   @IsOptional() @IsString() agentDid?: string; // operator-override only; normal actors are pinned to their token
   @IsString() driverBadgeId!: string;
   @IsString({ each: true }) parcelIds!: string[];
+  // S25 completeness gate: a short load is refused unless the agent knowingly leaves parcels behind.
+  @IsOptional() @IsBoolean() acknowledgeShortShip?: boolean;
+  @IsOptional() @IsString() shortShipReason?: string;
 }
 
 export class ArriveDto {

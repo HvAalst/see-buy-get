@@ -308,6 +308,11 @@ export class Parcel {
   buyerDisputePhotoRef?: string; // the receiver's photo of THE PROBLEM (dispute evidence, kept distinct)
   buyerDisputeReason?: string;
   buyerDisputedBy?: string; // the person DID that filed the dispute
+  // S25 — handover completeness gate. Set when a waiting parcel was KNOWINGLY left behind at handover
+  // (an acknowledged short-ship), so the control tower sees it immediately instead of waiting for the
+  // 48 h stagnant window. Cleared the moment the parcel is finally loaded onto a bus.
+  shortShippedAt?: string;
+  shortShipReason?: string;
   acceptedAt: string;
   handedToBusAt?: string;
   deliveredAt?: string;

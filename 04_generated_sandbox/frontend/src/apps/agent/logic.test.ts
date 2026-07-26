@@ -156,6 +156,15 @@ describe('speaking', () => {
     expect(handoverSummary(0, 0)).toContain('No parcels');
     expect(handoverSummary(3, 2)).toContain('3 parcels');
   });
+
+  it('handover summary speaks the parcels still owed to the bus after the gate refuses (S25)', () => {
+    const said = handoverSummary(3, 1, 2);
+    expect(said).toContain('2 for this bus are still waiting');
+    expect(said).toContain('leave them behind');
+    // No missed → the plain "finish the handover" prompt, never the short-ship wording.
+    expect(handoverSummary(3, 3, 0)).toContain('finish the handover');
+    expect(handoverSummary(3, 3, 0)).not.toContain('still waiting');
+  });
 });
 
 describe('void / reverse logistics', () => {

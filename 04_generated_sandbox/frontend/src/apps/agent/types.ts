@@ -71,6 +71,10 @@ export interface ParcelView {
 export interface HandoverView {
   handed: string[];
   vehicle?: string;
+  /** S25 completeness gate: every parcel that belonged on this bus, and any knowingly left behind. */
+  expected?: string[];
+  missed?: string[];
+  shortShipped?: boolean;
 }
 
 export interface ArriveView {

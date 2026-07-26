@@ -53,7 +53,8 @@ export interface AgentState {
   stale: boolean;
 
   accept: AcceptForm;
-  handover: { badge: string; selected: string[] };
+  /** `missed` is the last server verdict of parcels for this bus still waiting (the S25 gate). */
+  handover: { badge: string; selected: string[]; missed: string[] };
   release: { stickerId: string; parcel: ParcelView | null; otp: string; issuedOtp: string | null; stars: number; photoRef: string };
   collect: { code: string; found: CollectView | null; disputing: boolean; reason: string; photoRef: string };
   receivebag: { code: string };
@@ -61,7 +62,7 @@ export interface AgentState {
   void: { parcelId: string | null; photoRef: string };
 }
 
-const EMPTY_HANDOVER = { badge: '', selected: [] as string[] };
+const EMPTY_HANDOVER = { badge: '', selected: [] as string[], missed: [] as string[] };
 const EMPTY_RELEASE = { stickerId: '', parcel: null, otp: '', issuedOtp: null, stars: 0, photoRef: '' };
 const EMPTY_COLLECT = { code: '', found: null, disputing: false, reason: '', photoRef: '' };
 
@@ -355,7 +356,14 @@ export function useAgentApp() {
 
   const go = useCallback(
     (screen: Screen) => {
-      setState((s) => ({ ...s, screen, error: null, void: screen === 'void' ? { parcelId: null, photoRef: '' } : s.void }));
+      setState((s) => ({
+        ...s,
+        screen,
+        error: null,
+        // A fresh visit to the handover screen starts with no stale "still waiting" highlight.
+        handover: screen === 'handover' ? { ...s.handover, missed: [] } : s.handover,
+        void: screen === 'void' ? { parcelId: null, photoRef: '' } : s.void,
+      }));
       if (screen === 'handover' || screen === 'void') void loadShopParcels();
       if (screen === 'rates') void loadRates();
     },
@@ -374,7 +382,9 @@ export function useAgentApp() {
     setState((s) => {
       const has = s.handover.selected.includes(parcelId);
       const selected = has ? s.handover.selected.filter((x) => x !== parcelId) : [...s.handover.selected, parcelId];
-      return { ...s, handover: { ...s.handover, selected } };
+      // Selecting a parcel the gate flagged as missing resolves it — drop it from the highlight.
+      const missed = has ? s.handover.missed : s.handover.missed.filter((x) => x !== parcelId);
+      return { ...s, handover: { ...s.handover, selected, missed } };
     });
   }, []);
   const setRelease = useCallback((p: Partial<AgentState['release']>) => {
@@ -483,14 +493,36 @@ export function useAgentApp() {
     });
   }, [client, did, run, fail, pushToast, refresh]);
 
-  const submitHandover = useCallback(async () => {
+  /**
+   * Hand the selected parcels to the bus. `shortShipReason` opts into the S25 short-ship: it is passed
+   * only when the agent has knowingly chosen to leave the waiting parcels behind. Without it, the server
+   * gate refuses a short load (INCOMPLETE_MANIFEST) and we surface exactly which parcels are still waiting
+   * — the agent then loads them (and re-submits) or short-ships with a reason.
+   */
+  const submitHandover = useCallback(async (shortShipReason?: string) => {
     if (!client || !did) return;
     const f = stateRef.current.handover;
     if (!f.badge.trim() || f.selected.length === 0) return;
+    const acknowledge = typeof shortShipReason === 'string';
     await run('handover', async () => {
       // Driver badges are DRV-<uppercase hex>, resolved by a case-sensitive Map (byBadge).
-      const r = await client.api.handover(did, f.badge.trim().toUpperCase(), f.selected);
+      const r = await client.api.handover(
+        did,
+        f.badge.trim().toUpperCase(),
+        f.selected,
+        acknowledge ? { acknowledgeShortShip: true, shortShipReason } : undefined,
+      );
       if (r.error) {
+        // The completeness gate: don't treat it as a dead failure — reconcile the list and show the
+        // agent which parcels for this bus are still waiting, so they can load them or short-ship. The
+        // on-screen warn Note (+ the read-aloud foot) carries the guidance, so leave the generic
+        // ErrorNote banner cleared — one message, not two.
+        if (r.error.code === 'INCOMPLETE_MANIFEST') {
+          const missed = Array.isArray(r.error.params?.missed) ? (r.error.params!.missed as string[]) : [];
+          await loadShopParcels();
+          setState((s) => ({ ...s, error: null, handover: { ...s.handover, missed } }));
+          return;
+        }
         // Reconcile the list (some parcels may have moved), then explain.
         await loadShopParcels();
         fail(r.error);
@@ -498,12 +530,17 @@ export function useAgentApp() {
       }
       buzz();
       const v = narrow<HandoverView>(r.data);
+      const left = v?.missed?.length ?? 0;
       setState((s) => ({ ...s, handover: { ...EMPTY_HANDOVER }, screen: 'home' }));
       pushToast({
-        tone: 'ok',
+        tone: left ? 'warn' : 'ok',
         icon: 'truck',
         title: `${v?.handed?.length ?? f.selected.length} parcel(s) on the bus`,
-        detail: v?.vehicle ? `Loaded onto ${v.vehicle}.` : undefined,
+        detail: left
+          ? `${left} left behind — the control tower has been told.`
+          : v?.vehicle
+            ? `Loaded onto ${v.vehicle}.`
+            : undefined,
       });
       await refresh();
     });

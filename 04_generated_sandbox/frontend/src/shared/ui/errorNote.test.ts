@@ -25,4 +25,10 @@ describe('errorSentence — identity codes resolve to specific guidance (not the
     expect(sentence).toContain('pin');
     expect(sentence).toContain('code'); // points at "sign in with a code"
   });
+
+  it('INCOMPLETE_MANIFEST (S25) resolves to the gate guidance, not the generic fallback', () => {
+    const sentence = errorSentence(mk('INCOMPLETE_MANIFEST'));
+    expect(sentence).not.toBe(GENERIC);
+    expect(sentence.toLowerCase()).toContain('waiting'); // names the parcels still owed to the bus
+  });
 });

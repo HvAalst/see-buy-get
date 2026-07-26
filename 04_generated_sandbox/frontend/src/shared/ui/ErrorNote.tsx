@@ -32,6 +32,7 @@ const SAY: Record<string, string> = {
   'error.verify_phone': 'Verify your phone first — we will send you a code.',
   'error.bag_full': 'That bag is full.',
   'error.shelf_full': 'There is no shelf space left.',
+  'error.manifest_incomplete': 'Some parcels for this bus are still waiting. Load them, or leave them behind.',
   'error.sign_in': 'Please sign in again.',
   'error.not_allowed': 'You are not allowed to do that.',
   'error.slow_down': 'Too many taps. Wait a moment and try again.',

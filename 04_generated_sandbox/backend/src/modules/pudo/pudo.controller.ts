@@ -368,13 +368,12 @@ export class SbgController {
     return this.parcels.list({ vendorId: id }).map((p) => ({ parcelId: p.parcelId, externalOrderId: p.externalOrderId, status: p.status, paidStatus: p.paidStatus, collectionCode: p.collectionCode, trackingKey: p.trackingKey, binSlot: p.binSlot, destZone: p.destZone, size: p.size, shipmentCost: p.shipmentCost, buyerCharge: p.buyerCharge, routeMode: p.routeMode, createdAt: p.acceptedAt }));
   }
 
-  /** Full detail for one order (the watch-only status screen's drill-down). Validates it belongs to the vendor. */
+  /** Full detail for one order (the watch-only status screen's drill-down). Validates it belongs to the
+   *  vendor and strips the control-tower-only short-ship marker before it reaches the external merchant. */
   @Get('vendors/:id/orders/:parcelId')
   vendorOrder(@Param('id') id: string, @Param('parcelId') parcelId: string) {
-    this.vendors.get(id);
-    const p = this.parcels.get(parcelId);
-    if (p.vendorId !== id) throw new GlosError('NOT_FOUND', 'Order does not belong to this vendor');
-    return p;
+    this.vendors.get(id); // 404 if unknown vendor
+    return this.parcels.vendorOrderView(id, parcelId);
   }
 
   /** The buyer's checkout selections waiting to be shipped (the console's incoming-orders inbox). */

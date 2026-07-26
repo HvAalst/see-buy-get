@@ -99,6 +99,7 @@ export const ERROR_CODES = {
   // --- 409 Conflict ----------------------------------------------------------------------------
   CONFLICT: { status: 409, title: 'Conflict with existing data' },
   DUPLICATE: { status: 409, title: 'Already registered' },
+  INCOMPLETE_MANIFEST: { status: 409, title: 'Some waiting parcels were not loaded' },
 
   // --- 429 / 5xx: transport --------------------------------------------------------------------
   RATE_LIMITED: { status: 429, title: 'Too many requests', retryable: true },

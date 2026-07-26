@@ -6,7 +6,7 @@ import { WalletGateService } from './wallet-gate.service';
 import { AGENT_ONLINE_H, CONNECTIVITY_LOSS_H, GHOST_BUS_H, MDP_DWELL_H, STAGNANT_INVENTORY_H } from './pudo.config';
 
 export interface PudoFlag {
-  type: 'Stagnant_Inventory' | 'Ghost_Bus' | 'Stuck_At_MDP' | 'Connectivity_Loss' | 'Blocked_Corridor' | 'Buyer_Dispute';
+  type: 'Stagnant_Inventory' | 'Ghost_Bus' | 'Stuck_At_MDP' | 'Connectivity_Loss' | 'Blocked_Corridor' | 'Buyer_Dispute' | 'Short_Shipped';
   subject: string;
   detail: string;
   ageHours?: number;
@@ -36,6 +36,8 @@ export class MonitorService {
     for (const p of this.parcels.list({ status: 'At_PUDO' })) {
       const age = hoursSince(p.acceptedAt);
       if (age > STAGNANT_INVENTORY_H) flags.push({ type: 'Stagnant_Inventory', subject: p.parcelId, detail: `At_PUDO ${Math.round(age)}h`, ageHours: Math.round(age) });
+      // S25: a parcel a bus knowingly left behind — surfaced the instant it happens, not after 48 h.
+      if (p.shortShippedAt) flags.push({ type: 'Short_Shipped', subject: p.parcelId, detail: `left behind at handover · ${p.shortShipReason ?? 'not loaded'}`, ageHours: Math.round(hoursSince(p.shortShippedAt)) });
     }
     for (const p of this.parcels.list({ status: 'On_Bus' })) {
       const age = hoursSince(p.handedToBusAt);

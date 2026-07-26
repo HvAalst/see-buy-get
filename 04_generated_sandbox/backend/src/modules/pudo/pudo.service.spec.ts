@@ -866,6 +866,160 @@ describe('PUDO Light', () => {
     expect(r.vehicle).toBe('bus'); // a bike maps onto the bus corridor-vehicle
   });
 
+  it('handover 100%-gate (S25): refuses an incomplete manifest and names the parcels left behind', () => {
+    const origin = onboardAgent('Gate Origin', 'NorthTown', 50);
+    onboardAgent('Gate Dest', 'SouthTown', 50);
+    const corridor = corridors.addCorridor({ name: 'gate', originZone: 'NorthTown', destZone: 'SouthTown' });
+    const driver = corridors.addDriver({ driverDid: 'did:glos:gate', name: 'G', corridorId: corridor.corridorId });
+    parcels.accept({ agentDid: origin.did, parcelId: 'G-A', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'G-B', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+
+    // Scanning only one of the two waiting parcels is refused — nothing moves.
+    try {
+      parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['G-A'] });
+      throw new Error('expected INCOMPLETE_MANIFEST');
+    } catch (e) {
+      const err = e as { code?: string; params?: { missed?: string[] } };
+      expect(err.code).toBe('INCOMPLETE_MANIFEST');
+      expect(err.params?.missed).toEqual(['G-B']);
+    }
+    expect(parcels.get('G-A').status).toBe('At_PUDO'); // the refusal is transactional — G-A did not ride
+    expect(parcels.get('G-B').status).toBe('At_PUDO');
+
+    // Scanning both completes it: expected is reported, nothing missed.
+    const r = parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['G-A', 'G-B'] });
+    expect(r.handed.sort()).toEqual(['G-A', 'G-B']);
+    expect(r.expected.sort()).toEqual(['G-A', 'G-B']);
+    expect(r.missed).toEqual([]);
+    expect(r.shortShipped).toBe(false);
+  });
+
+  it('handover short-ship (S25): an acknowledged short load rides the scanned parcel and flags the rest', () => {
+    const origin = onboardAgent('SS Origin', 'NorthTown', 50);
+    onboardAgent('SS Dest', 'SouthTown', 50);
+    const corridor = corridors.addCorridor({ name: 'ss', originZone: 'NorthTown', destZone: 'SouthTown' });
+    const driver = corridors.addDriver({ driverDid: 'did:glos:ss', name: 'S', corridorId: corridor.corridorId });
+    parcels.accept({ agentDid: origin.did, parcelId: 'SS-A', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'SS-B', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+
+    const r = parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['SS-A'], acknowledgeShortShip: true, shortShipReason: 'no space left' });
+    expect(r.handed).toEqual(['SS-A']);
+    expect(r.shortShipped).toBe(true);
+    expect(r.missed).toEqual(['SS-B']);
+    expect(parcels.get('SS-A').status).toBe('On_Bus');
+
+    // The left-behind parcel is stamped and immediately visible to the control tower (not after 48 h).
+    const left = parcels.get('SS-B');
+    expect(left.status).toBe('At_PUDO');
+    expect(left.shortShippedAt).toBeDefined();
+    expect(left.shortShipReason).toBe('no space left');
+    const flag = monitor.flags().find((f) => f.type === 'Short_Shipped' && f.subject === 'SS-B');
+    expect(flag).toBeDefined();
+
+    // Loading it onto the next bus clears the short-ship marker.
+    const next = parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['SS-B'] });
+    expect(next.handed).toEqual(['SS-B']);
+    expect(parcels.get('SS-B').shortShippedAt).toBeUndefined();
+    expect(monitor.flags().some((f) => f.type === 'Short_Shipped')).toBe(false);
+  });
+
+  it('handover gate ignores parcels bound for another corridor (S25): they are not "missed"', () => {
+    const origin = onboardAgent('Multi Origin', 'NorthTown', 50);
+    onboardAgent('South Dest', 'SouthTown', 50);
+    onboardAgent('East Dest', 'EastTown', 50);
+    const south = corridors.addCorridor({ name: 'south', originZone: 'NorthTown', destZone: 'SouthTown' });
+    corridors.addCorridor({ name: 'east', originZone: 'NorthTown', destZone: 'EastTown' });
+    const southDriver = corridors.addDriver({ driverDid: 'did:glos:south', name: 'S', corridorId: south.corridorId });
+    parcels.accept({ agentDid: origin.did, parcelId: 'M-SOUTH', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'M-EAST', size: 'S', destZone: 'EastTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+
+    // The south bus only demands the south parcel; the east-bound one waits for its own corridor.
+    const r = parcels.handover({ agentDid: origin.did, driverBadgeId: southDriver.badgeId, parcelIds: ['M-SOUTH'] });
+    expect(r.handed).toEqual(['M-SOUTH']);
+    expect(r.expected).toEqual(['M-SOUTH']);
+    expect(r.missed).toEqual([]);
+    expect(parcels.get('M-EAST').status).toBe('At_PUDO');
+  });
+
+  it('handover short-ship reconciles what LOADED, not what was scanned (S25): a vehicle-rejected parcel is flagged, not silently left', () => {
+    // Regression for the gate-bypass: a parcel the agent SCANS but the vehicle refuses (fragile on a bike)
+    // must not slip through as "complete" — it is a genuine left-behind and the control tower must see it now.
+    const origin = onboardAgent('Bike Origin', 'NorthTown', 50);
+    const corridor = corridors.addCorridor({ name: 'bike', originZone: 'NorthTown', destZone: 'SouthTown' });
+    const d = drivers.register({ displayName: 'Boda', fullName: 'Boda B', nationalId: 'DRV-ID-SS', mobile: '+254900055', licenceClasses: ['bike'] });
+    const bike = vehicles.register({ plate: 'BD-SS', vehicleClass: 'bike', ownerName: 'Boda B' });
+    fleet.couple(d.did, bike.vehicleId, corridor.corridorId);
+    parcels.accept({ agentDid: origin.did, parcelId: 'BK-LIGHT', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'BK-FRAGILE', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg', fragile: true });
+
+    // The agent scans BOTH (no omission), so the gate does not block — but the bike cannot take the fragile one.
+    const r = parcels.handover({ agentDid: origin.did, driverBadgeId: d.badgeId!, parcelIds: ['BK-LIGHT', 'BK-FRAGILE'] });
+    expect(r.handed).toEqual(['BK-LIGHT']);
+    expect(r.missed).toEqual(['BK-FRAGILE']); // reconciled from what actually loaded — not [] just because it was scanned
+    expect(r.shortShipped).toBe(true);
+
+    const left = parcels.get('BK-FRAGILE');
+    expect(left.status).toBe('At_PUDO');
+    expect(left.shortShippedAt).toBeDefined();
+    expect(left.shortShipReason).toMatch(/fragile/); // the vehicle's concrete reason, not a generic default
+    const flag = monitor.flags().find((fl) => fl.type === 'Short_Shipped' && fl.subject === 'BK-FRAGILE');
+    expect(flag).toBeDefined(); // visible to the control tower immediately, not after the 48 h stagnant window
+  });
+
+  it('short-ship reason stays off the counterparty twin timeline (S25): the note is generic, the reason control-tower only', () => {
+    // Regression for the PII leak: the free-text reason must live only on shortShipReason (ops), never in a
+    // scan note, which toConsumerView copies into BOTH the sender's and receiver's twin timelines.
+    const origin = onboardAgent('Leak Origin', 'NorthTown', 50);
+    onboardAgent('Leak Dest', 'SouthTown', 50);
+    const corridor = corridors.addCorridor({ name: 'leak', originZone: 'NorthTown', destZone: 'SouthTown' });
+    const driver = corridors.addDriver({ driverDid: 'did:glos:leak', name: 'L', corridorId: corridor.corridorId });
+    const sender = '+254700955001';
+    const receiver = '+254700955002';
+    parcels.accept({ agentDid: origin.did, parcelId: 'LK-A', size: 'S', destZone: 'SouthTown', senderMobile: sender, receiverMobile: receiver, dropoffPhotoRef: 'p.jpg' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'LK-B', size: 'S', destZone: 'SouthTown', senderMobile: sender, receiverMobile: receiver, dropoffPhotoRef: 'p.jpg' });
+
+    const secret = 'consignee refused, balance unpaid';
+    parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['LK-A'], acknowledgeShortShip: true, shortShipReason: secret });
+
+    // The raw parcel keeps the reason for the control tower / monitor flag…
+    expect(parcels.get('LK-B').shortShipReason).toBe(secret);
+    // …but neither the receiver's nor the sender's twin timeline may carry it.
+    const rx = parcels.consumerParcel('LK-B', hashPhone(receiver));
+    const snd = parcels.consumerParcel('LK-B', hashPhone(sender));
+    expect(JSON.stringify(rx)).not.toContain('consignee refused');
+    expect(JSON.stringify(snd)).not.toContain('consignee refused');
+    // The generic short-ship note is still on the timeline (visible delay is fine — the words are not).
+    expect(rx.timeline.some((s) => (s.note ?? '').includes('short-ship'))).toBe(true);
+  });
+
+  it('vendor order detail hides the control-tower short-ship marker (S25 leak fix): reason never reaches the merchant', () => {
+    const origin = onboardAgent('VO Origin', 'NorthTown', 50);
+    const dest = onboardAgent('VO Dest', 'SouthTown', 50);
+    const corridor = corridors.addCorridor({ name: 'vo', originZone: 'NorthTown', destZone: 'SouthTown' });
+    const driver = corridors.addDriver({ driverDid: 'did:glos:vo', name: 'V', corridorId: corridor.corridorId });
+    const vendor = vendors.register({ name: 'V', callbackUrl: 'https://v.example/hook' });
+    vendors.topUp(vendor.vendorId, 50);
+    const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700966001', size: 'S', contentPhotoRef: 'content.jpg', shippingPolicy: vendor.shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'S') });
+    parcels.intakeInbound(parcel.parcelId, origin.did);
+
+    // Short-ship the vendor's parcel with a private operator reason (nothing else scanned).
+    parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: [], acknowledgeShortShip: true, shortShipReason: 'private ops note about the buyer' });
+    expect(parcels.get(parcel.parcelId).shortShipReason).toBe('private ops note about the buyer'); // raw record keeps it for ops
+
+    // The merchant's order-detail view must NOT carry the reason or the marker.
+    const view = parcels.vendorOrderView(vendor.vendorId, parcel.parcelId);
+    expect('shortShipReason' in view).toBe(false);
+    expect('shortShippedAt' in view).toBe(false);
+    expect(JSON.stringify(view)).not.toContain('private ops note');
+    // …but it still carries the normal order detail the console needs.
+    expect(view.parcelId).toBe(parcel.parcelId);
+    expect(view.status).toBe('At_PUDO');
+    expect(view.vendorId).toBe(vendor.vendorId);
+
+    // Wrong vendor cannot read it at all.
+    expect(() => parcels.vendorOrderView('vendor_other', parcel.parcelId)).toThrow(/does not belong/);
+  });
+
   it('publishes a PUDO tote for claim when full, and otherwise after the 24 h max wait (Ch 19)', () => {
     const origin = onboardAgent('Dispatch PUDO', 'NorthTown', 50);
     const mdp = mdps.register({ name: 'South Hub', zones: ['SouthTown'], location: { lat: -1.3, lng: 36.9 } });

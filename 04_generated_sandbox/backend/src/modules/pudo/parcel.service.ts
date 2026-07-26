@@ -38,6 +38,12 @@ export interface HandoverResult {
   vehicle: 'bus' | 'truck';
   handed: string[];
   rejected: Array<{ parcelId: string; reason: string }>;
+  // S25 — the completeness gate makes the manifest legible: `expected` is every waiting parcel that
+  // belongs on THIS bus (this shop → the driver's corridor destination); `missed` is the ones that were
+  // not scanned. A clean run has `missed: []`. A knowing short-ship returns them here with shortShipped.
+  expected: string[];
+  missed: string[];
+  shortShipped: boolean;
 }
 
 /**
@@ -150,6 +156,22 @@ export class ParcelService implements OnApplicationBootstrap {
     return ParcelService.toConsumerView(p, phoneHash, true);
   }
 
+  /**
+   * Full order detail for the external merchant console (`GET /vendors/:id/orders/:parcelId`) — everything
+   * the parcel carries EXCEPT the control-tower-only short-ship marker. shortShipReason is operator text
+   * (and shortShippedAt its timestamp): the orders LIST projection already omits it, so the detail must too,
+   * or an internal reason for leaving a parcel behind would reach the vendor. (S25 — the counterpart of the
+   * generic short-ship scan note that keeps the reason off the consumer twins.)
+   */
+  vendorOrderView(vendorId: string, parcelId: string): Omit<Parcel, 'shortShippedAt' | 'shortShipReason'> {
+    const p = this.require(parcelId);
+    if (p.vendorId !== vendorId) throw new GlosError('NOT_FOUND', 'Order does not belong to this vendor');
+    const view: Partial<Parcel> = { ...p }; // shallow copy — never delete off the live stored parcel
+    delete view.shortShippedAt;
+    delete view.shortShipReason;
+    return view as Omit<Parcel, 'shortShippedAt' | 'shortShipReason'>;
+  }
+
   private static toConsumerView(p: Parcel, phoneHash: string, withToken = false): ConsumerParcelView {
     const relation = p.receiverPhoneHash === phoneHash ? 'received' : 'sent';
     const view: ConsumerParcelView = {
@@ -233,23 +255,63 @@ export class ParcelService implements OnApplicationBootstrap {
 
   /** Screen 2 — Give to Bus (handover). Scan driver badge → manifest; scan each parcel; finish at 100%.
    * The badge resolves first to a registered fleet driver (with their coupled vehicle + capacity and
-   * handling rules enforced); failing that, to a legacy corridor driver. */
-  handover(input: { agentDid: string; driverBadgeId: string; parcelIds: string[] }): HandoverResult {
+   * handling rules enforced); failing that, to a legacy corridor driver.
+   *
+   * S25 completeness gate — the compendium's "finish at 100%" made real. The server itself computes the
+   * EXPECTED manifest (every parcel waiting at this shop bound for the driver's corridor destination) and
+   * refuses (INCOMPLETE_MANIFEST) if the scan omits any of them, so a bus can never quietly pull away with
+   * parcels left on the shelf. The only way past a short load is an explicit `acknowledgeShortShip` (with a
+   * reason): those parcels are flagged for the control tower instead of silently forgotten. */
+  handover(input: {
+    agentDid: string;
+    driverBadgeId: string;
+    parcelIds: string[];
+    acknowledgeShortShip?: boolean;
+    shortShipReason?: string;
+  }): HandoverResult {
     const fleet = this.fleet.resolveBadge(input.driverBadgeId);
     let badgeId: string;
     let corridorId: string;
+    let corridorDestZone: string;
     let vehicleType: 'bus' | 'truck';
     if (fleet) {
       if (!fleet.corridorId) throw new GlosError('INVALID_STATE', 'Driver is not assigned to a corridor — assign one before handover');
+      const corridor = this.corridors.requireCorridor(fleet.corridorId);
       badgeId = fleet.badgeId;
-      corridorId = this.corridors.requireCorridor(fleet.corridorId).corridorId;
+      corridorId = corridor.corridorId;
+      corridorDestZone = corridor.destZone;
       vehicleType = fleet.vehicleType;
     } else {
       const driver = this.corridors.driverByBadge(input.driverBadgeId);
       if (!driver) throw new GlosError('INVALID_INPUT', 'Unknown driver badge — not a registered fleet driver or on the corridor whitelist');
+      const corridor = this.corridors.requireCorridor(driver.corridorId);
       badgeId = driver.badgeId;
-      corridorId = this.corridors.requireCorridor(driver.corridorId).corridorId;
+      corridorId = corridor.corridorId;
+      corridorDestZone = corridor.destZone;
       vehicleType = driver.vehicleType;
+    }
+
+    // The expected manifest: every parcel waiting at THIS shop bound for the corridor's destination. The
+    // agent app's accept picker only offers destZones served by a corridor from here, and an inbound stamps
+    // the final dest zone, so in the direct-corridor model these are exactly the parcels this bus carries.
+    // (Conservative for a future multi-hop leg: a parcel routed onward via an MDP has a different destZone
+    // and simply isn't demanded here — the gate never blocks on a parcel it can't prove belongs on the bus.)
+    const expected = this.list({ status: 'At_PUDO', agentDid: input.agentDid })
+      .filter((p) => p.originAgentDid === input.agentDid && p.destZone === corridorDestZone)
+      .map((p) => p.parcelId);
+    const scanned = new Set(input.parcelIds);
+    const unscanned = expected.filter((id) => !scanned.has(id));
+
+    // The gate: a short load caused by simply NOT SCANNING an expected parcel is refused unless the agent
+    // knowingly acknowledges it — nothing is mutated on the refusal path (all-or-acknowledged-nothing). A
+    // parcel the agent DID scan but the vehicle cannot carry (fragile / over-weight / full) is not a silent
+    // omission the agent can fix, so it is never blocked; it is reconciled and short-shipped below instead.
+    if (unscanned.length && !input.acknowledgeShortShip) {
+      throw new GlosError(
+        'INCOMPLETE_MANIFEST',
+        `${unscanned.length} parcel(s) for this bus are still waiting — scan them, or short-ship on purpose.`,
+        { missed: unscanned, expected, corridorId },
+      );
     }
 
     const handed: string[] = [];
@@ -272,6 +334,8 @@ export class ParcelService implements OnApplicationBootstrap {
       parcel.status = 'On_Bus';
       parcel.corridorId = corridorId;
       parcel.driverBadgeId = badgeId;
+      parcel.shortShippedAt = undefined; // it made the bus after all — clear any earlier short-ship marker
+      parcel.shortShipReason = undefined;
       if (fleet && parcel.actualPerKm == null) parcel.actualPerKm = fleet.vehicle.pricePerKm; // the real carrier rate → flexible rebate
       parcel.handedToBusAt = new Date().toISOString();
       loadKg += parcel.weightKg;
@@ -280,10 +344,32 @@ export class ParcelService implements OnApplicationBootstrap {
       void this.events.publish(GlosEvent.Pudo.ParcelHandedToBus, { parcelId, driverBadgeId: badgeId, corridorId, manifestId }, { source: 'pudo' }).catch(() => undefined);
     }
 
+    // Reconcile completeness against what ACTUALLY loaded, not merely what was scanned: any expected parcel
+    // still on the shelf — whether the agent chose to leave it (acknowledged) OR the vehicle rejected it
+    // (fragile / over-weight / full) — is a genuine left-behind. Stamp each so the control tower sees it now
+    // (the Short_Shipped monitor flag), not after the 48 h stagnant window.
+    const handedSet = new Set(handed);
+    const rejectionReason = new Map(rejected.map((r) => [r.parcelId, r.reason]));
+    const operatorReason = (input.shortShipReason ?? '').trim() || 'not loaded';
+    const missed = expected.filter((id) => !handedSet.has(id) && this.parcels.get(id)?.status === 'At_PUDO');
+    if (missed.length) {
+      const at = new Date().toISOString();
+      for (const parcelId of missed) {
+        const parcel = this.parcels.get(parcelId)!; // guaranteed At_PUDO by the filter above
+        parcel.shortShippedAt = at;
+        // The vehicle's concrete rejection reason wins; otherwise the agent's acknowledged reason.
+        parcel.shortShipReason = rejectionReason.get(parcelId) ?? operatorReason;
+        // The scan note stays GENERIC: the reason lives on shortShipReason (control-tower only), never in the
+        // timeline that BOTH the sender and receiver twins can read via toConsumerView (mirrors buyerDispute, S23).
+        this.scan(parcel, 'At_PUDO', badgeId, `short-ship · left behind at manifest ${manifestId}`);
+        void this.events.publish(GlosEvent.Pudo.ParcelShortShipped, { parcelId, driverBadgeId: badgeId, corridorId, manifestId, reason: parcel.shortShipReason }, { source: 'pudo' }).catch(() => undefined);
+      }
+    }
+
     // Pay the agent the handover fee once for the batch.
     if (handed.length) this.gate.payLabour(input.agentDid, HANDOVER_FEE, manifestId, 'manifest');
 
-    return { manifestId, driverBadgeId: badgeId, corridorId, vehicle: fleet ? vehicleType : this.corridors.chooseVehicle(loadKg), handed, rejected };
+    return { manifestId, driverBadgeId: badgeId, corridorId, vehicle: fleet ? vehicleType : this.corridors.chooseVehicle(loadKg), handed, rejected, expected, missed, shortShipped: missed.length > 0 };
   }
 
   /** Arrival at the destination PUDO → Ready_For_Pickup; OTP issued to the receiver. */

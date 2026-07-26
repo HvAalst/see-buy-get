@@ -59,9 +59,27 @@ export function createAgentApi(sbg: SbgClient) {
       dropoffPhotoRef: string;
     }) => sbg.request((c) => c.POST('/v1/sbg/parcels/accept', { body })),
 
-    /** Hand selected parcels to the scanned driver badge (the bus moment). */
-    handover: (agentDid: string, driverBadgeId: string, parcelIds: string[]) =>
-      sbg.request((c) => c.POST('/v1/sbg/parcels/handover', { body: { agentDid, driverBadgeId, parcelIds } })),
+    /**
+     * Hand selected parcels to the scanned driver badge (the bus moment). The server runs the S25
+     * completeness gate: a short load is refused (INCOMPLETE_MANIFEST, with the missed ids in params)
+     * unless `acknowledgeShortShip` is passed to knowingly leave those parcels behind (with a reason).
+     */
+    handover: (
+      agentDid: string,
+      driverBadgeId: string,
+      parcelIds: string[],
+      opts?: { acknowledgeShortShip?: boolean; shortShipReason?: string },
+    ) =>
+      sbg.request((c) =>
+        c.POST('/v1/sbg/parcels/handover', {
+          body: {
+            agentDid,
+            driverBadgeId,
+            parcelIds,
+            ...(opts?.acknowledgeShortShip ? { acknowledgeShortShip: true, shortShipReason: opts.shortShipReason } : {}),
+          },
+        }),
+      ),
 
     /** Mark a bus parcel arrived at this destination shop → issues the customer OTP. */
     arrive: (parcelId: string, destAgentDid: string) =>

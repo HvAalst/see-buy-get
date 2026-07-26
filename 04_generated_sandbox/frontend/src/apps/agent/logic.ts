@@ -189,9 +189,12 @@ export function homeSummary(agent: AgentView | null, gate: GateView | null): str
   );
 }
 
-export function handoverSummary(count: number, selected: number): string {
+export function handoverSummary(count: number, selected: number, missed = 0): string {
   if (count === 0) return 'No parcels are waiting for the bus.';
-  return `${count} parcels waiting. ${selected} selected. Scan the driver badge, then finish the handover.`;
+  const base = `${count} parcels waiting. ${selected} selected.`;
+  // S25: after the gate refuses a short load, speak the number still owed to this bus.
+  if (missed > 0) return `${base} ${missed} for this bus are still waiting. Load them, or leave them behind.`;
+  return `${base} Scan the driver badge, then finish the handover.`;
 }
 
 /* -------------------------------------------------------------------- void -- */

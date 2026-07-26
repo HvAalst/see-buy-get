@@ -4774,7 +4774,7 @@
       "get": {
         "operationId": "Sbg.vendorOrder",
         "summary": "",
-        "description": "Full detail for one order (the watch-only status screen's drill-down). Validates it belongs to the vendor.",
+        "description": "Full detail for one order (the watch-only status screen's drill-down). Validates it belongs to the\n vendor and strips the control-tower-only short-ship marker before it reaches the external merchant.",
         "parameters": [
           {
             "name": "id",
@@ -4799,7 +4799,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Parcel"
+                  "type": "object"
                 }
               }
             }
@@ -10126,6 +10126,12 @@
           "buyerDisputedBy": {
             "type": "string"
           },
+          "shortShippedAt": {
+            "type": "string"
+          },
+          "shortShipReason": {
+            "type": "string"
+          },
           "acceptedAt": {
             "type": "string"
           },
@@ -10172,6 +10178,12 @@
             "items": {
               "type": "string"
             }
+          },
+          "acknowledgeShortShip": {
+            "type": "boolean"
+          },
+          "shortShipReason": {
+            "type": "string"
           }
         },
         "required": [

@@ -79,6 +79,19 @@
   background: var(--blue-soft);
 }
 
+/* S25 completeness gate: a parcel the bus is about to leave behind. A firmer edge + panel ground draws
+   the eye the same restrained way .note--warn does — no forbidden orange field. The "Waiting" pill on
+   the row carries the semantic. A selected row (.pick--on) wins, so loading it clears the highlight. */
+.pick--missed:not(.pick--on) {
+  border-color: var(--tx2);
+  background: var(--panel);
+}
+
+.pick__end {
+  flex: none;
+  margin-left: auto;
+}
+
 .pick__tick {
   flex: none;
   width: 30px;

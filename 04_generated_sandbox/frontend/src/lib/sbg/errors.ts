@@ -19,7 +19,7 @@ export type SbgErrorCode =
   | 'CANNOT_COUPLE' | 'CAPACITY_EXCEEDED' | 'FRAGILE_NOT_ALLOWED' | 'BAG_FULL' | 'BAG_EMPTY' | 'BAG_RESERVED'
   | 'BAG_MISADDRESSED' | 'SHELF_FULL' | 'NO_CAPACITY_AVAILABLE' | 'OTP_INVALID' | 'OTP_LOCKED' | 'PIN_INVALID' | 'UNAUTHORIZED'
   | 'AUTH_FAILED' | 'AUTH_CODE_INVALID' | 'AUTH_NOT_ACTIVE' | 'PAYMENT_REQUIRED' | 'WALLET_INSUFFICIENT'
-  | 'FORBIDDEN' | 'WRONG_PUDO' | 'AGENT_LOCKED' | 'PIN_LOCKED' | 'ROLE_NOT_HELD' | 'NOT_FOUND' | 'CONFLICT' | 'DUPLICATE' | 'RATE_LIMITED'
+  | 'FORBIDDEN' | 'WRONG_PUDO' | 'AGENT_LOCKED' | 'PIN_LOCKED' | 'ROLE_NOT_HELD' | 'NOT_FOUND' | 'CONFLICT' | 'DUPLICATE' | 'INCOMPLETE_MANIFEST' | 'RATE_LIMITED'
   | 'INTERNAL'
   | 'NETWORK' | 'TIMEOUT' | 'CLIENT_OUTDATED'; // client-synthesised (no HTTP response)
 
@@ -95,6 +95,8 @@ const PRESENTATION: Partial<Record<SbgErrorCode, ErrorPresentation>> = {
   FRAGILE_NOT_ALLOWED: { icon: 'block', tone: 'warn', say: 'error.no_fragile' },
   BAG_FULL: { icon: 'box', tone: 'warn', say: 'error.bag_full' },
   SHELF_FULL: { icon: 'box', tone: 'warn', say: 'error.shelf_full' },
+  // S25 handover completeness gate — a short load the agent must resolve (load the rest, or short-ship).
+  INCOMPLETE_MANIFEST: { icon: 'box', tone: 'warn', say: 'error.manifest_incomplete' },
   RATE_LIMITED: { icon: 'clock', tone: 'info', say: 'error.slow_down' },
   UNAUTHORIZED: { icon: 'key', tone: 'danger', say: 'error.sign_in' },
   FORBIDDEN: { icon: 'block', tone: 'danger', say: 'error.not_allowed' },
