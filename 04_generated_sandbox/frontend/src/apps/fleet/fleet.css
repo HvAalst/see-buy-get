@@ -168,3 +168,75 @@
   padding: 0 8px;
   white-space: nowrap;
 }
+
+/* ----------------------------------------------------- vehicle photos (S26) --
+   Capture pad + thumbnails for the owner's vehicle/trailer/registration photos.
+   The hidden file input triggers the camera; previews render via <AuthImage>. */
+.photo__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.photos__item {
+  position: relative;
+}
+
+.photos__thumb {
+  width: 72px;
+  height: 72px;
+  border-radius: var(--r-ctl);
+  object-fit: cover;
+}
+
+.photos__thumb--sm {
+  width: 48px;
+  height: 48px;
+}
+
+.photos--sm {
+  margin-top: 8px;
+}
+
+.photos__x {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid var(--bd);
+  background: var(--bg);
+  color: var(--tx2);
+  box-shadow: var(--sh-sm);
+}
+
+.photos__add {
+  min-width: 88px;
+  height: 72px;
+  padding: 0 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1.5px dashed var(--bd);
+  border-radius: var(--r-ctl);
+  background: var(--bg);
+  color: var(--tx2);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+}

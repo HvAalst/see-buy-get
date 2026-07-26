@@ -163,9 +163,9 @@ function ParcelDetail({ parcel, state, actions }: { parcel: ConsumerParcelView; 
           problem — a reason + a photo — which routes to the seller (or the sender) and the control tower. */}
       {canAct ? (
         <Card label="Got your parcel?">
-          <PhotoField id="pod-photo" value={parcel.podPhotoRef ?? ''} label="Add a photo of what you received" onCapture={(ref) => void actions.submitPod(ref)} disabled={state.podBusy} />
+          <PhotoField id="pod-photo" value={parcel.podPhotoRef ?? ''} label="Add a photo of what you received" upload={(file) => actions.uploadPhoto('pod', file)} onCapture={(ref) => void actions.submitPod(ref)} disabled={state.podBusy} />
           <div style="margin-top:10px">
-            <Button variant="outline" chevron={false} onClick={() => { setReason(''); setPhoto(parcel.podPhotoRef ?? ''); setDisputeOpen(true); }}>
+            <Button variant="outline" chevron={false} onClick={() => { setReason(''); setPhoto(''); setDisputeOpen(true); }}>
               Report a problem
             </Button>
           </div>
@@ -220,7 +220,7 @@ function ParcelDetail({ parcel, state, actions }: { parcel: ConsumerParcelView; 
             placeholder="e.g. the box was empty"
           />
         </div>
-        <PhotoField id="dispute-photo" value={photo} label="Photo of what you received" onCapture={setPhoto} disabled={state.disputeBusy} />
+        <PhotoField id="dispute-photo" value={photo} label="Photo of what you received" upload={(file) => actions.uploadPhoto('dispute', file)} onCapture={setPhoto} disabled={state.disputeBusy} />
         <Button chevron={false} disabled={!reason.trim() || !photo} busy={state.disputeBusy} onClick={() => void actions.submitDispute(reason, photo)}>
           Send the report
         </Button>

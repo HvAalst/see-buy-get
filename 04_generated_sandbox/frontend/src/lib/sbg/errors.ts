@@ -19,7 +19,8 @@ export type SbgErrorCode =
   | 'CANNOT_COUPLE' | 'CAPACITY_EXCEEDED' | 'FRAGILE_NOT_ALLOWED' | 'BAG_FULL' | 'BAG_EMPTY' | 'BAG_RESERVED'
   | 'BAG_MISADDRESSED' | 'SHELF_FULL' | 'NO_CAPACITY_AVAILABLE' | 'OTP_INVALID' | 'OTP_LOCKED' | 'PIN_INVALID' | 'UNAUTHORIZED'
   | 'AUTH_FAILED' | 'AUTH_CODE_INVALID' | 'AUTH_NOT_ACTIVE' | 'PAYMENT_REQUIRED' | 'WALLET_INSUFFICIENT'
-  | 'FORBIDDEN' | 'WRONG_PUDO' | 'AGENT_LOCKED' | 'PIN_LOCKED' | 'ROLE_NOT_HELD' | 'NOT_FOUND' | 'CONFLICT' | 'DUPLICATE' | 'INCOMPLETE_MANIFEST' | 'RATE_LIMITED'
+  | 'FORBIDDEN' | 'WRONG_PUDO' | 'AGENT_LOCKED' | 'PIN_LOCKED' | 'ROLE_NOT_HELD' | 'MEDIA_LOCKED' | 'NOT_FOUND' | 'CONFLICT' | 'DUPLICATE' | 'INCOMPLETE_MANIFEST'
+  | 'MEDIA_EXPIRED' | 'MEDIA_TOO_LARGE' | 'UNSUPPORTED_MEDIA' | 'RATE_LIMITED'
   | 'INTERNAL'
   | 'NETWORK' | 'TIMEOUT' | 'CLIENT_OUTDATED'; // client-synthesised (no HTTP response)
 
@@ -97,6 +98,11 @@ const PRESENTATION: Partial<Record<SbgErrorCode, ErrorPresentation>> = {
   SHELF_FULL: { icon: 'box', tone: 'warn', say: 'error.shelf_full' },
   // S25 handover completeness gate — a short load the agent must resolve (load the rest, or short-ship).
   INCOMPLETE_MANIFEST: { icon: 'box', tone: 'warn', say: 'error.manifest_incomplete' },
+  // S26 media upload + retention.
+  MEDIA_TOO_LARGE: { icon: 'camera', tone: 'warn', say: 'error.photo_too_large' },
+  UNSUPPORTED_MEDIA: { icon: 'camera', tone: 'warn', say: 'error.photo_type' },
+  MEDIA_EXPIRED: { icon: 'clock', tone: 'info', say: 'error.photo_expired' },
+  MEDIA_LOCKED: { icon: 'lock', tone: 'info', say: 'error.photo_locked' },
   RATE_LIMITED: { icon: 'clock', tone: 'info', say: 'error.slow_down' },
   UNAUTHORIZED: { icon: 'key', tone: 'danger', say: 'error.sign_in' },
   FORBIDDEN: { icon: 'block', tone: 'danger', say: 'error.not_allowed' },

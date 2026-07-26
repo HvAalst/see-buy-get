@@ -18,6 +18,7 @@ export { BottomNav, type BottomNavProps, type NavItem } from './BottomNav';
 export { ReadAloud, speak, stopSpeaking, isSpeechSupported, type ReadAloudProps } from './ReadAloud';
 export { ErrorNote, Note, errorSentence, type ErrorNoteProps, type NoteProps } from './ErrorNote';
 export { Icon, type IconName, type IconProps } from './Icon';
+export { AuthImage, type AuthImageProps } from './AuthImage';
 export { BandScale, type BandScaleProps } from './BandScale';
 export { CodeBoxes, type CodeBoxesProps } from './CodeBoxes';
 export { CodeCard, type CodeCardProps } from './CodeCard';

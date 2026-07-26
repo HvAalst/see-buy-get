@@ -6313,7 +6313,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/Vehicle"
+                    "type": "object"
                   }
                 }
               }
@@ -6364,7 +6364,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Vehicle"
+                  "type": "object"
                 }
               }
             }
@@ -7582,6 +7582,92 @@
         "parameters": [
           {
             "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/media": {
+      "post": {
+        "operationId": "Media.upload",
+        "summary": "",
+        "description": "Upload one downscaled image (+ optional thumbnail). The owner is the authenticated caller.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadMediaDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      },
+      "get": {
+        "operationId": "Media.mine",
+        "summary": "",
+        "description": "The caller's own media — the source for the media library (S27). PII-free projection.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/media/{id}": {
+      "get": {
+        "operationId": "Media.fetch",
+        "summary": "",
+        "description": "Stream one image's bytes (or its thumbnail via ?variant=thumb). Owner-or-operator only.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "delete": {
+        "operationId": "Media.remove",
+        "summary": "",
+        "description": "Remove one of your own asset images early (vehicle/trailer only — evidence bins stay locked).",
+        "parameters": [
+          {
+            "name": "id",
             "required": true,
             "in": "path",
             "schema": {
@@ -10671,6 +10757,18 @@
           "documents": {
             "$ref": "#/components/schemas/VehicleDocuments"
           },
+          "vehiclePhotoRefs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "trailerPhotoRefs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "verified": {
             "type": "boolean"
           },
@@ -11312,6 +11410,18 @@
           "documents": {
             "$ref": "#/components/schemas/VehicleDocumentsDto"
           },
+          "vehiclePhotoRefs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "trailerPhotoRefs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "managerDid": {
             "type": "string"
           }
@@ -11885,6 +11995,36 @@
             }
           }
         }
+      },
+      "UploadMediaDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "dropoff",
+              "pod",
+              "dispute",
+              "content",
+              "vehicle",
+              "trailer",
+              "registration",
+              "kyc_id",
+              "kyc_licence",
+              "shop"
+            ]
+          },
+          "dataUrl": {
+            "type": "string"
+          },
+          "thumbDataUrl": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "dataUrl"
+        ]
       },
       "MilestoneTermDto": {
         "type": "object",

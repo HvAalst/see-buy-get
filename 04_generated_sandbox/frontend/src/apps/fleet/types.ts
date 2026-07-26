@@ -31,6 +31,8 @@ export interface VehicleRow {
   verified: boolean;
   status: string;
   managerDid?: string;
+  vehiclePhotoRefs?: string[]; // S26 — mediaIds of the vehicle-body photos
+  trailerPhotoRefs?: string[]; // S26 — mediaIds of a coupled trailer's photos
 }
 
 export interface DriverRow {

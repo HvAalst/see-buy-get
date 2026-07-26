@@ -806,7 +806,9 @@ export class SbgController {
   /** A fleet manager sees only their own vehicles (actor.tenant); operator sees all. */
   @Get('vehicles')
   listVehicles(@Actor() actor: IntrospectionResult, @Query('status') status?: string, @Query('class') vehicleClass?: string) {
-    return this.vehicles.list({ status: status as never, vehicleClass: vehicleClass as never, managerDid: actingTenant(actor) });
+    // Open-data marketplace list, but scoped: a fleet manager sees their own vehicles in full; a
+    // non-owner sees only the public fields — never another tenant's owner id, docs, QR or photo mediaIds.
+    return this.vehicles.listFor({ status: status as never, vehicleClass: vehicleClass as never, managerDid: actingTenant(actor) }, actingTenant(actor), actor?.role === 'operator');
   }
 
   /** The truck sub-type catalog (label + capacity + handling capabilities) for registration UIs. */
@@ -816,8 +818,10 @@ export class SbgController {
   }
 
   @Get('vehicles/:id')
-  getVehicle(@Param('id') id: string) {
-    return this.vehicles.get(id);
+  getVehicle(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    // Scope the detail to the viewer: owner/operator see the full record; others get the public
+    // marketplace fields only — never the owner id, docs, dashboard QR or the S26 photo mediaIds.
+    return this.vehicles.viewFor(id, actingTenant(actor), actor?.role === 'operator');
   }
 
   /** Upload / update registration docs — re-evaluates the verified (dispatch-priority) flag. */

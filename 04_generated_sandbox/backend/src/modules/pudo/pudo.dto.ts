@@ -1,6 +1,7 @@
 import { ArrayMinSize, IsArray, IsBoolean, IsIn, IsNumber, IsObject, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { TRUCK_SUBTYPES } from './fleet.config';
+import { MEDIA_KINDS, MediaKind } from './media.types';
 
 class GeoDto {
   @IsNumber() lat!: number;
@@ -113,6 +114,13 @@ export class HandoverDto {
   // S25 completeness gate: a short load is refused unless the agent knowingly leaves parcels behind.
   @IsOptional() @IsBoolean() acknowledgeShortShip?: boolean;
   @IsOptional() @IsString() shortShipReason?: string;
+}
+
+/** S26 — upload one image as a base64 data URL (the client downscales + strips EXIF first). */
+export class UploadMediaDto {
+  @IsIn(MEDIA_KINDS) kind!: MediaKind;
+  @IsString() dataUrl!: string; // data:image/jpeg;base64,…
+  @IsOptional() @IsString() thumbDataUrl?: string; // a small thumbnail for the media grid
 }
 
 export class ArriveDto {
@@ -425,6 +433,9 @@ export class RegisterVehicleDto {
   @IsOptional() @IsIn(['driver_owned', 'fleet_owned', 'third_party']) ownerType?: string;
   @IsString() ownerName!: string;
   @IsOptional() @ValidateNested() @Type(() => VehicleDocumentsDto) documents?: VehicleDocumentsDto;
+  // S26 — mediaIds of the owner's uploaded vehicle-body and trailer photos.
+  @IsOptional() @IsArray() @IsString({ each: true }) vehiclePhotoRefs?: string[];
+  @IsOptional() @IsArray() @IsString({ each: true }) trailerPhotoRefs?: string[];
   @IsOptional() @IsString() managerDid?: string;
 }
 

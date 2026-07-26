@@ -3,6 +3,7 @@ import { AgentService } from './agent.service';
 import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
 import { ParcelService } from './parcel.service';
+import { MediaService } from './media.service';
 import { MonitorService } from './monitor.service';
 import { RatingService } from './rating.service';
 import { GraduationService } from './graduation.service';
@@ -45,6 +46,7 @@ describe('PUDO Light', () => {
   let gate: WalletGateService;
   let corridors: CorridorService;
   let parcels: ParcelService;
+  let media: MediaService;
   let monitor: MonitorService;
   let rating: RatingService;
   let shelfSvc: ShelfService;
@@ -74,7 +76,7 @@ describe('PUDO Light', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
-        GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, ToteService, VehicleService, DriverService, FleetService, DispatchService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
+        GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, ToteService, VehicleService, DriverService, FleetService, DispatchService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
@@ -84,6 +86,7 @@ describe('PUDO Light', () => {
     gate = moduleRef.get(WalletGateService);
     corridors = moduleRef.get(CorridorService);
     parcels = moduleRef.get(ParcelService);
+    media = moduleRef.get(MediaService);
     monitor = moduleRef.get(MonitorService);
     rating = moduleRef.get(RatingService);
     shelfSvc = moduleRef.get(ShelfService);
@@ -1018,6 +1021,112 @@ describe('PUDO Light', () => {
 
     // Wrong vendor cannot read it at all.
     expect(() => parcels.vendorOrderView('vendor_other', parcel.parcelId)).toThrow(/does not belong/);
+  });
+
+  it('media (S26): a real drop-off photo links to its parcel and its 90-day clock starts at delivery', () => {
+    const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const origin = onboardAgent('Media Origin', 'NorthTown', 50);
+    const dest = onboardAgent('Media Dest', 'SouthTown', 50);
+    const corridor = corridors.addCorridor({ name: 'm', originZone: 'NorthTown', destZone: 'SouthTown' });
+    const driver = corridors.addDriver({ driverDid: 'did:glos:m', name: 'M', corridorId: corridor.corridorId });
+
+    // The agent uploads a real drop-off photo, then accepts the parcel referencing that mediaId.
+    const { mediaId } = media.upload({ ownerDid: origin.did, kind: 'dropoff', dataUrl: PNG });
+    parcels.accept({ agentDid: origin.did, parcelId: 'MED-1', size: 'S', destZone: 'SouthTown', destPudoDid: dest.did, senderMobile: '+254700970001', receiverMobile: '+254700970002', dropoffPhotoRef: mediaId });
+
+    // Linked to the parcel, in the shipment-proof bin, clock NOT yet started.
+    const linked = media.get(mediaId)!;
+    expect(linked.link).toEqual({ type: 'parcel', id: 'MED-1' });
+    expect(linked.retentionClass).toBe('shipment-proof');
+    expect(linked.expiresAt).toBeUndefined();
+
+    // Ride the bus, arrive, collect with the OTP → Delivered anchors the 90-day retention.
+    parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['MED-1'] });
+    const { otp } = parcels.arrive('MED-1', dest.did);
+    parcels.pickup('MED-1', dest.did, otp);
+    expect(parcels.get('MED-1').status).toBe('Delivered');
+    expect(media.get(mediaId)!.expiresAt).toBeDefined(); // the clock is running only now
+  });
+
+  it('media (S26): vehicle registration links the owner’s body + trailer photos to the vehicle', () => {
+    const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const body = media.upload({ ownerDid: 'did:mgr', kind: 'vehicle', dataUrl: PNG });
+    const trailer = media.upload({ ownerDid: 'did:mgr', kind: 'vehicle', dataUrl: PNG }); // kind corrected by link
+    const v = vehicles.register({ plate: 'KDA-777', vehicleClass: 'bike', ownerName: 'Owner', managerDid: undefined, vehiclePhotoRefs: [body.mediaId], trailerPhotoRefs: [trailer.mediaId] });
+
+    expect(v.vehiclePhotoRefs).toEqual([body.mediaId]);
+    expect(media.get(body.mediaId)!.link).toEqual({ type: 'vehicle', id: v.vehicleId });
+    expect(media.get(trailer.mediaId)!.kind).toBe('trailer'); // link re-derived the kind
+    expect(media.get(body.mediaId)!.retentionClass).toBe('vehicle-asset');
+    // An asset image is the owner's to remove; it is never auto-scheduled while the vehicle is active.
+    expect(media.get(body.mediaId)!.expiresAt).toBeUndefined();
+  });
+
+  it('media (S26 leak fix): the vehicle detail hides the owner id + photo mediaIds from a non-owner', () => {
+    const v = vehicles.register({ plate: 'KDA-888', vehicleClass: 'bike', ownerName: 'Owner', vehiclePhotoRefs: ['med_x'], trailerPhotoRefs: ['med_y'] });
+    // An operator sees the full record (the photo mediaIds + docs are present)…
+    expect((vehicles.viewFor(v.vehicleId, undefined, true) as typeof v).vehiclePhotoRefs).toEqual(['med_x']);
+    // …any non-owner tenant sees only the public marketplace fields, never the media refs / owner / QR.
+    const stranger = vehicles.viewFor(v.vehicleId, 'did:mgr:B', false);
+    expect(stranger.vehicleClass).toBe('bike'); // public
+    expect(stranger.pricePerKm).toBeGreaterThanOrEqual(0);
+    expect('vehiclePhotoRefs' in stranger).toBe(false);
+    expect('trailerPhotoRefs' in stranger).toBe(false);
+    expect('managerDid' in stranger).toBe(false);
+    expect('documents' in stranger).toBe(false);
+    expect('qr' in stranger).toBe(false);
+    expect('ownerName' in stranger).toBe(false); // a driver-owned vehicle's ownerName is the driver's real name (PII)
+    expect('ownerType' in stranger).toBe(false);
+    // The open-data LIST is scoped the same way — a non-owner row never carries the media refs.
+    const listed = vehicles.listFor({}, 'did:mgr:B', false).find((r) => r.plate === 'KDA-888')!;
+    expect('vehiclePhotoRefs' in listed).toBe(false);
+    expect(vehicles.listFor({}, undefined, true).find((r) => r.plate === 'KDA-888')!.vehiclePhotoRefs).toEqual(['med_x']);
+  });
+
+  it('media (S26): a buyer dispute holds the delivery proof + its own photo on one clock, and rejects reusing the PoD', () => {
+    const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const origin = onboardAgent('Dsp Origin', 'NorthTown', 50);
+    const dest = onboardAgent('Dsp Dest', 'SouthTown', 50);
+    const corridor = corridors.addCorridor({ name: 'd', originZone: 'NorthTown', destZone: 'SouthTown' });
+    const driver = corridors.addDriver({ driverDid: 'did:glos:d', name: 'D', corridorId: corridor.corridorId });
+    const receiver = '+254700980002';
+    parcels.accept({ agentDid: origin.did, parcelId: 'DSP-1', size: 'M', destZone: 'SouthTown', destPudoDid: dest.did, senderMobile: '+254700980001', receiverMobile: receiver, dropoffPhotoRef: 'drop.jpg' });
+    parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['DSP-1'] });
+    const { otp } = parcels.arrive('DSP-1', dest.did);
+    parcels.pickup('DSP-1', dest.did, otp);
+
+    const rx = hashPhone(receiver);
+    const pod = media.upload({ ownerDid: 'did:rx', kind: 'pod', dataUrl: PNG });
+    parcels.attachPod('DSP-1', rx, 'did:rx', pod.mediaId); // PoD anchored to a 90-day shipment-proof clock
+    const podClock = media.get(pod.mediaId)!.expiresAt!;
+
+    // Reusing the PoD as the dispute photo is refused — the problem needs its own capture.
+    expect(() => parcels.buyerDispute('DSP-1', rx, 'did:rx', 'wrong item', pod.mediaId)).toThrow(/not the delivery photo/);
+
+    const problem = media.upload({ ownerDid: 'did:rx', kind: 'dispute', dataUrl: PNG });
+    parcels.buyerDispute('DSP-1', rx, 'did:rx', 'wrong item', problem.mediaId);
+    // Both the PoD and the problem photo are now on ONE dispute-evidence clock (PoD not swept mid-case).
+    expect(media.get(pod.mediaId)!.retentionClass).toBe('dispute-evidence');
+    expect(new Date(media.get(pod.mediaId)!.expiresAt!).getTime()).toBeGreaterThan(new Date(podClock).getTime());
+    expect(media.get(problem.mediaId)!.expiresAt).toBeDefined();
+  });
+
+  it('media (S26): the vendor content photo is linked to its parcel and survives the orphan reaper', () => {
+    const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const origin = onboardAgent('Ct Origin', 'NorthTown', 50);
+    const dest = onboardAgent('Ct Dest', 'SouthTown', 50);
+    corridors.addCorridor({ name: 'ct', originZone: 'NorthTown', destZone: 'SouthTown' });
+    const vendor = vendors.register({ name: 'V', callbackUrl: 'https://v.example/hook' });
+    vendors.topUp(vendor.vendorId, 50);
+    const content = media.upload({ ownerDid: vendor.vendorId, kind: 'content', dataUrl: PNG });
+    const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700985001', size: 'S', contentPhotoRef: content.mediaId, shippingPolicy: vendor.shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'S') });
+
+    // Linked to the parcel in the shipment-proof bin — NOT an orphan the reaper may reclaim.
+    expect(media.get(content.mediaId)!.link).toEqual({ type: 'parcel', id: parcel.parcelId });
+    expect(media.get(content.mediaId)!.retentionClass).toBe('shipment-proof');
+    // Even long after upload it is kept (linked, awaiting its terminal-state clock), never hard-deleted.
+    media.sweep(new Date(Date.now() + 72 * 60 * 60 * 1000));
+    expect(media.get(content.mediaId)).toBeDefined();
   });
 
   it('publishes a PUDO tote for claim when full, and otherwise after the 24 h max wait (Ch 19)', () => {

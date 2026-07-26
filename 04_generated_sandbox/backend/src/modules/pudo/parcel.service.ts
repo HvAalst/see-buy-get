@@ -15,6 +15,7 @@ import { HANDOVER_FEE, LABOUR_FEE, OTP_MAX_ATTEMPTS, PICKUP_FEE, SIZE_TRANSPORT_
 import { ConsumerParcelView, Parcel, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy } from './pudo.types';
 import { VendorService } from './vendor.service';
 import { VehicleService } from './vehicle.service';
+import { MediaService } from './media.service';
 import type { ShipmentQuote } from './routing.service';
 import { qrSvgGroup } from '../../foundation/label/qr';
 
@@ -70,6 +71,7 @@ export class ParcelService implements OnApplicationBootstrap {
     private readonly events: EventBus,
     private readonly vendors: VendorService,
     private readonly vehicles: VehicleService,
+    private readonly media: MediaService,
   ) {}
 
   /**
@@ -130,6 +132,8 @@ export class ParcelService implements OnApplicationBootstrap {
     if (p.status !== 'Delivered') throw new GlosError('INVALID_STATE', 'Add a photo once the parcel is delivered');
     if (!photoRef) throw new GlosError('PHOTO_REQUIRED', 'A photo is required');
     p.buyerPodPhotoRef = photoRef;
+    this.media.link(photoRef, { type: 'parcel', id: p.parcelId }, 'pod'); // shipment-proof; already terminal → anchor
+    this.media.anchorParcelTerminal(p.parcelId);
     this.persist(p);
     return ParcelService.toConsumerView(p, phoneHash, true);
   }
@@ -144,10 +148,18 @@ export class ParcelService implements OnApplicationBootstrap {
     const p = this.receiverParcel(id, phoneHash);
     if (p.status !== 'Delivered') throw new GlosError('INVALID_STATE', 'You can report a problem once the parcel is delivered');
     if (!reason?.trim() || !photoRef) throw new GlosError('DISPUTE_INCOMPLETE', 'A reason and a photo are required to report a problem');
+    // The problem photo must be its OWN media, not the delivered-state PoD reused — else one image serves
+    // two roles and its retention gets confused (S26). Force a distinct capture.
+    if (photoRef === p.buyerPodPhotoRef) throw new GlosError('DISPUTE_INCOMPLETE', 'Take a new photo of the problem — not the delivery photo');
     p.status = 'Disputed';
     p.buyerDisputeReason = reason;
     p.buyerDisputePhotoRef = photoRef; // the problem-photo gets its OWN durable home — never overwrites the PoD
     p.buyerDisputedBy = byDid;
+    // S26: link the problem photo to the dispute-evidence bin, and put ALL the parcel's evidence (the PoD
+    // that delivery already put on a 90-day clock + this photo) on one dispute-evidence clock, so the proof
+    // needed to adjudicate is not swept mid-case and the dispute photo's clock actually starts.
+    this.media.link(photoRef, { type: 'parcel', id: p.parcelId }, 'dispute');
+    this.media.holdParcelForDispute(p.parcelId);
     p.disputeReason = p.disputeReason ?? reason; // the vendor callback + control-tower flag read this field
     // The scan note stays generic: the free-text reason lives in buyerDisputeReason (receiver-gated), so it
     // is never copied into the timeline, which both parties (including the sender) can read.
@@ -245,6 +257,8 @@ export class ParcelService implements OnApplicationBootstrap {
       scans: [{ at: now, status: 'CREATED', by: input.agentDid, note: agent.shopName, anchorTxId }],
     };
     this.parcels.set(parcel.parcelId, parcel);
+    // S26: attach the drop-off proof to this parcel → shipment-proof bin (clock starts at terminal state).
+    this.media.link(input.dropoffPhotoRef, { type: 'parcel', id: parcel.parcelId }, 'dropoff');
 
     if (mode === 'cash') this.gate.chargeShipping(input.agentDid, WHOLESALE, parcel.parcelId);
     else this.gate.payLabour(input.agentDid, LABOUR_FEE, parcel.parcelId, 'parcel');
@@ -410,6 +424,9 @@ export class ParcelService implements OnApplicationBootstrap {
     parcel.status = 'Delivered';
     parcel.deliveredAt = new Date().toISOString();
     parcel.deliveredPhotoRef = deliveredPhotoRef;
+    // S26: the delivered proof + any earlier drop-off proof enter the 90-day shipment-proof window now.
+    this.media.link(deliveredPhotoRef, { type: 'parcel', id: parcelId }, 'pod');
+    this.media.anchorParcelTerminal(parcelId);
     this.shelf.release(parcel.destAgentDid ?? agentDid, parcelId); // free the shelf slot
     this.scan(parcel, 'Delivered', agentDid, 'OTP verified');
     void this.events.publish(GlosEvent.Pudo.ParcelDelivered, { parcelId, agentDid }, { source: 'pudo' }).catch(() => undefined);
@@ -425,6 +442,9 @@ export class ParcelService implements OnApplicationBootstrap {
     if (!voidedPhotoRef) throw new GlosError('PHOTO_REQUIRED', 'A photo of the voided label is required');
 
     parcel.status = 'Voided';
+    // S26: the torn-label void proof + the original drop-off proof enter the shipment-proof window now.
+    this.media.link(voidedPhotoRef, { type: 'parcel', id: parcel.parcelId }, 'dropoff');
+    this.media.anchorParcelTerminal(parcel.parcelId);
     this.scan(parcel, 'Voided', agentDid, 'voided + refunded');
     if (parcel.paymentMode === 'cash') this.gate.refund(agentDid, WHOLESALE, parcel.parcelId);
     void this.events.publish(GlosEvent.Pudo.ParcelVoided, { parcelId, agentDid }, { source: 'pudo' }).catch(() => undefined);
@@ -438,6 +458,7 @@ export class ParcelService implements OnApplicationBootstrap {
     if (!['Created', 'At_PUDO', 'At_MDP'].includes(parcel.status)) throw new GlosError('INVALID_STATE', `Cannot cancel a ${parcel.status} parcel`);
     if (parcel.paymentMode === 'cash' && parcel.status === 'At_PUDO') this.gate.refund(parcel.originAgentDid, WHOLESALE, parcel.parcelId);
     parcel.status = 'Voided';
+    this.media.anchorParcelTerminal(parcel.parcelId); // S26: shipment-proof retention starts at this terminal state
     this.scan(parcel, 'Voided', by, reason ? `cancelled · ${reason}` : 'cancelled');
     void this.events.publish(GlosEvent.Pudo.ParcelVoided, { parcelId, agentDid: by, cancelled: true }, { source: 'pudo' }).catch(() => undefined);
     return parcel;
@@ -512,6 +533,9 @@ export class ParcelService implements OnApplicationBootstrap {
       scans: [{ at: now, status: 'CREATED', by: input.vendorId, note: `inbound · order ${input.externalOrderId ?? '—'}`, anchorTxId }],
     };
     this.parcels.set(parcelId, parcel);
+    // S26: attach the vendor's content photo (the baseline a dispute is judged against) to the parcel →
+    // shipment-proof bin. Without this link the orphan-reaper would delete it before the parcel is delivered.
+    this.media.link(input.contentPhotoRef, { type: 'parcel', id: parcelId }, 'content');
 
     // Prepaid gate: bill the vendor's balance with the country daughter company → 'ParcelPaid' or 'unpaid'.
     const bill = this.vendors.billShipment(input.vendorId, parcelId, shipmentCost);
@@ -626,6 +650,7 @@ export class ParcelService implements OnApplicationBootstrap {
     if (parcel.collectionCode !== collectionCode) throw new GlosError('CODE_MISMATCH', 'Collection code does not match');
     parcel.status = 'Delivered';
     parcel.deliveredAt = new Date().toISOString();
+    this.media.anchorParcelTerminal(parcelId); // S26: shipment-proof retention starts at collection
     this.shelf.release(agentDid, parcelId); // free the shelf slot
     this.scan(parcel, 'Delivered', agentDid, 'collected · OK');
     this.gate.payLabour(agentDid, PICKUP_FEE, parcelId, 'parcel');
@@ -659,6 +684,9 @@ export class ParcelService implements OnApplicationBootstrap {
     parcel.status = 'Disputed';
     parcel.disputeReason = reason;
     parcel.disputePhotoRef = photoProofRef;
+    // S26: attach the proof to the dispute-evidence bin and start its clock at filing (no resolution flow yet).
+    this.media.link(photoProofRef, { type: 'parcel', id: parcel.parcelId }, 'dispute');
+    this.media.holdParcelForDispute(parcel.parcelId);
     this.scan(parcel, 'Disputed', agentDid, `dispute · ${reason}`);
     void this.events.publish(GlosEvent.Pudo.ParcelDisputed, { parcelId, agentDid, reason, photoProofRef, vendorId: parcel.vendorId, externalOrderId: parcel.externalOrderId }, { source: 'pudo' }).catch(() => undefined);
     return parcel;

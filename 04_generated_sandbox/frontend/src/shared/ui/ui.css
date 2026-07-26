@@ -1270,3 +1270,26 @@
   line-height: 1.5;
   margin-bottom: 8px;
 }
+
+/* ---------------------------------------------------------------- media (S26) --
+   AuthImage: bytes fetched with the bearer, shown via an object URL. The placeholder
+   states share the panel ground so a loading/failed image is not a jarring gap. */
+.authimg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--r-ctl);
+  object-fit: cover;
+  background: var(--panel);
+}
+.authimg--loading,
+.authimg--failed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 64px;
+  background: var(--panel);
+  color: var(--tx3);
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-ctl);
+}

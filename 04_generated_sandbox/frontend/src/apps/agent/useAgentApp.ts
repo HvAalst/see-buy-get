@@ -8,6 +8,9 @@ import {
   sbgReset,
   type SbgError,
 } from '../../lib/sbg';
+import type { MediaKind } from '../../lib/sbg/personas/media';
+import { downscaleImage } from '../../shared/media';
+import { errorSentence } from '../../shared/ui';
 import type { IconName } from '../../shared/ui/Icon';
 import { agentConfig, clearDid, createAgentClient, purgeAgentTokens, readDid, readEmail, saveDid, saveEmail } from './api';
 import { signal } from '../../shared/feedback';
@@ -327,6 +330,29 @@ export function useAgentApp() {
   }, []);
 
   /* ----------------------------------------------------------- navigation */
+
+  /**
+   * S26: prepare + upload a captured photo, returning its mediaId (or null on failure, with a toast).
+   * The downscale/EXIF-strip happens on-device; the contract field then holds this mediaId, not a filename.
+   */
+  const uploadPhoto = useCallback(
+    async (kind: MediaKind, file: File): Promise<string | null> => {
+      if (!client) return null;
+      try {
+        const { dataUrl, thumbDataUrl } = await downscaleImage(file);
+        const r = await client.api.uploadMedia(kind, dataUrl, thumbDataUrl);
+        if (r.error) {
+          pushToast({ tone: 'danger', icon: 'camera', title: 'Photo upload failed', detail: errorSentence(r.error) });
+          return null;
+        }
+        return narrow<{ mediaId: string }>(r.data)?.mediaId ?? null;
+      } catch {
+        pushToast({ tone: 'danger', icon: 'camera', title: 'Could not read that photo', detail: 'Try taking it again.' });
+        return null;
+      }
+    },
+    [client, pushToast],
+  );
 
   const loadShopParcels = useCallback(async () => {
     if (!client || !did) return;
@@ -726,6 +752,7 @@ export function useAgentApp() {
       openVoid,
       setVoidPhoto,
       submitVoid,
+      uploadPhoto,
       pushToast,
       dismissToast,
       readEmail,

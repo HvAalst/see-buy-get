@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { isSignInRequired, narrow, type SbgError } from '../../lib/sbg';
+import type { MediaKind } from '../../lib/sbg/personas/media';
+import { downscaleImage } from '../../shared/media';
 import {
   clearDid,
   createConsumerClient,
@@ -511,6 +513,25 @@ export function useSendApp() {
     setState((s) => ({ ...s, openParcelId: null, openParcelDetail: null, openParcelState: 'idle', openParcelError: null, disputeError: null }));
   }, []);
 
+  /** S26: downscale + EXIF-strip + upload a captured photo → its mediaId (null on failure). */
+  const uploadPhoto = useCallback(
+    async (kind: MediaKind, file: File): Promise<string | null> => {
+      if (!client) return null;
+      try {
+        const { dataUrl, thumbDataUrl } = await downscaleImage(file);
+        const r = await client.api.uploadMedia(kind, dataUrl, thumbDataUrl);
+        if (r.error) {
+          if (isSignInRequired(r.error)) signOutRef.current(r.error);
+          return null;
+        }
+        return narrow<{ mediaId: string }>(r.data)?.mediaId ?? null;
+      } catch {
+        return null;
+      }
+    },
+    [client],
+  );
+
   /** S23: attach the receiver's delivered-state photo to the open parcel (returns the updated twin). */
   const submitPod = useCallback(
     async (photoRef: string) => {
@@ -649,6 +670,7 @@ export function useSendApp() {
       loadParcels,
       openParcel,
       closeParcel,
+      uploadPhoto,
       submitPod,
       submitDispute,
       switchRole,

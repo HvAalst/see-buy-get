@@ -1,4 +1,5 @@
 import type { SbgClient } from '../client';
+import { createMediaApi } from './media';
 
 /**
  * Fleet-manager persona facade — the ONLY operations the fleet app can name, which is
@@ -11,6 +12,9 @@ import type { SbgClient } from '../client';
  */
 export function createFleetApi(sbg: SbgClient) {
   return {
+    // S26: real image upload/fetch (vehicle body + trailer + registration photos).
+    ...createMediaApi(sbg),
+
     /** Counts, working hours, live positions and active cargo — scoped by the token.
      *  (`manager` is required by the contract but operator-only at runtime; empty = my tenant.) */
     dashboard: () => sbg.request((c) => c.GET('/v1/sbg/fleet/dashboard', { params: { query: { manager: '' } } })),
@@ -32,6 +36,8 @@ export function createFleetApi(sbg: SbgClient) {
       capacityKg?: number;
       pricePerKm?: number;
       documents?: { registrationPhotoRef?: string; factoryId?: string };
+      vehiclePhotoRefs?: string[]; // S26 — mediaIds of the vehicle-body photos
+      trailerPhotoRefs?: string[]; // S26 — mediaIds of a coupled trailer's photos
       // Cast: the generated body narrows vehicleClass/truckSubtype to closed unions the
       // form feeds as validated strings; the backend re-validates (S5a contract quirk).
     }) => sbg.request((c) => c.POST('/v1/sbg/vehicles', { body: body as never })),

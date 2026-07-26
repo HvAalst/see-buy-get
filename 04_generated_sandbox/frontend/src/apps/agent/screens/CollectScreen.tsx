@@ -107,7 +107,7 @@ export function CollectScreen({ state, actions }: CollectScreenProps) {
             placeholder="e.g. the box is crushed"
           />
         </div>
-        <PhotoField id="dispute-photo" value={f.photoRef} label="Photo of the problem" onCapture={(ref) => actions.setCollect({ photoRef: ref })} />
+        <PhotoField id="dispute-photo" value={f.photoRef} label="Photo of the problem" upload={(file) => actions.uploadPhoto('dispute', file)} onCapture={(ref) => actions.setCollect({ photoRef: ref })} />
         <Button
           chevron={false}
           disabled={!f.reason.trim() || !f.photoRef}

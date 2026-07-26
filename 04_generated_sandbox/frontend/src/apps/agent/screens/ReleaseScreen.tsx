@@ -67,6 +67,7 @@ export function ReleaseScreen({ state, actions }: ReleaseScreenProps) {
               id="handover-photo"
               value={f.photoRef}
               label="Handover photo (optional)"
+              upload={(file) => actions.uploadPhoto('pod', file)}
               onCapture={(ref) => actions.setRelease({ photoRef: ref })}
             />
           </div>

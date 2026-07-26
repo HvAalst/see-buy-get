@@ -5,6 +5,7 @@ import { randomBytes } from 'crypto';
 import { TRUCK_SUBTYPE_CATALOG, TruckSubtype, TruckSubtypeSpec, VEHICLE_SPEC, VehicleClass } from './fleet.config';
 import { Vehicle, VehicleDocuments, VehicleOwnerType } from './fleet.types';
 import { FleetManagerService } from './fleet-manager.service';
+import { MediaService } from './media.service';
 import { DEFAULT_PRICE_PER_KM } from './pudo.config';
 
 interface RegisterVehicleInput {
@@ -15,6 +16,8 @@ interface RegisterVehicleInput {
   ownerType?: VehicleOwnerType;
   ownerName: string;
   documents?: VehicleDocuments;
+  vehiclePhotoRefs?: string[]; // S26 — mediaIds of the vehicle body photos
+  trailerPhotoRefs?: string[]; // S26 — mediaIds of a coupled trailer's photos
   managerDid?: string; // the fleet manager that owns this vehicle (must be ACTIVE)
   pricePerKm?: number; // open-data transport rate (defaults if unset)
 }
@@ -31,7 +34,10 @@ export class VehicleService {
   // Durable: registered fleet vehicles (documents, verification, pricing, manager ownership).
   private readonly vehicles = new PersistentMap<string, Vehicle>('pudo-vehicles');
 
-  constructor(private readonly managers: FleetManagerService) {}
+  constructor(
+    private readonly managers: FleetManagerService,
+    private readonly media: MediaService,
+  ) {}
 
   register(input: RegisterVehicleInput): Vehicle {
     const spec = VEHICLE_SPEC[input.vehicleClass];
@@ -64,11 +70,18 @@ export class VehicleService {
       ownerType: input.ownerType ?? 'driver_owned',
       ownerName: input.ownerName,
       documents: docs,
+      vehiclePhotoRefs: input.vehiclePhotoRefs?.length ? input.vehiclePhotoRefs : undefined,
+      trailerPhotoRefs: input.trailerPhotoRefs?.length ? input.trailerPhotoRefs : undefined,
       verified: Boolean(docs.registrationPhotoRef && docs.factoryId),
       status: 'ACTIVE',
       createdAt: new Date().toISOString(),
     };
     this.vehicles.set(vehicle.vehicleId, vehicle);
+    // S26: attach the owner's images to this vehicle → 'vehicle-asset' bin (user-managed while registered).
+    const link = { type: 'vehicle' as const, id: vehicle.vehicleId };
+    for (const ref of input.vehiclePhotoRefs ?? []) this.media.link(ref, link, 'vehicle');
+    for (const ref of input.trailerPhotoRefs ?? []) this.media.link(ref, link, 'trailer');
+    this.media.link(docs.registrationPhotoRef, link, 'registration');
     return vehicle;
   }
 
@@ -101,9 +114,41 @@ export class VehicleService {
     return v;
   }
 
+  /**
+   * A vehicle scoped to the viewer. The owning manager (or an operator) sees the full record; anyone else
+   * sees only the PUBLIC marketplace fields — never the owner id, registration documents, dashboard QR or
+   * the S26 media refs. Keeps the newly-added photo mediaIds off a raw cross-tenant read (the S25
+   * raw-object-leak lesson). Used by both the detail and the (open-data) list surfaces.
+   */
+  private scopedView(v: Vehicle, tenant: string | undefined, isOperator: boolean): Vehicle | Partial<Vehicle> {
+    if (isOperator || (tenant && v.managerDid === tenant)) return v;
+    const publicView: Partial<Vehicle> = { ...v };
+    delete publicView.managerDid;
+    delete publicView.documents;
+    delete publicView.vehiclePhotoRefs;
+    delete publicView.trailerPhotoRefs;
+    delete publicView.qr; // the dashboard shift sticker is the owner's, not marketplace data
+    // ownerName is the driver's real full name for a driver-owned vehicle (Golden-Record PII) — never
+    // marketplace data; the genuine public surfaces (/pricing, /network/points) never carry it either.
+    delete publicView.ownerName;
+    delete publicView.ownerType;
+    return publicView;
+  }
+
+  /** Vehicle detail scoped to the viewer (see scopedView). */
+  viewFor(vehicleId: string, tenant: string | undefined, isOperator: boolean): Vehicle | Partial<Vehicle> {
+    return this.scopedView(this.require(vehicleId), tenant, isOperator);
+  }
+
+  /** The vehicle list scoped to the viewer — a fleet manager's own rows are full; others get public rows. */
+  listFor(filter: { status?: Vehicle['status']; vehicleClass?: VehicleClass; managerDid?: string }, tenant: string | undefined, isOperator: boolean): Array<Vehicle | Partial<Vehicle>> {
+    return this.list(filter).map((v) => this.scopedView(v, tenant, isOperator));
+  }
+
   retire(vehicleId: string): Vehicle {
     const v = this.require(vehicleId);
     v.status = 'RETIRED';
+    this.media.anchorVehicleRetired(vehicleId); // S26: start the grace clock on this vehicle's asset photos
     return v;
   }
 

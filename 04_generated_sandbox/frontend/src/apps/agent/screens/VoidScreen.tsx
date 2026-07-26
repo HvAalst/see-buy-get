@@ -99,6 +99,7 @@ export function VoidScreen({ state, actions }: VoidScreenProps) {
                   id="void-photo"
                   value={state.void.photoRef}
                   label="Photo of the torn label"
+                  upload={(file) => actions.uploadPhoto('dropoff', file)}
                   onCapture={(ref) => actions.setVoidPhoto(ref)}
                 />
                 <Checklist items={['Your wallet is refunded straight away', 'The parcel is cancelled for good']} />

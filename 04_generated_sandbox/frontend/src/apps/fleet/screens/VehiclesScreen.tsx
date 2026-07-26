@@ -1,9 +1,81 @@
-import { useState } from 'preact/hooks';
-import { Button, Card, ErrorNote, Pill, QrBlock, ReadAloud, Sheet } from '../../../shared/ui';
+import { useRef, useState } from 'preact/hooks';
+import { AuthImage, Button, Card, ErrorNote, Icon, Pill, QrBlock, ReadAloud, Sheet } from '../../../shared/ui';
 import { qrPayload } from '../../../shared/qr';
+import type { MediaKind } from '../../../lib/sbg/personas/media';
 import { subtypeLine, vehicleMissing } from '../logic';
 import { VEHICLE_CLASSES, type VehicleRow } from '../types';
 import type { FleetActions, FleetState } from '../useFleetApp';
+
+/**
+ * Capture pad (S26) — one (registration) or many (vehicle/trailer) photos. Each capture is downscaled,
+ * EXIF-stripped and uploaded; the pad holds the returned mediaIds and previews them via AuthImage (a
+ * media endpoint needs the bearer). Removing a not-yet-registered photo deletes it, so we don't orphan
+ * bytes on the server — the whole point of the retention model is that nothing lingers unused.
+ */
+function PhotoPad({
+  label,
+  kind,
+  refs,
+  multi,
+  actions,
+  onChange,
+}: {
+  label: string;
+  kind: MediaKind;
+  refs: string[];
+  multi?: boolean;
+  actions: FleetActions;
+  onChange: (refs: string[]) => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const canAdd = multi || refs.length === 0;
+
+  const pick = async (file: File) => {
+    setBusy(true);
+    const mediaId = await actions.uploadPhoto(kind, file);
+    setBusy(false);
+    if (mediaId) onChange([...refs, mediaId]);
+  };
+  const remove = (id: string) => {
+    onChange(refs.filter((r) => r !== id));
+    void actions.deleteMedia(id); // it was never linked to the vehicle yet — drop the orphan bytes
+  };
+
+  return (
+    <div class="field">
+      <span class="field__label">{label}</span>
+      <div class="photos">
+        {refs.map((id) => (
+          <div key={id} class="photos__item">
+            <AuthImage mediaId={id} load={actions.loadMedia} alt={label} class="photos__thumb" />
+            <button type="button" class="photos__x" aria-label="Remove photo" onClick={() => remove(id)}>
+              <Icon name="close" size={16} />
+            </button>
+          </div>
+        ))}
+        {canAdd ? (
+          <button type="button" class="photos__add" disabled={busy} onClick={() => input.current?.click()}>
+            <Icon name={busy ? 'clock' : 'camera'} size={22} />
+            <span>{busy ? 'Uploading…' : 'Add photo'}</span>
+          </button>
+        ) : null}
+      </div>
+      <input
+        ref={input}
+        class="photo__input"
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={(e) => {
+          const file = e.currentTarget.files?.[0];
+          e.currentTarget.value = '';
+          if (file) void pick(file);
+        }}
+      />
+    </div>
+  );
+}
 
 export interface VehiclesScreenProps {
   state: FleetState;
@@ -104,11 +176,34 @@ export function VehiclesScreen({ state, actions }: VehiclesScreenProps) {
             <input id="v-vin" class="input input--mono" value={f.factoryId} onInput={(e) => actions.setVForm({ factoryId: e.currentTarget.value })} placeholder="VIN-…" spellcheck={false} />
           </div>
         </div>
-        <div class="field" style="margin-top:12px">
-          <label class="field__label" for="v-reg">
-            Registration photo ref
-          </label>
-          <input id="v-reg" class="input" value={f.registrationPhotoRef} onInput={(e) => actions.setVForm({ registrationPhotoRef: e.currentTarget.value })} placeholder="reg.jpg" />
+        <div style="margin-top:12px">
+          <PhotoPad
+            label="Registration papers (verifies)"
+            kind="registration"
+            refs={f.registrationPhotoRef ? [f.registrationPhotoRef] : []}
+            actions={actions}
+            onChange={(refs) => actions.setVForm({ registrationPhotoRef: refs[0] ?? '' })}
+          />
+        </div>
+        <div style="margin-top:12px">
+          <PhotoPad
+            label="Vehicle photos"
+            kind="vehicle"
+            refs={f.vehiclePhotoRefs}
+            multi
+            actions={actions}
+            onChange={(refs) => actions.setVForm({ vehiclePhotoRefs: refs })}
+          />
+        </div>
+        <div style="margin-top:12px">
+          <PhotoPad
+            label="Trailer photos (if any)"
+            kind="trailer"
+            refs={f.trailerPhotoRefs}
+            multi
+            actions={actions}
+            onChange={(refs) => actions.setVForm({ trailerPhotoRefs: refs })}
+          />
         </div>
         <div style="margin-top:14px">
           <Button chevron={false} onClick={() => void actions.submitVehicle()} disabled={Boolean(missing)} busy={state.busy === 'vehicle'}>
@@ -124,13 +219,22 @@ export function VehiclesScreen({ state, actions }: VehiclesScreenProps) {
           <p class="hint">No vehicles yet.</p>
         ) : (
           <div class="rows" role="list">
-            {state.vehicles.map((v) => (
+            {state.vehicles.map((v) => {
+              const photos = [...(v.vehiclePhotoRefs ?? []), ...(v.trailerPhotoRefs ?? [])];
+              return (
               <div key={v.vehicleId} class="row row--static" role="listitem">
                 <span class="row__body">
                   <span class="row__t mono">{v.plate}</span>
                   <span class="row__s">
                     {`${v.vehicleClass}${v.truckSubtype ? ` · ${v.truckSubtype.replace(/_/g, ' ')}` : ''} · ${v.capacityKg} kg · QR ${v.qr} · ${Number(v.pricePerKm ?? 0).toFixed(3)}/km`}
                   </span>
+                  {photos.length ? (
+                    <span class="photos photos--sm">
+                      {photos.slice(0, 4).map((id) => (
+                        <AuthImage key={id} mediaId={id} load={actions.loadMedia} alt={`${v.plate} photo`} class="photos__thumb photos__thumb--sm" />
+                      ))}
+                    </span>
+                  ) : null}
                 </span>
                 <span class="row__end">
                   <Pill tone={v.status === 'ACTIVE' ? 'ok' : 'idle'} dot>
@@ -144,7 +248,8 @@ export function VehiclesScreen({ state, actions }: VehiclesScreenProps) {
                   </Button>
                 </span>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </Card>

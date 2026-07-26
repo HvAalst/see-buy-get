@@ -1,4 +1,5 @@
 import type { SbgClient } from '../client';
+import { createMediaApi } from './media';
 
 /** The person-facing roles a consumer may hold and switch into (mirrors backend PersonRole). */
 export type PersonRole = 'consumer' | 'driver' | 'agent' | 'mdp' | 'fleet_manager' | 'vendor';
@@ -13,6 +14,9 @@ export type PersonRole = 'consumer' | 'driver' | 'agent' | 'mdp' | 'fleet_manage
  */
 export function createConsumerApi(sbg: SbgClient) {
   return {
+    // S26: real image upload/fetch (the receiver's own PoD + dispute evidence).
+    ...createMediaApi(sbg),
+
     /** The signed-in person + every role they hold (drives the role switcher). */
     me: () => sbg.request((c) => c.GET('/v1/sbg/identity/me')),
 

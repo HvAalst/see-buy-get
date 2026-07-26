@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { isUnknownIdentity, narrow, type SbgError } from '../../lib/sbg';
+import type { MediaKind } from '../../lib/sbg/personas/media';
+import { downscaleImage } from '../../shared/media';
 import type { IconName } from '../../shared/ui/Icon';
 import { clearManager, createFleetClient, managerLogin, purgeFleetTokens, readManager, saveManager } from './api';
 import { EMPTY_DRIVER, EMPTY_VEHICLE, isHeavySelection, type DriverForm, type VehicleForm } from './logic';
@@ -250,6 +252,40 @@ export function useFleetApp() {
   const setVForm = useCallback((p: Partial<VehicleForm>) => {
     setState((s) => ({ ...s, vForm: { ...s.vForm, ...p } }));
   }, []);
+
+  /** S26: downscale + EXIF-strip + upload a captured vehicle/trailer/registration photo → its mediaId. */
+  const uploadPhoto = useCallback(
+    async (kind: MediaKind, file: File): Promise<string | null> => {
+      if (!client) return null;
+      try {
+        const { dataUrl, thumbDataUrl } = await downscaleImage(file);
+        const r = await client.api.uploadMedia(kind, dataUrl, thumbDataUrl);
+        if (r.error) {
+          pushToast({ tone: 'danger', icon: 'camera', title: 'Photo upload failed', detail: 'Try taking it again.' });
+          return null;
+        }
+        return narrow<{ mediaId: string }>(r.data)?.mediaId ?? null;
+      } catch {
+        pushToast({ tone: 'danger', icon: 'camera', title: 'Could not read that photo' });
+        return null;
+      }
+    },
+    [client, pushToast],
+  );
+
+  /** Authenticated byte loader for <AuthImage> — a media endpoint needs the bearer, so no plain <img src>. */
+  const loadMedia = useCallback(
+    (mediaId: string) => (client ? client.api.mediaBlob(mediaId) : Promise.resolve({ data: null, error: {} as unknown })),
+    [client],
+  );
+
+  /** Drop a not-yet-registered vehicle photo's bytes so a removed capture never orphans on the server. */
+  const deleteMedia = useCallback(
+    async (mediaId: string) => {
+      if (client) await client.api.deleteMedia(mediaId);
+    },
+    [client],
+  );
   const setDForm = useCallback((p: Partial<DriverForm>) => {
     setState((s) => ({ ...s, dForm: { ...s.dForm, ...p } }));
   }, []);
@@ -292,6 +328,8 @@ export function useFleetApp() {
         ...(f.registrationPhotoRef || f.factoryId
           ? { documents: { registrationPhotoRef: f.registrationPhotoRef || undefined, factoryId: f.factoryId || undefined } }
           : {}),
+        ...(f.vehiclePhotoRefs.length ? { vehiclePhotoRefs: f.vehiclePhotoRefs } : {}),
+        ...(f.trailerPhotoRefs.length ? { trailerPhotoRefs: f.trailerPhotoRefs } : {}),
       });
       if (r.error) return fail(r.error);
       const v = narrow<VehicleRow>(r.data);
@@ -403,6 +441,9 @@ export function useFleetApp() {
       setVForm,
       setDForm,
       setCForm,
+      uploadPhoto,
+      loadMedia,
+      deleteMedia,
       submitVehicle,
       submitDriver,
       submitKyc,

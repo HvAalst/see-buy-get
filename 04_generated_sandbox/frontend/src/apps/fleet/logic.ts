@@ -32,8 +32,11 @@ export interface VehicleForm {
   ownerName: string;
   capacityKg: string;
   pricePerKm: string;
-  registrationPhotoRef: string;
+  registrationPhotoRef: string; // S26 — a mediaId (was a typed filename)
   factoryId: string;
+  // S26 — mediaIds of the owner's uploaded vehicle-body and trailer photos.
+  vehiclePhotoRefs: string[];
+  trailerPhotoRefs: string[];
 }
 
 export const EMPTY_VEHICLE: VehicleForm = {
@@ -46,6 +49,8 @@ export const EMPTY_VEHICLE: VehicleForm = {
   pricePerKm: '',
   registrationPhotoRef: '',
   factoryId: '',
+  vehiclePhotoRefs: [],
+  trailerPhotoRefs: [],
 };
 
 /** The next thing the vehicle form needs, or null when it can submit. */

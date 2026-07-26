@@ -72,6 +72,10 @@ export class Vehicle {
   ownerType: VehicleOwnerType;
   ownerName: string;
   documents: VehicleDocuments;
+  // S26 — the owner's photos of the actual vehicle body + any coupled trailer (mediaIds in the
+  // 'vehicle-asset' retention bin: user-managed while the vehicle is registered).
+  vehiclePhotoRefs?: string[];
+  trailerPhotoRefs?: string[];
   verified: boolean; // full registration + doc photo + factory ID present → dispatch priority
   status: VehicleStatus;
   createdAt: string;

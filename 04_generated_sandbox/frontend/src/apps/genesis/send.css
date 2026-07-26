@@ -288,3 +288,13 @@
   background: var(--ok-light);
   color: var(--ok);
 }
+
+/* S26: instant local preview of the just-captured photo, above the button while it uploads. */
+.photo__preview {
+  display: block;
+  width: 100%;
+  max-height: 200px;
+  object-fit: cover;
+  border-radius: var(--r-ctl);
+  margin-bottom: 8px;
+}

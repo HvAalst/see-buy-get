@@ -93,6 +93,9 @@ export const ERROR_CODES = {
   PIN_LOCKED: { status: 403, title: 'Too many wrong PINs — verify by code' },
   ROLE_NOT_HELD: { status: 403, title: 'You do not hold that role' },
 
+  // --- 403 Forbidden: media ---------------------------------------------------------------------
+  MEDIA_LOCKED: { status: 403, title: 'This image is kept as evidence and cannot be removed yet' },
+
   // --- 404 Not Found ---------------------------------------------------------------------------
   NOT_FOUND: { status: 404, title: 'Not found' },
 
@@ -100,6 +103,11 @@ export const ERROR_CODES = {
   CONFLICT: { status: 409, title: 'Conflict with existing data' },
   DUPLICATE: { status: 409, title: 'Already registered' },
   INCOMPLETE_MANIFEST: { status: 409, title: 'Some waiting parcels were not loaded' },
+
+  // --- 410 / 413 / 415: media upload + retention -----------------------------------------------
+  MEDIA_EXPIRED: { status: 410, title: 'This media has passed its retention window' },
+  MEDIA_TOO_LARGE: { status: 413, title: 'The image is too large' },
+  UNSUPPORTED_MEDIA: { status: 415, title: 'Unsupported image type' },
 
   // --- 429 / 5xx: transport --------------------------------------------------------------------
   RATE_LIMITED: { status: 429, title: 'Too many requests', retryable: true },

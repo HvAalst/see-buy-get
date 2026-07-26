@@ -108,7 +108,7 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
       </Card>
 
       <Card label="Proof photo">
-        <PhotoField id="accept-photo" value={f.photoRef} label="Take the proof photo" onCapture={(ref) => actions.setAccept({ photoRef: ref })} />
+        <PhotoField id="accept-photo" value={f.photoRef} label="Take the proof photo" upload={(file) => actions.uploadPhoto('dropoff', file)} onCapture={(ref) => actions.setAccept({ photoRef: ref })} />
         <p class="card__note">One photo of the parcel on your counter protects you if anything is disputed.</p>
       </Card>
 

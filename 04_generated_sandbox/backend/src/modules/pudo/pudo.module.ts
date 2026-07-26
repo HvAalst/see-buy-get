@@ -4,6 +4,8 @@ import { M4Module } from '../m4/m4.module';
 import { M7Module } from '../m7/m7.module';
 import { SbgController } from './pudo.controller';
 import { IdentityController } from './identity.controller';
+import { MediaController } from './media.controller';
+import { MediaService } from './media.service';
 import { PersonService } from './person.service';
 import { InviteService } from './invite.service';
 import { AgentService } from './agent.service';
@@ -37,8 +39,8 @@ import { OtpService } from './otp.service';
  */
 @Module({
   imports: [M1Module, M4Module, M7Module],
-  controllers: [SbgController, IdentityController],
-  providers: [AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService, GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, ToteService, VehicleService, DriverService, FleetService, DispatchService, FleetManagerService, AccountService, OtpService, PersonService, InviteService],
-  exports: [AgentService, ParcelService, MonitorService, RatingService, MdpService, ToteService, VehicleService, DriverService, FleetService, DispatchService, FleetManagerService, AccountService, OtpService, PersonService, InviteService],
+  controllers: [SbgController, IdentityController, MediaController],
+  providers: [AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService, GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, ToteService, VehicleService, DriverService, FleetService, DispatchService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService],
+  exports: [AgentService, ParcelService, MonitorService, RatingService, MdpService, ToteService, VehicleService, DriverService, FleetService, DispatchService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService],
 })
 export class PudoModule {}
