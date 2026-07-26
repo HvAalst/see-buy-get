@@ -281,10 +281,9 @@ const run = async () => {
     return p;
   };
 
-  const p1 = await accept(1);
-  const p2 = await accept(2, { size: 'S' });
-  say(`parcels waiting for the bus at Mama Sarah: ${p1.parcelId}, ${p2.parcelId}`);
-
+  // S25 completeness gate: a parcel is handed to the bus while it is the ONLY one waiting for that
+  // corridor (p3, then p6 below), and the two that should sit "waiting" for the handover-screen demo
+  // (p1, p2) are accepted AFTERWARDS — otherwise the gate rightly refuses the short load.
   const p3 = await accept(3);
   need(
     await req('POST', '/v1/sbg/parcels/handover', { token: tokA1, body: { agentDid: a1.did, driverBadgeId: amos.badgeId, parcelIds: [p3.parcelId] } }),
@@ -303,6 +302,11 @@ const run = async () => {
   );
   const p6Now = need(await req('GET', `/v1/sbg/parcels/${encodeURIComponent(p6.parcelId)}`, { token: tokA2 }), 'read p6');
   say(`parcel ready to collect at Riverside: ${p6.parcelId} — pickup code ${arrived.otp}${p6Now.binSlot ? ` · shelf ${p6Now.binSlot}` : ''}`);
+
+  // Now the two parcels that sit waiting at the shop — accepted AFTER the handovers so the gate is happy.
+  const p1 = await accept(1);
+  const p2 = await accept(2, { size: 'S' });
+  say(`parcels waiting for the bus at Mama Sarah: ${p1.parcelId}, ${p2.parcelId}`);
 
   /* Tote leg → hub floor content: two parcels bagged at the shop, bussed, dropped at the hub. */
   const p4 = await accept(4);

@@ -289,6 +289,15 @@
   color: var(--ok);
 }
 
+/* S27: a section heading between cards (e.g. "Your photos" above the media library). */
+.scr__section {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--navy);
+  margin: 18px 0 6px;
+}
+
 /* S26: instant local preview of the just-captured photo, above the button while it uploads. */
 .photo__preview {
   display: block;

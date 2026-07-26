@@ -1293,3 +1293,36 @@
   border: 1px solid var(--bd-soft);
   border-radius: var(--r-ctl);
 }
+
+/* ------------------------------------------------------------- media library (S27) --
+   All a person's photos grouped by retention bin. A square thumbnail grid with a
+   plain-language retention chip under each — the retention is visible, never hidden. */
+.medlib {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.medgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+.medcell {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.medcell__img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: var(--r-ctl);
+}
+.medcell__cap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}

@@ -82,11 +82,14 @@ export async function downscaleImage(file: File, opts: DownscaleOptions = {}): P
   }
 }
 
+/** The four retention bins an image can live in (mirrors the backend RetentionClass). */
+export type RetentionClass = 'shipment-proof' | 'dispute-evidence' | 'account-doc' | 'vehicle-asset';
+
 /** The PII-free media record the library (S27) and any list surface see. Mirrors the backend MediaView. */
 export interface MediaView {
   mediaId: string;
   kind: string;
-  retentionClass: 'shipment-proof' | 'dispute-evidence' | 'account-doc' | 'vehicle-asset';
+  retentionClass: RetentionClass;
   contentType: string;
   hasThumb: boolean;
   link?: { type: string; id: string };

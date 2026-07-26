@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, CodeBoxes, ErrorNote, Icon, Note, Pill, ReadAloud, Sheet } from '../../../shared/ui';
+import { Button, Card, CodeBoxes, ErrorNote, Icon, MediaLibrary, Note, Pill, ReadAloud, Sheet } from '../../../shared/ui';
 import { codeReady, roleMeta } from '../logic';
 import { ROLE_APPS } from '../api';
 import type { RoleLinkView } from '../types';
@@ -28,6 +28,10 @@ export function AccountScreen({ state, actions }: AccountScreenProps) {
   useEffect(() => {
     if (state.invitesState === 'idle') void actions.loadInvites();
   }, [state.invitesState, actions]);
+
+  useEffect(() => {
+    if (state.mediaState === 'idle') void actions.loadMyMedia();
+  }, [state.mediaState, actions]);
 
   return (
     <div class="scr">
@@ -68,6 +72,32 @@ export function AccountScreen({ state, actions }: AccountScreenProps) {
           </Button>
         </div>
       </Card>
+
+      {/* S27 media library: all the person's photos in one place, grouped by how long each is kept —
+          so the retention is visible and nothing feels hoarded. Always shown (empty/loading/error states
+          too) so the feature is discoverable even before you have any photos. Evidence is view-only. */}
+      <section aria-label="Your photos">
+        <h2 class="scr__section">Your photos</h2>
+        {state.mediaState === 'error' ? (
+          <Card>
+            <p class="hint">We couldn't load your photos.</p>
+            <div style="margin-top:10px">
+              <Button variant="outline" chevron={false} onClick={() => void actions.loadMyMedia()}>Try again</Button>
+            </div>
+          </Card>
+        ) : state.mediaState !== 'ready' && state.media.length === 0 ? (
+          <Card><p class="hint">Getting your photos…</p></Card>
+        ) : state.media.length > 0 ? (
+          <>
+            <MediaLibrary media={state.media} load={actions.loadMedia} onRemove={actions.removeMedia} removingId={state.mediaRemoving} />
+            <p class="hint" style="margin-top:8px">Old photos are removed automatically — you do not need to clean up.</p>
+          </>
+        ) : (
+          <Card>
+            <p class="hint">No photos yet. Proof photos from your deliveries appear here — and clear automatically after their keep-time, so nothing piles up.</p>
+          </Card>
+        )}
+      </section>
 
       <Card title="Sign in">
         <div class="rows">

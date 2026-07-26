@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { isSignInRequired, narrow, type SbgError } from '../../lib/sbg';
 import type { MediaKind } from '../../lib/sbg/personas/media';
-import { downscaleImage } from '../../shared/media';
+import { downscaleImage, type MediaView } from '../../shared/media';
 import {
   clearDid,
   createConsumerClient,
@@ -92,6 +92,11 @@ export interface SendState {
   inviteNote: string | null; // "Invite sent" / "Link copied" feedback
   inviteToken: string | null; // captured from a ?invite= landing
   invited: boolean; // the landing token validated → show the welcome
+
+  /* --- media library (S27) --- */
+  media: MediaView[];
+  mediaState: 'idle' | 'loading' | 'ready' | 'error';
+  mediaRemoving: string | null;
 }
 
 const INITIAL: SendState = {
@@ -141,6 +146,9 @@ const INITIAL: SendState = {
   inviteNote: null,
   inviteToken: null,
   invited: false,
+  media: [],
+  mediaState: 'idle',
+  mediaRemoving: null,
 };
 
 /**
@@ -354,6 +362,9 @@ export function useSendApp() {
       authStep: 'phone',
       parcels: null,
       parcelsState: 'idle',
+      media: [], // a fresh person: never show the previous account's media (its bytes would 403 anyway)
+      mediaState: 'idle',
+      mediaRemoving: null,
       inviteToken: null, // the invite (if any) was credited on the server at enrol; done with it now
       invited: false,
     }));
@@ -467,6 +478,9 @@ export function useSendApp() {
         parcels: null,
         parcelsState: 'idle',
         openParcelId: null,
+        media: [], // clear the signed-out person's media (bytes are owner-gated, but don't show stale cells)
+        mediaState: 'idle',
+        mediaRemoving: null,
         screen: error ? s.screen : 'send',
         authMode: 'login',
         authStep: 'phone',
@@ -544,7 +558,7 @@ export function useSendApp() {
         setState((s) => ({ ...s, podBusy: false, disputeError: r.error }));
         return;
       }
-      setState((s) => ({ ...s, podBusy: false, openParcelDetail: narrow<ConsumerParcelView>(r.data) }));
+      setState((s) => ({ ...s, podBusy: false, openParcelDetail: narrow<ConsumerParcelView>(r.data), mediaState: 'idle' })); // new photo → refresh the library next visit
     },
     [client],
   );
@@ -561,7 +575,7 @@ export function useSendApp() {
         setState((s) => ({ ...s, disputeBusy: false, disputeError: r.error }));
         return;
       }
-      setState((s) => ({ ...s, disputeBusy: false, openParcelDetail: narrow<ConsumerParcelView>(r.data) }));
+      setState((s) => ({ ...s, disputeBusy: false, openParcelDetail: narrow<ConsumerParcelView>(r.data), mediaState: 'idle' })); // new photo → refresh the library next visit
       void loadParcels(); // the status flips to Disputed on the list (and the sender sees it on theirs)
     },
     [client, loadParcels],
@@ -593,6 +607,45 @@ export function useSendApp() {
         return;
       }
       setState((s) => ({ ...s, accountBusy: false, accountNote: 'PIN updated', identity: s.identity ? { ...s.identity, hasPin: true } : s.identity }));
+    },
+    [client],
+  );
+
+  /* -------------------------------------------------- media library (S27) */
+
+  /** Load this person's media (the library source — PII-free views). */
+  const loadMyMedia = useCallback(async () => {
+    if (!client) return;
+    const startDid = readDid(); // guard: if the person signs out / switches mid-fetch, don't write stale media
+    setState((s) => ({ ...s, mediaState: 'loading' }));
+    const r = await client.api.myMedia();
+    if (readDid() !== startDid) return; // a different (or no) person now — drop this result
+    if (r.error) {
+      if (isSignInRequired(r.error)) return signOutRef.current(r.error);
+      setState((s) => ({ ...s, mediaState: 'error' }));
+      return;
+    }
+    setState((s) => ({ ...s, media: narrow<MediaView[]>(r.data) ?? [], mediaState: 'ready' }));
+  }, [client]);
+
+  /** Authenticated byte loader for <MediaLibrary>/<AuthImage> (media is owner-gated — no plain <img src>). */
+  const loadMedia = useCallback(
+    (mediaId: string) => (client ? client.api.mediaBlob(mediaId) : Promise.resolve({ data: null, error: {} as unknown })),
+    [client],
+  );
+
+  /** Remove one of the person's own asset images (evidence bins are locked server-side → MEDIA_LOCKED). */
+  const removeMedia = useCallback(
+    async (mediaId: string) => {
+      if (!client) return;
+      setState((s) => ({ ...s, mediaRemoving: mediaId }));
+      const r = await client.api.deleteMedia(mediaId);
+      if (r.error) {
+        if (isSignInRequired(r.error)) return signOutRef.current(r.error);
+        setState((s) => ({ ...s, mediaRemoving: null }));
+        return;
+      }
+      setState((s) => ({ ...s, mediaRemoving: null, media: s.media.filter((m) => m.mediaId !== mediaId) }));
     },
     [client],
   );
@@ -675,6 +728,9 @@ export function useSendApp() {
       submitDispute,
       switchRole,
       changePin,
+      loadMyMedia,
+      loadMedia,
+      removeMedia,
       loadInvites,
       createInvite,
     },
