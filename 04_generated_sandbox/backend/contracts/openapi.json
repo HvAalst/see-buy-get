@@ -7367,8 +7367,38 @@
       "get": {
         "operationId": "Identity.me",
         "summary": "",
-        "description": "The signed-in person + every role they hold (the role switcher reads this).",
+        "description": "The signed-in person + every role they hold (the role switcher reads this) + their self profile.",
         "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/identity/profile": {
+      "patch": {
+        "operationId": "Identity.setProfile",
+        "summary": "",
+        "description": "Set the signed-in person's own display name and/or avatar (S29). Returns the updated self-view.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileDto"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "",
@@ -11940,6 +11970,17 @@
           "pin"
         ]
       },
+      "ProfileDto": {
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": "string"
+          },
+          "avatarMediaId": {
+            "type": "string"
+          }
+        }
+      },
       "SwitchRoleDto": {
         "type": "object",
         "properties": {
@@ -12011,7 +12052,8 @@
               "registration",
               "kyc_id",
               "kyc_licence",
-              "shop"
+              "shop",
+              "avatar"
             ]
           },
           "dataUrl": {

@@ -41,8 +41,11 @@ export interface Person {
   /** Brute-force defence on the 4-digit PIN: wrong attempts, and a lockout window once exceeded. */
   pinAttempts?: number;
   pinLockedUntil?: number;
-  /** Identity Vault reference for the person's cleartext PII (phone; later avatar/name/address). */
+  /** Identity Vault reference for the person's cleartext PII (phone + displayName; later address). */
   vaultRef?: string;
+  /** Opaque handle to the person's avatar image (S29). The bytes are owner-gated in MediaService; the
+   *  person carries only the id, and replacing it purges the old blob. */
+  avatarMediaId?: string;
   roles: RoleLink[];
   createdAt: string;
 }
@@ -53,6 +56,10 @@ export interface PersonView {
   roles: Array<{ role: PersonRole; entityDid: string; status: RoleStatus }>;
   hasPin: boolean;
   createdAt: string;
+  /** Self-view profile (S29). `displayName` is revealed from the vault; both are shown only to the
+   *  person themselves, never in any counterparty projection. Absent until the person sets a profile. */
+  displayName?: string;
+  avatarMediaId?: string;
 }
 
 /**
@@ -75,5 +82,8 @@ export function toView(person: Person): PersonView {
     roles: person.roles.map((r) => ({ role: r.role, entityDid: r.entityDid, status: r.status })),
     hasPin: Boolean(person.pinHash),
     createdAt: person.createdAt,
+    // avatarMediaId is opaque + self-view, so it rides the pure projection; displayName lives in the
+    // vault and is grafted on by PersonService.view() (a reveal), never here.
+    avatarMediaId: person.avatarMediaId,
   };
 }

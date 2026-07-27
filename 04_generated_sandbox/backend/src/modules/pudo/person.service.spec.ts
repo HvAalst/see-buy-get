@@ -1,8 +1,12 @@
 import { Test } from '@nestjs/testing';
 import { PersonService } from './person.service';
+import { toView } from './person.types';
+import { MediaService } from './media.service';
 import { AuthService } from '../../foundation/auth/auth.service';
 import { DidService } from '../../foundation/did/did.service';
 import { OperationalStore } from '../../foundation/data-firewall/operational-store.service';
+import { IdentityVault } from '../../foundation/data-firewall/identity-vault.service';
+import { FieldEncryption } from '../../foundation/data-firewall/field-encryption.service';
 import { LedgerService } from '../../foundation/ledger/ledger.service';
 import { InMemoryLedgerAdapter } from '../../foundation/ledger/in-memory-ledger.adapter';
 import { LEDGER_ADAPTER } from '../../foundation/ledger/ledger.types';
@@ -11,17 +15,20 @@ import { hashPhone } from '../../foundation/identity/phone';
 
 describe('PersonService — the identity spine (S20)', () => {
   let persons: PersonService;
+  let media: MediaService;
   let auth: AuthService;
   let dids: DidService;
 
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
-        PersonService, AuthService, DidService, OperationalStore, LedgerService, EventBus,
+        PersonService, MediaService, IdentityVault, FieldEncryption,
+        AuthService, DidService, OperationalStore, LedgerService, EventBus,
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
       ],
     }).compile();
     persons = moduleRef.get(PersonService);
+    media = moduleRef.get(MediaService);
     auth = moduleRef.get(AuthService);
     dids = moduleRef.get(DidService);
   });
@@ -116,4 +123,84 @@ describe('PersonService — the identity spine (S20)', () => {
     expect(persons.tryAttachRole('123', 'driver', 'did:x')).toBe(false);
     expect(persons.tryAttachRole(PHONE, 'driver', dids.generate('pudo-driver:z').id)).toBe(true);
   });
+
+  describe('self-managed profile (S29): a display name + an avatar', () => {
+    // A minimal valid 1×1 PNG (real magic bytes, so it passes the MediaService signature check).
+    const PNG =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+    const avatarFor = (ownerDid: string) => media.upload({ ownerDid, kind: 'avatar', dataUrl: PNG }).mediaId;
+
+    it('stores a display NAME in the vault (never the core) and reveals it only in the self-view', () => {
+      const { person } = persons.enroll(PHONE, true, '1234');
+      persons.setProfile(person.personDid, { displayName: '  Hans  ' });
+      const p = persons.findByDid(person.personDid)!;
+      expect(p.vaultRef).toBeTruthy(); // the name went to the vault, not onto the person/core
+      expect(persons.view(p).displayName).toBe('Hans'); // trimmed on the way in
+      expect(toViewHasName(p)).toBe(false); // the PII-free projection never carries the name
+    });
+
+    it('rejects an empty or over-long display name', () => {
+      const { person } = persons.enroll(PHONE, true, '1234');
+      expect(() => persons.setProfile(person.personDid, { displayName: '   ' })).toThrow(/cannot be empty/);
+      expect(() => persons.setProfile(person.personDid, { displayName: 'x'.repeat(81) })).toThrow(/too long/);
+    });
+
+    it('updates the name IN PLACE (stable vault handle) rather than orphaning a record', () => {
+      const { person } = persons.enroll(PHONE, true, '1234');
+      persons.setProfile(person.personDid, { displayName: 'First' });
+      const ref1 = persons.findByDid(person.personDid)!.vaultRef;
+      persons.setProfile(person.personDid, { displayName: 'Second' });
+      const p = persons.findByDid(person.personDid)!;
+      expect(p.vaultRef).toBe(ref1);
+      expect(persons.view(p).displayName).toBe('Second');
+    });
+
+    it('links an OWNED avatar to the person and purges the previous one on replace', () => {
+      const { person } = persons.enroll(PHONE, true, '1234');
+      const first = avatarFor(person.personDid);
+      persons.setProfile(person.personDid, { avatarMediaId: first });
+      expect(persons.view(persons.findByDid(person.personDid)!).avatarMediaId).toBe(first);
+      expect(media.get(first)!.link).toEqual({ type: 'person', id: person.personDid });
+
+      const second = avatarFor(person.personDid);
+      persons.setProfile(person.personDid, { avatarMediaId: second });
+      expect(persons.findByDid(person.personDid)!.avatarMediaId).toBe(second);
+      expect(media.get(first)).toBeUndefined(); // the old avatar's bytes + ref are gone
+    });
+
+    it('refuses an avatar the person does not own (no cross-owner pinning)', () => {
+      const { person } = persons.enroll(PHONE, true, '1234');
+      const notMine = avatarFor(dids.generate('person:stranger').id);
+      expect(() => persons.setProfile(person.personDid, { avatarMediaId: notMine })).toThrow(/not yours/);
+      expect(persons.findByDid(person.personDid)!.avatarMediaId).toBeUndefined();
+    });
+
+    it('refuses a media the person owns but did NOT upload as an avatar (no evidence-photo laundering)', () => {
+      const { person } = persons.enroll(PHONE, true, '1234');
+      // A PoD/dispute photo the receiver owns lives in a LOCKED evidence bin. Pinning it as an avatar would
+      // re-kind it out of that bin and let a later replace hard-delete it — the setProfile guard forbids it.
+      const podId = media.upload({ ownerDid: person.personDid, kind: 'pod', dataUrl: PNG }).mediaId;
+      expect(() => persons.setProfile(person.personDid, { avatarMediaId: podId })).toThrow(/profile photo/i);
+      expect(media.get(podId)!.kind).toBe('pod'); // untouched: not re-kinded
+      expect(media.get(podId)!.link).toBeUndefined(); // untouched: not re-linked to the person
+      expect(persons.findByDid(person.personDid)!.avatarMediaId).toBeUndefined();
+    });
+
+    it('degrades gracefully when the vault entry is gone (in-memory vault lost on restart, vaultRef persisted)', () => {
+      const { person } = persons.enroll(PHONE, true, '1234');
+      persons.setProfile(person.personDid, { displayName: 'Hans' });
+      const p = persons.findByDid(person.personDid)!;
+      p.vaultRef = 'vault_gone'; // simulate a restart: the Person persisted, the in-memory vault did not
+      expect(() => persons.view(p)).not.toThrow(); // me()/login/enroll must NOT 404 the whole surface
+      expect(persons.view(p).displayName).toBeUndefined();
+      // and a returning consumer can re-seed the vault instead of hitting vault.update's NotFoundException
+      expect(() => persons.setProfile(person.personDid, { displayName: 'Hans again' })).not.toThrow();
+      expect(persons.view(persons.findByDid(person.personDid)!).displayName).toBe('Hans again');
+    });
+  });
 });
+
+/** The pure PII-free projection must never carry the display name — only the revealing view() does. */
+function toViewHasName(person: Parameters<typeof toView>[0]): boolean {
+  return 'displayName' in toView(person) && toView(person).displayName !== undefined;
+}

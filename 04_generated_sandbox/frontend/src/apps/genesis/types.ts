@@ -100,6 +100,10 @@ export interface PersonView {
   roles: RoleLinkView[];
   hasPin: boolean;
   createdAt: string;
+  /** Self profile (S29) — the person's own display name (revealed from the vault) + avatar mediaId.
+   *  Self-view only: these are never present on any counterparty projection. */
+  displayName?: string;
+  avatarMediaId?: string;
 }
 
 /** enroll/login response = a PersonView + isNew + the actor token to seed. */

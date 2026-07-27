@@ -20,6 +20,8 @@ interface StoredEntry {
  */
 @Injectable()
 export class IdentityVault {
+  /** Cap on the retained in-memory access log. Newest kept, oldest dropped (getAccessLog copies it). */
+  private static readonly ACCESS_LOG_CAP = 50_000;
   private readonly records = new Map<string, StoredEntry>();
   private readonly accessLog: VaultAccessRecord[] = [];
 
@@ -41,6 +43,13 @@ export class IdentityVault {
     return { vaultRef, region };
   }
 
+  /** Replace the PII behind an existing ref (e.g. a profile edit), keeping the same opaque handle. */
+  update(vaultRef: string, pii: PiiRecord): void {
+    const entry = this.records.get(vaultRef);
+    if (!entry) throw new NotFoundException(`Vault record not found: ${vaultRef}`);
+    entry.ciphertext = this.crypto.encryptObject(pii);
+  }
+
   /** Reveal PII for an authorized purpose. Logs + audits every access (consent receipt). */
   reveal(vaultRef: string, access: VaultAccess): PiiRecord {
     const entry = this.records.get(vaultRef);
@@ -48,6 +57,7 @@ export class IdentityVault {
 
     const record: VaultAccessRecord = { ...access, vaultRef, at: new Date().toISOString() };
     this.accessLog.push(record);
+    if (this.accessLog.length > IdentityVault.ACCESS_LOG_CAP) this.accessLog.splice(0, this.accessLog.length - IdentityVault.ACCESS_LOG_CAP);
     void this.events
       .publish(GlosEvent.Identity.ConsentReceiptLogged, record, { source: 'identity-vault' })
       .catch(() => undefined);

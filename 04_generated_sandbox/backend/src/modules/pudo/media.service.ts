@@ -192,6 +192,20 @@ export class MediaService implements OnApplicationBootstrap, OnModuleDestroy {
   }
 
   /**
+   * Owner-scoped hard delete for an INTERNAL caller superseding its own media — e.g. a new avatar replaces
+   * the old one. Requires ownership and is best-effort (an unknown id or a ref that is not yours is a silent
+   * no-op). Defence in depth: it REFUSES the evidence bins (shipment-proof, dispute-evidence) — a party must
+   * never destroy proof mid-case, and no internal supersede path has a legitimate reason to purge evidence.
+   */
+  purgeByOwner(mediaId: string | undefined, ownerDid: string): void {
+    if (!mediaId) return;
+    const ref = this.refs.get(mediaId);
+    if (!ref || ref.ownerDid !== ownerDid) return;
+    if (ref.retentionClass === 'shipment-proof' || ref.retentionClass === 'dispute-evidence') return;
+    this.purge(ref);
+  }
+
+  /**
    * The retention sweep, two passes: (1) media whose retention window has closed → delete the bytes,
    * leave the ref as a tombstone (audit line). (2) never-linked uploads older than the upload grace →
    * hard delete (an abandoned capture that never reached any lifecycle event carries no evidence value,

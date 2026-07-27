@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, CodeBoxes, ErrorNote, Icon, MediaLibrary, Note, Pill, ReadAloud, Sheet } from '../../../shared/ui';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { AuthImage, Button, Card, CodeBoxes, ErrorNote, Icon, MediaLibrary, Note, Pill, ReadAloud, Sheet } from '../../../shared/ui';
 import { codeReady, roleMeta } from '../logic';
 import { ROLE_APPS } from '../api';
 import { InviteSheet } from './InviteSheet';
-import type { RoleLinkView } from '../types';
+import type { PersonView, RoleLinkView } from '../types';
 import type { SendActions, SendState } from '../useSendApp';
 
 export interface AccountScreenProps {
@@ -21,6 +21,9 @@ export function AccountScreen({ state, actions }: AccountScreenProps) {
   const [pinOpen, setPinOpen] = useState(false);
   const [newPin, setNewPin] = useState('');
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const avatarInput = useRef<HTMLInputElement>(null);
   const id = state.identity;
   if (!id) return null;
 
@@ -37,11 +40,25 @@ export function AccountScreen({ state, actions }: AccountScreenProps) {
 
   return (
     <div class="scr">
-      <h1 class="scr__title">Your account</h1>
+      <h1 class="scr__title">{id.displayName ? `Hi, ${id.displayName}` : 'Your account'}</h1>
       <p class="scr__lede">Signed in as {state.authPhone || 'your phone'}.</p>
 
       {state.accountError ? <ErrorNote error={state.accountError} /> : null}
       {state.accountNote ? <Note tone="ok" icon="check" title={state.accountNote} /> : null}
+
+      {/* S29: a real name + photo instead of the impersonal "You / mobile". The name is stored in the
+          identity vault (PII), the photo is owner-gated media — both are shown only to the person and, as
+          a name, on the invites they send ("Join Hans on SeeBuyGet"). */}
+      <Card title="Your profile">
+        <button type="button" class="row" onClick={() => { setNameDraft(id.displayName ?? ''); setProfileOpen(true); }}>
+          <span class="row__ic row__ic--avatar"><Avatar id={id} load={actions.loadMedia} /></span>
+          <span class="row__body">
+            <span class="row__t">{id.displayName || 'Add your name'}</span>
+            <span class="row__s">{id.displayName ? 'Your name and photo appear on invites you send' : 'A name and photo make your invites personal'}</span>
+          </span>
+          <span class="row__end"><Icon name="chevronRight" size={22} /></span>
+        </button>
+      </Card>
 
       <Card title="Act as">
         <div class="rows">
@@ -142,9 +159,72 @@ export function AccountScreen({ state, actions }: AccountScreenProps) {
         <Button variant="link" onClick={() => setPinOpen(false)}>Cancel</Button>
       </Sheet>
 
+      <Sheet open={profileOpen} onClose={() => setProfileOpen(false)} title="Your profile">
+        {/* The avatar: pick a photo → it uploads and applies at once (the old one is purged server-side). */}
+        <div class="avatarpick">
+          <span class="avatarpick__pic"><Avatar id={id} load={actions.loadMedia} size={64} /></span>
+          <div class="avatarpick__act">
+            <input
+              ref={avatarInput}
+              class="photo__input"
+              type="file"
+              accept="image/*"
+              capture="user"
+              disabled={state.avatarBusy}
+              onChange={(e) => {
+                const f = e.currentTarget.files?.[0];
+                e.currentTarget.value = '';
+                if (f) void actions.saveAvatar(f);
+              }}
+            />
+            <Button variant="outline" chevron={false} busy={state.avatarBusy} onClick={() => avatarInput.current?.click()}>
+              {id.avatarMediaId ? 'Change photo' : 'Add a photo'}
+            </Button>
+            <p class="hint" style="margin-top:6px">A clear photo helps friends recognise your invites.</p>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field__label" for="profile-name">Your name</label>
+          <input
+            id="profile-name"
+            class="input"
+            type="text"
+            autocomplete="name"
+            maxLength={80}
+            value={nameDraft}
+            onInput={(e) => setNameDraft(e.currentTarget.value)}
+            placeholder="e.g. Hans van Aalst"
+          />
+        </div>
+        <Button
+          chevron={false}
+          disabled={!nameDraft.trim() || nameDraft.trim() === (id.displayName ?? '')}
+          busy={state.savingProfile}
+          onClick={async () => {
+            // Close only on success — a failed save keeps the sheet + the typed name so it can be retried.
+            if (await actions.saveDisplayName(nameDraft)) setProfileOpen(false);
+          }}
+        >
+          Save name
+        </Button>
+        <Button variant="link" onClick={() => setProfileOpen(false)}>Done</Button>
+      </Sheet>
+
       <InviteSheet open={inviteOpen} onClose={() => setInviteOpen(false)} state={state} actions={actions} />
     </div>
   );
+}
+
+/** The person's avatar as a round image (owner-gated media → AuthImage), or a placeholder when unset. */
+function Avatar({ id, load, size = 42 }: { id: PersonView; load: SendActions['loadMedia']; size?: number }) {
+  if (id.avatarMediaId) {
+    return <AuthImage mediaId={id.avatarMediaId} load={load} alt="Your profile photo" />;
+  }
+  const initial = id.displayName?.trim()?.[0]?.toUpperCase() ?? '';
+  return initial
+    ? <span class="avatar__initial">{initial}</span>
+    : <Icon name="person" size={Math.round(size * 0.55)} />;
 }
 
 function RoleRow({ link, busy, onSwitch }: { link: RoleLinkView; busy: boolean; onSwitch: () => void }) {

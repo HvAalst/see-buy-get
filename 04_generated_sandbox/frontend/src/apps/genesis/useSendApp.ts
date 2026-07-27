@@ -89,6 +89,10 @@ export interface SendState {
   accountError: SbgError | null;
   accountNote: string | null;
 
+  /* --- profile (S29): the person's own name + avatar --- */
+  savingProfile: boolean; // a display-name save is in flight
+  avatarBusy: boolean; // an avatar image is being uploaded + saved
+
   /* --- invites (S24) --- */
   invites: InviteSummary | null;
   invitesState: 'idle' | 'loading' | 'ready' | 'error';
@@ -147,6 +151,8 @@ const INITIAL: SendState = {
   accountBusy: false,
   accountError: null,
   accountNote: null,
+  savingProfile: false,
+  avatarBusy: false,
   invites: null,
   invitesState: 'idle',
   inviteBusy: false,
@@ -362,13 +368,17 @@ export function useSendApp() {
     await next.client.seed({ access_token: data.token.access_token, expires_in: data.token.expires_in ?? 3600 });
     setState((s) => ({
       ...s,
-      identity: { personId: data.personId, roles: data.roles ?? [], hasPin: data.hasPin ?? true, createdAt: data.createdAt ?? '' },
+      identity: { personId: data.personId, roles: data.roles ?? [], hasPin: data.hasPin ?? true, createdAt: data.createdAt ?? '', displayName: data.displayName, avatarMediaId: data.avatarMediaId },
       screen: 'parcels',
       authBusy: false,
       authError: null,
       authCode: '',
       authPin: '',
       authStep: 'phone',
+      savingProfile: false, // a prior person's in-flight profile save must not leave a stuck spinner
+      avatarBusy: false,
+      accountError: null,
+      accountNote: null,
       parcels: null,
       parcelsState: 'idle',
       media: [], // a fresh person: never show the previous account's media (its bytes would 403 anyway)
@@ -491,6 +501,10 @@ export function useSendApp() {
         parcels: null,
         parcelsState: 'idle',
         openParcelId: null,
+        savingProfile: false, // drop any in-flight profile-save spinner from the signed-out person
+        avatarBusy: false,
+        accountError: null,
+        accountNote: null,
         media: [], // clear the signed-out person's media (bytes are owner-gated, but don't show stale cells)
         mediaState: 'idle',
         mediaRemoving: null,
@@ -628,6 +642,66 @@ export function useSendApp() {
     [client],
   );
 
+  /* -------------------------------------------------- profile (S29) */
+
+  /** Save the person's display name (→ the Identity Vault). Resolves true on success so the caller can
+   *  keep the edit sheet open (and the typed name) on a failure. */
+  const saveDisplayName = useCallback(
+    async (name: string): Promise<boolean> => {
+      const trimmed = name.trim();
+      if (!client || !trimmed) return false;
+      const startDid = readDid(); // guard: if the person signs out / switches mid-save, drop the result
+      setState((s) => ({ ...s, savingProfile: true, accountError: null, accountNote: null }));
+      const r = await client.api.setProfile({ displayName: trimmed });
+      if (readDid() !== startDid) return false; // a different (or no) person now — never splice A's name onto B
+      if (r.error) {
+        if (isSignInRequired(r.error)) { signOutRef.current(r.error); return false; }
+        setState((s) => ({ ...s, savingProfile: false, accountError: r.error }));
+        return false;
+      }
+      const view = narrow<PersonView>(r.data);
+      setState((s) => ({ ...s, savingProfile: false, accountNote: 'Name saved', identity: s.identity ? { ...s.identity, displayName: view?.displayName } : s.identity }));
+      return true;
+    },
+    [client],
+  );
+
+  /**
+   * Set the avatar: downscale + upload the image (kind 'avatar'), then point the profile at the new
+   * mediaId. The server purges the previous avatar's bytes, so a person keeps exactly one. A failed
+   * upload leaves the old avatar untouched.
+   */
+  const saveAvatar = useCallback(
+    async (file: File) => {
+      if (!client) return;
+      const startDid = readDid(); // guard: if the person signs out / switches mid-upload, drop the result
+      setState((s) => ({ ...s, avatarBusy: true, accountError: null, accountNote: null }));
+      const mediaId = await uploadPhoto('avatar', file);
+      if (readDid() !== startDid) return; // a different (or no) person now
+      if (!mediaId) {
+        const err: SbgError = { code: 'INVALID_INPUT', status: 0, title: 'Photo not saved', detail: 'Could not upload that image — try a different photo.', retryable: true };
+        setState((s) => ({ ...s, avatarBusy: false, accountError: err }));
+        return;
+      }
+      const r = await client.api.setProfile({ avatarMediaId: mediaId });
+      if (readDid() !== startDid) return; // person changed mid-save — never splice A's avatar onto B
+      if (r.error) {
+        if (isSignInRequired(r.error)) return signOutRef.current(r.error);
+        setState((s) => ({ ...s, avatarBusy: false, accountError: r.error }));
+        return;
+      }
+      const view = narrow<PersonView>(r.data);
+      setState((s) => ({
+        ...s,
+        avatarBusy: false,
+        accountNote: 'Photo updated',
+        identity: s.identity ? { ...s.identity, avatarMediaId: view?.avatarMediaId } : s.identity,
+        mediaState: 'idle', // the new avatar (and the purge of the old) → refresh the library next visit
+      }));
+    },
+    [client, uploadPhoto],
+  );
+
   /* -------------------------------------------------- media library (S27) */
 
   /** Load this person's media (the library source — PII-free views). */
@@ -718,9 +792,12 @@ export function useSendApp() {
       }
 
       const url = `${globalThis.location?.origin ?? ''}/send/?invite=${token}`;
-      // No sender name to fill in (a phone-keyed person has none, and the channel already shows who it's
-      // from), so the text is simply "Join me on SeeBuyGet" — zero friction, no typing.
-      const text = 'Join me on SeeBuyGet — send, track & collect parcels.';
+      // S29: personalise the card with the sender's own display name when they've set one ("Join Hans on
+      // SeeBuyGet"); a person who hasn't named themselves still gets the zero-friction "Join me" text.
+      const senderName = stateRef.current.identity?.displayName?.trim();
+      const text = senderName
+        ? `Join ${senderName} on SeeBuyGet — send, track & collect parcels.`
+        : 'Join me on SeeBuyGet — send, track & collect parcels.';
       const how = await openChannel(channel, { text, url, tel: contact.tel || undefined, email: contact.email || undefined });
 
       // Persist the token→contact map ON DEVICE. Re-read at write time + a functional state update so a
@@ -782,6 +859,8 @@ export function useSendApp() {
       submitDispute,
       switchRole,
       changePin,
+      saveDisplayName,
+      saveAvatar,
       loadMyMedia,
       loadMedia,
       removeMedia,

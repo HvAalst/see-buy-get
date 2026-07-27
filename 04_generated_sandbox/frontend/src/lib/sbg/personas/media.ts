@@ -11,7 +11,8 @@ export type MediaKind =
   | 'registration'
   | 'kyc_id'
   | 'kyc_licence'
-  | 'shop';
+  | 'shop'
+  | 'avatar';
 
 /**
  * Media facade (S26) — the operations any authenticated app shares for real image upload + display.

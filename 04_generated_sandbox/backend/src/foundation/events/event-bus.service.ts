@@ -30,6 +30,8 @@ export const EVENT_BUS_CONFIG = 'EVENT_BUS_CONFIG';
  */
 @Injectable()
 export class EventBus {
+  /** Cap on the retained in-memory event log (observability/tests only). Newest kept, oldest dropped. */
+  private static readonly LOG_CAP = 10_000;
   private readonly logger = new Logger(EventBus.name);
   private readonly handlers = new Map<string, Set<EventHandler>>();
   private readonly log: EventEnvelope[] = [];
@@ -69,6 +71,9 @@ export class EventBus {
       payload,
     };
     this.log.push(envelope);
+    // Ring buffer: the log is observability/test-only (getLog copies it), so bound it — otherwise a
+    // long-running instance grows it without limit (one entry per publish, forever).
+    if (this.log.length > EventBus.LOG_CAP) this.log.splice(0, this.log.length - EventBus.LOG_CAP);
 
     const subscribers = Array.from(this.handlers.get(type) ?? []);
     await Promise.all(subscribers.map((handler) => this.deliver(handler, envelope)));

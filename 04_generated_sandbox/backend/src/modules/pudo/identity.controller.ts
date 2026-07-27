@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import { Public } from '../../foundation/auth/public.decorator';
 import { Roles } from '../../foundation/auth/scopes.decorator';
 import { Actor } from '../../foundation/auth/actor.decorator';
@@ -7,9 +7,8 @@ import { PersonService } from './person.service';
 import { OtpService } from './otp.service';
 import { ParcelService } from './parcel.service';
 import { InviteService } from './invite.service';
-import { toView } from './person.types';
 import { toInviteView } from './invite.types';
-import { BuyerDisputeDto, CreateInviteDto, EnrollDto, PinLoginDto, PodDto, SetPinDto, SwitchRoleDto } from './pudo.dto';
+import { BuyerDisputeDto, CreateInviteDto, EnrollDto, PinLoginDto, PodDto, ProfileDto, SetPinDto, SwitchRoleDto } from './pudo.dto';
 
 /**
  * Identity — the authenticated consumer surface (S20). "One person, one account, many roles."
@@ -44,7 +43,7 @@ export class IdentityController {
     this.otp.consume(dto.phone);
     // S24: a first-time join through an invite link credits the inviter (best-effort — never blocks sign-up).
     if (isNew && dto.inviteToken) this.invites.accept(dto.inviteToken, person.personDid);
-    return { ...toView(person), isNew, token };
+    return { ...this.persons.view(person), isNew, token };
   }
 
   /** Reopen the app: phone + 4-digit PIN, no OTP (locks after repeated wrong PINs — then OTP again). */
@@ -52,7 +51,7 @@ export class IdentityController {
   @Post('login')
   login(@Body() dto: PinLoginDto) {
     const { person, token } = this.persons.loginWithPin(dto.phone, dto.pin);
-    return { ...toView(person), token };
+    return { ...this.persons.view(person), token };
   }
 
   /** Set or change the signed-in person's PIN. */
@@ -63,11 +62,19 @@ export class IdentityController {
     return { ok: true };
   }
 
-  /** The signed-in person + every role they hold (the role switcher reads this). */
+  /** The signed-in person + every role they hold (the role switcher reads this) + their self profile. */
   @Roles('consumer')
   @Get('me')
   me(@Actor() actor: IntrospectionResult) {
-    return toView(this.persons.requireByDid(actor.did!));
+    return this.persons.view(this.persons.requireByDid(actor.did!));
+  }
+
+  /** Set the signed-in person's own display name and/or avatar (S29). Returns the updated self-view. */
+  @Roles('consumer')
+  @Patch('profile')
+  setProfile(@Body() dto: ProfileDto, @Actor() actor: IntrospectionResult) {
+    const person = this.persons.setProfile(actor.did!, dto);
+    return this.persons.view(person);
   }
 
   /** "Act as" a held role → an actor token carrying that role's scopes + tenant. */

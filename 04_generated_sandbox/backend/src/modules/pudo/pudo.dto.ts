@@ -402,6 +402,13 @@ export class SwitchRoleDto {
   @IsIn(PERSON_ROLES) role!: (typeof PERSON_ROLES)[number];
 }
 
+/** Set the person's self-managed profile (S29): a display name and/or an already-uploaded avatar mediaId.
+ *  Both optional and independent — send only the field that changed. */
+export class ProfileDto {
+  @IsOptional() @IsString() displayName?: string;
+  @IsOptional() @IsString() avatarMediaId?: string;
+}
+
 /** The receiver's delivered-state proof photo (S23). */
 export class PodDto {
   @IsString() photoRef!: string;

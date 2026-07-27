@@ -6,7 +6,9 @@ import { DidService } from '../../foundation/did/did.service';
 import { AuthService } from '../../foundation/auth/auth.service';
 import { AccessToken } from '../../foundation/auth/auth.types';
 import { hashPhone, isPlausiblePhone } from '../../foundation/identity/phone';
-import { Person, PersonRole, ROLE_TO_ACTOR, RoleLink } from './person.types';
+import { IdentityVault } from '../../foundation/data-firewall/identity-vault.service';
+import { MediaService } from './media.service';
+import { Person, PersonRole, PersonView, ROLE_TO_ACTOR, RoleLink, toView } from './person.types';
 
 /** Wrong-PIN attempts before the PIN is locked and a fresh OTP is required. */
 const MAX_PIN_ATTEMPTS = 5;
@@ -38,6 +40,8 @@ export class PersonService {
   constructor(
     private readonly dids: DidService,
     private readonly auth: AuthService,
+    private readonly vault: IdentityVault,
+    private readonly media: MediaService,
   ) {
     for (const p of this.persons.values()) this.byDid.set(p.personDid, p.phoneHash);
   }
@@ -106,6 +110,73 @@ export class PersonService {
     }
     this.save(person);
     return person;
+  }
+
+  // --- self-managed profile (S29): a display name + an avatar ---
+
+  /**
+   * Set the person's own profile. A display NAME is PII, so it goes to the Identity Vault (never the
+   * operational core) — created lazily the first time, updated in place after, so the opaque handle is
+   * stable. An AVATAR is an image the person already uploaded to MediaService: we verify they own it,
+   * link it to the person (starting its account-doc retention clock indirectly — kept while linked), and
+   * purge the previous avatar's bytes so a person keeps exactly one. Both fields are optional and
+   * independent (a caller may set just the name, just the avatar, or both).
+   */
+  setProfile(personDid: string, input: { displayName?: string; avatarMediaId?: string }): Person {
+    const person = this.requireByDid(personDid);
+
+    if (input.displayName !== undefined) {
+      const name = input.displayName.trim();
+      if (!name) throw new GlosError('FIELD_REQUIRED', 'A display name cannot be empty');
+      if (name.length > 80) throw new GlosError('INVALID_INPUT', 'That name is too long');
+      // Update in place when the vault entry still exists; otherwise (re)create it. The vault store is
+      // in-memory while person.vaultRef is persisted, so after a restart a stale ref must re-seed rather
+      // than throw NotFoundException out of vault.update() — see profile() for the read side of this.
+      if (person.vaultRef && this.vault.exists(person.vaultRef)) this.vault.update(person.vaultRef, { fullName: name });
+      else person.vaultRef = this.vault.store({ fullName: name }, { region: 'local' }).vaultRef;
+    }
+
+    if (input.avatarMediaId !== undefined) {
+      const next = input.avatarMediaId.trim() || undefined;
+      if (next) {
+        // The person must actually OWN this media — media.link() is best-effort and does NOT check, so
+        // without this a caller could pin any known media id onto their own profile.
+        const ref = this.media.get(next);
+        if (!ref || ref.ownerDid !== personDid) throw new GlosError('FORBIDDEN', 'That image is not yours to use');
+        // It must be an image uploaded AS an avatar. Re-kinding an evidence photo (a PoD/dispute the person
+        // owns) to {type:'person'}/'account-doc' would strip it out of its retention bin AND detach it from
+        // its parcel, so a later holdParcelForDispute()/anchorParcelTerminal() no longer protects it — and a
+        // subsequent avatar replace would purgeByOwner() it, hard-deleting locked evidence mid-case. Refuse.
+        if (ref.kind !== 'avatar') throw new GlosError('INVALID_INPUT', 'That image was not uploaded as a profile photo');
+        this.media.link(next, { type: 'person', id: personDid }, 'avatar');
+      }
+      if (person.avatarMediaId && person.avatarMediaId !== next) {
+        this.media.purgeByOwner(person.avatarMediaId, personDid); // one avatar per person — drop the old bytes
+      }
+      person.avatarMediaId = next;
+    }
+
+    this.save(person);
+    return person;
+  }
+
+  /**
+   * The person's self-view profile fields. `displayName` is a genuine PII reveal (audited consent
+   * receipt) — call it only for the person acting as themselves, never for a counterparty projection.
+   * Reveal is guarded by vault.exists(): the vault store is in-memory but person.vaultRef is persisted,
+   * so after a restart a stale ref must degrade to "no name" rather than throw and 404 the whole
+   * authenticated surface (this method is on the hot path of me/enroll/login/setProfile).
+   */
+  profile(person: Person): { displayName?: string; avatarMediaId?: string } {
+    const displayName = person.vaultRef && this.vault.exists(person.vaultRef)
+      ? this.vault.reveal(person.vaultRef, { purpose: 'self-profile', requesterDid: person.personDid }).fullName
+      : undefined;
+    return { displayName, avatarMediaId: person.avatarMediaId };
+  }
+
+  /** The full self-view: the PII-free projection plus the revealed profile. For the acting person ONLY. */
+  view(person: Person): PersonView {
+    return { ...toView(person), ...this.profile(person) };
   }
 
   // --- consumer auth (phone + OTP → PIN) ---

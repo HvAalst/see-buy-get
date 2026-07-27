@@ -23,6 +23,10 @@ export function createConsumerApi(sbg: SbgClient) {
     /** Set or change the 4-digit PIN. */
     setPin: (pin: string) => sbg.request((c) => c.POST('/v1/sbg/identity/pin', { body: { pin } })),
 
+    /** Set the person's own display name and/or avatar mediaId (S29). Returns the updated self-view. */
+    setProfile: (body: { displayName?: string; avatarMediaId?: string }) =>
+      sbg.request((c) => c.PATCH('/v1/sbg/identity/profile', { body })),
+
     /** "Act as" a held role → a NEW actor token for that role (do not seed it into THIS session). */
     switchRole: (role: PersonRole) => sbg.request((c) => c.POST('/v1/sbg/identity/switch', { body: { role } })),
 
