@@ -28,6 +28,7 @@ import { DispatchService } from './dispatch.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
+import { CargoService } from './cargo.service';
 
 /**
  * PUDO Light — emerging-market Tier 1/2 on-ramp (Compendium Ch 12–19).
@@ -40,7 +41,7 @@ import { OtpService } from './otp.service';
 @Module({
   imports: [M1Module, M4Module, M7Module],
   controllers: [SbgController, IdentityController, MediaController],
-  providers: [AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService, GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, ToteService, VehicleService, DriverService, FleetService, DispatchService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService],
-  exports: [AgentService, ParcelService, MonitorService, RatingService, MdpService, ToteService, VehicleService, DriverService, FleetService, DispatchService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService],
+  providers: [AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService, GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, ToteService, VehicleService, DriverService, FleetService, DispatchService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService],
+  exports: [AgentService, ParcelService, MonitorService, RatingService, MdpService, ToteService, VehicleService, DriverService, FleetService, DispatchService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService],
 })
 export class PudoModule {}

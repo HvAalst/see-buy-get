@@ -2,6 +2,7 @@ import { ArrayMinSize, IsArray, IsBoolean, IsIn, IsNumber, IsObject, IsOptional,
 import { Type } from 'class-transformer';
 import { TRUCK_SUBTYPES } from './fleet.config';
 import { MEDIA_KINDS, MediaKind } from './media.types';
+import { CARGO_NATURES, CargoNature } from './cargo.types';
 
 class GeoDto {
   @IsNumber() lat!: number;
@@ -105,6 +106,8 @@ export class AcceptParcelDto {
   @IsOptional() @IsIn(['cash', 'prepaid']) paymentMode?: 'cash' | 'prepaid';
   @IsOptional() @IsBoolean() fragile?: boolean;
   @IsOptional() @IsString() destPudoDid?: string;
+  /** S30 — the commodity's primary cargo nature (default GEN). Drives the compatibility matrix. */
+  @IsOptional() @IsIn(CARGO_NATURES) natureCode?: CargoNature;
 }
 
 export class HandoverDto {
@@ -237,6 +240,8 @@ export class InboundOrderDto {
   @IsOptional() @IsNumber() @Min(0) subtotal?: number;
   @IsOptional() @IsIn(['flexible', 'locked']) routeMode?: 'flexible' | 'locked';
   @IsOptional() @IsBoolean() fragile?: boolean;
+  /** S30 — the commodity's primary cargo nature (default GEN). Drives the compatibility matrix. */
+  @IsOptional() @IsIn(CARGO_NATURES) natureCode?: CargoNature;
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => OrderItemDto) items?: OrderItemDto[];
 }
 

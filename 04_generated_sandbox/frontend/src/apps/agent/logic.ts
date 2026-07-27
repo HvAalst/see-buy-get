@@ -75,6 +75,22 @@ export const SIZES: Array<{ key: ParcelSize; label: string; hint: string }> = [
   { key: 'HEAVY', label: 'Heavy', hint: 'Over 20 kg' },
 ];
 
+/** The commodity's primary cargo nature (S30). Plain-language labels for a low-literacy counter; the code
+ *  drives the backend compatibility matrix (e.g. cement powder never rides with fresh food). GEN is default. */
+export type CargoNature = 'GEN' | 'FOD' | 'FOP' | 'HAZ-CHEM' | 'HAZ-DUST' | 'HAZ-BIO' | 'HAZ-FLAM' | 'FRG' | 'ODR' | 'HUM';
+export const NATURES: Array<{ key: CargoNature; label: string }> = [
+  { key: 'GEN', label: 'General goods' },
+  { key: 'FOD', label: 'Dry food — rice, tins' },
+  { key: 'FOP', label: 'Fresh or frozen food' },
+  { key: 'FRG', label: 'Fragile — glass, electronics' },
+  { key: 'ODR', label: 'Strong smell — perfume, fish' },
+  { key: 'HUM', label: 'Medicine or aid' },
+  { key: 'HAZ-CHEM', label: 'Chemicals — paint, bleach' },
+  { key: 'HAZ-DUST', label: 'Cement or powder' },
+  { key: 'HAZ-BIO', label: 'Medical or biological' },
+  { key: 'HAZ-FLAM', label: 'Gas, fuel or flammable' },
+];
+
 export interface AcceptForm {
   parcelId: string;
   size: ParcelSize | '';
@@ -82,6 +98,7 @@ export interface AcceptForm {
   senderMobile: string;
   receiverMobile: string;
   photoRef: string;
+  natureCode: CargoNature;
 }
 
 export const EMPTY_ACCEPT: AcceptForm = {
@@ -91,6 +108,7 @@ export const EMPTY_ACCEPT: AcceptForm = {
   senderMobile: '',
   receiverMobile: '',
   photoRef: '',
+  natureCode: 'GEN',
 };
 
 /**

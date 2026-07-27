@@ -510,6 +510,7 @@ export function useAgentApp() {
         senderMobile: f.senderMobile.trim() || 'n/a',
         receiverMobile: f.receiverMobile.trim() || 'n/a',
         dropoffPhotoRef: f.photoRef,
+        natureCode: f.natureCode,
       });
       if (r.error) return fail(r.error);
       buzz();

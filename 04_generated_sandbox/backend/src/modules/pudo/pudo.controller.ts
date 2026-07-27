@@ -576,6 +576,7 @@ export class SbgController {
       weightKg: dto.weightKg,
       contentPhotoRef: dto.contentPhotoRef,
       fragile: dto.fragile,
+      natureCode: dto.natureCode,
       items: dto.items ?? handoff?.items,
       subtotal: dto.subtotal ?? handoff?.subtotal,
       shippingPolicy: vendor.shippingPolicy,

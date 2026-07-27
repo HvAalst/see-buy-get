@@ -3,6 +3,7 @@ import { AgentService } from './agent.service';
 import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
 import { ParcelService } from './parcel.service';
+import { CargoService } from './cargo.service';
 import { MediaService } from './media.service';
 import { MonitorService } from './monitor.service';
 import { RatingService } from './rating.service';
@@ -76,7 +77,7 @@ describe('PUDO Light', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
-        GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, ToteService, VehicleService, DriverService, FleetService, DispatchService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
+        GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, ToteService, VehicleService, DriverService, FleetService, DispatchService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
@@ -867,6 +868,51 @@ describe('PUDO Light', () => {
     expect(r.rejected.find((x) => x.parcelId === 'F-FRAGILE')?.reason).toMatch(/fragile/);
     expect(r.rejected.find((x) => x.parcelId === 'F-HEAVY')?.reason).toMatch(/over_20kg|vehicle_full/);
     expect(r.vehicle).toBe('bus'); // a bike maps onto the bus corridor-vehicle
+  });
+
+  it('S30: refuses to load incompatible cargo on one vehicle — cement dust never rides with fresh produce', () => {
+    const origin = onboardAgent('Cargo Origin', 'NorthTown', 50);
+    onboardAgent('Cargo Dest', 'SouthTown', 50);
+    const corridor = corridors.addCorridor({ name: 'cargo', originZone: 'NorthTown', destZone: 'SouthTown' });
+    const driver = corridors.addDriver({ driverDid: 'did:glos:cargo', name: 'C', corridorId: corridor.corridorId });
+    parcels.accept({ agentDid: origin.did, parcelId: 'CEMENT', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg', natureCode: 'HAZ-DUST' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'TOMATO', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg', natureCode: 'FOP' });
+
+    // Both are scanned (so the S25 completeness gate is satisfied), but they cannot ride together.
+    const r = parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['CEMENT', 'TOMATO'] });
+    expect(r.handed).toEqual(['CEMENT']); // the first loads; the incompatible one cannot join it
+    expect(r.rejected.find((x) => x.parcelId === 'TOMATO')?.reason).toBe('incompatible_cargo');
+    const left = parcels.get('TOMATO');
+    expect(left.status).toBe('At_PUDO'); // left behind for a later, compatible vehicle
+    expect(left.shortShipReason).toBe('incompatible_cargo');
+    expect(parcels.get('CEMENT').cargoClass).toBe('P1'); // 5 kg → P1, still a PUDO-lane parcel
+  });
+
+  it('S30: a perishable is refused by a vehicle with no cold chain (the previously-dead flags, now enforced)', () => {
+    const origin = onboardAgent('Cold Origin', 'NorthTown', 50);
+    onboardAgent('Cold Dest', 'SouthTown', 50);
+    const corridor = corridors.addCorridor({ name: 'cold', originZone: 'NorthTown', destZone: 'SouthTown' });
+    const d = drivers.register({ displayName: 'Feeder', fullName: 'Feeder F', nationalId: 'DRV-ID-COLD', mobile: '+254900099', licenceClasses: ['bike'] });
+    const bike = vehicles.register({ plate: 'CC-1', vehicleClass: 'bike', ownerName: 'Feeder F' }); // no reefer → coldChain false
+    fleet.couple(d.did, bike.vehicleId, corridor.corridorId);
+    parcels.accept({ agentDid: origin.did, parcelId: 'FISH', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg', natureCode: 'FOP' });
+
+    const r = parcels.handover({ agentDid: origin.did, driverBadgeId: d.badgeId!, parcelIds: ['FISH'] });
+    expect(r.handed).toEqual([]);
+    expect(r.rejected.find((x) => x.parcelId === 'FISH')?.reason).toBe('vehicle_missing_coldChain');
+  });
+
+  it('S30: refuses a palletised/oversized inbound order — it needs dedicated freight, not the PUDO network', () => {
+    const origin = onboardAgent('Dedic Origin', 'NorthTown', 50);
+    const dest = onboardAgent('Dedic Dest', 'NorthTown', 50); // same zone → a local quote needs no corridor
+    const vendor = vendors.register({ name: 'Pallet Co' });
+    const quote = routing.quoteShipment(origin.did, dest.did, 'HEAVY');
+    expect(() =>
+      parcels.createInbound({
+        vendorId: vendor.vendorId, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700',
+        weightKg: 300, contentPhotoRef: 'content.jpg', shippingPolicy: vendor.shippingPolicy, quote,
+      }),
+    ).toThrow(/dedicated/i);
   });
 
   it('handover 100%-gate (S25): refuses an incomplete manifest and names the parcels left behind', () => {

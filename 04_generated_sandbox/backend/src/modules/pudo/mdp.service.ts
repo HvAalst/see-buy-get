@@ -117,6 +117,12 @@ export class MdpService {
     const fleet = this.fleet.resolveBadge(driverBadgeId);
     // A claimed bag may only be loaded by the driver who claimed it.
     if (pending.claimedBy && (!fleet || fleet.driverDid !== pending.claimedBy)) throw new GlosError('BAG_RESERVED', `Bag ${code} is reserved for another driver`);
+    // S30/S31 SCOPE: this is the tote/MDP mixing point — the SECOND place cargo rides a vehicle. The S30 cargo
+    // gate (pairwise compatibility via CargoService.canShareVehicle + nature→vehicle-capability) is enforced
+    // ONLY on the direct PUDO→bus path (ParcelService.handover) this slice; the tote path deliberately still
+    // runs only the pre-S30 weight/fragile/capacity checks below. Enforcing compatibility here (and refusing to
+    // co-tote an incompatible pair in sortParcel) is S31 — until then a natured parcel routed multi-hop is NOT
+    // cargo-segregated on this leg. Tracked as the S31 headline; see cargo.types.ts for the matrix.
     if (fleet && pending.parcels.length) {
       let kg = 0;
       for (const id of pending.parcels) {
@@ -188,6 +194,9 @@ export class MdpService {
     const next = this.nextHop(mdp, parcel.destZone, parcel.destAgentDid);
 
     // Find a filling bag already bound to that next hop with room, else open + assign a fresh one.
+    // S31 will additionally reject reusing a bag whose contents are cargo-INCOMPATIBLE with this parcel
+    // (opening a fresh one instead), so every bag stays internally compatible and loadBag can trust it. For
+    // now sorting is by next-hop + size only — natureCode is stamped but not yet consulted here (see loadBag).
     let tote = this.totes.findFilling(mdpId, next.id, parcel.size);
     if (!tote) {
       tote = this.totes.register(mdpId);

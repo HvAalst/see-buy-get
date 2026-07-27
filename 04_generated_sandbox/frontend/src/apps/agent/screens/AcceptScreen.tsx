@@ -1,5 +1,5 @@
 import { Button, Card, ErrorNote, ReadAloud, ScanField } from '../../../shared/ui';
-import { SIZES, acceptMissing } from '../logic';
+import { NATURES, SIZES, acceptMissing } from '../logic';
 import type { AgentActions, AgentState } from '../useAgentApp';
 import { PhotoField } from './PhotoField';
 
@@ -50,6 +50,17 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
             </button>
           ))}
         </div>
+      </Card>
+
+      <Card label="What kind of goods?">
+        <select class="select" value={f.natureCode} onChange={(e) => actions.setAccept({ natureCode: e.currentTarget.value as typeof f.natureCode })}>
+          {NATURES.map((n) => (
+            <option key={n.key} value={n.key}>
+              {n.label}
+            </option>
+          ))}
+        </select>
+        <p class="card__note">This keeps unsafe mixes apart — e.g. cement dust never travels with fresh food.</p>
       </Card>
 
       <Card label="Where is it going?">

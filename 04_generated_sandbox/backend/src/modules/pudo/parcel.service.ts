@@ -16,6 +16,8 @@ import { ConsumerParcelView, Parcel, ParcelScan, ParcelSize, ParcelStatus, Payme
 import { VendorService } from './vendor.service';
 import { VehicleService } from './vehicle.service';
 import { MediaService } from './media.service';
+import { CargoService } from './cargo.service';
+import { CargoNature } from './cargo.types';
 import type { ShipmentQuote } from './routing.service';
 import { qrSvgGroup } from '../../foundation/label/qr';
 
@@ -29,6 +31,7 @@ interface AcceptInput {
   dropoffPhotoRef: string; // mandatory
   paymentMode?: PaymentMode;
   fragile?: boolean;
+  natureCode?: CargoNature; // S30: primary cargo nature (default GEN)
   destPudoDid?: string; // optional: nominate the destination PUDO up front (enables MDP pre-sort routing)
 }
 
@@ -72,6 +75,7 @@ export class ParcelService implements OnApplicationBootstrap {
     private readonly vendors: VendorService,
     private readonly vehicles: VehicleService,
     private readonly media: MediaService,
+    private readonly cargo: CargoService,
   ) {}
 
   /**
@@ -229,6 +233,14 @@ export class ParcelService implements OnApplicationBootstrap {
     }
 
     const weightKg = SIZE_WEIGHT_KG[input.size];
+    // S30: derive the cargo class (a walk-up parcel has no measured dims, so from weight alone → at most P2)
+    // and stamp the primary nature (default GEN). A class needing dedicated transport can never be a
+    // counter parcel; the gate is defensive against a future size table that admits heavier walk-ups.
+    const natureCode: CargoNature = input.natureCode ?? 'GEN';
+    const cargoClass = this.cargo.classify({ kg: weightKg });
+    if (this.cargo.dedicatedRequired(cargoClass)) {
+      throw new GlosError('CARGO_REQUIRES_DEDICATED', `Cargo class ${cargoClass} is too large for the PUDO network — it needs dedicated freight transport`);
+    }
     const now = new Date().toISOString();
     const anchorTxId = this.ledger.anchor({ p: input.parcelId, a: input.agentDid, s: input.size, dest: input.destZone, photo: input.dropoffPhotoRef, at: now }).txId;
     const parcel: Parcel = {
@@ -236,6 +248,8 @@ export class ParcelService implements OnApplicationBootstrap {
       direction: 'outbound',
       size: input.size,
       weightKg,
+      cargoClass,
+      natureCode,
       fragile: input.fragile ?? false,
       originAgentDid: input.agentDid,
       committedNodeDid: input.agentDid,
@@ -332,19 +346,36 @@ export class ParcelService implements OnApplicationBootstrap {
     const rejected: Array<{ parcelId: string; reason: string }> = [];
     const manifestId = `man_${randomBytes(6).toString('hex')}`;
     let loadKg = 0;
+    // S30: the natures already ON this vehicle, so each new parcel can be checked against the whole manifest
+    // (the platform's first pairwise cargo awareness — before this, a manifest accumulated blind).
+    const loadedNatures: CargoNature[] = [];
 
     for (const parcelId of input.parcelIds) {
       const parcel = this.parcels.get(parcelId);
       if (!parcel) { rejected.push({ parcelId, reason: 'unknown' }); continue; }
       if (parcel.originAgentDid !== input.agentDid) { rejected.push({ parcelId, reason: 'not_at_this_pudo' }); continue; }
       if (parcel.status !== 'At_PUDO') { rejected.push({ parcelId, reason: `status_${parcel.status}` }); continue; }
-      // Vehicle handling rules (fleet drivers only): per-parcel weight, fragile, and total capacity.
+      const nature: CargoNature = parcel.natureCode ?? 'GEN';
+      // S30 cargo compatibility (applies to ANY driver — it is parcel-vs-parcel, not vehicle-specific): this
+      // parcel must be able to share the vehicle with everything already loaded. A strictly INCOMPATIBLE pair
+      // (cement dust + fresh produce, LPG + anything) is refused; SEGREGATE passes at parcel granularity
+      // because each parcel is its own sealed, labelled package. The left-behind is short-shipped below.
+      if (loadedNatures.some((n) => !this.cargo.canShareVehicle(nature, n))) {
+        rejected.push({ parcelId, reason: 'incompatible_cargo' });
+        continue;
+      }
+      // Vehicle handling rules (fleet drivers only): per-parcel weight, cargo capability, fragile, capacity.
       if (fleet) {
         if (parcel.weightKg > fleet.maxParcelKg) { rejected.push({ parcelId, reason: `over_${fleet.maxParcelKg}kg_for_vehicle` }); continue; }
+        // S30: the vehicle must actually have the capability this nature demands (perishable → a cold-chain
+        // body, hazardous → a hazmat-capable vehicle) — the enforcement side of the previously-dead flags.
+        const cap = this.cargo.requiredCapability(nature);
+        if (cap && !fleet.vehicle[cap]) { rejected.push({ parcelId, reason: `vehicle_missing_${cap}` }); continue; }
         if (parcel.fragile && !fleet.allowsFragile) { rejected.push({ parcelId, reason: 'fragile_not_allowed_on_vehicle' }); continue; }
         if (loadKg + parcel.weightKg > fleet.capacityKg) { rejected.push({ parcelId, reason: 'vehicle_full' }); continue; }
       }
 
+      loadedNatures.push(nature);
       parcel.status = 'On_Bus';
       parcel.corridorId = corridorId;
       parcel.driverBadgeId = badgeId;
@@ -472,13 +503,21 @@ export class ParcelService implements OnApplicationBootstrap {
    * Generates the handover collection code AND a public tracking key, persists the label, and books the
    * split/contribution settlement (buyer's capped share + the vendor's share).
    */
-  createInbound(input: { vendorId: string; externalOrderId?: string; originAgentDid: string; destAgentDid: string; buyerMobile: string; buyerEmail?: string; size?: ParcelSize; dimensionsCm?: { l: number; w: number; h: number }; weightKg?: number; contentPhotoRef: string; fragile?: boolean; items?: Array<{ name: string; qty: number }>; subtotal?: number; shippingPolicy: ShippingPolicy; routeMode?: 'flexible' | 'locked'; quote: ShipmentQuote }): { parcel: Parcel; label: PhygitalLabel | null; paid: boolean } {
+  createInbound(input: { vendorId: string; externalOrderId?: string; originAgentDid: string; destAgentDid: string; buyerMobile: string; buyerEmail?: string; size?: ParcelSize; dimensionsCm?: { l: number; w: number; h: number }; weightKg?: number; contentPhotoRef: string; fragile?: boolean; natureCode?: CargoNature; items?: Array<{ name: string; qty: number }>; subtotal?: number; shippingPolicy: ShippingPolicy; routeMode?: 'flexible' | 'locked'; quote: ShipmentQuote }): { parcel: Parcel; label: PhygitalLabel | null; paid: boolean } {
     const origin = this.agents.get(input.originAgentDid);
     const dest = this.agents.get(input.destAgentDid);
     if (!input.contentPhotoRef) throw new GlosError('PHOTO_REQUIRED', 'A photo of the contents is required (the baseline for dispute resolution)');
     // Derive the tier from dimensions+weight when provided; otherwise trust the explicit size.
     const size: ParcelSize = input.dimensionsCm ? classifySize({ ...input.dimensionsCm, kg: input.weightKg ?? SIZE_WEIGHT_KG[input.size ?? 'M'] }) : (input.size ?? 'M');
     const weightKg = input.weightKg ?? SIZE_WEIGHT_KG[size];
+    // S30: derive the cargo class from the SAME weight+dims and gate the pipeline. A vendor can genuinely
+    // mint an over-limit order (a pallet of tiles), so unlike the counter flow this gate really bites: a
+    // P4+ load can never enter the PUDO/tote network and is refused here (dedicated freight, a later slice).
+    const natureCode: CargoNature = input.natureCode ?? 'GEN';
+    const cargoClass = this.cargo.classify({ kg: weightKg, dimsCm: input.dimensionsCm ? [input.dimensionsCm.l, input.dimensionsCm.w, input.dimensionsCm.h] : undefined });
+    if (this.cargo.dedicatedRequired(cargoClass)) {
+      throw new GlosError('CARGO_REQUIRES_DEDICATED', `Cargo class ${cargoClass} is too large for the PUDO network — it needs dedicated freight transport`);
+    }
     const parcelId = `PUD-${randomBytes(5).toString('hex').toUpperCase()}`;
     const collectionCode = `COL-${randomBytes(4).toString('hex').toUpperCase()}`;
     const trackingKey = `T-${randomBytes(5).toString('hex').toUpperCase()}`;
@@ -500,6 +539,8 @@ export class ParcelService implements OnApplicationBootstrap {
       size,
       dimensionsCm: input.dimensionsCm,
       weightKg,
+      cargoClass,
+      natureCode,
       fragile: input.fragile ?? false,
       originAgentDid: input.originAgentDid,
       committedNodeDid: input.originAgentDid,

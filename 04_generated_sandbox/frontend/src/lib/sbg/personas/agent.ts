@@ -61,6 +61,8 @@ export function createAgentApi(sbg: SbgClient) {
       senderMobile: string;
       receiverMobile: string;
       dropoffPhotoRef: string;
+      // S30 — the commodity's primary cargo nature (default GEN server-side). Union mirrors CARGO_NATURES.
+      natureCode?: 'GEN' | 'FOD' | 'FOP' | 'HAZ-CHEM' | 'HAZ-DUST' | 'HAZ-BIO' | 'HAZ-FLAM' | 'FRG' | 'ODR' | 'HUM';
     }) => sbg.request((c) => c.POST('/v1/sbg/parcels/accept', { body })),
 
     /**

@@ -1,6 +1,8 @@
 // PUDO Light domain (Compendium Ch 12–19). The emerging-market Tier 1/2 on-ramp. Reuses the GLOS
 // backbone (DID, vault, wallet, ledger, events) but models its own light parcel/agent/corridor flow.
 
+import { CargoClass, CargoNature } from './cargo.types';
+
 /** A map pin. Named (not an inline literal) so it is one reusable schema in the contract. */
 export class GeoPoint {
   lat: number;
@@ -246,6 +248,11 @@ export class Parcel {
   dimensionsCm?: Dimensions; // declared dims that derived the size tier
   weightKg: number; // implied by size tier (Heavy > 20 kg)
   fragile?: boolean; // cannot ride a bike/motorcycle (no fragile on a two-wheeler)
+  // S30 — cargo taxonomy. cargoClass (P0–P6) is DERIVED from weight+dims at create and drives the handling
+  // lane (P4+ never enters the PUDO/MDP pipeline). natureCode is the commodity's primary nature (default
+  // GEN), which the compatibility matrix reads to keep e.g. cement dust off fresh produce on one vehicle.
+  cargoClass?: CargoClass;
+  natureCode?: CargoNature;
   originAgentDid: string;
   originZone: string;
   destZone: string;

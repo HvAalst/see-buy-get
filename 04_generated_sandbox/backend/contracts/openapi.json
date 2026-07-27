@@ -9983,6 +9983,22 @@
           },
           "destPudoDid": {
             "type": "string"
+          },
+          "natureCode": {
+            "type": "string",
+            "description": "S30 — the commodity's primary cargo nature (default GEN). Drives the compatibility matrix.",
+            "enum": [
+              "GEN",
+              "FOD",
+              "FOP",
+              "HAZ-CHEM",
+              "HAZ-DUST",
+              "HAZ-BIO",
+              "HAZ-FLAM",
+              "FRG",
+              "ODR",
+              "HUM"
+            ]
           }
         },
         "required": [
@@ -10092,6 +10108,12 @@
           },
           "fragile": {
             "type": "boolean"
+          },
+          "cargoClass": {
+            "type": "object"
+          },
+          "natureCode": {
+            "type": "object"
           },
           "originAgentDid": {
             "type": "string"
@@ -10909,6 +10931,22 @@
           },
           "fragile": {
             "type": "boolean"
+          },
+          "natureCode": {
+            "type": "string",
+            "description": "S30 — the commodity's primary cargo nature (default GEN). Drives the compatibility matrix.",
+            "enum": [
+              "GEN",
+              "FOD",
+              "FOP",
+              "HAZ-CHEM",
+              "HAZ-DUST",
+              "HAZ-BIO",
+              "HAZ-FLAM",
+              "FRG",
+              "ODR",
+              "HUM"
+            ]
           },
           "items": {
             "type": "array",
