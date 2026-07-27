@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { isSignInRequired, narrow, type SbgError } from '../../lib/sbg';
 import type { MediaKind } from '../../lib/sbg/personas/media';
 import { downscaleImage, type MediaView } from '../../shared/media';
+import { openChannel, pickContacts, type PickedContact, type ShareChannel } from '../../shared/device';
 import {
   clearDid,
   createConsumerClient,
@@ -14,6 +15,7 @@ import {
   previewInvite,
   purgeConsumerTokens,
   readDid,
+  readInviteMap,
   readPhone,
   recentKeys,
   rememberKey,
@@ -21,9 +23,11 @@ import {
   saveDid,
   savePhone,
   verifyOtp,
+  writeInviteMap,
   type ConsumerClient,
+  type InviteEntry,
 } from './api';
-import { pickPhoneFromContacts, readSmsOtp, shareLink } from '../../shared/device';
+import { pickPhoneFromContacts, readSmsOtp } from '../../shared/device';
 import { cleanPhone, codeReady, normalizeKey, phoneReady } from './logic';
 import type { AuthResult, ConsumerParcelView, InviteSummary, InviteView, MyParcels, NetworkPoint, ParcelSize, PersonRole, PersonView, QuoteView, SwitchResult, TrackView } from './types';
 
@@ -92,6 +96,9 @@ export interface SendState {
   inviteNote: string | null; // "Invite sent" / "Link copied" feedback
   inviteToken: string | null; // captured from a ?invite= landing
   invited: boolean; // the landing token validated → show the welcome
+  /** S28 — the on-device token→contact map (names/numbers NEVER sent to the server). */
+  inviteMap: InviteEntry[];
+  inviteSending: string | null; // the contact key (tel|name) currently being sent, for a per-row spinner
 
   /* --- media library (S27) --- */
   media: MediaView[];
@@ -146,6 +153,8 @@ const INITIAL: SendState = {
   inviteNote: null,
   inviteToken: null,
   invited: false,
+  inviteMap: [],
+  inviteSending: null,
   media: [],
   mediaState: 'idle',
   mediaRemoving: null,
@@ -365,6 +374,10 @@ export function useSendApp() {
       media: [], // a fresh person: never show the previous account's media (its bytes would 403 anyway)
       mediaState: 'idle',
       mediaRemoving: null,
+      invites: null,
+      invitesState: 'idle',
+      inviteMap: [], // hydrated per-person from device storage when the invite sheet opens
+      inviteSending: null,
       inviteToken: null, // the invite (if any) was credited on the server at enrol; done with it now
       invited: false,
     }));
@@ -489,6 +502,10 @@ export function useSendApp() {
         authError: error,
         inviteToken: null, // a stale invite must not survive sign-out and credit the next person to enrol
         invited: false,
+        invites: null,
+        invitesState: 'idle',
+        inviteMap: [], // the next person re-hydrates their own map from device storage
+        inviteSending: null,
       }));
     },
     [client],
@@ -650,11 +667,13 @@ export function useSendApp() {
     [client],
   );
 
-  /* -------------------------------------------------- invites (S24) */
+  /* -------------------------------------------------- invites (S24 → S28) */
 
+  /** Load the server's per-token join counts AND hydrate the on-device token→contact map + the sender name. */
   const loadInvites = useCallback(async () => {
     if (!client) return;
-    setState((s) => ({ ...s, invitesState: 'loading' }));
+    const personId = stateRef.current.identity?.personId ?? '';
+    setState((s) => ({ ...s, invitesState: 'loading', inviteMap: personId ? readInviteMap(personId) : [] }));
     const r = await client.api.myInvites();
     if (r.error) {
       if (isSignInRequired(r.error)) return signOutRef.current(r.error);
@@ -664,26 +683,61 @@ export function useSendApp() {
     setState((s) => ({ ...s, invites: narrow<InviteSummary>(r.data), invitesState: 'ready' }));
   }, [client]);
 
-  /** Create an invite → a shareable /send/ link, opened in the OS share sheet (or copied). */
-  const createInvite = useCallback(async () => {
-    if (!client) return;
-    setState((s) => ({ ...s, inviteBusy: true, inviteNote: null }));
-    const r = await client.api.createInvite(['app']);
-    if (r.error) {
-      if (isSignInRequired(r.error)) return signOutRef.current(r.error);
-      setState((s) => ({ ...s, inviteBusy: false, inviteNote: 'Could not create an invite' }));
-      return;
-    }
-    const inv = narrow<InviteView>(r.data);
-    const url = `${globalThis.location?.origin ?? ''}/send/?invite=${inv.token}`;
-    const how = await shareLink('Join me on SeeBuyGet — send, track and collect parcels.', url);
-    setState((s) => ({
-      ...s,
-      inviteBusy: false,
-      inviteNote: how === 'copied' ? 'Link copied — paste it to a friend' : how === 'shared' ? 'Invite ready to send' : 'Could not share — try again',
-    }));
-    void loadInvites();
-  }, [client, loadInvites]);
+  /** Open the OS contact multi-picker (Android). Numbers stay on-device; the sheet stages the chosen ones. */
+  const pickInviteContacts = useCallback((): Promise<PickedContact[]> => pickContacts(), []);
+
+  /**
+   * Invite ONE contact via a channel: mint (or reuse) that contact's token, map it to the contact
+   * ON-DEVICE, and open the channel's deep link straight to them. The server only ever sees an opaque
+   * token; the name/number never leave the phone.
+   */
+  const inviteContact = useCallback(
+    async (contact: { name: string; tel: string; email?: string }, channel: ShareChannel) => {
+      if (!client) return;
+      const personId = stateRef.current.identity?.personId;
+      if (!personId) return;
+      if (stateRef.current.inviteSending) return; // single-flight: one send at a time, so no map races
+      const key = contact.tel || contact.name || 'link';
+      setState((s) => ({ ...s, inviteSending: key, inviteNote: null }));
+
+      // Reuse this contact's existing token (a re-send) or mint a fresh one so re-sending never spams tokens.
+      const existing = stateRef.current.inviteMap.find((e) => (contact.tel && e.tel === contact.tel) || (!contact.tel && contact.name && e.name === contact.name));
+      let token = existing?.token ?? '';
+      if (!token) {
+        const r = await client.api.createInvite([channel]);
+        if (r.error) {
+          if (isSignInRequired(r.error)) return signOutRef.current(r.error);
+          setState((s) => ({ ...s, inviteSending: null, inviteNote: r.error.code === 'INVITE_LIMIT' ? 'You have too many open invites' : 'Could not create the invite' }));
+          return;
+        }
+        token = narrow<InviteView>(r.data)?.token ?? '';
+        if (!token) {
+          setState((s) => ({ ...s, inviteSending: null, inviteNote: 'Could not create the invite' }));
+          return;
+        }
+      }
+
+      const url = `${globalThis.location?.origin ?? ''}/send/?invite=${token}`;
+      // No sender name to fill in (a phone-keyed person has none, and the channel already shows who it's
+      // from), so the text is simply "Join me on SeeBuyGet" — zero friction, no typing.
+      const text = 'Join me on SeeBuyGet — send, track & collect parcels.';
+      const how = await openChannel(channel, { text, url, tel: contact.tel || undefined, email: contact.email || undefined });
+
+      // Persist the token→contact map ON DEVICE. Re-read at write time + a functional state update so a
+      // stale snapshot can never clobber another entry, and dedupe by token so a re-send updates in place.
+      // `delivered` gates the "Sent" pill: a failed open keeps the token (reusable) but shows Send to retry.
+      const entry: InviteEntry = { token, name: contact.name || contact.tel || 'Shared link', tel: contact.tel, at: new Date().toISOString(), delivered: how !== 'failed' };
+      writeInviteMap(personId, [...readInviteMap(personId).filter((e) => e.token !== token), entry]);
+      setState((s) => ({
+        ...s,
+        inviteSending: null,
+        inviteMap: [...s.inviteMap.filter((e) => e.token !== token), entry],
+        inviteNote: how === 'copied' ? 'Link copied' : how === 'failed' ? 'Could not open that app — try another way' : 'Invite sent — they show as joined once they sign up',
+      }));
+      void loadInvites();
+    },
+    [client, loadInvites],
+  );
 
   /* ------------------------------------------------------------------- nav */
 
@@ -732,7 +786,8 @@ export function useSendApp() {
       loadMedia,
       removeMedia,
       loadInvites,
-      createInvite,
+      pickInviteContacts,
+      inviteContact,
     },
   };
 }

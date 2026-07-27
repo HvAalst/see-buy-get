@@ -6,6 +6,17 @@
     <title>SeeBuyGet Send</title>
     <meta name="description" content="Send a parcel on the SeeBuyGet network." />
 
+    <!-- S28 invite: the link-preview card WhatsApp/Telegram/etc. render when a `/send/?invite=…` link is
+         shared. Generic + SeeBuyGet-branded here; per-inviter personalisation ("Join Hans") would need
+         dynamic OG rendering on the real seebuyget.com (SSR), so it lives in the share TEXT instead. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="SeeBuyGet" />
+    <meta property="og:title" content="Join me on SeeBuyGet" />
+    <meta property="og:description" content="Send, track and collect parcels — no address needed. Join with my invite." />
+    <meta property="og:url" content="https://www.seebuyget.com" />
+    <meta property="og:image" content="https://www.seebuyget.com/social-card.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+
     <!-- Light only: this app never renders a dark variant. -->
     <meta name="color-scheme" content="light" />
     <meta name="theme-color" content="#4C46E0" />

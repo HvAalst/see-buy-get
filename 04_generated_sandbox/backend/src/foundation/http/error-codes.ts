@@ -103,6 +103,7 @@ export const ERROR_CODES = {
   CONFLICT: { status: 409, title: 'Conflict with existing data' },
   DUPLICATE: { status: 409, title: 'Already registered' },
   INCOMPLETE_MANIFEST: { status: 409, title: 'Some waiting parcels were not loaded' },
+  INVITE_LIMIT: { status: 409, title: 'Too many open invites' },
 
   // --- 410 / 413 / 415: media upload + retention -----------------------------------------------
   MEDIA_EXPIRED: { status: 410, title: 'This media has passed its retention window' },

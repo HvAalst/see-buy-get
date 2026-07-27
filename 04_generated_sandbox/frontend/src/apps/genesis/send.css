@@ -307,3 +307,26 @@
   border-radius: var(--r-ctl);
   margin-bottom: 8px;
 }
+
+/* ------------------------------------------------------------- invite chips (S28) --
+   The "send with" channel selector: pill chips, the chosen one outlined in blue. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+.chip {
+  padding: 8px 14px;
+  border: 1.5px solid var(--bd);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--tx2);
+  font-size: 14px;
+  font-weight: 600;
+}
+.chip--on {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+  color: var(--blue-dark);
+}

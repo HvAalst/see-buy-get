@@ -47,9 +47,97 @@ export async function pickPhoneFromContacts(): Promise<string | null> {
   }
 }
 
+/** A contact the user picked to invite — name + first number/email. Kept ON-DEVICE only (never sent to the server). */
+export interface PickedContact {
+  name: string;
+  tel: string;
+  email?: string;
+}
+
+/**
+ * Multi-select from the address book (S28 invite). Returns the chosen contacts' name + first number, or
+ * an empty list if cancelled / unsupported. The numbers live only on this device — they drive the deep
+ * links and the local "pending → joined" map, and are never uploaded (the server holds only opaque tokens).
+ */
+export async function pickContacts(): Promise<PickedContact[]> {
+  try {
+    if (!canPickContact()) return [];
+    const picker = (navigator as unknown as {
+      contacts: { select(props: string[], opts: { multiple: boolean }): Promise<Array<{ name?: string[]; tel?: string[]; email?: string[] }>> };
+    }).contacts;
+    const picked = await picker.select(['name', 'tel', 'email'], { multiple: true });
+    return (picked ?? [])
+      .map((c) => ({ name: (c.name?.[0] ?? '').trim(), tel: (c.tel?.[0] ?? '').trim(), email: (c.email?.[0] ?? '').trim() || undefined }))
+      .filter((c) => c.name || c.tel);
+  } catch {
+    return [];
+  }
+}
+
 /** Is the native share sheet available (most mobile browsers)? Sync — safe for a render-time check. */
 export function canShare(): boolean {
   return typeof navigator !== 'undefined' && 'share' in navigator;
+}
+
+/** The channels the invite sheet offers. `copy`/`system` are handled locally; the rest are deep links. */
+export type ShareChannel = 'whatsapp' | 'telegram' | 'sms' | 'email' | 'copy' | 'system';
+
+export interface ShareTarget {
+  text: string;
+  url: string;
+  tel?: string; // the picked contact's number — used to open WhatsApp/SMS straight to them
+  email?: string;
+}
+
+const digits = (tel: string): string => (tel || '').replace(/[^\d]/g, '');
+
+/**
+ * Build the deep link that opens a channel — to the specific contact where the channel supports it
+ * (WhatsApp/SMS/email), or to the channel's own chat-picker (Telegram). Returns null for copy/system,
+ * which openChannel handles directly.
+ */
+export function channelUrl(channel: ShareChannel, t: ShareTarget): string | null {
+  const msg = `${t.text} ${t.url}`;
+  switch (channel) {
+    case 'whatsapp':
+      return t.tel ? `https://wa.me/${digits(t.tel)}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    case 'telegram':
+      return `https://t.me/share/url?url=${encodeURIComponent(t.url)}&text=${encodeURIComponent(t.text)}`;
+    case 'sms':
+      return `sms:${digits(t.tel ?? '')}?body=${encodeURIComponent(msg)}`;
+    case 'email':
+      return `mailto:${t.email ?? ''}?subject=${encodeURIComponent('Join me on SeeBuyGet')}&body=${encodeURIComponent(msg)}`;
+    default:
+      return null;
+  }
+}
+
+/**
+ * Open a share channel. `copy` writes the clipboard; `system` opens the OS share sheet; the rest open
+ * their deep link in a new context so the SPA is not navigated away. Returns what happened, for feedback.
+ */
+export async function openChannel(channel: ShareChannel, t: ShareTarget): Promise<'opened' | 'copied' | 'shared' | 'failed'> {
+  if (channel === 'copy') {
+    try {
+      await navigator.clipboard?.writeText(`${t.text} ${t.url}`);
+      return 'copied';
+    } catch {
+      return 'failed';
+    }
+  }
+  if (channel === 'system') {
+    const r = await shareLink(t.text, t.url);
+    return r === 'failed' ? 'failed' : r; // 'shared' | 'copied'
+  }
+  const href = channelUrl(channel, t);
+  if (!href) return 'failed';
+  try {
+    const opened = globalThis.open?.(href, '_blank', 'noopener');
+    if (!opened) globalThis.location?.assign(href); // popup blocked → navigate; the app scheme still intercepts
+    return 'opened';
+  } catch {
+    return 'failed';
+  }
 }
 
 /**

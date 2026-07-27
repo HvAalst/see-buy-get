@@ -1299,43 +1299,67 @@ describe('PUDO Light', () => {
     expect(() => persons.loginWithPin(phone, '1234')).toThrow(/Too many wrong PINs/); // locked out → OTP required
   });
 
-  it('S24 — invite for exposure: one reusable link, multi-use + deduped credit, no oracle, no inflation', () => {
+  it('S28 — invite per contact: one token per contact, deduped credit, capped, no oracle, no inflation', () => {
     const inviter = persons.ensurePerson('+254700950001').personDid;
 
-    // ONE link per person: re-creating returns the SAME token (merging channels), never a second record.
-    const a = invites.create(inviter, ['share']);
-    const b = invites.create(inviter, ['copy']);
-    expect(b.token).toBe(a.token);
-    expect(b.channels).toEqual(expect.arrayContaining(['share', 'copy']));
-    expect(invites.forInviter(inviter).invites).toHaveLength(1);
+    // ONE token PER contact: each create mints a DISTINCT token (the sender maps each to a contact on-device).
+    const a = invites.create(inviter, ['whatsapp']);
+    const b = invites.create(inviter, ['sms']);
+    expect(b.token).not.toBe(a.token);
+    expect(invites.forInviter(inviter).invites).toHaveLength(2); // two contacts invited → two tokens
 
-    // Multi-use: several NEW people join through the one link → each credited once; the same person, never twice.
+    // A NEW person joining through a SPECIFIC token flips that token's count (the "Jane joined" signal),
+    // deduped per person; the other token stays at 0 (still "pending").
     const j1 = persons.ensurePerson('+254700950002').personDid;
     const j2 = persons.ensurePerson('+254700950003').personDid;
     invites.accept(a.token, j1);
     invites.accept(a.token, j1); // idempotent — already credited
-    invites.accept(a.token, j2);
+    invites.accept(b.token, j2);
+    const view = invites.forInviter(inviter);
+    expect(view.joined).toBe(2); // total across tokens
+    expect(view.invites.find((i) => i.token === a.token)?.joined).toBe(1); // a: joined
+    expect(view.invites.find((i) => i.token === b.token)?.joined).toBe(1); // b: joined
+    invites.accept(a.token, inviter); // you cannot credit yourself
     expect(invites.forInviter(inviter).joined).toBe(2);
 
-    // You cannot credit yourself.
-    invites.accept(a.token, inviter);
-    expect(invites.forInviter(inviter).joined).toBe(2);
-
-    // PII-free: the inviter's view exposes no number, no hash, no joiner identity.
+    // PII-free: the inviter's view exposes no number, no hash, no joiner identity (names live on the device).
     const json = JSON.stringify(invites.forInviter(inviter));
     expect(json).not.toContain('950002');
     expect(json).not.toContain(j1);
 
-    // NO membership oracle + NO inflation: creating a link and READING it can never credit anyone — only an
-    // enrol-time accept() with the real token can. Re-creating never mints a second link to re-heal.
+    // NO membership oracle + NO inflation: creating a token and READING it can never credit anyone — status
+    // flips ONLY on a real enrol-time accept() with that token, never healed from existing membership.
     const attacker = persons.ensurePerson('+254700950007').personDid;
     invites.create(attacker); // targets nobody — the model holds no phone to probe
     expect(invites.forInviter(attacker).joined).toBe(0);
     expect(invites.forInviter(attacker).joined).toBe(0); // reading again can never inflate
 
+    // Capped per person so the store can't be spammed (already has 2; mint up to 100, then refuse).
+    for (let i = 0; i < 98; i++) invites.create(inviter);
+    expect(invites.forInviter(inviter).invites).toHaveLength(100);
+    expect(() => invites.create(inviter)).toThrow(/most 100 open invites/);
+
     // The public landing preview validates the token, nothing more.
     expect(invites.preview(a.token).valid).toBe(true);
     expect(invites.preview('not-a-token').valid).toBe(false);
+  });
+
+  it('S28 — an invite credits only a genuinely NEW joiner; a returning member stays pending (no oracle)', () => {
+    const inviter = persons.ensurePerson('+254700951000').personDid;
+    const t = invites.create(inviter).token;
+
+    // A brand-new person enrolling through the link is credited — mimicking the controller's `isNew && accept`.
+    const first = persons.enroll('+254700951001', true, '1234');
+    expect(first.isNew).toBe(true);
+    if (first.isNew) invites.accept(t, first.person.personDid);
+    expect(invites.byToken(t)!.joiners).toHaveLength(1);
+
+    // The SAME person following an invite again is NOT new, so the controller never calls accept — the
+    // token stays put. This is the load-bearing guard against crediting (and thereby probing) existing members.
+    const again = persons.enroll('+254700951001', true);
+    expect(again.isNew).toBe(false);
+    if (again.isNew) invites.accept(t, again.person.personDid); // guard NOT taken
+    expect(invites.byToken(t)!.joiners).toHaveLength(1); // a returning member never inflates the count
   });
 
   it('S21 — links a parcel to its sender + receiver by phone hash; the receiver sees a PII-free twin', () => {

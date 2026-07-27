@@ -2,6 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, CodeBoxes, ErrorNote, Icon, MediaLibrary, Note, Pill, ReadAloud, Sheet } from '../../../shared/ui';
 import { codeReady, roleMeta } from '../logic';
 import { ROLE_APPS } from '../api';
+import { InviteSheet } from './InviteSheet';
 import type { RoleLinkView } from '../types';
 import type { SendActions, SendState } from '../useSendApp';
 
@@ -19,6 +20,7 @@ export interface AccountScreenProps {
 export function AccountScreen({ state, actions }: AccountScreenProps) {
   const [pinOpen, setPinOpen] = useState(false);
   const [newPin, setNewPin] = useState('');
+  const [inviteOpen, setInviteOpen] = useState(false);
   const id = state.identity;
   if (!id) return null;
 
@@ -65,9 +67,8 @@ export function AccountScreen({ state, actions }: AccountScreenProps) {
         ) : (
           <p class="hint">Share SeeBuyGet — your friends can send and collect too.</p>
         )}
-        {state.inviteNote ? <Note tone="ok" icon="check" title={state.inviteNote} /> : null}
         <div style="margin-top:10px">
-          <Button variant="outline" chevron={false} busy={state.inviteBusy} onClick={() => void actions.createInvite()}>
+          <Button variant="outline" chevron={false} onClick={() => { void actions.loadInvites(); setInviteOpen(true); }}>
             Invite a friend
           </Button>
         </div>
@@ -140,6 +141,8 @@ export function AccountScreen({ state, actions }: AccountScreenProps) {
         </Button>
         <Button variant="link" onClick={() => setPinOpen(false)}>Cancel</Button>
       </Sheet>
+
+      <InviteSheet open={inviteOpen} onClose={() => setInviteOpen(false)} state={state} actions={actions} />
     </div>
   );
 }

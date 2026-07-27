@@ -163,6 +163,38 @@ export const clearDid = (): void => drop(DID_KEY);
 export const readPhone = (): string | null => get(PHONE_KEY);
 export const savePhone = (phone: string): void => set(PHONE_KEY, phone);
 
+/* -------------------------------------------------- invite map (S28) -- */
+
+/**
+ * The invite token → contact map that renders "Jane joined" lives ONLY here, on the device. The server
+ * holds nothing but the opaque token, so this is what keeps the invitee's name/number off the wire while
+ * still letting the sender see per-name status. Keyed by personDid so two accounts on one phone never mix.
+ */
+const INVITE_KEY = 'glos-send-invites';
+
+export interface InviteEntry {
+  token: string;
+  name: string;
+  tel: string;
+  at: string;
+  /** Did the share channel actually open? A failed open keeps the token (reusable) but shows Send (retry). */
+  delivered?: boolean;
+}
+
+export function readInviteMap(personDid: string): InviteEntry[] {
+  try {
+    const raw = get(`${INVITE_KEY}:${personDid}`);
+    const list = raw ? (JSON.parse(raw) as unknown) : [];
+    return Array.isArray(list) ? (list as InviteEntry[]).filter((e) => e && typeof e.token === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export function writeInviteMap(personDid: string, entries: InviteEntry[]): void {
+  set(`${INVITE_KEY}:${personDid}`, JSON.stringify(entries));
+}
+
 /* ------------------------------------------------------------ recent keys -- */
 
 /**

@@ -1,41 +1,46 @@
 import { Injectable } from '@nestjs/common';
 import { randomBytes } from 'crypto';
+import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { Invite, InviteSummary, toInviteView } from './invite.types';
 
+/** A generous per-person ceiling — enough to invite a real address book, bounded so no one can spam the store. */
+const MAX_INVITES_PER_PERSON = 100;
+
 /**
- * InviteService (S24) — the SBG copy of BondBridge's invite pattern, for APP EXPOSURE / growth only.
+ * InviteService (S24 → S28) — invite for app exposure / growth, contact-picker driven.
  *
- * A signed-in consumer gets ONE reusable `/send/?invite=<token>` link to share. Anyone who follows it and
- * enrols as a NEW person is credited back to them (the token flows into enrol → `accept`). Deduped by
- * person, self-credit excluded, and — crucially — there is no phone lookup and nothing an inviter can do
- * by merely READING their invites, so it is neither a membership oracle nor inflatable. No circles, no
- * reward beyond the count.
+ * S28 mints ONE token PER invited contact (not one reusable link), so the sender can see "Jane joined"
+ * once Jane's specific link brings in a NEW person. The privacy guarantee from S24 is UNCHANGED and is
+ * exactly why this is still safe: the server holds NO invitee number or name — only the opaque token and
+ * the set of NEW persons who joined through it. Status flips only on a genuine new-enrol event (never
+ * "healed" from existing membership on read), so it is neither a membership oracle nor inflatable, and
+ * the invitee↔token map that renders the friend's NAME lives only on the sender's device.
  */
 @Injectable()
 export class InviteService {
-  // Durable: an invite is a growth credential + the ledger of who a person brought in.
-  private readonly invites = new PersistentMap<string, Invite>('sbg-invites'); // keyed by token
-  // One link per person → O(1) idempotent create, and the guarantee that a person cannot spam the store.
-  private readonly byInviter = new Map<string, string>();
+  // Durable: each token is a growth credential + the ledger of who joined through it. Keyed by token.
+  private readonly invites = new PersistentMap<string, Invite>('sbg-invites');
+  // personDid → their tokens. Bounds per-person growth and answers forInviter in O(their invites).
+  private readonly byInviter = new Map<string, string[]>();
 
   constructor() {
-    for (const i of this.invites.values()) this.byInviter.set(i.inviterPersonDid, i.token);
+    for (const i of this.invites.values()) this.index(i);
   }
 
-  /** The person's personal invite link — idempotent: one per person, the SAME token every time (re-share
-   *  across channels just merges the channel tags). This is also the spam guard — no second record. */
+  /**
+   * Mint a fresh per-contact invite token for this person (the sender maps it to a contact on-device).
+   * Not idempotent by design — one link per contact — but capped per person so the store can't be spammed.
+   */
   create(inviterPersonDid: string, channels?: string[]): Invite {
-    const existing = this.mine(inviterPersonDid);
-    if (existing) {
-      if (channels?.length) existing.channels = [...new Set([...(existing.channels ?? []), ...channels])];
-      this.invites.set(existing.token, existing);
-      return existing;
+    const mine = this.byInviter.get(inviterPersonDid) ?? [];
+    if (mine.length >= MAX_INVITES_PER_PERSON) {
+      throw new GlosError('INVITE_LIMIT', `You can have at most ${MAX_INVITES_PER_PERSON} open invites`);
     }
     const token = randomBytes(8).toString('hex');
     const invite: Invite = { inviteId: `inv_${randomBytes(6).toString('hex')}`, token, inviterPersonDid, channels, joiners: [], createdAt: new Date().toISOString() };
     this.invites.set(token, invite);
-    this.byInviter.set(inviterPersonDid, token);
+    this.index(invite);
     return invite;
   }
 
@@ -53,12 +58,15 @@ export class InviteService {
     this.invites.set(token, invite);
   }
 
-  /** The inviter's link + total joins it drove. A pure read — it performs no lookup and mutates nothing,
-   *  so an inviter can learn nothing about any phone number by calling it. */
+  /**
+   * The inviter's tokens + the total joins they drove. A pure read — no phone lookup, no mutation — so an
+   * inviter learns nothing about any number by calling it; each token's `joined` count is the on-device
+   * "pending → joined" signal (joined > 0 ⇒ that contact came in through their link).
+   */
   forInviter(inviterPersonDid: string): InviteSummary {
-    const invite = this.mine(inviterPersonDid);
-    const views = invite ? [toInviteView(invite)] : [];
-    return { invites: views, joined: invite ? invite.joiners.length : 0 };
+    const tokens = this.byInviter.get(inviterPersonDid) ?? [];
+    const invites = tokens.map((t) => this.invites.get(t)).filter((i): i is Invite => Boolean(i));
+    return { invites: invites.map(toInviteView), joined: invites.reduce((sum, i) => sum + i.joiners.length, 0) };
   }
 
   /** The @Public landing check — validates the token, nothing more (no inviter, no invitee, no count). */
@@ -66,9 +74,10 @@ export class InviteService {
     return { valid: this.invites.has(token) };
   }
 
-  private mine(inviterPersonDid: string): Invite | undefined {
-    const token = this.byInviter.get(inviterPersonDid);
-    return token ? this.invites.get(token) : undefined;
+  private index(invite: Invite): void {
+    const list = this.byInviter.get(invite.inviterPersonDid) ?? [];
+    if (!list.includes(invite.token)) list.push(invite.token);
+    this.byInviter.set(invite.inviterPersonDid, list);
   }
 
   /** Used by tests to confirm an invite exists. */
