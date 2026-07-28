@@ -46,6 +46,19 @@ describe('freight pricing (S34)', () => {
       expect(Number.isFinite(m)).toBe(true);
       expect(m).toBe(1);
     });
+
+    it('folds the S34b market factor (seasonal × market), still clamped to the corridor', () => {
+      const offpeak = new Date('2026-07-22T11:00:00');
+      // Market surge lifts the multiplier — but the vehicle's ceiling still wins.
+      expect(freightMultiplier(offpeak, { min: 0.8, max: 1.5 }, 1.4)).toBe(1.4);
+      expect(freightMultiplier(offpeak, { min: 0.8, max: 1.2 }, 1.4)).toBe(1.2); // clamped to ceiling
+      // A quiet market discounts down to the floor.
+      expect(freightMultiplier(offpeak, { min: 0.9, max: 1.5 }, 0.7)).toBe(0.9); // clamped up to floor
+      // Peak (1.15) × market compound.
+      expect(freightMultiplier(new Date('2026-07-22T08:00:00'), { min: 0.8, max: 2 }, 1.2)).toBe(1.38);
+      // A non-finite market factor degrades to neutral (never NaN).
+      expect(freightMultiplier(offpeak, { min: 0.8, max: 1.5 }, Number.NaN)).toBe(1);
+    });
   });
 
   describe('computeFreightPrice', () => {

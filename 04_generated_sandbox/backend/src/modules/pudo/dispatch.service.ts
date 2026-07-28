@@ -13,6 +13,7 @@ import { CargoNature, Equipment, VehicleCapability } from './cargo.types';
 import { VendorService } from './vendor.service';
 import { WalletGateService } from './wallet-gate.service';
 import { clampMultiplier, computeFreightPrice, freightMultiplier, shipperCharge } from './pricing';
+import { MarketPulseStore } from './market-pulse.store';
 import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, VEHICLE_SPEC } from './fleet.config';
 import { detourKm, haversineKm } from './geo';
 import { DEFAULT_PRICE_PER_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, OFFER_TTL_MIN, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
@@ -45,6 +46,7 @@ export class DispatchService {
     private readonly cargo: CargoService,
     private readonly vendors: VendorService,
     private readonly gate: WalletGateService,
+    private readonly market: MarketPulseStore,
   ) {
     this.freightSeq = [...this.freights.values()].length; // continue the human FRT-NNN sequence after a restart
   }
@@ -180,7 +182,8 @@ export class DispatchService {
             ratePerKm: profile.ratePerKm,
             deadheadKm: haversineKm(route.from, load.pickupLocation),
             tripKm: load.destLocation ? haversineKm(load.pickupLocation, load.destLocation) : 0,
-            multiplier: freightMultiplier(new Date(now), { min: profile.min, max: profile.max }),
+            // S34b — the market multiplier for the PICKUP's zone (supply/demand + admin surge), clamped to the corridor.
+            multiplier: freightMultiplier(new Date(now), { min: profile.min, max: profile.max }, this.market.factorFor(load.pickupLocation, now)),
           })
         : undefined;
       const offer: Offer = {
@@ -245,7 +248,9 @@ export class DispatchService {
         ratePerKm: profile.ratePerKm,
         deadheadKm: offer.price?.distanceKm ?? 0,
         tripKm: 0,
-        multiplier: freightMultiplier(new Date(now), { min: profile.min, max: profile.max }),
+        // S34b — lock against the market at the pickup's zone AT THIS INSTANT (a rule set since the offer, or a
+        // shifted pulse, is honoured here); the corridor clamp still guarantees the driver's floor and ceiling.
+        multiplier: freightMultiplier(new Date(now), { min: profile.min, max: profile.max }, this.market.factorFor(f.pickupLocation, now)),
       });
       f.priceBreakdown = breakdown;
       f.lockedPrice = breakdown.total;

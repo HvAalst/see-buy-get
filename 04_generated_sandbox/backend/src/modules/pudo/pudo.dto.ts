@@ -1,4 +1,4 @@
-import { ArrayMinSize, IsArray, IsBoolean, IsIn, IsNumber, IsObject, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
+import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsIn, IsNumber, IsObject, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { TRUCK_SUBTYPES } from './fleet.config';
 import { MEDIA_KINDS, MediaKind } from './media.types';
@@ -159,6 +159,18 @@ export class RateDto {
 export class DriverPayoutDto {
   @IsString() driverId!: string;
   @IsNumber() @Min(0.01) amount!: number;
+}
+
+// S34b — an operator's manual market surge override for a zone. Give a cell key OR a lat/lng (the controller
+// derives the cell); `factor` is the guaranteed market multiplier for that zone (clamped to the engine band).
+export class SurgeRuleDto {
+  @IsOptional() @IsString() cell?: string;
+  @IsOptional() @ValidateNested() @Type(() => GeoDto) location?: GeoDto;
+  @IsNumber() @Min(0.1) factor!: number;
+  @IsString() reason!: string;
+  @IsOptional() @IsString() by?: string;
+  // A real date — a malformed expiry would otherwise become a permanent, watchtower-invisible surge.
+  @IsOptional() @IsDateString() expiresAt?: string;
 }
 
 // --- inbound / e-commerce pickup-at-PUDO ---

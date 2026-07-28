@@ -19,6 +19,8 @@ import { VehicleService } from './vehicle.service';
 import { DriverService } from './driver.service';
 import { FleetService } from './fleet.service';
 import { DispatchService } from './dispatch.service';
+import { MarketPulseStore } from './market-pulse.store';
+import { MarketPulseService } from './market-pulse.service';
 import { shipperCharge } from './pricing';
 import { FleetManagerService } from './fleet-manager.service';
 import { AccountService } from './account.service';
@@ -60,6 +62,8 @@ describe('PUDO Light', () => {
   let drivers: DriverService;
   let fleet: FleetService;
   let dispatch: DispatchService;
+  let marketPulse: MarketPulseService;
+  let marketStore: MarketPulseStore;
   let controller: SbgController;
   let managers: FleetManagerService;
   let accounts: AccountService;
@@ -80,7 +84,7 @@ describe('PUDO Light', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
-        GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, ToteService, VehicleService, DriverService, FleetService, DispatchService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
+        GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, ToteService, VehicleService, DriverService, FleetService, DispatchService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
@@ -102,6 +106,8 @@ describe('PUDO Light', () => {
     drivers = moduleRef.get(DriverService);
     fleet = moduleRef.get(FleetService);
     dispatch = moduleRef.get(DispatchService);
+    marketPulse = moduleRef.get(MarketPulseService);
+    marketStore = moduleRef.get(MarketPulseStore);
     controller = moduleRef.get(SbgController);
     managers = moduleRef.get(FleetManagerService);
     accounts = moduleRef.get(AccountService);
@@ -1718,6 +1724,94 @@ describe('PUDO Light', () => {
     dispatch.pickupFreight(f.freightId, d.did);
     dispatch.deliverFreight(f.freightId, d.did);
     expect(gate.entries({ type: 'DRIVER_PAYOUT' }).filter((e) => e.reference === d.did)).toHaveLength(1); // driver still paid
+  });
+
+  // --- S34b: the dynamic market-pulse engine (per-zone supply/demand surge, admin rules, corridor clamp) ---
+
+  const coupleTipper = (tag: string, bounds: { min: number; max: number }) => {
+    const d = drivers.register({ displayName: tag, fullName: tag, nationalId: 'ID-' + tag, mobile: '+2547' + tag, licenceClasses: ['truck'], licenceNumber: 'L-' + tag, licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const v = vehicles.register({ plate: 'MK-' + tag, vehicleClass: 'truck', truckSubtype: 'tipper', capacityKg: 20_000, ownerName: 'X', baseFee: 10, pricePerKm: 0.5, minMultiplier: bounds.min, maxMultiplier: bounds.max });
+    fleet.couple(d.did, v.vehicleId);
+    return d;
+  };
+
+  it('S34b: a high-demand zone surges the freight multiplier, clamped to each vehicle corridor', () => {
+    const pickup = { lat: -1.2, lng: 36.8 };
+    const dest = { lat: -1.22, lng: 36.82 };
+    // 5 open loads in one cell, no vehicles reporting a position there → pressure 5 → factor clampRaw(2.0).
+    for (let i = 0; i < 5; i++) dispatch.registerFreight({ description: `Sand ${i}`, pickupLocation: pickup, pickupLabel: 'Quarry', destLabel: 'Site', destLocation: dest, weightKg: 1000, bulk: true });
+    const noon = new Date('2026-07-22T11:00:00').getTime();
+    marketPulse.recompute(noon);
+    expect(marketStore.factorFor(pickup, noon)).toBe(2);
+
+    // A [0.8,1.5] tipper: seasonal 1.0 × market 2.0 = 2.0, clamped to its 1.5 ceiling.
+    const narrow = coupleTipper('SRG', { min: 0.8, max: 1.5 });
+    expect(dispatch.suggest(narrow.did, { from: pickup, to: dest }, noon)[0].price!.multiplier).toBe(1.5);
+    // A [0.8,2.0] tipper captures more of the surge — but never beyond its own ceiling.
+    const wide = coupleTipper('WID', { min: 0.8, max: 2 });
+    expect(dispatch.suggest(wide.did, { from: pickup, to: dest }, noon)[0].price!.multiplier).toBe(2);
+
+    // The watchtower surfaces the hot cell (hottest first, with a human zone label).
+    const insight = marketPulse.insight(noon);
+    expect(insight.cells[0].demand).toBe(5);
+    expect(insight.cells[0].factor).toBe(2);
+  });
+
+  it('S34b: a thin zone below the demand threshold does not surge', () => {
+    const pickup = { lat: -1.35, lng: 36.95 };
+    for (let i = 0; i < 2; i++) dispatch.registerFreight({ description: `L${i}`, pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: { lat: -1.36, lng: 36.96 }, weightKg: 1000, bulk: true });
+    const noon = new Date('2026-07-22T11:00:00').getTime();
+    const cells = marketPulse.recompute(noon);
+    expect(cells.find((c) => c.demand === 2)?.organicFactor).toBe(1); // 2 < MARKET_MIN_DEMAND (3) → neutral
+    expect(marketStore.factorFor(pickup, noon)).toBe(1);
+  });
+
+  it('S34b: an operator surge rule overrides organic pricing, clamped to the band + the corridor', () => {
+    const pickup = { lat: -1.5, lng: 36.6 };
+    const dest = { lat: -1.52, lng: 36.62 };
+    dispatch.registerFreight({ description: 'One load', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: dest, weightKg: 1000, bulk: true });
+    const noon = new Date('2026-07-22T11:00:00').getTime();
+    const cell = marketPulse.cellFor(pickup);
+    // A lone load would be neutral, but the operator declares a festival surge.
+    marketPulse.setSurgeRule({ cell, factor: 1.8, reason: 'festival', by: 'op' }, noon);
+    expect(marketStore.factorFor(pickup, noon)).toBe(1.8);
+    const d = coupleTipper('RUL', { min: 0.8, max: 1.5 });
+    expect(dispatch.suggest(d.did, { from: pickup, to: dest }, noon)[0].price!.multiplier).toBe(1.5); // clamped to ceiling
+    // Lifting the rule returns the zone to neutral.
+    marketPulse.clearSurgeRule(cell, noon);
+    expect(marketStore.factorFor(pickup, noon)).toBe(1);
+    expect(marketPulse.insight(noon).rules).toHaveLength(0);
+  });
+
+  it('S34b: the watchtower reflects a lapsed surge rule at once (no stale baked factor)', () => {
+    const pickup = { lat: -1.6, lng: 36.5 };
+    dispatch.registerFreight({ description: 'L', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: { lat: -1.62, lng: 36.52 }, weightKg: 1000, bulk: true });
+    const t0 = new Date('2026-07-22T11:00:00Z').getTime();
+    const cell = marketPulse.cellFor(pickup);
+    // A rule that lapses in 60s; setSurgeRule recomputes, baking factor 1.8 into the snapshot cell.
+    marketPulse.setSurgeRule({ cell, factor: 1.8, reason: 'brief', by: 'op', expiresAt: new Date(t0 + 60_000).toISOString() }, t0);
+    const before = marketPulse.insight(t0);
+    expect(before.cells.find((c) => c.cell === cell)?.factor).toBe(1.8);
+    expect(before.rules).toHaveLength(1);
+    // 90s later the rule has lapsed but the 120s recompute has NOT fired — the watchtower must already show organic.
+    const after = marketPulse.insight(t0 + 90_000);
+    const afterCell = after.cells.find((c) => c.cell === cell);
+    expect(afterCell?.ruleApplied).toBe(false);
+    expect(afterCell?.factor).toBe(1); // organic (1 load < threshold), not the stale baked 1.8
+    expect(after.rules).toHaveLength(0);
+    expect(marketStore.factorFor(pickup, t0 + 90_000)).toBe(1); // and pricing agrees
+  });
+
+  it('S34b: the operator market-pulse endpoints recompute and return the insight', () => {
+    const pickup = { lat: -1.2, lng: 36.8 };
+    for (let i = 0; i < 4; i++) dispatch.registerFreight({ description: `F${i}`, pickupLocation: pickup, pickupLabel: 'Q', destLabel: 'S', destLocation: { lat: -1.22, lng: 36.82 }, weightKg: 1000, bulk: true });
+    const out = controller.recomputeMarketPulse();
+    expect(out.cells.length).toBeGreaterThan(0);
+    const insight = controller.marketPulse();
+    expect(insight.cells[0].demand).toBe(4);
+    expect(insight.cells[0].factor).toBe(1.75); // 4 loads, 0 vehicles → 1 + 0.25·(4−1)
   });
 
   // --- S32: the dedicated-transport lane (equipment manifest + freight cargo model + P4+ divert) ---

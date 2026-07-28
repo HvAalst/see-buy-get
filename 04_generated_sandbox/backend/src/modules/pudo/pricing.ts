@@ -18,20 +18,27 @@ export function clampMultiplier(m: number): number {
 const PEAK_HOURS = new Set([7, 8, 16, 17, 18]);
 const PEAK_BONUS = 0.15;
 
+/** The seasonal (time-of-day) component of the multiplier — 1.0 off-peak, +PEAK_BONUS in a rush-hour window.
+ *  The market engine (S34b) multiplies this by a per-zone supply/demand factor before the corridor clamp. */
+export function seasonalFactor(now: Date): number {
+  return PEAK_HOURS.has(now.getHours()) ? 1 + PEAK_BONUS : 1;
+}
+
 /**
- * The market multiplier for a job, CLAMPED to the driver's [min, max] corridor. S34a is intentionally simple:
- * a neutral 1.0, +PEAK_BONUS in a rush-hour window. S34b replaces the body with the real market pulse
- * (per-zone supply/demand, urgency SLA, seasonal admin rules); the clamp-to-bounds contract is the invariant.
+ * The market multiplier for a job, CLAMPED to the driver's [min, max] corridor — the invariant the driver owns.
+ * It is the seasonal (time-of-day) factor times a `marketFactor` the caller supplies: 1.0 by default (S34a's
+ * behaviour), and in S34b the per-zone supply/demand + admin-surge factor from the MarketPulseStore. The clamp
+ * to the vehicle's own corridor is the guarantee: however hot the market, the driver's floor and ceiling hold.
  */
-export function freightMultiplier(now: Date, bounds: { min: number; max: number }): number {
-  let m = 1;
-  if (PEAK_HOURS.has(now.getHours())) m += PEAK_BONUS;
+export function freightMultiplier(now: Date, bounds: { min: number; max: number }, marketFactor = 1): number {
+  const market = Number.isFinite(marketFactor) ? marketFactor : 1;
+  const m = Math.round(seasonalFactor(now) * market * 100) / 100;
   // Sanitise the corridor on READ: a vehicle persisted before pricing existed rehydrates with undefined
   // bounds, and an undefined slipping into Math.min/max yields NaN — which must never reach a price or a
   // ledger. A non-finite bound falls back to a neutral 1.0 (the safe identity), never NaN.
   const lo = Number.isFinite(bounds.min) ? bounds.min : 1;
   const hi = Number.isFinite(bounds.max) ? bounds.max : 1;
-  return Math.min(hi, Math.max(lo, Math.round(m * 100) / 100));
+  return Math.min(hi, Math.max(lo, m));
 }
 
 /** The transparent price breakdown shown on an offer card — every term the driver can see and trust. */

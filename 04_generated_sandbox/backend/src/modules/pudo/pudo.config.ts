@@ -59,6 +59,18 @@ export function withPlatformFee(base: number): number {
   return round2(base * (1 + PLATFORM_FEE_PCT));
 }
 
+// S34b — dynamic market-pulse tunables. The engine buckets the map into ~0.1° cells (a "market zone",
+// mirroring the monitor heatmap), samples supply (live vehicles) vs demand (open freight) per cell, and
+// derives a raw multiplier factor = 1 + K·(pressure − 1) that the freight price is flexed by — always then
+// clamped to the individual vehicle's own [min,max] corridor. A thin cell (few open loads) stays neutral.
+export const MARKET_CELL_DP = 1; // decimal places for the geo-cell key → 0.1° ≈ 11 km market zones
+export const MARKET_MIN_DEMAND = 3; // a cell needs at least this many open loads before any surge/discount
+export const MARKET_SURGE_K = 0.25; // sensitivity: factor = 1 + K·(demand/supply − 1)
+export const MARKET_RAW_MIN = 0.7; // the engine's own factor floor (before the per-vehicle corridor clamp)
+export const MARKET_RAW_MAX = 2.0; // …and ceiling — the market never asks for more than 2× off the base rate
+export const MARKET_SUPPLY_STALE_MIN = 30; // a driver's GPS older than this no longer counts as live supply
+export const MARKET_RECOMPUTE_MS = 120_000; // recompute the whole-map pulse every 2 minutes
+
 // Heavier parcels occupy more of a vehicle — scale the per-km transport by size so a heavy isn't priced
 // like a letter (keeps the per-km rate the provider advertises, multiplied by how much room it takes).
 export const SIZE_TRANSPORT_FACTOR: Record<ParcelSize, number> = { S: 0.4, M: 1, L: 1.6, HEAVY: 3 };

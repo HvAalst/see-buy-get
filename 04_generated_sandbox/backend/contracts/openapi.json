@@ -5709,6 +5709,82 @@
         }
       }
     },
+    "/v1/sbg/market-pulse": {
+      "get": {
+        "operationId": "Sbg.marketPulse",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/market-pulse/recompute": {
+      "post": {
+        "operationId": "Sbg.recomputeMarketPulse",
+        "summary": "",
+        "description": "Force a recompute of the whole-map pulse now (it also recomputes on a 2-min timer).",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/market/surge-rules": {
+      "post": {
+        "operationId": "Sbg.setSurgeRule",
+        "summary": "",
+        "description": "Set an operator surge override for a zone — a cell key, or a lat/lng the server buckets into one.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SurgeRuleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/market/surge-rules/{cell}": {
+      "delete": {
+        "operationId": "Sbg.clearSurgeRule",
+        "summary": "",
+        "description": "Lift an operator surge override from a zone.",
+        "parameters": [
+          {
+            "name": "cell",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/mdps": {
       "post": {
         "operationId": "Sbg.registerMdp",
@@ -11106,6 +11182,34 @@
         },
         "required": [
           "destAgentDid"
+        ]
+      },
+      "SurgeRuleDto": {
+        "type": "object",
+        "properties": {
+          "cell": {
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/GeoDto"
+          },
+          "factor": {
+            "type": "number",
+            "minimum": 0.1
+          },
+          "reason": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "factor",
+          "reason"
         ]
       },
       "RegisterMdpDto": {

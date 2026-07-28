@@ -112,7 +112,7 @@ export function OffersScreen({ state, actions }: OffersScreenProps) {
             <p class="t-body">{active.message}</p>
             <Checklist
               items={[
-                ...(active.price ? [`You earn ${money(active.price.total)} — locked in when you claim`] : []),
+                ...(active.price ? [`You earn about ${money(active.price.total)} — the final price locks when you claim`] : []),
                 `${active.weightKg} kg — fits the space you have left`,
                 `${active.detourKm} km extra driving`,
                 `Drop it at ${active.destLabel}`,
