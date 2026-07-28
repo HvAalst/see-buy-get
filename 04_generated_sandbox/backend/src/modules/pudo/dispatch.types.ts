@@ -3,6 +3,7 @@
 // remaining capacity of the driver's coupled vehicle. The driver claims, ignores, or lets it lapse.
 
 import { GeoPoint } from './pudo.types';
+import { VehicleCapability } from './cargo.types';
 
 export class RoutePlan {
   from: GeoPoint;
@@ -40,6 +41,10 @@ export class Claimable {
   weightKg: number;
   fragile: boolean;
   bulk: boolean;
+  /** S31 — vehicle capabilities this load's cargo requires (a tote's perishable/hazardous parcels →
+   *  cold chain / hazmat). A vehicle lacking any is not offered the load. Freight carries none until it
+   *  gains a cargo model (S32). */
+  requiredCapabilities?: VehicleCapability[];
 }
 
 export type OfferStatus = 'pending' | 'claimed' | 'ignored' | 'expired';

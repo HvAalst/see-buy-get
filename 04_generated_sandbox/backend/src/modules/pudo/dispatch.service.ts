@@ -126,6 +126,15 @@ export class DispatchService {
     const vehicle = this.fleet.vehicleForDriver(offer.driverDid);
     if (!vehicle) throw new GlosError('NOT_COUPLED', 'Driver is no longer coupled to a vehicle');
     if (offer.weightKg > this.remainingCapacity(offer.driverDid)) throw new GlosError('CAPACITY_EXCEEDED', 'Not enough remaining capacity for this load');
+    // S31: re-check the load's required capabilities against the driver's CURRENT vehicle — coupling is
+    // re-assignable, so a capability that held when the offer was made (suggest → vehicleCanCarry) may not
+    // hold now. Without this, a driver could re-couple to an incapable vehicle and RESERVE the tote (markClaimed)
+    // only to dead-end at loadBag (VEHICLE_MISSING_CAPABILITY), stranding it 'claimed' for everyone else.
+    if (offer.kind === 'tote') {
+      const tote = this.totes.byCodeMaybe(offer.ref);
+      const need = tote ? this.mdps.toteRequiredCapabilities(tote) : [];
+      if (need.some((cap) => !vehicle[cap])) throw new GlosError('VEHICLE_MISSING_CAPABILITY', 'Your current vehicle lacks a capability this load requires — re-couple to a capable vehicle');
+    }
 
     if (offer.kind === 'tote') this.totes.markClaimed(offer.ref, offer.driverDid);
     else { const f = this.requireFreight(offer.ref); if (f.status !== 'available') throw new GlosError('INVALID_STATE', `Freight is ${f.status}`); f.status = 'claimed'; f.claimedBy = offer.driverDid; }
@@ -214,10 +223,13 @@ export class DispatchService {
     // among the driver's loads. Available/claimed totes resolve to their PUDO/MDP pickup point.
     const place = this.place(t.locationId) ?? { loc: { lat: 0, lng: 0 }, label: 'on board' };
     const fragile = false; // totes are not individually flagged fragile here; parcel rules apply at load
-    return { kind: 'tote', ref: t.code, pickupLocation: place.loc, pickupLabel: place.label, destLabel: t.destinationLabel || 'destination', weightKg: t.weightKg, fragile, bulk: false };
+    // S31: surface the capabilities the bag's cargo needs (perishable → cold chain, hazardous → hazmat) so a
+    // vehicle that lacks one is never offered the tote — the offer would only dead-end at loadBag otherwise.
+    return { kind: 'tote', ref: t.code, pickupLocation: place.loc, pickupLabel: place.label, destLabel: t.destinationLabel || 'destination', weightKg: t.weightKg, fragile, bulk: false, requiredCapabilities: this.mdps.toteRequiredCapabilities(t) };
   }
 
   private wrapFreight(f: Freight): Claimable {
+    // Freight carries no cargo-nature model yet (its capability requirements arrive with the S32 freight lane).
     return { kind: 'freight', ref: f.freightId, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk };
   }
 
@@ -226,6 +238,8 @@ export class DispatchService {
     if (load.weightKg > vehicle.capacityKg) return false;
     if (load.fragile && !vehicle.allowsFragile) return false;
     if (load.bulk && !vehicle.carriesBulk) return false;
+    // S31: the vehicle must satisfy every capability the load's cargo requires (else it can't legally carry it).
+    if ((load.requiredCapabilities ?? []).some((cap) => !vehicle[cap])) return false;
     return true;
   }
 

@@ -64,6 +64,17 @@ export class CargoService {
     return NATURE_CAPABILITY[nature] ?? null;
   }
 
+  /** The DISTINCT vehicle capabilities a set of cargo natures collectively require — the union over a load
+   *  (a tote's parcels, a bag). A vehicle must satisfy every one of them to carry the load. */
+  requiredCapabilities(natures: CargoNature[]): VehicleCapability[] {
+    const caps = new Set<VehicleCapability>();
+    for (const n of natures) {
+      const cap = this.requiredCapability(n);
+      if (cap) caps.add(cap);
+    }
+    return [...caps];
+  }
+
   /** The pairwise matrix verdict for two cargo natures (symmetric). */
   check(a: CargoNature, b: CargoNature): Compatibility {
     return COMPAT_MATRIX[a][b];

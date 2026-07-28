@@ -122,10 +122,20 @@ export class ToteService {
     return { tote, parcels };
   }
 
-  /** A filling tote at this location already linked to the wanted destination, with room for the size. */
-  findFilling(locationId: string, destinationNodeId: string, size: ParcelSize): Tote | undefined {
+  /**
+   * A filling tote at this location already linked to the wanted destination, with room for the size.
+   * `accepts` (S31) is an optional cargo-compatibility gate: a caller passes the bag's current parcelIds and
+   * decides whether the incoming parcel may JOIN them — so an incompatible parcel skips this bag (the caller
+   * opens a fresh one), keeping every tote internally compatible without ToteService knowing about cargo.
+   */
+  findFilling(locationId: string, destinationNodeId: string, size: ParcelSize, accepts?: (parcels: string[]) => boolean): Tote | undefined {
     return [...this.totes.values()].find(
-      (t) => t.status === 'filling' && t.locationId === locationId && t.destinationNodeId === destinationNodeId && this.fits(t, size),
+      (t) =>
+        t.status === 'filling' &&
+        t.locationId === locationId &&
+        t.destinationNodeId === destinationNodeId &&
+        this.fits(t, size) &&
+        (!accepts || accepts(t.parcels)),
     );
   }
 

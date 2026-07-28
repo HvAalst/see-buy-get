@@ -11,6 +11,8 @@ import { ParcelService } from './parcel.service';
 import { ToteService } from './tote.service';
 import { FleetService } from './fleet.service';
 import { WalletGateService } from './wallet-gate.service';
+import { CargoService } from './cargo.service';
+import { CargoNature, VehicleCapability } from './cargo.types';
 import { DEFAULT_MDP_PRICE_PER_PARCEL, MDP_SORT_FEE, TOTE_LOAD_FEE } from './pudo.config';
 import { Mdp, NextHop, Tote } from './pudo.types';
 
@@ -43,7 +45,30 @@ export class MdpService {
     private readonly events: EventBus,
     private readonly dids: DidService,
     private readonly core: OperationalStore,
+    private readonly cargo: CargoService,
   ) {}
+
+  // --- cargo helpers (S31): the tote path's view of what its parcels are + need ---
+
+  /** The primary cargo nature of a parcel (default GEN for legacy/unstamped parcels). */
+  private natureOf(parcelId: string): CargoNature {
+    return this.parcels.get(parcelId).natureCode ?? 'GEN';
+  }
+
+  /** The distinct cargo natures currently in a tote (via its parcels). */
+  toteNatures(tote: Tote): CargoNature[] {
+    return [...new Set(tote.parcels.map((id) => this.natureOf(id)))];
+  }
+
+  /** The vehicle capabilities a tote's contents collectively require (cold chain, hazmat, …). */
+  toteRequiredCapabilities(tote: Tote): VehicleCapability[] {
+    return this.cargo.requiredCapabilities(this.toteNatures(tote));
+  }
+
+  /** May a parcel of `nature` join a bag already holding `parcels`? Only if compatible with every one. */
+  private bagAccepts(nature: CargoNature, parcels: string[]): boolean {
+    return parcels.every((id) => this.cargo.canShareVehicle(nature, this.natureOf(id)));
+  }
 
   // --- registry ---
 
@@ -104,6 +129,13 @@ export class MdpService {
   /** Pack a parcel into a bag bound for a destination (used at the origin PUDO and after sorting). */
   fillTote(code: string, parcelId: string): { tote: Tote; fillPct: number } {
     const parcel = this.parcels.get(parcelId);
+    // S31: this worker chose a specific bag — refuse to drop in a parcel whose cargo is incompatible with the
+    // bag's current contents (cement dust into a fresh-produce bag). The bag stays internally compatible, so
+    // loadBag can trust it later. sortParcel auto-routes around this; here the bag is explicit, so we throw.
+    const bag = this.totes.requireByCode(code);
+    if (!this.bagAccepts(parcel.natureCode ?? 'GEN', bag.parcels)) {
+      throw new GlosError('CARGO_INCOMPATIBLE', `Parcel ${parcelId} cannot share bag ${code} — its cargo is incompatible with the bag's contents`);
+    }
     const tote = this.totes.add(code, parcelId, parcel.size);
     this.parcels.get(parcelId).toteId = tote.toteId; // connect parcel ↔ bag (still where it was)
     return { tote, fillPct: this.totes.fillPct(tote) };
@@ -117,12 +149,24 @@ export class MdpService {
     const fleet = this.fleet.resolveBadge(driverBadgeId);
     // A claimed bag may only be loaded by the driver who claimed it.
     if (pending.claimedBy && (!fleet || fleet.driverDid !== pending.claimedBy)) throw new GlosError('BAG_RESERVED', `Bag ${code} is reserved for another driver`);
-    // S30/S31 SCOPE: this is the tote/MDP mixing point — the SECOND place cargo rides a vehicle. The S30 cargo
-    // gate (pairwise compatibility via CargoService.canShareVehicle + nature→vehicle-capability) is enforced
-    // ONLY on the direct PUDO→bus path (ParcelService.handover) this slice; the tote path deliberately still
-    // runs only the pre-S30 weight/fragile/capacity checks below. Enforcing compatibility here (and refusing to
-    // co-tote an incompatible pair in sortParcel) is S31 — until then a natured parcel routed multi-hop is NOT
-    // cargo-segregated on this leg. Tracked as the S31 headline; see cargo.types.ts for the matrix.
+    // S31: this is the tote/MDP mixing point — the second place cargo rides a vehicle. A bag loads ATOMICALLY
+    // (one scan moves every parcel), so unlike handover it cannot short-ship one parcel — it accepts or refuses
+    // the WHOLE bag. Two gates: (1) an internal-compatibility BACKSTOP (defence in depth — sortParcel/fillTote
+    // already keep a bag internally compatible, so this should never fire, but a legacy/hand-built bag might);
+    // (2) the vehicle must satisfy every capability the bag's cargo requires (perishable → cold chain,
+    // hazardous → hazmat), mirroring handover's per-parcel capability check.
+    // KNOWN LIMITATION (shared with handover, deferred to the vehicle-manifest / digital-twin work): neither
+    // path checks a newly-loaded bag against cargo ALREADY on the vehicle from a PRIOR load — compatibility is
+    // guaranteed WITHIN one load operation, not across a vehicle's whole live manifest.
+    if (pending.parcels.length) {
+      for (let i = 0; i < pending.parcels.length; i++) {
+        for (let j = i + 1; j < pending.parcels.length; j++) {
+          if (!this.cargo.canShareVehicle(this.natureOf(pending.parcels[i]), this.natureOf(pending.parcels[j]))) {
+            throw new GlosError('CARGO_INCOMPATIBLE', `Bag ${code} mixes incompatible cargo — re-sort it before loading`);
+          }
+        }
+      }
+    }
     if (fleet && pending.parcels.length) {
       let kg = 0;
       for (const id of pending.parcels) {
@@ -130,6 +174,10 @@ export class MdpService {
         kg += p.weightKg;
         if (p.weightKg > fleet.maxParcelKg) throw new GlosError('CAPACITY_EXCEEDED', `Parcel ${id} (${p.weightKg}kg) exceeds the ${fleet.maxParcelKg}kg limit of this ${fleet.vehicle.vehicleClass}`);
         if (p.fragile && !fleet.allowsFragile) throw new GlosError('FRAGILE_NOT_ALLOWED', `A ${fleet.vehicle.vehicleClass} cannot carry fragile parcels (${id})`);
+      }
+      // Every capability the bag's cargo needs must be present on the vehicle, else the whole bag is refused.
+      for (const cap of this.toteRequiredCapabilities(pending)) {
+        if (!fleet.vehicle[cap]) throw new GlosError('VEHICLE_MISSING_CAPABILITY', `A ${fleet.vehicle.vehicleClass} lacks ${cap} that bag ${code}'s cargo requires`);
       }
       if (kg > fleet.capacityKg) throw new GlosError('CAPACITY_EXCEEDED', `Bag ${code} (${kg}kg) exceeds this ${fleet.vehicle.vehicleClass}'s ${fleet.capacityKg}kg capacity`);
     }
@@ -193,11 +241,11 @@ export class MdpService {
 
     const next = this.nextHop(mdp, parcel.destZone, parcel.destAgentDid);
 
-    // Find a filling bag already bound to that next hop with room, else open + assign a fresh one.
-    // S31 will additionally reject reusing a bag whose contents are cargo-INCOMPATIBLE with this parcel
-    // (opening a fresh one instead), so every bag stays internally compatible and loadBag can trust it. For
-    // now sorting is by next-hop + size only — natureCode is stamped but not yet consulted here (see loadBag).
-    let tote = this.totes.findFilling(mdpId, next.id, parcel.size);
+    // Find a filling bag already bound to that next hop with room AND cargo-compatible with this parcel, else
+    // open a fresh one (S31). Passing the compatibility gate to findFilling means an incompatible parcel never
+    // co-totes — every bag stays internally compatible, so loadBag can trust the whole bag as one unit.
+    const nature = parcel.natureCode ?? 'GEN';
+    let tote = this.totes.findFilling(mdpId, next.id, parcel.size, (parcels) => this.bagAccepts(nature, parcels));
     if (!tote) {
       tote = this.totes.register(mdpId);
       this.totes.assign(tote.code, next.id, next.label);

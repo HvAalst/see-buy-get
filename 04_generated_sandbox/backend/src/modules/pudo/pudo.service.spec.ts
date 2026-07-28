@@ -685,6 +685,112 @@ describe('PUDO Light', () => {
     ids.forEach((id) => expect(parcels.get(id).status).toBe('On_Bus'));
   });
 
+  // --- S31: cargo enforcement on the multi-hop tote/MDP path (+ the dispatch marketplace) ---
+
+  it('S31: fillTote refuses to drop incompatible cargo into the same bag', () => {
+    const origin = onboardAgent('Fill Origin', 'NorthTown', 50);
+    const dest = onboardAgent('Fill Dest', 'NorthTown', 50); // same zone → a local quote needs no corridor
+    const vendor = vendors.register({ name: 'FillCo' });
+    vendors.topUp(vendor.vendorId, 50);
+    const quote = routing.quoteShipment(origin.did, dest.did, 'M');
+    const mk = (nature: 'HAZ-DUST' | 'FOP', mob: string) => {
+      const p = parcels.createInbound({ vendorId: vendor.vendorId, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: mob, size: 'M', contentPhotoRef: 'c.jpg', natureCode: nature, shippingPolicy: vendor.shippingPolicy, quote }).parcel;
+      parcels.intakeInbound(p.parcelId, origin.did);
+      return p.parcelId;
+    };
+    const dust = mk('HAZ-DUST', '+254700001');
+    const fop = mk('FOP', '+254700002');
+    const bag = totes.register(origin.did);
+    totes.assign(bag.code, dest.did, 'Dest');
+    mdps.fillTote(bag.code, dust); // cement goes in first
+    expect(() => mdps.fillTote(bag.code, fop)).toThrow(/incompatible/i); // fresh produce is refused
+    expect(totes.requireByCode(bag.code).parcels).toEqual([dust]); // the bag is unchanged
+  });
+
+  it('S31: sortParcel never co-totes incompatible cargo — it opens a fresh bag instead', () => {
+    const origin = onboardAgent('Sort Origin', 'NorthTown', 50);
+    const dest = onboardAgent('Sort Dest', 'SouthTown', 50);
+    const hub = mdps.register({ name: 'Sort MDP', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } });
+    const vendor = vendors.register({ name: 'SortCo' });
+    vendors.topUp(vendor.vendorId, 50);
+    const quote = routing.quoteShipment(origin.did, dest.did, 'M');
+    const toMdp = (nature: 'HAZ-DUST' | 'FOP', mob: string) => {
+      const p = parcels.createInbound({ vendorId: vendor.vendorId, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: mob, size: 'M', contentPhotoRef: 'c.jpg', natureCode: nature, shippingPolicy: vendor.shippingPolicy, quote }).parcel;
+      parcels.intakeInbound(p.parcelId, origin.did);
+      // each rides its OWN first-leg bag to the hub (they can't share), then lands At_MDP
+      const b = totes.register(origin.did);
+      totes.assign(b.code, hub.mdpId, hub.name);
+      mdps.fillTote(b.code, p.parcelId);
+      mdps.loadBag(b.code, 'BUS-1');
+      mdps.dropBag(hub.mdpId, b.code);
+      return p.parcelId;
+    };
+    const dust = toMdp('HAZ-DUST', '+254700003');
+    const fop = toMdp('FOP', '+254700004');
+
+    // Both are bound for the same PUDO, but sorting must land them in DIFFERENT bags.
+    const sDust = mdps.sortParcel(hub.mdpId, dust);
+    const sFop = mdps.sortParcel(hub.mdpId, fop);
+    expect(sDust.nextDestination.id).toBe(dest.did);
+    expect(sFop.nextDestination.id).toBe(dest.did); // same next hop…
+    expect(sFop.toteCode).not.toBe(sDust.toteCode); // …yet never the same bag
+  });
+
+  it('S31: loadBag refuses a perishable bag onto a vehicle with no cold chain', () => {
+    const origin = onboardAgent('Bag Origin', 'NorthTown', 50);
+    const corridor = corridors.addCorridor({ name: 'bag', originZone: 'NorthTown', destZone: 'SouthTown' });
+    const d = drivers.register({ displayName: 'Feeder', fullName: 'F F', nationalId: 'DRV-ID-BAG', mobile: '+254900077', licenceClasses: ['bike'] });
+    const bike = vehicles.register({ plate: 'BG-1', vehicleClass: 'bike', ownerName: 'F F' }); // no reefer → coldChain false
+    fleet.couple(d.did, bike.vehicleId, corridor.corridorId);
+    parcels.accept({ agentDid: origin.did, parcelId: 'FISH-BAG', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg', natureCode: 'FOP' });
+    const bag = totes.register(origin.did);
+    totes.assign(bag.code, 'dest-node', 'Dest');
+    mdps.fillTote(bag.code, 'FISH-BAG');
+    expect(() => mdps.loadBag(bag.code, d.badgeId!)).toThrow(/coldChain/); // the whole bag is refused
+    expect(parcels.get('FISH-BAG').status).not.toBe('On_Bus'); // nothing moved
+  });
+
+  it('S31: the dispatch marketplace does not offer a perishable tote to a vehicle lacking cold chain', () => {
+    const origin = onboardAgent('Disp Origin', 'NorthTown', 50);
+    const d = drivers.register({ displayName: 'Disp', fullName: 'D D', nationalId: 'DRV-ID-DISP', mobile: '+254900088', licenceClasses: ['bike'] });
+    const bike = vehicles.register({ plate: 'DP-1', vehicleClass: 'bike', ownerName: 'D D' });
+    fleet.couple(d.did, bike.vehicleId);
+    // A GEN control tote + an FOP tote, both waiting at the origin on the bike's route.
+    parcels.accept({ agentDid: origin.did, parcelId: 'GEN-DISP', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg', natureCode: 'GEN' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'FOP-DISP', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg', natureCode: 'FOP' });
+    const genBag = totes.register(origin.did); totes.assign(genBag.code, 'dn', 'Dest'); mdps.fillTote(genBag.code, 'GEN-DISP'); dispatch.release(genBag.code);
+    const fopBag = totes.register(origin.did); totes.assign(fopBag.code, 'dn', 'Dest'); mdps.fillTote(fopBag.code, 'FOP-DISP'); dispatch.release(fopBag.code);
+
+    const offers = dispatch.suggest(d.did, { from: origin.location, to: { lat: -1.3, lng: 36.95 } });
+    const refs = offers.map((o) => o.ref);
+    expect(refs).toContain(genBag.code); // the general tote is offered…
+    expect(refs).not.toContain(fopBag.code); // …but the perishable one is filtered out
+  });
+
+  it('S31: claim() re-checks capability — re-coupling to an incapable vehicle cannot reserve a cold tote', () => {
+    const origin = onboardAgent('Claim Origin', 'NorthTown', 50);
+    // A heavy driver, activated via KYC and licence-cleared for trucks (so they can couple to either truck).
+    const future = new Date(Date.now() + 365 * 86_400_000).toISOString();
+    const d = drivers.register({ displayName: 'Reefer', fullName: 'R R', nationalId: 'DRV-ID-CLAIM', mobile: '+254900099', licenceClasses: ['truck'], licenceNumber: 'L-CLAIM', licenceExpiresAt: future, criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'id.jpg', licenceCopyRef: 'lic.jpg' });
+    drivers.decideKyc(d.did, true, 'ops');
+    const reefer = vehicles.register({ plate: 'RF-1', vehicleClass: 'truck', truckSubtype: 'refrigerated', ownerName: 'R R' }); // coldChain true
+    const plain = vehicles.register({ plate: 'PL-1', vehicleClass: 'truck', truckSubtype: 'flatbed', ownerName: 'R R' }); // coldChain false
+    parcels.accept({ agentDid: origin.did, parcelId: 'FOP-CLAIM', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg', natureCode: 'FOP' });
+    const bag = totes.register(origin.did); totes.assign(bag.code, 'dn', 'Dest'); mdps.fillTote(bag.code, 'FOP-CLAIM'); dispatch.release(bag.code);
+
+    // Coupled to the reefer, the perishable tote IS offered.
+    fleet.couple(d.did, reefer.vehicleId);
+    const [offer] = dispatch.suggest(d.did, { from: origin.location, to: { lat: -1.3, lng: 36.95 } });
+    expect(offer?.ref).toBe(bag.code);
+    // Re-couple to a non-cold truck, then try to claim the still-pending offer → refused, tote stays available.
+    fleet.uncouple(d.did);
+    fleet.couple(d.did, plain.vehicleId);
+    expect(() => dispatch.claim(offer.offerId)).toThrow(/capability|coldChain/i);
+    expect(totes.requireByCode(bag.code).status).toBe('available'); // never reserved to an incapable driver
+    expect(totes.requireByCode(bag.code).claimedBy).toBeUndefined();
+  });
+
   it('onboards a bike courier on the light registry — ACTIVE immediately with a badge (Ch 19)', () => {
     const d = drivers.register({ displayName: 'Boda J.', fullName: 'James K', nationalId: 'DRV-ID-1', mobile: '+254900001', licenceClasses: ['bike'] });
     expect(d.registry).toBe('light');

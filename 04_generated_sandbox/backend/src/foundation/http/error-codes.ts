@@ -65,6 +65,8 @@ export const ERROR_CODES = {
   CAPACITY_EXCEEDED: { status: 400, title: 'Exceeds the available capacity' },
   FRAGILE_NOT_ALLOWED: { status: 400, title: 'This vehicle cannot carry fragile parcels' },
   CARGO_REQUIRES_DEDICATED: { status: 400, title: 'This load needs dedicated freight transport' },
+  CARGO_INCOMPATIBLE: { status: 400, title: 'These goods cannot travel together' },
+  VEHICLE_MISSING_CAPABILITY: { status: 400, title: 'This vehicle cannot carry this cargo' },
   BAG_FULL: { status: 400, title: 'The bag is full' },
   BAG_EMPTY: { status: 400, title: 'The bag is empty' },
   BAG_RESERVED: { status: 400, title: 'The bag is reserved for another driver' },
