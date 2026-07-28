@@ -400,10 +400,13 @@ export class SbgController {
     return this.vendors.outboxFor(id);
   }
 
-  /** Derive the size tier from dimensions (cm) + weight (kg) — live preview for the mint form. */
+  /** Derive the size tier from dimensions (cm) + weight (kg) — live preview for the mint form. S32c also
+   *  returns the cargo class + whether it needs dedicated freight, so the mint form can warn BEFORE minting
+   *  that a P4+ load won't ride the parcel network (it will be diverted to the dedicated-freight lane). */
   @Post('size/classify')
   classify(@Body() dto: ClassifyDto) {
-    return { size: classifySize(dto) };
+    const cargoClass = this.cargo.classify({ kg: dto.kg, dimsCm: [dto.l, dto.w, dto.h] });
+    return { size: classifySize(dto), cargoClass, dedicated: this.cargo.dedicatedRequired(cargoClass) };
   }
 
   /** Quote a shipment from the open-data participant rates: flexible (any carrier) vs locked (cheapest).
@@ -587,6 +590,10 @@ export class SbgController {
         fragile: dto.fragile,
         bulk: false, // a diverted e-commerce order is DISCRETE/palletised, so it needs real handling equipment
         shipperDid: dto.vendorId,
+        // S32c: the freight's ends ARE these PUDOs — check they can actually HANDLE the cargo (a small shop
+        // with only manual handling can't take a pallet), flagging a gap advisory for a Local Admin to resolve.
+        originEquipment: origin.equipment,
+        destEquipment: dest.equipment,
       });
       if (handoff) this.vendors.consumeCheckout(handoff.id, freight.freightId);
       return { diverted: true, reason: 'dedicated_freight', cargoClass, freight };

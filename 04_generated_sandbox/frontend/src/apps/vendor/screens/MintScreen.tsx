@@ -140,6 +140,11 @@ function ParcelStep({ state, actions }: MintScreenProps) {
           ))}
         </div>
         {f.derivedSize ? <Pill tone="info">{`Size tier ${f.derivedSize}`}</Pill> : <p class="card__note">Fill all four and the tier appears.</p>}
+        {f.dedicatedCargo ? (
+          <div style="margin-top:12px">
+            <Note tone="warn" icon="truck" title="Too big for the parcel network" detail="This is dedicated freight — minting sends it to the freight lane (a truck with the right lifting gear), not the PUDO shelves." />
+          </div>
+        ) : null}
         <label class="checkline" style="margin-top:12px">
           <input type="checkbox" checked={f.fragile} onChange={(e) => actions.setForm({ fragile: e.currentTarget.checked })} />
           <span>Fragile — keep it off two-wheelers</span>

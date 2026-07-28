@@ -4914,7 +4914,7 @@
       "post": {
         "operationId": "Sbg.classify",
         "summary": "",
-        "description": "Derive the size tier from dimensions (cm) + weight (kg) — live preview for the mint form.",
+        "description": "Derive the size tier from dimensions (cm) + weight (kg) — live preview for the mint form. S32c also\n returns the cargo class + whether it needs dedicated freight, so the mint form can warn BEFORE minting\n that a P4+ load won't ride the parcel network (it will be diverted to the dedicated-freight lane).",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -9506,6 +9506,19 @@
           },
           "requirements": {
             "$ref": "#/components/schemas/RequirementsDto"
+          },
+          "equipment": {
+            "type": "string",
+            "enum": [
+              "MAN",
+              "HTR",
+              "PLT",
+              "FLT",
+              "TLT",
+              "CRN",
+              "RMP",
+              "STR"
+            ]
           }
         },
         "required": [
@@ -9642,6 +9655,12 @@
           "pricePerParcel": {
             "type": "number"
           },
+          "equipment": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
           "deviceImei": {
             "type": "string"
           },
@@ -9676,6 +9695,7 @@
           "openingHours",
           "shelf",
           "pricePerParcel",
+          "equipment",
           "deviceImei",
           "requirements",
           "equipmentDepositPaid",
@@ -11925,6 +11945,13 @@
               "type": "object"
             }
           },
+          "equipmentGaps": {
+            "description": "S32c — the ends whose SITE cannot handle this cargo (no qualifying load/unload equipment on hand). An\n ADVISORY flag (\"arrange a forklift at the destination\"), not a block — a Local Admin resolves it. Empty\n when both ends are equipped (or their equipment is unknown, e.g. a bulletin freight with only geo labels).",
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
           "shipperDid": {
             "type": "string"
           },
@@ -11952,6 +11979,7 @@
           "natureCode",
           "requiredCapabilities",
           "requiredEquipment",
+          "equipmentGaps",
           "status",
           "createdAt"
         ]

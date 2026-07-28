@@ -65,13 +65,21 @@ export class DispatchService {
     return { code: t.code, status: t.status };
   }
 
-  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; shipperDid?: string }): Freight {
+  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[] }): Freight {
     this.freightSeq += 1;
     // S32: give the freight a cargo model so it matches vehicles like a tote does — class (from weight+dims)
     // drives the required equipment, the primary nature drives the required vehicle capability.
     const natureCode: CargoNature = input.natureCode ?? 'GEN';
     const cargoClass = this.cargo.classify({ kg: input.weightKg, dimsCm: input.dimensionsCm });
     const bulk = input.bulk ?? true; // bulk cargo by default (sugar/cement) → trucks
+    const requiredEquipment = bulk ? [] : this.cargo.requiredEquipment(cargoClass);
+    // S32c: flag ends whose site cannot HANDLE this cargo — a site needs at least one qualifying piece of the
+    // required equipment (any-of). Only checked when the site's manifest is known (a diverted order → its
+    // PUDOs); a bulletin freight with only geo labels leaves both ends unknown → no gap flagged.
+    const siteHandles = (have?: Equipment[]) => requiredEquipment.length === 0 || (have != null && requiredEquipment.some((eq) => have.includes(eq)));
+    const equipmentGaps: Array<'origin' | 'dest'> = [];
+    if (input.originEquipment != null && !siteHandles(input.originEquipment)) equipmentGaps.push('origin');
+    if (input.destEquipment != null && !siteHandles(input.destEquipment)) equipmentGaps.push('dest');
     const freight: Freight = {
       freightId: `frt_${randomBytes(5).toString('hex')}`,
       code: `FRT-${String(this.freightSeq).padStart(3, '0')}`,
@@ -89,7 +97,8 @@ export class DispatchService {
       // Handling equipment is for DISCRETE/palletised cargo (a forklift/pallet-jack/crane). Loose BULK
       // (cement in a tipper, grain in a hopper) self-loads via silo/tipping, so it needs no handling gear —
       // its constraint is `carriesBulk` (checked in vehicleCanCarry), not a forklift.
-      requiredEquipment: bulk ? [] : this.cargo.requiredEquipment(cargoClass),
+      requiredEquipment,
+      equipmentGaps,
       shipperDid: input.shipperDid,
       status: 'available',
       createdAt: new Date().toISOString(),

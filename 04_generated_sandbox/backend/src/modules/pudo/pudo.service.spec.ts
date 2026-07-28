@@ -1668,6 +1668,39 @@ describe('PUDO Light', () => {
     expect(dispatch.listFreight({ status: 'available' }).some((x) => x.freightId === f.freightId)).toBe(true); // stays free
   });
 
+  // --- S32c: site equipment profiles (both-ends gap, advisory) + the classify cargo-class signal ---
+
+  it('S32c: flags a SITE equipment gap for discrete heavy freight — advisory, per end', () => {
+    const base = { description: 'Pallet', pickupLocation: { lat: -1.2, lng: 36.8 }, pickupLabel: 'D', destLabel: 'S' } as const;
+    // A P4 discrete load needs a qualifying piece (HTR/PLT/TLT/RMP) at EACH end.
+    const gapAtDest = dispatch.registerFreight({ ...base, weightKg: 200, bulk: false, originEquipment: ['MAN', 'PLT'], destEquipment: ['MAN'] });
+    expect(gapAtDest.equipmentGaps).toEqual(['dest']); // origin has a pallet jack, destination only manual
+    const equipped = dispatch.registerFreight({ ...base, weightKg: 200, bulk: false, originEquipment: ['MAN', 'TLT'], destEquipment: ['MAN', 'RMP'] });
+    expect(equipped.equipmentGaps).toEqual([]); // both ends carry a P4-qualifying piece (tail-lift / ramp)
+    const bulk = dispatch.registerFreight({ ...base, weightKg: 5000, bulk: true, originEquipment: ['MAN'], destEquipment: ['MAN'] });
+    expect(bulk.equipmentGaps).toEqual([]); // loose bulk self-loads → no handling gear → no gap
+    const unknown = dispatch.registerFreight({ ...base, weightKg: 200, bulk: false }); // a geo-only bulletin freight
+    expect(unknown.equipmentGaps).toEqual([]); // site equipment unknown → nothing to flag
+  });
+
+  it('S32c: a diverted P4+ order flags an equipment gap at PUDOs that cannot handle it', () => {
+    const origin = onboardAgent('Gap Origin', 'NorthTown', 50); // a plain shop → MAN only
+    const dest = onboardAgent('Gap Dest', 'NorthTown', 50);
+    const vendor = vendors.register({ name: 'GapVendor' });
+    vendors.topUp(vendor.vendorId, 50);
+    const res: any = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', weightKg: 300, contentPhotoRef: 'c.jpg' } as never);
+    expect(res.diverted).toBe(true);
+    expect(res.freight.equipmentGaps.slice().sort()).toEqual(['dest', 'origin']); // neither shop can lift a pallet
+  });
+
+  it('S32c: size/classify returns the cargo class + whether it needs dedicated freight', () => {
+    const light: any = controller.classify({ l: 20, w: 20, h: 10, kg: 1 } as never);
+    expect(light.cargoClass).toBe('P0');
+    expect(light.dedicated).toBe(false);
+    const heavy: any = controller.classify({ l: 120, w: 100, h: 100, kg: 300 } as never);
+    expect(heavy.dedicated).toBe(true); // P5 → dedicated freight
+  });
+
   it('serves the operator dashboard KPIs (M7 light)', () => {
     const a = onboardAgent('Dash Shop', 'NorthTown', 20);
     parcels.accept({ agentDid: a.did, parcelId: 'QR-D', size: 'S', destZone: 'Z', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'd.jpg' });

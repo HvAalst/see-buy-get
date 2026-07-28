@@ -1,7 +1,7 @@
 // PUDO Light domain (Compendium Ch 12–19). The emerging-market Tier 1/2 on-ramp. Reuses the GLOS
 // backbone (DID, vault, wallet, ledger, events) but models its own light parcel/agent/corridor flow.
 
-import { CargoClass, CargoNature } from './cargo.types';
+import { CargoClass, CargoNature, Equipment } from './cargo.types';
 
 /** A map pin. Named (not an inline literal) so it is one reusable schema in the contract. */
 export class GeoPoint {
@@ -77,6 +77,10 @@ export class Agent {
   openingHours: WeeklyHours; // per-day schedule (pickup window + ETA constraint)
   shelf: ShelfConfig; // rows × cols → colour/number slot grid (replaces the m² cap)
   pricePerParcel: number; // open-data handling fee the agent advertises (public — competition pressure)
+  // S32c — load/unload equipment on hand at this site (MAN baseline + declared). A heavy dedicated-freight
+  // job checks whether its origin/dest PUDOs can HANDLE the cargo (a pallet needs a forklift/pallet-jack);
+  // a gap is flagged advisory (arrange equipment) — a small shop with only MAN cannot handle project cargo.
+  equipment: Equipment[];
   deviceImei: string; // Golden Record device — agent binds to this tablet
   requirements: AgentRequirements;
   kyc?: KycDocuments;

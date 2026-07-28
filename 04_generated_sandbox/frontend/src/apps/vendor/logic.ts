@@ -66,6 +66,7 @@ export interface MintForm {
   h: string;
   kg: string;
   derivedSize: string | null;
+  dedicatedCargo: boolean; // S32c — the load classified P4+ (needs dedicated freight, not the parcel network)
   photoRef: string;
   fragile: boolean;
   routeMode: 'flexible' | 'locked';
@@ -83,6 +84,7 @@ export const EMPTY_MINT: MintForm = {
   h: '',
   kg: '',
   derivedSize: null,
+  dedicatedCargo: false,
   photoRef: '',
   fragile: false,
   routeMode: 'locked',

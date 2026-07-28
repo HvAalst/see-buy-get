@@ -35,6 +35,8 @@ export class RegisterAgentDto {
   @IsString() mobile!: string;
   @IsString() deviceImei!: string;
   @ValidateNested() @Type(() => RequirementsDto) requirements!: RequirementsDto;
+  // S32c — load/unload equipment on hand at the shop (beyond manual handling, which is always assumed).
+  @IsOptional() @IsArray() @IsIn(EQUIPMENT, { each: true }) equipment?: Equipment[];
 }
 
 export class SetHoursDto {

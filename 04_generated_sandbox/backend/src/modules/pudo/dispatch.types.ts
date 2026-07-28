@@ -34,6 +34,10 @@ export class Freight {
   natureCode: CargoNature;
   requiredCapabilities: VehicleCapability[];
   requiredEquipment: Equipment[];
+  /** S32c — the ends whose SITE cannot handle this cargo (no qualifying load/unload equipment on hand). An
+   *  ADVISORY flag ("arrange a forklift at the destination"), not a block — a Local Admin resolves it. Empty
+   *  when both ends are equipped (or their equipment is unknown, e.g. a bulletin freight with only geo labels). */
+  equipmentGaps: Array<'origin' | 'dest'>;
   shipperDid?: string;
   status: FreightStatus;
   claimedBy?: string;

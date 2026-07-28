@@ -366,7 +366,10 @@ export function useVendorApp() {
     const f = stateRef.current.form;
     if (!dimsComplete(f)) return;
     const r = await client.api.classify(Number(f.l), Number(f.w), Number(f.h), Number(f.kg));
-    if (!r.error) setState((s) => ({ ...s, form: { ...s.form, derivedSize: narrow<{ size: string }>(r.data)?.size ?? null } }));
+    if (!r.error) {
+      const c = narrow<{ size: string; dedicated?: boolean }>(r.data);
+      setState((s) => ({ ...s, form: { ...s.form, derivedSize: c?.size ?? null, dedicatedCargo: Boolean(c?.dedicated) } }));
+    }
   }, [client]);
 
   const toStep = useCallback((mintStep: MintStep) => {
@@ -446,10 +449,13 @@ export function useVendorApp() {
       // S32: a heavy/oversized order (cargo class P4+) is DIVERTED into the dedicated-freight lane — the
       // response carries no parcel/label. Confirm it and return to the start instead of walking into the
       // label step (which dereferences the absent parcel). Parity with the old CARGO_REQUIRES_DEDICATED path.
-      const diverted = r.data as { diverted?: boolean; cargoClass?: string } | null;
+      const diverted = r.data as { diverted?: boolean; cargoClass?: string; freight?: { equipmentGaps?: string[] } } | null;
       if (diverted?.diverted) {
+        // S32c: advise if a pickup/dropoff site can't handle the cargo (no lifting gear) — arrange it.
+        const gaps = diverted.freight?.equipmentGaps ?? [];
+        const gapNote = gaps.length ? ` Arrange lifting equipment at the ${gaps.map((g) => (g === 'origin' ? 'pickup' : 'destination')).join(' and ')}.` : '';
         setState((s) => ({ ...s, minted: null, mintStep: 'source' }));
-        pushToast({ tone: 'info', icon: 'truck', title: 'Sent to dedicated freight', detail: `This load is too big for the parcel network (class ${diverted.cargoClass}) — a dedicated-freight job was created.` });
+        pushToast({ tone: 'info', icon: 'truck', title: 'Sent to dedicated freight', detail: `This load is too big for the parcel network (class ${diverted.cargoClass}) — a dedicated-freight job was created.${gapNote}` });
         await refresh();
         return;
       }

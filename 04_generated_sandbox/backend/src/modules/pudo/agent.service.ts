@@ -12,6 +12,7 @@ import { DEFAULT_PUDO_PRICE_PER_PARCEL, LOCK_THRESHOLD, MIN_ANDROID_VERSION, MIN
 import { geocodeAddress } from './geo';
 import { averageOpenHours } from './hours';
 import { Agent, AgentRequirements, AgentStatus, KycDocuments, ShelfConfig, WeeklyHours } from './pudo.types';
+import { Equipment } from './cargo.types';
 
 interface RegisterAgentInput {
   shopName: string;
@@ -27,6 +28,7 @@ interface RegisterAgentInput {
   mobile: string;
   deviceImei: string;
   requirements: AgentRequirements;
+  equipment?: Equipment[]; // S32c — declared load/unload equipment on hand (beyond manual)
 }
 
 const fp = (value: string): string => createHash('sha256').update(value.trim().toLowerCase()).digest('hex');
@@ -101,6 +103,9 @@ export class AgentService {
       openingHours: input.openingHours,
       shelf: input.shelf,
       pricePerParcel: input.pricePerParcel ?? DEFAULT_PUDO_PRICE_PER_PARCEL,
+      // S32c: every shop can do manual handling; a well-equipped PUDO declares more (a pallet jack, a
+      // forklift) so it can be a dedicated-freight origin/destination without a handling gap.
+      equipment: [...new Set<Equipment>(['MAN', ...(input.equipment ?? [])])],
       deviceImei: input.deviceImei,
       requirements: input.requirements,
       equipmentDepositPaid: false,
