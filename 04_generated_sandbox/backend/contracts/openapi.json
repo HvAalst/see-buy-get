@@ -7053,7 +7053,7 @@
       "post": {
         "operationId": "Sbg.freightPickup",
         "summary": "",
-        "description": "Bulk freight pickup (claimed → in_transit).",
+        "description": "Bulk freight pickup (claimed → in_transit). driverDid (the claimer) is verified against claimedBy.",
         "parameters": [
           {
             "name": "id",
@@ -7064,6 +7064,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FreightActionDto"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "",
@@ -7093,6 +7103,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FreightActionDto"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "",
@@ -11935,6 +11955,14 @@
           "status",
           "createdAt"
         ]
+      },
+      "FreightActionDto": {
+        "type": "object",
+        "properties": {
+          "driverDid": {
+            "type": "string"
+          }
+        }
       },
       "SuggestRouteDto": {
         "type": "object",

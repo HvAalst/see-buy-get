@@ -521,3 +521,9 @@ export class RegisterFreightDto {
   /** S32 — the freight's primary cargo nature (default GEN); drives the required vehicle capability. */
   @IsOptional() @IsIn(CARGO_NATURES) natureCode?: CargoNature;
 }
+
+/** S32b — a driver advancing a claimed freight (pickup/deliver). driverDid is the claimer, verified against
+ *  the freight's claimedBy so only the driver who claimed it may advance it. */
+export class FreightActionDto {
+  @IsOptional() @IsString() driverDid?: string;
+}

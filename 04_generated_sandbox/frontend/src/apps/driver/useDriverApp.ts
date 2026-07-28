@@ -573,6 +573,47 @@ export function useDriverApp() {
     [client, state.driver, run, fail, pushToast, refresh],
   );
 
+  /** S32b — pick up a claimed dedicated-freight job (claimed → in_transit). */
+  const pickupFreight = useCallback(
+    async (ref: string) => {
+      const did = stateRef.current.driver?.did;
+      if (!client || !did) return;
+      await run(`freight:${ref}`, async () => {
+        const r = await client.api.pickupFreight(ref, did);
+        if (r.error) {
+          // Reconcile FIRST, then report (mirror answerOffer): if the job moved on elsewhere the stale
+          // 'Pick up' row would loop the same 400 on every re-tap — a refresh flips it to its true control.
+          // Skip it while offline so the row stays and the driver can retry when the network returns.
+          if (!isOffline(r.error)) await refresh();
+          return fail(r.error);
+        }
+        buzz();
+        pushToast({ tone: 'ok', icon: 'truck', title: 'Freight picked up', detail: 'Drive it to the destination, then mark it delivered.' });
+        await refresh();
+      });
+    },
+    [client, run, fail, pushToast, refresh],
+  );
+
+  /** S32b — deliver an in-transit dedicated-freight job (in_transit → delivered; capacity released). */
+  const deliverFreight = useCallback(
+    async (ref: string) => {
+      const did = stateRef.current.driver?.did;
+      if (!client || !did) return;
+      await run(`freight:${ref}`, async () => {
+        const r = await client.api.deliverFreight(ref, did);
+        if (r.error) {
+          if (!isOffline(r.error)) await refresh(); // reconcile a moved-on job before showing the error
+          return fail(r.error);
+        }
+        buzz();
+        pushToast({ tone: 'ok', icon: 'check', title: 'Freight delivered', detail: 'Your van capacity is freed.' });
+        await refresh();
+      });
+    },
+    [client, run, fail, pushToast, refresh],
+  );
+
   return {
     state,
     actions: {
@@ -590,6 +631,8 @@ export function useDriverApp() {
       setOfferIndex,
       answerOffer,
       loadBag,
+      pickupFreight,
+      deliverFreight,
       pushToast,
       dismissToast,
     },

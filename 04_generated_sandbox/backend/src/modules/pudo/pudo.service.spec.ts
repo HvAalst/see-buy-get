@@ -1588,8 +1588,10 @@ describe('PUDO Light', () => {
     const [offer] = dispatch.suggest(d.did, { from: { lat: -1.2, lng: 36.8 }, to: { lat: -1.25, lng: 36.85 } });
     dispatch.claim(offer.offerId);
     expect(dispatch.remainingCapacity(d.did)).toBe(5000); // 10000 − 5000 reserved
-    dispatch.pickupFreight(f.freightId);
-    expect(dispatch.deliverFreight(f.freightId).status).toBe('delivered');
+    // S32b: only the driver who CLAIMED it may advance it (a claimed freight is their obligation).
+    expect(() => dispatch.pickupFreight(f.freightId, 'did:glos:someone-else')).toThrow(/another driver/);
+    dispatch.pickupFreight(f.freightId, d.did);
+    expect(dispatch.deliverFreight(f.freightId, d.did).status).toBe('delivered');
     expect(dispatch.remainingCapacity(d.did)).toBe(10_000); // released
   });
 

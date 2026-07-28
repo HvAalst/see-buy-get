@@ -148,9 +148,10 @@ describe('claim rows', () => {
     expect(claimControl({ ...tote, pickupLabel: 'on board' })).toBe('onboard');
   });
 
-  it('leaves freight without an action — the facade has no pickup/deliver call', () => {
-    expect(claimControl({ ...tote, kind: 'freight' })).toBe('none');
-    expect(claimControl({ ...tote, kind: 'freight', pickupLabel: 'on board' })).toBe('onboard');
+  it('drives claimed freight through pickup then deliver (S32b)', () => {
+    expect(claimControl({ ...tote, kind: 'freight', status: 'claimed' })).toBe('pickup');
+    expect(claimControl({ ...tote, kind: 'freight', status: 'in_transit' })).toBe('deliver');
+    expect(claimControl({ ...tote, kind: 'freight' })).toBe('none'); // no status → nothing actionable
   });
 
   it('requires a badge before a bag can be loaded (no badge, no payout)', () => {

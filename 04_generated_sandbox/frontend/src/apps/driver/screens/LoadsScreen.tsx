@@ -55,7 +55,7 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                   <Icon name={c.kind === 'tote' ? 'box' : 'truck'} size={24} />
                 </span>
                 <span class="row__body">
-                  <span class="load__ref">{c.ref}</span>
+                  <span class="load__ref">{c.code ?? c.ref}</span>
                   <span class="load__meta">{`${c.pickupLabel} → ${c.destLabel} · ${c.weightKg} kg`}</span>
                 </span>
               </>
@@ -69,11 +69,34 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                     class="row"
                     onClick={() => setPick(c)}
                     disabled={!hasBadge || busy}
-                    aria-label={`Load ${c.ref} onto the van`}
+                    aria-label={`Load ${c.code ?? c.ref} onto the van`}
                   >
                     {body}
                     <span class="row__end">
                       <Pill tone="info">Load on</Pill>
+                      <Icon name="chevronRight" size={22} />
+                    </span>
+                  </button>
+                </li>
+              );
+            }
+
+            // S32b — a claimed dedicated-freight job: one tap moves it claimed → picked-up → delivered.
+            if (control === 'pickup' || control === 'deliver') {
+              const isPickup = control === 'pickup';
+              const freightBusy = state.busy === `freight:${c.ref}`;
+              return (
+                <li key={c.ref}>
+                  <button
+                    type="button"
+                    class="row"
+                    onClick={() => (isPickup ? void actions.pickupFreight(c.ref) : void actions.deliverFreight(c.ref))}
+                    disabled={freightBusy}
+                    aria-label={`${isPickup ? 'Pick up' : 'Deliver'} freight ${c.code ?? c.ref}`}
+                  >
+                    {body}
+                    <span class="row__end">
+                      <Pill tone={isPickup ? 'info' : 'ok'}>{isPickup ? 'Pick up' : 'Deliver'}</Pill>
                       <Icon name="chevronRight" size={22} />
                     </span>
                   </button>
@@ -91,10 +114,7 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                         On board
                       </Pill>
                     ) : (
-                      /* Freight pickup/deliver exists server-side but is not in the driver
-                         facade, so this app cannot act on it. Say that plainly rather than
-                         showing a button that does nothing. */
-                      <Pill tone="idle">Hub handles this</Pill>
+                      <Pill tone="idle">In progress</Pill>
                     )}
                   </span>
                 </div>

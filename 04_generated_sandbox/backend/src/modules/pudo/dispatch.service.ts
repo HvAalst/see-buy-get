@@ -206,17 +206,23 @@ export class DispatchService {
     return [...totes, ...freight];
   }
 
-  /** Bulk freight is picked up (claimed → in_transit) then delivered (→ delivered, capacity released). */
-  pickupFreight(freightId: string): Freight {
+  /** Freight is picked up (claimed → in_transit) then delivered (→ delivered, capacity released). S32b: when
+   *  a driver DID is given (the authenticated driver-app path), only the driver who CLAIMED it may advance it —
+   *  a claimed freight is that driver's obligation, not a free-for-all. */
+  pickupFreight(freightId: string, driverDid?: string): Freight {
     const f = this.requireFreight(freightId);
+    if (driverDid && f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
     if (f.status !== 'claimed') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected claimed`);
     f.status = 'in_transit';
+    this.freights.set(f.freightId, f);
     return f;
   }
-  deliverFreight(freightId: string): Freight {
+  deliverFreight(freightId: string, driverDid?: string): Freight {
     const f = this.requireFreight(freightId);
+    if (driverDid && f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
     if (f.status !== 'in_transit') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected in_transit`);
     f.status = 'delivered'; // no longer counts against the driver's remaining capacity
+    this.freights.set(f.freightId, f);
     return f;
   }
 
@@ -250,12 +256,13 @@ export class DispatchService {
     const fragile = false; // totes are not individually flagged fragile here; parcel rules apply at load
     // S31: surface the capabilities the bag's cargo needs (perishable → cold chain, hazardous → hazmat) so a
     // vehicle that lacks one is never offered the tote — the offer would only dead-end at loadBag otherwise.
-    return { kind: 'tote', ref: t.code, pickupLocation: place.loc, pickupLabel: place.label, destLabel: t.destinationLabel || 'destination', weightKg: t.weightKg, fragile, bulk: false, requiredCapabilities: this.mdps.toteRequiredCapabilities(t) };
+    return { kind: 'tote', ref: t.code, code: t.code, pickupLocation: place.loc, pickupLabel: place.label, destLabel: t.destinationLabel || 'destination', weightKg: t.weightKg, fragile, bulk: false, status: t.status, requiredCapabilities: this.mdps.toteRequiredCapabilities(t) };
   }
 
   private wrapFreight(f: Freight): Claimable {
     // S32: freight now carries its cargo model, so it matches vehicles on capability AND equipment like a tote.
-    return { kind: 'freight', ref: f.freightId, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment };
+    // S32b: status lets the driver app drive the claimed → picked-up → delivered flow in-app.
+    return { kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment };
   }
 
   private vehicleCanCarry(vehicle: Vehicle, load: Claimable, remainingKg: number): boolean {

@@ -167,17 +167,22 @@ export function offerSpoken(o: { message: string; weightKg: number; destLabel: s
 
 /* ----------------------------------------------------------------- loads -- */
 
-export type ClaimControl = 'load' | 'onboard' | 'none';
+export type ClaimControl = 'load' | 'onboard' | 'pickup' | 'deliver' | 'none';
 
 /**
  * What the trailing control on a claim row should be.
  *  - 'load'    — a tote still sitting at a shop/hub: one scan puts it on the van.
  *  - 'onboard' — already on the van, nothing to do.
- *  - 'none'    — freight. The pickup/deliver endpoints exist server-side but are absent from
- *                the driver facade, so this app cannot act on freight yet; the row states
- *                that instead of pretending it is actionable.
+ *  - 'pickup'  — a claimed dedicated-freight job awaiting collection (claimed → in_transit).
+ *  - 'deliver' — an in-transit freight job to drop at its destination (in_transit → delivered).
+ *  - 'none'    — nothing actionable (a freight in an unexpected state).
  */
 export function claimControl(claim: Claimable): ClaimControl {
+  if (claim.kind === 'freight') {
+    if (claim.status === 'in_transit') return 'deliver';
+    if (claim.status === 'claimed') return 'pickup';
+    return 'none';
+  }
   if (claim.pickupLabel === 'on board') return 'onboard';
   if (claim.kind === 'tote') return 'load';
   return 'none';

@@ -28,7 +28,7 @@ import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
-import { AcceptParcelDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, CoupleDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, OverdraftDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetPriceDto, ShelfDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto } from './pudo.dto';
+import { AcceptParcelDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, CoupleDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, OverdraftDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetPriceDto, ShelfDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto } from './pudo.dto';
 import { classifySize, SIZE_WEIGHT_KG } from './pudo.config';
 import { haversineKm } from './geo';
 
@@ -990,16 +990,16 @@ export class SbgController {
     return this.dispatch.listFreight({ status: status as never });
   }
 
-  /** Bulk freight pickup (claimed → in_transit). */
+  /** Bulk freight pickup (claimed → in_transit). driverDid (the claimer) is verified against claimedBy. */
   @Post('dispatch/freight/:id/pickup')
-  freightPickup(@Param('id') id: string) {
-    return this.dispatch.pickupFreight(id);
+  freightPickup(@Param('id') id: string, @Body() dto: FreightActionDto) {
+    return this.dispatch.pickupFreight(id, dto.driverDid);
   }
 
   /** Bulk freight delivery (in_transit → delivered; releases the driver's reserved capacity). */
   @Post('dispatch/freight/:id/deliver')
-  freightDeliver(@Param('id') id: string) {
-    return this.dispatch.deliverFreight(id);
+  freightDeliver(@Param('id') id: string, @Body() dto: FreightActionDto) {
+    return this.dispatch.deliverFreight(id, dto.driverDid);
   }
 
   /** A driver declares a route A→B → the platform suggests the loads sitting on the way. */

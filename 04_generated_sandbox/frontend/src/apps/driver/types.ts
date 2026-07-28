@@ -56,13 +56,15 @@ export type ClaimKind = 'tote' | 'freight';
 
 export interface Claimable {
   kind: ClaimKind;
-  ref: string;
+  ref: string; // the API id used for pickup/load/deliver
+  code?: string; // S32b — the human reference to show (TOTE-042 / FRT-007); ref for freight is an opaque id
   pickupLocation?: { lat: number; lng: number };
   pickupLabel: string;
   destLabel: string;
   weightKg: number;
   fragile?: boolean;
   bulk?: boolean;
+  status?: string; // S32b — freight status (claimed | in_transit | …) drives the pickup/deliver control
 }
 
 export interface ClaimsView {

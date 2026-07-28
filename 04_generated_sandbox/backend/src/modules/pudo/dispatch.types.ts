@@ -43,13 +43,19 @@ export class Freight {
 /** A unit a driver can claim, normalised across totes and freight. */
 export class Claimable {
   kind: ClaimableKind;
-  ref: string; // toteCode | freightId
+  ref: string; // toteCode | freightId — the API identifier the pickup/load/deliver calls use
+  /** S32b — the human-readable reference to SHOW a driver (TOTE-042 / FRT-007). For a tote this equals ref;
+   *  for freight ref is the opaque frt_… id, so the readable FRT-NNN code must ride separately. */
+  code?: string;
   pickupLocation: GeoPoint;
   pickupLabel: string;
   destLabel: string;
   weightKg: number;
   fragile: boolean;
   bulk: boolean;
+  /** S32b — the underlying tote/freight status (available | claimed | in_transit | …). Lets the driver app
+   *  decide the next action on a claimed load: a claimed freight needs PICK-UP, an in-transit one needs DELIVER. */
+  status?: string;
   /** S31 — vehicle capabilities this load's cargo requires (a tote's perishable/hazardous parcels →
    *  cold chain / hazmat). A vehicle lacking any is not offered the load. */
   requiredCapabilities?: VehicleCapability[];
