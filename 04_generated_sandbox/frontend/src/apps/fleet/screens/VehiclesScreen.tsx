@@ -198,6 +198,24 @@ export function VehiclesScreen({ state, actions }: VehiclesScreenProps) {
             <input id="v-vin" class="input input--mono" value={f.factoryId} onInput={(e) => actions.setVForm({ factoryId: e.currentTarget.value })} placeholder="VIN-…" spellcheck={false} />
           </div>
         </div>
+        {/* S34 — the freight-pricing profile. All optional; each defaults per class. The base fee starts every
+            freight price; the market may only flex the per-km rate between the two multipliers the fleet owns. */}
+        <div class="grid2" style="margin-top:12px">
+          <div class="field">
+            <label class="field__label" for="v-basefee">
+              Freight base fee (optional)
+            </label>
+            <input id="v-basefee" class="input" type="number" inputMode="decimal" min="0" step="0.1" placeholder="default per class" value={f.baseFee} onInput={(e) => actions.setVForm({ baseFee: e.currentTarget.value })} />
+          </div>
+          <div class="field">
+            <span class="field__label">Price multiplier range</span>
+            <div class="grid2">
+              <input aria-label="Lowest price multiplier" class="input" type="number" inputMode="decimal" min="0.1" step="0.1" placeholder="min 0.8" value={f.minMultiplier} onInput={(e) => actions.setVForm({ minMultiplier: e.currentTarget.value })} />
+              <input aria-label="Highest price multiplier" class="input" type="number" inputMode="decimal" min="0.1" step="0.1" placeholder="max 1.5" value={f.maxMultiplier} onInput={(e) => actions.setVForm({ maxMultiplier: e.currentTarget.value })} />
+            </div>
+          </div>
+        </div>
+        <p class="hint" style="margin-top:6px">The base fee starts every freight price. Busy-time demand may only flex the per-km rate between your two multipliers — you always own the floor and the ceiling.</p>
         <div style="margin-top:12px">
           <PhotoPad
             label="Registration papers (verifies)"

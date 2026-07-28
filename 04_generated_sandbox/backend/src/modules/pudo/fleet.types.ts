@@ -63,6 +63,12 @@ export class Vehicle {
   truckSubtype?: TruckSubtype; // only for class 'truck'
   capacityKg: number; // system-computed (light) or operator-declared within class bounds (heavy)
   pricePerKm: number; // open-data transport rate set by the driver/fleet manager (public, locked to the vehicle)
+  // S34 — the dynamic-pricing profile. baseFee is the flag-down (deadhead + loading) fee; pricePerKm above is
+  // R_base; [minMultiplier, maxMultiplier] is the corridor the market engine may flex the per-km rate within.
+  // The driver/fleet always owns the absolute floor + ceiling — the engine never prices outside these bounds.
+  baseFee: number;
+  minMultiplier: number;
+  maxMultiplier: number;
   maxParcelKg: number; // largest single parcel (from the class spec)
   allowsFragile: boolean;
   coldChain: boolean; // temperature-controlled body

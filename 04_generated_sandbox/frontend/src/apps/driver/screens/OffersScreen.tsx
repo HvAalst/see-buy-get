@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, Checklist, ErrorNote, Icon, Pill, ReadAloud, Sheet, SwipeDeck } from '../../../shared/ui';
-import { countdownLabel, offerSpoken, offersSummary, secondsLeft } from '../logic';
+import { countdownLabel, money, offerSpoken, offersSummary, priceBreakdownLines, secondsLeft } from '../logic';
 import type { OfferView } from '../types';
 import type { DriverActions, DriverState } from '../useDriverApp';
 
@@ -112,6 +112,7 @@ export function OffersScreen({ state, actions }: OffersScreenProps) {
             <p class="t-body">{active.message}</p>
             <Checklist
               items={[
+                ...(active.price ? [`You earn ${money(active.price.total)} — locked in when you claim`] : []),
                 `${active.weightKg} kg — fits the space you have left`,
                 `${active.detourKm} km extra driving`,
                 `Drop it at ${active.destLabel}`,
@@ -151,6 +152,16 @@ function OfferCard({ offer, now }: { offer: OfferView; now: number }) {
       {/* Server-composed sentence — already plain language, shown verbatim. */}
       <p class="offer__msg">{offer.message}</p>
 
+      {/* S34 — a freight offer leads with what the driver EARNS, then the transparent breakdown behind it. */}
+      {offer.price ? (
+        <div class="offer__pay">
+          <Icon name="wallet" size={24} class="offer__pay-ic" />
+          <span class="offer__pay-amt">
+            You earn <b>{money(offer.price.total)}</b>
+          </span>
+        </div>
+      ) : null}
+
       <div class="offer__meta">
         <p class="meta">
           <Icon name="weight" size={21} class="meta__ic" />
@@ -170,6 +181,12 @@ function OfferCard({ offer, now }: { offer: OfferView; now: number }) {
             Detour <b>{offer.detourKm} km</b> · about <b>{offer.minutesAway} min</b> away
           </span>
         </p>
+        {priceBreakdownLines(offer.price).map((line) => (
+          <p class="meta" key={line}>
+            <Icon name="check" size={21} class="meta__ic" />
+            <span>{line}</span>
+          </p>
+        ))}
       </div>
     </article>
   );

@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks';
 import { Button, Card, Checklist, ErrorNote, GlanceNumber, Icon, Note, Pill, ReadAloud, Sheet } from '../../../shared/ui';
-import { canLoadBag, capacitySubLine, claimControl, isFull, loadsSummary, usedPercent } from '../logic';
+import { canLoadBag, capacitySubLine, claimControl, isFull, loadsSummary, money, usedPercent } from '../logic';
 import type { Claimable } from '../types';
 import type { DriverActions, DriverState } from '../useDriverApp';
 
@@ -57,6 +57,8 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                 <span class="row__body">
                   <span class="load__ref">{c.code ?? c.ref}</span>
                   <span class="load__meta">{`${c.pickupLabel} → ${c.destLabel} · ${c.weightKg} kg`}</span>
+                  {/* S34 — the locked earning rides on the claimed freight, so a driver always sees what this job pays. */}
+                  {c.lockedPrice != null ? <span class="load__earn">You earn {money(c.lockedPrice)}</span> : null}
                 </span>
               </>
             );

@@ -69,18 +69,25 @@ export interface VehicleClassSpec {
   maxParcelKg: number; // largest single parcel this class may carry
   allowsFragile: boolean; // a bike/motorcycle may not carry fragile items
   carriesBulk: boolean; // bulk cargo (sugar/cement bags) — trucks only
+  defaultBaseFee: number; // S34 — flag-down / loading fee (deadhead + load time), scaled to the class
   role: string;
 }
 
 export const VEHICLE_SPEC: Record<VehicleClass, VehicleClassSpec> = {
-  bike: { registry: 'light', defaultCapacityKg: 20, maxCapacityKg: 20, maxParcelKg: 20, allowsFragile: false, carriesBulk: false, role: 'micro feeder · MDP→PUDO last mile' },
-  motorcycle: { registry: 'light', defaultCapacityKg: 50, maxCapacityKg: 80, maxParcelKg: 30, allowsFragile: false, carriesBulk: false, role: 'micro feeder · last mile' },
-  tuktuk: { registry: 'heavy', defaultCapacityKg: 250, maxCapacityKg: 400, maxParcelKg: 80, allowsFragile: true, carriesBulk: false, role: 'last mile · light distribution' },
-  car: { registry: 'heavy', defaultCapacityKg: 300, maxCapacityKg: 500, maxParcelKg: 100, allowsFragile: true, carriesBulk: false, role: 'last mile' },
-  van: { registry: 'heavy', defaultCapacityKg: 1200, maxCapacityKg: 2000, maxParcelKg: 300, allowsFragile: true, carriesBulk: false, role: 'feeder · distribution' },
-  bus: { registry: 'heavy', defaultCapacityKg: 500, maxCapacityKg: 800, maxParcelKg: 200, allowsFragile: true, carriesBulk: false, role: 'corridor line-haul' },
-  truck: { registry: 'heavy', defaultCapacityKg: 8000, maxCapacityKg: 30000, maxParcelKg: 2000, allowsFragile: true, carriesBulk: true, role: 'bulk cargo · line-haul' },
+  bike: { registry: 'light', defaultCapacityKg: 20, maxCapacityKg: 20, maxParcelKg: 20, allowsFragile: false, carriesBulk: false, defaultBaseFee: 0.5, role: 'micro feeder · MDP→PUDO last mile' },
+  motorcycle: { registry: 'light', defaultCapacityKg: 50, maxCapacityKg: 80, maxParcelKg: 30, allowsFragile: false, carriesBulk: false, defaultBaseFee: 0.8, role: 'micro feeder · last mile' },
+  tuktuk: { registry: 'heavy', defaultCapacityKg: 250, maxCapacityKg: 400, maxParcelKg: 80, allowsFragile: true, carriesBulk: false, defaultBaseFee: 1.5, role: 'last mile · light distribution' },
+  car: { registry: 'heavy', defaultCapacityKg: 300, maxCapacityKg: 500, maxParcelKg: 100, allowsFragile: true, carriesBulk: false, defaultBaseFee: 2, role: 'last mile' },
+  van: { registry: 'heavy', defaultCapacityKg: 1200, maxCapacityKg: 2000, maxParcelKg: 300, allowsFragile: true, carriesBulk: false, defaultBaseFee: 5, role: 'feeder · distribution' },
+  bus: { registry: 'heavy', defaultCapacityKg: 500, maxCapacityKg: 800, maxParcelKg: 200, allowsFragile: true, carriesBulk: false, defaultBaseFee: 4, role: 'corridor line-haul' },
+  truck: { registry: 'heavy', defaultCapacityKg: 8000, maxCapacityKg: 30000, maxParcelKg: 2000, allowsFragile: true, carriesBulk: true, defaultBaseFee: 10, role: 'bulk cargo · line-haul' },
 };
+
+// S34 — dynamic-pricing bounds. A driver/fleet delegates a "pricing agent" (the multiplier engine) that may
+// flex the per-km rate within THIS corridor; the driver always controls the absolute floor + ceiling. These
+// are the defaults when a vehicle declares none.
+export const DEFAULT_MIN_MULTIPLIER = 0.8;
+export const DEFAULT_MAX_MULTIPLIER = 1.5;
 
 /** Map a vehicle class onto the corridor's coarse bus/truck heuristic for line-haul legs. */
 export const CLASS_TO_CORRIDOR_VEHICLE: Record<VehicleClass, 'bus' | 'truck'> = {

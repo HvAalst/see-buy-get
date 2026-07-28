@@ -2,9 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { randomBytes } from 'crypto';
-import { TRUCK_SUBTYPE_CATALOG, TruckSubtype, TruckSubtypeSpec, VEHICLE_SPEC, VehicleClass } from './fleet.config';
+import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, TRUCK_SUBTYPE_CATALOG, TruckSubtype, TruckSubtypeSpec, VEHICLE_SPEC, VehicleClass } from './fleet.config';
 import { Vehicle, VehicleDocuments, VehicleOwnerType } from './fleet.types';
 import { Equipment } from './cargo.types';
+import { clampMultiplier } from './pricing';
 import { FleetManagerService } from './fleet-manager.service';
 import { MediaService } from './media.service';
 import { DEFAULT_PRICE_PER_KM } from './pudo.config';
@@ -22,6 +23,9 @@ interface RegisterVehicleInput {
   managerDid?: string; // the fleet manager that owns this vehicle (must be ACTIVE)
   pricePerKm?: number; // open-data transport rate (defaults if unset)
   equipment?: Equipment[]; // S32 — declared load/unload equipment (tail-lift, pallet jack, …) beyond the subtype baseline
+  baseFee?: number; // S34 — flag-down fee (defaults per class)
+  minMultiplier?: number; // S34 — the driver's price floor multiplier (default 0.8)
+  maxMultiplier?: number; // S34 — the driver's price ceiling multiplier (default 1.5)
 }
 
 /**
@@ -62,6 +66,11 @@ export class VehicleService {
       truckSubtype: input.truckSubtype,
       capacityKg,
       pricePerKm: input.pricePerKm != null ? Math.round(input.pricePerKm * 1000) / 1000 : DEFAULT_PRICE_PER_KM,
+      // S34 — the pricing profile. Defaults are class-scaled (a bike's flag-down is cents, a truck's is dollars)
+      // with a sane [0.8, 1.5] corridor; a fleet may declare its own. Bounds are sanitised so min ≤ max ≤ 3.
+      baseFee: input.baseFee != null && input.baseFee >= 0 ? Math.round(input.baseFee * 100) / 100 : spec.defaultBaseFee,
+      minMultiplier: clampMultiplier(input.minMultiplier ?? DEFAULT_MIN_MULTIPLIER),
+      maxMultiplier: Math.max(clampMultiplier(input.minMultiplier ?? DEFAULT_MIN_MULTIPLIER), clampMultiplier(input.maxMultiplier ?? DEFAULT_MAX_MULTIPLIER)),
       maxParcelKg: spec.maxParcelKg,
       allowsFragile: spec.allowsFragile,
       coldChain: Boolean(sub?.coldChain),

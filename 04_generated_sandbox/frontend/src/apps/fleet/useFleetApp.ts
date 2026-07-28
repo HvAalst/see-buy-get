@@ -325,6 +325,10 @@ export function useFleetApp() {
         ...(f.vehicleClass === 'truck' && f.truckSubtype ? { truckSubtype: f.truckSubtype } : {}),
         ...(f.capacityKg ? { capacityKg: Number(f.capacityKg) } : {}),
         ...(f.pricePerKm ? { pricePerKm: Number(f.pricePerKm) } : {}),
+        // S34 — the pricing profile; each field defaults per class when left blank.
+        ...(f.baseFee ? { baseFee: Number(f.baseFee) } : {}),
+        ...(f.minMultiplier ? { minMultiplier: Number(f.minMultiplier) } : {}),
+        ...(f.maxMultiplier ? { maxMultiplier: Number(f.maxMultiplier) } : {}),
         ...(f.registrationPhotoRef || f.factoryId
           ? { documents: { registrationPhotoRef: f.registrationPhotoRef || undefined, factoryId: f.factoryId || undefined } }
           : {}),

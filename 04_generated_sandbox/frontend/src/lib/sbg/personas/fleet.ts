@@ -35,6 +35,9 @@ export function createFleetApi(sbg: SbgClient) {
       truckSubtype?: string;
       capacityKg?: number;
       pricePerKm?: number;
+      baseFee?: number; // S34 — freight flag-down fee (defaults per class)
+      minMultiplier?: number; // S34 — the fleet's price-floor multiplier (default 0.8)
+      maxMultiplier?: number; // S34 — the fleet's price-ceiling multiplier (default 1.5)
       documents?: { registrationPhotoRef?: string; factoryId?: string };
       vehiclePhotoRefs?: string[]; // S26 — mediaIds of the vehicle-body photos
       trailerPhotoRefs?: string[]; // S26 — mediaIds of a coupled trailer's photos

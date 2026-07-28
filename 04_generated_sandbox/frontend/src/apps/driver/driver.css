@@ -76,6 +76,36 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* S34 — the earning highlight on a freight offer. A soft positive-money panel, NOT the blue
+   action colour (that stays reserved for the single Claim CTA) — the emerald reads as "this pays". */
+.offer__pay {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--r-ctl);
+  background: var(--ok-light);
+  border: 1px solid var(--ok);
+}
+
+.offer__pay-ic {
+  flex: none;
+  color: var(--ok);
+}
+
+.offer__pay-amt {
+  font-size: 17px;
+  color: var(--tx2);
+}
+
+.offer__pay-amt b {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--navy);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---------------------------------------------------------------- loads -- */
 
 /* The row title of a claimed load, so it takes the card-heading step, matching
@@ -99,4 +129,14 @@
   color: var(--tx3);
   line-height: 1.4;
   margin-top: 2px;
+}
+
+/* S34 — the locked freight earning on a claimed load row: emerald, so it reads as money the driver is owed. */
+.load__earn {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ok);
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
 }

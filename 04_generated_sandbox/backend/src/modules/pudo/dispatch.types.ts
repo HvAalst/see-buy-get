@@ -4,6 +4,7 @@
 
 import { GeoPoint } from './pudo.types';
 import { CargoClass, CargoNature, Equipment, VehicleCapability } from './cargo.types';
+import { PriceBreakdown } from './pricing';
 
 export class RoutePlan {
   from: GeoPoint;
@@ -49,6 +50,15 @@ export class Freight {
   claimedAt?: string;
   pickedUpAt?: string;
   deliveredAt?: string;
+  // S34 — the price is LOCKED at claim (the claiming vehicle's profile × the market multiplier at that
+  // moment), so a later surge or a driver profile edit never changes what was agreed. paidStatus tracks the
+  // shipper charge at claim ('billed' paid | 'billing_failed' known shipper short of prepaid funds, a debt to
+  // collect | 'unpaid' bulletin freight settled off-platform); driverPaid tracks the driver payout at delivery.
+  lockedPrice?: number;
+  priceBreakdown?: PriceBreakdown;
+  lockedAt?: string;
+  paidStatus?: 'unpaid' | 'billed' | 'billing_failed';
+  driverPaid?: boolean;
   status: FreightStatus;
   claimedBy?: string;
   createdAt: string;
@@ -80,6 +90,9 @@ export class Claimable {
   pickupLocation: GeoPoint;
   pickupLabel: string;
   destLabel: string;
+  /** S34 — the haul destination coordinate, when known (freight sets it), so pricing can compute the
+   *  pickup→dropoff leg. A tote carries only a dest label, so this stays undefined for totes. */
+  destLocation?: GeoPoint;
   weightKg: number;
   fragile: boolean;
   bulk: boolean;
@@ -92,6 +105,10 @@ export class Claimable {
   /** S32 — load/unload equipment this load requires (a heavy-class freight → a forklift/tail-lift/crane).
    *  A vehicle whose equipment manifest lacks any is not offered the load. */
   requiredEquipment?: Equipment[];
+  /** S34 — once a freight is claimed its price is locked; a claimed load carries the driver's agreed earning
+   *  (and its breakdown) so "my loads" always shows what the job pays. Undefined for a tote / an unclaimed load. */
+  lockedPrice?: number;
+  priceBreakdown?: PriceBreakdown;
 }
 
 export type OfferStatus = 'pending' | 'claimed' | 'ignored' | 'expired';
@@ -109,6 +126,9 @@ export class Offer {
   detourKm: number;
   minutesAway: number;
   message: string;
+  /** S34 — the priced offer: the driver's earning + the transparent B + D·R·M breakdown. Freight only; a
+   *  tote offer stays unpriced (totes settle on the pre-paid parcel model). */
+  price?: PriceBreakdown;
   createdAt: string;
   expiresAt: string;
   status: OfferStatus;

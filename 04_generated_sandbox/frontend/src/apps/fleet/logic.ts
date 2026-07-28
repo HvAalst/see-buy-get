@@ -32,6 +32,11 @@ export interface VehicleForm {
   ownerName: string;
   capacityKg: string;
   pricePerKm: string;
+  // S34 — the dynamic-pricing profile. All optional: left blank, each falls back to a sensible class default.
+  // baseFee is the flag-down/loading fee; the two multipliers are the corridor the market may flex the rate in.
+  baseFee: string;
+  minMultiplier: string;
+  maxMultiplier: string;
   registrationPhotoRef: string; // S26 — a mediaId (was a typed filename)
   factoryId: string;
   // S26 — mediaIds of the owner's uploaded vehicle-body and trailer photos.
@@ -61,6 +66,9 @@ export const EMPTY_VEHICLE: VehicleForm = {
   ownerName: '',
   capacityKg: '',
   pricePerKm: '',
+  baseFee: '',
+  minMultiplier: '',
+  maxMultiplier: '',
   registrationPhotoRef: '',
   factoryId: '',
   vehiclePhotoRefs: [],
@@ -73,6 +81,15 @@ export function vehicleMissing(f: VehicleForm): string | null {
   if (!f.plate.trim()) return 'Type the number plate.';
   if (!f.ownerName.trim()) return 'Name the owner.';
   if (f.vehicleClass === 'truck' && !f.truckSubtype) return 'Pick the truck body.';
+  // S34 — the price corridor is set as a PAIR or not at all. A lone bound would be silently paired with the
+  // other class default (a typed ceiling of 0.5 gets raised to the 0.8 floor), contradicting the on-screen
+  // promise that the operator owns BOTH the floor and the ceiling — so require both, or neither.
+  const min = f.minMultiplier.trim() ? Number(f.minMultiplier) : null;
+  const max = f.maxMultiplier.trim() ? Number(f.maxMultiplier) : null;
+  if ((min === null) !== (max === null)) return 'Set both the lowest and highest price multiplier, or leave both blank.';
+  if (min !== null && max !== null && Number.isFinite(min) && Number.isFinite(max) && min > max) {
+    return 'The lowest price multiplier cannot be above the highest.';
+  }
   return null;
 }
 

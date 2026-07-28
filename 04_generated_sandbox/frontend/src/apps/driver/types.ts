@@ -54,6 +54,16 @@ export interface SessionView {
 
 export type ClaimKind = 'tote' | 'freight';
 
+/** S34 — the transparent price breakdown behind a freight offer/claim (B + D·R·M). */
+export interface PriceBreakdown {
+  baseFee: number;
+  distanceKm: number;
+  ratePerKm: number;
+  multiplier: number;
+  effectiveRate: number;
+  total: number;
+}
+
 export interface Claimable {
   kind: ClaimKind;
   ref: string; // the API id used for pickup/load/deliver
@@ -65,6 +75,8 @@ export interface Claimable {
   fragile?: boolean;
   bulk?: boolean;
   status?: string; // S32b — freight status (claimed | in_transit | …) drives the pickup/deliver control
+  lockedPrice?: number; // S34 — the driver's agreed earning on a claimed freight (locked at claim)
+  priceBreakdown?: PriceBreakdown; // S34 — the breakdown behind lockedPrice
 }
 
 export interface ClaimsView {
@@ -98,6 +110,8 @@ export interface OfferView {
   minutesAway: number;
   /** Server-composed sentence — already plain language, show it verbatim. */
   message: string;
+  /** S34 — the freight offer's price + transparent breakdown (absent on a tote offer). */
+  price?: PriceBreakdown;
   createdAt: string;
   expiresAt: string;
   status: string;

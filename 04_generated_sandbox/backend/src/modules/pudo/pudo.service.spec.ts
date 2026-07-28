@@ -19,6 +19,7 @@ import { VehicleService } from './vehicle.service';
 import { DriverService } from './driver.service';
 import { FleetService } from './fleet.service';
 import { DispatchService } from './dispatch.service';
+import { shipperCharge } from './pricing';
 import { FleetManagerService } from './fleet-manager.service';
 import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
@@ -1593,6 +1594,130 @@ describe('PUDO Light', () => {
     dispatch.pickupFreight(f.freightId, d.did);
     expect(dispatch.deliverFreight(f.freightId, d.did).status).toBe('delivered');
     expect(dispatch.remainingCapacity(d.did)).toBe(10_000); // released
+  });
+
+  // --- S34: dynamic freight pricing (priced offer → price lock + shipper billing → driver payout) ---
+
+  it('S34: prices a freight offer, locks + bills the shipper at claim, pays the driver on delivery', () => {
+    const d = drivers.register({ displayName: 'PR', fullName: 'P', nationalId: 'ID-PR', mobile: '+254770777', licenceClasses: ['truck'], licenceNumber: 'L-PR', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    // A KNOWN profile: base 10, 0.5/km, corridor [0.8, 1.5], carrying the tail-lift a P4 discrete load needs.
+    const truck = vehicles.register({ plate: 'PR-1', vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 10_000, ownerName: 'X', equipment: ['TLT'], baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5 });
+    expect(truck.baseFee).toBe(10);
+    expect([truck.minMultiplier, truck.maxMultiplier]).toEqual([0.8, 1.5]);
+    fleet.couple(d.did, truck.vehicleId);
+
+    // A vendor pre-pays; a diverted-style freight names them as the shipper.
+    const vendor = vendors.register({ name: 'PriceVendor' });
+    vendors.topUp(vendor.vendorId, 500);
+    const pickup = { lat: -1.2, lng: 36.8 };
+    const f = dispatch.registerFreight({ description: 'Machinery', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', destLocation: pickup, weightKg: 200, bulk: false, shipperDid: vendor.vendorId });
+
+    // Driver starts AT the pickup and the haul is zero-length → the price is the flat base fee only, at an
+    // off-peak neutral multiplier. A fixed 11:00 clock keeps the multiplier deterministic (off-peak → 1.0).
+    const noon = new Date('2026-07-22T11:00:00').getTime();
+    const [offer] = dispatch.suggest(d.did, { from: pickup, to: pickup }, noon);
+    expect(offer.kind).toBe('freight');
+    expect(offer.price).toBeDefined();
+    expect(offer.price!.multiplier).toBe(1);
+    expect(offer.price!.total).toBe(10); // base 10 + 0 km × rate
+
+    const before = vendors.balanceOf(vendor.vendorId);
+    dispatch.claim(offer.offerId, noon);
+    const claimed = dispatch.listFreight().find((x) => x.freightId === f.freightId)!;
+    expect(claimed.lockedPrice).toBe(10);
+    expect(claimed.priceBreakdown?.total).toBe(10);
+    expect(claimed.paidStatus).toBe('billed');
+    expect(vendors.balanceOf(vendor.vendorId)).toBeCloseTo(before - shipperCharge(10), 2); // earning + platform fee
+
+    // Deliver → the driver is paid the locked earning exactly once (a single DRIVER_PAYOUT ledger row).
+    dispatch.pickupFreight(f.freightId, d.did);
+    dispatch.deliverFreight(f.freightId, d.did);
+    const payouts = gate.entries({ type: 'DRIVER_PAYOUT' }).filter((e) => e.reference === d.did);
+    expect(payouts).toHaveLength(1);
+    expect(payouts[0].amount).toBe(10);
+    expect(dispatch.listFreight().find((x) => x.freightId === f.freightId)!.driverPaid).toBe(true);
+  });
+
+  it('S34: a legacy vehicle with no pricing profile prices at its class default — never NaN into money', () => {
+    const d = drivers.register({ displayName: 'LG', fullName: 'L', nationalId: 'ID-LG', mobile: '+254770999', licenceClasses: ['truck'], licenceNumber: 'L-LG', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const truck = vehicles.register({ plate: 'LG-1', vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 10_000, ownerName: 'X', equipment: ['TLT'] });
+    // Simulate a vehicle PERSISTED before S34a: strip the three new pricing fields, exactly as PersistentMap.load()
+    // rehydrates an old on-disk record (no migration/backfill). The pricing read path must not read these raw.
+    delete (truck as unknown as Record<string, unknown>).baseFee;
+    delete (truck as unknown as Record<string, unknown>).minMultiplier;
+    delete (truck as unknown as Record<string, unknown>).maxMultiplier;
+    fleet.couple(d.did, truck.vehicleId);
+
+    const vendor = vendors.register({ name: 'LegacyVendor' });
+    vendors.topUp(vendor.vendorId, 500);
+    const start = vendors.balanceOf(vendor.vendorId);
+    const pickup = { lat: -1.2, lng: 36.8 };
+    const f = dispatch.registerFreight({ description: 'Machinery', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', destLocation: pickup, weightKg: 200, bulk: false, shipperDid: vendor.vendorId });
+    const noon = new Date('2026-07-22T11:00:00').getTime();
+    const [offer] = dispatch.suggest(d.did, { from: pickup, to: pickup }, noon);
+    expect(offer.price).toBeDefined();
+    expect(Number.isFinite(offer.price!.total)).toBe(true);
+    expect(offer.price!.total).toBe(10); // truck class default base fee (fleet.config) + 0 km
+
+    dispatch.claim(offer.offerId, noon);
+    const claimed = dispatch.listFreight().find((x) => x.freightId === f.freightId)!;
+    expect(Number.isFinite(claimed.lockedPrice!)).toBe(true);
+    expect(claimed.lockedPrice).toBe(10);
+    expect(claimed.paidStatus).toBe('billed');
+    // The durable prepaid balance stayed FINITE (the NaN-corruption bug the review found), decremented exactly.
+    expect(Number.isFinite(vendors.balanceOf(vendor.vendorId))).toBe(true);
+    expect(vendors.balanceOf(vendor.vendorId)).toBeCloseTo(start - shipperCharge(10), 2);
+
+    dispatch.pickupFreight(f.freightId, d.did);
+    dispatch.deliverFreight(f.freightId, d.did);
+    const payouts = gate.entries({ type: 'DRIVER_PAYOUT' }).filter((e) => e.reference === d.did);
+    expect(payouts).toHaveLength(1);
+    expect(Number.isFinite(payouts[0].amount)).toBe(true);
+    expect(payouts[0].amount).toBe(10);
+  });
+
+  it('S34: an underfunded KNOWN shipper is flagged billing_failed (distinct from a bulletin), driver still paid', () => {
+    const d = drivers.register({ displayName: 'BF', fullName: 'B', nationalId: 'ID-BF', mobile: '+254771000', licenceClasses: ['truck'], licenceNumber: 'L-BF', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const truck = vehicles.register({ plate: 'BF-1', vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 10_000, ownerName: 'X', equipment: ['TLT'], baseFee: 10, pricePerKm: 0.5 });
+    fleet.couple(d.did, truck.vehicleId);
+    const vendor = vendors.register({ name: 'BrokeVendor' }); // balance 0 — never topped up
+    const pickup = { lat: -1.2, lng: 36.8 };
+    const f = dispatch.registerFreight({ description: 'Machinery', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', destLocation: pickup, weightKg: 200, bulk: false, shipperDid: vendor.vendorId });
+    const noon = new Date('2026-07-22T11:00:00').getTime();
+    const [offer] = dispatch.suggest(d.did, { from: pickup, to: pickup }, noon);
+    dispatch.claim(offer.offerId, noon);
+    const claimed = dispatch.listFreight().find((x) => x.freightId === f.freightId)!;
+    expect(claimed.paidStatus).toBe('billing_failed'); // a real debt to collect — NOT the same as a bulletin 'unpaid'
+    expect(vendors.balanceOf(vendor.vendorId)).toBe(0); // billShipment rejected → balance untouched (no NaN, no negative)
+    dispatch.pickupFreight(f.freightId, d.did);
+    dispatch.deliverFreight(f.freightId, d.did);
+    expect(gate.entries({ type: 'DRIVER_PAYOUT' }).filter((e) => e.reference === d.did)).toHaveLength(1); // labour is owed regardless
+  });
+
+  it('S34: a bulletin freight with no shipper stays unpaid at claim but still pays the driver on delivery', () => {
+    const d = drivers.register({ displayName: 'BL', fullName: 'B', nationalId: 'ID-BL', mobile: '+254770888', licenceClasses: ['truck'], licenceNumber: 'L-BL', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const truck = vehicles.register({ plate: 'BL-1', vehicleClass: 'truck', truckSubtype: 'tipper', capacityKg: 10_000, ownerName: 'X', baseFee: 8, pricePerKm: 0.4 });
+    fleet.couple(d.did, truck.vehicleId);
+    const pickup = { lat: -1.2, lng: 36.8 };
+    const f = dispatch.registerFreight({ description: 'Sand 5t', pickupLocation: pickup, pickupLabel: 'Quarry', destLabel: 'Site', destLocation: pickup, weightKg: 5000, bulk: true }); // no shipperDid
+
+    const noon = new Date('2026-07-22T11:00:00').getTime();
+    const [offer] = dispatch.suggest(d.did, { from: pickup, to: pickup }, noon);
+    dispatch.claim(offer.offerId, noon);
+    const claimed = dispatch.listFreight().find((x) => x.freightId === f.freightId)!;
+    expect(claimed.lockedPrice).toBe(8);
+    expect(claimed.paidStatus).toBe('unpaid'); // no shipper to bill — settled off-platform
+    dispatch.pickupFreight(f.freightId, d.did);
+    dispatch.deliverFreight(f.freightId, d.did);
+    expect(gate.entries({ type: 'DRIVER_PAYOUT' }).filter((e) => e.reference === d.did)).toHaveLength(1); // driver still paid
   });
 
   // --- S32: the dedicated-transport lane (equipment manifest + freight cargo model + P4+ divert) ---

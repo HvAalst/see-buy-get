@@ -7,15 +7,18 @@ import {
   countdownLabel,
   driverStatusNotice,
   isFull,
+  money,
   nodeOptions,
+  offerSpoken,
   offersSummary,
+  priceBreakdownLines,
   rateBand,
   roundPrice,
   secondsLeft,
   shiftSummary,
   usedPercent,
 } from './logic';
-import type { Benchmark } from './types';
+import type { Benchmark, PriceBreakdown } from './types';
 
 describe('usedPercent — the capacity bar', () => {
   it('reports the used share of capacity', () => {
@@ -190,5 +193,35 @@ describe('spoken summaries', () => {
     expect(offersSummary(0)).toContain('No shipments');
     expect(offersSummary(1)).toContain('One shipment');
     expect(offersSummary(4)).toContain('4 shipments');
+  });
+});
+
+describe('freight pricing (S34)', () => {
+  const price: PriceBreakdown = { baseFee: 10, distanceKm: 12, ratePerKm: 0.5, multiplier: 1.15, effectiveRate: 0.575, total: 16.9 };
+
+  it('money is two decimals, no symbol, safe on nullish', () => {
+    expect(money(16.9)).toBe('16.90');
+    expect(money(undefined)).toBe('0.00');
+    expect(money(null)).toBe('0.00');
+  });
+
+  it('breaks a price into plain lines a driver can trust', () => {
+    const lines = priceBreakdownLines(price);
+    expect(lines[0]).toBe('Base fee 10.00');
+    expect(lines[1]).toBe('12 km at 0.575 per km');
+    expect(lines[2]).toContain('Busy-time rate'); // multiplier > 1
+    expect(lines[2]).toContain('15%');
+  });
+
+  it('names a quiet-time discount and omits any note at the neutral rate', () => {
+    expect(priceBreakdownLines({ ...price, multiplier: 0.8 }).some((l) => l.includes('Quiet-time'))).toBe(true);
+    expect(priceBreakdownLines({ ...price, multiplier: 1 })).toHaveLength(2); // no surge/discount note
+    expect(priceBreakdownLines(undefined)).toEqual([]);
+  });
+
+  it('adds the earning to the spoken offer only when the load is priced', () => {
+    const base = { message: 'Ready.', weightKg: 200, destLabel: 'Site', detourKm: 3 };
+    expect(offerSpoken({ ...base, price })).toContain('You earn 16.90');
+    expect(offerSpoken(base)).not.toContain('You earn');
   });
 });

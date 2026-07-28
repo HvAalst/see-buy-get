@@ -453,6 +453,10 @@ export class RegisterVehicleDto {
   @IsOptional() @IsString() managerDid?: string;
   // S32 — declared load/unload equipment beyond the subtype baseline (a tail-lift, a pallet jack, straps).
   @IsOptional() @IsArray() @IsIn(EQUIPMENT, { each: true }) equipment?: Equipment[];
+  // S34 — the dynamic-pricing profile (defaults per class if unset): flag-down fee + the multiplier corridor.
+  @IsOptional() @IsNumber() @Min(0) baseFee?: number;
+  @IsOptional() @IsNumber() @Min(0.1) minMultiplier?: number;
+  @IsOptional() @IsNumber() @Min(0.1) maxMultiplier?: number;
 }
 
 export class VehicleDocsDto {

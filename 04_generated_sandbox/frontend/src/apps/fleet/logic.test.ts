@@ -61,6 +61,15 @@ describe('forms', () => {
     expect(vehicleMissing({ ...EMPTY_VEHICLE, plate: 'K 1', ownerName: 'A' })).toBeNull();
   });
 
+  it('vehicle form: the price-multiplier corridor is both-or-neither, and never inverted (S34)', () => {
+    const ok = { ...EMPTY_VEHICLE, plate: 'K 1', ownerName: 'A' } as const;
+    expect(vehicleMissing({ ...ok, minMultiplier: '1.5', maxMultiplier: '0.8' })).toContain('cannot be above'); // inverted
+    expect(vehicleMissing({ ...ok, minMultiplier: '0.8', maxMultiplier: '1.5' })).toBeNull(); // floor ≤ ceiling
+    expect(vehicleMissing({ ...ok, minMultiplier: '1.2' })).toContain('both'); // a lone bound would be silently paired
+    expect(vehicleMissing({ ...ok, maxMultiplier: '0.5' })).toContain('both'); // a lone ceiling too
+    expect(vehicleMissing({ ...ok, baseFee: '5' })).toBeNull(); // base fee alone is always fine
+  });
+
   it('driver form: heavy selection demands the licence number', () => {
     const filled = { ...EMPTY_DRIVER, displayName: 'D', fullName: 'D Full', nationalId: 'N1', mobile: '07' };
     expect(driverMissing(filled)).toBeNull();

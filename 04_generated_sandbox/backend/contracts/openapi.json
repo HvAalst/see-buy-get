@@ -10826,6 +10826,15 @@
           "pricePerKm": {
             "type": "number"
           },
+          "baseFee": {
+            "type": "number"
+          },
+          "minMultiplier": {
+            "type": "number"
+          },
+          "maxMultiplier": {
+            "type": "number"
+          },
           "maxParcelKg": {
             "type": "number"
           },
@@ -10891,6 +10900,9 @@
           "vehicleClass",
           "capacityKg",
           "pricePerKm",
+          "baseFee",
+          "minMultiplier",
+          "maxMultiplier",
           "maxParcelKg",
           "allowsFragile",
           "coldChain",
@@ -11559,6 +11571,18 @@
               "RMP",
               "STR"
             ]
+          },
+          "baseFee": {
+            "type": "number",
+            "minimum": 0
+          },
+          "minMultiplier": {
+            "type": "number",
+            "minimum": 0.1
+          },
+          "maxMultiplier": {
+            "type": "number",
+            "minimum": 0.1
           }
         },
         "required": [
@@ -11973,6 +11997,21 @@
           "deliveredAt": {
             "type": "string"
           },
+          "lockedPrice": {
+            "type": "number"
+          },
+          "priceBreakdown": {
+            "type": "object"
+          },
+          "lockedAt": {
+            "type": "string"
+          },
+          "paidStatus": {
+            "type": "object"
+          },
+          "driverPaid": {
+            "type": "boolean"
+          },
           "status": {
             "type": "object"
           },
@@ -12078,6 +12117,10 @@
           },
           "message": {
             "type": "string"
+          },
+          "price": {
+            "type": "object",
+            "description": "S34 — the priced offer: the driver's earning + the transparent B + D·R·M breakdown. Freight only; a\n tote offer stays unpriced (totes settle on the pre-paid parcel model)."
           },
           "createdAt": {
             "type": "string"

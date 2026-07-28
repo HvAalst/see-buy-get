@@ -10,8 +10,12 @@ import { ToteService } from './tote.service';
 import { FleetService } from './fleet.service';
 import { CargoService } from './cargo.service';
 import { CargoNature, Equipment, VehicleCapability } from './cargo.types';
+import { VendorService } from './vendor.service';
+import { WalletGateService } from './wallet-gate.service';
+import { clampMultiplier, computeFreightPrice, freightMultiplier, shipperCharge } from './pricing';
+import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, VEHICLE_SPEC } from './fleet.config';
 import { detourKm, haversineKm } from './geo';
-import { DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, OFFER_TTL_MIN, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
+import { DEFAULT_PRICE_PER_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, OFFER_TTL_MIN, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
 import { Claimable, ClaimableKind, Freight, FreightShipmentView, Offer, RoutePlan } from './dispatch.types';
@@ -39,6 +43,8 @@ export class DispatchService {
     private readonly fleet: FleetService,
     private readonly events: EventBus,
     private readonly cargo: CargoService,
+    private readonly vendors: VendorService,
+    private readonly gate: WalletGateService,
   ) {
     this.freightSeq = [...this.freights.values()].length; // continue the human FRT-NNN sequence after a restart
   }
@@ -153,6 +159,7 @@ export class DispatchService {
     if (!vehicle) throw new GlosError('NOT_COUPLED', 'Couple the driver to a vehicle before requesting work');
     this.publishReady(now);
     const remaining = this.remainingCapacity(driverDid);
+    const profile = this.pricingProfile(vehicle); // S34 — fixed for this driver+vehicle across all offers here
 
     const matches = this.availableLoads()
       .map((load) => ({ load, detour: detourKm(route.from, load.pickupLocation, route.to), minutesAway: this.minutes(route.from, load.pickupLocation) }))
@@ -164,6 +171,18 @@ export class DispatchService {
       // One live offer per driver+load — reuse the existing pending one if any.
       const existing = [...this.offers.values()].find((o) => o.driverDid === driverDid && o.ref === load.ref && o.status === 'pending' && new Date(o.expiresAt).getTime() > now);
       if (existing) { out.push(existing); continue; }
+      // S34 — freight offers carry a transparent price: P = B + D·R_base·M, D = deadhead (driver→pickup) +
+      // haul (pickup→dropoff), M the market multiplier flexed within THIS vehicle's own [min,max] corridor. The
+      // price shown here is indicative; it is LOCKED (recomputed against the vehicle at that instant) on claim.
+      const price = load.kind === 'freight'
+        ? computeFreightPrice({
+            baseFee: profile.baseFee,
+            ratePerKm: profile.ratePerKm,
+            deadheadKm: haversineKm(route.from, load.pickupLocation),
+            tripKm: load.destLocation ? haversineKm(load.pickupLocation, load.destLocation) : 0,
+            multiplier: freightMultiplier(new Date(now), { min: profile.min, max: profile.max }),
+          })
+        : undefined;
       const offer: Offer = {
         offerId: `ofr_${randomBytes(6).toString('hex')}`,
         driverDid,
@@ -176,6 +195,7 @@ export class DispatchService {
         detourKm: detour,
         minutesAway,
         message: `≈${minutesAway} min from ${load.pickupLabel}: a ${load.weightKg} kg shipment to ${load.destLabel} is ready. Claim it?`,
+        price,
         createdAt: new Date(now).toISOString(),
         expiresAt: new Date(now + OFFER_TTL_MIN * 60_000).toISOString(),
         status: 'pending',
@@ -209,7 +229,42 @@ export class DispatchService {
     }
 
     if (offer.kind === 'tote') this.totes.markClaimed(offer.ref, offer.driverDid);
-    else { const f = this.requireFreight(offer.ref); if (f.status !== 'available') throw new GlosError('INVALID_STATE', `Freight is ${f.status}`); f.status = 'claimed'; f.claimedBy = offer.driverDid; f.claimedAt = new Date().toISOString(); this.freights.set(f.freightId, f); }
+    else {
+      const f = this.requireFreight(offer.ref);
+      if (f.status !== 'available') throw new GlosError('INVALID_STATE', `Freight is ${f.status}`);
+      f.status = 'claimed';
+      f.claimedBy = offer.driverDid;
+      f.claimedAt = new Date().toISOString();
+      // S34 — LOCK THE PRICE at claim. The market can surge afterwards and the driver can edit their profile,
+      // but what was agreed at this instant never changes. Recompute against THIS vehicle's current profile
+      // (defaults resolved for a legacy vehicle) and the multiplier now, over the distance the offer was priced
+      // on (deadhead + haul). Then settle the shipper side straight away.
+      const profile = this.pricingProfile(vehicle);
+      const breakdown = computeFreightPrice({
+        baseFee: profile.baseFee,
+        ratePerKm: profile.ratePerKm,
+        deadheadKm: offer.price?.distanceKm ?? 0,
+        tripKm: 0,
+        multiplier: freightMultiplier(new Date(now), { min: profile.min, max: profile.max }),
+      });
+      f.priceBreakdown = breakdown;
+      f.lockedPrice = breakdown.total;
+      f.lockedAt = f.claimedAt;
+      f.driverPaid = false;
+      // Settle the shipper: a diverted vendor order (shipperDid = the vendor) is billed its earning + the
+      // platform fee from its prepaid balance. THREE distinct states, so an uncollected debt is never silent:
+      //  - 'billed'         a known shipper whose prepaid balance covered the charge;
+      //  - 'billing_failed' a known shipper whose balance fell SHORT — a real debt for a Local Admin to collect;
+      //  - 'unpaid'         a bulletin freight with no shipper, settled off-platform (the intended default).
+      // The driver is still paid on delivery in every case — labour done is owed regardless of shipper collection.
+      if (f.shipperDid && this.vendors.has(f.shipperDid)) {
+        const { paid } = this.vendors.billShipment(f.shipperDid, f.freightId, shipperCharge(breakdown.total));
+        f.paidStatus = paid ? 'billed' : 'billing_failed';
+      } else {
+        f.paidStatus = 'unpaid';
+      }
+      this.freights.set(f.freightId, f);
+    }
 
     offer.status = 'claimed';
     // Retire the competing offers for the same load.
@@ -271,6 +326,12 @@ export class DispatchService {
     if (f.status !== 'in_transit') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected in_transit`);
     f.status = 'delivered'; // no longer counts against the driver's remaining capacity
     f.deliveredAt = new Date().toISOString();
+    // S34 — pay the driver their LOCKED earning on delivery, exactly once. A system-level ledger outflow
+    // (drivers hold no agent wallet). A legacy/bulletin freight claimed before pricing (no lockedPrice) is skipped.
+    if (f.lockedPrice != null && !f.driverPaid && f.claimedBy) {
+      this.gate.driverPayout(f.claimedBy, f.lockedPrice);
+      f.driverPaid = true;
+    }
     this.freights.set(f.freightId, f);
     return f;
   }
@@ -308,10 +369,27 @@ export class DispatchService {
     return { kind: 'tote', ref: t.code, code: t.code, pickupLocation: place.loc, pickupLabel: place.label, destLabel: t.destinationLabel || 'destination', weightKg: t.weightKg, fragile, bulk: false, status: t.status, requiredCapabilities: this.mdps.toteRequiredCapabilities(t) };
   }
 
+  /**
+   * S34 — resolve a vehicle's pricing profile, filling class defaults for any missing field. A vehicle
+   * persisted BEFORE S34a rehydrates with baseFee/minMultiplier/maxMultiplier undefined: PersistentMap.load()
+   * does no migration, and vehicle.service.register() only defaults them for a NEWLY created vehicle. Reading
+   * them raw would drive NaN into the price and, from there, into a vendor's durable balance and the ledger.
+   * Every pricing read goes through here, so a legacy vehicle prices at its class default — mirroring the
+   * write-time defaults in register(). (pricing.ts also sanitises non-finite inputs as a last-line backstop.)
+   */
+  private pricingProfile(vehicle: Vehicle): { baseFee: number; ratePerKm: number; min: number; max: number } {
+    const spec = VEHICLE_SPEC[vehicle.vehicleClass];
+    const baseFee = Number.isFinite(vehicle.baseFee) ? vehicle.baseFee : (spec?.defaultBaseFee ?? 1);
+    const ratePerKm = Number.isFinite(vehicle.pricePerKm) ? vehicle.pricePerKm : DEFAULT_PRICE_PER_KM;
+    const min = clampMultiplier(Number.isFinite(vehicle.minMultiplier) ? vehicle.minMultiplier : DEFAULT_MIN_MULTIPLIER);
+    const max = Math.max(min, clampMultiplier(Number.isFinite(vehicle.maxMultiplier) ? vehicle.maxMultiplier : DEFAULT_MAX_MULTIPLIER));
+    return { baseFee, ratePerKm, min, max };
+  }
+
   private wrapFreight(f: Freight): Claimable {
     // S32: freight now carries its cargo model, so it matches vehicles on capability AND equipment like a tote.
     // S32b: status lets the driver app drive the claimed → picked-up → delivered flow in-app.
-    return { kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment };
+    return { kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown };
   }
 
   private vehicleCanCarry(vehicle: Vehicle, load: Claimable, remainingKg: number): boolean {

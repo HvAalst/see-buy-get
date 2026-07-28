@@ -6,7 +6,7 @@
  * PWA and the old page can never disagree about what "72 / 800 kg" or "12% above" means.
  */
 
-import type { AgentRow, Benchmark, Claimable, DriverStatus, MdpRow, NodeOption } from './types';
+import type { AgentRow, Benchmark, Claimable, DriverStatus, MdpRow, NodeOption, PriceBreakdown } from './types';
 
 /* -------------------------------------------------------------- capacity -- */
 
@@ -160,9 +160,33 @@ export function countdownLabel(seconds: number): string {
   return `${Math.floor(seconds / 60)} min left`;
 }
 
-/** Detour, weight and time in one plain sentence for the read-aloud summary. */
-export function offerSpoken(o: { message: string; weightKg: number; destLabel: string; detourKm: number }): string {
-  return `${o.message} ${o.weightKg} kilograms to ${o.destLabel}. ${o.detourKm} kilometres extra driving.`;
+/** Detour, weight, time and (for freight) the earning in one plain sentence for the read-aloud summary. */
+export function offerSpoken(o: { message: string; weightKg: number; destLabel: string; detourKm: number; price?: PriceBreakdown }): string {
+  const base = `${o.message} ${o.weightKg} kilograms to ${o.destLabel}. ${o.detourKm} kilometres extra driving.`;
+  return o.price ? `${base} You earn ${money(o.price.total)}.` : base;
+}
+
+/* ---------------------------------------------------------------- pricing -- */
+
+/** Plain money, two decimals, no symbol — the driver's local currency is set by their zone. */
+export function money(v: number | null | undefined): string {
+  return (Number(v) || 0).toFixed(2);
+}
+
+/**
+ * The transparent breakdown behind a freight earning, as plain lines for a Checklist. Every term a driver
+ * can see and trust: the flag-down fee, the distance × the rate actually applied, and — only when the
+ * market moved the rate off the base — a note that a busy- or quiet-time rate is in effect.
+ */
+export function priceBreakdownLines(price: PriceBreakdown | undefined): string[] {
+  if (!price) return [];
+  const lines = [
+    `Base fee ${money(price.baseFee)}`,
+    `${price.distanceKm} km at ${price.effectiveRate.toFixed(3)} per km`,
+  ];
+  if (price.multiplier > 1) lines.push(`Busy-time rate: ${Math.round((price.multiplier - 1) * 100)}% more per km`);
+  else if (price.multiplier < 1) lines.push(`Quiet-time rate: ${Math.round((1 - price.multiplier) * 100)}% less per km`);
+  return lines;
 }
 
 /* ----------------------------------------------------------------- loads -- */
