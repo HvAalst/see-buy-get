@@ -39,9 +39,35 @@ export class Freight {
    *  when both ends are equipped (or their equipment is unknown, e.g. a bulletin freight with only geo labels). */
   equipmentGaps: Array<'origin' | 'dest'>;
   shipperDid?: string;
+  // S32d — the buyer whose order was diverted keeps sight of it: a phone-HASH join to their identity (so it
+  // shows in "my shipments") — never the cleartext number, since the raw Freight is returned to drivers /
+  // operators (listFreight, pickup/deliver) — plus a public tracking key, the order ref, and per-transition
+  // timestamps → a timeline. Absent for a bulletin freight (no buyer).
+  buyerPhoneHash?: string;
+  trackingKey?: string;
+  externalOrderId?: string;
+  claimedAt?: string;
+  pickedUpAt?: string;
+  deliveredAt?: string;
   status: FreightStatus;
   claimedBy?: string;
   createdAt: string;
+}
+
+/** The buyer-facing, PII-free projection of a diverted freight job — the freight analogue of a
+ *  ConsumerParcelView, shown in the buyer's "my shipments" so a diverted order never disappears. */
+export class FreightShipmentView {
+  freightId!: string;
+  code!: string; // human FRT-NNN reference
+  status!: FreightStatus;
+  cargoClass!: string;
+  destLabel!: string;
+  weightKg!: number;
+  trackingKey?: string;
+  externalOrderId?: string;
+  equipmentGaps!: Array<'origin' | 'dest'>;
+  createdAt!: string;
+  timeline!: Array<{ status: FreightStatus; at: string }>;
 }
 
 /** A unit a driver can claim, normalised across totes and freight. */

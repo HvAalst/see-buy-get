@@ -143,9 +143,26 @@ export interface ConsumerParcelView {
   disputeReason?: string;
 }
 
+/** S32d — a diverted dedicated-freight job the buyer is a party to (the freight analogue of a parcel twin).
+ *  Shown in a "Dedicated freight" section of "my parcels" so an order too big for the network stays visible. */
+export interface FreightShipmentView {
+  freightId: string;
+  code: string; // human FRT-NNN reference
+  status: 'available' | 'claimed' | 'in_transit' | 'delivered';
+  cargoClass: string;
+  destLabel: string;
+  weightKg: number;
+  trackingKey?: string;
+  externalOrderId?: string;
+  equipmentGaps: Array<'origin' | 'dest'>;
+  createdAt: string;
+  timeline: Array<{ status: string; at: string }>;
+}
+
 export interface MyParcels {
   sent: ConsumerParcelView[];
   received: ConsumerParcelView[];
+  freights: FreightShipmentView[];
 }
 
 /* ------------------------------------------------- invites (S24) -- */

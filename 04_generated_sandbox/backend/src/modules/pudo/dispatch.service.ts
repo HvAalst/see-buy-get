@@ -12,8 +12,9 @@ import { CargoService } from './cargo.service';
 import { CargoNature, Equipment, VehicleCapability } from './cargo.types';
 import { detourKm, haversineKm } from './geo';
 import { DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, OFFER_TTL_MIN, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
+import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
-import { Claimable, ClaimableKind, Freight, Offer, RoutePlan } from './dispatch.types';
+import { Claimable, ClaimableKind, Freight, FreightShipmentView, Offer, RoutePlan } from './dispatch.types';
 
 /**
  * DispatchService — the opportunistic line-haul marketplace (Compendium Ch 19). PUDO agents (and
@@ -65,7 +66,7 @@ export class DispatchService {
     return { code: t.code, status: t.status };
   }
 
-  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[] }): Freight {
+  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string }): Freight {
     this.freightSeq += 1;
     // S32: give the freight a cargo model so it matches vehicles like a tote does — class (from weight+dims)
     // drives the required equipment, the primary nature drives the required vehicle capability.
@@ -100,11 +101,48 @@ export class DispatchService {
       requiredEquipment,
       equipmentGaps,
       shipperDid: input.shipperDid,
+      // S32d — keep the buyer joined to their diverted order by phone HASH only (never the cleartext number:
+      // the raw Freight goes to drivers/operators). Plus a public tracking key + the order ref. Only when a
+      // buyer is known (a diverted order; not a bulletin freight).
+      buyerPhoneHash: input.buyerMobile ? hashPhone(input.buyerMobile) || undefined : undefined,
+      trackingKey: `T-${randomBytes(5).toString('hex').toUpperCase()}`,
+      externalOrderId: input.externalOrderId,
       status: 'available',
       createdAt: new Date().toISOString(),
     };
     this.freights.set(freight.freightId, freight);
     return freight;
+  }
+
+  /** Every diverted freight a buyer (by phone hash) is a party to — the "my shipments" freight section. */
+  freightsForPhoneHash(phoneHash: string): FreightShipmentView[] {
+    if (!phoneHash) return [];
+    return [...this.freights.values()]
+      .filter((f) => f.buyerPhoneHash === phoneHash)
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+      .map((f) => DispatchService.toShipmentView(f));
+  }
+
+  /** The buyer-facing, PII-free projection of a freight job + its status timeline (built from the stamped
+   *  transition times). Never carries the buyer's number, the shipper, or the pickup coordinates. */
+  static toShipmentView(f: Freight): FreightShipmentView {
+    const timeline: Array<{ status: Freight['status']; at: string }> = [{ status: 'available', at: f.createdAt }];
+    if (f.claimedAt) timeline.push({ status: 'claimed', at: f.claimedAt });
+    if (f.pickedUpAt) timeline.push({ status: 'in_transit', at: f.pickedUpAt });
+    if (f.deliveredAt) timeline.push({ status: 'delivered', at: f.deliveredAt });
+    return {
+      freightId: f.freightId,
+      code: f.code,
+      status: f.status,
+      cargoClass: f.cargoClass,
+      destLabel: f.destLabel,
+      weightKg: f.weightKg,
+      trackingKey: f.trackingKey,
+      externalOrderId: f.externalOrderId,
+      equipmentGaps: f.equipmentGaps,
+      createdAt: f.createdAt,
+      timeline,
+    };
   }
 
   // --- matching ---
@@ -171,7 +209,7 @@ export class DispatchService {
     }
 
     if (offer.kind === 'tote') this.totes.markClaimed(offer.ref, offer.driverDid);
-    else { const f = this.requireFreight(offer.ref); if (f.status !== 'available') throw new GlosError('INVALID_STATE', `Freight is ${f.status}`); f.status = 'claimed'; f.claimedBy = offer.driverDid; }
+    else { const f = this.requireFreight(offer.ref); if (f.status !== 'available') throw new GlosError('INVALID_STATE', `Freight is ${f.status}`); f.status = 'claimed'; f.claimedBy = offer.driverDid; f.claimedAt = new Date().toISOString(); this.freights.set(f.freightId, f); }
 
     offer.status = 'claimed';
     // Retire the competing offers for the same load.
@@ -223,6 +261,7 @@ export class DispatchService {
     if (driverDid && f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
     if (f.status !== 'claimed') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected claimed`);
     f.status = 'in_transit';
+    f.pickedUpAt = new Date().toISOString();
     this.freights.set(f.freightId, f);
     return f;
   }
@@ -231,6 +270,7 @@ export class DispatchService {
     if (driverDid && f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
     if (f.status !== 'in_transit') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected in_transit`);
     f.status = 'delivered'; // no longer counts against the driver's remaining capacity
+    f.deliveredAt = new Date().toISOString();
     this.freights.set(f.freightId, f);
     return f;
   }

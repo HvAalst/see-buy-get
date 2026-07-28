@@ -594,6 +594,9 @@ export class SbgController {
         // with only manual handling can't take a pallet), flagging a gap advisory for a Local Admin to resolve.
         originEquipment: origin.equipment,
         destEquipment: dest.equipment,
+        // S32d: keep the buyer joined to their order so it stays in their "my shipments" with a tracking key.
+        buyerMobile: dto.buyerMobile ?? handoff?.buyerMobile,
+        externalOrderId: dto.externalOrderId ?? handoff?.externalOrderId,
       });
       if (handoff) this.vendors.consumeCheckout(handoff.id, freight.freightId);
       return { diverted: true, reason: 'dedicated_freight', cargoClass, freight };

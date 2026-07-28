@@ -1701,6 +1701,39 @@ describe('PUDO Light', () => {
     expect(heavy.dedicated).toBe(true); // P5 → dedicated freight
   });
 
+  it('S32d: a diverted order stays in the buyer\'s shipments with a tracking key + a growing timeline', () => {
+    const origin = onboardAgent('Ship Origin', 'NorthTown', 50);
+    const dest = onboardAgent('Ship Dest', 'NorthTown', 50);
+    const vendor = vendors.register({ name: 'ShipVendor' });
+    vendors.topUp(vendor.vendorId, 50);
+    const buyer = '+254700123456';
+    const res: any = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: buyer, externalOrderId: 'ORD-99', weightKg: 300, contentPhotoRef: 'c.jpg' } as never);
+    expect(res.diverted).toBe(true);
+    expect(res.freight.trackingKey).toMatch(/^T-/);
+
+    // The buyer (by phone hash) finds their freight in "my shipments" — just created so far.
+    const mine = dispatch.freightsForPhoneHash(hashPhone(buyer));
+    expect(mine).toHaveLength(1);
+    expect(mine[0].code).toBe(res.freight.code);
+    expect(mine[0].externalOrderId).toBe('ORD-99');
+    expect(mine[0].timeline.map((t: { status: string }) => t.status)).toEqual(['available']);
+
+    // A driver claims → picks up → delivers; the buyer's timeline grows with each step.
+    const d = drivers.register({ displayName: 'FT', fullName: 'F', nationalId: 'ID-FT', mobile: '+254900202', licenceClasses: ['truck'], licenceNumber: 'L-FT', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const truck = vehicles.register({ plate: 'FT-1', vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 10_000, ownerName: 'X', equipment: ['TLT'] });
+    fleet.couple(d.did, truck.vehicleId);
+    const [offer] = dispatch.suggest(d.did, { from: origin.location, to: { lat: -1.3, lng: 36.95 } });
+    dispatch.claim(offer.offerId);
+    dispatch.pickupFreight(res.freight.freightId, d.did);
+    dispatch.deliverFreight(res.freight.freightId, d.did);
+
+    const done = dispatch.freightsForPhoneHash(hashPhone(buyer))[0];
+    expect(done.status).toBe('delivered');
+    expect(done.timeline.map((t: { status: string }) => t.status)).toEqual(['available', 'claimed', 'in_transit', 'delivered']);
+  });
+
   it('serves the operator dashboard KPIs (M7 light)', () => {
     const a = onboardAgent('Dash Shop', 'NorthTown', 20);
     parcels.accept({ agentDid: a.did, parcelId: 'QR-D', size: 'S', destZone: 'Z', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'd.jpg' });

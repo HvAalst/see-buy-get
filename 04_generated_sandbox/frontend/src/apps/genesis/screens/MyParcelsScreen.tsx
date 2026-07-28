@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, Checklist, CodeCard, ErrorNote, Icon, Note, Pill, ReadAloud, Sheet } from '../../../shared/ui';
 import { PhotoField } from './PhotoField';
 import { LADDER, isOffLadder, ladderIndex, parcelRowLine, relationWord, sortForPerson, statusPresentation, stepTime } from '../logic';
-import type { ConsumerParcelView, ParcelStatus } from '../types';
+import type { ConsumerParcelView, FreightShipmentView, ParcelStatus } from '../types';
 import type { SendActions, SendState } from '../useSendApp';
 
 export interface MyParcelsScreenProps {
@@ -28,7 +28,8 @@ export function MyParcelsScreen({ state, actions }: MyParcelsScreenProps) {
 
   const received = sortForPerson(state.parcels?.received ?? []);
   const sent = sortForPerson(state.parcels?.sent ?? []);
-  const empty = state.parcelsState === 'ready' && received.length === 0 && sent.length === 0;
+  const freights = state.parcels?.freights ?? [];
+  const empty = state.parcelsState === 'ready' && received.length === 0 && sent.length === 0 && freights.length === 0;
 
   return (
     <div class="scr">
@@ -45,6 +46,8 @@ export function MyParcelsScreen({ state, actions }: MyParcelsScreenProps) {
       {sent.length ? (
         <ParcelGroup title="You are sending" items={sent} actions={actions} />
       ) : null}
+
+      {freights.length ? <FreightGroup items={freights} /> : null}
 
       {empty ? (
         <Card tone="soft">
@@ -84,6 +87,38 @@ function ParcelGroup({ title, items, actions }: { title: string; items: Consumer
                 <Icon name="chevronRight" size={22} />
               </span>
             </button>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+/** S32d — the buyer's dedicated-freight orders (too big for the parcel network). Informational rows: a
+ *  diverted order stays visible with its status; the carrier/pickup flow is handled off the shelves. */
+const FREIGHT_STATUS: Record<string, { word: string; tone: 'ok' | 'info' | 'idle' }> = {
+  available: { word: 'Finding a truck', tone: 'idle' },
+  claimed: { word: 'Truck assigned', tone: 'info' },
+  in_transit: { word: 'On the way', tone: 'info' },
+  delivered: { word: 'Delivered', tone: 'ok' },
+};
+
+function FreightGroup({ items }: { items: FreightShipmentView[] }) {
+  return (
+    <Card title="Dedicated freight">
+      <p class="card__note">Orders too big for the parcel network — carried on a dedicated truck.</p>
+      <div class="rows">
+        {items.map((fr) => {
+          const s = FREIGHT_STATUS[fr.status] ?? { word: fr.status, tone: 'info' as const };
+          return (
+            <div key={fr.freightId} class="row row--static">
+              <span class="row__ic"><Icon name="truck" size={24} /></span>
+              <span class="row__body">
+                <span class="row__t">{fr.code}</span>
+                <span class="row__s">{`To ${fr.destLabel} · ${fr.weightKg} kg · class ${fr.cargoClass}`}</span>
+              </span>
+              <span class="row__end"><Pill tone={s.tone} dot>{s.word}</Pill></span>
+            </div>
           );
         })}
       </div>

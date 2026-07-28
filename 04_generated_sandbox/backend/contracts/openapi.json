@@ -7467,7 +7467,7 @@
       "get": {
         "operationId": "Identity.myParcels",
         "summary": "",
-        "description": "The receiver/sender home: every parcel this person is a party to (sent + received), matched by their\nverified phone — retroactively (O4). PII-free authenticated twins; the counterpart stays hashed.",
+        "description": "The receiver/sender home: every parcel this person is a party to (sent + received), matched by their\nverified phone — retroactively (O4). PII-free authenticated twins; the counterpart stays hashed. S32d\nalso returns `freights` — any order of theirs that was too big for the parcel network and diverted to\ndedicated freight, so a diverted order never vanishes from the buyer's home.",
         "parameters": [],
         "responses": {
           "200": {
@@ -11953,6 +11953,24 @@
             }
           },
           "shipperDid": {
+            "type": "string"
+          },
+          "buyerPhoneHash": {
+            "type": "string"
+          },
+          "trackingKey": {
+            "type": "string"
+          },
+          "externalOrderId": {
+            "type": "string"
+          },
+          "claimedAt": {
+            "type": "string"
+          },
+          "pickedUpAt": {
+            "type": "string"
+          },
+          "deliveredAt": {
             "type": "string"
           },
           "status": {

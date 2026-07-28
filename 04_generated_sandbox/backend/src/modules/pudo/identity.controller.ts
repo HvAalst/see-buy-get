@@ -6,6 +6,7 @@ import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { PersonService } from './person.service';
 import { OtpService } from './otp.service';
 import { ParcelService } from './parcel.service';
+import { DispatchService } from './dispatch.service';
 import { InviteService } from './invite.service';
 import { toInviteView } from './invite.types';
 import { BuyerDisputeDto, CreateInviteDto, EnrollDto, PinLoginDto, PodDto, ProfileDto, SetPinDto, SwitchRoleDto } from './pudo.dto';
@@ -28,6 +29,7 @@ export class IdentityController {
     private readonly otp: OtpService,
     private readonly parcels: ParcelService,
     private readonly invites: InviteService,
+    private readonly dispatch: DispatchService,
   ) {}
 
   /**
@@ -87,13 +89,15 @@ export class IdentityController {
 
   /**
    * The receiver/sender home: every parcel this person is a party to (sent + received), matched by their
-   * verified phone — retroactively (O4). PII-free authenticated twins; the counterpart stays hashed.
+   * verified phone — retroactively (O4). PII-free authenticated twins; the counterpart stays hashed. S32d
+   * also returns `freights` — any order of theirs that was too big for the parcel network and diverted to
+   * dedicated freight, so a diverted order never vanishes from the buyer's home.
    */
   @Roles('consumer')
   @Get('parcels')
   myParcels(@Actor() actor: IntrospectionResult) {
     const person = this.persons.requireByDid(actor.did!);
-    return this.parcels.forPhoneHash(person.phoneHash);
+    return { ...this.parcels.forPhoneHash(person.phoneHash), freights: this.dispatch.freightsForPhoneHash(person.phoneHash) };
   }
 
   /** One parcel the caller is a party to — the authenticated twin + status timeline (404 to a non-party). */
