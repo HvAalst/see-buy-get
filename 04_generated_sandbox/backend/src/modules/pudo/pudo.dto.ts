@@ -2,7 +2,7 @@ import { ArrayMinSize, IsArray, IsBoolean, IsIn, IsNumber, IsObject, IsOptional,
 import { Type } from 'class-transformer';
 import { TRUCK_SUBTYPES } from './fleet.config';
 import { MEDIA_KINDS, MediaKind } from './media.types';
-import { CARGO_NATURES, CargoNature } from './cargo.types';
+import { CARGO_NATURES, CargoNature, EQUIPMENT, Equipment } from './cargo.types';
 
 class GeoDto {
   @IsNumber() lat!: number;
@@ -449,6 +449,8 @@ export class RegisterVehicleDto {
   @IsOptional() @IsArray() @IsString({ each: true }) vehiclePhotoRefs?: string[];
   @IsOptional() @IsArray() @IsString({ each: true }) trailerPhotoRefs?: string[];
   @IsOptional() @IsString() managerDid?: string;
+  // S32 — declared load/unload equipment beyond the subtype baseline (a tail-lift, a pallet jack, straps).
+  @IsOptional() @IsArray() @IsIn(EQUIPMENT, { each: true }) equipment?: Equipment[];
 }
 
 export class VehicleDocsDto {
@@ -516,4 +518,6 @@ export class RegisterFreightDto {
   @IsNumber() @Min(1) weightKg!: number;
   @IsOptional() @IsBoolean() fragile?: boolean;
   @IsOptional() @IsBoolean() bulk?: boolean;
+  /** S32 — the freight's primary cargo nature (default GEN); drives the required vehicle capability. */
+  @IsOptional() @IsIn(CARGO_NATURES) natureCode?: CargoNature;
 }

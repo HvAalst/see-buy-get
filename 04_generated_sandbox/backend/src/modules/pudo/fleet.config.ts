@@ -9,6 +9,7 @@
 // prefers vehicles with full registration + doc photos + a factory/VIN number.
 
 import { ParcelSize } from './pudo.types';
+import { Equipment } from './cargo.types';
 
 export type VehicleClass = 'bike' | 'motorcycle' | 'tuktuk' | 'car' | 'van' | 'bus' | 'truck';
 
@@ -25,6 +26,10 @@ export interface TruckSubtypeSpec {
   liquid?: boolean; // tanker
   hazmat?: boolean; // dangerous goods
   oversized?: boolean; // abnormal / project cargo
+  // S32 — load/unload equipment BUILT INTO this body (a crane truck self-loads; a sidelifter has a forklift).
+  // The fleet manager may declare additional equipment the truck carries (a tail-lift, a pallet jack); this
+  // is only the subtype-implied baseline. Every vehicle also gets 'MAN' (human handling) at register time.
+  equipment?: Equipment[];
 }
 
 export const TRUCK_SUBTYPE_CATALOG = {
@@ -43,14 +48,14 @@ export const TRUCK_SUBTYPE_CATALOG = {
   fuel_tanker: { label: 'Fuel tanker', capacityKg: 20000, liquid: true, hazmat: true },
   water_bowser: { label: 'Water bowser', capacityKg: 16000, liquid: true },
   hazmat: { label: 'Hazmat / chemical', capacityKg: 18000, hazmat: true },
-  car_carrier: { label: 'Car carrier', capacityKg: 10000, oversized: true },
-  livestock: { label: 'Livestock', capacityKg: 12000 },
+  car_carrier: { label: 'Car carrier', capacityKg: 10000, oversized: true, equipment: ['RMP'] },
+  livestock: { label: 'Livestock', capacityKg: 12000, equipment: ['RMP'] },
   skeletal: { label: 'Skeletal (container chassis)', capacityKg: 30000 },
-  container_selfloader: { label: 'Container self-loader (sidelifter)', capacityKg: 30000 },
-  crane: { label: 'Crane / Hiab', capacityKg: 14000 },
-  lowboy: { label: 'Lowboy / low-loader (machinery)', capacityKg: 40000, oversized: true },
-  logging: { label: 'Logging / timber', capacityKg: 25000, oversized: true },
-  tow_recovery: { label: 'Tow / recovery', capacityKg: 8000 },
+  container_selfloader: { label: 'Container self-loader (sidelifter)', capacityKg: 30000, equipment: ['CRN', 'FLT'] },
+  crane: { label: 'Crane / Hiab', capacityKg: 14000, equipment: ['CRN', 'STR'] },
+  lowboy: { label: 'Lowboy / low-loader (machinery)', capacityKg: 40000, oversized: true, equipment: ['RMP'] },
+  logging: { label: 'Logging / timber', capacityKg: 25000, oversized: true, equipment: ['CRN'] },
+  tow_recovery: { label: 'Tow / recovery', capacityKg: 8000, equipment: ['CRN'] },
   refuse: { label: 'Refuse / compactor', capacityKg: 12000 },
 } satisfies Record<string, TruckSubtypeSpec>;
 

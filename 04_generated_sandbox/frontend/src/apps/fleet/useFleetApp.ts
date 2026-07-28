@@ -330,6 +330,7 @@ export function useFleetApp() {
           : {}),
         ...(f.vehiclePhotoRefs.length ? { vehiclePhotoRefs: f.vehiclePhotoRefs } : {}),
         ...(f.trailerPhotoRefs.length ? { trailerPhotoRefs: f.trailerPhotoRefs } : {}),
+        ...(f.vehicleClass === 'truck' && f.equipment.length ? { equipment: f.equipment } : {}), // equipment applies to trucks only
       });
       if (r.error) return fail(r.error);
       const v = narrow<VehicleRow>(r.data);

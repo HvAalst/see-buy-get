@@ -3,6 +3,7 @@
 // the MDP→PUDO feeder today and a van tomorrow, and a vehicle may change hands between drivers.
 
 import { TruckSubtype, VehicleClass } from './fleet.config';
+import { Equipment } from './cargo.types';
 import { GeoPoint } from './pudo.types';
 
 export type FleetManagerStatus = 'DRAFT' | 'KYC_PENDING' | 'APPROVED' | 'ACTIVE' | 'SUSPENDED';
@@ -69,6 +70,11 @@ export class Vehicle {
   liquid: boolean; // tanker
   hazmat: boolean; // dangerous-goods capable
   oversized: boolean; // abnormal / project cargo
+  // S32 — load/unload equipment this vehicle carries (MAN…STR). Subtype-implied baseline (a crane truck
+  // self-loads) plus whatever the fleet manager declares (a tail-lift, a pallet jack). A heavy cargo class
+  // (P3+) requires at least one qualifying piece; dispatch only offers a dedicated freight to a vehicle that
+  // has the equipment the load needs. Always includes 'MAN'.
+  equipment: Equipment[];
   ownerType: VehicleOwnerType;
   ownerName: string;
   documents: VehicleDocuments;

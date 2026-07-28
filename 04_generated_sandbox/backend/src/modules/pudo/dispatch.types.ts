@@ -3,7 +3,7 @@
 // remaining capacity of the driver's coupled vehicle. The driver claims, ignores, or lets it lapse.
 
 import { GeoPoint } from './pudo.types';
-import { VehicleCapability } from './cargo.types';
+import { CargoClass, CargoNature, Equipment, VehicleCapability } from './cargo.types';
 
 export class RoutePlan {
   from: GeoPoint;
@@ -14,7 +14,8 @@ export class RoutePlan {
 export type ClaimableKind = 'tote' | 'freight';
 export type FreightStatus = 'available' | 'claimed' | 'in_transit' | 'delivered';
 
-/** A bulk freight job (sugar/cement etc.) — trucks only, never via MDP. Same marketplace as totes. */
+/** A bulk/dedicated freight job (sugar/cement, or a P4+ order diverted out of the PUDO network) — trucks
+ *  only, never via MDP. Same marketplace as totes. */
 export class Freight {
   freightId: string;
   code: string; // human-readable reference
@@ -26,6 +27,14 @@ export class Freight {
   weightKg: number;
   fragile: boolean;
   bulk: boolean; // requires a bulk-capable vehicle (truck)
+  // S32 — the freight's cargo model, so it matches vehicles like a tote does: class (drives required
+  // equipment), primary nature (drives required vehicle capability), and the resolved requirements a
+  // claiming vehicle must satisfy. `shipperDid` links the originator (a vendor whose P4+ order was diverted).
+  cargoClass: CargoClass;
+  natureCode: CargoNature;
+  requiredCapabilities: VehicleCapability[];
+  requiredEquipment: Equipment[];
+  shipperDid?: string;
   status: FreightStatus;
   claimedBy?: string;
   createdAt: string;
@@ -42,9 +51,11 @@ export class Claimable {
   fragile: boolean;
   bulk: boolean;
   /** S31 — vehicle capabilities this load's cargo requires (a tote's perishable/hazardous parcels →
-   *  cold chain / hazmat). A vehicle lacking any is not offered the load. Freight carries none until it
-   *  gains a cargo model (S32). */
+   *  cold chain / hazmat). A vehicle lacking any is not offered the load. */
   requiredCapabilities?: VehicleCapability[];
+  /** S32 — load/unload equipment this load requires (a heavy-class freight → a forklift/tail-lift/crane).
+   *  A vehicle whose equipment manifest lacks any is not offered the load. */
+  requiredEquipment?: Equipment[];
 }
 
 export type OfferStatus = 'pending' | 'claimed' | 'ignored' | 'expired';

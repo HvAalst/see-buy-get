@@ -37,7 +37,21 @@ export interface VehicleForm {
   // S26 — mediaIds of the owner's uploaded vehicle-body and trailer photos.
   vehiclePhotoRefs: string[];
   trailerPhotoRefs: string[];
+  equipment: Equipment[]; // S32 — declared load/unload equipment (a tail-lift, a pallet jack, …)
 }
+
+/** Load/unload equipment a fleet manager can declare (S32). Mirrors the backend EQUIPMENT tuple; plain
+ *  labels for the console. 'MAN' is implicit (every vehicle can do manual handling) so it is not listed. */
+export type Equipment = 'HTR' | 'PLT' | 'FLT' | 'TLT' | 'CRN' | 'RMP' | 'STR';
+export const EQUIPMENT_OPTIONS: Array<{ key: Equipment; label: string }> = [
+  { key: 'HTR', label: 'Hand truck / sack barrow' },
+  { key: 'PLT', label: 'Pallet jack' },
+  { key: 'TLT', label: 'Tail-lift (hydraulic)' },
+  { key: 'FLT', label: 'Forklift' },
+  { key: 'CRN', label: 'Crane / Hiab' },
+  { key: 'RMP', label: 'Loading ramp' },
+  { key: 'STR', label: 'Slings / straps' },
+];
 
 export const EMPTY_VEHICLE: VehicleForm = {
   plate: '',
@@ -51,6 +65,7 @@ export const EMPTY_VEHICLE: VehicleForm = {
   factoryId: '',
   vehiclePhotoRefs: [],
   trailerPhotoRefs: [],
+  equipment: [],
 };
 
 /** The next thing the vehicle form needs, or null when it can submit. */

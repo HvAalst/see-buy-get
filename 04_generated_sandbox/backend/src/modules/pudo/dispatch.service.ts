@@ -3,14 +3,17 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { randomBytes } from 'crypto';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
+import { PersistentMap } from '../../foundation/store/persistent-map';
 import { AgentService } from './agent.service';
 import { MdpService } from './mdp.service';
 import { ToteService } from './tote.service';
 import { FleetService } from './fleet.service';
+import { CargoService } from './cargo.service';
+import { CargoNature, Equipment, VehicleCapability } from './cargo.types';
 import { detourKm, haversineKm } from './geo';
 import { DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, OFFER_TTL_MIN, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
 import { Vehicle } from './fleet.types';
-import { Claimable, Freight, Offer, RoutePlan } from './dispatch.types';
+import { Claimable, ClaimableKind, Freight, Offer, RoutePlan } from './dispatch.types';
 
 /**
  * DispatchService — the opportunistic line-haul marketplace (Compendium Ch 19). PUDO agents (and
@@ -22,7 +25,9 @@ import { Claimable, Freight, Offer, RoutePlan } from './dispatch.types';
  */
 @Injectable()
 export class DispatchService {
-  private readonly freights = new Map<string, Freight>();
+  // Durable: a freight job is a real transport obligation (a diverted P4+ order is a paid commitment),
+  // so — unlike the ephemeral offer bulletin — it must survive a restart.
+  private readonly freights = new PersistentMap<string, Freight>('pudo-freights');
   private readonly offers = new Map<string, Offer>();
   private freightSeq = 0;
 
@@ -32,7 +37,10 @@ export class DispatchService {
     private readonly mdps: MdpService,
     private readonly fleet: FleetService,
     private readonly events: EventBus,
-  ) {}
+    private readonly cargo: CargoService,
+  ) {
+    this.freightSeq = [...this.freights.values()].length; // continue the human FRT-NNN sequence after a restart
+  }
 
   // --- publishing ---
 
@@ -57,8 +65,13 @@ export class DispatchService {
     return { code: t.code, status: t.status };
   }
 
-  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean }): Freight {
+  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; shipperDid?: string }): Freight {
     this.freightSeq += 1;
+    // S32: give the freight a cargo model so it matches vehicles like a tote does — class (from weight+dims)
+    // drives the required equipment, the primary nature drives the required vehicle capability.
+    const natureCode: CargoNature = input.natureCode ?? 'GEN';
+    const cargoClass = this.cargo.classify({ kg: input.weightKg, dimsCm: input.dimensionsCm });
+    const bulk = input.bulk ?? true; // bulk cargo by default (sugar/cement) → trucks
     const freight: Freight = {
       freightId: `frt_${randomBytes(5).toString('hex')}`,
       code: `FRT-${String(this.freightSeq).padStart(3, '0')}`,
@@ -69,7 +82,15 @@ export class DispatchService {
       destLocation: input.destLocation,
       weightKg: input.weightKg,
       fragile: input.fragile ?? false,
-      bulk: input.bulk ?? true, // bulk cargo by default (sugar/cement) → trucks
+      bulk,
+      cargoClass,
+      natureCode,
+      requiredCapabilities: this.cargo.requiredCapabilities([natureCode]),
+      // Handling equipment is for DISCRETE/palletised cargo (a forklift/pallet-jack/crane). Loose BULK
+      // (cement in a tipper, grain in a hopper) self-loads via silo/tipping, so it needs no handling gear —
+      // its constraint is `carriesBulk` (checked in vehicleCanCarry), not a forklift.
+      requiredEquipment: bulk ? [] : this.cargo.requiredEquipment(cargoClass),
+      shipperDid: input.shipperDid,
       status: 'available',
       createdAt: new Date().toISOString(),
     };
@@ -126,14 +147,18 @@ export class DispatchService {
     const vehicle = this.fleet.vehicleForDriver(offer.driverDid);
     if (!vehicle) throw new GlosError('NOT_COUPLED', 'Driver is no longer coupled to a vehicle');
     if (offer.weightKg > this.remainingCapacity(offer.driverDid)) throw new GlosError('CAPACITY_EXCEEDED', 'Not enough remaining capacity for this load');
-    // S31: re-check the load's required capabilities against the driver's CURRENT vehicle — coupling is
-    // re-assignable, so a capability that held when the offer was made (suggest → vehicleCanCarry) may not
-    // hold now. Without this, a driver could re-couple to an incapable vehicle and RESERVE the tote (markClaimed)
-    // only to dead-end at loadBag (VEHICLE_MISSING_CAPABILITY), stranding it 'claimed' for everyone else.
-    if (offer.kind === 'tote') {
-      const tote = this.totes.byCodeMaybe(offer.ref);
-      const need = tote ? this.mdps.toteRequiredCapabilities(tote) : [];
-      if (need.some((cap) => !vehicle[cap])) throw new GlosError('VEHICLE_MISSING_CAPABILITY', 'Your current vehicle lacks a capability this load requires — re-couple to a capable vehicle');
+    // S31/S32: re-check the load's required capabilities AND equipment against the driver's CURRENT vehicle —
+    // coupling is re-assignable, so what held when the offer was made (suggest → vehicleCanCarry) may not hold
+    // now. Without this, a driver could re-couple to an unsuitable vehicle and RESERVE the load (markClaimed)
+    // only to dead-end at load time, stranding it 'claimed' for everyone else.
+    const need = this.loadRequirements(offer.kind, offer.ref);
+    if (
+      need.capabilities.some((cap) => !vehicle[cap]) ||
+      !DispatchService.hasEquipmentFor(vehicle, need.equipment) ||
+      (need.bulk && !vehicle.carriesBulk) ||
+      (need.fragile && !vehicle.allowsFragile)
+    ) {
+      throw new GlosError('VEHICLE_MISSING_CAPABILITY', 'Your current vehicle lacks a capability or equipment this load requires — re-couple to a suitable vehicle');
     }
 
     if (offer.kind === 'tote') this.totes.markClaimed(offer.ref, offer.driverDid);
@@ -229,8 +254,8 @@ export class DispatchService {
   }
 
   private wrapFreight(f: Freight): Claimable {
-    // Freight carries no cargo-nature model yet (its capability requirements arrive with the S32 freight lane).
-    return { kind: 'freight', ref: f.freightId, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk };
+    // S32: freight now carries its cargo model, so it matches vehicles on capability AND equipment like a tote.
+    return { kind: 'freight', ref: f.freightId, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment };
   }
 
   private vehicleCanCarry(vehicle: Vehicle, load: Claimable, remainingKg: number): boolean {
@@ -238,9 +263,33 @@ export class DispatchService {
     if (load.weightKg > vehicle.capacityKg) return false;
     if (load.fragile && !vehicle.allowsFragile) return false;
     if (load.bulk && !vehicle.carriesBulk) return false;
-    // S31: the vehicle must satisfy every capability the load's cargo requires (else it can't legally carry it).
+    // S31: the vehicle must satisfy EVERY capability the load's cargo requires (perishable → cold chain,
+    // hazardous → hazmat — a load needing both needs both).
     if ((load.requiredCapabilities ?? []).some((cap) => !vehicle[cap])) return false;
+    // S32: and it must carry AT LEAST ONE piece of qualifying load/unload equipment (requiredEquipment is an
+    // any-of set — a P4 load can be handled by a hand-truck OR a pallet-jack OR a tail-lift OR a ramp).
+    if (!DispatchService.hasEquipmentFor(vehicle, load.requiredEquipment)) return false;
     return true;
+  }
+
+  /** Does the vehicle carry at least one piece of the equipment a load requires? An empty requirement (bulk /
+   *  light cargo) is always satisfied. requiredEquipment is ANY-OF, so one qualifying piece is enough. */
+  private static hasEquipmentFor(vehicle: Vehicle, required?: Equipment[]): boolean {
+    if (!required || required.length === 0) return true;
+    const have = vehicle.equipment ?? [];
+    return required.some((eq) => have.includes(eq));
+  }
+
+  /** Everything a claimable's cargo requires of a vehicle (tote via its parcels; freight from its record) —
+   *  capabilities, equipment, AND the bulk/fragile flags. Used by claim() to re-check the driver's CURRENT
+   *  vehicle (coupling is re-assignable), so it mirrors EVERY axis vehicleCanCarry filters on. */
+  private loadRequirements(kind: ClaimableKind, ref: string): { capabilities: VehicleCapability[]; equipment: Equipment[]; bulk: boolean; fragile: boolean } {
+    if (kind === 'tote') {
+      const t = this.totes.byCodeMaybe(ref);
+      return { capabilities: t ? this.mdps.toteRequiredCapabilities(t) : [], equipment: [], bulk: false, fragile: false };
+    }
+    const f = this.freights.get(ref);
+    return { capabilities: f?.requiredCapabilities ?? [], equipment: f?.requiredEquipment ?? [], bulk: f?.bulk ?? false, fragile: f?.fragile ?? false };
   }
 
   /** Resolve a tote's locationId (an MDP id or an agent DID) → its coordinates + display label. */

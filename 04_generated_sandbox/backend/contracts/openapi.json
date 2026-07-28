@@ -5364,7 +5364,14 @@
         },
         "responses": {
           "201": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       }
@@ -10800,6 +10807,12 @@
           "oversized": {
             "type": "boolean"
           },
+          "equipment": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
           "ownerType": {
             "type": "object"
           },
@@ -10845,6 +10858,7 @@
           "liquid",
           "hazmat",
           "oversized",
+          "equipment",
           "ownerType",
           "ownerName",
           "documents",
@@ -11492,6 +11506,19 @@
           },
           "managerDid": {
             "type": "string"
+          },
+          "equipment": {
+            "type": "string",
+            "enum": [
+              "MAN",
+              "HTR",
+              "PLT",
+              "FLT",
+              "TLT",
+              "CRN",
+              "RMP",
+              "STR"
+            ]
           }
         },
         "required": [
@@ -11801,6 +11828,22 @@
           },
           "bulk": {
             "type": "boolean"
+          },
+          "natureCode": {
+            "type": "string",
+            "description": "S32 — the freight's primary cargo nature (default GEN); drives the required vehicle capability.",
+            "enum": [
+              "GEN",
+              "FOD",
+              "FOP",
+              "HAZ-CHEM",
+              "HAZ-DUST",
+              "HAZ-BIO",
+              "HAZ-FLAM",
+              "FRG",
+              "ODR",
+              "HUM"
+            ]
           }
         },
         "required": [
@@ -11844,6 +11887,27 @@
           "bulk": {
             "type": "boolean"
           },
+          "cargoClass": {
+            "type": "object"
+          },
+          "natureCode": {
+            "type": "object"
+          },
+          "requiredCapabilities": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "requiredEquipment": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "shipperDid": {
+            "type": "string"
+          },
           "status": {
             "type": "object"
           },
@@ -11864,6 +11928,10 @@
           "weightKg",
           "fragile",
           "bulk",
+          "cargoClass",
+          "natureCode",
+          "requiredCapabilities",
+          "requiredEquipment",
           "status",
           "createdAt"
         ]

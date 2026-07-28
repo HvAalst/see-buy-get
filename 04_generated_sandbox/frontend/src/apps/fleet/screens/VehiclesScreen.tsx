@@ -2,7 +2,7 @@ import { useRef, useState } from 'preact/hooks';
 import { AuthImage, Button, Card, ErrorNote, Icon, Pill, QrBlock, ReadAloud, Sheet } from '../../../shared/ui';
 import { qrPayload } from '../../../shared/qr';
 import type { MediaKind } from '../../../lib/sbg/personas/media';
-import { subtypeLine, vehicleMissing } from '../logic';
+import { EQUIPMENT_OPTIONS, subtypeLine, vehicleMissing } from '../logic';
 import { VEHICLE_CLASSES, type VehicleRow } from '../types';
 import type { FleetActions, FleetState } from '../useFleetApp';
 
@@ -112,7 +112,7 @@ export function VehiclesScreen({ state, actions }: VehiclesScreenProps) {
             <label class="field__label" for="v-class">
               Class
             </label>
-            <select id="v-class" class="select" value={f.vehicleClass} onChange={(e) => actions.setVForm({ vehicleClass: e.currentTarget.value as typeof f.vehicleClass, truckSubtype: '' })}>
+            <select id="v-class" class="select" value={f.vehicleClass} onChange={(e) => actions.setVForm({ vehicleClass: e.currentTarget.value as typeof f.vehicleClass, truckSubtype: '', equipment: [] })}>
               {VEHICLE_CLASSES.map((c) => (
                 <option key={c} value={c}>
                   {c}
@@ -148,6 +148,28 @@ export function VehiclesScreen({ state, actions }: VehiclesScreenProps) {
           )}
         </div>
         {subLine ? <p class="hint" style="margin-top:8px">{subLine}</p> : null}
+        {isTruck ? (
+          <div class="field" style="margin-top:12px">
+            <span class="field__label">Load/unload equipment on board</span>
+            <div class="chips">
+              {EQUIPMENT_OPTIONS.map((eq) => {
+                const on = f.equipment.includes(eq.key);
+                return (
+                  <button
+                    key={eq.key}
+                    type="button"
+                    class={`chip chip--tap${on ? ' chip--on' : ''}`}
+                    aria-pressed={on}
+                    onClick={() => actions.setVForm({ equipment: on ? f.equipment.filter((e) => e !== eq.key) : [...f.equipment, eq.key] })}
+                  >
+                    {eq.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p class="hint" style="margin-top:6px">Needed to be offered heavy dedicated-freight jobs. Manual handling is always assumed.</p>
+          </div>
+        ) : null}
         <div class="grid2" style="margin-top:12px">
           <div class="field">
             <label class="field__label" for="v-owner">

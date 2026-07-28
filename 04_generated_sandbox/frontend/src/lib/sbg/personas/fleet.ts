@@ -38,6 +38,7 @@ export function createFleetApi(sbg: SbgClient) {
       documents?: { registrationPhotoRef?: string; factoryId?: string };
       vehiclePhotoRefs?: string[]; // S26 — mediaIds of the vehicle-body photos
       trailerPhotoRefs?: string[]; // S26 — mediaIds of a coupled trailer's photos
+      equipment?: string[]; // S32 — declared load/unload equipment (tail-lift, pallet jack, …)
       // Cast: the generated body narrows vehicleClass/truckSubtype to closed unions the
       // form feeds as validated strings; the backend re-validates (S5a contract quirk).
     }) => sbg.request((c) => c.POST('/v1/sbg/vehicles', { body: body as never })),

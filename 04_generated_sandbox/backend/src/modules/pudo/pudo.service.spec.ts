@@ -4,6 +4,7 @@ import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
 import { ParcelService } from './parcel.service';
 import { CargoService } from './cargo.service';
+import { SbgController } from './pudo.controller';
 import { MediaService } from './media.service';
 import { MonitorService } from './monitor.service';
 import { RatingService } from './rating.service';
@@ -58,6 +59,7 @@ describe('PUDO Light', () => {
   let drivers: DriverService;
   let fleet: FleetService;
   let dispatch: DispatchService;
+  let controller: SbgController;
   let managers: FleetManagerService;
   let accounts: AccountService;
   let otp: OtpService;
@@ -82,6 +84,7 @@ describe('PUDO Light', () => {
         WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
       ],
+      controllers: [SbgController],
     }).compile();
     agents = moduleRef.get(AgentService);
     gate = moduleRef.get(WalletGateService);
@@ -98,6 +101,7 @@ describe('PUDO Light', () => {
     drivers = moduleRef.get(DriverService);
     fleet = moduleRef.get(FleetService);
     dispatch = moduleRef.get(DispatchService);
+    controller = moduleRef.get(SbgController);
     managers = moduleRef.get(FleetManagerService);
     accounts = moduleRef.get(AccountService);
     otp = moduleRef.get(OtpService);
@@ -1587,6 +1591,79 @@ describe('PUDO Light', () => {
     dispatch.pickupFreight(f.freightId);
     expect(dispatch.deliverFreight(f.freightId).status).toBe('delivered');
     expect(dispatch.remainingCapacity(d.did)).toBe(10_000); // released
+  });
+
+  // --- S32: the dedicated-transport lane (equipment manifest + freight cargo model + P4+ divert) ---
+
+  it('S32: a vehicle carries a load/unload equipment manifest (MAN baseline + subtype + declared)', () => {
+    expect(vehicles.register({ plate: 'EQ-1', vehicleClass: 'bike', ownerName: 'X' }).equipment).toEqual(['MAN']);
+    const crane = vehicles.register({ plate: 'EQ-2', vehicleClass: 'truck', truckSubtype: 'crane', ownerName: 'X' });
+    expect(crane.equipment).toEqual(expect.arrayContaining(['MAN', 'CRN'])); // subtype-implied (a Hiab self-loads)
+    const declared = vehicles.register({ plate: 'EQ-3', vehicleClass: 'truck', truckSubtype: 'flatbed', ownerName: 'X', equipment: ['TLT', 'PLT'] });
+    expect(declared.equipment).toEqual(expect.arrayContaining(['MAN', 'TLT', 'PLT'])); // fleet-declared kit
+  });
+
+  it('S32: registered freight gets a cargo model — class + required capability + equipment (discrete vs bulk)', () => {
+    const pallet = dispatch.registerFreight({ description: 'Tiles', pickupLocation: { lat: -1.2, lng: 36.8 }, pickupLabel: 'D', destLabel: 'S', weightKg: 200, bulk: false });
+    expect(pallet.cargoClass).toBe('P4'); // 200 kg
+    expect(pallet.requiredEquipment.length).toBeGreaterThan(0); // discrete → needs handling gear
+    const bulk = dispatch.registerFreight({ description: 'Cement 5t', pickupLocation: { lat: -1.2, lng: 36.8 }, pickupLabel: 'D', destLabel: 'S', weightKg: 5000, bulk: true, natureCode: 'HAZ-DUST' });
+    expect(bulk.requiredEquipment).toEqual([]); // loose bulk self-loads (tipper/silo) → no handling equipment
+    expect(bulk.natureCode).toBe('HAZ-DUST');
+  });
+
+  it('S32: a discrete heavy freight is offered only to a vehicle carrying the required equipment', () => {
+    const mkTruck = (tag: string, equipment: ('MAN' | 'HTR' | 'PLT' | 'FLT' | 'TLT' | 'CRN' | 'RMP' | 'STR')[]) => {
+      const d = drivers.register({ displayName: tag, fullName: tag, nationalId: 'ID-' + tag, mobile: '+2547' + tag, licenceClasses: ['truck'], licenceNumber: 'L-' + tag, licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+      drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+      drivers.decideKyc(d.did, true);
+      const v = vehicles.register({ plate: 'V-' + tag, vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 10_000, ownerName: 'X', equipment });
+      fleet.couple(d.did, v.vehicleId);
+      return d;
+    };
+    const equipped = mkTruck('EQP', ['TLT']); // a tail-lift can handle a P4 load
+    const bare = mkTruck('BAR', []); // MAN only — no lifting gear
+    const pallet = dispatch.registerFreight({ description: 'Machinery', pickupLocation: { lat: -1.2, lng: 36.8 }, pickupLabel: 'D', destLabel: 'S', destLocation: { lat: -1.25, lng: 36.85 }, weightKg: 200, bulk: false });
+    expect(pallet.requiredEquipment).toContain('TLT');
+
+    const route = { from: { lat: -1.2, lng: 36.8 }, to: { lat: -1.25, lng: 36.85 } };
+    expect(dispatch.suggest(equipped.did, route).map((o) => o.ref)).toContain(pallet.freightId); // offered
+    expect(dispatch.suggest(bare.did, route).map((o) => o.ref)).not.toContain(pallet.freightId); // filtered out
+  });
+
+  it('S32: a P4+ vendor order is DIVERTED into dedicated freight, not minted as a PUDO parcel', () => {
+    const origin = onboardAgent('Div Origin', 'NorthTown', 50);
+    const dest = onboardAgent('Div Dest', 'NorthTown', 50); // same zone → the non-diverted control order quotes fine
+    const vendor = vendors.register({ name: 'PalletVendor' });
+    vendors.topUp(vendor.vendorId, 50);
+
+    const diverted: any = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', weightKg: 300, contentPhotoRef: 'c.jpg', natureCode: 'GEN' } as never);
+    expect(diverted.diverted).toBe(true);
+    expect(diverted.cargoClass).toBe('P5'); // 300 kg
+    expect(diverted.freight.freightId).toBeDefined();
+    expect(diverted.freight.requiredEquipment.length).toBeGreaterThan(0); // discrete → real handling gear
+    expect(diverted.freight.shipperDid).toBe(vendor.vendorId); // the vendor is the shipper
+
+    const normal: any = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: 'c.jpg' } as never);
+    expect(normal.diverted).toBeUndefined(); // a normal order still mints a parcel
+    expect(normal.parcel).toBeDefined();
+  });
+
+  it('S32: claim() re-checks bulk — a re-coupled non-bulk vehicle cannot reserve a bulk freight', () => {
+    const d = drivers.register({ displayName: 'BLK', fullName: 'B', nationalId: 'ID-BLK', mobile: '+254900101', licenceClasses: ['truck', 'van'], licenceNumber: 'L-BLK', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const tipper = vehicles.register({ plate: 'BT-1', vehicleClass: 'truck', truckSubtype: 'tipper', capacityKg: 10_000, ownerName: 'X' }); // carriesBulk true
+    const van = vehicles.register({ plate: 'VN-9', vehicleClass: 'van', ownerName: 'X' }); // carriesBulk false
+    const f = dispatch.registerFreight({ description: 'Cement', pickupLocation: { lat: -1.2, lng: 36.8 }, pickupLabel: 'D', destLabel: 'S', destLocation: { lat: -1.25, lng: 36.85 }, weightKg: 100, bulk: true });
+
+    fleet.couple(d.did, tipper.vehicleId);
+    const [offer] = dispatch.suggest(d.did, { from: { lat: -1.2, lng: 36.8 }, to: { lat: -1.25, lng: 36.85 } });
+    expect(offer?.ref).toBe(f.freightId); // a bulk-capable truck IS offered the bulk load
+    fleet.uncouple(d.did);
+    fleet.couple(d.did, van.vehicleId);
+    expect(() => dispatch.claim(offer.offerId)).toThrow(/capability|equipment/i); // the van can't carry bulk
+    expect(dispatch.listFreight({ status: 'available' }).some((x) => x.freightId === f.freightId)).toBe(true); // stays free
   });
 
   it('serves the operator dashboard KPIs (M7 light)', () => {

@@ -443,6 +443,16 @@ export function useVendorApp() {
         fragile: f.fragile,
       });
       if (r.error) return fail(r.error);
+      // S32: a heavy/oversized order (cargo class P4+) is DIVERTED into the dedicated-freight lane — the
+      // response carries no parcel/label. Confirm it and return to the start instead of walking into the
+      // label step (which dereferences the absent parcel). Parity with the old CARGO_REQUIRES_DEDICATED path.
+      const diverted = r.data as { diverted?: boolean; cargoClass?: string } | null;
+      if (diverted?.diverted) {
+        setState((s) => ({ ...s, minted: null, mintStep: 'source' }));
+        pushToast({ tone: 'info', icon: 'truck', title: 'Sent to dedicated freight', detail: `This load is too big for the parcel network (class ${diverted.cargoClass}) — a dedicated-freight job was created.` });
+        await refresh();
+        return;
+      }
       const minted = narrow<MintView>(r.data);
       setState((s) => ({ ...s, minted, mintStep: 'label' }));
       pushToast(

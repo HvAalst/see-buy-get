@@ -22,6 +22,7 @@ import { VehicleService } from './vehicle.service';
 import { DriverService } from './driver.service';
 import { FleetService } from './fleet.service';
 import { DispatchService } from './dispatch.service';
+import { CargoService } from './cargo.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
@@ -66,6 +67,7 @@ export class SbgController {
     private readonly otp: OtpService,
     private readonly auth: AuthService,
     private readonly persons: PersonService,
+    private readonly cargo: CargoService,
   ) {}
 
   // --- phone verification (mandatory at onboarding — control-tower contact + GPS) ---
@@ -563,6 +565,32 @@ export class SbgController {
     if (!destPudoDid) throw new GlosError('FIELD_REQUIRED', 'A destination PUDO is required');
     // Derive the size, then quote the route from the open-data participant rates.
     const size = dto.dimensionsCm ? classifySize({ ...dto.dimensionsCm, kg: dto.weightKg ?? SIZE_WEIGHT_KG[dto.size ?? 'M'] }) : (dto.size ?? 'M');
+    // S32: a heavy/oversized order (cargo class P4+) is DEDICATED FREIGHT — it can never enter the shelf/tote
+    // network. Instead of minting a PUDO parcel (or, as before S32, rejecting it), DIVERT it into the freight
+    // marketplace with the vendor as shipper, and skip the parcel quote/settlement (freight is a negotiated,
+    // claim-based model). ParcelService.createInbound keeps its own P4+ guard as a safety net for direct callers.
+    const weightKg = dto.weightKg ?? SIZE_WEIGHT_KG[size];
+    const dimsCm: [number, number, number] | undefined = dto.dimensionsCm ? [dto.dimensionsCm.l, dto.dimensionsCm.w, dto.dimensionsCm.h] : undefined;
+    const cargoClass = this.cargo.classify({ kg: weightKg, dimsCm });
+    if (this.cargo.dedicatedRequired(cargoClass)) {
+      const origin = this.agents.get(dto.originPudoDid);
+      const dest = this.agents.get(destPudoDid);
+      const freight = this.dispatch.registerFreight({
+        description: `Order ${dto.externalOrderId ?? handoff?.externalOrderId ?? vendor.name} — ${cargoClass} dedicated cargo`,
+        pickupLocation: origin.location,
+        pickupLabel: origin.shopName,
+        destLabel: dest.shopName,
+        destLocation: dest.location,
+        weightKg,
+        dimensionsCm: dimsCm,
+        natureCode: dto.natureCode,
+        fragile: dto.fragile,
+        bulk: false, // a diverted e-commerce order is DISCRETE/palletised, so it needs real handling equipment
+        shipperDid: dto.vendorId,
+      });
+      if (handoff) this.vendors.consumeCheckout(handoff.id, freight.freightId);
+      return { diverted: true, reason: 'dedicated_freight', cargoClass, freight };
+    }
     const quote = this.routing.quoteShipment(dto.originPudoDid, destPudoDid, size);
     const result = this.parcels.createInbound({
       vendorId: dto.vendorId,

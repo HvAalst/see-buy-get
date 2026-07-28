@@ -4,6 +4,7 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
 import { randomBytes } from 'crypto';
 import { TRUCK_SUBTYPE_CATALOG, TruckSubtype, TruckSubtypeSpec, VEHICLE_SPEC, VehicleClass } from './fleet.config';
 import { Vehicle, VehicleDocuments, VehicleOwnerType } from './fleet.types';
+import { Equipment } from './cargo.types';
 import { FleetManagerService } from './fleet-manager.service';
 import { MediaService } from './media.service';
 import { DEFAULT_PRICE_PER_KM } from './pudo.config';
@@ -20,6 +21,7 @@ interface RegisterVehicleInput {
   trailerPhotoRefs?: string[]; // S26 — mediaIds of a coupled trailer's photos
   managerDid?: string; // the fleet manager that owns this vehicle (must be ACTIVE)
   pricePerKm?: number; // open-data transport rate (defaults if unset)
+  equipment?: Equipment[]; // S32 — declared load/unload equipment (tail-lift, pallet jack, …) beyond the subtype baseline
 }
 
 /**
@@ -67,6 +69,9 @@ export class VehicleService {
       liquid: Boolean(sub?.liquid),
       hazmat: Boolean(sub?.hazmat),
       oversized: Boolean(sub?.oversized),
+      // S32: every vehicle can do manual (human) handling; a truck subtype adds its built-in kit (a crane
+      // truck self-loads), and the fleet manager may declare more (a tail-lift, a pallet jack). Deduped.
+      equipment: [...new Set<Equipment>(['MAN', ...(sub?.equipment ?? []), ...(input.equipment ?? [])])],
       ownerType: input.ownerType ?? 'driver_owned',
       ownerName: input.ownerName,
       documents: docs,
