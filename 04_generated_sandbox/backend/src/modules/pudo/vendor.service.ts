@@ -57,7 +57,11 @@ export class VendorService {
   ) {}
 
   private static policy(p?: Partial<ShippingPolicy>): ShippingPolicy {
-    return { mode: p?.mode === 'full' ? 'full' : 'capped', freeOverSubtotal: p?.freeOverSubtotal ?? 50, buyerContributionCap: p?.buyerContributionCap ?? 3 };
+    // S34c — carry the freight-spend cap. A zero/negative/non-finite value means "no cap" (never a shipment
+    // nobody can afford to move), so it is normalised to undefined here at the single policy chokepoint.
+    const cap = p?.maxTransportSpend;
+    const maxTransportSpend = cap != null && Number.isFinite(cap) && cap > 0 ? Math.round(cap * 100) / 100 : undefined;
+    return { mode: p?.mode === 'full' ? 'full' : 'capped', freeOverSubtotal: p?.freeOverSubtotal ?? 50, buyerContributionCap: p?.buyerContributionCap ?? 3, maxTransportSpend };
   }
 
   register(input: { name: string; callbackUrl?: string; secret?: string; location?: { lat: number; lng: number }; address?: string; country?: string; shippingPolicy?: Partial<ShippingPolicy> }): Vendor {

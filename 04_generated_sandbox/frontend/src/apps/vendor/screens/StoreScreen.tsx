@@ -136,6 +136,7 @@ function PolicySheet({ open, onClose, state, actions }: { open: boolean; onClose
   const [mode, setMode] = useState<'full' | 'capped'>(p?.mode ?? 'capped');
   const [cap, setCap] = useState(String(p?.buyerContributionCap ?? 3));
   const [freeOver, setFreeOver] = useState(String(p?.freeOverSubtotal ?? 50));
+  const [freightCap, setFreightCap] = useState(p?.maxTransportSpend != null ? String(p.maxTransportSpend) : '');
 
   return (
     <Sheet open={open} onClose={onClose} title="What the buyer pays">
@@ -164,12 +165,20 @@ function PolicySheet({ open, onClose, state, actions }: { open: boolean; onClose
           </div>
         </>
       ) : null}
+      {/* S34c — the freight-spend cap applies to heavy (dedicated-freight) orders, independent of the buyer split. */}
+      <div class="field" style="margin-top:12px">
+        <label class="field__label" for="p-freight">
+          Most you'll pay to ship a heavy order
+        </label>
+        <input id="p-freight" class="input" type="number" inputMode="decimal" min="0" step="1" placeholder="no limit" value={freightCap} onInput={(e) => setFreightCap(e.currentTarget.value)} />
+        <p class="hint" style="margin-top:6px">A big order goes by dedicated freight at a live market rate. Leave blank for no limit; set a cap and it waits for a rate within it.</p>
+      </div>
       <Button
         chevron={false}
         busy={state.busy === 'policy'}
         onClick={() => {
           onClose();
-          void actions.savePolicy({ mode, buyerContributionCap: Number(cap) || 0, freeOverSubtotal: Number(freeOver) || 0 });
+          void actions.savePolicy({ mode, buyerContributionCap: Number(cap) || 0, freeOverSubtotal: Number(freeOver) || 0, maxTransportSpend: freightCap.trim() ? Number(freightCap) || 0 : 0 });
         }}
       >
         Save the policy

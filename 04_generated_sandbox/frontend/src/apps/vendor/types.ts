@@ -19,6 +19,7 @@ export interface ShippingPolicy {
   mode: 'full' | 'capped';
   freeOverSubtotal: number;
   buyerContributionCap: number;
+  maxTransportSpend?: number; // S34c — the store's per-shipment dedicated-freight spend cap (undefined = no cap)
 }
 
 export interface VendorView {

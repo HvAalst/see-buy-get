@@ -174,6 +174,16 @@ export function money(v: number | null | undefined): string {
 }
 
 /**
+ * S34c — the driver's minimum-earning filter as a number the API accepts, or undefined for "show all". Only a
+ * finite POSITIVE floor is a real filter: blank, 0, a negative (a naive `x || undefined` keeps -5, which the
+ * backend's @Min(0) would then 400), or junk all collapse to undefined — matching the backend's `minEarn > 0`.
+ */
+export function minEarnFilter(raw: string | number | null | undefined): number | undefined {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
+/**
  * The transparent breakdown behind a freight earning, as plain lines for a Checklist. Every term a driver
  * can see and trust: the flag-down fee, the distance × the rate actually applied, and — only when the
  * market moved the rate off the base — a note that a busy- or quiet-time rate is in effect.

@@ -159,6 +159,9 @@ export class ShippingPolicy {
   mode: 'full' | 'capped';
   freeOverSubtotal: number; // (capped) order value at/above which the buyer is charged nothing
   buyerContributionCap: number; // (capped) the most the buyer is charged at checkout
+  // S34c — the most the vendor will pay to move ONE dedicated-freight (P4+) shipment: the all-in charge cap
+  // dispatch enforces before a driver may claim a diverted order. Undefined = no cap (accept any market price).
+  maxTransportSpend?: number;
 }
 
 /** A registered e-commerce vendor that wires its checkout into PUDO for click-and-collect. */

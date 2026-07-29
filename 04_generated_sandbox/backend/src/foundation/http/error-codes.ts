@@ -67,6 +67,7 @@ export const ERROR_CODES = {
   CARGO_REQUIRES_DEDICATED: { status: 400, title: 'This load needs dedicated freight transport' },
   CARGO_INCOMPATIBLE: { status: 400, title: 'These goods cannot travel together' },
   VEHICLE_MISSING_CAPABILITY: { status: 400, title: 'This vehicle cannot carry this cargo' },
+  BUDGET_EXCEEDED: { status: 400, title: "The price exceeds the shipper's budget" },
   BAG_FULL: { status: 400, title: 'The bag is full' },
   BAG_EMPTY: { status: 400, title: 'The bag is empty' },
   BAG_RESERVED: { status: 400, title: 'The bag is reserved for another driver' },

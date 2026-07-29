@@ -40,7 +40,7 @@ export function createDriverApi(sbg: SbgClient) {
     endSession: (did: string) => sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/end-session', { params: { path: { did } } })),
 
     /** Declare a route A→B and get offered nearby totes/freight sized to the vehicle's remaining capacity. */
-    suggestWork: (did: string, body: { from: { lat: number; lng: number }; to: { lat: number; lng: number }; departAt?: string }) =>
+    suggestWork: (did: string, body: { from: { lat: number; lng: number }; to: { lat: number; lng: number }; departAt?: string; minEarn?: number }) =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/suggest-work', { params: { path: { did } }, body })),
 
     /** Accept an offer. */

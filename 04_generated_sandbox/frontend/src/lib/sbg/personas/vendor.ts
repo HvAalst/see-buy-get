@@ -18,7 +18,7 @@ export function createVendorApi(sbg: SbgClient) {
         callbackUrl?: string;
         location?: { lat: number; lng: number };
         address?: string;
-        shippingPolicy?: { mode?: 'full' | 'capped'; freeOverSubtotal?: number; buyerContributionCap?: number };
+        shippingPolicy?: { mode?: 'full' | 'capped'; freeOverSubtotal?: number; buyerContributionCap?: number; maxTransportSpend?: number };
       },
     ) => sbg.request((c) => c.PATCH('/v1/sbg/vendors/{id}', { params: { path: { id: vendorId } }, body: patch })),
 

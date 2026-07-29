@@ -10530,6 +10530,10 @@
           "buyerContributionCap": {
             "type": "number",
             "minimum": 0
+          },
+          "maxTransportSpend": {
+            "type": "number",
+            "minimum": 0
           }
         }
       },
@@ -10576,6 +10580,9 @@
             "type": "number"
           },
           "buyerContributionCap": {
+            "type": "number"
+          },
+          "maxTransportSpend": {
             "type": "number"
           }
         },
@@ -12083,6 +12090,9 @@
           "shipperDid": {
             "type": "string"
           },
+          "maxSpend": {
+            "type": "number"
+          },
           "buyerPhoneHash": {
             "type": "string"
           },
@@ -12164,6 +12174,10 @@
           },
           "departAt": {
             "type": "string"
+          },
+          "minEarn": {
+            "type": "number",
+            "minimum": 0
           }
         },
         "required": [

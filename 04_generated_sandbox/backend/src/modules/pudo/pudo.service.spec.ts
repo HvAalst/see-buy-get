@@ -1728,11 +1728,11 @@ describe('PUDO Light', () => {
 
   // --- S34b: the dynamic market-pulse engine (per-zone supply/demand surge, admin rules, corridor clamp) ---
 
-  const coupleTipper = (tag: string, bounds: { min: number; max: number }) => {
+  const coupleTipper = (tag: string, bounds: { min: number; max: number }, baseFee = 10) => {
     const d = drivers.register({ displayName: tag, fullName: tag, nationalId: 'ID-' + tag, mobile: '+2547' + tag, licenceClasses: ['truck'], licenceNumber: 'L-' + tag, licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
     drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
     drivers.decideKyc(d.did, true);
-    const v = vehicles.register({ plate: 'MK-' + tag, vehicleClass: 'truck', truckSubtype: 'tipper', capacityKg: 20_000, ownerName: 'X', baseFee: 10, pricePerKm: 0.5, minMultiplier: bounds.min, maxMultiplier: bounds.max });
+    const v = vehicles.register({ plate: 'MK-' + tag, vehicleClass: 'truck', truckSubtype: 'tipper', capacityKg: 20_000, ownerName: 'X', baseFee, pricePerKm: 0.5, minMultiplier: bounds.min, maxMultiplier: bounds.max });
     fleet.couple(d.did, v.vehicleId);
     return d;
   };
@@ -1812,6 +1812,66 @@ describe('PUDO Light', () => {
     const insight = controller.marketPulse();
     expect(insight.cells[0].demand).toBe(4);
     expect(insight.cells[0].factor).toBe(1.75); // 4 loads, 0 vehicles → 1 + 0.25·(4−1)
+  });
+
+  // --- S34c: shipper-budget matching + the driver's min-earn filter ---
+  // A 0-distance haul (pickup==dest, route from==pickup) prices at the base fee only → deterministic:
+  // a base-fee-10 tipper earns 10, the shipper is charged withPlatformFee(10) = 10.2.
+
+  it('S34c: a shipper budget hides an over-budget freight offer; a cheaper vehicle still gets it', () => {
+    const pickup = { lat: -1.7, lng: 36.4 };
+    const noon = new Date('2026-07-22T11:00:00Z').getTime();
+    const f = dispatch.registerFreight({ description: 'Cargo', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 1000, bulk: true, maxSpend: 10 });
+    expect(f.maxSpend).toBe(10);
+    const pricey = coupleTipper('EXP', { min: 0.8, max: 1.5 }, 10); // charge 10.2 > 10 → over budget
+    expect(dispatch.suggest(pricey.did, { from: pickup, to: pickup }, noon).map((o) => o.ref)).not.toContain(f.freightId);
+    const cheap = coupleTipper('CHP', { min: 0.8, max: 1.5 }, 5); // charge 5.1 ≤ 10 → offered
+    expect(dispatch.suggest(cheap.did, { from: pickup, to: pickup }, noon).map((o) => o.ref)).toContain(f.freightId);
+  });
+
+  it('S34c: claim refuses an over-budget freight (re-coupled to a pricier vehicle) and leaves it available', () => {
+    const pickup = { lat: -1.71, lng: 36.41 };
+    const noon = new Date('2026-07-22T11:00:00Z').getTime();
+    const f = dispatch.registerFreight({ description: 'Cargo', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 1000, bulk: true, maxSpend: 6 });
+    const d = drivers.register({ displayName: 'RC', fullName: 'R', nationalId: 'ID-RC', mobile: '+254772000', licenceClasses: ['truck'], licenceNumber: 'L-RC', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const cheap = vehicles.register({ plate: 'RC-CHP', vehicleClass: 'truck', truckSubtype: 'tipper', capacityKg: 20_000, ownerName: 'X', baseFee: 5, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5 }); // charge 5.1 ≤ 6
+    const pricey = vehicles.register({ plate: 'RC-EXP', vehicleClass: 'truck', truckSubtype: 'tipper', capacityKg: 20_000, ownerName: 'X', baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5 }); // charge 10.2 > 6
+    fleet.couple(d.did, cheap.vehicleId);
+    const [offer] = dispatch.suggest(d.did, { from: pickup, to: pickup }, noon);
+    expect(offer.ref).toBe(f.freightId); // within budget on the cheap vehicle → offered
+    fleet.uncouple(d.did);
+    fleet.couple(d.did, pricey.vehicleId); // re-couple to a pricier vehicle AFTER the offer
+    expect(() => dispatch.claim(offer.offerId, noon)).toThrow(/budget/i);
+    expect(dispatch.listFreight({ status: 'available' }).some((x) => x.freightId === f.freightId)).toBe(true); // stays open
+  });
+
+  it('S34c: a driver min-earn filter hides freight paying less than the floor', () => {
+    const pickup = { lat: -1.72, lng: 36.42 };
+    const noon = new Date('2026-07-22T11:00:00Z').getTime();
+    const f = dispatch.registerFreight({ description: 'Cargo', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 1000, bulk: true });
+    const d = coupleTipper('ME', { min: 0.8, max: 1.5 }, 10); // earns 10
+    expect(dispatch.suggest(d.did, { from: pickup, to: pickup }, noon, 20).map((o) => o.ref)).not.toContain(f.freightId); // floor 20 > 10 → hidden
+    expect(dispatch.suggest(d.did, { from: pickup, to: pickup }, noon, 5).map((o) => o.ref)).toContain(f.freightId); // floor 5 < 10 → shown
+  });
+
+  it('S34c: a diverted order carries the vendor\'s shipping-policy freight budget', () => {
+    const origin = onboardAgent('Budget Origin', 'NorthTown', 50);
+    const dest = onboardAgent('Budget Dest', 'NorthTown', 50);
+    const vendor = vendors.register({ name: 'CapVendor', shippingPolicy: { maxTransportSpend: 25 } });
+    vendors.topUp(vendor.vendorId, 500);
+    const res = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', weightKg: 300, contentPhotoRef: 'c.jpg' } as never) as { diverted?: boolean; freight?: { maxSpend?: number } };
+    expect(res.diverted).toBe(true);
+    expect(res.freight?.maxSpend).toBe(25);
+  });
+
+  it('S34c: a zero/negative budget means NO cap (never a load nobody can move)', () => {
+    const pickup = { lat: -1.73, lng: 36.43 };
+    const base = { description: 'C', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 1000, bulk: true } as const;
+    expect(dispatch.registerFreight({ ...base, maxSpend: 0 }).maxSpend).toBeUndefined();
+    expect(dispatch.registerFreight({ ...base, maxSpend: -5 }).maxSpend).toBeUndefined();
+    expect(vendors.register({ name: 'ZeroCap', shippingPolicy: { maxTransportSpend: 0 } }).shippingPolicy.maxTransportSpend).toBeUndefined();
   });
 
   // --- S32: the dedicated-transport lane (equipment manifest + freight cargo model + P4+ divert) ---

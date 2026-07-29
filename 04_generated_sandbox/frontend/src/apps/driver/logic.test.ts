@@ -7,6 +7,7 @@ import {
   countdownLabel,
   driverStatusNotice,
   isFull,
+  minEarnFilter,
   money,
   nodeOptions,
   offerSpoken,
@@ -223,5 +224,15 @@ describe('freight pricing (S34)', () => {
     const base = { message: 'Ready.', weightKg: 200, destLabel: 'Site', detourKm: 3 };
     expect(offerSpoken({ ...base, price })).toContain('You earn 16.90');
     expect(offerSpoken(base)).not.toContain('You earn');
+  });
+
+  it('minEarnFilter keeps only a finite POSITIVE floor — everything else means "show all"', () => {
+    expect(minEarnFilter('20')).toBe(20);
+    expect(minEarnFilter('12.5')).toBe(12.5);
+    expect(minEarnFilter('')).toBeUndefined(); // blank
+    expect(minEarnFilter('0')).toBeUndefined(); // zero = no floor
+    expect(minEarnFilter('-5')).toBeUndefined(); // a negative must NOT reach the backend's @Min(0)
+    expect(minEarnFilter('abc')).toBeUndefined(); // junk
+    expect(minEarnFilter(undefined)).toBeUndefined();
   });
 });

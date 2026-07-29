@@ -40,6 +40,11 @@ export class Freight {
    *  when both ends are equipped (or their equipment is unknown, e.g. a bulletin freight with only geo labels). */
   equipmentGaps: Array<'origin' | 'dest'>;
   shipperDid?: string;
+  // S34c — the shipper's budget: the most they will pay (the all-in shipperCharge = earning + platform fee) for
+  // this haul. Dispatch will not OFFER or let a driver CLAIM the job above it — the load waits for a cheaper
+  // vehicle or a cooler market. The driver owns their [min,max] corridor; the shipper owns this ceiling. Undefined
+  // = no cap (the pre-S34c behaviour). Set from the diverting vendor's shipping policy.
+  maxSpend?: number;
   // S32d — the buyer whose order was diverted keeps sight of it: a phone-HASH join to their identity (so it
   // shows in "my shipments") — never the cleartext number, since the raw Freight is returned to drivers /
   // operators (listFreight, pickup/deliver) — plus a public tracking key, the order ref, and per-transition
@@ -109,6 +114,9 @@ export class Claimable {
    *  (and its breakdown) so "my loads" always shows what the job pays. Undefined for a tote / an unclaimed load. */
   lockedPrice?: number;
   priceBreakdown?: PriceBreakdown;
+  /** S34c — the shipper's spend cap for this freight (the all-in charge), so suggest can skip a load whose price
+   *  at this vehicle's rate would blow the shipper's budget. Undefined for a tote / an uncapped freight. */
+  maxSpend?: number;
 }
 
 export type OfferStatus = 'pending' | 'claimed' | 'ignored' | 'expired';

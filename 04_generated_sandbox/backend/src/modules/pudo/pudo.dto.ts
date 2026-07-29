@@ -179,6 +179,8 @@ class ShippingPolicyDto {
   @IsOptional() @IsIn(['full', 'capped']) mode?: 'full' | 'capped';
   @IsOptional() @IsNumber() @Min(0) freeOverSubtotal?: number;
   @IsOptional() @IsNumber() @Min(0) buyerContributionCap?: number;
+  // S34c — the vendor's per-shipment dedicated-freight spend cap (0 = no cap).
+  @IsOptional() @IsNumber() @Min(0) maxTransportSpend?: number;
 }
 
 export class RegisterVendorDto {
@@ -525,6 +527,8 @@ export class SuggestRouteDto {
   @ValidateNested() @Type(() => GeoDto) from!: GeoDto;
   @ValidateNested() @Type(() => GeoDto) to!: GeoDto;
   @IsOptional() @IsString() departAt?: string;
+  // S34c — the driver's minimum freight earning: hide freight offers paying less than this (their own filter).
+  @IsOptional() @IsNumber() @Min(0) minEarn?: number;
 }
 
 export class RegisterFreightDto {

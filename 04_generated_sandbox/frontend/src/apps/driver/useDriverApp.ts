@@ -17,7 +17,7 @@ import type {
   SuggestView,
   VehicleView,
 } from './types';
-import { nodeOptions } from './logic';
+import { minEarnFilter, nodeOptions } from './logic';
 
 export type Screen = 'home' | 'route' | 'offers' | 'loads';
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
@@ -55,10 +55,10 @@ export interface DriverState {
   refreshing: boolean;
   /** A refresh failed for want of network; what is on screen is the last known truth. */
   stale: boolean;
-  form: { vehicleQr: string; fromId: string; toId: string };
+  form: { vehicleQr: string; fromId: string; toId: string; minEarn: string };
 }
 
-const EMPTY_FORM = { vehicleQr: '', fromId: '', toId: '' };
+const EMPTY_FORM = { vehicleQr: '', fromId: '', toId: '', minEarn: '' };
 
 const INITIAL: DriverState = {
   phase: 'boot',
@@ -467,10 +467,10 @@ export function useDriverApp() {
   );
 
   const runSuggest = useCallback(
-    async (from: { lat: number; lng: number }, to: { lat: number; lng: number }) => {
+    async (from: { lat: number; lng: number }, to: { lat: number; lng: number }, minEarn?: number) => {
       if (!client || !did) return;
       await run('suggest', async () => {
-        const r = await client.api.suggestWork(did, { from, to });
+        const r = await client.api.suggestWork(did, { from, to, ...(minEarn ? { minEarn } : {}) });
         if (r.error) return fail(r.error);
         const v = narrow<SuggestView>(r.data);
         setState((s) => ({
@@ -502,13 +502,13 @@ export function useDriverApp() {
       saveRoute(did, route);
       setState((s) => ({ ...s, route }));
     }
-    await runSuggest({ lat: from.lat, lng: from.lng }, { lat: to.lat, lng: to.lng });
-  }, [state.nodes, state.form.fromId, state.form.toId, did, pushToast, runSuggest]);
+    await runSuggest({ lat: from.lat, lng: from.lng }, { lat: to.lat, lng: to.lng }, minEarnFilter(state.form.minEarn));
+  }, [state.nodes, state.form.fromId, state.form.toId, state.form.minEarn, did, pushToast, runSuggest]);
 
   const repeatRoute = useCallback(async () => {
     const r = did ? savedRoute(did) : null;
     if (!r) return go('route');
-    await runSuggest(r.from, r.to);
+    await runSuggest(r.from, r.to, minEarnFilter(stateRef.current.form.minEarn));
   }, [did, go, runSuggest]);
 
   const setOfferIndex = useCallback((offerIndex: number) => setState((s) => ({ ...s, offerIndex })), []);

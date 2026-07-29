@@ -542,7 +542,7 @@ export function useVendorApp() {
   /* ----------------------------------------------------------------- store */
 
   const savePolicy = useCallback(
-    async (patch: { mode: 'full' | 'capped'; freeOverSubtotal: number; buyerContributionCap: number }) => {
+    async (patch: { mode: 'full' | 'capped'; freeOverSubtotal: number; buyerContributionCap: number; maxTransportSpend?: number }) => {
       if (!client || !creds) return;
       await run('policy', async () => {
         const r = await client.api.update(creds.vendorId, { shippingPolicy: patch });

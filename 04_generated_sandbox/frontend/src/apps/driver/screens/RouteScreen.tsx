@@ -67,6 +67,24 @@ export function RouteScreen({ state, actions }: RouteScreenProps) {
           </select>
         </div>
 
+        <div class="field" style="margin-top:16px">
+          <label class="field__label" for="min-earn">
+            Only freight paying at least (optional)
+          </label>
+          <input
+            id="min-earn"
+            class="input"
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="1"
+            placeholder="show all"
+            value={state.form.minEarn}
+            disabled={loading || empty}
+            onInput={(e) => actions.setForm({ minEarn: e.currentTarget.value })}
+          />
+        </div>
+
         <p class="card__note">We only suggest loads on your route that fit your remaining capacity.</p>
       </Card>
 

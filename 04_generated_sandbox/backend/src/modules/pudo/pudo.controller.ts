@@ -599,6 +599,8 @@ export class SbgController {
         // S32d: keep the buyer joined to their order so it stays in their "my shipments" with a tracking key.
         buyerMobile: dto.buyerMobile ?? handoff?.buyerMobile,
         externalOrderId: dto.externalOrderId ?? handoff?.externalOrderId,
+        // S34c: the vendor's freight-spend cap — dispatch won't move this order above it.
+        maxSpend: vendor.shippingPolicy?.maxTransportSpend,
       });
       if (handoff) this.vendors.consumeCheckout(handoff.id, freight.freightId);
       return { diverted: true, reason: 'dedicated_freight', cargoClass, freight };
@@ -1049,7 +1051,7 @@ export class SbgController {
   /** A driver declares a route A→B → the platform suggests the loads sitting on the way. */
   @Post('fleet/drivers/:did/suggest-work')
   suggestWork(@Param('did') did: string, @Body() dto: SuggestRouteDto) {
-    const offers = this.dispatch.suggest(did, dto);
+    const offers = this.dispatch.suggest(did, dto, Date.now(), dto.minEarn); // S34c — the driver's min-earning filter
     this.fleet.reportLocation(did, dto.from); // the driver is at the route start → live map
     return { remainingCapacityKg: this.dispatch.remainingCapacity(did), offers };
   }

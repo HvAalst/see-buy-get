@@ -74,7 +74,7 @@ export class DispatchService {
     return { code: t.code, status: t.status };
   }
 
-  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string }): Freight {
+  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number }): Freight {
     this.freightSeq += 1;
     // S32: give the freight a cargo model so it matches vehicles like a tote does — class (from weight+dims)
     // drives the required equipment, the primary nature drives the required vehicle capability.
@@ -115,6 +115,9 @@ export class DispatchService {
       buyerPhoneHash: input.buyerMobile ? hashPhone(input.buyerMobile) || undefined : undefined,
       trackingKey: `T-${randomBytes(5).toString('hex').toUpperCase()}`,
       externalOrderId: input.externalOrderId,
+      // S34c — a positive, finite cap only; a zero/negative/NaN budget is treated as "no cap" (never a load
+      // nobody can ever afford to move) so a bad value can't silently strand a diverted order.
+      maxSpend: input.maxSpend != null && Number.isFinite(input.maxSpend) && input.maxSpend > 0 ? Math.round(input.maxSpend * 100) / 100 : undefined,
       status: 'available',
       createdAt: new Date().toISOString(),
     };
@@ -155,13 +158,15 @@ export class DispatchService {
 
   // --- matching ---
 
-  /** Suggest the loads sitting along a driver's A→B route, within remaining vehicle capacity. */
-  suggest(driverDid: string, route: RoutePlan, now: number = Date.now()): Offer[] {
+  /** Suggest the loads sitting along a driver's A→B route, within remaining vehicle capacity. `minEarn` is the
+   *  driver's own floor: hide freight paying less than this (their surge-threshold filter). */
+  suggest(driverDid: string, route: RoutePlan, now: number = Date.now(), minEarn?: number): Offer[] {
     const vehicle = this.fleet.vehicleForDriver(driverDid);
     if (!vehicle) throw new GlosError('NOT_COUPLED', 'Couple the driver to a vehicle before requesting work');
     this.publishReady(now);
     const remaining = this.remainingCapacity(driverDid);
     const profile = this.pricingProfile(vehicle); // S34 — fixed for this driver+vehicle across all offers here
+    const floor = minEarn != null && Number.isFinite(minEarn) && minEarn > 0 ? minEarn : undefined;
 
     const matches = this.availableLoads()
       .map((load) => ({ load, detour: detourKm(route.from, load.pickupLocation, route.to), minutesAway: this.minutes(route.from, load.pickupLocation) }))
@@ -170,9 +175,6 @@ export class DispatchService {
 
     const out: Offer[] = [];
     for (const { load, detour, minutesAway } of matches) {
-      // One live offer per driver+load — reuse the existing pending one if any.
-      const existing = [...this.offers.values()].find((o) => o.driverDid === driverDid && o.ref === load.ref && o.status === 'pending' && new Date(o.expiresAt).getTime() > now);
-      if (existing) { out.push(existing); continue; }
       // S34 — freight offers carry a transparent price: P = B + D·R_base·M, D = deadhead (driver→pickup) +
       // haul (pickup→dropoff), M the market multiplier flexed within THIS vehicle's own [min,max] corridor. The
       // price shown here is indicative; it is LOCKED (recomputed against the vehicle at that instant) on claim.
@@ -186,6 +188,17 @@ export class DispatchService {
             multiplier: freightMultiplier(new Date(now), { min: profile.min, max: profile.max }, this.market.factorFor(load.pickupLocation, now)),
           })
         : undefined;
+      // S34c — two gates BEFORE reusing/creating an offer, computed against the CURRENT price so a load that no
+      // longer qualifies is dropped even if a stale offer exists: (1) the shipper's budget — don't offer a freight
+      // whose all-in charge would exceed what the shipper agreed to pay (a cheaper vehicle may still get it);
+      // (2) the driver's own minimum-earning filter. Both apply to freight only (totes settle on a different model).
+      if (price && load.kind === 'freight') {
+        if (load.maxSpend != null && shipperCharge(price.total) > load.maxSpend) continue;
+        if (floor != null && price.total < floor) continue;
+      }
+      // One live offer per driver+load — reuse the existing pending one if any (now that it still qualifies).
+      const existing = [...this.offers.values()].find((o) => o.driverDid === driverDid && o.ref === load.ref && o.status === 'pending' && new Date(o.expiresAt).getTime() > now);
+      if (existing) { out.push(existing); continue; }
       const offer: Offer = {
         offerId: `ofr_${randomBytes(6).toString('hex')}`,
         driverDid,
@@ -235,13 +248,10 @@ export class DispatchService {
     else {
       const f = this.requireFreight(offer.ref);
       if (f.status !== 'available') throw new GlosError('INVALID_STATE', `Freight is ${f.status}`);
-      f.status = 'claimed';
-      f.claimedBy = offer.driverDid;
-      f.claimedAt = new Date().toISOString();
-      // S34 — LOCK THE PRICE at claim. The market can surge afterwards and the driver can edit their profile,
-      // but what was agreed at this instant never changes. Recompute against THIS vehicle's current profile
+      // S34 — compute the price to LOCK. The market can surge afterwards and the driver can edit their profile,
+      // but what is agreed at this instant never changes. Recompute against THIS vehicle's current profile
       // (defaults resolved for a legacy vehicle) and the multiplier now, over the distance the offer was priced
-      // on (deadhead + haul). Then settle the shipper side straight away.
+      // on (deadhead + haul).
       const profile = this.pricingProfile(vehicle);
       const breakdown = computeFreightPrice({
         baseFee: profile.baseFee,
@@ -252,6 +262,15 @@ export class DispatchService {
         // shifted pulse, is honoured here); the corridor clamp still guarantees the driver's floor and ceiling.
         multiplier: freightMultiplier(new Date(now), { min: profile.min, max: profile.max }, this.market.factorFor(f.pickupLocation, now)),
       });
+      // S34c — the shipper's budget gate, checked BEFORE any mutation so a refused claim leaves the freight
+      // untouched and available. suggest() already skips over-budget offers; this re-check catches a driver who
+      // re-coupled to a pricier vehicle (or a surge) after the offer was made (the S31 mirror-at-claim lesson).
+      if (f.maxSpend != null && shipperCharge(breakdown.total) > f.maxSpend) {
+        throw new GlosError('BUDGET_EXCEEDED', "This load's price now exceeds the shipper's budget — it stays open for a cheaper vehicle or a cooler market");
+      }
+      f.status = 'claimed';
+      f.claimedBy = offer.driverDid;
+      f.claimedAt = new Date().toISOString();
       f.priceBreakdown = breakdown;
       f.lockedPrice = breakdown.total;
       f.lockedAt = f.claimedAt;
@@ -394,7 +413,7 @@ export class DispatchService {
   private wrapFreight(f: Freight): Claimable {
     // S32: freight now carries its cargo model, so it matches vehicles on capability AND equipment like a tote.
     // S32b: status lets the driver app drive the claimed → picked-up → delivered flow in-app.
-    return { kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown };
+    return { kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend };
   }
 
   private vehicleCanCarry(vehicle: Vehicle, load: Claimable, remainingKg: number): boolean {
