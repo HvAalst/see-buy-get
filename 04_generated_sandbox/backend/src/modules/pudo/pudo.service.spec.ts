@@ -22,6 +22,7 @@ import { DispatchService } from './dispatch.service';
 import { MarketPulseStore } from './market-pulse.store';
 import { MarketPulseService } from './market-pulse.service';
 import { shipperCharge } from './pricing';
+import { requiredLoadKeys, requiredUnloadKeys } from './heavy-cargo';
 import { FleetManagerService } from './fleet-manager.service';
 import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
@@ -1597,8 +1598,8 @@ describe('PUDO Light', () => {
     expect(dispatch.remainingCapacity(d.did)).toBe(5000); // 10000 − 5000 reserved
     // S32b: only the driver who CLAIMED it may advance it (a claimed freight is their obligation).
     expect(() => dispatch.pickupFreight(f.freightId, 'did:glos:someone-else')).toThrow(/another driver/);
-    dispatch.pickupFreight(f.freightId, d.did);
-    expect(dispatch.deliverFreight(f.freightId, d.did).status).toBe('delivered');
+    pickupOk(f, d.did);
+    expect(deliverOk(f, d.did).status).toBe('delivered');
     expect(dispatch.remainingCapacity(d.did)).toBe(10_000); // released
   });
 
@@ -1638,8 +1639,8 @@ describe('PUDO Light', () => {
     expect(vendors.balanceOf(vendor.vendorId)).toBeCloseTo(before - shipperCharge(10), 2); // earning + platform fee
 
     // Deliver → the driver is paid the locked earning exactly once (a single DRIVER_PAYOUT ledger row).
-    dispatch.pickupFreight(f.freightId, d.did);
-    dispatch.deliverFreight(f.freightId, d.did);
+    pickupOk(f, d.did);
+    deliverOk(f, d.did);
     const payouts = gate.entries({ type: 'DRIVER_PAYOUT' }).filter((e) => e.reference === d.did);
     expect(payouts).toHaveLength(1);
     expect(payouts[0].amount).toBe(10);
@@ -1678,8 +1679,8 @@ describe('PUDO Light', () => {
     expect(Number.isFinite(vendors.balanceOf(vendor.vendorId))).toBe(true);
     expect(vendors.balanceOf(vendor.vendorId)).toBeCloseTo(start - shipperCharge(10), 2);
 
-    dispatch.pickupFreight(f.freightId, d.did);
-    dispatch.deliverFreight(f.freightId, d.did);
+    pickupOk(f, d.did);
+    deliverOk(f, d.did);
     const payouts = gate.entries({ type: 'DRIVER_PAYOUT' }).filter((e) => e.reference === d.did);
     expect(payouts).toHaveLength(1);
     expect(Number.isFinite(payouts[0].amount)).toBe(true);
@@ -1701,8 +1702,8 @@ describe('PUDO Light', () => {
     const claimed = dispatch.listFreight().find((x) => x.freightId === f.freightId)!;
     expect(claimed.paidStatus).toBe('billing_failed'); // a real debt to collect — NOT the same as a bulletin 'unpaid'
     expect(vendors.balanceOf(vendor.vendorId)).toBe(0); // billShipment rejected → balance untouched (no NaN, no negative)
-    dispatch.pickupFreight(f.freightId, d.did);
-    dispatch.deliverFreight(f.freightId, d.did);
+    pickupOk(f, d.did);
+    deliverOk(f, d.did);
     expect(gate.entries({ type: 'DRIVER_PAYOUT' }).filter((e) => e.reference === d.did)).toHaveLength(1); // labour is owed regardless
   });
 
@@ -1721,12 +1722,20 @@ describe('PUDO Light', () => {
     const claimed = dispatch.listFreight().find((x) => x.freightId === f.freightId)!;
     expect(claimed.lockedPrice).toBe(8);
     expect(claimed.paidStatus).toBe('unpaid'); // no shipper to bill — settled off-platform
-    dispatch.pickupFreight(f.freightId, d.did);
-    dispatch.deliverFreight(f.freightId, d.did);
+    pickupOk(f, d.did);
+    deliverOk(f, d.did);
     expect(gate.entries({ type: 'DRIVER_PAYOUT' }).filter((e) => e.reference === d.did)).toHaveLength(1); // driver still paid
   });
 
   // --- S34b: the dynamic market-pulse engine (per-zone supply/demand surge, admin rules, corridor clamp) ---
+
+  // S33 — advance a freight through the safety gate: a complete load-safety checklist (derived from the freight)
+  // + a securement photo at pickup, a complete unload checklist at delivery. (A fake mediaId is fine — link()
+  // no-ops on an unknown id.)
+  const pickupOk = (freight: { freightId: string; bulk: boolean; fragile: boolean; requiredCapabilities: import('./cargo.types').VehicleCapability[] }, did?: string) =>
+    dispatch.pickupFreight(freight.freightId, did, { confirmed: requiredLoadKeys(freight), securementPhotoId: 'med_test' });
+  const deliverOk = (freight: { freightId: string }, did?: string) =>
+    dispatch.deliverFreight(freight.freightId, did, { confirmed: requiredUnloadKeys() });
 
   const coupleTipper = (tag: string, bounds: { min: number; max: number }, baseFee = 10) => {
     const d = drivers.register({ displayName: tag, fullName: tag, nationalId: 'ID-' + tag, mobile: '+2547' + tag, licenceClasses: ['truck'], licenceNumber: 'L-' + tag, licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
@@ -1874,6 +1883,84 @@ describe('PUDO Light', () => {
     expect(vendors.register({ name: 'ZeroCap', shippingPolicy: { maxTransportSpend: 0 } }).shippingPolicy.maxTransportSpend).toBeUndefined();
   });
 
+  // --- S33a: the heavy-cargo safety gate (load-safety checklist + securement photo; unload checklist) ---
+
+  const claimFreight = (did: string, pickup: { lat: number; lng: number }, freightId: string) => {
+    const noon = new Date('2026-07-22T11:00:00Z').getTime();
+    const offer = dispatch.suggest(did, { from: pickup, to: pickup }, noon).find((o) => o.ref === freightId)!;
+    dispatch.claim(offer.offerId, noon);
+  };
+
+  it('S33: pickup is refused until the load-safety checklist is complete AND a securement photo is attached', () => {
+    const pickup = { lat: -1.8, lng: 36.3 };
+    const d = coupleTipper('SG', { min: 0.8, max: 1.5 });
+    const f = dispatch.registerFreight({ description: 'Pallets', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, bulk: true });
+    claimFreight(d.did, pickup, f.freightId);
+
+    expect(() => dispatch.pickupFreight(f.freightId, d.did)).toThrow(/checklist/i); // nothing confirmed
+    expect(() => dispatch.pickupFreight(f.freightId, d.did, { confirmed: ['distributed'], securementPhotoId: 'm' })).toThrow(/checklist/i); // partial
+    expect(() => dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f) })).toThrow(/photo/i); // complete but no photo
+    expect(dispatch.listFreight({ status: 'claimed' }).some((x) => x.freightId === f.freightId)).toBe(true); // a failed gate never advanced it
+
+    const moved = dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_secure' });
+    expect(moved.status).toBe('in_transit');
+    expect(moved.loadSafety?.securementPhotoRef).toBe('med_secure');
+    expect(moved.loadSafety?.confirmed).toEqual(expect.arrayContaining(requiredLoadKeys(f)));
+  });
+
+  it('S33: delivery is refused until the unload checklist is complete; then it stamps the report and still pays', () => {
+    const pickup = { lat: -1.81, lng: 36.31 };
+    const d = coupleTipper('UN', { min: 0.8, max: 1.5 });
+    const f = dispatch.registerFreight({ description: 'Pallets', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, bulk: true });
+    claimFreight(d.did, pickup, f.freightId);
+    pickupOk(f, d.did);
+    expect(() => dispatch.deliverFreight(f.freightId, d.did)).toThrow(/checklist/i);
+    const done = dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys() });
+    expect(done.status).toBe('delivered');
+    expect(done.unloadReport?.confirmed).toEqual(expect.arrayContaining(requiredUnloadKeys()));
+    expect(done.driverPaid).toBe(true); // the S34 payout still fires after the gate
+  });
+
+  it('S33: a claimed freight carries its cargo model + the exact checklists to the driver', () => {
+    const pickup = { lat: -1.82, lng: 36.32 };
+    const d = coupleTipper('CL', { min: 0.8, max: 1.5 });
+    const f = dispatch.registerFreight({ description: 'Cement', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, bulk: true });
+    claimFreight(d.did, pickup, f.freightId);
+    const claim = dispatch.claimsFor(d.did).find((c) => c.ref === f.freightId)!;
+    expect(claim.cargoClass).toBe('P4'); // 200 kg
+    expect((claim.loadChecklist ?? []).map((i) => i.key)).toContain('contained'); // the bulk item
+    expect(claim.unloadChecklist).toHaveLength(4);
+  });
+
+  it('S33: the securement photo is linked to the freight at pickup and its retention clock anchored at delivery', () => {
+    const pickup = { lat: -1.83, lng: 36.33 };
+    const d = coupleTipper('MD', { min: 0.8, max: 1.5 });
+    const f = dispatch.registerFreight({ description: 'Cement', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, bulk: true });
+    claimFreight(d.did, pickup, f.freightId);
+    const adoptSpy = jest.spyOn(media, 'adopt');
+    const anchorSpy = jest.spyOn(media, 'anchorFreightTerminal');
+    dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_real' });
+    expect(adoptSpy).toHaveBeenCalledWith('med_real', d.did, { type: 'freight', id: f.freightId }, 'securement');
+    dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys() });
+    expect(anchorSpy).toHaveBeenCalledWith(f.freightId);
+    adoptSpy.mockRestore();
+    anchorSpy.mockRestore();
+  });
+
+  it('S33: a securement id the driver does NOT own is never laundered onto the freight (S29 guard)', () => {
+    const pickup = { lat: -1.84, lng: 36.34 };
+    const d = coupleTipper('LN', { min: 0.8, max: 1.5 });
+    const f = dispatch.registerFreight({ description: 'Cement', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, bulk: true });
+    claimFreight(d.did, pickup, f.freightId);
+    // Another actor's media (a 1×1 PNG in the dispute-evidence bin). The driver passes ITS id as the securement.
+    const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+    const victim = media.upload({ ownerDid: 'did:glos:victim', kind: 'dispute', dataUrl: PNG });
+    dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f), securementPhotoId: victim.mediaId });
+    const ref = media.get(victim.mediaId)!;
+    expect(ref.kind).toBe('dispute'); // NOT re-kinded to securement
+    expect(ref.link?.type).not.toBe('freight'); // NOT re-linked to the freight — the victim's evidence is untouched
+  });
+
   // --- S32: the dedicated-transport lane (equipment manifest + freight cargo model + P4+ divert) ---
 
   it('S32: a vehicle carries a load/unload equipment manifest (MAN baseline + subtype + declared)', () => {
@@ -2005,8 +2092,8 @@ describe('PUDO Light', () => {
     fleet.couple(d.did, truck.vehicleId);
     const [offer] = dispatch.suggest(d.did, { from: origin.location, to: { lat: -1.3, lng: 36.95 } });
     dispatch.claim(offer.offerId);
-    dispatch.pickupFreight(res.freight.freightId, d.did);
-    dispatch.deliverFreight(res.freight.freightId, d.did);
+    pickupOk(res.freight, d.did);
+    deliverOk(res.freight, d.did);
 
     const done = dispatch.freightsForPhoneHash(hashPhone(buyer))[0];
     expect(done.status).toBe('delivered');

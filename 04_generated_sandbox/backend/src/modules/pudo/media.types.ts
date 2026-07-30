@@ -16,6 +16,7 @@ export const MEDIA_KINDS = [
   'kyc_licence', // account KYC — trading/driving licence
   'shop', // shop premises photo
   'avatar', // a person's profile picture (S29)
+  'securement', // S33 — a driver's photo of a secured dedicated-freight load at pickup
 ] as const;
 
 export type MediaKind = (typeof MEDIA_KINDS)[number];
@@ -25,7 +26,7 @@ export type MediaStatus = 'active' | 'expired';
 
 /** What a media item is attached to — drives who may see it and when its retention clock starts. */
 export interface MediaLink {
-  type: 'parcel' | 'vehicle' | 'agent' | 'driver' | 'person';
+  type: 'parcel' | 'vehicle' | 'agent' | 'driver' | 'person' | 'freight';
   id: string;
 }
 
@@ -79,6 +80,7 @@ export const KIND_RETENTION: Record<MediaKind, RetentionClass> = {
   kyc_licence: 'account-doc',
   shop: 'account-doc',
   avatar: 'account-doc', // kept while the account is active (linked to the person → never orphan-reaped)
+  securement: 'shipment-proof', // S33 — proof of a secured load, kept 90d after the freight is delivered
 };
 
 /** Only real raster image types — no SVG (it can carry script), no arbitrary bytes. */

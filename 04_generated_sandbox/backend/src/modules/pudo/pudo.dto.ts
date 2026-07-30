@@ -545,7 +545,11 @@ export class RegisterFreightDto {
 }
 
 /** S32b — a driver advancing a claimed freight (pickup/deliver). driverDid is the claimer, verified against
- *  the freight's claimedBy so only the driver who claimed it may advance it. */
+ *  the freight's claimedBy so only the driver who claimed it may advance it.
+ *  S33 — plus the safety gate: `confirmed` are the checklist item keys the driver ticked (load at pickup,
+ *  unload at delivery) and `securementPhotoId` the uploaded mediaId of the secured load (pickup only). */
 export class FreightActionDto {
   @IsOptional() @IsString() driverDid?: string;
+  @IsOptional() @IsArray() @IsString({ each: true }) confirmed?: string[];
+  @IsOptional() @IsString() securementPhotoId?: string;
 }

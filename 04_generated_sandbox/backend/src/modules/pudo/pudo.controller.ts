@@ -1039,13 +1039,13 @@ export class SbgController {
   /** Bulk freight pickup (claimed → in_transit). driverDid (the claimer) is verified against claimedBy. */
   @Post('dispatch/freight/:id/pickup')
   freightPickup(@Param('id') id: string, @Body() dto: FreightActionDto) {
-    return this.dispatch.pickupFreight(id, dto.driverDid);
+    return this.dispatch.pickupFreight(id, dto.driverDid, { confirmed: dto.confirmed, securementPhotoId: dto.securementPhotoId });
   }
 
   /** Bulk freight delivery (in_transit → delivered; releases the driver's reserved capacity). */
   @Post('dispatch/freight/:id/deliver')
   freightDeliver(@Param('id') id: string, @Body() dto: FreightActionDto) {
-    return this.dispatch.deliverFreight(id, dto.driverDid);
+    return this.dispatch.deliverFreight(id, dto.driverDid, { confirmed: dto.confirmed });
   }
 
   /** A driver declares a route A→B → the platform suggests the loads sitting on the way. */

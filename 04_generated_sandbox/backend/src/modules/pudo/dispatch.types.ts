@@ -5,6 +5,7 @@
 import { GeoPoint } from './pudo.types';
 import { CargoClass, CargoNature, Equipment, VehicleCapability } from './cargo.types';
 import { PriceBreakdown } from './pricing';
+import { SafetyItem } from './heavy-cargo';
 
 export class RoutePlan {
   from: GeoPoint;
@@ -64,6 +65,10 @@ export class Freight {
   lockedAt?: string;
   paidStatus?: 'unpaid' | 'billed' | 'billing_failed';
   driverPaid?: boolean;
+  // S33 — the heavy-cargo safety gate. loadSafety is stamped at pickup (the confirmed checklist keys + the
+  // securement photo mediaId); unloadReport at delivery. Absent until the driver passes each gate.
+  loadSafety?: { confirmed: string[]; securementPhotoRef: string; at: string; by?: string };
+  unloadReport?: { confirmed: string[]; at: string; by?: string };
   status: FreightStatus;
   claimedBy?: string;
   createdAt: string;
@@ -117,6 +122,13 @@ export class Claimable {
   /** S34c — the shipper's spend cap for this freight (the all-in charge), so suggest can skip a load whose price
    *  at this vehicle's rate would blow the shipper's budget. Undefined for a tote / an uncapped freight. */
   maxSpend?: number;
+  /** S33 — the cargo model the driver app needs to render the right safety checklist + a heavy badge. */
+  cargoClass?: CargoClass;
+  natureCode?: CargoNature;
+  /** S33 — the exact load-safety + unload checklist items THIS freight must pass. Single source of truth: the
+   *  driver ticks these and sends the keys back; the backend re-derives and enforces the same set. Freight only. */
+  loadChecklist?: SafetyItem[];
+  unloadChecklist?: SafetyItem[];
 }
 
 export type OfferStatus = 'pending' | 'claimed' | 'ignored' | 'expired';

@@ -12126,6 +12126,50 @@
           "driverPaid": {
             "type": "boolean"
           },
+          "loadSafety": {
+            "type": "object",
+            "properties": {
+              "confirmed": {
+                "required": true,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "securementPhotoRef": {
+                "required": true,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "by": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
+          "unloadReport": {
+            "type": "object",
+            "properties": {
+              "confirmed": {
+                "required": true,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "by": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
           "status": {
             "type": "object"
           },
@@ -12151,6 +12195,8 @@
           "requiredCapabilities",
           "requiredEquipment",
           "equipmentGaps",
+          "loadSafety",
+          "unloadReport",
           "status",
           "createdAt"
         ]
@@ -12159,6 +12205,15 @@
         "type": "object",
         "properties": {
           "driverDid": {
+            "type": "string"
+          },
+          "confirmed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "securementPhotoId": {
             "type": "string"
           }
         }
@@ -12394,7 +12449,8 @@
               "kyc_id",
               "kyc_licence",
               "shop",
-              "avatar"
+              "avatar",
+              "securement"
             ]
           },
           "dataUrl": {

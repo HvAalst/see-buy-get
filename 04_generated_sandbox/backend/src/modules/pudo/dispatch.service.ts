@@ -13,6 +13,8 @@ import { CargoNature, Equipment, VehicleCapability } from './cargo.types';
 import { VendorService } from './vendor.service';
 import { WalletGateService } from './wallet-gate.service';
 import { clampMultiplier, computeFreightPrice, freightMultiplier, shipperCharge } from './pricing';
+import { loadSafetyItems, missingKeys, requiredLoadKeys, requiredUnloadKeys, unloadSafetyItems } from './heavy-cargo';
+import { MediaService } from './media.service';
 import { MarketPulseStore } from './market-pulse.store';
 import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, VEHICLE_SPEC } from './fleet.config';
 import { detourKm, haversineKm } from './geo';
@@ -47,6 +49,7 @@ export class DispatchService {
     private readonly vendors: VendorService,
     private readonly gate: WalletGateService,
     private readonly market: MarketPulseStore,
+    private readonly media: MediaService,
   ) {
     this.freightSeq = [...this.freights.values()].length; // continue the human FRT-NNN sequence after a restart
   }
@@ -335,27 +338,48 @@ export class DispatchService {
   /** Freight is picked up (claimed → in_transit) then delivered (→ delivered, capacity released). S32b: when
    *  a driver DID is given (the authenticated driver-app path), only the driver who CLAIMED it may advance it —
    *  a claimed freight is that driver's obligation, not a free-for-all. */
-  pickupFreight(freightId: string, driverDid?: string): Freight {
+  pickupFreight(freightId: string, driverDid?: string, check?: { confirmed?: string[]; securementPhotoId?: string }): Freight {
     const f = this.requireFreight(freightId);
     if (driverDid && f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
     if (f.status !== 'claimed') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected claimed`);
+    // S33 — the load-safety gate. Every dedicated freight must clear the load-safety checklist THIS cargo
+    // requires (re-derived from the freight, so a client that under-reports can't bypass it) AND carry a
+    // securement photo, before it leaves the pickup. The check happens BEFORE any mutation, so a failed gate
+    // leaves the freight untouched (still 'claimed').
+    const required = requiredLoadKeys({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities });
+    const missing = missingKeys(required, check?.confirmed);
+    if (missing.length) throw new GlosError('SAFETY_CHECK_INCOMPLETE', `Complete the load-safety checklist before pickup — ${missing.length} item(s) left`);
+    const securementPhotoId = check?.securementPhotoId;
+    if (!securementPhotoId) throw new GlosError('SECUREMENT_PHOTO_REQUIRED', 'Attach a photo of the secured load before pickup');
     f.status = 'in_transit';
     f.pickedUpAt = new Date().toISOString();
+    f.loadSafety = { confirmed: [...new Set(check?.confirmed ?? [])], securementPhotoRef: securementPhotoId, at: f.pickedUpAt, by: driverDid };
+    // Bind the securement photo to the freight so its retention clock is the freight's, not the 48h orphan
+    // reaper. adopt() (not link()) because this id came from the CLIENT: it only re-kinds/links a photo the
+    // DRIVER owns and that isn't attached elsewhere, so a passed id can never launder another actor's media
+    // (S29). Anchored at delivery (the terminal state).
+    this.media.adopt(securementPhotoId, driverDid ?? '', { type: 'freight', id: f.freightId }, 'securement');
     this.freights.set(f.freightId, f);
     return f;
   }
-  deliverFreight(freightId: string, driverDid?: string): Freight {
+  deliverFreight(freightId: string, driverDid?: string, check?: { confirmed?: string[] }): Freight {
     const f = this.requireFreight(freightId);
     if (driverDid && f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
     if (f.status !== 'in_transit') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected in_transit`);
+    // S33 — the unload gate: the unload checklist must be complete before the freight is marked delivered.
+    const missing = missingKeys(requiredUnloadKeys(), check?.confirmed);
+    if (missing.length) throw new GlosError('SAFETY_CHECK_INCOMPLETE', `Complete the unload checklist before delivery — ${missing.length} item(s) left`);
     f.status = 'delivered'; // no longer counts against the driver's remaining capacity
     f.deliveredAt = new Date().toISOString();
+    f.unloadReport = { confirmed: [...new Set(check?.confirmed ?? [])], at: f.deliveredAt, by: driverDid };
     // S34 — pay the driver their LOCKED earning on delivery, exactly once. A system-level ledger outflow
     // (drivers hold no agent wallet). A legacy/bulletin freight claimed before pricing (no lockedPrice) is skipped.
     if (f.lockedPrice != null && !f.driverPaid && f.claimedBy) {
       this.gate.driverPayout(f.claimedBy, f.lockedPrice);
       f.driverPaid = true;
     }
+    // S33 — delivery is terminal: start the securement photo's retention clock (shipment-proof bin).
+    this.media.anchorFreightTerminal(f.freightId);
     this.freights.set(f.freightId, f);
     return f;
   }
@@ -413,7 +437,7 @@ export class DispatchService {
   private wrapFreight(f: Freight): Claimable {
     // S32: freight now carries its cargo model, so it matches vehicles on capability AND equipment like a tote.
     // S32b: status lets the driver app drive the claimed → picked-up → delivered flow in-app.
-    return { kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend };
+    return { kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems() };
   }
 
   private vehicleCanCarry(vehicle: Vehicle, load: Claimable, remainingKg: number): boolean {

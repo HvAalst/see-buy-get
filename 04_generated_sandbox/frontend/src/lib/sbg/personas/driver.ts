@@ -1,4 +1,5 @@
 import type { SbgClient } from '../client';
+import { createMediaApi } from './media';
 
 /**
  * Driver persona facade — the ONLY operations the driver app can name. Because it exports just this
@@ -9,6 +10,10 @@ import type { SbgClient } from '../client';
  */
 export function createDriverApi(sbg: SbgClient) {
   return {
+    // S33 — real image upload/fetch, for the securement photo at freight pickup (the driver app had no
+    // media capability before this; the securement gate is the first operation that needs it).
+    ...createMediaApi(sbg),
+
     /** The driver's own record (status, badge, registry). */
     me: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}', { params: { path: { did } } })),
 
@@ -53,14 +58,16 @@ export function createDriverApi(sbg: SbgClient) {
     loadBag: (code: string, driverBadgeId: string) =>
       sbg.request((c) => c.POST('/v1/sbg/totes/{code}/load', { params: { path: { code } }, body: { driverBadgeId } })),
 
-    /** S32b — pick up a claimed dedicated-freight job (claimed → in_transit). Sends the driver's own DID so
-     *  the server can confirm THIS driver claimed it (only the claimer may advance a job). */
-    pickupFreight: (freightId: string, driverDid: string) =>
-      sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/pickup', { params: { path: { id: freightId } }, body: { driverDid } })),
+    /** S32b/S33 — pick up a claimed dedicated-freight job (claimed → in_transit). Sends the driver's own DID
+     *  (only the claimer may advance a job) plus the S33 load-safety gate: the confirmed checklist keys + the
+     *  securement photo mediaId. */
+    pickupFreight: (freightId: string, driverDid: string, check?: { confirmed?: string[]; securementPhotoId?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/pickup', { params: { path: { id: freightId } }, body: { driverDid, ...check } })),
 
-    /** S32b — deliver an in-transit dedicated-freight job (in_transit → delivered; capacity released). */
-    deliverFreight: (freightId: string, driverDid: string) =>
-      sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/deliver', { params: { path: { id: freightId } }, body: { driverDid } })),
+    /** S32b/S33 — deliver an in-transit dedicated-freight job (in_transit → delivered; capacity released),
+     *  with the confirmed unload-checklist keys. */
+    deliverFreight: (freightId: string, driverDid: string, check?: { confirmed?: string[] }) =>
+      sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/deliver', { params: { path: { id: freightId } }, body: { driverDid, ...check } })),
   };
 }
 

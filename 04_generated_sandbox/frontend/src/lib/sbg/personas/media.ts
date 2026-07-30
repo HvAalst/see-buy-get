@@ -12,7 +12,8 @@ export type MediaKind =
   | 'kyc_id'
   | 'kyc_licence'
   | 'shop'
-  | 'avatar';
+  | 'avatar'
+  | 'securement'; // S33 — a driver's photo of a secured dedicated-freight load at pickup
 
 /**
  * Media facade (S26) — the operations any authenticated app shares for real image upload + display.

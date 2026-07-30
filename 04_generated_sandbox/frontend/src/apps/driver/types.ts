@@ -54,6 +54,12 @@ export interface SessionView {
 
 export type ClaimKind = 'tote' | 'freight';
 
+/** S33 — one confirmable safety-checklist line (mirrors the backend heavy-cargo SafetyItem). */
+export interface SafetyItem {
+  key: string;
+  label: string;
+}
+
 /** S34 — the transparent price breakdown behind a freight offer/claim (B + D·R·M). */
 export interface PriceBreakdown {
   baseFee: number;
@@ -77,6 +83,10 @@ export interface Claimable {
   status?: string; // S32b — freight status (claimed | in_transit | …) drives the pickup/deliver control
   lockedPrice?: number; // S34 — the driver's agreed earning on a claimed freight (locked at claim)
   priceBreakdown?: PriceBreakdown; // S34 — the breakdown behind lockedPrice
+  cargoClass?: string; // S33 — P4/P5/P6 (heavy badge)
+  natureCode?: string; // S33 — the commodity nature (GEN…HUM)
+  loadChecklist?: SafetyItem[]; // S33 — the load-safety items to confirm at pickup
+  unloadChecklist?: SafetyItem[]; // S33 — the unload items to confirm at delivery
 }
 
 export interface ClaimsView {

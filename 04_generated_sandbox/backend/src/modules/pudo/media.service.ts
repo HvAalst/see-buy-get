@@ -137,6 +137,26 @@ export class MediaService implements OnApplicationBootstrap, OnModuleDestroy {
     this.refs.set(mediaId, ref);
   }
 
+  /**
+   * S33 — adopt a CLIENT-SUPPLIED photo as a domain object's proof: link it + set its kind, but ONLY when the
+   * caller OWNS it and it is not already attached elsewhere. `link()` above is ownership/kind-blind for TRUSTED
+   * internal refs; a mediaId a client hands us (a driver's securement id at pickup) must not be able to launder
+   * another actor's media out of its retention bin, nor detach media already anchored to something else (S29).
+   * Silently no-ops (never throws) when it cannot safely adopt — an unknown/legacy id, a ref that isn't the
+   * caller's, or one linked elsewhere — so a fresh own upload links and anything dubious is simply left alone.
+   */
+  adopt(mediaId: string | undefined, ownerDid: string, link: MediaLink, kind: MediaKind): void {
+    if (!mediaId || !ownerDid) return;
+    const ref = this.refs.get(mediaId);
+    if (!ref || ref.status !== 'active') return;
+    if (ref.ownerDid !== ownerDid) return; // not the caller's — never launder another actor's media
+    if (ref.link && (ref.link.type !== link.type || ref.link.id !== link.id)) return; // already attached elsewhere
+    ref.link = link;
+    ref.kind = kind;
+    ref.retentionClass = KIND_RETENTION[kind];
+    this.refs.set(mediaId, ref);
+  }
+
   /** Parcel reached a terminal state → start the 90-day clock on its shipment-proof media. Idempotent. */
   anchorParcelTerminal(parcelId: string, at: Date = new Date()): void {
     this.anchorLink('parcel', parcelId, 'shipment-proof', at);
@@ -145,6 +165,11 @@ export class MediaService implements OnApplicationBootstrap, OnModuleDestroy {
   /** Vehicle retired → start the grace clock on its asset media (so retired-fleet photos don't linger). */
   anchorVehicleRetired(vehicleId: string, at: Date = new Date()): void {
     this.anchorLink('vehicle', vehicleId, 'vehicle-asset', at);
+  }
+
+  /** Freight delivered (terminal) → start the 90-day clock on its securement proof. Idempotent (S33). */
+  anchorFreightTerminal(freightId: string, at: Date = new Date()): void {
+    this.anchorLink('freight', freightId, 'shipment-proof', at);
   }
 
   /**

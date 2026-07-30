@@ -68,6 +68,8 @@ export const ERROR_CODES = {
   CARGO_INCOMPATIBLE: { status: 400, title: 'These goods cannot travel together' },
   VEHICLE_MISSING_CAPABILITY: { status: 400, title: 'This vehicle cannot carry this cargo' },
   BUDGET_EXCEEDED: { status: 400, title: "The price exceeds the shipper's budget" },
+  SAFETY_CHECK_INCOMPLETE: { status: 400, title: 'The safety checklist is not complete' },
+  SECUREMENT_PHOTO_REQUIRED: { status: 400, title: 'A photo of the secured load is required' },
   BAG_FULL: { status: 400, title: 'The bag is full' },
   BAG_EMPTY: { status: 400, title: 'The bag is empty' },
   BAG_RESERVED: { status: 400, title: 'The bag is reserved for another driver' },

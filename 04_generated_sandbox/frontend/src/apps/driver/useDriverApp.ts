@@ -18,6 +18,8 @@ import type {
   VehicleView,
 } from './types';
 import { minEarnFilter, nodeOptions } from './logic';
+import { downscaleImage } from '../../shared/media';
+import type { MediaKind } from '../../lib/sbg/personas/media';
 
 export type Screen = 'home' | 'route' | 'offers' | 'loads';
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
@@ -573,13 +575,34 @@ export function useDriverApp() {
     [client, state.driver, run, fail, pushToast, refresh],
   );
 
-  /** S32b — pick up a claimed dedicated-freight job (claimed → in_transit). */
+  /** S26/S33 — downscale + EXIF-strip + upload a captured securement photo → its mediaId (null on failure). */
+  const uploadPhoto = useCallback(
+    async (kind: MediaKind, file: File): Promise<string | null> => {
+      if (!client) return null;
+      try {
+        const { dataUrl, thumbDataUrl } = await downscaleImage(file);
+        const r = await client.api.uploadMedia(kind, dataUrl, thumbDataUrl);
+        if (r.error) {
+          pushToast({ tone: 'danger', icon: 'camera', title: 'Photo upload failed', detail: 'Try taking it again.' });
+          return null;
+        }
+        return narrow<{ mediaId: string }>(r.data)?.mediaId ?? null;
+      } catch {
+        pushToast({ tone: 'danger', icon: 'camera', title: 'Could not read that photo' });
+        return null;
+      }
+    },
+    [client, pushToast],
+  );
+
+  /** S32b/S33 — pick up a claimed dedicated-freight job (claimed → in_transit), through the load-safety gate:
+   *  the confirmed checklist keys + the securement photo mediaId. */
   const pickupFreight = useCallback(
-    async (ref: string) => {
+    async (ref: string, check: { confirmed: string[]; securementPhotoId: string }) => {
       const did = stateRef.current.driver?.did;
       if (!client || !did) return;
       await run(`freight:${ref}`, async () => {
-        const r = await client.api.pickupFreight(ref, did);
+        const r = await client.api.pickupFreight(ref, did, check);
         if (r.error) {
           // Reconcile FIRST, then report (mirror answerOffer): if the job moved on elsewhere the stale
           // 'Pick up' row would loop the same 400 on every re-tap — a refresh flips it to its true control.
@@ -595,13 +618,14 @@ export function useDriverApp() {
     [client, run, fail, pushToast, refresh],
   );
 
-  /** S32b — deliver an in-transit dedicated-freight job (in_transit → delivered; capacity released). */
+  /** S32b/S33 — deliver an in-transit dedicated-freight job (in_transit → delivered), with the confirmed
+   *  unload-checklist keys. */
   const deliverFreight = useCallback(
-    async (ref: string) => {
+    async (ref: string, check: { confirmed: string[] }) => {
       const did = stateRef.current.driver?.did;
       if (!client || !did) return;
       await run(`freight:${ref}`, async () => {
-        const r = await client.api.deliverFreight(ref, did);
+        const r = await client.api.deliverFreight(ref, did, check);
         if (r.error) {
           if (!isOffline(r.error)) await refresh(); // reconcile a moved-on job before showing the error
           return fail(r.error);
@@ -631,6 +655,7 @@ export function useDriverApp() {
       setOfferIndex,
       answerOffer,
       loadBag,
+      uploadPhoto,
       pickupFreight,
       deliverFreight,
       pushToast,
