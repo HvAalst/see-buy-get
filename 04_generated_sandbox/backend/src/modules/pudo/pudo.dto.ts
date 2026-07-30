@@ -553,3 +553,9 @@ export class FreightActionDto {
   @IsOptional() @IsArray() @IsString({ each: true }) confirmed?: string[];
   @IsOptional() @IsString() securementPhotoId?: string;
 }
+
+/** S33b — a driver logging a temperature reading for a cold-chain freight in transit. */
+export class RecordTempDto {
+  @IsOptional() @IsString() driverDid?: string;
+  @IsNumber() celsius!: number;
+}

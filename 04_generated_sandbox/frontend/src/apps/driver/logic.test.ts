@@ -7,6 +7,7 @@ import {
   countdownLabel,
   driverStatusNotice,
   isFull,
+  lastReadingBreached,
   minEarnFilter,
   money,
   nodeOptions,
@@ -234,5 +235,15 @@ describe('freight pricing (S34)', () => {
     expect(minEarnFilter('-5')).toBeUndefined(); // a negative must NOT reach the backend's @Min(0)
     expect(minEarnFilter('abc')).toBeUndefined(); // junk
     expect(minEarnFilter(undefined)).toBeUndefined();
+  });
+
+  it('lastReadingBreached reflects THIS reading, not the sticky freight flag (S33b)', () => {
+    expect(lastReadingBreached([{ breach: false }])).toBe(false);
+    expect(lastReadingBreached([{ breach: true }])).toBe(true);
+    // A recovery after a breach: the last reading is in-band → NOT a fresh alert, even though the freight
+    // stayed flagged. This is the exact case the sticky flag would have mis-warned.
+    expect(lastReadingBreached([{ breach: true }, { breach: false }])).toBe(false);
+    expect(lastReadingBreached([])).toBe(false);
+    expect(lastReadingBreached(undefined)).toBe(false);
   });
 });

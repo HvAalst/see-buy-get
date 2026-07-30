@@ -184,6 +184,16 @@ export function minEarnFilter(raw: string | number | null | undefined): number |
 }
 
 /**
+ * S33b — was the JUST-logged temperature reading a breach? The recordTemp response returns the whole freight,
+ * whose `tempBreached` is STICKY (stays true after any past breach). To warn a driver about THIS reading (not a
+ * past one), key off the last reading's own verdict, not the sticky flag — an in-band reading after a recovery
+ * must read as fine, not as a fresh alert.
+ */
+export function lastReadingBreached(readings: Array<{ breach: boolean }> | undefined): boolean {
+  return Boolean(readings?.length && readings[readings.length - 1].breach);
+}
+
+/**
  * The transparent breakdown behind a freight earning, as plain lines for a Checklist. Every term a driver
  * can see and trust: the flag-down fee, the distance × the rate actually applied, and — only when the
  * market moved the rate off the base — a note that a busy- or quiet-time rate is in effect.

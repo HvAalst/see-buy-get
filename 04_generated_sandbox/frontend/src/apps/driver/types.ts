@@ -87,6 +87,9 @@ export interface Claimable {
   natureCode?: string; // S33 — the commodity nature (GEN…HUM)
   loadChecklist?: SafetyItem[]; // S33 — the load-safety items to confirm at pickup
   unloadChecklist?: SafetyItem[]; // S33 — the unload items to confirm at delivery
+  tempBand?: { minC: number; maxC: number }; // S33b — the safe band to keep (present ⇒ cold-chain, show the log control)
+  lastTempC?: number; // S33b — the last logged reading
+  tempBreached?: boolean; // S33b — the chain has been broken
 }
 
 export interface ClaimsView {

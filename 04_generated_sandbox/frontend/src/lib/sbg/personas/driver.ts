@@ -68,6 +68,10 @@ export function createDriverApi(sbg: SbgClient) {
      *  with the confirmed unload-checklist keys. */
     deliverFreight: (freightId: string, driverDid: string, check?: { confirmed?: string[] }) =>
       sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/deliver', { params: { path: { id: freightId } }, body: { driverDid, ...check } })),
+
+    /** S33b — log a temperature reading for a cold-chain freight in transit (a breach flags it for the tower). */
+    recordTemp: (freightId: string, driverDid: string, celsius: number) =>
+      sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/temperature', { params: { path: { id: freightId } }, body: { driverDid, celsius } })),
   };
 }
 

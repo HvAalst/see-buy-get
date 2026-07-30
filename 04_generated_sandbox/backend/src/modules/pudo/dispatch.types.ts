@@ -5,7 +5,7 @@
 import { GeoPoint } from './pudo.types';
 import { CargoClass, CargoNature, Equipment, VehicleCapability } from './cargo.types';
 import { PriceBreakdown } from './pricing';
-import { SafetyItem } from './heavy-cargo';
+import { SafetyItem, TempBand, TempReading } from './heavy-cargo';
 
 export class RoutePlan {
   from: GeoPoint;
@@ -69,6 +69,11 @@ export class Freight {
   // securement photo mediaId); unloadReport at delivery. Absent until the driver passes each gate.
   loadSafety?: { confirmed: string[]; securementPhotoRef: string; at: string; by?: string };
   unloadReport?: { confirmed: string[]; at: string; by?: string };
+  // S33b — cold-chain temperature monitoring. A reading log (each stamped with its own breach verdict) + a
+  // STICKY tempBreached flag: once the chain is broken the cargo is suspect even if the temperature recovers.
+  // Only meaningful for a temperature-controlled cargo (tempBand(natureCode) != null).
+  tempReadings?: TempReading[];
+  tempBreached?: boolean;
   status: FreightStatus;
   claimedBy?: string;
   createdAt: string;
@@ -88,6 +93,9 @@ export class FreightShipmentView {
   equipmentGaps!: Array<'origin' | 'dest'>;
   createdAt!: string;
   timeline!: Array<{ status: FreightStatus; at: string }>;
+  /** S33b — for a cold-chain order, whether its temperature chain was broken in transit (a PII-free boolean:
+   *  the buyer sees "temperature maintained" vs a "temperature alert", never the raw readings). */
+  tempBreached?: boolean;
 }
 
 /** A unit a driver can claim, normalised across totes and freight. */
@@ -129,6 +137,11 @@ export class Claimable {
    *  driver ticks these and sends the keys back; the backend re-derives and enforces the same set. Freight only. */
   loadChecklist?: SafetyItem[];
   unloadChecklist?: SafetyItem[];
+  /** S33b — cold-chain monitoring surfaced to the driver: the safe band to keep (null = not temperature-
+   *  controlled → no log control), the last logged reading, and whether the chain has been breached. */
+  tempBand?: TempBand;
+  lastTempC?: number;
+  tempBreached?: boolean;
 }
 
 export type OfferStatus = 'pending' | 'claimed' | 'ignored' | 'expired';

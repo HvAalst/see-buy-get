@@ -235,3 +235,36 @@
   border-radius: var(--r-ctl);
   margin-bottom: 8px;
 }
+
+/* S33b — the cold-chain strip under an in-transit freight: the safe band + last reading + a log control.
+   Neutral while the chain holds; danger-tinted once it has been broken. */
+.temp-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 6px 0 2px;
+  padding: 8px 12px;
+  border-radius: var(--r-ctl);
+  background: var(--panel);
+  border: 1px solid var(--bd-soft);
+  font-size: 14px;
+  color: var(--tx2);
+}
+
+.temp-strip--breach {
+  background: rgba(220, 38, 38, 0.08);
+  border-color: var(--dang);
+  color: var(--dang);
+}
+
+.temp-strip__info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.temp-strip__ic {
+  flex: none;
+  color: var(--dang);
+}

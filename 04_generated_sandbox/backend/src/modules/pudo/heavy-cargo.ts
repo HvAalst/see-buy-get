@@ -5,7 +5,7 @@
 // testable, and the SAME item list the backend enforces is sent to the driver app so the checklist it shows is
 // exactly the checklist it must pass.
 
-import { VehicleCapability } from './cargo.types';
+import { CargoNature, NATURE_CAPABILITY, VehicleCapability } from './cargo.types';
 
 /** One confirmable line on a safety checklist. `key` is what the driver app sends back as confirmed; `label`
  *  is the plain-language line shown to the driver. */
@@ -70,4 +70,37 @@ export function requiredUnloadKeys(): string[] {
 export function missingKeys(required: string[], confirmed: string[] | undefined): string[] {
   const done = new Set(confirmed ?? []);
   return required.filter((k) => !done.has(k));
+}
+
+// --- S33b: temperature monitoring for cold-chain freight ---
+
+/** A safe temperature band (°C, inclusive). */
+export interface TempBand {
+  minC: number;
+  maxC: number;
+}
+
+/** One logged temperature reading for a cold-chain freight, stamped with its own breach verdict. */
+export interface TempReading {
+  celsius: number;
+  at: string;
+  by?: string;
+  breach: boolean;
+}
+
+// The chilled cold-chain band (fresh produce, dairy, pharma). The codebase's FIRST numeric temperature concept
+// — cargo.types.ts flagged the per-parcel temp field as deferred; this fills it. A single band for now; a
+// frozen band / a shipper-set per-freight range is a later refinement.
+export const COLD_CHAIN_BAND: TempBand = { minC: 2, maxC: 8 };
+
+/** The safe temperature band a freight must stay in, or null when its cargo is not temperature-controlled.
+ *  Driven by the same nature→capability mapping vehicle matching uses (FOP → coldChain), so a monitored
+ *  freight is exactly one that had to be carried on a reefer. */
+export function tempBand(natureCode: CargoNature): TempBand | null {
+  return NATURE_CAPABILITY[natureCode] === 'coldChain' ? COLD_CHAIN_BAND : null;
+}
+
+/** True when a reading is outside the safe band (a cold-chain breach). */
+export function isTempBreach(celsius: number, band: TempBand): boolean {
+  return celsius < band.minC || celsius > band.maxC;
 }

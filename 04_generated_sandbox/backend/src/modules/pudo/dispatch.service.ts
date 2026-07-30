@@ -13,7 +13,7 @@ import { CargoNature, Equipment, VehicleCapability } from './cargo.types';
 import { VendorService } from './vendor.service';
 import { WalletGateService } from './wallet-gate.service';
 import { clampMultiplier, computeFreightPrice, freightMultiplier, shipperCharge } from './pricing';
-import { loadSafetyItems, missingKeys, requiredLoadKeys, requiredUnloadKeys, unloadSafetyItems } from './heavy-cargo';
+import { isTempBreach, loadSafetyItems, missingKeys, requiredLoadKeys, requiredUnloadKeys, tempBand, unloadSafetyItems } from './heavy-cargo';
 import { MediaService } from './media.service';
 import { MarketPulseStore } from './market-pulse.store';
 import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, VEHICLE_SPEC } from './fleet.config';
@@ -156,6 +156,7 @@ export class DispatchService {
       equipmentGaps: f.equipmentGaps,
       createdAt: f.createdAt,
       timeline,
+      tempBreached: f.tempBreached, // S33b — the only temp fact a buyer sees (a boolean; never the readings)
     };
   }
 
@@ -384,6 +385,30 @@ export class DispatchService {
     return f;
   }
 
+  /**
+   * S33b — log a temperature reading for a cold-chain freight IN TRANSIT. Only the claiming driver may log it;
+   * a reading outside the cargo's safe band marks the freight breached (STICKY — the chain, once broken, stays
+   * flagged even if it recovers) and emits an event for the operator watchtower. A freight whose cargo is not
+   * temperature-controlled has no band, so logging is refused (there is nothing to monitor).
+   */
+  recordTemp(freightId: string, celsius: number, driverDid?: string): Freight {
+    const f = this.requireFreight(freightId);
+    if (driverDid && f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
+    if (f.status !== 'in_transit') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected in_transit`);
+    const band = tempBand(f.natureCode);
+    if (!band) throw new GlosError('NOT_TEMPERATURE_CONTROLLED', 'This freight is not temperature-controlled — no reading to log');
+    if (!Number.isFinite(celsius)) throw new GlosError('INVALID_INPUT', 'A numeric temperature reading is required');
+    const c = Math.round(celsius * 10) / 10;
+    const breach = isTempBreach(c, band);
+    f.tempReadings = [...(f.tempReadings ?? []), { celsius: c, at: new Date().toISOString(), by: driverDid, breach }];
+    if (breach && !f.tempBreached) {
+      f.tempBreached = true; // sticky
+      void this.events.publish(GlosEvent.Pudo.FreightTempBreach, { freightId: f.freightId, code: f.code, celsius: c, band, driverDid }, { source: 'pudo' }).catch(() => undefined);
+    }
+    this.freights.set(f.freightId, f);
+    return f;
+  }
+
   listFreight(filter: { status?: Freight['status'] } = {}): Freight[] {
     return [...this.freights.values()].filter((f) => !filter.status || f.status === filter.status);
   }
@@ -437,7 +462,7 @@ export class DispatchService {
   private wrapFreight(f: Freight): Claimable {
     // S32: freight now carries its cargo model, so it matches vehicles on capability AND equipment like a tote.
     // S32b: status lets the driver app drive the claimed → picked-up → delivered flow in-app.
-    return { kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems() };
+    return { kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached };
   }
 
   private vehicleCanCarry(vehicle: Vehicle, load: Claimable, remainingKg: number): boolean {

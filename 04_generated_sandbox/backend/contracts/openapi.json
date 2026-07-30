@@ -7203,6 +7203,45 @@
         }
       }
     },
+    "/v1/sbg/dispatch/freight/{id}/temperature": {
+      "post": {
+        "operationId": "Sbg.freightTemp",
+        "summary": "",
+        "description": "S33b — log a temperature reading for a cold-chain freight in transit (a breach flags it for the tower).",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordTempDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Freight"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/drivers/{did}/suggest-work": {
       "post": {
         "operationId": "Sbg.suggestWork",
@@ -12170,6 +12209,15 @@
               }
             }
           },
+          "tempReadings": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "tempBreached": {
+            "type": "boolean"
+          },
           "status": {
             "type": "object"
           },
@@ -12217,6 +12265,20 @@
             "type": "string"
           }
         }
+      },
+      "RecordTempDto": {
+        "type": "object",
+        "properties": {
+          "driverDid": {
+            "type": "string"
+          },
+          "celsius": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "celsius"
+        ]
       },
       "SuggestRouteDto": {
         "type": "object",

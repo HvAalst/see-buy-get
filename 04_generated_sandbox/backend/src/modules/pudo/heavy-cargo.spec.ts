@@ -1,4 +1,4 @@
-import { loadSafetyItems, missingKeys, requiredLoadKeys, requiredUnloadKeys, unloadSafetyItems } from './heavy-cargo';
+import { COLD_CHAIN_BAND, isTempBreach, loadSafetyItems, missingKeys, requiredLoadKeys, requiredUnloadKeys, tempBand, unloadSafetyItems } from './heavy-cargo';
 
 describe('heavy-cargo safety checklist (S33)', () => {
   const keys = (ctx: { bulk: boolean; fragile: boolean; requiredCapabilities: import('./cargo.types').VehicleCapability[] }) => requiredLoadKeys(ctx);
@@ -38,5 +38,24 @@ describe('heavy-cargo safety checklist (S33)', () => {
     expect(missingKeys(required, ['a'])).toEqual(['b', 'c']);
     expect(missingKeys(required, undefined)).toEqual(['a', 'b', 'c']);
     expect(missingKeys(required, ['a', 'b', 'c', 'extra'])).toEqual([]); // extras are ignored
+  });
+});
+
+describe('cold-chain temperature (S33b)', () => {
+  it('tempBand is the chilled band for a temperature-controlled nature, null otherwise', () => {
+    expect(tempBand('FOP')).toEqual(COLD_CHAIN_BAND); // perishable food → coldChain
+    expect(tempBand('GEN')).toBeNull();
+    expect(tempBand('HAZ-CHEM')).toBeNull(); // hazmat, but not cold-chain
+    expect(tempBand('HUM')).toBeNull(); // pharma is "often cold" but not a coldChain-required nature here
+  });
+
+  it('isTempBreach flags a reading outside the inclusive band', () => {
+    const band = COLD_CHAIN_BAND; // { minC: 2, maxC: 8 }
+    expect(isTempBreach(5, band)).toBe(false);
+    expect(isTempBreach(2, band)).toBe(false); // inclusive floor
+    expect(isTempBreach(8, band)).toBe(false); // inclusive ceiling
+    expect(isTempBreach(1.9, band)).toBe(true);
+    expect(isTempBreach(8.1, band)).toBe(true);
+    expect(isTempBreach(-18, band)).toBe(true); // frozen is a breach of the chilled band
   });
 });

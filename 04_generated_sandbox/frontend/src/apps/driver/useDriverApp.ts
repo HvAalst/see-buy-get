@@ -17,7 +17,7 @@ import type {
   SuggestView,
   VehicleView,
 } from './types';
-import { minEarnFilter, nodeOptions } from './logic';
+import { lastReadingBreached, minEarnFilter, nodeOptions } from './logic';
 import { downscaleImage } from '../../shared/media';
 import type { MediaKind } from '../../lib/sbg/personas/media';
 
@@ -638,6 +638,33 @@ export function useDriverApp() {
     [client, run, fail, pushToast, refresh],
   );
 
+  /** S33b — log a temperature reading for a cold-chain freight in transit. An out-of-band reading warns the
+   *  driver (and flags the load for the control tower). */
+  const logTemp = useCallback(
+    async (ref: string, celsius: number) => {
+      const did = stateRef.current.driver?.did;
+      if (!client || !did) return;
+      await run(`temp:${ref}`, async () => {
+        const r = await client.api.recordTemp(ref, did, celsius);
+        if (r.error) {
+          if (!isOffline(r.error)) await refresh();
+          return fail(r.error);
+        }
+        buzz();
+        // Warn on THIS reading's own verdict, not the sticky freight flag (which stays true after any past
+        // breach) — an in-band reading logged after a recovery must read as fine, not as a fresh alert.
+        const breach = lastReadingBreached(narrow<{ tempReadings?: Array<{ breach: boolean }> }>(r.data)?.tempReadings);
+        pushToast(
+          breach
+            ? { tone: 'warn', icon: 'warning', title: 'Temperature out of range', detail: 'Logged — the control tower is alerted.' }
+            : { tone: 'ok', icon: 'check', title: 'Temperature logged' },
+        );
+        await refresh();
+      });
+    },
+    [client, run, fail, pushToast, refresh],
+  );
+
   return {
     state,
     actions: {
@@ -658,6 +685,7 @@ export function useDriverApp() {
       uploadPhoto,
       pickupFreight,
       deliverFreight,
+      logTemp,
       pushToast,
       dismissToast,
     },

@@ -1746,6 +1746,16 @@ describe('PUDO Light', () => {
     return d;
   };
 
+  // S33b — a refrigerated truck (coldChain) carrying a tail-lift, so it can be offered a discrete cold-chain (FOP) freight.
+  const coupleReefer = (tag: string) => {
+    const d = drivers.register({ displayName: tag, fullName: tag, nationalId: 'ID-' + tag, mobile: '+2547' + tag, licenceClasses: ['truck'], licenceNumber: 'L-' + tag, licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const v = vehicles.register({ plate: 'RF-' + tag, vehicleClass: 'truck', truckSubtype: 'refrigerated', capacityKg: 20_000, ownerName: 'X', equipment: ['TLT'], baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5 });
+    fleet.couple(d.did, v.vehicleId);
+    return d;
+  };
+
   it('S34b: a high-demand zone surges the freight multiplier, clamped to each vehicle corridor', () => {
     const pickup = { lat: -1.2, lng: 36.8 };
     const dest = { lat: -1.22, lng: 36.82 };
@@ -1959,6 +1969,60 @@ describe('PUDO Light', () => {
     const ref = media.get(victim.mediaId)!;
     expect(ref.kind).toBe('dispute'); // NOT re-kinded to securement
     expect(ref.link?.type).not.toBe('freight'); // NOT re-linked to the freight — the victim's evidence is untouched
+  });
+
+  // --- S33b: cold-chain temperature monitoring (the first temp-band concept) ---
+
+  it('S33b: a cold-chain freight logs temperatures; an out-of-band reading breaches it (sticky) + flags the tower', () => {
+    const pickup = { lat: -1.9, lng: 36.2 };
+    const d = coupleReefer('CC');
+    const f = dispatch.registerFreight({ description: 'Vaccines', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, bulk: false, natureCode: 'FOP' });
+    claimFreight(d.did, pickup, f.freightId);
+    pickupOk(f, d.did); // → in_transit
+
+    const r1 = dispatch.recordTemp(f.freightId, 5, d.did); // in-band
+    expect(r1.tempBreached).toBeFalsy();
+    expect(r1.tempReadings).toHaveLength(1);
+    const r2 = dispatch.recordTemp(f.freightId, 12, d.did); // out of band → breach
+    expect(r2.tempBreached).toBe(true);
+    const r3 = dispatch.recordTemp(f.freightId, 4, d.did); // recovers, but the breach is STICKY
+    expect(r3.tempBreached).toBe(true);
+    expect(r3.tempReadings).toHaveLength(3);
+    expect(r3.tempReadings!.map((t) => t.breach)).toEqual([false, true, false]);
+
+    // The operator watchtower flags the in-transit breach; the buyer sees only the boolean.
+    expect(monitor.flags().some((fl) => fl.type === 'Temp_Breach' && fl.subject === f.code)).toBe(true);
+    expect(DispatchService.toShipmentView(dispatch.listFreight().find((x) => x.freightId === f.freightId)!).tempBreached).toBe(true);
+  });
+
+  it('S33b: recordTemp is refused off in_transit, for a non-cold-chain freight, and by another driver', () => {
+    const cold = { lat: -1.91, lng: 36.21 };
+    const dr = coupleReefer('RF');
+    const cf = dispatch.registerFreight({ description: 'Dairy', pickupLocation: cold, pickupLabel: 'D', destLabel: 'S', destLocation: cold, weightKg: 200, bulk: false, natureCode: 'FOP' });
+    claimFreight(dr.did, cold, cf.freightId);
+    expect(() => dispatch.recordTemp(cf.freightId, 5, dr.did)).toThrow(/expected in_transit/i); // claimed, not moving yet
+    pickupOk(cf, dr.did);
+    expect(() => dispatch.recordTemp(cf.freightId, 5, 'did:glos:someone-else')).toThrow(/another driver/i);
+
+    const warm = { lat: -1.95, lng: 36.25 };
+    const dt = coupleTipper('WM', { min: 0.8, max: 1.5 });
+    const wf = dispatch.registerFreight({ description: 'Gravel', pickupLocation: warm, pickupLabel: 'D', destLabel: 'S', destLocation: warm, weightKg: 200, bulk: true, natureCode: 'GEN' });
+    claimFreight(dt.did, warm, wf.freightId);
+    pickupOk(wf, dt.did);
+    expect(() => dispatch.recordTemp(wf.freightId, 5, dt.did)).toThrow(/temperature-controlled/i); // GEN → no band
+  });
+
+  it('S33b: a claimed cold-chain freight shows the driver its safe band + last reading; a plain freight shows none', () => {
+    const pickup = { lat: -1.93, lng: 36.23 };
+    const d = coupleReefer('BD');
+    const f = dispatch.registerFreight({ description: 'Meat', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, bulk: false, natureCode: 'FOP' });
+    claimFreight(d.did, pickup, f.freightId);
+    pickupOk(f, d.did);
+    dispatch.recordTemp(f.freightId, 6, d.did);
+    const claim = dispatch.claimsFor(d.did).find((c) => c.ref === f.freightId)!;
+    expect(claim.tempBand).toEqual({ minC: 2, maxC: 8 });
+    expect(claim.lastTempC).toBe(6);
+    expect(claim.tempBreached).toBeFalsy();
   });
 
   // --- S32: the dedicated-transport lane (equipment manifest + freight cargo model + P4+ divert) ---

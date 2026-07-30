@@ -12,6 +12,7 @@ export interface LoadsScreenProps {
 export function LoadsScreen({ state, actions }: LoadsScreenProps) {
   const [pick, setPick] = useState<Claimable | null>(null);
   const [gate, setGate] = useState<Claimable | null>(null); // S33 — the freight in the load/unload safety gate
+  const [tempFor, setTempFor] = useState<Claimable | null>(null); // S33b — the freight whose temperature we're logging
   const v = state.vehicle;
   const hasBadge = canLoadBag(state.driver?.badgeId);
 
@@ -104,6 +105,8 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                       <Icon name="chevronRight" size={22} />
                     </span>
                   </button>
+                  {/* S33b — an in-transit cold-chain load: show the safe band + last reading + a log control. */}
+                  {control === 'deliver' && c.tempBand ? <TempStrip claim={c} onLog={() => setTempFor(c)} /> : null}
                 </li>
               );
             }
@@ -160,7 +163,71 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
       </Sheet>
 
       <FreightGate claim={gate} state={state} actions={actions} onClose={() => setGate(null)} />
+      <TempSheet claim={tempFor} state={state} actions={actions} onClose={() => setTempFor(null)} />
     </div>
+  );
+}
+
+/** S33b — the cold-chain strip under an in-transit freight row: the safe band, the last reading, and a log control. */
+function TempStrip({ claim, onLog }: { claim: Claimable; onLog: () => void }) {
+  const band = claim.tempBand!;
+  const breached = claim.tempBreached;
+  return (
+    <div class={`temp-strip${breached ? ' temp-strip--breach' : ''}`}>
+      <span class="temp-strip__info">
+        {breached ? <Icon name="warning" size={18} class="temp-strip__ic" /> : null}
+        <span>
+          {breached ? 'Temperature breached — keep ' : 'Keep '}
+          {band.minC}–{band.maxC}°C
+          {claim.lastTempC != null ? ` · last ${claim.lastTempC}°C` : ''}
+        </span>
+      </span>
+      <Button variant="link" full={false} onClick={onLog}>
+        Log temp
+      </Button>
+    </div>
+  );
+}
+
+/** S33b — log a temperature reading for a cold-chain freight in transit. */
+function TempSheet({ claim, state, actions, onClose }: { claim: Claimable | null; state: DriverState; actions: DriverActions; onClose: () => void }) {
+  const [val, setVal] = useState('');
+  useEffect(() => setVal(''), [claim?.ref]);
+  const band = claim?.tempBand;
+  const num = Number(val);
+  const valid = val.trim() !== '' && Number.isFinite(num);
+  const busy = claim ? state.busy === `temp:${claim.ref}` : false;
+  return (
+    <Sheet open={!!claim} onClose={onClose} title="Log temperature">
+      {claim && band ? (
+        <>
+          <p class="t-body">{`Keep this load between ${band.minC}°C and ${band.maxC}°C. Enter the current reading.`}</p>
+          <div class="field">
+            <label class="field__label" for={`temp-${claim.ref}`}>
+              Temperature °C
+            </label>
+            <input id={`temp-${claim.ref}`} class="input" type="number" inputMode="decimal" step="0.1" value={val} onInput={(e) => setVal(e.currentTarget.value)} />
+          </div>
+          <div style="margin-top:14px">
+            <Button
+              chevron={false}
+              busy={busy}
+              disabled={!valid}
+              onClick={() => {
+                const ref = claim.ref;
+                void actions.logTemp(ref, num);
+                onClose();
+              }}
+            >
+              Log this reading
+            </Button>
+          </div>
+          <Button variant="link" onClick={onClose}>
+            Cancel
+          </Button>
+        </>
+      ) : null}
+    </Sheet>
   );
 }
 

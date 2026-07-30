@@ -3,10 +3,11 @@ import { AgentService } from './agent.service';
 import { ParcelService } from './parcel.service';
 import { CorridorService } from './corridor.service';
 import { WalletGateService } from './wallet-gate.service';
+import { DispatchService } from './dispatch.service';
 import { AGENT_ONLINE_H, CONNECTIVITY_LOSS_H, GHOST_BUS_H, MDP_DWELL_H, STAGNANT_INVENTORY_H } from './pudo.config';
 
 export interface PudoFlag {
-  type: 'Stagnant_Inventory' | 'Ghost_Bus' | 'Stuck_At_MDP' | 'Connectivity_Loss' | 'Blocked_Corridor' | 'Buyer_Dispute' | 'Short_Shipped';
+  type: 'Stagnant_Inventory' | 'Ghost_Bus' | 'Stuck_At_MDP' | 'Connectivity_Loss' | 'Blocked_Corridor' | 'Buyer_Dispute' | 'Short_Shipped' | 'Temp_Breach';
   subject: string;
   detail: string;
   ageHours?: number;
@@ -27,6 +28,7 @@ export class MonitorService {
     private readonly parcels: ParcelService,
     private readonly corridors: CorridorService,
     private readonly gate: WalletGateService,
+    private readonly dispatch: DispatchService,
   ) {}
 
   /** Time-window auto-flags — 'what's on fire' (Ch 14). */
@@ -59,6 +61,11 @@ export class MonitorService {
     // the sender's own parcel list, so this flag is the ops-side catch-all a buyer dispute routes to.
     for (const p of this.parcels.list({ status: 'Disputed' })) {
       flags.push({ type: 'Buyer_Dispute', subject: p.parcelId, detail: `${p.vendorId ? 'vendor order' : 'peer send'} · ${p.buyerDisputeReason ?? p.disputeReason ?? 'disputed'}` });
+    }
+    // S33b: a cold-chain freight whose temperature left the safe band in transit — the chain is broken, the
+    // cargo suspect. Surfaced while it is still moving so an operator can act (reroute, alert the shipper).
+    for (const f of this.dispatch.listFreight({ status: 'in_transit' })) {
+      if (f.tempBreached) flags.push({ type: 'Temp_Breach', subject: f.code, detail: `cold-chain freight to ${f.destLabel} broke its temperature band` });
     }
     return flags;
   }
