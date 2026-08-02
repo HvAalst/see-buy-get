@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { NotificationsApi } from '../lib/sbg';
-import { enablePush, isPushSupported, urlBase64ToUint8Array } from './push';
+import { enablePush, isPushSupported, loadInbox, relativeTime, urlBase64ToUint8Array } from './push';
 
 /** The real dev-default VAPID public key the backend serves (a base64url uncompressed P-256 point). */
 const VAPID = 'BGdKs8o8SwKFtZWmRYPEy5j8tccJ2bbBzExTX0xJW2qzb6ft9Rot26iGI9p4u5_5e0jXTskaRLJrNW7p3oIP37U';
@@ -14,6 +14,9 @@ function fakeApi(over: Partial<NotificationsApi> = {}): NotificationsApi {
     subscribe: () => Promise.resolve(ok({ subscribed: true })),
     unsubscribe: () => Promise.resolve(ok({ unsubscribed: true })),
     test: () => Promise.resolve(ok({ sent: 1 })),
+    inbox: () => Promise.resolve(ok({ items: [], unread: 0 })),
+    markRead: () => Promise.resolve(ok({ ok: true })),
+    markAllRead: () => Promise.resolve(ok({ ok: true })),
     ...over,
   } as unknown as NotificationsApi;
 }
@@ -70,6 +73,44 @@ describe('urlBase64ToUint8Array', () => {
     // "AQID" = [1,2,3]; url-safe with no padding "AQID" already, and a 3-char stub needs padding.
     expect(Array.from(urlBase64ToUint8Array('AQID'))).toEqual([1, 2, 3]);
     expect(urlBase64ToUint8Array('-_8').length).toBe(2); // "-_8" -> bytes, url-safe chars decoded
+  });
+});
+
+describe('relativeTime', () => {
+  const base = Date.parse('2026-08-02T12:00:00Z');
+  it('formats each bucket', () => {
+    expect(relativeTime('2026-08-02T11:59:30Z', base)).toBe('just now');
+    expect(relativeTime('2026-08-02T11:59:05Z', base)).toBe('just now'); // 55s — never "0m ago"
+    expect(relativeTime('2026-08-02T11:59:00Z', base)).toBe('1m ago'); // exactly 60s
+    expect(relativeTime('2026-08-02T11:55:00Z', base)).toBe('5m ago');
+    expect(relativeTime('2026-08-02T09:00:00Z', base)).toBe('3h ago');
+    expect(relativeTime('2026-08-01T12:00:00Z', base)).toBe('yesterday');
+    expect(relativeTime('2026-07-30T12:00:00Z', base)).toBe('3d ago');
+    expect(relativeTime('2026-07-19T12:00:00Z', base)).toBe('2w ago');
+  });
+  it('returns empty for an unparseable date and clamps a future time', () => {
+    expect(relativeTime('nonsense', base)).toBe('');
+    expect(relativeTime('2026-08-02T12:05:00Z', base)).toBe('just now');
+  });
+});
+
+describe('loadInbox', () => {
+  it('narrows items + unread', async () => {
+    const item = { id: '1', kind: 'parcel_ready', title: 't', body: 'b', createdAt: '2026-08-02T12:00:00Z' };
+    const api = fakeApi({ inbox: (() => Promise.resolve(ok({ items: [item], unread: 1 }))) as unknown as NotificationsApi['inbox'] });
+    expect(await loadInbox(api)).toEqual({ items: [item], unread: 1 });
+  });
+
+  it('returns null when the fetch fails (centre shows a retry, not a crash)', async () => {
+    const api = fakeApi({
+      inbox: (() => Promise.resolve({ data: null, error: { code: 'NETWORK', status: 0, title: 'x', detail: 'x', retryable: true }, status: 0 })) as unknown as NotificationsApi['inbox'],
+    });
+    expect(await loadInbox(api)).toBeNull();
+  });
+
+  it('defaults missing fields to an empty inbox', async () => {
+    const api = fakeApi({ inbox: (() => Promise.resolve(ok({}))) as unknown as NotificationsApi['inbox'] });
+    expect(await loadInbox(api)).toEqual({ items: [], unread: 0 });
   });
 });
 

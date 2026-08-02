@@ -24,6 +24,15 @@ export function createNotificationsApi(sbg: SbgClient) {
 
     /** Fire a test push to every device the owner has enrolled — the post-opt-in "it works". */
     test: () => sbg.request((c) => c.POST('/v1/sbg/notifications/test', {})),
+
+    /** The caller's own notification inbox (newest first) + unread count — the in-app centre (N2). */
+    inbox: () => sbg.request((c) => c.GET('/v1/sbg/notifications/inbox', {})),
+
+    /** Mark one notification read. */
+    markRead: (id: string) => sbg.request((c) => c.POST('/v1/sbg/notifications/inbox/{id}/read', { params: { path: { id } } })),
+
+    /** Mark every notification read (clears the bell badge). */
+    markAllRead: () => sbg.request((c) => c.POST('/v1/sbg/notifications/inbox/read-all', {})),
   };
 }
 

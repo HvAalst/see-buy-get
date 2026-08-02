@@ -562,6 +562,148 @@
   gap: 8px;
 }
 
+/* --------------------------------------------------- Notification centre -- */
+
+/* The bell + its unread badge. The wrapper is the positioning context; the badge floats on the corner. */
+.nbell {
+  position: relative;
+  display: inline-flex;
+}
+.nbell__badge {
+  position: absolute;
+  top: 2px;
+  right: 0;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--dang);
+  color: var(--bg);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* The compact push-opt-in section at the top of the sheet. */
+.npush {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0 14px;
+  border-bottom: 1px solid var(--bd-soft);
+  margin-bottom: 6px;
+}
+.npush--off {
+  display: block;
+}
+.npush__lede {
+  font-size: 15px;
+  color: var(--tx2);
+  margin: 0 0 12px;
+  line-height: 1.4;
+}
+.npush__on {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ok);
+}
+.npush__acts {
+  display: inline-flex;
+  gap: 16px;
+}
+.npush__link {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--blue);
+  background: none;
+}
+.npush__link:disabled {
+  opacity: 0.5;
+}
+
+/* The inbox list. */
+.nlist__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 4px 0 8px;
+}
+.nlist__title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--navy);
+}
+.nlist__all {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--blue);
+  background: none;
+}
+.nlist__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.nitem {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 8px;
+  border-radius: var(--r-ctl);
+  background: none;
+  text-align: left;
+}
+.nitem--unread {
+  background: var(--blue-soft);
+}
+.nitem__ic {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg);
+  color: var(--blue);
+}
+.nitem__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.nitem__t {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--navy);
+}
+.nitem__b {
+  font-size: 14px;
+  color: var(--tx2);
+  line-height: 1.35;
+}
+.nitem__time {
+  font-size: 14px;
+  color: var(--tx3);
+}
+.nitem__dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--blue);
+}
+
 /* ------------------------------------------------------------ BottomNav -- */
 
 .bnav {

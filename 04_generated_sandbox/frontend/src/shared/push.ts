@@ -14,6 +14,44 @@ import { narrow, type NotificationsApi, type SbgError } from '../lib/sbg';
 
 export type PushState = 'unsupported' | 'denied' | 'prompt' | 'on';
 
+/** One inbox entry as the in-app notification centre reads it (mirrors the backend NotificationRecord). */
+export interface InboxItem {
+  id: string;
+  kind: string;
+  title: string;
+  body: string;
+  link?: string;
+  createdAt: string;
+  readAt?: string;
+}
+
+/** Load the caller's notification inbox. Returns null on failure (the centre shows a retry, not a crash). */
+export async function loadInbox(api: NotificationsApi): Promise<{ items: InboxItem[]; unread: number } | null> {
+  const res = await api.inbox();
+  if (res.error) return null;
+  const data = narrow<{ items?: InboxItem[]; unread?: number }>(res.data ?? {});
+  return { items: data.items ?? [], unread: data.unread ?? 0 };
+}
+
+/**
+ * A compact relative time ("just now", "5m ago", "yesterday", "3d ago") for a notification row. `nowMs`
+ * is injectable so the unit test is deterministic; app callers let it default to the current time.
+ */
+export function relativeTime(iso: string, nowMs: number = Date.now()): string {
+  const then = Date.parse(iso);
+  if (!Number.isFinite(then)) return '';
+  const s = Math.max(0, Math.floor((nowMs - then) / 1000));
+  if (s < 60) return 'just now'; // whole first minute → "just now" (never "0m ago" for the 45–59s window)
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d === 1) return 'yesterday';
+  if (d < 7) return `${d}d ago`;
+  return `${Math.floor(d / 7)}w ago`;
+}
+
 export type PushFailure = 'unsupported' | 'denied' | 'dismissed' | 'no-serviceworker' | 'no-key' | 'subscribe-failed' | 'save-failed';
 
 export interface PushOutcome {

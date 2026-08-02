@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import type { NotificationsApi } from '../lib/sbg';
-import { disablePush, enablePush, getPushState, sendTestPush, type PushFailure, type PushState } from './push';
+import { disablePush, enablePush, getPushState, loadInbox, sendTestPush, type InboxItem, type PushFailure, type PushState } from './push';
 
 export interface PushFlash {
   tone: 'ok' | 'warn' | 'danger';
@@ -18,6 +18,14 @@ export interface PushControls {
   disable: () => Promise<void>;
   test: () => Promise<void>;
   clearFlash: () => void;
+  // --- inbox / notification centre (N2b) ---
+  items: InboxItem[];
+  /** Unread count, derived from the loaded items — drives the bell badge. */
+  unread: number;
+  inboxState: 'idle' | 'loading' | 'ready' | 'error';
+  loadInbox: () => Promise<void>;
+  markRead: (id: string) => Promise<void>;
+  markAllRead: () => Promise<void>;
 }
 
 /** The user-facing sentence for a failed opt-in — truthful and actionable, never "no signal". */
@@ -51,6 +59,12 @@ export function usePush(api: NotificationsApi | null): PushControls {
   const [state, setState] = useState<PushState | 'loading'>('loading');
   const [busy, setBusy] = useState<PushBusy>(null);
   const [flash, setFlash] = useState<PushFlash | null>(null);
+  const [items, setItems] = useState<InboxItem[]>([]);
+  const [inboxState, setInboxState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+
+  // Unread is DERIVED from the loaded items, so an optimistic markRead updates the badge with no
+  // separate counter to keep in sync (the badge caps at the loaded page — accepted at prototype scale).
+  const unread = items.reduce((n, it) => (it.readAt ? n : n + 1), 0);
 
   useEffect(() => {
     let live = true;
@@ -61,6 +75,38 @@ export function usePush(api: NotificationsApi | null): PushControls {
       live = false;
     };
   }, []);
+
+  const loadInboxCb = useCallback(async () => {
+    if (!api) return;
+    setInboxState('loading');
+    const r = await loadInbox(api);
+    if (r) {
+      setItems(r.items);
+      setInboxState('ready');
+    } else {
+      setInboxState('error');
+    }
+  }, [api]);
+
+  // Load once when a signed-in client arrives, so the bell badge is right before the sheet is opened.
+  useEffect(() => {
+    void loadInboxCb();
+  }, [loadInboxCb]);
+
+  const markRead = useCallback(
+    async (id: string) => {
+      if (!api) return;
+      setItems((xs) => xs.map((x) => (x.id === id && !x.readAt ? { ...x, readAt: new Date().toISOString() } : x)));
+      await api.markRead(id).catch(() => undefined);
+    },
+    [api],
+  );
+
+  const markAllRead = useCallback(async () => {
+    if (!api) return;
+    setItems((xs) => xs.map((x) => (x.readAt ? x : { ...x, readAt: new Date().toISOString() })));
+    await api.markAllRead().catch(() => undefined);
+  }, [api]);
 
   const enable = useCallback(async () => {
     if (!api) return;
@@ -101,5 +147,5 @@ export function usePush(api: NotificationsApi | null): PushControls {
 
   const clearFlash = useCallback(() => setFlash(null), []);
 
-  return { state, busy, flash, enable, disable, test, clearFlash };
+  return { state, busy, flash, enable, disable, test, clearFlash, items, unread, inboxState, loadInbox: loadInboxCb, markRead, markAllRead };
 }
