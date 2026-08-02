@@ -29,6 +29,10 @@ export function createVendorApi(sbg: SbgClient) {
     order: (vendorId: string, parcelId: string) =>
       sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/orders/{parcelId}', { params: { path: { id: vendorId, parcelId } } })),
 
+    /** DT — the parcel's planned journey (origin PUDO → MDP(s) → dest PUDO), for the twin view after minting. */
+    parcelRoute: (parcelId: string) =>
+      sbg.request((c) => c.GET('/v1/sbg/parcels/{id}/route', { params: { path: { id: parcelId } } })),
+
     /** Buyer checkout selections waiting to be shipped — the incoming-orders inbox. */
     checkouts: (vendorId: string) => sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/checkouts', { params: { path: { id: vendorId } } })),
 

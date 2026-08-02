@@ -248,3 +248,19 @@
   color: var(--navy);
   font-variant-numeric: tabular-nums;
 }
+
+/* DT — the printable parcel label shown after accept (mirrors the vendor label box). */
+.labelbox {
+  background: var(--bg);
+  border: 1.5px solid var(--bd);
+  border-radius: var(--r-card);
+  padding: 12px;
+  margin: 12px 0;
+  overflow-x: auto;
+}
+
+.labelbox svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}

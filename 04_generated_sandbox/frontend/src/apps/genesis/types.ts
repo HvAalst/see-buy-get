@@ -122,6 +122,7 @@ export interface SwitchResult {
 /** One authenticated parcel twin the consumer is a party to (PII-free; mirrors backend ConsumerParcelView). */
 export interface ConsumerParcelView {
   parcelId: string;
+  did?: string; // DT — the shipment's stable GLOS identity (the digital twin)
   relation: 'sent' | 'received';
   direction: 'inbound' | 'outbound';
   status: ParcelStatus;

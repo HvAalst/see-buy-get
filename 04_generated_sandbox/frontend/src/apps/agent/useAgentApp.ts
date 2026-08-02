@@ -56,6 +56,8 @@ export interface AgentState {
   stale: boolean;
 
   accept: AcceptForm;
+  /** DT — the label the last accept produced, shown to print + stick on the parcel (null once dismissed). */
+  acceptedLabel: { parcelId: string; trackingKey?: string; svg?: string } | null;
   /** `missed` is the last server verdict of parcels for this bus still waiting (the S25 gate). */
   handover: { badge: string; selected: string[]; missed: string[] };
   release: { stickerId: string; parcel: ParcelView | null; otp: string; issuedOtp: string | null; stars: number; photoRef: string };
@@ -85,6 +87,7 @@ const INITIAL: AgentState = {
   refreshing: false,
   stale: false,
   accept: { ...EMPTY_ACCEPT },
+  acceptedLabel: null,
   handover: { ...EMPTY_HANDOVER },
   release: { ...EMPTY_RELEASE },
   collect: { ...EMPTY_COLLECT },
@@ -514,11 +517,17 @@ export function useAgentApp() {
       });
       if (r.error) return fail(r.error);
       buzz();
-      setState((s) => ({ ...s, accept: { ...EMPTY_ACCEPT }, screen: 'home' }));
+      // DT — capture the label the parcel was born with so the agent can print it and stick it on the parcel
+      // (peer-send parcels never had one). Clearing the form but staying on the accept screen; a Sheet shows it.
+      const p = narrow<{ parcelId: string; trackingKey?: string; label?: { svg?: string } }>(r.data);
+      setState((s) => ({ ...s, accept: { ...EMPTY_ACCEPT }, acceptedLabel: p ? { parcelId: p.parcelId, trackingKey: p.trackingKey, svg: p.label?.svg } : null }));
       pushToast({ tone: 'ok', icon: 'box', title: 'Parcel accepted', detail: 'A tracking message has been sent.' });
       await refresh();
     });
   }, [client, did, run, fail, pushToast, refresh]);
+
+  /** DT — dismiss the printed-label sheet and return to the shop home. */
+  const dismissAcceptedLabel = useCallback(() => setState((s) => ({ ...s, acceptedLabel: null, screen: 'home' })), []);
 
   /**
    * Hand the selected parcels to the bus. `shortShipReason` opts into the S25 short-ship: it is passed
@@ -741,6 +750,7 @@ export function useAgentApp() {
       setOpen,
       setPrice,
       submitAccept,
+      dismissAcceptedLabel,
       submitHandover,
       findRelease,
       markArrived,

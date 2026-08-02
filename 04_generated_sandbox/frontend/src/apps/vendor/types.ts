@@ -47,6 +47,7 @@ export interface VendorRegisteredView extends VendorView {
 
 export interface OrderRow {
   parcelId: string;
+  did?: string; // DT — the shipment's stable GLOS identity (the digital twin)
   externalOrderId?: string;
   status: ParcelStatus;
   paidStatus: 'ParcelPaid' | 'Unpaid' | string;

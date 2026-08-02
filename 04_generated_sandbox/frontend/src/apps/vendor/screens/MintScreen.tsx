@@ -423,11 +423,28 @@ function LabelStep({ state, actions }: MintScreenProps) {
 
       {m.parcel.collectionCode ? <CodeCard label="Buyer's collection code" code={m.parcel.collectionCode} scanAs="collect" /> : null}
 
+      {/* DT — the parcel is born with a digital twin that already knows its route. */}
+      {state.mintedJourney ? (
+        <Card title="Planned journey">
+          <p class="t-body">{state.mintedJourney.hops.join(' → ')}</p>
+          <p class="card__note">
+            {state.mintedJourney.mdpRouted ? 'Routed through a sorting hub. ' : 'Direct local hop. '}
+            {state.mintedJourney.pickupReadyAt ? `Ready for pickup around ${new Date(state.mintedJourney.pickupReadyAt).toLocaleString()}.` : ''}
+          </p>
+        </Card>
+      ) : null}
+
       <Card label="Keep for your records">
         <div class="kv">
           <span>Parcel</span>
           <b class="mono-t">{m.parcel.parcelId}</b>
         </div>
+        {m.parcel.did ? (
+          <div class="kv">
+            <span>Shipment ID (twin)</span>
+            <b class="mono-t">{m.parcel.did}</b>
+          </div>
+        ) : null}
         {m.parcel.trackingKey ? (
           <div class="kv">
             <span>Tracking key</span>

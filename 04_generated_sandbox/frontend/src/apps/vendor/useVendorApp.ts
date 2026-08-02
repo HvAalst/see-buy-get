@@ -58,6 +58,8 @@ export interface VendorState {
   quote: QuoteView | null;
   quoteState: 'idle' | 'loading' | 'ready' | 'error';
   minted: MintView | null;
+  /** DT — the twin's planned journey (hop labels + when it should be ready), fetched after mint for the label step. */
+  mintedJourney: { hops: string[]; pickupReadyAt?: string; mdpRouted: boolean } | null;
   mintStep: MintStep;
   form: MintForm;
   error: SbgError | null;
@@ -86,6 +88,7 @@ const INITIAL: VendorState = {
   quote: null,
   quoteState: 'idle',
   minted: null,
+  mintedJourney: null,
   mintStep: 'source',
   form: { ...EMPTY_MINT },
   error: null,
@@ -343,6 +346,7 @@ export function useVendorApp() {
         ...s,
         screen: 'mint',
         minted: null,
+        mintedJourney: null,
         quote: null,
         quoteState: 'idle',
         originOptions: null,
@@ -460,12 +464,21 @@ export function useVendorApp() {
         return;
       }
       const minted = narrow<MintView>(r.data);
-      setState((s) => ({ ...s, minted, mintStep: 'label' }));
+      setState((s) => ({ ...s, minted, mintedJourney: null, mintStep: 'label' }));
       pushToast(
         minted.paid
           ? { tone: 'ok', icon: 'check', title: 'Label minted', detail: 'Print it and stick it on the parcel.' }
           : { tone: 'warn', icon: 'wallet', title: 'Order created — unpaid', detail: 'Top up, then release the label.' },
       );
+      // DT — the parcel is born with a digital twin + a planned route; fetch it to show on the label step.
+      const pid = minted?.parcel?.parcelId;
+      if (pid) {
+        const jr = await client.api.parcelRoute(pid);
+        const j = narrow<{ planned?: boolean; hops?: Array<{ label: string }>; pickupReadyAt?: string; mdpRouted?: boolean }>(jr.data);
+        if (j?.planned && j.hops?.length) {
+          setState((s) => ({ ...s, mintedJourney: { hops: j.hops!.map((h) => h.label), pickupReadyAt: j.pickupReadyAt, mdpRouted: Boolean(j.mdpRouted) } }));
+        }
+      }
       await refresh();
     });
   }, [client, creds, run, fail, pushToast, refresh]);

@@ -1,4 +1,4 @@
-import { Button, Card, ErrorNote, ReadAloud, ScanField } from '../../../shared/ui';
+import { Button, Card, ErrorNote, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
 import { NATURES, SIZES, acceptMissing } from '../logic';
 import type { AgentActions, AgentState } from '../useAgentApp';
 import { PhotoField } from './PhotoField';
@@ -6,6 +6,13 @@ import { PhotoField } from './PhotoField';
 export interface AcceptScreenProps {
   state: AgentState;
   actions: AgentActions;
+}
+
+/** DT — open the label SVG in a new tab so the agent can print it and stick it on the parcel. */
+function openLabel(svg: string) {
+  const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+  window.open(url, '_blank', 'noopener');
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 /**
@@ -133,6 +140,28 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
       <div class="scr__foot">
         <ReadAloud text={() => missing ?? 'Everything is filled in. Tap confirm and accept.'} label="What is still missing?" />
       </div>
+
+      {/* DT — the parcel is born with a printable label; show it so the agent prints + sticks it on the parcel. */}
+      <Sheet open={Boolean(state.acceptedLabel)} onClose={actions.dismissAcceptedLabel} title="Parcel label ready">
+        {state.acceptedLabel ? (
+          <>
+            <p class="t-body">{`Print this and stick it on ${state.acceptedLabel.parcelId}. It carries the tracking QR the customer follows.`}</p>
+            {state.acceptedLabel.svg ? (
+              <>
+                {/* Trusted markup: the SVG comes from OUR backend label builder, nothing user-authored. */}
+                <div class="labelbox" dangerouslySetInnerHTML={{ __html: state.acceptedLabel.svg }} />
+                <Button chevron={false} onClick={() => state.acceptedLabel?.svg && openLabel(state.acceptedLabel.svg)}>
+                  Open and print the label
+                </Button>
+              </>
+            ) : null}
+            {state.acceptedLabel.trackingKey ? <p class="hint" style="margin-top:8px">Tracking key: {state.acceptedLabel.trackingKey}</p> : null}
+            <Button variant="link" onClick={actions.dismissAcceptedLabel}>
+              Done — take in another
+            </Button>
+          </>
+        ) : null}
+      </Sheet>
     </div>
   );
 }

@@ -152,6 +152,8 @@ function ParcelDetail({ parcel, state, actions }: { parcel: ConsumerParcelView; 
 
       <h1 class="scr__title">{parcel.parcelId}</h1>
       <p class="scr__lede">{relationWord(parcel.relation)} · {parcel.relation === 'received' ? `from ${parcel.originZone}` : `to ${parcel.destZone}`}</p>
+      {/* DT — the shipment's stable digital-twin identity, from creation. */}
+      {parcel.did ? <p class="hint" style="word-break:break-all">Shipment ID: {parcel.did}</p> : null}
 
       <section class={`now now--${pres.tone}`} aria-live="polite">
         <Icon name={pres.icon} size={34} class="now__ic" />
