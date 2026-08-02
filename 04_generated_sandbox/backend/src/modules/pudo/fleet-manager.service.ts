@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { createHash, randomBytes } from 'crypto';
@@ -7,7 +7,7 @@ import { IdentityVault } from '../../foundation/data-firewall/identity-vault.ser
 import { OperationalStore } from '../../foundation/data-firewall/operational-store.service';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
-import { geocodeAddress } from './geo';
+import { Geocoder, GEOCODER } from './geocoder';
 import { FleetManager, FleetManagerKyc, FleetManagerRequirements, FleetManagerStatus } from './fleet.types';
 
 interface RegisterManagerInput {
@@ -43,6 +43,7 @@ export class FleetManagerService {
     private readonly vault: IdentityVault,
     private readonly core: OperationalStore,
     private readonly events: EventBus,
+    @Inject(GEOCODER) private readonly geocoder: Geocoder,
   ) {}
 
   /** The fleet-manager eligibility filter. Returns the list of unmet hard requirements. */
@@ -59,7 +60,7 @@ export class FleetManagerService {
   register(input: RegisterManagerInput): FleetManager {
     const unmet = this.unmetRequirements(input);
     if (unmet.length) throw new GlosError('REQUIREMENTS_NOT_MET', `Does not meet fleet-manager requirements: ${unmet.join('; ')}`);
-    const location = input.location ?? geocodeAddress(input.depotAddress!);
+    const location = input.location ?? this.geocoder.geocode(input.depotAddress!).location;
 
     // Dedup — one business registration / tax ID / operator licence across the network.
     const prints = { reg: fp(input.requirements.businessRegistrationNo), tax: fp(input.requirements.taxId), lic: fp(input.requirements.transportOperatorLicence) };

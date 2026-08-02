@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { createHash, randomBytes } from 'crypto';
@@ -9,7 +9,7 @@ import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { WalletService } from '../m1/wallet/wallet.service';
 import { DEFAULT_PUDO_PRICE_PER_PARCEL, LOCK_THRESHOLD, MIN_ANDROID_VERSION, MIN_OPEN_HOURS, MIN_SLOTS } from './pudo.config';
-import { geocodeAddress } from './geo';
+import { Geocoder, GEOCODER } from './geocoder';
 import { averageOpenHours } from './hours';
 import { Agent, AgentRequirements, AgentStatus, KycDocuments, ShelfConfig, WeeklyHours } from './pudo.types';
 import { Equipment } from './cargo.types';
@@ -54,6 +54,7 @@ export class AgentService {
     private readonly core: OperationalStore,
     private readonly wallet: WalletService,
     private readonly events: EventBus,
+    @Inject(GEOCODER) private readonly geocoder: Geocoder,
   ) {}
 
   /** The agent-eligibility filter (18.1). Returns the list of unmet hard requirements. */
@@ -73,7 +74,9 @@ export class AgentService {
   register(input: RegisterAgentInput): Agent {
     // Location: a map pin AND/OR a physical address — at least one. Geocode the address if no pin.
     if (!input.location && !input.physicalAddress?.trim()) throw new GlosError('ADDRESS_REQUIRED', 'Provide a map pin (location) and/or a physical address');
-    const location = input.location ?? geocodeAddress(input.physicalAddress!);
+    // A map pin is exact; otherwise resolve the address against the geocoder (real coords for a known
+    // place, deterministic fallback for anything it can't place).
+    const location = input.location ?? this.geocoder.geocode(input.physicalAddress!).location;
 
     // Eligibility filter (18.1) — block ineligible applicants up front.
     const unmet = this.unmetRequirements(input);

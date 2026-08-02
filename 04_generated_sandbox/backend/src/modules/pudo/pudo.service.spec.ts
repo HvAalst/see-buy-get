@@ -1,5 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { AgentService } from './agent.service';
+import { GazetteerGeocoder, GEOCODER } from './geocoder';
 import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
 import { ParcelService } from './parcel.service';
@@ -91,6 +92,7 @@ describe('PUDO Light', () => {
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
+        GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder },
       ],
       controllers: [SbgController],
     }).compile();
