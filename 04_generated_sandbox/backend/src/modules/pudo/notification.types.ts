@@ -31,9 +31,27 @@ export interface PushSubscriptionRecord {
   lastSeenAt?: string;
 }
 
-/** The closed vocabulary of what we push. The spine (N1) only fires `test`; the rest land in N3. */
+/** The closed vocabulary of what we push. The spine (N1) fires `test`; N2/N3 add the rest. */
 export const NOTIFICATION_KINDS = ['test', 'parcel_ready', 'load_nearby', 'bus_inbound'] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
+
+/**
+ * One inbox entry (N2). Every notification we push is ALSO recorded here, so the in-app notification
+ * centre can show history and an unread count even on a device that never enabled push (or missed the
+ * live message). `readAt` is set when the owner opens/marks it. Durable — a user's notification history
+ * must survive a restart.
+ */
+export interface NotificationRecord {
+  id: string;
+  ownerDid: string;
+  kind: NotificationKind;
+  title: string;
+  body: string;
+  link?: string;
+  data?: Record<string, unknown>;
+  createdAt: string;
+  readAt?: string;
+}
 
 /**
  * What the service worker renders. `title`/`body` are the visible lines; `link` is the app-relative

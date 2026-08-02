@@ -1,9 +1,10 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { createHash } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { GlosError } from '../../foundation/http/glos-error';
 import {
   NotificationPayload,
+  NotificationRecord,
   PushSender,
   PushSubscriptionRecord,
   PUSH_SENDER,
@@ -41,6 +42,11 @@ export class NotificationService {
   // `${ownerDid}:${endpointHash}` so one owner can enrol many devices and a re-subscribe overwrites,
   // never duplicates. The endpoint (a long push-service URL) is hashed only to keep the key compact.
   private readonly subs = new PersistentMap<string, PushSubscriptionRecord>('sbg-push-subscriptions');
+
+  // Durable inbox (N2): every notification is recorded here as well as pushed, so the in-app
+  // notification centre shows history + an unread count even for a device that never enabled push or
+  // was offline when the live message fired. Keyed by record id.
+  private readonly inbox = new PersistentMap<string, NotificationRecord>('sbg-notifications');
 
   constructor(@Inject(PUSH_SENDER) private readonly sender: PushSender) {}
 
@@ -102,5 +108,63 @@ export class NotificationService {
 
   private key(ownerDid: string, endpoint: string): string {
     return `${ownerDid}:${createHash('sha256').update(endpoint).digest('hex').slice(0, 16)}`;
+  }
+
+  // --- inbox (N2) ---------------------------------------------------------------------------------
+
+  /**
+   * Deliver a notification to an owner: RECORD it to the durable inbox first (the source of truth the
+   * in-app centre reads), THEN fan it out to their devices. Recording first means a push-delivery
+   * hiccup never loses the notification — the user still sees it in-app. Returns the stored record.
+   */
+  async notify(ownerDid: string, payload: NotificationPayload): Promise<NotificationRecord> {
+    const record: NotificationRecord = {
+      id: `ntf_${randomBytes(8).toString('hex')}`,
+      ownerDid,
+      kind: payload.kind,
+      title: payload.title,
+      body: payload.body,
+      link: payload.link,
+      data: payload.data,
+      createdAt: new Date().toISOString(),
+    };
+    this.inbox.set(record.id, record);
+    await this.pushToOwner(ownerDid, payload);
+    return record;
+  }
+
+  /** An owner's notifications, newest first, capped (the centre paginates later if it ever needs to). */
+  inboxFor(ownerDid: string, limit = 50): NotificationRecord[] {
+    return [...this.inbox.values()]
+      .filter((n) => n.ownerDid === ownerDid)
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+      .slice(0, limit);
+  }
+
+  /** How many of an owner's notifications are unread — the bell badge count. */
+  unreadCount(ownerDid: string): number {
+    let count = 0;
+    for (const n of this.inbox.values()) if (n.ownerDid === ownerDid && !n.readAt) count += 1;
+    return count;
+  }
+
+  /** Mark one notification read. Ownership-guarded — a caller can only ever touch its OWN notifications. */
+  markRead(ownerDid: string, id: string): void {
+    const n = this.inbox.get(id);
+    if (n && n.ownerDid === ownerDid && !n.readAt) {
+      n.readAt = new Date().toISOString();
+      this.inbox.set(id, n);
+    }
+  }
+
+  /** Mark every one of an owner's unread notifications read (the "mark all read" affordance). */
+  markAllRead(ownerDid: string): void {
+    const now = new Date().toISOString();
+    for (const n of this.inbox.values()) {
+      if (n.ownerDid === ownerDid && !n.readAt) {
+        n.readAt = now;
+        this.inbox.set(n.id, n);
+      }
+    }
   }
 }

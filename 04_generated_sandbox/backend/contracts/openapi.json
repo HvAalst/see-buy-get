@@ -7953,6 +7953,54 @@
         }
       }
     },
+    "/v1/sbg/notifications/inbox": {
+      "get": {
+        "operationId": "Notifications.inbox",
+        "summary": "",
+        "description": "The caller's notification inbox (newest first) + the unread count — the in-app notification centre (N2).",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/notifications/inbox/{id}/read": {
+      "post": {
+        "operationId": "Notifications.markRead",
+        "summary": "",
+        "description": "Mark one of the caller's notifications read. Ownership-guarded in the service.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/notifications/inbox/read-all": {
+      "post": {
+        "operationId": "Notifications.markAllRead",
+        "summary": "",
+        "description": "Mark all of the caller's notifications read (clears the bell badge).",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/settlement/module-info": {
       "get": {
         "operationId": "Sse.info",

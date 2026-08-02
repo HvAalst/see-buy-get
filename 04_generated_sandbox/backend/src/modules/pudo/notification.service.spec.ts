@@ -106,4 +106,52 @@ describe('NotificationService — the push spine (N1)', () => {
       await expect(svc.pushToOwner('did:person:a', payload)).resolves.toBe(2);
     });
   });
+
+  describe('inbox (N2)', () => {
+    it('records every notification AND pushes it (inbox is the source of truth)', async () => {
+      const outbox = new OutboxPushSender();
+      const svc = new NotificationService(outbox);
+      svc.subscribe('did:person:a', 'consumer', sub('https://push/1'));
+      const record = await svc.notify('did:person:a', payload);
+      expect(record).toMatchObject({ ownerDid: 'did:person:a', kind: 'test', title: 'hi' });
+      expect(record.readAt).toBeUndefined(); // starts unread
+      expect(svc.inboxFor('did:person:a')).toHaveLength(1);
+      expect(outbox.outboxFor('did:person:a')).toHaveLength(1); // also pushed to the device
+    });
+
+    it('records even when the owner has no devices (the notification is not lost)', async () => {
+      const svc = new NotificationService(new OutboxPushSender());
+      await svc.notify('did:person:a', payload);
+      expect(svc.inboxFor('did:person:a')).toHaveLength(1);
+      expect(svc.unreadCount('did:person:a')).toBe(1);
+    });
+
+    it('lists newest-first and isolates owners', async () => {
+      const svc = new NotificationService(new OutboxPushSender());
+      await svc.notify('did:person:a', { ...payload, title: 'first' });
+      await svc.notify('did:person:a', { ...payload, title: 'second' });
+      await svc.notify('did:person:b', { ...payload, title: 'other' });
+      const a = svc.inboxFor('did:person:a');
+      expect(a.map((n) => n.title)).toEqual(['second', 'first']);
+      expect(svc.inboxFor('did:person:b')).toHaveLength(1);
+    });
+
+    it('tracks unread and clears it on markRead / markAllRead', async () => {
+      const svc = new NotificationService(new OutboxPushSender());
+      const one = await svc.notify('did:person:a', { ...payload, title: 'one' });
+      await svc.notify('did:person:a', { ...payload, title: 'two' });
+      expect(svc.unreadCount('did:person:a')).toBe(2);
+      svc.markRead('did:person:a', one.id);
+      expect(svc.unreadCount('did:person:a')).toBe(1);
+      svc.markAllRead('did:person:a');
+      expect(svc.unreadCount('did:person:a')).toBe(0);
+    });
+
+    it('markRead is ownership-guarded — one person cannot mark another’s notification', async () => {
+      const svc = new NotificationService(new OutboxPushSender());
+      const mine = await svc.notify('did:person:a', payload);
+      svc.markRead('did:person:b', mine.id); // B tries to touch A's notification
+      expect(svc.unreadCount('did:person:a')).toBe(1); // unchanged
+    });
+  });
 });

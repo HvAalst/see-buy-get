@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
 import { Public } from '../../foundation/auth/public.decorator';
 import { Scopes } from '../../foundation/auth/scopes.decorator';
 import { Actor } from '../../foundation/auth/actor.decorator';
@@ -60,5 +60,29 @@ export class NotificationsController {
       tag: 'sbg-test',
     });
     return { sent: devices };
+  }
+
+  /** The caller's notification inbox (newest first) + the unread count — the in-app notification centre (N2). */
+  @Scopes('notification:manage:self')
+  @Get('inbox')
+  inbox(@Actor() actor: IntrospectionResult) {
+    const did = actingDid(actor);
+    return { items: this.notifications.inboxFor(did), unread: this.notifications.unreadCount(did) };
+  }
+
+  /** Mark one of the caller's notifications read. Ownership-guarded in the service. */
+  @Scopes('notification:manage:self')
+  @Post('inbox/:id/read')
+  markRead(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    this.notifications.markRead(actingDid(actor), id);
+    return { ok: true };
+  }
+
+  /** Mark all of the caller's notifications read (clears the bell badge). */
+  @Scopes('notification:manage:self')
+  @Post('inbox/read-all')
+  markAllRead(@Actor() actor: IntrospectionResult) {
+    this.notifications.markAllRead(actingDid(actor));
+    return { ok: true };
   }
 }
