@@ -222,6 +222,7 @@ export class ParcelScan {
  */
 export interface ConsumerParcelView {
   parcelId: string;
+  did?: string; // DT — the shipment's stable GLOS identity (the digital twin), shown to its owner
   relation: 'sent' | 'received'; // the caller's side of this parcel
   direction: ParcelDirection;
   status: ParcelStatus;
@@ -249,7 +250,10 @@ export interface ConsumerParcelView {
 }
 
 export class Parcel {
-  parcelId: string; // pre-printed QR sticker id
+  parcelId: string; // pre-printed QR sticker id (the human handle; reusable across shipments)
+  // DT — the shipment's stable GLOS identity: a real DID minted at creation (the digital twin's id, distinct
+  // from the reusable sticker parcelId). Resolvable + ledger-anchored, so the twin is a first-class entity.
+  did?: string;
   direction: ParcelDirection;
   size: ParcelSize;
   dimensionsCm?: Dimensions; // declared dims that derived the size tier

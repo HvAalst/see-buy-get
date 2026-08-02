@@ -306,6 +306,15 @@ export class SbgController {
     return { planned: true, ...this.routing.planJourney({ originAgentDid: parcel.committedNodeDid ?? parcel.originAgentDid, destAgentDid: parcel.destAgentDid }) };
   }
 
+  /** DT — the printable label for a parcel (reprint). Operator-only: the inbound label carries the buyer's
+   *  collection code (a handover secret), so this is not a public surface — the creator got it in the mint /
+   *  accept response, and the vendor sees it on their order detail. */
+  @Roles('operator')
+  @Get('parcels/:id/label')
+  parcelLabel(@Param('id') id: string) {
+    return this.parcels.labelFor(id);
+  }
+
   /** Reverse logistics: cancel a not-yet-delivered parcel (Created / At_PUDO / At_MDP) — operator only. */
   @Roles('operator')
   @Post('parcels/:id/cancel')
@@ -535,7 +544,22 @@ export class SbgController {
   @Public()
   @Get('track/:key')
   track(@Param('key') key: string) {
-    return this.parcels.track(key);
+    const t = this.parcels.track(key);
+    // DT — surface the twin's stable id + its PLANNED route (the hops it will travel + when it should be
+    // ready), so the parcel is trackable AS a planned journey from creation, before it has moved. All PII-free
+    // (shop names + zones are already public via /network/points). Best-effort — a route it can't plan yet
+    // (no destination / no corridor) just omits the plannedRoute; the status ladder still renders.
+    const parcel = this.parcels.get(t.ref);
+    let plannedRoute: { hops: string[]; mdpRouted: boolean; pickupReadyAt: string } | undefined;
+    if (parcel.destAgentDid) {
+      try {
+        const j = this.routing.planJourney({ originAgentDid: parcel.committedNodeDid ?? parcel.originAgentDid, destAgentDid: parcel.destAgentDid });
+        plannedRoute = { hops: j.hops.map((h) => h.label), mdpRouted: j.mdpRouted, pickupReadyAt: j.pickupReadyAt };
+      } catch {
+        plannedRoute = undefined;
+      }
+    }
+    return { ...t, did: parcel.did, plannedRoute };
   }
 
   /**

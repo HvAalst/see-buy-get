@@ -77,6 +77,8 @@ describe('PUDO Light', () => {
   let vendorCallback: VendorCallbackService;
   let twin: DigitalTwinService;
   let tracking: TrackingService;
+  let context: TrackingContextService;
+  let dids: DidService;
   let vault: IdentityVault;
   let core: OperationalStore;
   let events: EventBus;
@@ -121,6 +123,8 @@ describe('PUDO Light', () => {
     vendorCallback = moduleRef.get(VendorCallbackService);
     twin = moduleRef.get(DigitalTwinService);
     tracking = moduleRef.get(TrackingService);
+    context = moduleRef.get(TrackingContextService);
+    dids = moduleRef.get(DidService);
     vault = moduleRef.get(IdentityVault);
     core = moduleRef.get(OperationalStore);
     events = moduleRef.get(EventBus);
@@ -373,6 +377,80 @@ describe('PUDO Light', () => {
     expect(tl.events.some((e) => e.type === 'PICKUP')).toBe(true);
     expect(tl.currentState).toBe('DELIVERED');
     expect(twin.shipment('QR-G')?.state).toBe('delivered');
+  });
+
+  // --- DT: the digital twin is BORN at creation (shipment DID + twin + planned journey + label) ---
+
+  const mintInbound = (tag: string) => {
+    const origin = onboardAgent(`${tag} Origin`, 'NorthTown', 50);
+    const dest = onboardAgent(`${tag} Dest`, 'NorthTown', 50);
+    const vendor = vendors.register({ name: `${tag}Vendor` });
+    vendors.topUp(vendor.vendorId, 50);
+    const res = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700111', size: 'M', contentPhotoRef: 'c.jpg' } as never) as { parcel: any; paid: boolean };
+    return { origin, dest, vendor, res };
+  };
+
+  it('DT: an inbound parcel is born with a shipment DID + a digital twin + its planned journey AT MINT', async () => {
+    const flush = () => new Promise((r) => setImmediate(r));
+    twin.onModuleInit();
+    graduation.onModuleInit();
+    const { res } = mintInbound('DT');
+    expect(res.paid).toBe(true);
+    // A real, resolvable GLOS identity for the shipment (the twin's id).
+    expect(res.parcel.did).toMatch(/^did:glos:/);
+    expect(dids.exists(res.parcel.did)).toBe(true);
+    await flush();
+    // The digital twin exists at 'created' with its planned route — BEFORE any physical intake.
+    const t = twin.shipment(res.parcel.parcelId);
+    expect(t).toBeDefined();
+    expect(t?.state).toBe('created');
+    expect(t?.props.source).toBe('pudo');
+    expect(String(t?.props.route)).toContain('→'); // the hop chain
+    // The m4 planned route + milestones are registered from creation.
+    expect(context.has(res.parcel.parcelId)).toBe(true);
+    const ctx = context.get(res.parcel.parcelId);
+    expect(ctx?.milestones.some((m) => m.name === 'PICKUP')).toBe(true);
+    expect(ctx?.milestones.some((m) => m.name === 'DELIVERY')).toBe(true);
+    // …while the parcel is still 'Created' — the twin exists AHEAD of physical custody.
+    expect(res.parcel.status).toBe('Created');
+  });
+
+  it('DT: intake advances the created twin to picked_up without clobbering its created-time journey', async () => {
+    const flush = () => new Promise((r) => setImmediate(r));
+    twin.onModuleInit();
+    graduation.onModuleInit();
+    const { origin, res } = mintInbound('DTI');
+    await flush();
+    // The created journey's first leg carries the SHOP NAME (planJourney), not the zone (the one-leg fallback).
+    expect(context.get(res.parcel.parcelId)?.legs[0].origin).toBe('DTI Origin');
+    parcels.intakeInbound(res.parcel.parcelId, origin.did);
+    await flush();
+    expect(twin.shipment(res.parcel.parcelId)?.state).toBe('picked_up');
+    expect(context.get(res.parcel.parcelId)?.legs[0].origin).toBe('DTI Origin'); // NOT re-registered to the zone
+  });
+
+  it('DT: the public track surfaces the twin id + its planned route from creation', () => {
+    const { res } = mintInbound('DTT');
+    const tr = controller.track(res.parcel.trackingKey) as { did?: string; plannedRoute?: { hops: string[] } };
+    expect(tr.did).toBe(res.parcel.did);
+    expect(tr.plannedRoute?.hops.length).toBeGreaterThanOrEqual(2); // origin PUDO … dest PUDO
+  });
+
+  it('DT: the authenticated buyer view carries the twin id', () => {
+    const { res } = mintInbound('DTB');
+    const view = parcels.consumerParcel(res.parcel.parcelId, hashPhone('+254700111')!);
+    expect(view.did).toBe(res.parcel.did);
+  });
+
+  it('DT: an outbound (walk-up) parcel gets a shipment DID + a printable label (tracking key, no collection code)', () => {
+    const origin = onboardAgent('OB', 'NorthTown', 50);
+    const p = parcels.accept({ agentDid: origin.did, parcelId: 'QR-OB', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'g.jpg' });
+    expect(p.did).toMatch(/^did:glos:/);
+    expect(p.label).toBeDefined();
+    expect(p.label!.svg).toContain(p.trackingKey!); // the public key is printed on the label
+    expect(p.label!.svg).not.toContain('Collect at the shop'); // outbound → no collection-code line
+    // The reprint endpoint returns the same label.
+    expect(controller.parcelLabel('QR-OB').parcelId).toBe('QR-OB');
   });
 
   it('runs the inbound e-commerce flow: webhook → intake → bus → shelve → collect, with vendor callbacks', async () => {

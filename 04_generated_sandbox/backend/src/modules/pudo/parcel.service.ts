@@ -6,13 +6,14 @@ import { hashPhone } from '../../foundation/identity/phone';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { LedgerService } from '../../foundation/ledger/ledger.service';
+import { DidService } from '../../foundation/did/did.service';
 import { AgentService } from './agent.service';
 import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
 import { ShelfService } from './shelf.service';
 import { FleetService } from './fleet.service';
 import { HANDOVER_FEE, LABOUR_FEE, OTP_MAX_ATTEMPTS, PICKUP_FEE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, VOID_WINDOW_MS, WHOLESALE, classifySize, withPlatformFee } from './pudo.config';
-import { ConsumerParcelView, Parcel, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy } from './pudo.types';
+import { ConsumerParcelView, Parcel, ParcelDirection, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy } from './pudo.types';
 import { VendorService } from './vendor.service';
 import { VehicleService } from './vehicle.service';
 import { MediaService } from './media.service';
@@ -76,7 +77,14 @@ export class ParcelService implements OnApplicationBootstrap {
     private readonly vehicles: VehicleService,
     private readonly media: MediaService,
     private readonly cargo: CargoService,
+    private readonly dids: DidService,
   ) {}
+
+  /** DT — mint the shipment's stable GLOS identity (the digital twin's DID) at parcel creation. Anchored +
+   *  resolvable; the reusable sticker parcelId is the human handle, this is the shipment's global id. */
+  private mintShipmentDid(parcelId: string, direction: ParcelDirection): string {
+    return this.dids.generate(`shipment:${parcelId}`, { role: 'shipment', direction }).id;
+  }
 
   /**
    * O4 retroactive linking (S21): backfill sender/receiver phone hashes on parcels created before the
@@ -192,6 +200,7 @@ export class ParcelService implements OnApplicationBootstrap {
     const relation = p.receiverPhoneHash === phoneHash ? 'received' : 'sent';
     const view: ConsumerParcelView = {
       parcelId: p.parcelId,
+      did: p.did, // DT — the twin's stable id
       relation,
       direction: p.direction,
       status: p.status,
@@ -245,6 +254,7 @@ export class ParcelService implements OnApplicationBootstrap {
     const anchorTxId = this.ledger.anchor({ p: input.parcelId, a: input.agentDid, s: input.size, dest: input.destZone, photo: input.dropoffPhotoRef, at: now }).txId;
     const parcel: Parcel = {
       parcelId: input.parcelId,
+      did: this.mintShipmentDid(input.parcelId, 'outbound'), // DT — the twin's stable GLOS identity, minted at creation
       direction: 'outbound',
       size: input.size,
       weightKg,
@@ -270,6 +280,9 @@ export class ParcelService implements OnApplicationBootstrap {
       trackingKey: `T-${randomBytes(5).toString('hex').toUpperCase()}`,
       scans: [{ at: now, status: 'CREATED', by: input.agentDid, note: agent.shopName, anchorTxId }],
     };
+    // DT — a printable label at creation for OUTBOUND too (the counter flow never issued one). Direction-aware:
+    // shows the public tracking key, not a collection code. Persisted so it can be reprinted.
+    parcel.label = this.label(parcel);
     this.parcels.set(parcel.parcelId, parcel);
     // S26: attach the drop-off proof to this parcel → shipment-proof bin (clock starts at terminal state).
     this.media.link(input.dropoffPhotoRef, { type: 'parcel', id: parcel.parcelId }, 'dropoff');
@@ -535,6 +548,7 @@ export class ParcelService implements OnApplicationBootstrap {
 
     const parcel: Parcel = {
       parcelId,
+      did: this.mintShipmentDid(parcelId, 'inbound'), // DT — the twin's stable GLOS identity, minted at creation
       direction: 'inbound',
       size,
       dimensionsCm: input.dimensionsCm,
@@ -762,23 +776,38 @@ export class ParcelService implements OnApplicationBootstrap {
    * XML-escaped: a shop name is operator-entered text and would otherwise break the SVG
    * (or inject into it) the first time someone typed an ampersand.
    */
-  private label(parcel: Parcel, destShop: string): PhygitalLabel {
+  private label(parcel: Parcel, destShop?: string): PhygitalLabel {
     const qrPayload = `sbg:parcel:${parcel.parcelId}`;
     const esc = (s: string) => s.replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[c] as string);
+    // DT — direction-aware so OUTBOUND / peer-send parcels get a label too (they have no destShop and no
+    // collection code). An inbound label shows the buyer's collection code; any other shows the PUBLIC tracking
+    // key (safe to print — no PII), so the physical parcel always carries a scannable, trackable identity.
+    const hasCode = parcel.direction === 'inbound' && Boolean(parcel.collectionCode);
+    const bottom = hasCode
+      ? [`<text x="12" y="130" font-family="Arial" font-size="10" fill="#4A5261">Collect at the shop with this code:</text>`, `<text x="12" y="152" font-family="monospace" font-size="16" font-weight="bold" fill="#0B1F5C">${esc(parcel.collectionCode ?? '')}</text>`]
+      : [`<text x="12" y="130" font-family="Arial" font-size="10" fill="#4A5261">Track this parcel:</text>`, `<text x="12" y="152" font-family="monospace" font-size="15" font-weight="bold" fill="#0B1F5C">${esc(parcel.trackingKey ?? '')}</text>`];
     const svg = [
       `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180">`,
       `<rect width="320" height="180" fill="#fff" stroke="#0B1F5C"/>`,
       qrSvgGroup(qrPayload, 12, 12, 96),
       `<text x="120" y="32" font-family="Arial" font-size="15" font-weight="bold" fill="#0B1F5C">SeeBuyGet</text>`,
       `<text x="120" y="52" font-family="monospace" font-size="11">${esc(parcel.parcelId)}</text>`,
-      `<text x="120" y="72" font-family="Arial" font-size="10">To: ${esc(destShop)}</text>`,
+      `<text x="120" y="72" font-family="Arial" font-size="10">To: ${esc(destShop ?? parcel.destZone)}</text>`,
       `<text x="120" y="92" font-family="Arial" font-size="9" fill="#4A5261">${esc(parcel.destZone)}</text>`,
-      `<text x="12" y="130" font-family="Arial" font-size="10" fill="#4A5261">Collect at the shop with this code:</text>`,
-      `<text x="12" y="152" font-family="monospace" font-size="16" font-weight="bold" fill="#0B1F5C">${esc(parcel.collectionCode ?? '')}</text>`,
-      `<text x="12" y="171" font-family="Arial" font-size="8" fill="#6E7684">Pre-paid · pick-up and drop-off · ${esc(qrPayload)}</text>`,
+      ...bottom,
+      `<text x="12" y="171" font-family="Arial" font-size="8" fill="#6E7684">${parcel.direction === 'inbound' ? 'Pre-paid · ' : ''}${esc(qrPayload)}</text>`,
       `</svg>`,
     ].join('');
     return { parcelId: parcel.parcelId, qrPayload, svg };
+  }
+
+  /** DT — the printable label for a parcel (reprint surface). Returns the persisted one, or generates it on
+   *  demand (e.g. an inbound parcel not yet paid still has no label → generated so an operator can inspect it). */
+  labelFor(parcelId: string): PhygitalLabel {
+    const parcel = this.require(parcelId);
+    if (parcel.label) return parcel.label;
+    const destShop = parcel.destAgentDid ? this.agents.get(parcel.destAgentDid).shopName : undefined;
+    return this.label(parcel, destShop);
   }
 
   list(filter: { status?: Parcel['status']; agentDid?: string; vendorId?: string } = {}): Parcel[] {
