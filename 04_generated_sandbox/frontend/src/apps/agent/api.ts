@@ -1,10 +1,12 @@
 import {
   createAgentApi,
+  createNotificationsApi,
   createSeededClient,
   makeConfig,
   purgeTokens,
   tokenKeyFor,
   type AgentApi,
+  type NotificationsApi,
   type SbgConfig,
   type SeededAppClient,
 } from '../../lib/sbg';
@@ -25,6 +27,8 @@ export function agentConfig(): SbgConfig {
 export interface AgentClient {
   api: AgentApi;
   client: SeededAppClient;
+  /** Persona-agnostic Web Push controls, bound to the same token (N1). */
+  notifications: NotificationsApi;
 }
 
 /**
@@ -35,7 +39,7 @@ export interface AgentClient {
  */
 export function createAgentClient(did: string): AgentClient {
   const client = createSeededClient(agentConfig(), tokenKeyFor(TOKEN_PREFIX, did));
-  return { api: createAgentApi(client.sbg), client };
+  return { api: createAgentApi(client.sbg), client, notifications: createNotificationsApi(client.sbg) };
 }
 
 export function purgeAgentTokens(keepDid: string | null): void {

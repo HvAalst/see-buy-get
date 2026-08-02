@@ -1,5 +1,5 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
-import { BottomNav, Button, Checklist, FeedbackFlash, Icon, Pill, TopBar, type NavItem } from '../../shared/ui';
+import { BottomNav, Button, Checklist, FeedbackFlash, Icon, NotificationBell, Pill, TopBar, type NavItem } from '../../shared/ui';
 import { HomeScreen } from './screens/HomeScreen';
 import { LoadsScreen } from './screens/LoadsScreen';
 import { OffersScreen } from './screens/OffersScreen';
@@ -12,7 +12,7 @@ import './driver.css';
 type Tab = 'home' | 'route' | 'loads';
 
 export function App() {
-  const { state, actions } = useDriverApp();
+  const { state, actions, notifications } = useDriverApp();
   const sw = useRegisterSW();
   const [needRefresh] = sw.needRefresh;
 
@@ -49,6 +49,7 @@ export function App() {
         backLabel="Back to my van"
         end={
           <>
+            <NotificationBell api={notifications} />
             {needRefresh ? (
               <button
                 type="button"

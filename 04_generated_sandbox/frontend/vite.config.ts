@@ -1,6 +1,7 @@
 import { dirname, resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import preact from '@preact/preset-vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
@@ -125,6 +126,23 @@ const SIBLING_DIRS = Object.values(APPS)
   .map((a) => a.base.replace(/^\/|\/$/g, ''))
   .filter(Boolean);
 const APP_DIR = resolve(ROOT, 'src/apps', APP_ID);
+
+/**
+ * Emit the ONE canonical Web Push SW handler (scripts/push-sw.js) into this app's build output as a
+ * fixed, unhashed `push-sw.js`, so the generated Workbox SW can `importScripts('push-sw.js')` it (see
+ * workbox.importScripts below) and every installed app stays self-contained — no cross-app file
+ * dependency. Runs on build only; the SW is disabled in dev (devOptions.enabled: false).
+ */
+function pushSwPlugin(): Plugin {
+  const source = readFileSync(resolve(ROOT, 'scripts/push-sw.js'), 'utf8');
+  return {
+    name: 'sbg-push-sw',
+    apply: 'build',
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'push-sw.js', source });
+    },
+  };
+}
 // Output mirrors the deploy path, not the app id (genesis ships at /send/), so the
 // whole of dist/ can be copied to a web root and every base resolves as built.
 const OUT_DIR = resolve(ROOT, 'dist', BASE.replace(/^\/|\/$/g, ''));
@@ -139,6 +157,7 @@ export default defineConfig({
 
   plugins: [
     preact(),
+    pushSwPlugin(),
     VitePWA({
       strategies: 'generateSW',
       // 'prompt' is the mode that does NOT inject skipWaiting. Never switch to
@@ -184,6 +203,10 @@ export default defineConfig({
         // an explicit user gesture via updateServiceWorker(true).
         skipWaiting: false,
         clientsClaim: false,
+        // Pull in the hand-written Web Push handlers (push + notificationclick). This ADDS to the
+        // generated SW without changing its update contract; the file is emitted by pushSwPlugin
+        // above and served at `${BASE}push-sw.js`, which is where importScripts resolves it.
+        importScripts: ['push-sw.js'],
         cleanupOutdatedCaches: true,
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         /**

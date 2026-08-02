@@ -827,6 +827,8 @@ export function useSendApp() {
 
   return {
     state,
+    // The Web Push controls (N1b) — surfaced for the TopBar NotificationBell; null while signed out.
+    notifications: client?.notifications ?? null,
     actions: {
       go,
       pickSize,

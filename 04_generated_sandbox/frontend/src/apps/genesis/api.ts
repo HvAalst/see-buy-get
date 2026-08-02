@@ -1,11 +1,13 @@
 import {
   createConsumerApi,
+  createNotificationsApi,
   createSeededClient,
   makeConfig,
   publicRequest,
   purgeTokens,
   tokenKeyFor,
   type ConsumerApi,
+  type NotificationsApi,
   type Result,
   type SbgConfig,
   type SeededAppClient,
@@ -74,6 +76,8 @@ const TOKEN_PREFIX = 'sbg:send:';
 export interface ConsumerClient {
   api: ConsumerApi;
   client: SeededAppClient;
+  /** Persona-agnostic Web Push controls, bound to the same token (N1). */
+  notifications: NotificationsApi;
 }
 
 /**
@@ -83,7 +87,7 @@ export interface ConsumerClient {
  */
 export function createConsumerClient(personDid: string): ConsumerClient {
   const client = createSeededClient(sendConfig(), tokenKeyFor(TOKEN_PREFIX, personDid));
-  return { api: createConsumerApi(client.sbg), client };
+  return { api: createConsumerApi(client.sbg), client, notifications: createNotificationsApi(client.sbg) };
 }
 
 export function purgeConsumerTokens(keepDid: string | null): void {

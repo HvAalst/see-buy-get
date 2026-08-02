@@ -2,10 +2,12 @@ import {
   Session,
   clientError,
   createDriverApi,
+  createNotificationsApi,
   createSbgClient,
   makeConfig,
   toSbgError,
   type DriverApi,
+  type NotificationsApi,
   type SbgClient,
   type SbgError,
 } from '../../lib/sbg';
@@ -113,6 +115,8 @@ function abortError(detail: string): Error {
 export interface DriverClient {
   api: DriverApi;
   session: Session;
+  /** Persona-agnostic Web Push controls, bound to the same token (N1). */
+  notifications: NotificationsApi;
 }
 
 export function createDriverClient(did: string): DriverClient {
@@ -204,7 +208,7 @@ export function createDriverClient(did: string): DriverClient {
       }),
   };
 
-  return { api: createDriverApi(truthful), session };
+  return { api: createDriverApi(truthful), session, notifications: createNotificationsApi(truthful) };
 }
 
 /**

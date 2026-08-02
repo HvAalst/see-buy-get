@@ -1,5 +1,5 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
-import { BottomNav, Icon, TopBar, type NavItem } from '../../shared/ui';
+import { BottomNav, Icon, NotificationBell, TopBar, type NavItem } from '../../shared/ui';
 import { SendScreen } from './screens/SendScreen';
 import { TrackScreen } from './screens/TrackScreen';
 import { AuthScreen } from './screens/AuthScreen';
@@ -15,7 +15,7 @@ import './send.css';
  * phone+PIN sign-in only when tapped; a returning user with a live token restores silently past it.
  */
 export function App() {
-  const { state, actions } = useSendApp();
+  const { state, actions, notifications } = useSendApp();
   const sw = useRegisterSW();
   const [needRefresh] = sw.needRefresh;
 
@@ -32,16 +32,23 @@ export function App() {
         title="SeeBuyGet Send"
         subtitle="See the price. Pay at the shop."
         end={
-          needRefresh ? (
-            <button
-              type="button"
-              class="topbar__lead"
-              onClick={() => void sw.updateServiceWorker(true)}
-              aria-label="A new version is ready — update now"
-              title="Update the app"
-            >
-              <Icon name="refresh" size={24} />
-            </button>
+          notifications || needRefresh ? (
+            <>
+              {/* The bell appears once signed in (My parcels / Account) — that is where the buyer
+                  wants "your parcel has arrived" — and stays hidden on the anonymous Send/Track surfaces. */}
+              {notifications ? <NotificationBell api={notifications} /> : null}
+              {needRefresh ? (
+                <button
+                  type="button"
+                  class="topbar__lead"
+                  onClick={() => void sw.updateServiceWorker(true)}
+                  aria-label="A new version is ready — update now"
+                  title="Update the app"
+                >
+                  <Icon name="refresh" size={24} />
+                </button>
+              ) : null}
+            </>
           ) : null
         }
       />

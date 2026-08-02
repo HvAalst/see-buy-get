@@ -733,6 +733,8 @@ export function useAgentApp() {
   return {
     state,
     did,
+    // The Web Push controls (N1b) — surfaced for the TopBar NotificationBell; null while signed out.
+    notifications: client?.notifications ?? null,
     actions: {
       refresh,
       signIn,

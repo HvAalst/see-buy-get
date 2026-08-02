@@ -1,5 +1,5 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
-import { BottomNav, Button, Checklist, FeedbackFlash, Icon, Pill, TopBar, type NavItem } from '../../shared/ui';
+import { BottomNav, Button, Checklist, FeedbackFlash, Icon, NotificationBell, Pill, TopBar, type NavItem } from '../../shared/ui';
 import { AcceptScreen } from './screens/AcceptScreen';
 import { CollectScreen } from './screens/CollectScreen';
 import { HandoverScreen } from './screens/HandoverScreen';
@@ -16,7 +16,7 @@ import './agent.css';
 type Tab = 'home' | 'accept' | 'release';
 
 export function App() {
-  const { state, actions } = useAgentApp();
+  const { state, actions, notifications } = useAgentApp();
   const sw = useRegisterSW();
   const [needRefresh] = sw.needRefresh;
 
@@ -53,6 +53,7 @@ export function App() {
         backLabel="Back to my shop"
         end={
           <>
+            <NotificationBell api={notifications} />
             {needRefresh ? (
               <button
                 type="button"
