@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
 import { randomBytes } from 'crypto';
 import { EventBus } from '../../foundation/events/event-bus.service';
@@ -17,7 +17,7 @@ import { isTempBreach, loadSafetyItems, missingKeys, requiredLoadKeys, requiredU
 import { MediaService } from './media.service';
 import { MarketPulseStore } from './market-pulse.store';
 import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, VEHICLE_SPEC } from './fleet.config';
-import { detourKm, haversineKm } from './geo';
+import { Router, ROUTER } from './router';
 import { DEFAULT_PRICE_PER_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, OFFER_TTL_MIN, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
@@ -50,6 +50,7 @@ export class DispatchService {
     private readonly gate: WalletGateService,
     private readonly market: MarketPulseStore,
     private readonly media: MediaService,
+    @Inject(ROUTER) private readonly router: Router,
   ) {
     this.freightSeq = [...this.freights.values()].length; // continue the human FRT-NNN sequence after a restart
   }
@@ -173,7 +174,7 @@ export class DispatchService {
     const floor = minEarn != null && Number.isFinite(minEarn) && minEarn > 0 ? minEarn : undefined;
 
     const matches = this.availableLoads()
-      .map((load) => ({ load, detour: detourKm(route.from, load.pickupLocation, route.to), minutesAway: this.minutes(route.from, load.pickupLocation) }))
+      .map((load) => ({ load, detour: this.router.detourKm(route.from, load.pickupLocation, route.to), minutesAway: this.minutes(route.from, load.pickupLocation) }))
       .filter(({ load, detour, minutesAway }) => detour <= DISPATCH_MAX_DETOUR_KM && minutesAway <= DISPATCH_MAX_PICKUP_MIN && this.vehicleCanCarry(vehicle, load, remaining))
       .sort((a, b) => a.detour - b.detour || a.minutesAway - b.minutesAway);
 
@@ -186,8 +187,8 @@ export class DispatchService {
         ? computeFreightPrice({
             baseFee: profile.baseFee,
             ratePerKm: profile.ratePerKm,
-            deadheadKm: haversineKm(route.from, load.pickupLocation),
-            tripKm: load.destLocation ? haversineKm(load.pickupLocation, load.destLocation) : 0,
+            deadheadKm: this.router.roadKm(route.from, load.pickupLocation),
+            tripKm: load.destLocation ? this.router.roadKm(load.pickupLocation, load.destLocation) : 0,
             // S34b — the market multiplier for the PICKUP's zone (supply/demand + admin surge), clamped to the corridor.
             multiplier: freightMultiplier(new Date(now), { min: profile.min, max: profile.max }, this.market.factorFor(load.pickupLocation, now)),
           })
@@ -507,7 +508,7 @@ export class DispatchService {
   }
 
   private minutes(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
-    return Math.max(1, Math.round((haversineKm(a, b) / VEHICLE_SPEED_KMH.bus) * 60));
+    return this.router.etaMinutes(a, b, VEHICLE_SPEED_KMH.bus);
   }
 
   private requireOffer(offerId: string): Offer {

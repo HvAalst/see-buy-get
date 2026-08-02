@@ -1,11 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
 import { AgentService } from './agent.service';
 import { ShelfService } from './shelf.service';
 import { CorridorService } from './corridor.service';
 import { MdpService } from './mdp.service';
 import { VehicleService } from './vehicle.service';
-import { haversineKm } from './geo';
+import { Router, ROUTER } from './router';
 import { isOpenAt, nextOpenAt } from './hours';
 import { DISPATCH_BUFFER_H, HANDOVER_BUFFER_H, PLATFORM_FEE_PCT, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, VEHICLE_SPEED_KMH, withPlatformFee } from './pudo.config';
 import { ParcelSize } from './pudo.types';
@@ -55,6 +55,7 @@ export class RoutingService {
     private readonly corridors: CorridorService,
     private readonly mdps: MdpService,
     private readonly vehicles: VehicleService,
+    @Inject(ROUTER) private readonly router: Router,
   ) {}
 
   /**
@@ -92,7 +93,7 @@ export class RoutingService {
     if (!candidates.length) throw new GlosError('NO_CAPACITY_AVAILABLE', 'No open PUDO with free shelf capacity available');
 
     const ranked = input.location
-      ? candidates.map((a) => ({ a, d: haversineKm(input.location!, a.location) })).sort((x, y) => x.d - y.d)
+      ? candidates.map((a) => ({ a, d: this.router.roadKm(input.location!, a.location) })).sort((x, y) => x.d - y.d)
       : candidates.map((a) => ({ a, d: undefined as number | undefined }));
     const { a, d } = ranked[0];
     return { agentDid: a.did, shopName: a.shopName, zone: a.zone, distanceKm: d != null ? Math.round(d) : undefined };
@@ -124,7 +125,7 @@ export class RoutingService {
     let cursor = Date.now() + DISPATCH_BUFFER_H * 3_600_000;
     const legs = route.slice(0, -1).map((from, i) => {
       const to = route[i + 1];
-      const distanceKm = Math.round(haversineKm(from.location, to.location) * 10) / 10;
+      const distanceKm = Math.round(this.router.roadKm(from.location, to.location) * 10) / 10;
       const transitH = distanceKm / VEHICLE_SPEED_KMH[vehicle];
       const departAt = cursor;
       const arriveAt = departAt + (transitH + HANDOVER_BUFFER_H) * 3_600_000;

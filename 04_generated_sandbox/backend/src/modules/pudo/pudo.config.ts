@@ -100,6 +100,10 @@ export const SHELF_COLORS = ['Red', 'Orange', 'Amber', 'Green', 'Teal', 'Blue', 
 export const VEHICLE_SPEED_KMH: Record<'bus' | 'truck', number> = { bus: 40, truck: 55 };
 export const DISPATCH_BUFFER_H = 1; // time until the next scheduled departure (simplified)
 export const HANDOVER_BUFFER_H = 0.5;
+// G2 — road distance ≈ straight-line × this. Real roads are ~30–40% longer than the crow flies; 1.35 is
+// a sane country-wide average the sandbox Router applies over haversine (a real OSRM/Valhalla adapter is
+// the production swap). Legs, ETAs and freight pricing all read the routed distance, not the great circle.
+export const ROAD_CIRCUITY_FACTOR = 1.35;
 
 // Dispatch marketplace (Ch 19 — opportunistic line-haul). A filling tote is published for drivers to
 // claim once it is full OR has waited this long; suggestions auto-ignore if unanswered within the TTL.
