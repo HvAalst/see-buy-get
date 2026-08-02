@@ -5,6 +5,10 @@ import { M7Module } from '../m7/m7.module';
 import { SbgController } from './pudo.controller';
 import { IdentityController } from './identity.controller';
 import { MediaController } from './media.controller';
+import { NotificationsController } from './notifications.controller';
+import { NotificationService } from './notification.service';
+import { OutboxPushSender } from './push-sender';
+import { PUSH_SENDER } from './notification.types';
 import { MediaService } from './media.service';
 import { PersonService } from './person.service';
 import { InviteService } from './invite.service';
@@ -42,8 +46,8 @@ import { CargoService } from './cargo.service';
  */
 @Module({
   imports: [M1Module, M4Module, M7Module],
-  controllers: [SbgController, IdentityController, MediaController],
-  providers: [AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService, GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, ToteService, VehicleService, DriverService, FleetService, DispatchService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService],
-  exports: [AgentService, ParcelService, MonitorService, RatingService, MdpService, ToteService, VehicleService, DriverService, FleetService, DispatchService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService],
+  controllers: [SbgController, IdentityController, MediaController, NotificationsController],
+  providers: [AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService, GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, ToteService, VehicleService, DriverService, FleetService, DispatchService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, NotificationService, OutboxPushSender, { provide: PUSH_SENDER, useExisting: OutboxPushSender }],
+  exports: [AgentService, ParcelService, MonitorService, RatingService, MdpService, ToteService, VehicleService, DriverService, FleetService, DispatchService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, NotificationService, OutboxPushSender],
 })
 export class PudoModule {}

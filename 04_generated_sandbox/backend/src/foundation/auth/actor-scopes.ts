@@ -14,12 +14,16 @@ export const ROLE_SCOPES: Record<ActorRole, string[]> = {
   // delivery dispute, and submit proof-of-delivery. `identity:self` gates the person's own account
   // routes (me / role-switch). Routes for dispute:file / pod:submit land in S23; the scope is defined
   // now so the token already carries the authority its future routes require.
+  // NOTIF — every human role may manage its OWN push subscriptions + read its own notification inbox
+  // (`notification:manage:self`, reach enforced against the token's DID). Provisioned on the role now so a
+  // freshly-minted token already carries the authority its subscribe/inbox routes require.
   consumer: [
     'shipment:create',
     'parcel:read:own',
     'dispute:file',
     'pod:submit',
     'identity:self',
+    'notification:manage:self',
   ],
   agent: [
     'parcel:accept',
@@ -30,11 +34,12 @@ export const ROLE_SCOPES: Record<ActorRole, string[]> = {
     'tote:manage:own',
     'agent:read:self',
     'wallet:read:self',
+    'notification:manage:self',
   ],
-  driver: ['driver:read:self', 'session:manage:self', 'offer:claim', 'load:read:own', 'route:manage:self'],
-  mdp: ['mdp:read:self', 'tote:sort', 'bag:manage', 'parcel:transit'],
-  genesis: ['shipment:create', 'vendor:read:self', 'vendor:manage:self', 'quote:read', 'parcel:read:own'],
-  fleet_manager: ['fleet:read:own', 'fleet:manage:own', 'driver:onboard:own', 'vehicle:manage:own'],
+  driver: ['driver:read:self', 'session:manage:self', 'offer:claim', 'load:read:own', 'route:manage:self', 'notification:manage:self'],
+  mdp: ['mdp:read:self', 'tote:sort', 'bag:manage', 'parcel:transit', 'notification:manage:self'],
+  genesis: ['shipment:create', 'vendor:read:self', 'vendor:manage:self', 'quote:read', 'parcel:read:own', 'notification:manage:self'],
+  fleet_manager: ['fleet:read:own', 'fleet:manage:own', 'driver:onboard:own', 'vehicle:manage:own', 'notification:manage:self'],
   operator: [WILDCARD_SCOPE],
   anon: [],
 };

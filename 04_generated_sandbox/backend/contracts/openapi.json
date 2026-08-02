@@ -7883,6 +7883,76 @@
         }
       }
     },
+    "/v1/sbg/notifications/vapid-public-key": {
+      "get": {
+        "operationId": "Notifications.vapidPublicKey",
+        "summary": "",
+        "description": "The `applicationServerKey` the browser needs to build a PushSubscription. Public, not a secret.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/notifications/subscribe": {
+      "post": {
+        "operationId": "Notifications.subscribe",
+        "summary": "",
+        "description": "Enrol this device (the browser's PushSubscription) for the authenticated owner.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscribeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      },
+      "delete": {
+        "operationId": "Notifications.unsubscribe",
+        "summary": "",
+        "description": "Drop this device (the browser unsubscribed, or the user turned notifications off).",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnsubscribeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/notifications/test": {
+      "post": {
+        "operationId": "Notifications.test",
+        "summary": "",
+        "description": "Send a test push to every device the owner has enrolled — the \"it works\" confirmation after opt-in.",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/settlement/module-info": {
       "get": {
         "operationId": "Sse.info",
@@ -12557,6 +12627,47 @@
         "required": [
           "kind",
           "dataUrl"
+        ]
+      },
+      "PushKeysDto": {
+        "type": "object",
+        "properties": {
+          "p256dh": {
+            "type": "string"
+          },
+          "auth": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "p256dh",
+          "auth"
+        ]
+      },
+      "SubscribeDto": {
+        "type": "object",
+        "properties": {
+          "endpoint": {
+            "type": "string"
+          },
+          "keys": {
+            "$ref": "#/components/schemas/PushKeysDto"
+          }
+        },
+        "required": [
+          "endpoint",
+          "keys"
+        ]
+      },
+      "UnsubscribeDto": {
+        "type": "object",
+        "properties": {
+          "endpoint": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "endpoint"
         ]
       },
       "MilestoneTermDto": {
