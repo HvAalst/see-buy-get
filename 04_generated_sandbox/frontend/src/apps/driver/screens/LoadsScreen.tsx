@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, CheckGate, Checklist, ErrorNote, GlanceNumber, Icon, Note, PhotoField, Pill, ReadAloud, Sheet } from '../../../shared/ui';
+import { Button, Card, CheckGate, Checklist, ErrorNote, GlanceNumber, Icon, Note, OpenInMaps, PhotoField, Pill, ReadAloud, Sheet } from '../../../shared/ui';
 import { canLoadBag, capacitySubLine, claimControl, isFull, loadsSummary, money, usedPercent } from '../logic';
 import type { Claimable } from '../types';
 import type { DriverActions, DriverState } from '../useDriverApp';
@@ -81,6 +81,11 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                       <Icon name="chevronRight" size={22} />
                     </span>
                   </button>
+                  {c.pickupLocation ? (
+                    <div class="load__nav">
+                      <OpenInMaps point={c.pickupLocation} label={`Navigate to ${c.pickupLabel}`} />
+                    </div>
+                  ) : null}
                 </li>
               );
             }
@@ -105,6 +110,12 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                       <Icon name="chevronRight" size={22} />
                     </span>
                   </button>
+                  {/* G3 — before pickup, offer turn-by-turn to the pickup point. */}
+                  {isPickup && c.pickupLocation ? (
+                    <div class="load__nav">
+                      <OpenInMaps point={c.pickupLocation} label={`Navigate to ${c.pickupLabel}`} />
+                    </div>
+                  ) : null}
                   {/* S33b — an in-transit cold-chain load: show the safe band + last reading + a log control. */}
                   {control === 'deliver' && c.tempBand ? <TempStrip claim={c} onLog={() => setTempFor(c)} /> : null}
                 </li>

@@ -58,6 +58,14 @@
   margin-top: auto;
 }
 
+/* G3 — the "navigate to pickup" deep link under an offer card / claimed load row. */
+.offer__nav {
+  margin-top: 14px;
+}
+.load__nav {
+  margin: 2px 0 12px 44px;
+}
+
 .meta {
   display: flex;
   align-items: center;

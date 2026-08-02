@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, Checklist, ErrorNote, Icon, Pill, ReadAloud, Sheet, SwipeDeck } from '../../../shared/ui';
+import { Button, Card, Checklist, ErrorNote, Icon, OpenInMaps, Pill, ReadAloud, Sheet, SwipeDeck } from '../../../shared/ui';
 import { countdownLabel, money, offerSpoken, offersSummary, priceBreakdownLines, secondsLeft } from '../logic';
 import type { OfferView } from '../types';
 import type { DriverActions, DriverState } from '../useDriverApp';
@@ -187,6 +187,11 @@ function OfferCard({ offer, now }: { offer: OfferView; now: number }) {
             <span>{line}</span>
           </p>
         ))}
+      </div>
+
+      {/* G3 — mobile-first: hand the pickup coordinate straight to the phone's maps app for turn-by-turn. */}
+      <div class="offer__nav">
+        <OpenInMaps point={offer.pickupLocation} label={`Navigate to ${offer.pickupLabel}`} />
       </div>
     </article>
   );

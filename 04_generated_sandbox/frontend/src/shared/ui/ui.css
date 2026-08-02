@@ -704,6 +704,28 @@
   background: var(--blue);
 }
 
+/* ------------------------------------------------------- Open in Maps -- */
+
+/* A deep-link into the device maps app. Outline-link styling — a secondary action, never the CTA. */
+.openmaps {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  min-height: var(--tap);
+  box-sizing: border-box;
+  border: 1.5px solid var(--blue);
+  border-radius: var(--r-ctl);
+  color: var(--blue);
+  background: var(--bg);
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.openmaps:active {
+  background: var(--blue-soft);
+}
+
 /* ------------------------------------------------------------ BottomNav -- */
 
 .bnav {
