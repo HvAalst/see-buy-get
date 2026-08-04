@@ -20,6 +20,111 @@ import { MediaService } from './media.service';
 import { CargoService } from './cargo.service';
 import { CargoNature } from './cargo.types';
 import type { ShipmentQuote } from './routing.service';
+import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
+
+/** The vendor shipment-register query (R0) — mirrors VendorOrdersQueryDto, all optional. */
+export interface VendorOrdersQuery {
+  q?: string;
+  status?: string;
+  pudo?: string;
+  from?: string;
+  to?: string;
+  paid?: 'paid' | 'unpaid';
+  sort?: 'newest' | 'oldest' | 'cost_desc' | 'cost_asc';
+  limit?: string;
+  offset?: string;
+}
+
+/** One row of the vendor shipment register — the list projection, now carrying the DID, buyer + products. */
+export interface VendorOrderRow {
+  parcelId: string;
+  did?: string;
+  externalOrderId?: string;
+  status: ParcelStatus;
+  paidStatus?: 'unpaid' | 'ParcelPaid';
+  buyer: string; // the buyer's mobile (the vendor's own customer, provided at checkout)
+  buyerEmail?: string;
+  products: string; // item names, human-readable ("Ankara shirt ×2, Kitenge scarf")
+  destZone: string;
+  destAgentDid?: string;
+  size: ParcelSize;
+  shipmentCost?: number;
+  buyerCharge?: number;
+  routeMode?: 'flexible' | 'locked';
+  collectionCode?: string;
+  trackingKey?: string;
+  binSlot?: string;
+  createdAt: string;
+}
+
+/** Products as a human string: "Ankara shirt ×2, Kitenge scarf". */
+function vendorProducts(p: Parcel): string {
+  return (p.items ?? []).map((i) => (i.qty > 1 ? `${i.name} ×${i.qty}` : i.name)).join(', ');
+}
+
+function vendorOrderSort(sort?: VendorOrdersQuery['sort']): (a: Parcel, b: Parcel) => number {
+  switch (sort) {
+    case 'oldest':
+      return (a, b) => a.acceptedAt.localeCompare(b.acceptedAt);
+    case 'cost_desc':
+      return (a, b) => (b.shipmentCost ?? 0) - (a.shipmentCost ?? 0);
+    case 'cost_asc':
+      return (a, b) => (a.shipmentCost ?? 0) - (b.shipmentCost ?? 0);
+    default:
+      return (a, b) => b.acceptedAt.localeCompare(a.acceptedAt); // newest first
+  }
+}
+
+/**
+ * Filter + search + sort a vendor's parcels for the register (PURE — the owner scope is applied by the
+ * caller via list({vendorId})). Search `q` is a case-insensitive substring over the order-ref, DID,
+ * sticker id, tracking key, buyer mobile/email, destination zone and product names.
+ */
+export function filterVendorParcels(rows: Parcel[], q: VendorOrdersQuery): Parcel[] {
+  let out = rows;
+  if (q.status) out = out.filter((p) => p.status === q.status);
+  if (q.pudo) out = out.filter((p) => p.destAgentDid === q.pudo);
+  if (q.paid) out = out.filter((p) => (q.paid === 'paid' ? p.paidStatus === 'ParcelPaid' : p.paidStatus !== 'ParcelPaid'));
+  if (q.from || q.to) out = out.filter((p) => withinDates(p.acceptedAt, q.from, q.to));
+  if (q.q) {
+    out = out.filter((p) =>
+      textMatch([p.parcelId, p.did, p.externalOrderId, p.trackingKey, p.receiverMobile, p.buyerEmail, p.destZone, ...(p.items?.map((i) => i.name) ?? [])], q.q),
+    );
+  }
+  return [...out].sort(vendorOrderSort(q.sort));
+}
+
+/** Project a Parcel to a register row (adds the DID, buyer + product names the raw list lacked). */
+export function vendorOrderRowOf(p: Parcel): VendorOrderRow {
+  return {
+    parcelId: p.parcelId,
+    did: p.did,
+    externalOrderId: p.externalOrderId,
+    status: p.status,
+    paidStatus: p.paidStatus,
+    buyer: p.receiverMobile,
+    buyerEmail: p.buyerEmail,
+    products: vendorProducts(p),
+    destZone: p.destZone,
+    destAgentDid: p.destAgentDid,
+    size: p.size,
+    shipmentCost: p.shipmentCost,
+    buyerCharge: p.buyerCharge,
+    routeMode: p.routeMode,
+    collectionCode: p.collectionCode,
+    trackingKey: p.trackingKey,
+    binSlot: p.binSlot,
+    createdAt: p.acceptedAt,
+  };
+}
+
+/** Render matched parcels as the vendor's shipment CSV export. */
+export function vendorOrdersToCsv(rows: Parcel[]): string {
+  return toCsv(
+    ['Order', 'Shipment DID', 'Buyer', 'Products', 'Status', 'Paid', 'Destination', 'Shipping cost', 'Buyer charge', 'Created'],
+    rows.map((p) => [p.externalOrderId ?? p.parcelId, p.did ?? '', p.receiverMobile, vendorProducts(p), p.status, p.paidStatus ?? '', p.destZone, p.shipmentCost ?? '', p.buyerCharge ?? '', p.acceptedAt]),
+  );
+}
 import { qrSvgGroup } from '../../foundation/label/qr';
 
 interface AcceptInput {
@@ -812,6 +917,20 @@ export class ParcelService implements OnApplicationBootstrap {
 
   list(filter: { status?: Parcel['status']; agentDid?: string; vendorId?: string } = {}): Parcel[] {
     return [...this.parcels.values()].filter((p) => (!filter.status || p.status === filter.status) && (!filter.agentDid || p.originAgentDid === filter.agentDid || p.destAgentDid === filter.agentDid) && (!filter.vendorId || p.vendorId === filter.vendorId));
+  }
+
+  // --- vendor shipment register (R0) — server-side search / filter / sort / paginate / export -------------
+
+  /** One page of the vendor shipment register: the projected rows + the full match count. Owner-scoped. */
+  vendorOrdersPage(vendorId: string, q: VendorOrdersQuery): Page<VendorOrderRow> {
+    const filtered = filterVendorParcels(this.list({ vendorId }), q);
+    const { items, total } = paginate(filtered, q.limit, q.offset);
+    return { items: items.map(vendorOrderRowOf), total };
+  }
+
+  /** The whole matching set (every page) rendered as CSV — the vendor's export of their shipments. */
+  vendorOrdersCsv(vendorId: string, q: VendorOrdersQuery): string {
+    return vendorOrdersToCsv(filterVendorParcels(this.list({ vendorId }), q));
   }
 
   // --- internals ---

@@ -212,6 +212,19 @@ export class SetPriceDto {
   @IsNumber() @Min(0) price!: number;
 }
 
+/** R0 — the vendor shipment register query. All optional; params arrive as strings on the query string. */
+export class VendorOrdersQueryDto {
+  @IsOptional() @IsString() q?: string; // smart search: order-ref / DID / parcelId / tracking / buyer / product / zone
+  @IsOptional() @IsString() status?: string;
+  @IsOptional() @IsString() pudo?: string; // the destination PUDO (destAgentDid)
+  @IsOptional() @IsString() from?: string; // ISO or YYYY-MM-DD (inclusive)
+  @IsOptional() @IsString() to?: string;
+  @IsOptional() @IsIn(['paid', 'unpaid']) paid?: 'paid' | 'unpaid';
+  @IsOptional() @IsIn(['newest', 'oldest', 'cost_desc', 'cost_asc']) sort?: 'newest' | 'oldest' | 'cost_desc' | 'cost_asc';
+  @IsOptional() @IsString() limit?: string;
+  @IsOptional() @IsString() offset?: string;
+}
+
 class OrderItemDto {
   @IsString() name!: string;
   @IsNumber() @Min(1) qty!: number;

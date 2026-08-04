@@ -22,8 +22,22 @@ export function createVendorApi(sbg: SbgClient) {
       },
     ) => sbg.request((c) => c.PATCH('/v1/sbg/vendors/{id}', { params: { path: { id: vendorId } }, body: patch })),
 
-    /** The store's orders (its inbound parcels), newest first server-side. */
-    orders: (vendorId: string) => sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/orders', { params: { path: { id: vendorId } } })),
+    /** The store's shipment register (R0): a server-side searched/filtered/sorted/paged page of orders,
+     *  returned as { items, total }. All query fields are optional (no query = newest-first, page 1). */
+    orders: (
+      vendorId: string,
+      query?: {
+        q?: string;
+        status?: string;
+        pudo?: string;
+        from?: string;
+        to?: string;
+        paid?: 'paid' | 'unpaid';
+        sort?: 'newest' | 'oldest' | 'cost_desc' | 'cost_asc';
+        limit?: string;
+        offset?: string;
+      },
+    ) => sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/orders', { params: { path: { id: vendorId }, query: query ?? {} } })),
 
     /** Full detail for one order (validates it belongs to this store). */
     order: (vendorId: string, parcelId: string) =>

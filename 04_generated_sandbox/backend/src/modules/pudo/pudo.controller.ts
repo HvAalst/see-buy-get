@@ -1,8 +1,8 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiQuery } from '@nestjs/swagger';
 import { GlosError } from '../../foundation/http/glos-error';
 import { Public } from '../../foundation/auth/public.decorator';
-import { Roles } from '../../foundation/auth/scopes.decorator';
+import { Roles, Scopes } from '../../foundation/auth/scopes.decorator';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { actingDid, actingTenant, auditActor } from '../../foundation/auth/acting';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
@@ -29,7 +29,7 @@ import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
-import { AcceptParcelDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, CoupleDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, OverdraftDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetPriceDto, ShelfDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, RecordTempDto } from './pudo.dto';
+import { AcceptParcelDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, CoupleDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, OverdraftDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetPriceDto, ShelfDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, RecordTempDto, VendorOrdersQueryDto } from './pudo.dto';
 import { classifySize, SIZE_WEIGHT_KG } from './pudo.config';
 import { haversineKm } from './geo';
 
@@ -374,18 +374,46 @@ export class SbgController {
     return VendorService.publicView(this.vendors.updateProfile(id, dto));
   }
 
-  /** A vendor's orders (their inbound parcels) for the merchant console. */
-  @Get('vendors/:id/orders')
-  vendorOrders(@Param('id') id: string) {
-    this.vendors.get(id); // 404 if unknown
-    return this.parcels.list({ vendorId: id }).map((p) => ({ parcelId: p.parcelId, externalOrderId: p.externalOrderId, status: p.status, paidStatus: p.paidStatus, collectionCode: p.collectionCode, trackingKey: p.trackingKey, binSlot: p.binSlot, destZone: p.destZone, size: p.size, shipmentCost: p.shipmentCost, buyerCharge: p.buyerCharge, routeMode: p.routeMode, createdAt: p.acceptedAt }));
+  /**
+   * OWNER GATE for a vendor's own data. 404 on an unknown store; 403 unless the caller IS that store — a
+   * vendor's token carries did = vendor.did (mintActorToken at vendors/login), so we compare the acting
+   * DID to the record; an operator (client-secret gated) may act on any store. Without this, an unlabelled
+   * route is admitted for ANY valid token and the path id alone would expose one store's orders + buyer
+   * PII to another. `@Scopes('vendor:read:self')` additionally keeps non-vendor roles off these routes.
+   */
+  private assertVendorOwner(id: string, actor: IntrospectionResult): void {
+    const vendor = this.vendors.get(id); // 404 if unknown
+    if (actor?.role !== 'operator' && (!actor?.did || actor.did !== vendor.did)) {
+      throw new GlosError('FORBIDDEN', 'This store is not yours to view');
+    }
   }
 
-  /** Full detail for one order (the watch-only status screen's drill-down). Validates it belongs to the
-   *  vendor and strips the control-tower-only short-ship marker before it reaches the external merchant. */
+  /** A vendor's shipment register (R0): their OWN inbound parcels, server-side searched / filtered /
+   *  sorted / paginated. Returns { items, total } so the console can page. Owner-scoped (403 for non-owners). */
+  @Scopes('vendor:read:self')
+  @Get('vendors/:id/orders')
+  vendorOrders(@Param('id') id: string, @Query() query: VendorOrdersQueryDto, @Actor() actor: IntrospectionResult) {
+    this.assertVendorOwner(id, actor);
+    return this.parcels.vendorOrdersPage(id, query);
+  }
+
+  /** Export the WHOLE matching set (every page, current filters) as CSV — the vendor's OWN shipment export.
+   *  Owner-scoped. Declared before the :parcelId route so "export" is not captured as a parcel id. */
+  @Scopes('vendor:read:self')
+  @Get('vendors/:id/orders/export')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="shipments.csv"')
+  vendorOrdersExport(@Param('id') id: string, @Query() query: VendorOrdersQueryDto, @Actor() actor: IntrospectionResult): string {
+    this.assertVendorOwner(id, actor);
+    return this.parcels.vendorOrdersCsv(id, query);
+  }
+
+  /** Full detail for one order (the watch-only status screen's drill-down). Owner-scoped; strips the
+   *  control-tower-only short-ship marker before it reaches the external merchant. */
+  @Scopes('vendor:read:self')
   @Get('vendors/:id/orders/:parcelId')
-  vendorOrder(@Param('id') id: string, @Param('parcelId') parcelId: string) {
-    this.vendors.get(id); // 404 if unknown vendor
+  vendorOrder(@Param('id') id: string, @Param('parcelId') parcelId: string, @Actor() actor: IntrospectionResult) {
+    this.assertVendorOwner(id, actor);
     return this.parcels.vendorOrderView(id, parcelId);
   }
 

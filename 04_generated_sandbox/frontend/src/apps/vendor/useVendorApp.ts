@@ -194,7 +194,7 @@ export function useVendorApp() {
         ...s,
         phase: 'ready',
         vendor,
-        orders: ordersR.error ? s.orders : (narrow<OrderRow[]>(ordersR.data) ?? []),
+        orders: ordersR.error ? s.orders : (narrow<{ items?: OrderRow[] }>(ordersR.data)?.items ?? []),
         checkouts: checkoutsR.error ? s.checkouts : (narrow<CheckoutRow[]>(checkoutsR.data) ?? []),
         error: null,
         stale: false,
