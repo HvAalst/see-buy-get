@@ -216,7 +216,14 @@ export default defineConfig({
          * copy of another app's index.html after that app shipped an update, fighting its own
          * update prompt. A leaf app's outDir contains only itself, so it needs no ignores.
          */
-        globIgnores: IS_ROOT ? SIBLING_DIRS.map((d) => `${d}/**`) : [],
+        globIgnores: [
+          // The Leaflet tile-map chunk (G3a) is an ONLINE-ONLY, on-demand enhancement. Keep it out of
+          // the precache so an offline-first install — and every user who never switches to the Map view
+          // — does not pay ~166 KB for it. It is fetched from the network only when the map is opened.
+          '**/PlaceMapLeaflet-*.js',
+          '**/PlaceMapLeaflet-*.css',
+          ...(IS_ROOT ? SIBLING_DIRS.map((d) => `${d}/**`) : []),
+        ],
         navigateFallback: `${BASE}index.html`,
         /**
          * Never serve an app shell for an API path — nor, from the root worker (whose scope

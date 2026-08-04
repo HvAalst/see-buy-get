@@ -1,5 +1,8 @@
+import type { JSX } from 'preact';
+import { useEffect, useState } from 'preact/hooks';
 import type { GeoPoint } from '../geo';
-import { fitBounds, project, unproject } from '../geo';
+import { PlaceMapPlot } from './PlaceMapPlot';
+import { Icon } from './Icon';
 
 export interface PlaceMapPin {
   id: string;
@@ -14,7 +17,7 @@ export interface PlaceMapProps {
   onPick?: (id: string) => void;
   /** The person's own position (typed place words, the store pin) — the orange locator dot. */
   reference?: GeoPoint | null;
-  /** Drop mode: tapping empty surface calls back with the lat/lng under the finger. */
+  /** Drop mode: tapping the surface calls back with the lat/lng under the finger. */
   onDrop?: (p: GeoPoint) => void;
   /** The current dropped pin (drop mode). */
   dropped?: GeoPoint | null;
@@ -22,73 +25,105 @@ export interface PlaceMapProps {
   label: string;
 }
 
+export type MapMode = 'map' | 'plot';
+const STORE_KEY = 'sbg:mapmode';
+
 /**
- * The dependency-free map every picker shares: a bounded relative plot (the fleet console
- * proved the pattern) — no tiles, no network, works offline on the cheapest phone. Pins
- * are real buttons (the row list beside it remains the screen-reader path); in drop mode
- * a tap anywhere becomes a lat/lng via the same projection, inverted.
- *
- * This is a PICTURE of relative positions, not cartography — and that is the point: where
- * this network runs, "which dot is nearest the reference dot" answers what a street
- * address cannot.
+ * Which view to show first. A stored choice always wins (the user's toggle is remembered); otherwise
+ * default to the real map when online, and the offline-first dot-plot when not. Pure + exported for the
+ * unit test.
  */
-export function PlaceMap({ pins = [], selectedId, onPick, reference, onDrop, dropped, label }: PlaceMapProps) {
-  const bounds = fitBounds([...pins.map((p) => p.point), reference ?? null, dropped ?? null]);
-
-  const drop = (e: MouseEvent) => {
-    if (!onDrop) return;
-    const el = e.currentTarget as HTMLElement;
-    const r = el.getBoundingClientRect();
-    const x = ((e.clientX - r.left) / r.width) * 100;
-    const y = ((e.clientY - r.top) / r.height) * 100;
-    onDrop(unproject(x, y, bounds));
-  };
-
-  return (
-    <div
-      class={`pmap${onDrop ? ' pmap--drop' : ''}`}
-      role={onDrop ? 'button' : 'img'}
-      aria-label={label}
-      onClick={onDrop ? (drop as unknown as (e: Event) => void) : undefined}
-    >
-      {pins.length === 0 && !reference && !dropped ? <p class="pmap__empty">Nothing to show here yet.</p> : null}
-
-      {pins.map((pin) => {
-        const { x, y } = project(pin.point, bounds);
-        const on = pin.id === selectedId;
-        return (
-          <button
-            key={pin.id}
-            type="button"
-            class={`pmap__pin${on ? ' pmap__pin--on' : ''}`}
-            style={`left:${x}%;top:${y}%`}
-            aria-pressed={on}
-            aria-label={pin.label}
-            onClick={(e) => {
-              e.stopPropagation();
-              onPick?.(pin.id);
-            }}
-          >
-            <span class="pmap__dot" aria-hidden="true" />
-            <span class="pmap__lbl" aria-hidden="true">
-              {pin.label}
-            </span>
-          </button>
-        );
-      })}
-
-      {dropped ? <Marker point={dropped} bounds={bounds} kind="dropped" /> : null}
-      {reference ? <Marker point={reference} bounds={bounds} kind="ref" /> : null}
-    </div>
-  );
+export function initialMapMode(online: boolean, stored: string | null): MapMode {
+  if (stored === 'map' || stored === 'plot') return stored;
+  return online ? 'map' : 'plot';
 }
 
-function Marker({ point, bounds, kind }: { point: GeoPoint; bounds: ReturnType<typeof fitBounds>; kind: 'ref' | 'dropped' }) {
-  const { x, y } = project(point, bounds);
+function readMode(): string | null {
+  try {
+    return globalThis.localStorage?.getItem(STORE_KEY) ?? null;
+  } catch {
+    return null;
+  }
+}
+function writeMode(mode: MapMode): void {
+  try {
+    globalThis.localStorage?.setItem(STORE_KEY, mode);
+  } catch {
+    /* storage unavailable — the choice just won't persist */
+  }
+}
+
+type MapComponent = (props: PlaceMapProps) => JSX.Element;
+
+/**
+ * The location picker (G3a). A real OpenStreetMap tile map when the user wants it and is online, and the
+ * dependency-free dot-plot otherwise — with a toggle to switch, remembered across sessions. Leaflet is
+ * LAZY-loaded only when the map is actually shown, so an offline session or an app that never opens the
+ * map pays nothing for it. Falls back to the plot (with a note) when offline or if the map fails to load.
+ */
+export function PlaceMap(props: PlaceMapProps) {
+  const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
+  const [mode, setMode] = useState<MapMode>(() => initialMapMode(typeof navigator === 'undefined' ? true : navigator.onLine, readMode()));
+  const [MapComp, setMapComp] = useState<MapComponent | null>(null);
+  const [mapError, setMapError] = useState(false);
+
+  useEffect(() => {
+    const goOnline = () => setOnline(true);
+    const goOffline = () => setOnline(false);
+    window.addEventListener('online', goOnline);
+    window.addEventListener('offline', goOffline);
+    return () => {
+      window.removeEventListener('online', goOnline);
+      window.removeEventListener('offline', goOffline);
+    };
+  }, []);
+
+  const wantMap = mode === 'map' && online && !mapError;
+
+  // Lazy-load the Leaflet map only when it is actually wanted.
+  useEffect(() => {
+    if (!wantMap || MapComp) return;
+    let live = true;
+    void import('./PlaceMapLeaflet')
+      .then((m) => {
+        if (live) setMapComp(() => m.PlaceMapLeaflet);
+      })
+      .catch(() => {
+        if (live) setMapError(true);
+      });
+    return () => {
+      live = false;
+    };
+  }, [wantMap, MapComp]);
+
+  const choose = (m: MapMode) => {
+    setMode(m);
+    writeMode(m);
+    // Re-tapping "Map" clears a prior load failure so a transient chunk-load blip isn't a permanent latch.
+    if (m === 'map') setMapError(false);
+  };
+
+  const showMap = wantMap && MapComp;
+
   return (
-    <span class={`pmap__mark pmap__mark--${kind}`} style={`left:${x}%;top:${y}%`} aria-hidden="true">
-      <span class="pmap__mark-dot" />
-      <span class="pmap__mark-lbl">{kind === 'ref' ? 'here' : 'your pin'}</span>
-    </span>
+    <div class="pmap-wrap">
+      <div class="pmap-toggle" role="group" aria-label="Map view">
+        <button type="button" class={`pmap-toggle__btn${mode === 'map' ? ' is-on' : ''}`} aria-pressed={mode === 'map'} onClick={() => choose('map')}>
+          <Icon name="pin" size={18} /> Map
+        </button>
+        <button type="button" class={`pmap-toggle__btn${mode === 'plot' ? ' is-on' : ''}`} aria-pressed={mode === 'plot'} onClick={() => choose('plot')}>
+          <Icon name="grid" size={18} /> Simple
+        </button>
+      </div>
+
+      {showMap ? <MapComp {...props} /> : <PlaceMapPlot {...props} />}
+
+      {/* One reason at a time: offline is the recoverable case; a load failure is the terminal one. */}
+      {mode === 'map' && !online ? (
+        <p class="pmap-note">Map needs a connection — showing the simple view.</p>
+      ) : mapError ? (
+        <p class="pmap-note">Map unavailable — showing the simple view.</p>
+      ) : null}
+    </div>
   );
 }
