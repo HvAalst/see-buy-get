@@ -726,6 +726,160 @@
   background: var(--blue-soft);
 }
 
+/* ------------------------------------------------------ Register (R1) -- */
+
+/* Search box */
+.search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  height: var(--tap);
+  border: 1.5px solid var(--bd);
+  border-radius: var(--r-ctl);
+  background: var(--bg);
+}
+.search__ic {
+  flex: none;
+  color: var(--tx3);
+}
+.search__input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: none;
+  font-size: 16px;
+  color: var(--navy);
+}
+.search__input::-webkit-search-cancel-button {
+  display: none;
+}
+.search__clear {
+  flex: none;
+  display: flex;
+  color: var(--tx3);
+  background: none;
+}
+
+/* Pager */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 12px 0;
+}
+.pager__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1.5px solid var(--bd);
+  border-radius: var(--r-ctl);
+  color: var(--blue);
+  background: var(--bg);
+}
+.pager__btn:disabled {
+  color: var(--bd);
+  border-color: var(--bd-soft);
+}
+.pager__label {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--tx2);
+  min-width: 120px;
+  text-align: center;
+}
+
+/* Checkbox */
+.cbx {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--bd);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--bg);
+}
+.cbx--on {
+  background: var(--blue);
+  border-color: var(--blue);
+}
+.cbx__dash {
+  width: 12px;
+  height: 2.5px;
+  border-radius: 2px;
+  background: var(--bg);
+}
+
+/* Selection action bar */
+.selbar {
+  position: sticky;
+  bottom: calc(var(--bottomnav-h) + var(--sa-b) + 8px);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--r-ctl);
+  background: var(--navy);
+  box-shadow: var(--sh-lg);
+}
+.selbar__clear {
+  flex: none;
+  display: flex;
+  color: var(--bg);
+  background: none;
+}
+.selbar__count {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--bg);
+}
+.selbar__acts {
+  flex: none;
+  display: flex;
+  gap: 8px;
+}
+
+/* Filter chip */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1.5px solid var(--bd);
+  border-radius: 999px;
+  background: var(--bg);
+  overflow: hidden;
+}
+.chip--on {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+}
+.chip__label {
+  padding: 6px 12px;
+  min-height: 34px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--tx2);
+  background: none;
+}
+.chip--on .chip__label {
+  color: var(--blue);
+}
+.chip__x {
+  display: flex;
+  align-items: center;
+  padding: 0 8px 0 2px;
+  color: var(--blue);
+  background: none;
+}
+
 /* ------------------------------------------------------------ BottomNav -- */
 
 .bnav {
