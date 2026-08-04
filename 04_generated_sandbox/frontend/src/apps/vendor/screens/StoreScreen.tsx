@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { Button, Card, ErrorNote, PlaceMap, ReadAloud, Sheet } from '../../../shared/ui';
+import { Button, Card, ErrorNote, PlaceMap, ReadAloud, Sheet, ShopDetailSheet } from '../../../shared/ui';
 import { toPlaceWords } from '../../../shared/placewords';
 import type { GeoPoint } from '../../../shared/geo';
 import { money, policyLine } from '../logic';
@@ -91,20 +91,42 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
  */
 function PinCard({ state, actions }: { state: VendorState; actions: VendorActions }) {
   const [draft, setDraft] = useState<GeoPoint | null>(null);
+  const [openShop, setOpenShop] = useState<string | null>(null);
   const current = draft ?? state.vendor?.location ?? null;
+  const preview = openShop ? state.points.find((p) => p.did === openShop) ?? null : null;
 
   return (
     <Card title="Where your store is">
-      <p class="card__note">Tap the map to drop the pin. The network's shops are shown for bearings.</p>
+      <p class="card__note">Tap the map to drop your pin, or tap a shop to see it. The network's shops are shown for bearings.</p>
       <div style="margin-top:10px">
         <PlaceMap
           label="Your store's pin — tap the map to move it"
           pins={state.points.filter((p) => p.location).map((p) => ({ id: p.did, label: p.shopName, point: p.location! }))}
+          selectedId={openShop}
+          onPick={setOpenShop}
           onDrop={setDraft}
           dropped={draft}
           reference={draft ? null : state.vendor?.location ?? null}
         />
       </div>
+
+      {/* G4b — the reference-shop pins are tappable too: an info-only preview, so no pin is a dead tap. */}
+      <ShopDetailSheet
+        open={!!preview}
+        title={preview?.shopName ?? 'Shop'}
+        subtitle={preview ? [preview.landmark, `Zone ${preview.zone}`].filter(Boolean).join(' · ') : undefined}
+        lines={
+          preview
+            ? [
+                `${money(preview.pricePerParcel)} to handle a parcel`,
+                preview.openState === 'open' ? 'Open now' : 'Closed right now',
+                ...(preview.rating?.count ? [`Rated ${preview.rating.average.toFixed(1)} by ${preview.rating.count}`] : []),
+              ]
+            : []
+        }
+        location={preview?.location ?? null}
+        onClose={() => setOpenShop(null)}
+      />
       {current ? (
         <>
           <p class="words" style="margin-top:10px">

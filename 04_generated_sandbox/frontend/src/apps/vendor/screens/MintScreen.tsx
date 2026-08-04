@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { Button, Card, Checklist, CodeCard, ErrorNote, Icon, Note, PlaceMap, Pill, ReadAloud } from '../../../shared/ui';
+import { Button, Card, Checklist, CodeCard, ErrorNote, Icon, Note, PlaceMap, Pill, ReadAloud, ShopDetailSheet } from '../../../shared/ui';
 import { fromPlaceWords } from '../../../shared/placewords';
 import { distanceLabel, haversineKm } from '../../../shared/geo';
 import { PhotoField } from './PhotoField';
@@ -197,6 +197,7 @@ function ParcelStep({ state, actions }: MintScreenProps) {
 function DestStep({ state, actions }: MintScreenProps) {
   /** The buyer's place, in three words — the no-address way to sort shops nearest-first. */
   const [wordsText, setWordsText] = useState('');
+  const [openShop, setOpenShop] = useState<string | null>(null);
   const near = fromPlaceWords(wordsText);
   const points = state.points
     .filter((p) => p.openState === 'open')
@@ -208,6 +209,7 @@ function DestStep({ state, actions }: MintScreenProps) {
       }
       return a.shopName.localeCompare(b.shopName);
     });
+  const preview = openShop ? points.find((p) => p.did === openShop) ?? null : null;
 
   return (
     <div class="scr">
@@ -222,7 +224,8 @@ function DestStep({ state, actions }: MintScreenProps) {
         <PlaceMap
           label={`Map of ${points.length} collection shops`}
           pins={points.filter((p) => p.location).map((p) => ({ id: p.did, label: p.shopName, point: p.location! }))}
-          onPick={(did) => void actions.pickDest(did)}
+          selectedId={openShop}
+          onPick={setOpenShop}
           reference={near}
         />
       ) : null}
@@ -256,8 +259,31 @@ function DestStep({ state, actions }: MintScreenProps) {
           Go back a step
         </Button>
       </div>
+
+      {/* G4b — tap a shop on the map to preview it (price, distance, rating) before choosing. */}
+      <ShopDetailSheet
+        open={!!preview}
+        title={preview?.shopName ?? 'Collection shop'}
+        subtitle={preview ? [preview.landmark, `Zone ${preview.zone}`].filter(Boolean).join(' · ') : undefined}
+        lines={preview ? shopFacts(preview, near && preview.location ? distanceLabel(haversineKm(near, preview.location)) : null) : []}
+        location={preview?.location ?? null}
+        onChoose={preview ? () => { const did = preview.did; setOpenShop(null); void actions.pickDest(did); } : undefined}
+        chooseLabel="Collect here"
+        onClose={() => setOpenShop(null)}
+      />
     </div>
   );
+}
+
+/** The detail lines a shop preview shows: price to handle, distance, open state, free slots, rating. */
+function shopFacts(shop: NetworkPoint, away: string | null): string[] {
+  return [
+    `${money(shop.pricePerParcel)} to handle the parcel`,
+    away ? `${away} away` : `Zone ${shop.zone}`,
+    shop.openState === 'open' ? 'Open now' : 'Closed right now',
+    ...(shop.freeSlots != null ? [`${shop.freeSlots} ${shop.freeSlots === 1 ? 'space' : 'spaces'} free`] : []),
+    ...(shop.rating?.count ? [`Rated ${shop.rating.average.toFixed(1)} by ${shop.rating.count}`] : []),
+  ];
 }
 
 function PointRow({ point, onPick, price, sub }: { point: NetworkPoint; onPick: () => void; price?: string | null; sub?: string }) {
@@ -282,6 +308,8 @@ function PointRow({ point, onPick, price, sub }: { point: NetworkPoint; onPick: 
 
 function OriginStep({ state, actions }: MintScreenProps) {
   const rows = originRows(state.points, state.form.destDid, state.originOptions);
+  const [openShop, setOpenShop] = useState<string | null>(null);
+  const preview = openShop ? rows.find((r) => r.point.did === openShop) ?? null : null;
 
   return (
     <div class="scr">
@@ -296,7 +324,8 @@ function OriginStep({ state, actions }: MintScreenProps) {
         <PlaceMap
           label={`Map of ${rows.length} drop-off shops relative to your store`}
           pins={rows.filter((r) => r.point.location).map((r) => ({ id: r.point.did, label: r.total === null ? r.point.shopName : `${r.point.shopName} · ${money(r.total)}`, point: r.point.location! }))}
-          onPick={(did) => void actions.pickOrigin(did)}
+          selectedId={openShop}
+          onPick={setOpenShop}
           reference={state.vendor?.location ?? null}
         />
       ) : null}
@@ -318,6 +347,28 @@ function OriginStep({ state, actions }: MintScreenProps) {
           Go back a step
         </Button>
       </div>
+
+      {/* G4b — tap a drop-off shop on the map to preview its all-in shipping price before choosing. */}
+      <ShopDetailSheet
+        open={!!preview}
+        title={preview?.point.shopName ?? 'Drop-off shop'}
+        subtitle={preview ? [preview.point.landmark, `Zone ${preview.point.zone}`].filter(Boolean).join(' · ') : undefined}
+        lines={
+          preview
+            ? [
+                preview.total === null ? 'No route from here yet' : `${money(preview.total)} to ship, all in`,
+                ...shopFacts(
+                  preview.point,
+                  state.vendor?.location && preview.point.location ? distanceLabel(haversineKm(state.vendor.location, preview.point.location)) : null,
+                ),
+              ]
+            : []
+        }
+        location={preview?.point.location ?? null}
+        onChoose={preview && preview.total !== null ? () => { const did = preview.point.did; setOpenShop(null); void actions.pickOrigin(did); } : undefined}
+        chooseLabel="Drop off here"
+        onClose={() => setOpenShop(null)}
+      />
     </div>
   );
 }

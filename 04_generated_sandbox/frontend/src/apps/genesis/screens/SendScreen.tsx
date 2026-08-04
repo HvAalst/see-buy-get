@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { Button, Card, Checklist, ErrorNote, Icon, OpenInMaps, PlaceMap, Pill, ReadAloud, Sheet } from '../../../shared/ui';
+import { Button, Card, Checklist, ErrorNote, Icon, PlaceMap, Pill, ReadAloud, ShopDetailSheet } from '../../../shared/ui';
 import { fromPlaceWords } from '../../../shared/placewords';
 import { SIZES, journeyLine, money, pointDistance, pointLine, priceCards, quoteSummary, selectablePoints } from '../logic';
 import type { NetworkPoint } from '../types';
@@ -153,52 +153,32 @@ function PointStep({ state, actions, kind }: SendScreenProps & { kind: 'from' | 
         />
       </div>
 
-      {/* G4 — tap a pin on the map to preview the shop (price, distance, rating) before committing. */}
-      <ShopSheet shop={preview} away={preview ? pointDistance(preview, near) : null} onClose={() => setOpenShop(null)} onChoose={pick} />
+      {/* G4 — tap a pin on the map to preview the shop (price, distance, rating) before committing. The
+          list rows still commit directly; the shared sheet is the same on every shop picker (G4b). */}
+      <ShopDetailSheet
+        open={!!preview}
+        title={preview?.shopName ?? 'Pickup point'}
+        subtitle={preview ? [preview.landmark, `Zone ${preview.zone}`].filter(Boolean).join(' · ') : undefined}
+        lines={preview ? shopFacts(preview, pointDistance(preview, near)) : []}
+        location={preview?.location ?? null}
+        onChoose={preview ? () => { const did = preview.did; setOpenShop(null); pick(did); } : undefined}
+        chooseLabel="Choose this pickup"
+        chooseDisabled={preview?.openState === 'closed'}
+        onClose={() => setOpenShop(null)}
+      />
     </div>
   );
 }
 
-/** The pickup-point preview: a slide-up sheet opened by tapping a shop on the map. Shows what the row
- *  can't (price, rating, free slots) + a way to navigate there, and confirms the choice. */
-function ShopSheet({ shop, away, onClose, onChoose }: { shop: NetworkPoint | null; away: string | null; onClose: () => void; onChoose: (did: string) => void }) {
-  return (
-    <Sheet open={!!shop} onClose={onClose} title={shop?.shopName ?? 'Pickup point'}>
-      {shop ? (
-        <>
-          <p class="scr__lede">{[shop.landmark, `Zone ${shop.zone}`].filter(Boolean).join(' · ')}</p>
-          <Checklist
-            items={[
-              `${money(shop.pricePerParcel)} to handle your parcel`,
-              away ? `${away} from your place` : `In zone ${shop.zone}`,
-              shop.openState === 'open' ? 'Open now' : 'Closed right now',
-              ...(shop.freeSlots != null ? [`${shop.freeSlots} ${shop.freeSlots === 1 ? 'space' : 'spaces'} free`] : []),
-              ...(shop.rating?.count ? [`Rated ${shop.rating.average.toFixed(1)} by ${shop.rating.count}`] : []),
-            ]}
-          />
-          {shop.location ? (
-            <div style="margin:12px 0">
-              <OpenInMaps point={shop.location} label="Navigate there" />
-            </div>
-          ) : null}
-          <Button
-            chevron={false}
-            disabled={shop.openState === 'closed'}
-            onClick={() => {
-              const did = shop.did;
-              onClose();
-              onChoose(did);
-            }}
-          >
-            Choose this pickup
-          </Button>
-          <Button variant="link" onClick={onClose}>
-            Close
-          </Button>
-        </>
-      ) : null}
-    </Sheet>
-  );
+/** The detail lines a shop preview shows (what the row can't): price, distance, open state, slots, rating. */
+function shopFacts(shop: NetworkPoint, away: string | null): string[] {
+  return [
+    `${money(shop.pricePerParcel)} to handle your parcel`,
+    away ? `${away} from your place` : `In zone ${shop.zone}`,
+    shop.openState === 'open' ? 'Open now' : 'Closed right now',
+    ...(shop.freeSlots != null ? [`${shop.freeSlots} ${shop.freeSlots === 1 ? 'space' : 'spaces'} free`] : []),
+    ...(shop.rating?.count ? [`Rated ${shop.rating.average.toFixed(1)} by ${shop.rating.count}`] : []),
+  ];
 }
 
 function PointRow({ point, picked, away, onPick }: { point: NetworkPoint; picked: boolean; away: string | null; onPick: () => void }) {

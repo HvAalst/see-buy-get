@@ -22,6 +22,7 @@ export { ErrorNote, Note, errorSentence, type ErrorNoteProps, type NoteProps } f
 export { Icon, type IconName, type IconProps } from './Icon';
 export { NotificationBell, type NotificationBellProps } from './NotificationBell';
 export { OpenInMaps, type OpenInMapsProps } from './OpenInMaps';
+export { ShopDetailSheet, type ShopDetailSheetProps } from './ShopDetailSheet';
 export { AuthImage, type AuthImageProps } from './AuthImage';
 export { MediaLibrary, type MediaLibraryProps } from './MediaLibrary';
 export { BandScale, type BandScaleProps } from './BandScale';

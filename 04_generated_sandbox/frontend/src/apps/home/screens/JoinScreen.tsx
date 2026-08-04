@@ -1,4 +1,5 @@
-import { Button, Card, Checklist, CodeBoxes, ErrorNote, Icon, Note, PlaceMap, ReadAloud } from '../../../shared/ui';
+import { useState } from 'preact/hooks';
+import { Button, Card, Checklist, CodeBoxes, ErrorNote, Icon, Note, PlaceMap, ReadAloud, ShopDetailSheet } from '../../../shared/ui';
 import { toPlaceWords } from '../../../shared/placewords';
 
 import { DRIVER_CLASSES, joinSpoken, stepBlocker, stepsFor } from '../logic';
@@ -233,15 +234,19 @@ function WhereStep({ state, actions }: JoinScreenProps) {
   const f = state.form;
   const blocker = stepBlocker(role, 'where', f);
   const zones = [...new Set(state.points.map((p) => p.zone).filter(Boolean))].sort();
+  const [openShop, setOpenShop] = useState<string | null>(null);
+  const preview = openShop ? state.points.find((p) => p.did === openShop) ?? null : null;
 
   return (
     <>
       <h1 class="scr__title">{role.id === 'driver' ? 'Where do you start?' : 'Where are you?'}</h1>
-      <p class="scr__lede">Tap the map. No street address needed — the pin is your address.</p>
+      <p class="scr__lede">Tap the map to drop your pin — or tap a shop to see it. No street address needed.</p>
 
       <PlaceMap
         label="Tap the map to drop your pin"
         pins={state.points.filter((p) => p.location).map((p) => ({ id: p.did, label: p.shopName, point: p.location! }))}
+        selectedId={openShop}
+        onPick={setOpenShop}
         onDrop={(location) => actions.setForm({ location })}
         dropped={f.location}
       />
@@ -285,6 +290,16 @@ function WhereStep({ state, actions }: JoinScreenProps) {
         </Button>
         {blocker ? <p class="hint" style="margin-top:8px">{blocker}</p> : null}
       </div>
+
+      {/* G4b — the bearings pins are tappable: an info-only preview, so no pin is a dead tap. */}
+      <ShopDetailSheet
+        open={!!preview}
+        title={preview?.shopName ?? 'Shop'}
+        subtitle={preview ? `Zone ${preview.zone}` : undefined}
+        lines={preview ? [preview.openState === 'open' ? 'Open now' : 'Closed right now'] : []}
+        location={preview?.location ?? null}
+        onClose={() => setOpenShop(null)}
+      />
     </>
   );
 }
