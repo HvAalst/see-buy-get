@@ -57,7 +57,13 @@ export function PlaceMapLeaflet({ pins = [], selectedId, onPick, reference, onDr
     const points: L.LatLngExpression[] = [];
     for (const pin of pins) {
       const marker = L.marker([pin.point.lat, pin.point.lng], { icon: dotIcon(pin.id === selectedId ? 'on' : 'pin', pin.label) });
-      marker.on('click', () => onPickRef.current?.(pin.id));
+      marker.on('click', () => {
+        // Tapping a pin flies the map in to it (the fit is signature-gated, so this zoom sticks), then
+        // hands the tap to the consumer — which opens its detail sheet.
+        const m = mapRef.current;
+        if (m) m.flyTo([pin.point.lat, pin.point.lng], Math.max(m.getZoom(), 14), { duration: 0.5 });
+        onPickRef.current?.(pin.id);
+      });
       marker.addTo(layer);
       points.push([pin.point.lat, pin.point.lng]);
     }

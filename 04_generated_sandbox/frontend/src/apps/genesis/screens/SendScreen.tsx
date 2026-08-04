@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { Button, Card, Checklist, ErrorNote, Icon, PlaceMap, Pill, ReadAloud } from '../../../shared/ui';
+import { Button, Card, Checklist, ErrorNote, Icon, OpenInMaps, PlaceMap, Pill, ReadAloud, Sheet } from '../../../shared/ui';
 import { fromPlaceWords } from '../../../shared/placewords';
 import { SIZES, journeyLine, money, pointDistance, pointLine, priceCards, quoteSummary, selectablePoints } from '../logic';
 import type { NetworkPoint } from '../types';
@@ -83,10 +83,14 @@ function PointStep({ state, actions, kind }: SendScreenProps & { kind: 'from' | 
    * No street address anywhere in the flow.
    */
   const [wordsText, setWordsText] = useState('');
+  // G4 — the shop whose detail sheet is open (tapping a map pin previews it before committing). The list
+  // rows still commit directly; the map is the "look before you leap" surface.
+  const [openShop, setOpenShop] = useState<string | null>(null);
   const near = fromPlaceWords(wordsText);
   const points = selectablePoints(state.points, from ? undefined : (state.fromDid ?? undefined), near);
   const picked = from ? state.fromDid : state.toDid;
   const pick = (did: string) => (from ? actions.pickFrom(did) : actions.pickTo(did));
+  const preview = openShop ? points.find((p) => p.did === openShop) ?? null : null;
 
   return (
     <div class="scr">
@@ -106,8 +110,8 @@ function PointStep({ state, actions, kind }: SendScreenProps & { kind: 'from' | 
         <PlaceMap
           label={`Map of ${points.length} shops${near ? ' with your three-words place marked' : ''}`}
           pins={points.filter((p) => p.location && p.openState === 'open').map((p) => ({ id: p.did, label: p.shopName, point: p.location! }))}
-          selectedId={picked}
-          onPick={pick}
+          selectedId={openShop ?? picked}
+          onPick={setOpenShop}
           reference={near}
         />
       ) : null}
@@ -148,7 +152,52 @@ function PointStep({ state, actions, kind }: SendScreenProps & { kind: 'from' | 
           label="Read this aloud"
         />
       </div>
+
+      {/* G4 — tap a pin on the map to preview the shop (price, distance, rating) before committing. */}
+      <ShopSheet shop={preview} away={preview ? pointDistance(preview, near) : null} onClose={() => setOpenShop(null)} onChoose={pick} />
     </div>
+  );
+}
+
+/** The pickup-point preview: a slide-up sheet opened by tapping a shop on the map. Shows what the row
+ *  can't (price, rating, free slots) + a way to navigate there, and confirms the choice. */
+function ShopSheet({ shop, away, onClose, onChoose }: { shop: NetworkPoint | null; away: string | null; onClose: () => void; onChoose: (did: string) => void }) {
+  return (
+    <Sheet open={!!shop} onClose={onClose} title={shop?.shopName ?? 'Pickup point'}>
+      {shop ? (
+        <>
+          <p class="scr__lede">{[shop.landmark, `Zone ${shop.zone}`].filter(Boolean).join(' · ')}</p>
+          <Checklist
+            items={[
+              `${money(shop.pricePerParcel)} to handle your parcel`,
+              away ? `${away} from your place` : `In zone ${shop.zone}`,
+              shop.openState === 'open' ? 'Open now' : 'Closed right now',
+              ...(shop.freeSlots != null ? [`${shop.freeSlots} ${shop.freeSlots === 1 ? 'space' : 'spaces'} free`] : []),
+              ...(shop.rating?.count ? [`Rated ${shop.rating.average.toFixed(1)} by ${shop.rating.count}`] : []),
+            ]}
+          />
+          {shop.location ? (
+            <div style="margin:12px 0">
+              <OpenInMaps point={shop.location} label="Navigate there" />
+            </div>
+          ) : null}
+          <Button
+            chevron={false}
+            disabled={shop.openState === 'closed'}
+            onClick={() => {
+              const did = shop.did;
+              onClose();
+              onChoose(did);
+            }}
+          >
+            Choose this pickup
+          </Button>
+          <Button variant="link" onClick={onClose}>
+            Close
+          </Button>
+        </>
+      ) : null}
+    </Sheet>
   );
 }
 
