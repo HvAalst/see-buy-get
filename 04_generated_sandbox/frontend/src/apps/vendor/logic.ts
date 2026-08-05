@@ -4,8 +4,9 @@
  * what a merchant is told their shipment costs and where it stands.
  */
 
+import { toCsv } from '../../shared/csv';
 import type { IconName } from '../../shared/ui/Icon';
-import type { CheckoutRow, NetworkPoint, OriginOption, ParcelStatus, QuoteView, ShippingPolicy } from './types';
+import type { CheckoutRow, NetworkPoint, OrderRow, OriginOption, ParcelStatus, QuoteView, ShippingPolicy } from './types';
 
 /* ------------------------------------------------------------------ money -- */
 
@@ -171,5 +172,20 @@ export function ordersSummary(balance: number, open: number, unpaid: number): st
   return (
     `Balance ${money(balance)}. ${open} order${open === 1 ? '' : 's'} on the move.` +
     (unpaid ? ` ${unpaid} unpaid — top up to release ${unpaid === 1 ? 'it' : 'them'}.` : '')
+  );
+}
+
+/* -------------------------------------------------------------------- export -- */
+
+/** The vendor export columns — SAME set + order as the server's whole-set export (vendorOrdersToCsv), so a
+ *  client "export selected" and a server "export all" are byte-identical. The collection code (the handover
+ *  secret) is deliberately NOT a column. */
+export const ORDER_CSV_HEADERS = ['Order', 'Shipment DID', 'Buyer', 'Products', 'Status', 'Paid', 'Destination', 'Shipping cost', 'Buyer charge', 'Created'];
+
+/** Render the given (already-selected) shipment rows to CSV for a client-side download. */
+export function orderRowsToCsv(rows: OrderRow[]): string {
+  return toCsv(
+    ORDER_CSV_HEADERS,
+    rows.map((o) => [o.externalOrderId ?? o.parcelId, o.did ?? '', o.buyer ?? '', o.products ?? '', o.status, o.paidStatus ?? '', o.destZone, o.shipmentCost ?? '', o.buyerCharge ?? '', o.createdAt ?? '']),
   );
 }

@@ -43,6 +43,13 @@ export function createVendorApi(sbg: SbgClient) {
      *  computed over the WHOLE store, never the current register page. Owner-scoped. */
     orderStats: (vendorId: string) => sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/orders/stats', { params: { path: { id: vendorId } } })),
 
+    /** Export the WHOLE matching set (every page, current filters) as a CSV string — the vendor's OWN
+     *  shipment export. Owner-scoped; parsed as text (the endpoint returns text/csv, not JSON). */
+    exportOrders: (
+      vendorId: string,
+      query?: { q?: string; status?: string; pudo?: string; from?: string; to?: string; paid?: 'paid' | 'unpaid'; sort?: 'newest' | 'oldest' | 'cost_desc' | 'cost_asc' },
+    ) => sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/orders/export', { params: { path: { id: vendorId }, query: query ?? {} }, parseAs: 'text' })),
+
     /** Full detail for one order (validates it belongs to this store). */
     order: (vendorId: string, parcelId: string) =>
       sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/orders/{parcelId}', { params: { path: { id: vendorId, parcelId } } })),

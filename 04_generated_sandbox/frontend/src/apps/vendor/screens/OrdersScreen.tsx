@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, Chip, CodeCard, ErrorNote, GlanceNumber, Icon, Pager, Pill, ReadAloud, SearchInput, Sheet } from '../../../shared/ui';
+import { Button, Card, Checkbox, Chip, CodeCard, ErrorNote, GlanceNumber, Icon, Pager, Pill, ReadAloud, SearchInput, SelectionBar, Sheet } from '../../../shared/ui';
+import { triggerDownload } from '../../../shared/download';
+import { toggleAll, toggleId } from '../../../shared/register';
 import { useDebounced } from '../../../shared/useDebounced';
-import { handoffLine, money, orderStatus, ordersSummary, paidWord } from '../logic';
+import { handoffLine, money, orderRowsToCsv, orderStatus, ordersSummary, paidWord } from '../logic';
 import { ORDER_LIMIT, type OrderQuery, type VendorActions, type VendorState } from '../useVendorApp';
 import type { NetworkPoint, OrderRow } from '../types';
 
@@ -27,6 +29,7 @@ export function OrdersScreen({ state, actions }: OrdersScreenProps) {
   const [topupOpen, setTopupOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [searchText, setSearchText] = useState(state.orderQuery.q);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const debounced = useDebounced(searchText, 300);
   const q = state.orderQuery;
   // Store-wide (the WHOLE store, never the filtered/paged list) — so the "top up" nudge and the spoken
@@ -56,6 +59,28 @@ export function OrdersScreen({ state, actions }: OrdersScreenProps) {
   const resetAll = () => {
     setSearchText('');
     actions.queryOrders({ q: '', status: '', pudo: '', from: '', to: '', paid: '', sort: 'newest' });
+  };
+
+  // Multi-select is scoped to the current view: a deliberate query change (filter / search / page) clears it.
+  const querySig = `${q.q}|${q.status}|${q.pudo}|${q.from}|${q.to}|${q.paid}|${q.sort}|${q.offset}`;
+  useEffect(() => {
+    setSelected(new Set());
+  }, [querySig]);
+
+  const pageIds = state.orders.map((o) => o.parcelId);
+  const allChecked = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
+  const someChecked = pageIds.some((id) => selected.has(id));
+  // The EFFECTIVE selection is derived live from the visible page, so the badge count and the export are
+  // ALWAYS exactly the checked rows in hand. A same-query background refresh (tab refocus / online / a
+  // post-mutation reload) can reorder a selected row off the page without changing querySig; a stale id left
+  // in the set is then simply not counted or exported (and the deliberate-change effect above clears it).
+  const selectedRows = state.orders.filter((o) => selected.has(o.parcelId));
+
+  const exportSelected = () => {
+    if (selectedRows.length === 0) return;
+    triggerDownload('shipments-selected.csv', orderRowsToCsv(selectedRows));
+    actions.pushToast({ tone: 'ok', icon: 'check', title: `${selectedRows.length} exported`, detail: 'Saved shipments-selected.csv to your device.' });
+    setSelected(new Set());
   };
 
   // A visually-hidden status line (WCAG 2.1 SC 4.1.3) — assistive tech hears the result set change even
@@ -145,20 +170,46 @@ export function OrdersScreen({ state, actions }: OrdersScreenProps) {
               <p class="hint">No orders yet. Mint your first label from the Ship tab.</p>
             )
           ) : (
-            <div class={`rows${state.ordersState === 'loading' ? ' rows--loading' : ''}`} role="list">
-              {state.orders.map((o) => (
-                <OrderRowItem key={o.parcelId} o={o} onOpen={() => void actions.openOrder(o.parcelId)} />
-              ))}
-            </div>
+            <>
+              <div class="reg__selall">
+                <Checkbox checked={allChecked} indeterminate={someChecked && !allChecked} onChange={() => setSelected(toggleAll(selected, pageIds))} label="Select all shipments on this page" />
+                <span class="reg__selall-txt">{allChecked ? 'All on this page selected' : 'Select all on this page'}</span>
+              </div>
+              <div class={`rows${state.ordersState === 'loading' ? ' rows--loading' : ''}`} role="list">
+                {state.orders.map((o) => (
+                  <OrderRowItem
+                    key={o.parcelId}
+                    o={o}
+                    selected={selected.has(o.parcelId)}
+                    onToggle={() => setSelected(toggleId(selected, o.parcelId))}
+                    onOpen={() => void actions.openOrder(o.parcelId)}
+                  />
+                ))}
+              </div>
+            </>
           )}
         </div>
 
         <Pager offset={q.offset} limit={ORDER_LIMIT} total={state.ordersTotal} busy={state.ordersState === 'loading'} onOffset={(offset) => actions.queryOrders({ offset })} />
+
+        {state.ordersTotal > 0 ? (
+          <div class="reg__export">
+            <Button variant="link" full={false} busy={state.busy === 'export'} onClick={() => void actions.exportOrders()}>
+              Export all {state.ordersTotal} as CSV
+            </Button>
+          </div>
+        ) : null}
       </Card>
 
       <div class="scr__foot">
         <ReadAloud text={() => (statsKnown ? ordersSummary(state.vendor?.balance ?? 0, moving, unpaid) : `Balance ${money(state.vendor?.balance ?? 0)}. Shipment counts are updating.`)} label="Read this aloud" />
       </div>
+
+      <SelectionBar count={selectedRows.length} onClear={() => setSelected(new Set())}>
+        <Button variant="outline" full={false} onClick={exportSelected}>
+          Export
+        </Button>
+      </SelectionBar>
 
       <FilterSheet open={filterOpen} onClose={() => setFilterOpen(false)} query={q} points={state.points} onApply={(patch) => { actions.queryOrders(patch); setFilterOpen(false); }} onClearAll={() => { resetAll(); setFilterOpen(false); }} />
       <TopUpSheet open={topupOpen} onClose={() => setTopupOpen(false)} state={state} actions={actions} />
@@ -167,28 +218,33 @@ export function OrdersScreen({ state, actions }: OrdersScreenProps) {
   );
 }
 
-/** One shipment row — order ref, then who + what, then status · zone · cost. The DID is searchable but
- *  not shown (the point of the register is not to scroll DID numbers). */
-function OrderRowItem({ o, onOpen }: { o: OrderRow; onOpen: () => void }) {
+/** One shipment row — a select checkbox (a sibling, since it is itself a button) beside a tappable card:
+ *  order ref, then who + what, then status · zone · cost. The DID is searchable but not shown (the point of
+ *  the register is not to scroll DID numbers). */
+function OrderRowItem({ o, selected, onToggle, onOpen }: { o: OrderRow; selected: boolean; onToggle: () => void; onOpen: () => void }) {
   const st = orderStatus(o.status);
   const paid = paidWord(o.paidStatus);
   const who = [o.buyer, o.products].filter(Boolean).join(' · ');
+  const label = o.externalOrderId ?? o.parcelId;
   return (
-    <button type="button" class="row" onClick={onOpen}>
-      <span class="row__ic">
-        <Icon name={st.icon} size={24} />
-      </span>
-      <span class="row__body">
-        <span class="row__t mono-t">{o.externalOrderId ?? o.parcelId}</span>
-        {who ? <span class="row__s">{who}</span> : null}
-        <span class="row__meta">{`${st.word} · ${o.size} → ${o.destZone}${o.shipmentCost != null ? ` · ${money(o.shipmentCost)}` : ''}`}</span>
-      </span>
-      <span class="row__end">
-        <Pill tone={paid.tone === 'ok' ? 'ok' : 'warn'} dot>
-          {paid.word}
-        </Pill>
-      </span>
-    </button>
+    <div class={`orow${selected ? ' orow--on' : ''}`}>
+      <Checkbox checked={selected} onChange={() => onToggle()} label={`Select order ${label}`} />
+      <button type="button" class="row orow__row" onClick={onOpen}>
+        <span class="row__ic">
+          <Icon name={st.icon} size={24} />
+        </span>
+        <span class="row__body">
+          <span class="row__t mono-t">{label}</span>
+          {who ? <span class="row__s">{who}</span> : null}
+          <span class="row__meta">{`${st.word} · ${o.size} → ${o.destZone}${o.shipmentCost != null ? ` · ${money(o.shipmentCost)}` : ''}`}</span>
+        </span>
+        <span class="row__end">
+          <Pill tone={paid.tone === 'ok' ? 'ok' : 'warn'} dot>
+            {paid.word}
+          </Pill>
+        </span>
+      </button>
+    </div>
   );
 }
 

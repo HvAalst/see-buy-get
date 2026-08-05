@@ -928,6 +928,45 @@
   min-width: 0;
 }
 
+/* A selectable register row — the checkbox is a SIBLING of the row button (a <button> can't nest a
+   <button>), and the row grows to fill the rest. Selected rows carry a soft-blue highlight. */
+.orow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.orow .cbx {
+  flex: none;
+}
+.orow__row {
+  flex: 1;
+  min-width: 0;
+}
+.orow--on .orow__row {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+}
+
+/* Select-all-on-page header above the rows */
+.reg__selall {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 2px 2px 12px;
+}
+.reg__selall-txt {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--tx2);
+}
+
+/* Export-all link under the pager */
+.reg__export {
+  display: flex;
+  justify-content: center;
+  padding-top: 4px;
+}
+
 /* ------------------------------------------------------------ BottomNav -- */
 
 .bnav {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { isMintSourced, narrow, type SbgError } from '../../lib/sbg';
+import { triggerDownload } from '../../shared/download';
 import type { IconName } from '../../shared/ui/Icon';
 import {
   clearCreds,
@@ -645,6 +646,27 @@ export function useVendorApp() {
     setState((s) => ({ ...s, detail: null, detailState: 'idle' }));
   }, []);
 
+  /** Export the WHOLE current-filter result set (every page) as a CSV download — the server renders it
+   *  (owner-scoped, with the same columns + formula-injection guard as the multi-select export). */
+  const exportOrders = useCallback(async () => {
+    if (!client || !creds) return;
+    await run('export', async () => {
+      const q = stateRef.current.orderQuery;
+      const r = await client.api.exportOrders(creds.vendorId, {
+        q: q.q || undefined,
+        status: q.status || undefined,
+        pudo: q.pudo || undefined,
+        from: q.from || undefined,
+        to: q.to || undefined,
+        paid: q.paid || undefined,
+        sort: q.sort,
+      });
+      if (r.error) return fail(r.error);
+      triggerDownload('shipments.csv', narrow<string>(r.data));
+      pushToast({ tone: 'ok', icon: 'check', title: 'Shipments exported', detail: 'Saved shipments.csv to your device.' });
+    });
+  }, [client, creds, run, fail, pushToast]);
+
   /* ----------------------------------------------------------------- store */
 
   const savePolicy = useCallback(
@@ -695,6 +717,7 @@ export function useVendorApp() {
       saveLocation,
       openOrder,
       closeOrder,
+      exportOrders,
       savePolicy,
       saveCallback,
       loadPoints,
