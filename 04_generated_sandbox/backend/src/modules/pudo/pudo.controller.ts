@@ -29,7 +29,7 @@ import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
-import { AcceptParcelDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, CoupleDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, OverdraftDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetPriceDto, ShelfDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, RecordTempDto, VendorOrdersQueryDto } from './pudo.dto';
+import { AcceptParcelDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, CoupleDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, OverdraftDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetPriceDto, ShelfDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto } from './pudo.dto';
 import { classifySize, SIZE_WEIGHT_KG } from './pudo.config';
 import { haversineKm } from './geo';
 
@@ -427,10 +427,12 @@ export class SbgController {
     return this.parcels.vendorOrderView(id, parcelId);
   }
 
-  /** The buyer's checkout selections waiting to be shipped (the console's incoming-orders inbox). */
+  /** The buyer's checkout selections waiting to be shipped (the console's incoming-orders inbox). Owner-scoped:
+   *  these carry buyer email/mobile, so only the store itself (or an operator) may read them. */
+  @Scopes('vendor:read:self')
   @Get('vendors/:id/checkouts')
-  vendorCheckouts(@Param('id') id: string) {
-    this.vendors.get(id);
+  vendorCheckouts(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    this.assertVendorOwner(id, actor);
     return this.vendors.checkoutsFor(id);
   }
 
@@ -443,9 +445,12 @@ export class SbgController {
     return this.vendors.captureCheckout({ vendorId: id, destAgentDid: dto.destPudoDid, buyerEmail: dto.buyerEmail, buyerMobile: dto.buyerMobile, externalOrderId: dto.externalOrderId, items: dto.items, subtotal: dto.subtotal, source: dto.source });
   }
 
-  /** Vendor status-callback outbox (HMAC-signed ready_for_pickup / collected / disputed). */
+  /** Vendor status-callback outbox (HMAC-signed ready_for_pickup / collected / disputed). Owner-scoped —
+   *  the outbox holds signatures + payloads for this store only. */
+  @Scopes('vendor:read:self')
   @Get('vendors/:id/callbacks')
-  vendorCallbacks(@Param('id') id: string) {
+  vendorCallbacks(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    this.assertVendorOwner(id, actor);
     return this.vendors.outboxFor(id);
   }
 
@@ -563,10 +568,42 @@ export class SbgController {
     return VendorService.publicView(this.vendors.topUp(id, dto.amount));
   }
 
-  /** A vendor's prepaid balance + settlement book (top-ups / billings / rebates). */
+  /** A vendor's prepaid balance + settlement book (top-ups / billings / rebates). Owner-scoped — this is the
+   *  store's money history. The searchable/paginated register is at .../ledger; this stays for the balance. */
+  @Scopes('vendor:read:self')
   @Get('vendors/:id/settlement')
-  vendorSettlement(@Param('id') id: string) {
+  vendorSettlement(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    this.assertVendorOwner(id, actor);
     return { balance: this.vendors.balanceOf(id), entries: this.vendors.settlementsFor(id) };
+  }
+
+  /** The vendor's bookkeeping register (R3): their OWN ledger, server-side searched / filtered / sorted /
+   *  paginated → { items, total }. Owner-scoped (403 for non-owners). */
+  @Scopes('vendor:read:self')
+  @Get('vendors/:id/ledger')
+  vendorLedger(@Param('id') id: string, @Query() query: VendorLedgerQueryDto, @Actor() actor: IntrospectionResult) {
+    this.assertVendorOwner(id, actor);
+    return this.vendors.vendorLedgerPage(id, query);
+  }
+
+  /** Running totals (in / out / net / count) for the CURRENT filtered view, plus the always-current balance.
+   *  Owner-scoped. Declared before no :sub route, but kept explicit for parity with the shipment register. */
+  @Scopes('vendor:read:self')
+  @Get('vendors/:id/ledger/summary')
+  vendorLedgerSummary(@Param('id') id: string, @Query() query: VendorLedgerQueryDto, @Actor() actor: IntrospectionResult) {
+    this.assertVendorOwner(id, actor);
+    return { ...this.vendors.vendorLedgerSummary(id, query), balance: this.vendors.balanceOf(id) };
+  }
+
+  /** Export the WHOLE matching set (every page, current filters) as CSV — the vendor's OWN bookkeeping export.
+   *  Owner-scoped. */
+  @Scopes('vendor:read:self')
+  @Get('vendors/:id/ledger/export')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="bookkeeping.csv"')
+  vendorLedgerExport(@Param('id') id: string, @Query() query: VendorLedgerQueryDto, @Actor() actor: IntrospectionResult): string {
+    this.assertVendorOwner(id, actor);
+    return this.vendors.vendorLedgerCsv(id, query);
   }
 
   /** Retry the prepaid gate on an unpaid shipment after a top-up → issue the label + ParcelPaid. */

@@ -6,6 +6,7 @@ import { DidService } from '../../foundation/did/did.service';
 import { OperationalStore } from '../../foundation/data-firewall/operational-store.service';
 import { CheckoutHandoff, ShippingPolicy, Vendor } from './pudo.types';
 import { DEFAULT_VENDOR_COUNTRY } from './pudo.config';
+import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
 
 /** One entry in a vendor's prepaid book with the per-country daughter company (GLOS reports, never escrows). */
 export interface VendorSettlement {
@@ -30,6 +31,96 @@ export interface VendorCallback {
   at: string;
 }
 
+/* ------------------------------------------------------------- bookkeeping register (R3) -- */
+
+/** The vendor bookkeeping register query — the SAME searchable / filterable / paginated / exportable shape
+ *  as the shipment register (R0), over the money ledger. All fields optional (no query = the whole book,
+ *  newest-first). The owner scope is applied by the caller, exactly as for the shipment register. */
+export interface VendorLedgerQuery {
+  q?: string; // smart search: parcel id / note / the human type word ("shipment", "top-up", "rebate")
+  type?: VendorSettlement['type']; // TOP_UP | BILLING | REBATE
+  direction?: 'in' | 'out'; // in = money received (sign '+'), out = money spent (sign '-')
+  from?: string; // ISO or YYYY-MM-DD (inclusive)
+  to?: string;
+  sort?: 'newest' | 'oldest' | 'amount_desc' | 'amount_asc';
+  limit?: number | string;
+  offset?: number | string;
+}
+
+/** The merchant's word for an entry type — also the fourth thing the search matches. */
+export function ledgerTypeWord(type: VendorSettlement['type']): string {
+  return type === 'TOP_UP' ? 'Top-up' : type === 'BILLING' ? 'Shipment' : 'Rebate';
+}
+
+/** One row of the bookkeeping register (the entry itself — it carries no secret and no PII beyond the parcel id). */
+export interface VendorLedgerRow {
+  id: string;
+  type: VendorSettlement['type'];
+  sign: '+' | '-';
+  amount: number;
+  parcelId?: string;
+  note?: string;
+  at: string;
+}
+
+export function ledgerRowOf(s: VendorSettlement): VendorLedgerRow {
+  return { id: s.id, type: s.type, sign: s.sign, amount: s.amount, parcelId: s.parcelId, note: s.note, at: s.at };
+}
+
+/** Running totals over a set of entries: money IN (top-ups + rebates), money OUT (shipments), and the net.
+ *  Computed over whatever set the caller passes — so a FILTERED view yields that view's totals. */
+export interface VendorLedgerSummary {
+  in: number;
+  out: number;
+  net: number;
+  count: number;
+}
+
+export function vendorLedgerSummaryOf(rows: VendorSettlement[]): VendorLedgerSummary {
+  let inSum = 0;
+  let outSum = 0;
+  for (const s of rows) {
+    if (s.sign === '+') inSum += s.amount;
+    else outSum += s.amount;
+  }
+  inSum = Math.round(inSum * 100) / 100;
+  outSum = Math.round(outSum * 100) / 100;
+  return { in: inSum, out: outSum, net: Math.round((inSum - outSum) * 100) / 100, count: rows.length };
+}
+
+function ledgerSort(sort?: VendorLedgerQuery['sort']): (a: VendorSettlement, b: VendorSettlement) => number {
+  switch (sort) {
+    case 'oldest':
+      return (a, b) => a.at.localeCompare(b.at);
+    case 'amount_desc':
+      return (a, b) => b.amount - a.amount;
+    case 'amount_asc':
+      return (a, b) => a.amount - b.amount;
+    default:
+      return (a, b) => b.at.localeCompare(a.at); // newest first
+  }
+}
+
+/** Filter + search + sort a vendor's ledger for the register (PURE — the owner scope is applied by the
+ *  caller). Search `q` is a case-insensitive substring over the parcel id, the note, and the type word. */
+export function filterVendorLedger(rows: VendorSettlement[], q: VendorLedgerQuery): VendorSettlement[] {
+  let out = rows;
+  if (q.type) out = out.filter((s) => s.type === q.type);
+  if (q.direction) out = out.filter((s) => (q.direction === 'in' ? s.sign === '+' : s.sign === '-'));
+  if (q.from || q.to) out = out.filter((s) => withinDates(s.at, q.from, q.to));
+  if (q.q) out = out.filter((s) => textMatch([s.parcelId, s.note, ledgerTypeWord(s.type)], q.q));
+  return [...out].sort(ledgerSort(q.sort));
+}
+
+/** Render matched entries as the vendor's bookkeeping CSV. Amount is a SIGNED number (a real negative for
+ *  money out) so a spreadsheet reads it as a value, not a formula — and a Direction column spells it out. */
+export function vendorLedgerToCsv(rows: VendorSettlement[]): string {
+  return toCsv(
+    ['Date', 'Type', 'Direction', 'Amount', 'Parcel', 'Note'],
+    rows.map((s) => [s.at, ledgerTypeWord(s.type), s.sign === '+' ? 'in' : 'out', s.sign === '+' ? s.amount : -s.amount, s.parcelId ?? '', s.note ?? '']),
+  );
+}
+
 /**
  * VendorService (PUDO ↔ e-commerce). The registry of businesses that wire their checkout into PUDO
  * for click-and-collect, and the outbound status-callback channel: when a parcel reaches a milestone
@@ -42,14 +133,18 @@ export class VendorService {
   /**
    * Durable (S15, catching up with the S1 principle): a vendor record IS a credential (the
    * HMAC secret, issued exactly once) and money (the prepaid balance) — a restart must not
-   * delete either. The outbox and settlement book stay in-memory: they are history the record
-   * itself already summarises, not the money.
+   * delete either.
    */
   private readonly vendors = new PersistentMap<string, Vendor>('pudo-vendors');
   /** Durable too: a pending handoff is a BUYER'S ORDER that has not shipped yet. */
   private readonly checkouts = new PersistentMap<string, CheckoutHandoff>('pudo-vendor-checkouts');
   private readonly outbox: VendorCallback[] = [];
-  private readonly settlements: VendorSettlement[] = [];
+  /**
+   * R3 — the settlement book is now DURABLE: it is the vendor's bookkeeping (every top-up, shipment
+   * billing and rebate), the ledger behind the balance. A restart must not erase the money history the
+   * merchant reconciles against. Keyed by entry id; the register queries iterate the values.
+   */
+  private readonly settlements = new PersistentMap<string, VendorSettlement>('pudo-vendor-settlements');
 
   constructor(
     private readonly dids: DidService,
@@ -98,7 +193,7 @@ export class VendorService {
 
   private book(vendor: Vendor, type: VendorSettlement['type'], sign: '+' | '-', amount: number, parcelId?: string, note?: string): VendorSettlement {
     const entry: VendorSettlement = { id: `vs_${randomBytes(6).toString('hex')}`, vendorId: vendor.vendorId, country: vendor.country, type, sign, amount: Math.round(amount * 100) / 100, parcelId, note, at: new Date().toISOString() };
-    this.settlements.push(entry);
+    this.settlements.set(entry.id, entry); // durable bookkeeping
     return entry;
   }
 
@@ -137,7 +232,28 @@ export class VendorService {
   }
 
   settlementsFor(vendorId: string): VendorSettlement[] {
-    return this.settlements.filter((s) => s.vendorId === vendorId).slice().reverse();
+    return [...this.settlements.values()].filter((s) => s.vendorId === vendorId).reverse();
+  }
+
+  // --- bookkeeping register (R3): the same server-side query the shipment register uses, over the ledger ---
+
+  /** One page of the vendor's bookkeeping register — filtered / searched / sorted / paginated. Owner scope
+   *  is the caller's (the controller's assertVendorOwner), mirroring the shipment register. */
+  vendorLedgerPage(vendorId: string, q: VendorLedgerQuery): Page<VendorLedgerRow> {
+    const filtered = filterVendorLedger(this.settlementsFor(vendorId), q);
+    const { items, total } = paginate(filtered, q.limit, q.offset);
+    return { items: items.map(ledgerRowOf), total };
+  }
+
+  /** Running totals (in / out / net / count) for the CURRENT filtered view — so "August shipments" totals
+   *  that view's spend. The always-current BALANCE stays on the vendor record, not here. */
+  vendorLedgerSummary(vendorId: string, q: VendorLedgerQuery): VendorLedgerSummary {
+    return vendorLedgerSummaryOf(filterVendorLedger(this.settlementsFor(vendorId), q));
+  }
+
+  /** The whole matching set (every page) as CSV — the vendor's bookkeeping export. */
+  vendorLedgerCsv(vendorId: string, q: VendorLedgerQuery): string {
+    return vendorLedgerToCsv(filterVendorLedger(this.settlementsFor(vendorId), q));
   }
 
   /** Update the store profile (map pin, address, callback URL, split/contribution policy). */

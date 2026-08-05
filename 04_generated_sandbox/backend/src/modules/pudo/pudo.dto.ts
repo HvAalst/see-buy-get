@@ -225,6 +225,18 @@ export class VendorOrdersQueryDto {
   @IsOptional() @IsString() offset?: string;
 }
 
+/** R3 — the vendor bookkeeping (ledger) register query: search / type / direction / date / sort + paging. */
+export class VendorLedgerQueryDto {
+  @IsOptional() @IsString() q?: string; // parcel id / note / type word
+  @IsOptional() @IsIn(['TOP_UP', 'BILLING', 'REBATE']) type?: 'TOP_UP' | 'BILLING' | 'REBATE';
+  @IsOptional() @IsIn(['in', 'out']) direction?: 'in' | 'out';
+  @IsOptional() @IsString() from?: string; // ISO or YYYY-MM-DD (inclusive)
+  @IsOptional() @IsString() to?: string;
+  @IsOptional() @IsIn(['newest', 'oldest', 'amount_desc', 'amount_asc']) sort?: 'newest' | 'oldest' | 'amount_desc' | 'amount_asc';
+  @IsOptional() @IsString() limit?: string;
+  @IsOptional() @IsString() offset?: string;
+}
+
 class OrderItemDto {
   @IsString() name!: string;
   @IsNumber() @Min(1) qty!: number;

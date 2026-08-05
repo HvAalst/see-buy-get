@@ -5062,7 +5062,7 @@
       "get": {
         "operationId": "Sbg.vendorCheckouts",
         "summary": "",
-        "description": "The buyer's checkout selections waiting to be shipped (the console's incoming-orders inbox).",
+        "description": "The buyer's checkout selections waiting to be shipped (the console's incoming-orders inbox). Owner-scoped:\n these carry buyer email/mobile, so only the store itself (or an operator) may read them.",
         "parameters": [
           {
             "name": "id",
@@ -5133,7 +5133,7 @@
       "get": {
         "operationId": "Sbg.vendorCallbacks",
         "summary": "",
-        "description": "Vendor status-callback outbox (HMAC-signed ready_for_pickup / collected / disputed).",
+        "description": "Vendor status-callback outbox (HMAC-signed ready_for_pickup / collected / disputed). Owner-scoped —\n the outbox holds signatures + payloads for this store only.",
         "parameters": [
           {
             "name": "id",
@@ -5522,7 +5522,7 @@
       "get": {
         "operationId": "Sbg.vendorSettlement",
         "summary": "",
-        "description": "A vendor's prepaid balance + settlement book (top-ups / billings / rebates).",
+        "description": "A vendor's prepaid balance + settlement book (top-ups / billings / rebates). Owner-scoped — this is the\n store's money history. The searchable/paginated register is at .../ledger; this stays for the balance.",
         "parameters": [
           {
             "name": "id",
@@ -5536,6 +5536,316 @@
         "responses": {
           "200": {
             "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/vendors/{id}/ledger": {
+      "get": {
+        "operationId": "Sbg.vendorLedger",
+        "summary": "",
+        "description": "The vendor's bookkeeping register (R3): their OWN ledger, server-side searched / filtered / sorted /\n paginated → { items, total }. Owner-scoped (403 for non-owners).",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "TOP_UP",
+                "BILLING",
+                "REBATE"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "direction",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "in",
+                "out"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "newest",
+                "oldest",
+                "amount_desc",
+                "amount_asc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/vendors/{id}/ledger/summary": {
+      "get": {
+        "operationId": "Sbg.vendorLedgerSummary",
+        "summary": "",
+        "description": "Running totals (in / out / net / count) for the CURRENT filtered view, plus the always-current balance.\n Owner-scoped. Declared before no :sub route, but kept explicit for parity with the shipment register.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "TOP_UP",
+                "BILLING",
+                "REBATE"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "direction",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "in",
+                "out"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "newest",
+                "oldest",
+                "amount_desc",
+                "amount_asc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/vendors/{id}/ledger/export": {
+      "get": {
+        "operationId": "Sbg.vendorLedgerExport",
+        "summary": "",
+        "description": "Export the WHOLE matching set (every page, current filters) as CSV — the vendor's OWN bookkeeping export.\n Owner-scoped.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "TOP_UP",
+                "BILLING",
+                "REBATE"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "direction",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "in",
+                "out"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "newest",
+                "oldest",
+                "amount_desc",
+                "amount_asc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
