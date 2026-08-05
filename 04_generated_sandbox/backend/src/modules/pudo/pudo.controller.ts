@@ -408,6 +408,16 @@ export class SbgController {
     return this.parcels.vendorOrdersCsv(id, query);
   }
 
+  /** Store-wide shipment counts (total / unpaid / active) for the console header — computed over the WHOLE
+   *  store, never the current register page, so the "top up" nudge stays honest under any filter. Owner-scoped.
+   *  Declared before the :parcelId route so "stats" is not captured as a parcel id. */
+  @Scopes('vendor:read:self')
+  @Get('vendors/:id/orders/stats')
+  vendorOrderStats(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    this.assertVendorOwner(id, actor);
+    return this.parcels.vendorOrderStats(id);
+  }
+
   /** Full detail for one order (the watch-only status screen's drill-down). Owner-scoped; strips the
    *  control-tower-only short-ship marker before it reaches the external merchant. */
   @Scopes('vendor:read:self')

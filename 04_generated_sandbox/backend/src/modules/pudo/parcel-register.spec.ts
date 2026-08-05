@@ -1,4 +1,4 @@
-import { filterVendorParcels, vendorOrderRowOf, vendorOrdersToCsv } from './parcel.service';
+import { filterVendorParcels, vendorOrderRowOf, vendorOrderStatsOf, vendorOrdersToCsv } from './parcel.service';
 import type { Parcel } from './pudo.types';
 
 /** A minimal Parcel carrying only the register-relevant fields. */
@@ -66,6 +66,23 @@ describe('vendor shipment register (R0)', () => {
       expect(lines).toHaveLength(3); // header + A + C
       expect(lines[1]).toContain('SO-1');
       expect(lines[1]).toContain('Ankara shirt');
+    });
+  });
+
+  describe('vendorOrderStatsOf', () => {
+    it('counts the WHOLE store (never a page): total, unpaid, and still-moving', () => {
+      // rows: A At_PUDO/paid, B Delivered/unpaid, C At_PUDO/paid
+      expect(vendorOrderStatsOf(rows)).toEqual({ total: 3, unpaid: 1, active: 2 });
+    });
+
+    it('excludes both Delivered and Voided from active, and counts every non-ParcelPaid as unpaid', () => {
+      const withVoided = [...rows, parcel({ parcelId: 'D', status: 'Voided', paidStatus: 'unpaid' })];
+      // active = A, C (B Delivered and D Voided are out); unpaid = B, D
+      expect(vendorOrderStatsOf(withVoided)).toEqual({ total: 4, unpaid: 2, active: 2 });
+    });
+
+    it('is all-zero for a store with no shipments', () => {
+      expect(vendorOrderStatsOf([])).toEqual({ total: 0, unpaid: 0, active: 0 });
     });
   });
 });

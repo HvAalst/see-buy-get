@@ -51,15 +51,26 @@ export interface OrderRow {
   externalOrderId?: string;
   status: ParcelStatus;
   paidStatus: 'ParcelPaid' | 'Unpaid' | string;
+  buyer?: string; // R2 — the buyer's mobile (this store's own customer)
+  buyerEmail?: string;
+  products?: string; // R2 — item names, human-readable ("Ankara shirt ×2, Kitenge scarf")
   collectionCode?: string;
   trackingKey?: string;
   binSlot?: string;
   destZone: string;
+  destAgentDid?: string; // R2 — the collection PUDO (the per-PUDO filter value)
   size: ParcelSize;
   shipmentCost?: number;
   buyerCharge?: number;
   routeMode?: 'flexible' | 'locked';
   createdAt?: string;
+}
+
+/** Store-wide shipment counts for the console header + spoken summary — over the WHOLE store, never a page. */
+export interface OrderStats {
+  total: number;
+  unpaid: number;
+  active: number;
 }
 
 export interface OrderDetail extends OrderRow {

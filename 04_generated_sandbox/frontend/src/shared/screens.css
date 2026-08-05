@@ -118,12 +118,29 @@
   color: var(--tx3);
 }
 
+/* An inline text button inside a hint (retry / clear filters). Blue, underlined, but still
+   a real button — it inherits the hint's line so it never breaks the sentence. */
+.linkbtn {
+  font-size: inherit;
+  font-weight: 700;
+  color: var(--blue);
+  background: none;
+  text-decoration: underline;
+}
+
 /* ------------------------------------------------------------- list rows -- */
 
 .rows {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+/* A register page is in flight while its previous rows are still shown: dim them and swallow taps so the
+   stale rows read as "updating" and can't be opened against a page that is about to be replaced. */
+.rows--loading {
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 /* A disabled row must LOOK disabled. Without this it rendered pixel-identical to a live one —
@@ -180,8 +197,21 @@
 
 /* These sit inside a <button>, so they are spans — they need to be told to stack. */
 .row__t,
-.row__s {
+.row__s,
+.row__meta {
   display: block;
+}
+
+/* A third, quieter row line — status · route · cost in a register row. Kept at the 14px
+   type floor and one line, so a long product name above can't push it into a wrap. */
+.row__meta {
+  margin-top: 2px;
+  font-size: 14px;
+  color: var(--tx2);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .row__t {

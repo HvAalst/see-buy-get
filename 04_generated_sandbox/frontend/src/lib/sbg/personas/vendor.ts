@@ -39,6 +39,10 @@ export function createVendorApi(sbg: SbgClient) {
       },
     ) => sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/orders', { params: { path: { id: vendorId }, query: query ?? {} } })),
 
+    /** Store-wide shipment counts (total / unpaid / active) for the console header nudge + spoken summary —
+     *  computed over the WHOLE store, never the current register page. Owner-scoped. */
+    orderStats: (vendorId: string) => sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/orders/stats', { params: { path: { id: vendorId } } })),
+
     /** Full detail for one order (validates it belongs to this store). */
     order: (vendorId: string, parcelId: string) =>
       sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/orders/{parcelId}', { params: { path: { id: vendorId, parcelId } } })),

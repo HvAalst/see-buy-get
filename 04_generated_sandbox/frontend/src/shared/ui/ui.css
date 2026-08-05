@@ -880,6 +880,54 @@
   background: none;
 }
 
+/* Register composition — the search + filter control row, the applied-filter chip
+   strip, the results block, and the date-range pair inside the filter sheet. */
+.reg__controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.reg__controls .search {
+  flex: 1;
+  min-width: 0;
+}
+.reg__filter {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--tap);
+  padding: 0 14px;
+  border: 1.5px solid var(--bd);
+  border-radius: var(--r-ctl);
+  background: var(--bg);
+  color: var(--tx2);
+  font-size: 15px;
+  font-weight: 700;
+}
+.reg__filter--on {
+  border-color: var(--blue);
+  color: var(--blue);
+  background: var(--blue-soft);
+}
+.reg__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.reg__list {
+  margin-top: 14px;
+}
+.reg__dates {
+  display: flex;
+  gap: 12px;
+}
+.reg__dates .field {
+  flex: 1;
+  min-width: 0;
+}
+
 /* ------------------------------------------------------------ BottomNav -- */
 
 .bnav {

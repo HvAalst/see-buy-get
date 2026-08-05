@@ -57,6 +57,29 @@ export interface VendorOrderRow {
   createdAt: string;
 }
 
+/**
+ * Store-wide shipment counts for the console header — computed over the WHOLE store, never a filtered
+ * page. The register list is paginated and filterable, so the "N unpaid — top up" nudge and the spoken
+ * summary MUST come from here, not from the visible page, or filtering to (say) Delivered would report
+ * zero unpaid and hide unreleased labels.
+ */
+export interface VendorOrderStats {
+  total: number;
+  unpaid: number; // paidStatus !== 'ParcelPaid' — labels still waiting on the balance
+  active: number; // still moving: not yet Delivered, not Voided
+}
+
+/** Count a vendor's parcels store-wide (PURE — the owner scope is applied by the caller via list({vendorId})). */
+export function vendorOrderStatsOf(rows: Parcel[]): VendorOrderStats {
+  let unpaid = 0;
+  let active = 0;
+  for (const p of rows) {
+    if (p.paidStatus !== 'ParcelPaid') unpaid += 1;
+    if (p.status !== 'Delivered' && p.status !== 'Voided') active += 1;
+  }
+  return { total: rows.length, unpaid, active };
+}
+
 /** Products as a human string: "Ankara shirt ×2, Kitenge scarf". */
 function vendorProducts(p: Parcel): string {
   return (p.items ?? []).map((i) => (i.qty > 1 ? `${i.name} ×${i.qty}` : i.name)).join(', ');
@@ -931,6 +954,12 @@ export class ParcelService implements OnApplicationBootstrap {
   /** The whole matching set (every page) rendered as CSV — the vendor's export of their shipments. */
   vendorOrdersCsv(vendorId: string, q: VendorOrdersQuery): string {
     return vendorOrdersToCsv(filterVendorParcels(this.list({ vendorId }), q));
+  }
+
+  /** Store-wide shipment counts (total / unpaid / active) — the header nudge + spoken summary read these
+   *  so they stay honest regardless of the register's active filter or page. */
+  vendorOrderStats(vendorId: string): VendorOrderStats {
+    return vendorOrderStatsOf(this.list({ vendorId }));
   }
 
   // --- internals ---

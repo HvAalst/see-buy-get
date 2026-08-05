@@ -38,7 +38,8 @@ export type IconName =
   | 'bag'
   | 'send'
   | 'grid'
-  | 'bell';
+  | 'bell'
+  | 'filter';
 
 const PATHS: Record<IconName, JSX.Element> = {
   chevronRight: <path d="m9 5 7 7-7 7" />,
@@ -106,6 +107,7 @@ const PATHS: Record<IconName, JSX.Element> = {
     </>
   ),
   bell: <path d="M6.4 10a5.6 5.6 0 0 1 11.2 0c0 4.2 1.4 6 1.4 6H5s1.4-1.8 1.4-6ZM10 19.4a2.2 2.2 0 0 0 4 0" />,
+  filter: <path d="M4 7h11m3 0h2M4 17h2m3 0h11M14 4.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8ZM7 14.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8Z" />,
 
   /* --- symbols an error presentation can ask for (ErrorIconName) ----------- */
 

@@ -19,6 +19,7 @@ import type {
   NetworkPoint,
   OrderDetail,
   OrderRow,
+  OrderStats,
   OriginOption,
   QuoteView,
   SettlementRow,
@@ -38,11 +39,46 @@ export interface Toast {
   detail?: string;
 }
 
+/** R2 — the vendor shipment register query (server-side). Empty strings mean "no filter". */
+export interface OrderQuery {
+  q: string;
+  status: string;
+  pudo: string;
+  from: string;
+  to: string;
+  paid: '' | 'paid' | 'unpaid';
+  sort: 'newest' | 'oldest' | 'cost_desc' | 'cost_asc';
+  offset: number;
+}
+
+export const ORDER_LIMIT = 20;
+export const INITIAL_ORDER_QUERY: OrderQuery = { q: '', status: '', pudo: '', from: '', to: '', paid: '', sort: 'newest', offset: 0 };
+
+/** Turn the UI query into the API query — dropping empties, stringifying the page bounds. */
+export function orderApiQuery(q: OrderQuery) {
+  return {
+    q: q.q || undefined,
+    status: q.status || undefined,
+    pudo: q.pudo || undefined,
+    from: q.from || undefined,
+    to: q.to || undefined,
+    paid: q.paid || undefined,
+    sort: q.sort,
+    limit: String(ORDER_LIMIT),
+    offset: String(q.offset),
+  };
+}
+
 export interface VendorState {
   phase: Phase;
   screen: Screen;
   vendor: VendorView | null;
   orders: OrderRow[];
+  ordersTotal: number;
+  ordersState: 'idle' | 'loading' | 'ready' | 'error';
+  orderQuery: OrderQuery;
+  /** Store-wide counts (whole store, never the current page) — the header nudge + spoken summary read these. */
+  orderStats: OrderStats | null;
   checkouts: CheckoutRow[];
   /** Fresh registration — the secret is on screen exactly once. */
   registered: VendorRegisteredView | null;
@@ -74,6 +110,10 @@ const INITIAL: VendorState = {
   screen: 'orders',
   vendor: null,
   orders: [],
+  ordersTotal: 0,
+  ordersState: 'idle',
+  orderQuery: INITIAL_ORDER_QUERY,
+  orderStats: null,
   checkouts: [],
   registered: null,
   detail: null,
@@ -162,6 +202,41 @@ export function useVendorApp() {
 
   const refreshEpoch = useRef(0);
   const refreshesRunning = useRef(0);
+  const ordersEpoch = useRef(0);
+
+  /**
+   * The register's ONE order-page loader — every path (a store refresh, a search, a filter, a page turn)
+   * runs through here so a single epoch decides which response wins: a slow store refresh can no longer
+   * clobber a fresher query, nor the reverse. It shows "loading" only when the list isn't already
+   * populated, so a background refresh over a ready list never flashes. And it snaps an out-of-range page
+   * (offset past the end after the set shrank under us — orders settled/voided, or a refresh at a stale
+   * page) back onto the last real page, instead of stranding the merchant on a false "no shipments match".
+   */
+  const fetchOrdersWith = useCallback(
+    async (query: OrderQuery) => {
+      if (!client || !creds) return;
+      const epoch = ++ordersEpoch.current;
+      setState((s) => (s.ordersState === 'ready' ? s : { ...s, ordersState: 'loading' }));
+      const r = await client.api.orders(creds.vendorId, orderApiQuery(query));
+      if (epoch !== ordersEpoch.current) return; // a newer query/refresh won the race
+      if (r.error) {
+        setState((s) => ({ ...s, ordersState: 'error' }));
+        fail(r.error);
+        return;
+      }
+      const page = narrow<{ items?: OrderRow[]; total?: number }>(r.data);
+      const items = page.items ?? [];
+      const total = page.total ?? 0;
+      if (items.length === 0 && total > 0 && query.offset >= total) {
+        const lastOffset = Math.max(0, (Math.ceil(total / ORDER_LIMIT) - 1) * ORDER_LIMIT);
+        setState((s) => (s.orderQuery.offset === query.offset ? { ...s, orderQuery: { ...s.orderQuery, offset: lastOffset } } : s));
+        void fetchOrdersWith({ ...query, offset: lastOffset });
+        return;
+      }
+      setState((s) => ({ ...s, orders: items, ordersTotal: total, ordersState: 'ready' }));
+    },
+    [client, creds, fail],
+  );
 
   const refresh = useCallback(async () => {
     if (!client || !creds) return;
@@ -187,25 +262,29 @@ export function useVendorApp() {
       }
       const vendor = narrow<VendorView>(meR.data);
 
-      const [ordersR, checkoutsR] = await Promise.all([client.api.orders(creds.vendorId), client.api.checkouts(creds.vendorId)]);
+      // The register page loads on its own (ordersEpoch-guarded) path; the header counts come from the
+      // store-wide stats endpoint, NOT the filtered page. Both run alongside the checkouts inbox.
+      void fetchOrdersWith(stateRef.current.orderQuery);
+      const [statsR, checkoutsR] = await Promise.all([client.api.orderStats(creds.vendorId), client.api.checkouts(creds.vendorId)]);
       if (superseded()) return;
-
       setState((s) => ({
         ...s,
         phase: 'ready',
         vendor,
-        orders: ordersR.error ? s.orders : (narrow<{ items?: OrderRow[] }>(ordersR.data)?.items ?? []),
+        orderStats: statsR.error ? s.orderStats : (narrow<OrderStats>(statsR.data) ?? s.orderStats),
         checkouts: checkoutsR.error ? s.checkouts : (narrow<CheckoutRow[]>(checkoutsR.data) ?? []),
         error: null,
         stale: false,
         refreshing: false,
       }));
-      if (ordersR.error) fail(ordersR.error);
-      else if (checkoutsR.error) fail(checkoutsR.error);
+      // Surface a stats failure like any other — a swallowed count error would let the header silently read
+      // "every label is paid" on missing data (the OrdersScreen also refuses to assert all-paid when null).
+      if (checkoutsR.error) fail(checkoutsR.error);
+      else if (statsR.error) fail(statsR.error);
     } finally {
       refreshesRunning.current -= 1;
     }
-  }, [client, creds, fail]);
+  }, [client, creds, fail, fetchOrdersWith]);
 
   /* -------------------------------------------------------------- recovery */
 
@@ -235,6 +314,20 @@ export function useVendorApp() {
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, []);
+
+  /* --------------------------------------------------- shipment register (R2) */
+
+  /** The register's one control point: merge a change into the query and reload. Any change EXCEPT paging
+   *  resets to the first page (a new search/filter should not land you on page 5). */
+  const queryOrders = useCallback(
+    (patch: Partial<OrderQuery>) => {
+      const offsetOnly = Object.keys(patch).length === 1 && 'offset' in patch;
+      const next: OrderQuery = { ...stateRef.current.orderQuery, ...patch, offset: offsetOnly ? (patch.offset ?? 0) : 0 };
+      setState((s) => ({ ...s, orderQuery: next, ordersState: 'loading' }));
+      void fetchOrdersWith(next);
+    },
+    [fetchOrdersWith],
+  );
 
   /* ------------------------------------------------------------- identity */
 
@@ -584,6 +677,7 @@ export function useVendorApp() {
     state,
     actions: {
       refresh,
+      queryOrders,
       signIn,
       register,
       adoptRegistration,
