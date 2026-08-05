@@ -102,15 +102,19 @@ const run = async () => {
   /* ------------------------------------------------------------- shops ---- */
   const a1 = await ensureAccount('agent1@sbg.test', 'pudo', agentProfile('Mama Sarah Shop', 'Z-A', 'Blue gate, next to the market', -1.2864, 36.8172, 1.5));
   const a2 = await ensureAccount('agent2@sbg.test', 'pudo', agentProfile('Riverside Corner', 'Z-B', 'Next to the clinic', -1.3021, 36.8456, 1.2));
+  const a3 = await ensureAccount('agent3@sbg.test', 'pudo', agentProfile('Downtown Kiosk', 'Z-B', 'Opposite the bus stage', -1.2899, 36.8219, 1.3));
   const tokA1 = a1.token.access_token;
   const tokA2 = a2.token.access_token;
+  const tokA3 = a3.token.access_token;
   say(`shop  Mama Sarah Shop   ${a1.did}`);
   say(`shop  Riverside Corner  ${a2.did}`);
+  say(`shop  Downtown Kiosk    ${a3.did}`);
 
   // DRAFT → KYC_PENDING → APPROVED_UNFUNDED (wallet minted) → deposit → ACTIVE with money.
   for (const [did, tok, label] of [
     [a1.did, tokA1, 'Mama Sarah Shop'],
     [a2.did, tokA2, 'Riverside Corner'],
+    [a3.did, tokA3, 'Downtown Kiosk'],
   ]) {
     const rec = need(await req('GET', `/v1/sbg/agents/${encodeURIComponent(did)}`, { token: tok }), 'agent read');
     if (rec.status === 'DRAFT' || rec.status === 'KYC_PENDING') {
@@ -393,10 +397,94 @@ const run = async () => {
     `vendor Nairobi Threads: 2 checkouts waiting · ${minted.parcel.parcelId} minted (${minted.paid ? 'paid' : 'UNPAID'}), at the drop-off shop`,
   );
 
+  /* ---- a rich shipment HISTORY so the register (search / filter / paginate / multi-select / export)
+   *      has real volume: varied products, buyers, two collection PUDOs, sizes, and a paid/unpaid +
+   *      status spread. Kept resilient — a per-parcel failure is skipped, never fatal. -------------- */
+  const PRODUCTS = [
+    [{ name: 'Ankara shirt', qty: 2 }],
+    [{ name: 'Kitenge dress', qty: 1 }],
+    [{ name: 'Maasai sandals', qty: 1 }, { name: 'Beaded necklace', qty: 2 }],
+    [{ name: 'Denim jacket', qty: 1 }],
+    [{ name: 'Leather satchel', qty: 1 }],
+    [{ name: 'Cotton kanga', qty: 3 }],
+    [{ name: 'Silk headwrap', qty: 2 }],
+    [{ name: 'Woven basket', qty: 1 }],
+    [{ name: 'Canvas tote bag', qty: 2 }],
+    [{ name: 'Wool blanket', qty: 1 }],
+  ];
+  const BUYERS = [
+    ['amina', '+254700310001'], ['brian', '+254700310002'], ['clara', '+254700310003'],
+    ['david', '+254700310004'], ['esther', '+254700310005'], ['felix', '+254700310006'],
+    ['grace', '+254700310007'], ['hassan', '+254700310008'], ['irene', '+254700310009'], ['james', '+254700310010'],
+  ];
+  const DESTS = [a2.did, a3.did]; // Riverside Corner · Downtown Kiosk — gives the per-PUDO filter two values
+  const SIZES = [['S', { l: 18, w: 12, h: 6 }, 0.4], ['M', { l: 30, w: 20, h: 10 }, 1.6], ['L', { l: 45, w: 32, h: 22 }, 6.0]];
+
+  const history = [];
+  const HISTORY_N = 44; // > 2 pages at 20/page
+  for (let i = 0; i < HISTORY_N; i++) {
+    const [firstname, mobile] = BUYERS[i % BUYERS.length];
+    const [size, dims, kg] = SIZES[i % SIZES.length];
+    const ref = `SO-${stamp}-${String(i + 10).padStart(3, '0')}`;
+    void size;
+    const r = await req('POST', '/v1/sbg/inbound/orders', {
+      token: tokV,
+      body: {
+        vendorId: shop.vendorId,
+        originPudoDid: a1.did,
+        destPudoDid: DESTS[i % DESTS.length],
+        buyerMobile: mobile,
+        buyerEmail: `${firstname}@example.com`,
+        externalOrderId: ref,
+        dimensionsCm: dims,
+        weightKg: kg,
+        contentPhotoRef: `${ref}-contents.jpg`,
+        routeMode: i % 3 === 0 ? 'flexible' : 'locked',
+        items: PRODUCTS[i % PRODUCTS.length],
+        subtotal: 20 + (i % 7) * 8,
+      },
+    });
+    if (!r.ok || !r.data?.parcel) continue; // a rare diverted/blocked mint is simply skipped in the demo
+    history.push({ parcelId: r.data.parcel.parcelId, paid: Boolean(r.data.paid) });
+  }
+  say(`vendor history: minted ${history.length}/${HISTORY_N} shipments`);
+
+  // Fund the store, then settle HALF of the still-unpaid ones so the Paid filter has both sides to show.
+  need(await req('POST', `/v1/sbg/vendors/${shop.vendorId}/top-up`, { token: tokV, body: { amount: 3000 } }), 'vendor bulk top-up');
+  const unpaidOnes = history.filter((h) => !h.paid);
+  for (let k = 0; k < Math.floor(unpaidOnes.length / 2); k++) {
+    const s = await req('POST', `/v1/sbg/parcels/${encodeURIComponent(unpaidOnes[k].parcelId)}/settle`, { token: tokV });
+    if (s.ok) unpaidOnes[k].paid = true;
+  }
+
+  // Spread the statuses: intake ~70% (→ At the drop-off shop / At_PUDO), void a few of those, leave the rest Created.
+  let intook = 0;
+  let voided = 0;
+  for (let i = 0; i < history.length; i++) {
+    if (i % 10 >= 7) continue; // ~30% stay Created
+    const h = history[i];
+    const t = await req('POST', `/v1/sbg/parcels/${encodeURIComponent(h.parcelId)}/intake`, { token: tokA1, body: {} });
+    if (!t.ok) continue;
+    intook++;
+    if (voided < 4 && i % 10 === 6) {
+      const v = await req('POST', `/v1/sbg/parcels/${encodeURIComponent(h.parcelId)}/void`, {
+        token: tokA1,
+        body: { agentDid: a1.did, voidedPhotoRef: `${h.parcelId}-void.jpg` },
+      });
+      if (v.ok) {
+        voided++;
+        intook--;
+      }
+    }
+  }
+  const paidNow = history.filter((h) => h.paid).length;
+  say(`vendor history: ${paidNow} paid / ${history.length - paidNow} unpaid · ${intook} at the shop · ${voided} voided · rest created`);
+
   /* -------------------------------------------------------------- sheet --- */
   out.push('', '='.repeat(64), '  SEEBUYGET DEMO — SIGN-IN SHEET', '='.repeat(64));
   out.push('  Agent app   /agent/   agent1@sbg.test / seebuyget   (Mama Sarah Shop)');
   out.push('                        agent2@sbg.test / seebuyget   (Riverside Corner)');
+  out.push('                        agent3@sbg.test / seebuyget   (Downtown Kiosk)');
   out.push('  Hub app     /mdp/     hub@sbg.test    / seebuyget   (Central Sort)');
   out.push(`  Fleet app   /fleet/   sign-in code ${fleetCode}            (Kilima Logistics)`);
   out.push(`  Driver app  /driver/  driver ID ${amos.did}`);
@@ -410,6 +498,7 @@ const run = async () => {
   out.push(`  Track demo      ${p6.trackingKey} (ready) · ${p3.trackingKey} (on the bus)`);
   out.push(`  Hub sort demo   ${p4.parcelId} queued · bag ${sorted.toteCode} ready to load`);
   out.push(`  Vendor demo     ${minted.parcel.parcelId} minted · collection ${minted.parcel.collectionCode ?? '—'} · track ${minted.parcel.trackingKey ?? '—'}`);
+  out.push(`  Register demo   Nairobi Threads has ${history.length + 1} shipments — try Search / Filters / pages / multi-select + Export`);
   out.push('='.repeat(64));
   say(out.join('\n'));
 };
