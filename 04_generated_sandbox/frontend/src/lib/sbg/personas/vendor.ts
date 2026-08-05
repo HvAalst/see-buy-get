@@ -1,5 +1,17 @@
 import type { SbgClient } from '../client';
 
+/** The bookkeeping (ledger) register query params — all optional (no query = the whole book, newest-first). */
+export interface LedgerQuery {
+  q?: string;
+  type?: 'TOP_UP' | 'BILLING' | 'REBATE';
+  direction?: 'in' | 'out';
+  from?: string;
+  to?: string;
+  sort?: 'newest' | 'oldest' | 'amount_desc' | 'amount_asc';
+  limit?: string;
+  offset?: string;
+}
+
 /**
  * Vendor persona facade — the ONLY operations the merchant console can name: the store's
  * own record, the incoming-orders inbox, the MINT (an order becomes a parcel + phygital
@@ -49,6 +61,26 @@ export function createVendorApi(sbg: SbgClient) {
       vendorId: string,
       query?: { q?: string; status?: string; pudo?: string; from?: string; to?: string; paid?: 'paid' | 'unpaid'; sort?: 'newest' | 'oldest' | 'cost_desc' | 'cost_asc' },
     ) => sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/orders/export', { params: { path: { id: vendorId }, query: query ?? {} }, parseAs: 'text' })),
+
+    /** The store's BOOKKEEPING register (R3): a server-side searched/filtered/sorted/paged page of ledger
+     *  entries (top-ups / shipment billings / rebates) → { items, total }. Owner-scoped. */
+    ledger: (
+      vendorId: string,
+      query?: LedgerQuery,
+    ) => sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/ledger', { params: { path: { id: vendorId }, query: query ?? {} } })),
+
+    /** Running totals (in / out / net / count) for the current filter + the always-current balance. Owner-scoped. */
+    ledgerSummary: (
+      vendorId: string,
+      query?: LedgerQuery,
+    ) => sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/ledger/summary', { params: { path: { id: vendorId }, query: query ?? {} } })),
+
+    /** Export the WHOLE matching set (every page, current filters) as a CSV string — the vendor's OWN
+     *  bookkeeping export. Owner-scoped; parsed as text (the endpoint returns text/csv). */
+    ledgerExport: (
+      vendorId: string,
+      query?: LedgerQuery,
+    ) => sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/ledger/export', { params: { path: { id: vendorId }, query: query ?? {} }, parseAs: 'text' })),
 
     /** Full detail for one order (validates it belongs to this store). */
     order: (vendorId: string, parcelId: string) =>

@@ -16,6 +16,7 @@ import { EMPTY_MINT, dimsComplete, fromHandoff, type MintForm } from './logic';
 import type {
   CallbackRow,
   CheckoutRow,
+  LedgerSummary,
   MintView,
   NetworkPoint,
   OrderDetail,
@@ -28,7 +29,7 @@ import type {
   VendorView,
 } from './types';
 
-export type Screen = 'orders' | 'mint' | 'store';
+export type Screen = 'orders' | 'mint' | 'books' | 'store';
 export type MintStep = 'source' | 'parcel' | 'dest' | 'origin' | 'price' | 'label';
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
 
@@ -70,6 +71,33 @@ export function orderApiQuery(q: OrderQuery) {
   };
 }
 
+/** R3 — the vendor bookkeeping (ledger) register query. Empty strings mean "no filter". */
+export interface LedgerQuery {
+  q: string;
+  type: '' | 'TOP_UP' | 'BILLING' | 'REBATE';
+  direction: '' | 'in' | 'out';
+  from: string;
+  to: string;
+  sort: 'newest' | 'oldest' | 'amount_desc' | 'amount_asc';
+  offset: number;
+}
+
+export const LEDGER_LIMIT = 20;
+export const INITIAL_LEDGER_QUERY: LedgerQuery = { q: '', type: '', direction: '', from: '', to: '', sort: 'newest', offset: 0 };
+
+export function ledgerApiQuery(q: LedgerQuery) {
+  return {
+    q: q.q || undefined,
+    type: q.type || undefined,
+    direction: q.direction || undefined,
+    from: q.from || undefined,
+    to: q.to || undefined,
+    sort: q.sort,
+    limit: String(LEDGER_LIMIT),
+    offset: String(q.offset),
+  };
+}
+
 export interface VendorState {
   phase: Phase;
   screen: Screen;
@@ -80,6 +108,12 @@ export interface VendorState {
   orderQuery: OrderQuery;
   /** Store-wide counts (whole store, never the current page) — the header nudge + spoken summary read these. */
   orderStats: OrderStats | null;
+  /** R3 — the bookkeeping register (the money ledger): a filtered/paged page + the current view's totals. */
+  ledger: SettlementRow[];
+  ledgerTotal: number;
+  ledgerState: 'idle' | 'loading' | 'ready' | 'error';
+  ledgerQuery: LedgerQuery;
+  ledgerSummary: LedgerSummary | null;
   checkouts: CheckoutRow[];
   /** Fresh registration — the secret is on screen exactly once. */
   registered: VendorRegisteredView | null;
@@ -115,6 +149,11 @@ const INITIAL: VendorState = {
   ordersState: 'idle',
   orderQuery: INITIAL_ORDER_QUERY,
   orderStats: null,
+  ledger: [],
+  ledgerTotal: 0,
+  ledgerState: 'idle',
+  ledgerQuery: INITIAL_LEDGER_QUERY,
+  ledgerSummary: null,
   checkouts: [],
   registered: null,
   detail: null,
@@ -330,6 +369,57 @@ export function useVendorApp() {
     [fetchOrdersWith],
   );
 
+  /* ----------------------------------------------- bookkeeping register (R3) */
+
+  const ledgerEpoch = useRef(0);
+
+  /** The bookkeeping loader — mirrors the shipment loader: one epoch decides which response wins, it shows
+   *  "loading" only when the list isn't already populated, and it clamps an out-of-range page. It fetches
+   *  the page AND the current-view totals together (the summary is filter-dependent, unlike the store-wide
+   *  shipment counts). The always-current balance rides along on the summary. */
+  const fetchLedgerWith = useCallback(
+    async (query: LedgerQuery) => {
+      if (!client || !creds) return;
+      const epoch = ++ledgerEpoch.current;
+      setState((s) => (s.ledgerState === 'ready' ? s : { ...s, ledgerState: 'loading' }));
+      const [pageR, sumR] = await Promise.all([client.api.ledger(creds.vendorId, ledgerApiQuery(query)), client.api.ledgerSummary(creds.vendorId, ledgerApiQuery(query))]);
+      if (epoch !== ledgerEpoch.current) return; // a newer query/refresh won the race
+      if (pageR.error) {
+        // Blank the filter-dependent summary too: a failed load must not leave the PREVIOUS filter's totals
+        // in the header beside the new filter's error state (the whole-store balance is unaffected).
+        setState((s) => ({ ...s, ledgerState: 'error', ledgerSummary: null }));
+        fail(pageR.error);
+        return;
+      }
+      const page = narrow<{ items?: SettlementRow[]; total?: number }>(pageR.data);
+      const items = page.items ?? [];
+      const total = page.total ?? 0;
+      if (items.length === 0 && total > 0 && query.offset >= total) {
+        const lastOffset = Math.max(0, (Math.ceil(total / LEDGER_LIMIT) - 1) * LEDGER_LIMIT);
+        setState((s) => (s.ledgerQuery.offset === query.offset ? { ...s, ledgerQuery: { ...s.ledgerQuery, offset: lastOffset } } : s));
+        void fetchLedgerWith({ ...query, offset: lastOffset });
+        return;
+      }
+      // The summary is filter-dependent, so a failed summary must NOT keep the previous filter's totals next
+      // to this filter's rows — blank it (the header then shows neutral wording, never a mismatched total).
+      const summary = sumR.error ? null : narrow<LedgerSummary>(sumR.data);
+      setState((s) => ({ ...s, ledger: items, ledgerTotal: total, ledgerState: 'ready', ledgerSummary: summary }));
+    },
+    [client, creds, fail],
+  );
+
+  /** The bookkeeping register's control point: merge a change into the query and reload (any change except
+   *  paging resets to the first page). */
+  const queryLedger = useCallback(
+    (patch: Partial<LedgerQuery>) => {
+      const offsetOnly = Object.keys(patch).length === 1 && 'offset' in patch;
+      const next: LedgerQuery = { ...stateRef.current.ledgerQuery, ...patch, offset: offsetOnly ? (patch.offset ?? 0) : 0 };
+      setState((s) => ({ ...s, ledgerQuery: next, ledgerState: 'loading' }));
+      void fetchLedgerWith(next);
+    },
+    [fetchLedgerWith],
+  );
+
   /* ------------------------------------------------------------- identity */
 
   useEffect(() => {
@@ -413,8 +503,9 @@ export function useVendorApp() {
         if (stateRef.current.pointsState !== 'ready') void loadPointsRef.current();
       }
       if (screen === 'orders') void refresh();
+      if (screen === 'books') void fetchLedgerWith(stateRef.current.ledgerQuery);
     },
-    [loadStore, refresh],
+    [loadStore, refresh, fetchLedgerWith],
   );
 
   /* ----------------------------------------------------------------- mint */
@@ -667,6 +758,25 @@ export function useVendorApp() {
     });
   }, [client, creds, run, fail, pushToast]);
 
+  /** Export the WHOLE current-filter bookkeeping set (every page) as a CSV download — the server renders it. */
+  const exportLedger = useCallback(async () => {
+    if (!client || !creds) return;
+    await run('export-ledger', async () => {
+      const q = stateRef.current.ledgerQuery;
+      const r = await client.api.ledgerExport(creds.vendorId, {
+        q: q.q || undefined,
+        type: q.type || undefined,
+        direction: q.direction || undefined,
+        from: q.from || undefined,
+        to: q.to || undefined,
+        sort: q.sort,
+      });
+      if (r.error) return fail(r.error);
+      triggerDownload('bookkeeping.csv', narrow<string>(r.data));
+      pushToast({ tone: 'ok', icon: 'check', title: 'Books exported', detail: 'Saved bookkeeping.csv to your device.' });
+    });
+  }, [client, creds, run, fail, pushToast]);
+
   /* ----------------------------------------------------------------- store */
 
   const savePolicy = useCallback(
@@ -700,6 +810,8 @@ export function useVendorApp() {
     actions: {
       refresh,
       queryOrders,
+      queryLedger,
+      exportLedger,
       signIn,
       register,
       adoptRegistration,

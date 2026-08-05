@@ -6,7 +6,7 @@
 
 import { toCsv } from '../../shared/csv';
 import type { IconName } from '../../shared/ui/Icon';
-import type { CheckoutRow, NetworkPoint, OrderRow, OriginOption, ParcelStatus, QuoteView, ShippingPolicy } from './types';
+import type { CheckoutRow, NetworkPoint, OrderRow, OriginOption, ParcelStatus, QuoteView, SettlementRow, ShippingPolicy } from './types';
 
 /* ------------------------------------------------------------------ money -- */
 
@@ -187,5 +187,23 @@ export function orderRowsToCsv(rows: OrderRow[]): string {
   return toCsv(
     ORDER_CSV_HEADERS,
     rows.map((o) => [o.externalOrderId ?? o.parcelId, o.did ?? '', o.buyer ?? '', o.products ?? '', o.status, o.paidStatus ?? '', o.destZone, o.shipmentCost ?? '', o.buyerCharge ?? '', o.createdAt ?? '']),
+  );
+}
+
+/* --------------------------------------------------------------- bookkeeping -- */
+
+/** The merchant's word for a ledger entry type — the shipment billing reads as "Shipment". */
+export function ledgerTypeWord(type: SettlementRow['type']): string {
+  return type === 'TOP_UP' ? 'Top-up' : type === 'BILLING' ? 'Shipment' : 'Rebate';
+}
+
+/** The bookkeeping export columns — SAME set + order as the server's ledger export (vendorLedgerToCsv), so a
+ *  client "export selected" and a server "export all" are byte-identical. Amount is a SIGNED number. */
+export const LEDGER_CSV_HEADERS = ['Date', 'Type', 'Direction', 'Amount', 'Parcel', 'Note'];
+
+export function ledgerRowsToCsv(rows: SettlementRow[]): string {
+  return toCsv(
+    LEDGER_CSV_HEADERS,
+    rows.map((s) => [s.at, ledgerTypeWord(s.type), s.sign === '+' ? 'in' : 'out', s.sign === '+' ? s.amount : -s.amount, s.parcelId ?? '', s.note ?? '']),
   );
 }

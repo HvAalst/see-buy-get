@@ -214,6 +214,21 @@
   white-space: nowrap;
 }
 
+/* A ledger amount — the sign carries the direction; money IN reads green, money OUT stays strong-neutral
+   (a shipment cost is normal business, not an alarm). Tabular figures so columns of money line up. */
+.amt {
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.amt--in {
+  color: var(--ok);
+}
+.amt--out {
+  color: var(--navy);
+}
+
 .row__t {
   font-size: 18px;
   font-weight: 700;

@@ -112,6 +112,16 @@ export interface SettlementRow {
   at: string;
 }
 
+/** R3 — the bookkeeping register's running totals for the CURRENT filtered view, plus the always-current
+ *  store balance (which never depends on the filter). */
+export interface LedgerSummary {
+  in: number;
+  out: number;
+  net: number;
+  count: number;
+  balance: number;
+}
+
 export interface CallbackRow {
   id: string;
   event: string;

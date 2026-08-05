@@ -1,6 +1,7 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { BottomNav, Button, Checklist, Icon, Pill, TopBar, type NavItem } from '../../shared/ui';
 import { money } from './logic';
+import { BooksScreen } from './screens/BooksScreen';
 import { MintScreen } from './screens/MintScreen';
 import { OrdersScreen } from './screens/OrdersScreen';
 import { SignInScreen } from './screens/SignInScreen';
@@ -32,6 +33,7 @@ export function App() {
   const tabs: NavItem<Screen>[] = [
     { key: 'orders', label: 'Orders', icon: 'box', badge: state.checkouts.length || undefined },
     { key: 'mint', label: 'Ship', icon: 'send' },
+    { key: 'books', label: 'Books', icon: 'wallet' },
     { key: 'store', label: 'My store', icon: 'home' },
   ];
 
@@ -83,6 +85,8 @@ function ScreenRouter({ screen, state, actions }: { screen: Screen; state: Vendo
   switch (screen) {
     case 'mint':
       return <MintScreen state={state} actions={actions} />;
+    case 'books':
+      return <BooksScreen state={state} actions={actions} />;
     case 'store':
       return <StoreScreen state={state} actions={actions} />;
     default:
