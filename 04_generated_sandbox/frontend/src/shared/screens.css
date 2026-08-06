@@ -214,6 +214,30 @@
   white-space: nowrap;
 }
 
+/* Segmented control — a two-or-more-way view toggle (e.g. Parcels | Earnings). One raised, on-brand pill
+   marks the active view; the whole control is a single tablist. */
+.seg {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--r-ctl);
+  background: var(--bd-soft);
+}
+.seg__btn {
+  flex: 1;
+  min-height: 40px;
+  border-radius: calc(var(--r-ctl) - 4px);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--tx2);
+  background: none;
+}
+.seg__btn--on {
+  color: var(--navy);
+  background: var(--bg);
+  box-shadow: var(--sh-sm);
+}
+
 /* A ledger amount — the sign carries the direction; money IN reads green, money OUT stays strong-neutral
    (a shipment cost is normal business, not an alarm). Tabular figures so columns of money line up. */
 .amt {

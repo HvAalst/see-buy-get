@@ -5,6 +5,7 @@ import { CollectScreen } from './screens/CollectScreen';
 import { HandoverScreen } from './screens/HandoverScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { RatesScreen } from './screens/RatesScreen';
+import { RecordsScreen } from './screens/RecordsScreen';
 import { ReceiveBagScreen } from './screens/ReceiveBagScreen';
 import { ReleaseScreen } from './screens/ReleaseScreen';
 import { SignInScreen } from './screens/SignInScreen';
@@ -13,7 +14,7 @@ import { useAgentApp, type AgentActions, type AgentState, type Screen } from './
 import '../../shared/screens.css';
 import './agent.css';
 
-type Tab = 'home' | 'accept' | 'release';
+type Tab = 'home' | 'accept' | 'release' | 'records';
 
 export function App() {
   const { state, actions, notifications } = useAgentApp();
@@ -36,12 +37,13 @@ export function App() {
   }
 
   const open = state.agent?.openState !== 'closed';
-  const tab: Tab = state.screen === 'accept' ? 'accept' : state.screen === 'release' ? 'release' : 'home';
+  const tab: Tab = state.screen === 'accept' ? 'accept' : state.screen === 'release' ? 'release' : state.screen === 'records' ? 'records' : 'home';
 
   const tabs: NavItem<Tab>[] = [
     { key: 'home', label: 'My shop', icon: 'home' },
     { key: 'accept', label: 'Take in', icon: 'box' },
     { key: 'release', label: 'Hand out', icon: 'person' },
+    { key: 'records', label: 'Records', icon: 'grid' },
   ];
 
   return (
@@ -106,6 +108,8 @@ function ScreenRouter({ screen, state, actions }: { screen: Screen; state: Agent
       return <VoidScreen state={state} actions={actions} />;
     case 'rates':
       return <RatesScreen state={state} actions={actions} />;
+    case 'records':
+      return <RecordsScreen state={state} actions={actions} />;
     default:
       return <HomeScreen state={state} actions={actions} />;
   }

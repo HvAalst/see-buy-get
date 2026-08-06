@@ -251,3 +251,50 @@ export function voidCountdownLabel(ms: number): string {
   if (seconds < 60) return `${seconds} sec left to undo`;
   return `${Math.ceil(seconds / 60)} min left to undo`;
 }
+
+/* --------------------------------------------------------------- registers (R4) -- */
+
+/** The word the SHOP reads for a parcel's status in its history register. */
+export function parcelStatusWord(status: ParcelStatus): string {
+  switch (status) {
+    case 'Created':
+      return 'Label made';
+    case 'At_PUDO':
+      return 'At a shop';
+    case 'On_Bus':
+      return 'On the bus';
+    case 'At_MDP':
+      return 'At the sort hub';
+    case 'Ready_For_Pickup':
+      return 'Ready for pickup';
+    case 'Delivered':
+      return 'Collected';
+    case 'Disputed':
+      return 'Problem reported';
+    case 'Voided':
+      return 'Cancelled';
+  }
+}
+
+/** The shop's role in a parcel's journey — it took the parcel IN, or handed it OUT. */
+export function parcelRoleWord(role: 'origin' | 'dest'): string {
+  return role === 'origin' ? 'Took in' : 'Handed out';
+}
+
+/** The shop's word for an earnings-ledger entry type. */
+export function agentLedgerTypeWord(type: string): string {
+  switch (type) {
+    case 'TOP_UP':
+      return 'Top-up';
+    case 'FEE':
+      return 'Shipping fee';
+    case 'LABOR_PAYOUT':
+      return 'Handling pay';
+    case 'REFUND':
+      return 'Refund';
+    case 'OVERDRAFT':
+      return 'Credit';
+    default:
+      return type;
+  }
+}

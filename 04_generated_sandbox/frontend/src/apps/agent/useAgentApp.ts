@@ -14,21 +14,57 @@ import { errorSentence } from '../../shared/ui';
 import type { IconName } from '../../shared/ui/Icon';
 import { agentConfig, clearDid, createAgentClient, purgeAgentTokens, readDid, readEmail, saveDid, saveEmail } from './api';
 import { signal } from '../../shared/feedback';
+import { triggerDownload } from '../../shared/download';
 import { EMPTY_ACCEPT, destinationZones, otpValid, type AcceptForm } from './logic';
 import type {
+  AgentLedgerRow,
+  AgentParcelRow,
   AgentView,
   ArriveView,
   CollectView,
   CorridorRow,
   GateView,
   HandoverView,
+  LedgerSummary,
   ParcelView,
   RatesView,
   ReceiveBagView,
 } from './types';
 
-export type Screen = 'home' | 'accept' | 'handover' | 'release' | 'collect' | 'receivebag' | 'rates' | 'void';
+export type Screen = 'home' | 'accept' | 'handover' | 'release' | 'collect' | 'receivebag' | 'rates' | 'void' | 'records';
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
+
+/* --- R4 registers: the shop's parcel history + earnings, server-side searched / filtered / paged --- */
+
+export interface HistQuery {
+  q: string;
+  status: string;
+  role: '' | 'origin' | 'dest';
+  from: string;
+  to: string;
+  sort: 'newest' | 'oldest';
+  offset: number;
+}
+export const HIST_LIMIT = 20;
+export const INITIAL_HIST_QUERY: HistQuery = { q: '', status: '', role: '', from: '', to: '', sort: 'newest', offset: 0 };
+export function histApiQuery(q: HistQuery) {
+  return { q: q.q || undefined, status: q.status || undefined, role: q.role || undefined, from: q.from || undefined, to: q.to || undefined, sort: q.sort, limit: String(HIST_LIMIT), offset: String(q.offset) };
+}
+
+export interface EarnQuery {
+  q: string;
+  type: '' | 'TOP_UP' | 'FEE' | 'LABOR_PAYOUT' | 'REFUND' | 'OVERDRAFT';
+  direction: '' | 'in' | 'out';
+  from: string;
+  to: string;
+  sort: 'newest' | 'oldest' | 'amount_desc' | 'amount_asc';
+  offset: number;
+}
+export const EARN_LIMIT = 20;
+export const INITIAL_EARN_QUERY: EarnQuery = { q: '', type: '', direction: '', from: '', to: '', sort: 'newest', offset: 0 };
+export function earnApiQuery(q: EarnQuery) {
+  return { q: q.q || undefined, type: q.type || undefined, direction: q.direction || undefined, from: q.from || undefined, to: q.to || undefined, sort: q.sort, limit: String(EARN_LIMIT), offset: String(q.offset) };
+}
 
 export interface Toast {
   id: number;
@@ -49,6 +85,17 @@ export interface AgentState {
   shopParcelsState: 'idle' | 'loading' | 'ready' | 'error';
   rates: RatesView | null;
   ratesState: 'idle' | 'loading' | 'ready' | 'error';
+  /** R4 — the shop's parcel-history register (a filtered/paged page). */
+  parcelHist: AgentParcelRow[];
+  parcelHistTotal: number;
+  parcelHistState: 'idle' | 'loading' | 'ready' | 'error';
+  parcelHistQuery: HistQuery;
+  /** R4 — the shop's earnings register (a filtered/paged page + the current view's totals). */
+  ledger: AgentLedgerRow[];
+  ledgerTotal: number;
+  ledgerState: 'idle' | 'loading' | 'ready' | 'error';
+  ledgerQuery: EarnQuery;
+  ledgerSummary: LedgerSummary | null;
   error: SbgError | null;
   toasts: Toast[];
   busy: string | null;
@@ -81,6 +128,15 @@ const INITIAL: AgentState = {
   shopParcelsState: 'idle',
   rates: null,
   ratesState: 'idle',
+  parcelHist: [],
+  parcelHistTotal: 0,
+  parcelHistState: 'idle',
+  parcelHistQuery: INITIAL_HIST_QUERY,
+  ledger: [],
+  ledgerTotal: 0,
+  ledgerState: 'idle',
+  ledgerQuery: INITIAL_EARN_QUERY,
+  ledgerSummary: null,
   error: null,
   toasts: [],
   busy: null,
@@ -383,6 +439,88 @@ export function useAgentApp() {
     setState((s) => ({ ...s, rates: narrow<RatesView>(r.data), ratesState: 'ready' }));
   }, [client, fail]);
 
+  /* ----------------------------------------------------- registers (R4) */
+
+  const histEpoch = useRef(0);
+  const fetchHistoryWith = useCallback(
+    async (query: HistQuery) => {
+      if (!client || !did) return;
+      const epoch = ++histEpoch.current;
+      setState((s) => (s.parcelHistState === 'ready' ? s : { ...s, parcelHistState: 'loading' }));
+      const r = await client.api.parcels(did, histApiQuery(query));
+      if (epoch !== histEpoch.current) return;
+      if (r.error) {
+        setState((s) => ({ ...s, parcelHistState: 'error' }));
+        fail(r.error);
+        return;
+      }
+      const page = narrow<{ items?: AgentParcelRow[]; total?: number }>(r.data);
+      const items = page.items ?? [];
+      const total = page.total ?? 0;
+      if (items.length === 0 && total > 0 && query.offset >= total) {
+        const lastOffset = Math.max(0, (Math.ceil(total / HIST_LIMIT) - 1) * HIST_LIMIT);
+        setState((s) => (s.parcelHistQuery.offset === query.offset ? { ...s, parcelHistQuery: { ...s.parcelHistQuery, offset: lastOffset } } : s));
+        void fetchHistoryWith({ ...query, offset: lastOffset });
+        return;
+      }
+      setState((s) => ({ ...s, parcelHist: items, parcelHistTotal: total, parcelHistState: 'ready' }));
+    },
+    [client, did, fail],
+  );
+  const queryHistory = useCallback(
+    (patch: Partial<HistQuery>) => {
+      const offsetOnly = Object.keys(patch).length === 1 && 'offset' in patch;
+      const next: HistQuery = { ...stateRef.current.parcelHistQuery, ...patch, offset: offsetOnly ? (patch.offset ?? 0) : 0 };
+      setState((s) => ({ ...s, parcelHistQuery: next, parcelHistState: 'loading' }));
+      void fetchHistoryWith(next);
+    },
+    [fetchHistoryWith],
+  );
+  const loadHistory = useCallback(() => {
+    void fetchHistoryWith(stateRef.current.parcelHistQuery);
+  }, [fetchHistoryWith]);
+
+  const ledgerEpoch = useRef(0);
+  const fetchLedgerWith = useCallback(
+    async (query: EarnQuery) => {
+      if (!client || !did) return;
+      const epoch = ++ledgerEpoch.current;
+      setState((s) => (s.ledgerState === 'ready' ? s : { ...s, ledgerState: 'loading' }));
+      const [pageR, sumR] = await Promise.all([client.api.ledger(did, earnApiQuery(query)), client.api.ledgerSummary(did, earnApiQuery(query))]);
+      if (epoch !== ledgerEpoch.current) return;
+      if (pageR.error) {
+        // Blank the filter-dependent summary too (a failed load must not leave a stale total on the header).
+        setState((s) => ({ ...s, ledgerState: 'error', ledgerSummary: null }));
+        fail(pageR.error);
+        return;
+      }
+      const page = narrow<{ items?: AgentLedgerRow[]; total?: number }>(pageR.data);
+      const items = page.items ?? [];
+      const total = page.total ?? 0;
+      if (items.length === 0 && total > 0 && query.offset >= total) {
+        const lastOffset = Math.max(0, (Math.ceil(total / EARN_LIMIT) - 1) * EARN_LIMIT);
+        setState((s) => (s.ledgerQuery.offset === query.offset ? { ...s, ledgerQuery: { ...s.ledgerQuery, offset: lastOffset } } : s));
+        void fetchLedgerWith({ ...query, offset: lastOffset });
+        return;
+      }
+      const summary = sumR.error ? null : narrow<LedgerSummary>(sumR.data);
+      setState((s) => ({ ...s, ledger: items, ledgerTotal: total, ledgerState: 'ready', ledgerSummary: summary }));
+    },
+    [client, did, fail],
+  );
+  const queryLedger = useCallback(
+    (patch: Partial<EarnQuery>) => {
+      const offsetOnly = Object.keys(patch).length === 1 && 'offset' in patch;
+      const next: EarnQuery = { ...stateRef.current.ledgerQuery, ...patch, offset: offsetOnly ? (patch.offset ?? 0) : 0 };
+      setState((s) => ({ ...s, ledgerQuery: next, ledgerState: 'loading' }));
+      void fetchLedgerWith(next);
+    },
+    [fetchLedgerWith],
+  );
+  const loadEarnings = useCallback(() => {
+    void fetchLedgerWith(stateRef.current.ledgerQuery);
+  }, [fetchLedgerWith]);
+
   const go = useCallback(
     (screen: Screen) => {
       setState((s) => ({
@@ -450,6 +588,30 @@ export function useAgentApp() {
       setState((s) => (s.busy === key ? { ...s, busy: null } : s));
     }
   }, []);
+
+  /** Export the whole current-filter parcel history (every page) as a CSV download — server-rendered. */
+  const exportHistory = useCallback(async () => {
+    if (!client || !did) return;
+    await run('export-history', async () => {
+      const q = stateRef.current.parcelHistQuery;
+      const r = await client.api.parcelsExport(did, { q: q.q || undefined, status: q.status || undefined, role: q.role || undefined, from: q.from || undefined, to: q.to || undefined, sort: q.sort });
+      if (r.error) return fail(r.error);
+      triggerDownload('parcels.csv', narrow<string>(r.data));
+      pushToast({ tone: 'ok', icon: 'check', title: 'History exported', detail: 'Saved parcels.csv to your device.' });
+    });
+  }, [client, did, run, fail, pushToast]);
+
+  /** Export the whole current-filter earnings ledger (every page) as a CSV download — server-rendered. */
+  const exportLedger = useCallback(async () => {
+    if (!client || !did) return;
+    await run('export-ledger', async () => {
+      const q = stateRef.current.ledgerQuery;
+      const r = await client.api.ledgerExport(did, { q: q.q || undefined, type: q.type || undefined, direction: q.direction || undefined, from: q.from || undefined, to: q.to || undefined, sort: q.sort });
+      if (r.error) return fail(r.error);
+      triggerDownload('earnings.csv', narrow<string>(r.data));
+      pushToast({ tone: 'ok', icon: 'check', title: 'Earnings exported', detail: 'Saved earnings.csv to your device.' });
+    });
+  }, [client, did, run, fail, pushToast]);
 
   const topUp = useCallback(
     async (amount: number) => {
@@ -742,6 +904,12 @@ export function useAgentApp() {
       forgot,
       reset,
       go,
+      queryHistory,
+      loadHistory,
+      exportHistory,
+      queryLedger,
+      loadEarnings,
+      exportLedger,
       setAccept,
       setHandover,
       toggleHandover,

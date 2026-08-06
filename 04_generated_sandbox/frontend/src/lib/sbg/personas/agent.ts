@@ -1,6 +1,30 @@
 import type { SbgClient } from '../client';
 import { createMediaApi } from './media';
 
+/** The agent parcel-history register query (all optional). */
+export interface AgentParcelsQuery {
+  q?: string;
+  status?: string;
+  role?: 'origin' | 'dest';
+  from?: string;
+  to?: string;
+  sort?: 'newest' | 'oldest';
+  limit?: string;
+  offset?: string;
+}
+
+/** The agent earnings-ledger register query (all optional). */
+export interface AgentLedgerQuery {
+  q?: string;
+  type?: 'TOP_UP' | 'FEE' | 'LABOR_PAYOUT' | 'REFUND' | 'OVERDRAFT';
+  direction?: 'in' | 'out';
+  from?: string;
+  to?: string;
+  sort?: 'newest' | 'oldest' | 'amount_desc' | 'amount_asc';
+  limit?: string;
+  offset?: string;
+}
+
 /**
  * Agent persona facade — the ONLY operations the PUDO shop app can name. A compile-time
  * mirror of the runtime scope check: the agent PWA literally cannot type a fleet or hub
@@ -48,6 +72,21 @@ export function createAgentApi(sbg: SbgClient) {
     /** Parcels sitting at this shop, waiting for the bus. */
     parcelsAtShop: (did: string) =>
       sbg.request((c) => c.GET('/v1/sbg/parcels', { params: { query: { status: 'At_PUDO', agent: did } } })),
+
+    /** The shop's PARCEL-HISTORY register (R4): parcels it handled (drop-off or collection), server-side
+     *  searched / filtered / sorted / paged → { items, total }. Owner-scoped. */
+    parcels: (did: string, query?: AgentParcelsQuery) =>
+      sbg.request((c) => c.GET('/v1/sbg/agents/{did}/parcels', { params: { path: { did }, query: query ?? {} } })),
+    parcelsExport: (did: string, query?: AgentParcelsQuery) =>
+      sbg.request((c) => c.GET('/v1/sbg/agents/{did}/parcels/export', { params: { path: { did }, query: query ?? {} }, parseAs: 'text' })),
+
+    /** The shop's EARNINGS register (R4): its own ledger (top-ups / handling pay / fees / refunds). Owner-scoped. */
+    ledger: (did: string, query?: AgentLedgerQuery) =>
+      sbg.request((c) => c.GET('/v1/sbg/agents/{did}/ledger', { params: { path: { did }, query: query ?? {} } })),
+    ledgerSummary: (did: string, query?: AgentLedgerQuery) =>
+      sbg.request((c) => c.GET('/v1/sbg/agents/{did}/ledger/summary', { params: { path: { did }, query: query ?? {} } })),
+    ledgerExport: (did: string, query?: AgentLedgerQuery) =>
+      sbg.request((c) => c.GET('/v1/sbg/agents/{did}/ledger/export', { params: { path: { did }, query: query ?? {} }, parseAs: 'text' })),
 
     /** One parcel by sticker id (drives the release flow's state machine). */
     parcel: (id: string) => sbg.request((c) => c.GET('/v1/sbg/parcels/{id}', { params: { path: { id } } })),

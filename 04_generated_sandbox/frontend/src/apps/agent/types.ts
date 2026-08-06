@@ -113,3 +113,38 @@ export interface RatesView {
   pins: RatePin[];
   radiusKm?: number;
 }
+
+/* ------------------------------------------------------------- registers (R4) -- */
+
+/** One row of the shop's parcel-history register — the shop's OWN handling, no buyer PII, no collection code. */
+export interface AgentParcelRow {
+  parcelId: string;
+  did?: string;
+  status: ParcelStatus;
+  role: 'origin' | 'dest'; // took it in (drop-off) vs handed it out (collection)
+  originZone: string;
+  destZone: string;
+  size: ParcelSize;
+  trackingKey?: string;
+  createdAt: string;
+}
+
+/** One row of the shop's earnings ledger. */
+export interface AgentLedgerRow {
+  id: string;
+  type: 'TOP_UP' | 'FEE' | 'LABOR_PAYOUT' | 'REFUND' | 'OVERDRAFT' | string;
+  sign: '+' | '-';
+  amount: number;
+  reference: string;
+  refType?: string;
+  at: string;
+}
+
+/** The earnings register's running totals for the CURRENT filtered view, plus the always-current wallet balance. */
+export interface LedgerSummary {
+  in: number;
+  out: number;
+  net: number;
+  count: number;
+  balance: number;
+}
