@@ -29,7 +29,7 @@ import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
-import { AcceptParcelDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, CoupleDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, OverdraftDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetPriceDto, ShelfDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto } from './pudo.dto';
+import { AcceptParcelDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, CoupleDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, OverdraftDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetPriceDto, ShelfDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto } from './pudo.dto';
 import { classifySize, SIZE_WEIGHT_KG } from './pudo.config';
 import { haversineKm } from './geo';
 
@@ -222,9 +222,51 @@ export class SbgController {
     return this.gate.overdraft(did, dto.amount, auditActor(actor, dto.adminId));
   }
 
+  /** A shop's EARNINGS register (R4): its OWN ledger (top-ups / handling pay / shipping fees / refunds),
+   *  server-side searched / filtered / sorted / paginated → { items, total }. Owner-scoped (was unscoped —
+   *  a data-firewall fix: a shop's money history must not be readable by another token via the path did). */
+  @Scopes('wallet:read:self')
   @Get('agents/:did/ledger')
-  agentLedger(@Param('did') did: string) {
-    return this.gate.entries({ did });
+  agentLedger(@Param('did') did: string, @Query() query: AgentLedgerQueryDto, @Actor() actor: IntrospectionResult) {
+    this.assertAgentOwner(did, actor);
+    return this.gate.agentLedgerPage(did, query);
+  }
+
+  /** Running totals (in / out / net / count) for the current filter + the always-current wallet balance. Owner-scoped. */
+  @Scopes('wallet:read:self')
+  @Get('agents/:did/ledger/summary')
+  agentLedgerSummary(@Param('did') did: string, @Query() query: AgentLedgerQueryDto, @Actor() actor: IntrospectionResult) {
+    this.assertAgentOwner(did, actor);
+    return { ...this.gate.agentLedgerSummary(did, query), balance: this.agents.balance(did) };
+  }
+
+  /** Export the whole matching set (every page, current filters) as CSV — the shop's OWN earnings export. Owner-scoped. */
+  @Scopes('wallet:read:self')
+  @Get('agents/:did/ledger/export')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="earnings.csv"')
+  agentLedgerExport(@Param('did') did: string, @Query() query: AgentLedgerQueryDto, @Actor() actor: IntrospectionResult): string {
+    this.assertAgentOwner(did, actor);
+    return this.gate.agentLedgerCsv(did, query);
+  }
+
+  /** A shop's PARCEL-HISTORY register (R4): the parcels it handled (drop-off origin or collection dest),
+   *  server-side searched / filtered / sorted / paginated → { items, total }. Owner-scoped. */
+  @Scopes('agent:read:self')
+  @Get('agents/:did/parcels')
+  agentParcels(@Param('did') did: string, @Query() query: AgentParcelsQueryDto, @Actor() actor: IntrospectionResult) {
+    this.assertAgentOwner(did, actor);
+    return this.parcels.agentParcelsPage(did, query);
+  }
+
+  /** Export the shop's parcel history (every page, current filters) as CSV. Owner-scoped. */
+  @Scopes('agent:read:self')
+  @Get('agents/:did/parcels/export')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="parcels.csv"')
+  agentParcelsExport(@Param('did') did: string, @Query() query: AgentParcelsQueryDto, @Actor() actor: IntrospectionResult): string {
+    this.assertAgentOwner(did, actor);
+    return this.parcels.agentParcelsCsv(did, query);
   }
 
   // --- corridors + drivers (↔ M3 light) ---
@@ -385,6 +427,16 @@ export class SbgController {
     const vendor = this.vendors.get(id); // 404 if unknown
     if (actor?.role !== 'operator' && (!actor?.did || actor.did !== vendor.did)) {
       throw new GlosError('FORBIDDEN', 'This store is not yours to view');
+    }
+  }
+
+  /** OWNER GATE for a shop's own data (R4). 404 on an unknown shop; 403 unless the caller IS that shop — a
+   *  shop's token carries did = the agent did — or an operator. The did IS the record key, so we compare it
+   *  directly. Without this, the earnings ledger + parcel history would be readable for any shop by path did. */
+  private assertAgentOwner(did: string, actor: IntrospectionResult): void {
+    this.agents.get(did); // 404 if unknown
+    if (actor?.role !== 'operator' && (!actor?.did || actor.did !== did)) {
+      throw new GlosError('FORBIDDEN', 'This shop is not yours to view');
     }
   }
 

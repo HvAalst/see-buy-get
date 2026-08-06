@@ -148,6 +148,61 @@ export function vendorOrdersToCsv(rows: Parcel[]): string {
     rows.map((p) => [p.externalOrderId ?? p.parcelId, p.did ?? '', p.receiverMobile, vendorProducts(p), p.status, p.paidStatus ?? '', p.destZone, p.shipmentCost ?? '', p.buyerCharge ?? '', p.acceptedAt]),
   );
 }
+
+/* ----------------------- agent parcel-history register (R4) — the parcels through a shop --------------- */
+
+/** The AGENT register is about the shop's OWN handling, not the buyer — so it carries only parcel / route /
+ *  status facts: no buyer PII, no collection code. A shop's parcels are those where it is the drop-off
+ *  (origin) OR the collection point (dest). */
+export interface AgentParcelsQuery {
+  q?: string; // parcel id / shipment DID / tracking key / zone
+  status?: string;
+  role?: 'origin' | 'dest'; // took it IN (drop-off) vs handing it OUT (collection)
+  from?: string; // ISO or YYYY-MM-DD (inclusive)
+  to?: string;
+  sort?: 'newest' | 'oldest';
+  limit?: number | string;
+  offset?: number | string;
+}
+
+export interface AgentParcelRow {
+  parcelId: string;
+  did?: string;
+  status: ParcelStatus;
+  role: 'origin' | 'dest';
+  originZone: string;
+  destZone: string;
+  size: ParcelSize;
+  trackingKey?: string;
+  createdAt: string;
+}
+
+/** This shop's relation to a parcel: the drop-off (origin) or the collection point (dest). */
+export function agentParcelRole(p: Parcel, agentDid: string): 'origin' | 'dest' {
+  return p.originAgentDid === agentDid ? 'origin' : 'dest';
+}
+
+export function agentParcelRowOf(p: Parcel, agentDid: string): AgentParcelRow {
+  return { parcelId: p.parcelId, did: p.did, status: p.status, role: agentParcelRole(p, agentDid), originZone: p.originZone, destZone: p.destZone, size: p.size, trackingKey: p.trackingKey, createdAt: p.acceptedAt };
+}
+
+/** Filter + search + sort a shop's parcels for its history register (PURE — the owner scope + the
+ *  list({agentDid}) that restricts to THIS shop's parcels are the caller's). */
+export function filterAgentParcels(rows: Parcel[], agentDid: string, q: AgentParcelsQuery): Parcel[] {
+  let out = rows;
+  if (q.status) out = out.filter((p) => p.status === q.status);
+  if (q.role) out = out.filter((p) => agentParcelRole(p, agentDid) === q.role);
+  if (q.from || q.to) out = out.filter((p) => withinDates(p.acceptedAt, q.from, q.to));
+  if (q.q) out = out.filter((p) => textMatch([p.parcelId, p.did, p.trackingKey, p.originZone, p.destZone], q.q));
+  return [...out].sort(q.sort === 'oldest' ? (a, b) => a.acceptedAt.localeCompare(b.acceptedAt) : (a, b) => b.acceptedAt.localeCompare(a.acceptedAt));
+}
+
+export function agentParcelsToCsv(rows: Parcel[], agentDid: string): string {
+  return toCsv(
+    ['Parcel', 'Shipment DID', 'Role', 'Status', 'From', 'To', 'Size', 'Tracking', 'Date'],
+    rows.map((p) => [p.parcelId, p.did ?? '', agentParcelRole(p, agentDid), p.status, p.originZone, p.destZone, p.size, p.trackingKey ?? '', p.acceptedAt]),
+  );
+}
 import { qrSvgGroup } from '../../foundation/label/qr';
 
 interface AcceptInput {
@@ -960,6 +1015,18 @@ export class ParcelService implements OnApplicationBootstrap {
    *  so they stay honest regardless of the register's active filter or page. */
   vendorOrderStats(vendorId: string): VendorOrderStats {
     return vendorOrderStatsOf(this.list({ vendorId }));
+  }
+
+  // --- agent parcel-history register (R4): the shop's OWN parcels (origin or dest), owner-scoped by caller ---
+
+  agentParcelsPage(agentDid: string, q: AgentParcelsQuery): Page<AgentParcelRow> {
+    const filtered = filterAgentParcels(this.list({ agentDid }), agentDid, q);
+    const { items, total } = paginate(filtered, q.limit, q.offset);
+    return { items: items.map((p) => agentParcelRowOf(p, agentDid)), total };
+  }
+
+  agentParcelsCsv(agentDid: string, q: AgentParcelsQuery): string {
+    return agentParcelsToCsv(filterAgentParcels(this.list({ agentDid }), agentDid, q), agentDid);
   }
 
   // --- internals ---

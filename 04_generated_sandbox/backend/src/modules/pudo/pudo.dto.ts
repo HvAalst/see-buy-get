@@ -237,6 +237,30 @@ export class VendorLedgerQueryDto {
   @IsOptional() @IsString() offset?: string;
 }
 
+/** R4 — the agent parcel-history register query: search / status / role / date / sort + paging. */
+export class AgentParcelsQueryDto {
+  @IsOptional() @IsString() q?: string; // parcel id / DID / tracking / zone
+  @IsOptional() @IsString() status?: string;
+  @IsOptional() @IsIn(['origin', 'dest']) role?: 'origin' | 'dest';
+  @IsOptional() @IsString() from?: string; // ISO or YYYY-MM-DD (inclusive)
+  @IsOptional() @IsString() to?: string;
+  @IsOptional() @IsIn(['newest', 'oldest']) sort?: 'newest' | 'oldest';
+  @IsOptional() @IsString() limit?: string;
+  @IsOptional() @IsString() offset?: string;
+}
+
+/** R4 — the agent earnings-ledger register query. */
+export class AgentLedgerQueryDto {
+  @IsOptional() @IsString() q?: string; // reference (parcel id / bank ref) or type word
+  @IsOptional() @IsIn(['TOP_UP', 'FEE', 'LABOR_PAYOUT', 'REFUND', 'OVERDRAFT']) type?: 'TOP_UP' | 'FEE' | 'LABOR_PAYOUT' | 'REFUND' | 'OVERDRAFT';
+  @IsOptional() @IsIn(['in', 'out']) direction?: 'in' | 'out';
+  @IsOptional() @IsString() from?: string; // ISO or YYYY-MM-DD (inclusive)
+  @IsOptional() @IsString() to?: string;
+  @IsOptional() @IsIn(['newest', 'oldest', 'amount_desc', 'amount_asc']) sort?: 'newest' | 'oldest' | 'amount_desc' | 'amount_asc';
+  @IsOptional() @IsString() limit?: string;
+  @IsOptional() @IsString() offset?: string;
+}
+
 class OrderItemDto {
   @IsString() name!: string;
   @IsNumber() @Min(1) qty!: number;

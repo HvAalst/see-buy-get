@@ -8,6 +8,104 @@ import { WalletService } from '../m1/wallet/wallet.service';
 import { AgentService } from './agent.service';
 import { LOCK_THRESHOLD } from './pudo.config';
 import { LedgerType, PudoLedgerEntry } from './pudo.types';
+import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
+
+/* ------------------- agent earnings-ledger register (R4) — the mirror of the vendor ledger (R3) ------- */
+
+/** The shop's word for a ledger entry: it earns handling pay + shipping fees, tops up its float, and takes
+ *  refunds / emergency credit. */
+export function agentLedgerTypeWord(type: LedgerType): string {
+  switch (type) {
+    case 'TOP_UP':
+      return 'Top-up';
+    case 'FEE':
+      return 'Shipping fee';
+    case 'LABOR_PAYOUT':
+      return 'Handling pay';
+    case 'REFUND':
+      return 'Refund';
+    case 'OVERDRAFT':
+      return 'Credit';
+    default:
+      return type;
+  }
+}
+
+export interface AgentLedgerQuery {
+  q?: string; // reference (parcel id / bank ref) or the type word
+  type?: LedgerType;
+  direction?: 'in' | 'out'; // in = received (sign '+'), out = spent (sign '-')
+  from?: string; // ISO or YYYY-MM-DD (inclusive)
+  to?: string;
+  sort?: 'newest' | 'oldest' | 'amount_desc' | 'amount_asc';
+  limit?: number | string;
+  offset?: number | string;
+}
+
+export interface AgentLedgerRow {
+  id: string;
+  type: LedgerType;
+  sign: '+' | '-';
+  amount: number;
+  reference: string;
+  refType: PudoLedgerEntry['refType'];
+  at: string;
+}
+
+export function agentLedgerRowOf(e: PudoLedgerEntry): AgentLedgerRow {
+  return { id: e.id, type: e.type, sign: e.sign, amount: e.amount, reference: e.reference, refType: e.refType, at: e.at };
+}
+
+export interface AgentLedgerSummary {
+  in: number;
+  out: number;
+  net: number;
+  count: number;
+}
+
+export function agentLedgerSummaryOf(rows: PudoLedgerEntry[]): AgentLedgerSummary {
+  let inSum = 0;
+  let outSum = 0;
+  for (const e of rows) {
+    if (e.sign === '+') inSum += e.amount;
+    else outSum += e.amount;
+  }
+  inSum = Math.round(inSum * 100) / 100;
+  outSum = Math.round(outSum * 100) / 100;
+  return { in: inSum, out: outSum, net: Math.round((inSum - outSum) * 100) / 100, count: rows.length };
+}
+
+function agentLedgerSort(sort?: AgentLedgerQuery['sort']): (a: PudoLedgerEntry, b: PudoLedgerEntry) => number {
+  switch (sort) {
+    case 'oldest':
+      return (a, b) => a.at.localeCompare(b.at);
+    case 'amount_desc':
+      return (a, b) => b.amount - a.amount;
+    case 'amount_asc':
+      return (a, b) => a.amount - b.amount;
+    default:
+      return (a, b) => b.at.localeCompare(a.at); // newest first
+  }
+}
+
+/** Filter + search + sort a shop's ledger for the earnings register (PURE — the owner scope + entries({did})
+ *  that restrict to THIS shop are the caller's). */
+export function filterAgentLedger(rows: PudoLedgerEntry[], q: AgentLedgerQuery): PudoLedgerEntry[] {
+  let out = rows;
+  if (q.type) out = out.filter((e) => e.type === q.type);
+  if (q.direction) out = out.filter((e) => (q.direction === 'in' ? e.sign === '+' : e.sign === '-'));
+  if (q.from || q.to) out = out.filter((e) => withinDates(e.at, q.from, q.to));
+  if (q.q) out = out.filter((e) => textMatch([e.reference, agentLedgerTypeWord(e.type)], q.q));
+  return [...out].sort(agentLedgerSort(q.sort));
+}
+
+/** Render matched entries as the shop's earnings CSV. Amount is a SIGNED number (out negative). */
+export function agentLedgerToCsv(rows: PudoLedgerEntry[]): string {
+  return toCsv(
+    ['Date', 'Type', 'Direction', 'Amount', 'Reference'],
+    rows.map((e) => [e.at, agentLedgerTypeWord(e.type), e.sign === '+' ? 'in' : 'out', e.sign === '+' ? e.amount : -e.amount, e.reference]),
+  );
+}
 
 /**
  * WalletGateService (P-003, Light SSE ↔ GLOS SSE). The pre-paid wallet that enforces 'no money, no
@@ -107,6 +205,24 @@ export class WalletGateService {
 
   entries(filter: { did?: string; type?: LedgerType } = {}): PudoLedgerEntry[] {
     return [...this.ledger.values()].filter((e) => (!filter.did || e.did === filter.did) && (!filter.type || e.type === filter.type)).reverse();
+  }
+
+  // --- earnings register (R4): the shop's OWN ledger, server-side searched / filtered / sorted / paginated ---
+
+  agentLedgerPage(did: string, q: AgentLedgerQuery): Page<AgentLedgerRow> {
+    const filtered = filterAgentLedger(this.entries({ did }), q);
+    const { items, total } = paginate(filtered, q.limit, q.offset);
+    return { items: items.map(agentLedgerRowOf), total };
+  }
+
+  /** Running totals (in / out / net / count) for the CURRENT filtered view — the always-current balance
+   *  stays on the wallet, not here (parity with the vendor bookkeeping register). */
+  agentLedgerSummary(did: string, q: AgentLedgerQuery): AgentLedgerSummary {
+    return agentLedgerSummaryOf(filterAgentLedger(this.entries({ did }), q));
+  }
+
+  agentLedgerCsv(did: string, q: AgentLedgerQuery): string {
+    return agentLedgerToCsv(filterAgentLedger(this.entries({ did }), q));
   }
 
   /** Sum of all agent wallet balances — the platform's pre-paid liability (System Float). */
