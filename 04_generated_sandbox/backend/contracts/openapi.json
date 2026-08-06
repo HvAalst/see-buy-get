@@ -8420,6 +8420,326 @@
         }
       }
     },
+    "/v1/sbg/fleet/drivers/{did}/jobs": {
+      "get": {
+        "operationId": "Sbg.driverJobs",
+        "summary": "",
+        "description": "A driver's JOBS + EARNINGS register (R5): the dedicated-freight hauls they claimed, server-side searched /\n filtered / sorted / paginated → { items, total }. Each row carries the driver's agreed earning (lockedPrice)\n and whether it has been paid. Owner-scoped (403 for another driver).",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "available",
+                "claimed",
+                "in_transit",
+                "delivered"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "paid",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "paid",
+                "unpaid"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "newest",
+                "oldest",
+                "earn_desc",
+                "earn_asc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/drivers/{did}/jobs/summary": {
+      "get": {
+        "operationId": "Sbg.driverJobsSummaryRoute",
+        "summary": "",
+        "description": "Running totals (earned / paid / unpaid / delivered / count) for the current filter. Owner-scoped.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "available",
+                "claimed",
+                "in_transit",
+                "delivered"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "paid",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "paid",
+                "unpaid"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "newest",
+                "oldest",
+                "earn_desc",
+                "earn_asc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/drivers/{did}/jobs/export": {
+      "get": {
+        "operationId": "Sbg.driverJobsExport",
+        "summary": "",
+        "description": "Export the whole matching set (every page, current filters) as CSV — the driver's OWN earnings export. Owner-scoped.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "available",
+                "claimed",
+                "in_transit",
+                "delivered"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "paid",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "paid",
+                "unpaid"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "newest",
+                "oldest",
+                "earn_desc",
+                "earn_asc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/dispatch/offers/{id}/claim": {
       "post": {
         "operationId": "Sbg.claimOffer",

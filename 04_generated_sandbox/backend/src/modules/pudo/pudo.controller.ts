@@ -29,7 +29,7 @@ import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
-import { AcceptParcelDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, CoupleDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, OverdraftDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetPriceDto, ShelfDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto } from './pudo.dto';
+import { AcceptParcelDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, CoupleDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, OverdraftDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetPriceDto, ShelfDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
 import { classifySize, SIZE_WEIGHT_KG } from './pudo.config';
 import { haversineKm } from './geo';
 
@@ -437,6 +437,15 @@ export class SbgController {
     this.agents.get(did); // 404 if unknown
     if (actor?.role !== 'operator' && (!actor?.did || actor.did !== did)) {
       throw new GlosError('FORBIDDEN', 'This shop is not yours to view');
+    }
+  }
+
+  /** OWNER GATE for a driver's own data (R5). 404 on an unknown driver; 403 unless the caller IS that driver
+   *  (its token carries did = the driver did) or an operator. */
+  private assertDriverOwner(did: string, actor: IntrospectionResult): void {
+    this.drivers.get(did); // 404 if unknown
+    if (actor?.role !== 'operator' && (!actor?.did || actor.did !== did)) {
+      throw new GlosError('FORBIDDEN', 'These jobs are not yours to view');
     }
   }
 
@@ -1245,6 +1254,34 @@ export class SbgController {
   @Get('fleet/drivers/:did/claims')
   driverClaims(@Param('did') did: string) {
     return { remainingCapacityKg: this.dispatch.remainingCapacity(did), claims: this.dispatch.claimsFor(did) };
+  }
+
+  /** A driver's JOBS + EARNINGS register (R5): the dedicated-freight hauls they claimed, server-side searched /
+   *  filtered / sorted / paginated → { items, total }. Each row carries the driver's agreed earning (lockedPrice)
+   *  and whether it has been paid. Owner-scoped (403 for another driver). */
+  @Scopes('driver:read:self')
+  @Get('fleet/drivers/:did/jobs')
+  driverJobs(@Param('did') did: string, @Query() query: DriverJobsQueryDto, @Actor() actor: IntrospectionResult) {
+    this.assertDriverOwner(did, actor);
+    return this.dispatch.driverJobsPage(did, query);
+  }
+
+  /** Running totals (earned / paid / unpaid / delivered / count) for the current filter. Owner-scoped. */
+  @Scopes('driver:read:self')
+  @Get('fleet/drivers/:did/jobs/summary')
+  driverJobsSummaryRoute(@Param('did') did: string, @Query() query: DriverJobsQueryDto, @Actor() actor: IntrospectionResult) {
+    this.assertDriverOwner(did, actor);
+    return this.dispatch.driverJobsSummary(did, query);
+  }
+
+  /** Export the whole matching set (every page, current filters) as CSV — the driver's OWN earnings export. Owner-scoped. */
+  @Scopes('driver:read:self')
+  @Get('fleet/drivers/:did/jobs/export')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="jobs.csv"')
+  driverJobsExport(@Param('did') did: string, @Query() query: DriverJobsQueryDto, @Actor() actor: IntrospectionResult): string {
+    this.assertDriverOwner(did, actor);
+    return this.dispatch.driverJobsCsv(did, query);
   }
 
   /** Driver accepts a suggestion → reserves the load + its weight against the vehicle's capacity. */

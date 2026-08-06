@@ -261,6 +261,18 @@ export class AgentLedgerQueryDto {
   @IsOptional() @IsString() offset?: string;
 }
 
+/** R5 — the driver jobs + earnings register query (over the driver's freight hauls). */
+export class DriverJobsQueryDto {
+  @IsOptional() @IsString() q?: string; // job code / description / destination / tracking / order ref
+  @IsOptional() @IsIn(['available', 'claimed', 'in_transit', 'delivered']) status?: 'available' | 'claimed' | 'in_transit' | 'delivered';
+  @IsOptional() @IsIn(['paid', 'unpaid']) paid?: 'paid' | 'unpaid';
+  @IsOptional() @IsString() from?: string; // ISO or YYYY-MM-DD (inclusive)
+  @IsOptional() @IsString() to?: string;
+  @IsOptional() @IsIn(['newest', 'oldest', 'earn_desc', 'earn_asc']) sort?: 'newest' | 'oldest' | 'earn_desc' | 'earn_asc';
+  @IsOptional() @IsString() limit?: string;
+  @IsOptional() @IsString() offset?: string;
+}
+
 class OrderItemDto {
   @IsString() name!: string;
   @IsNumber() @Min(1) qty!: number;

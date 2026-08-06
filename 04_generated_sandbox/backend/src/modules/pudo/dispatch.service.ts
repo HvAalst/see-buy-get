@@ -21,7 +21,101 @@ import { Router, ROUTER } from './router';
 import { DEFAULT_PRICE_PER_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, OFFER_TTL_MIN, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
-import { Claimable, ClaimableKind, Freight, FreightShipmentView, Offer, RoutePlan } from './dispatch.types';
+import { Claimable, ClaimableKind, Freight, FreightShipmentView, FreightStatus, Offer, RoutePlan } from './dispatch.types';
+import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
+
+/* --------------------- driver jobs + earnings register (R5) — a driver's freight hauls -------------- */
+
+/** A driver's "jobs" are the dedicated-freight hauls they CLAIMED (Freight.claimedBy === driverDid); each
+ *  carries the driver's agreed earning (lockedPrice, locked at claim) and whether it has been paid out.
+ *  Totes are excluded — they are unpriced to the driver (they settle on the parcel model). */
+export interface DriverJobsQuery {
+  q?: string; // job code / description / destination / tracking / order ref
+  status?: FreightStatus;
+  paid?: 'paid' | 'unpaid'; // the driver payout for this job
+  from?: string; // ISO or YYYY-MM-DD (inclusive)
+  to?: string;
+  sort?: 'newest' | 'oldest' | 'earn_desc' | 'earn_asc';
+  limit?: number | string;
+  offset?: number | string;
+}
+
+export interface DriverJobRow {
+  freightId: string;
+  code: string;
+  description: string;
+  destLabel: string;
+  status: FreightStatus;
+  cargoClass: string;
+  weightKg: number;
+  earning?: number; // lockedPrice — the driver's agreed pay for the haul
+  paid: boolean; // driverPaid
+  claimedAt?: string;
+  deliveredAt?: string;
+  createdAt: string;
+}
+
+/** The date a job is filed under in the register — when the driver CLAIMED it (falls back to creation). */
+function jobDate(f: Freight): string {
+  return f.claimedAt ?? f.createdAt;
+}
+
+export function driverJobRowOf(f: Freight): DriverJobRow {
+  return { freightId: f.freightId, code: f.code, description: f.description, destLabel: f.destLabel, status: f.status, cargoClass: f.cargoClass, weightKg: f.weightKg, earning: f.lockedPrice, paid: Boolean(f.driverPaid), claimedAt: f.claimedAt, deliveredAt: f.deliveredAt, createdAt: f.createdAt };
+}
+
+export interface DriverJobsSummary {
+  earned: number; // sum of the agreed earning over the set
+  paid: number; // of that, what has been paid out
+  unpaid: number; // earned - paid (still owed)
+  delivered: number; // jobs completed
+  count: number;
+}
+
+export function driverJobsSummaryOf(rows: Freight[]): DriverJobsSummary {
+  let earned = 0;
+  let paid = 0;
+  let delivered = 0;
+  for (const f of rows) {
+    const e = f.lockedPrice ?? 0;
+    earned += e;
+    if (f.driverPaid) paid += e;
+    if (f.status === 'delivered') delivered += 1;
+  }
+  earned = Math.round(earned * 100) / 100;
+  paid = Math.round(paid * 100) / 100;
+  return { earned, paid, unpaid: Math.round((earned - paid) * 100) / 100, delivered, count: rows.length };
+}
+
+function driverJobSort(sort?: DriverJobsQuery['sort']): (a: Freight, b: Freight) => number {
+  switch (sort) {
+    case 'oldest':
+      return (a, b) => jobDate(a).localeCompare(jobDate(b));
+    case 'earn_desc':
+      return (a, b) => (b.lockedPrice ?? 0) - (a.lockedPrice ?? 0);
+    case 'earn_asc':
+      return (a, b) => (a.lockedPrice ?? 0) - (b.lockedPrice ?? 0);
+    default:
+      return (a, b) => jobDate(b).localeCompare(jobDate(a)); // newest first
+  }
+}
+
+/** Filter + search + sort a driver's freight jobs (PURE — restricts to THIS driver's claimed hauls). */
+export function filterDriverJobs(rows: Freight[], driverDid: string, q: DriverJobsQuery): Freight[] {
+  let out = rows.filter((f) => f.claimedBy === driverDid);
+  if (q.status) out = out.filter((f) => f.status === q.status);
+  if (q.paid) out = out.filter((f) => (q.paid === 'paid' ? f.driverPaid === true : !f.driverPaid));
+  if (q.from || q.to) out = out.filter((f) => withinDates(jobDate(f), q.from, q.to));
+  if (q.q) out = out.filter((f) => textMatch([f.code, f.description, f.destLabel, f.trackingKey, f.externalOrderId], q.q));
+  return [...out].sort(driverJobSort(q.sort));
+}
+
+export function driverJobsToCsv(rows: Freight[]): string {
+  return toCsv(
+    ['Job', 'Description', 'Destination', 'Status', 'Class', 'Weight kg', 'Earning', 'Paid', 'Claimed', 'Delivered'],
+    rows.map((f) => [f.code, f.description, f.destLabel, f.status, f.cargoClass, f.weightKg, f.lockedPrice ?? '', f.driverPaid ? 'yes' : 'no', f.claimedAt ?? '', f.deliveredAt ?? '']),
+  );
+}
 
 /**
  * DispatchService — the opportunistic line-haul marketplace (Compendium Ch 19). PUDO agents (and
@@ -412,6 +506,23 @@ export class DispatchService {
 
   listFreight(filter: { status?: Freight['status'] } = {}): Freight[] {
     return [...this.freights.values()].filter((f) => !filter.status || f.status === filter.status);
+  }
+
+  // --- driver jobs + earnings register (R5): the driver's OWN freight hauls, owner-scoped by the caller ---
+
+  driverJobsPage(driverDid: string, q: DriverJobsQuery): Page<DriverJobRow> {
+    const filtered = filterDriverJobs([...this.freights.values()], driverDid, q);
+    const { items, total } = paginate(filtered, q.limit, q.offset);
+    return { items: items.map(driverJobRowOf), total };
+  }
+
+  /** Running totals (earned / paid / unpaid / delivered / count) for the CURRENT filtered view. */
+  driverJobsSummary(driverDid: string, q: DriverJobsQuery): DriverJobsSummary {
+    return driverJobsSummaryOf(filterDriverJobs([...this.freights.values()], driverDid, q));
+  }
+
+  driverJobsCsv(driverDid: string, q: DriverJobsQuery): string {
+    return driverJobsToCsv(filterDriverJobs([...this.freights.values()], driverDid, q));
   }
 
   /** All cargo currently claimed or moving (optionally scoped to one fleet's drivers) for the dashboard. */
