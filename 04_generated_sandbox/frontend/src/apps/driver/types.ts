@@ -23,6 +23,31 @@ export interface DriverRecord {
   licence?: { classes?: string[]; number?: string; expiresAt?: string };
 }
 
+/** R5 — one row of the driver jobs + earnings register (a claimed freight haul). No buyer identity. */
+export interface DriverJobRow {
+  freightId: string;
+  code: string;
+  description: string;
+  destLabel: string;
+  status: 'available' | 'claimed' | 'in_transit' | 'delivered' | string;
+  cargoClass: string;
+  weightKg: number;
+  earning?: number;
+  paid: boolean;
+  claimedAt?: string;
+  deliveredAt?: string;
+  createdAt: string;
+}
+
+/** R5 — the earnings register's running totals for the current filtered view. */
+export interface DriverJobsSummary {
+  earned: number;
+  paid: number;
+  unpaid: number;
+  delivered: number;
+  count: number;
+}
+
 export interface VehicleView {
   vehicleId: string;
   qr: string;

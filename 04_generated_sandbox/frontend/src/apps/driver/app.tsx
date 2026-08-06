@@ -1,5 +1,6 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { BottomNav, Button, Checklist, FeedbackFlash, Icon, NotificationBell, Pill, TopBar, type NavItem } from '../../shared/ui';
+import { EarningsScreen } from './screens/EarningsScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { LoadsScreen } from './screens/LoadsScreen';
 import { OffersScreen } from './screens/OffersScreen';
@@ -9,7 +10,7 @@ import { useDriverApp, type DriverActions, type DriverState, type Screen } from 
 import '../../shared/screens.css';
 import './driver.css';
 
-type Tab = 'home' | 'route' | 'loads';
+type Tab = 'home' | 'route' | 'loads' | 'earnings';
 
 export function App() {
   const { state, actions, notifications } = useDriverApp();
@@ -38,6 +39,7 @@ export function App() {
     { key: 'home', label: 'My van', icon: 'truck' },
     { key: 'route', label: 'Find work', icon: 'route', disabled: !onShift },
     { key: 'loads', label: 'My loads', icon: 'box', badge: state.claims.length || undefined, disabled: !onShift },
+    { key: 'earnings', label: 'Earnings', icon: 'wallet' },
   ];
 
   return (
@@ -93,7 +95,8 @@ export function App() {
 function ScreenRouter({ screen, state, actions }: { screen: Screen; state: DriverState; actions: DriverActions }) {
   // A stale tab (or a restored PWA) can be pointing at an on-shift screen after the shift
   // ended — the legacy page rendered those against a null vehicle. Re-check every time.
-  if (!state.session.active && screen !== 'home') return <HomeScreen state={state} actions={actions} />;
+  // Earnings is exempt: a driver reviews their jobs + pay whether or not they're on shift.
+  if (!state.session.active && screen !== 'home' && screen !== 'earnings') return <HomeScreen state={state} actions={actions} />;
 
   switch (screen) {
     case 'route':
@@ -102,6 +105,8 @@ function ScreenRouter({ screen, state, actions }: { screen: Screen; state: Drive
       return <OffersScreen state={state} actions={actions} />;
     case 'loads':
       return <LoadsScreen state={state} actions={actions} />;
+    case 'earnings':
+      return <EarningsScreen state={state} actions={actions} />;
     default:
       return <HomeScreen state={state} actions={actions} />;
   }

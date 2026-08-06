@@ -6,6 +6,8 @@ import { adoptDidFromUrl, clearDid, saveDid, saveRoute, savedRoute } from './sto
 import type {
   AgentRow,
   ClaimsView,
+  DriverJobRow,
+  DriverJobsSummary,
   DriverRecord,
   LoadBagView,
   MdpRow,
@@ -19,9 +21,26 @@ import type {
 } from './types';
 import { lastReadingBreached, minEarnFilter, nodeOptions } from './logic';
 import { downscaleImage } from '../../shared/media';
+import { triggerDownload } from '../../shared/download';
 import type { MediaKind } from '../../lib/sbg/personas/media';
 
-export type Screen = 'home' | 'route' | 'offers' | 'loads';
+export type Screen = 'home' | 'route' | 'offers' | 'loads' | 'earnings';
+
+/* --- R5: the driver jobs + earnings register query --- */
+export interface JobsQuery {
+  q: string;
+  status: '' | 'available' | 'claimed' | 'in_transit' | 'delivered';
+  paid: '' | 'paid' | 'unpaid';
+  from: string;
+  to: string;
+  sort: 'newest' | 'oldest' | 'earn_desc' | 'earn_asc';
+  offset: number;
+}
+export const JOBS_LIMIT = 20;
+export const INITIAL_JOBS_QUERY: JobsQuery = { q: '', status: '', paid: '', from: '', to: '', sort: 'newest', offset: 0 };
+export function jobsApiQuery(q: JobsQuery) {
+  return { q: q.q || undefined, status: q.status || undefined, paid: q.paid || undefined, from: q.from || undefined, to: q.to || undefined, sort: q.sort, limit: String(JOBS_LIMIT), offset: String(q.offset) };
+}
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
 
 export interface Toast {
@@ -49,6 +68,12 @@ export interface DriverState {
   offers: OfferView[];
   offerIndex: number;
   route: SavedRoute | null;
+  /** R5 — the driver jobs + earnings register (a filtered/paged page + the current view's totals). */
+  jobs: DriverJobRow[];
+  jobsTotal: number;
+  jobsState: 'idle' | 'loading' | 'ready' | 'error';
+  jobsQuery: JobsQuery;
+  jobsSummary: DriverJobsSummary | null;
   /** Screen-level failure — rendered as an ErrorNote, never as a raw string. */
   error: SbgError | null;
   toasts: Toast[];
@@ -76,6 +101,11 @@ const INITIAL: DriverState = {
   offers: [],
   offerIndex: 0,
   route: null,
+  jobs: [],
+  jobsTotal: 0,
+  jobsState: 'idle',
+  jobsQuery: INITIAL_JOBS_QUERY,
+  jobsSummary: null,
   error: null,
   toasts: [],
   busy: null,
@@ -266,8 +296,9 @@ export function useDriverApp() {
         error: null,
         stale: false,
         refreshing: false,
-        // A stale tab can still be sitting on offers/loads after the shift ended.
-        screen: !session.active && s.screen !== 'home' ? 'home' : s.screen,
+        // A stale tab can still be sitting on offers/loads after the shift ended — send it home. Earnings is
+        // exempt (a driver reviews jobs + pay OFF shift), matching the ScreenRouter guard in app.tsx.
+        screen: !session.active && s.screen !== 'home' && s.screen !== 'earnings' ? 'home' : s.screen,
         offers: session.active ? s.offers : [],
       }));
 
@@ -388,12 +419,55 @@ export function useDriverApp() {
     if (partial) fail(partial);
   }, [client, fail]);
 
+  /* ------------------------------------------------- jobs + earnings register (R5) */
+
+  const jobsEpoch = useRef(0);
+  const fetchJobsWith = useCallback(
+    async (query: JobsQuery) => {
+      if (!client || !did) return;
+      const epoch = ++jobsEpoch.current;
+      setState((s) => (s.jobsState === 'ready' ? s : { ...s, jobsState: 'loading' }));
+      const [pageR, sumR] = await Promise.all([client.api.jobs(did, jobsApiQuery(query)), client.api.jobsSummary(did, jobsApiQuery(query))]);
+      if (epoch !== jobsEpoch.current) return;
+      if (pageR.error) {
+        setState((s) => ({ ...s, jobsState: 'error', jobsSummary: null }));
+        fail(pageR.error);
+        return;
+      }
+      const page = narrow<{ items?: DriverJobRow[]; total?: number }>(pageR.data);
+      const items = page.items ?? [];
+      const total = page.total ?? 0;
+      if (items.length === 0 && total > 0 && query.offset >= total) {
+        const lastOffset = Math.max(0, (Math.ceil(total / JOBS_LIMIT) - 1) * JOBS_LIMIT);
+        setState((s) => (s.jobsQuery.offset === query.offset ? { ...s, jobsQuery: { ...s.jobsQuery, offset: lastOffset } } : s));
+        void fetchJobsWith({ ...query, offset: lastOffset });
+        return;
+      }
+      const summary = sumR.error ? null : narrow<DriverJobsSummary>(sumR.data);
+      setState((s) => ({ ...s, jobs: items, jobsTotal: total, jobsState: 'ready', jobsSummary: summary }));
+    },
+    [client, did, fail],
+  );
+  const queryJobs = useCallback(
+    (patch: Partial<JobsQuery>) => {
+      const offsetOnly = Object.keys(patch).length === 1 && 'offset' in patch;
+      const next: JobsQuery = { ...stateRef.current.jobsQuery, ...patch, offset: offsetOnly ? (patch.offset ?? 0) : 0 };
+      setState((s) => ({ ...s, jobsQuery: next, jobsState: 'loading' }));
+      void fetchJobsWith(next);
+    },
+    [fetchJobsWith],
+  );
+  const loadJobs = useCallback(() => {
+    void fetchJobsWith(stateRef.current.jobsQuery);
+  }, [fetchJobsWith]);
+
   const go = useCallback(
     (screen: Screen) => {
       setState((s) => ({ ...s, screen, error: null, form: screen === 'route' ? { ...s.form } : s.form }));
       if (screen === 'route') void loadNodes();
+      if (screen === 'earnings') void fetchJobsWith(stateRef.current.jobsQuery);
     },
-    [loadNodes],
+    [loadNodes, fetchJobsWith],
   );
 
   const setForm = useCallback(
@@ -425,6 +499,18 @@ export function useDriverApp() {
     },
     [],
   );
+
+  /** Export the whole current-filter jobs set (every page) as a CSV download — server-rendered. */
+  const exportJobs = useCallback(async () => {
+    if (!client || !did) return;
+    await run('export-jobs', async () => {
+      const q = stateRef.current.jobsQuery;
+      const r = await client.api.jobsExport(did, { q: q.q || undefined, status: q.status || undefined, paid: q.paid || undefined, from: q.from || undefined, to: q.to || undefined, sort: q.sort });
+      if (r.error) return fail(r.error);
+      triggerDownload('jobs.csv', narrow<string>(r.data));
+      pushToast({ tone: 'ok', icon: 'check', title: 'Jobs exported', detail: 'Saved jobs.csv to your device.' });
+    });
+  }, [client, did, run, fail, pushToast]);
 
   const startShift = useCallback(async () => {
     if (!client || !did) return;
@@ -675,6 +761,9 @@ export function useDriverApp() {
       signOut,
       go,
       setForm,
+      queryJobs,
+      loadJobs,
+      exportJobs,
       loadNodes,
       startShift,
       endShift,

@@ -1,6 +1,18 @@
 import type { SbgClient } from '../client';
 import { createMediaApi } from './media';
 
+/** The driver jobs + earnings register query (all optional). */
+export interface DriverJobsQuery {
+  q?: string;
+  status?: 'available' | 'claimed' | 'in_transit' | 'delivered';
+  paid?: 'paid' | 'unpaid';
+  from?: string;
+  to?: string;
+  sort?: 'newest' | 'oldest' | 'earn_desc' | 'earn_asc';
+  limit?: string;
+  offset?: string;
+}
+
 /**
  * Driver persona facade — the ONLY operations the driver app can name. Because it exports just this
  * slice, the driver PWA literally cannot type an operator or fleet-manager call: a compile-time mirror
@@ -19,6 +31,15 @@ export function createDriverApi(sbg: SbgClient) {
 
     /** The current shift session (coupled vehicle, corridor) — null-ish when off shift. */
     session: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}/session', { params: { path: { did } } })),
+
+    /** The driver's JOBS + EARNINGS register (R5): a searched/filtered/paged page of the freight hauls they
+     *  claimed → { items, total }. Owner-scoped. */
+    jobs: (did: string, query?: DriverJobsQuery) =>
+      sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}/jobs', { params: { path: { did }, query: query ?? {} } })),
+    jobsSummary: (did: string, query?: DriverJobsQuery) =>
+      sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}/jobs/summary', { params: { path: { did }, query: query ?? {} } })),
+    jobsExport: (did: string, query?: DriverJobsQuery) =>
+      sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}/jobs/export', { params: { path: { did }, query: query ?? {} }, parseAs: 'text' })),
 
     /** What the driver has claimed (totes / freight in hand). */
     claims: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}/claims', { params: { path: { did } } })),
