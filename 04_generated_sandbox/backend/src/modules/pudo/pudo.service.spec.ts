@@ -7,6 +7,7 @@ import { CorridorService } from './corridor.service';
 import { ParcelService } from './parcel.service';
 import { CargoService } from './cargo.service';
 import { SbgController } from './pudo.controller';
+import { IdentityController } from './identity.controller';
 import { MediaService } from './media.service';
 import { MonitorService } from './monitor.service';
 import { RatingService } from './rating.service';
@@ -69,6 +70,7 @@ describe('PUDO Light', () => {
   let marketPulse: MarketPulseService;
   let marketStore: MarketPulseStore;
   let controller: SbgController;
+  let identity: IdentityController;
   let managers: FleetManagerService;
   let accounts: AccountService;
   let otp: OtpService;
@@ -97,7 +99,7 @@ describe('PUDO Light', () => {
         GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder },
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
       ],
-      controllers: [SbgController],
+      controllers: [SbgController, IdentityController],
     }).compile();
     agents = moduleRef.get(AgentService);
     gate = moduleRef.get(WalletGateService);
@@ -117,6 +119,7 @@ describe('PUDO Light', () => {
     marketPulse = moduleRef.get(MarketPulseService);
     marketStore = moduleRef.get(MarketPulseStore);
     controller = moduleRef.get(SbgController);
+    identity = moduleRef.get(IdentityController);
     managers = moduleRef.get(FleetManagerService);
     accounts = moduleRef.get(AccountService);
     otp = moduleRef.get(OtpService);
@@ -518,6 +521,94 @@ describe('PUDO Light', () => {
     const store = vendors.register({ name: 'StoreW' });
     parcels.accept({ agentDid: origin.did, parcelId: 'QR-PG0', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'g.jpg' });
     expect(() => controller.settleParcel('QR-PG0', { role: 'genesis', did: store.did } as never)).toThrow(/minting store/);
+  });
+
+  // --- PG1: parcel genesis from the sender's own phone (the Send app mints, identically) ---
+
+  const enrollPerson = (phone: string) => persons.enroll(phone, true).person;
+  const asConsumer = (personDid: string) => ({ role: 'consumer', did: personDid }) as never;
+
+  it('PG1: a signed-in sender mints in-app — DID, locked price, journey twin and label at creation', async () => {
+    const flush = () => new Promise((r) => setImmediate(r));
+    twin.onModuleInit();
+    graduation.onModuleInit();
+    const origin = onboardAgent('PG1 O', 'NorthTown', 50);
+    const dest = onboardAgent('PG1 D', 'NorthTown', 50);
+    const sender = enrollPerson('+254700500001');
+    const res: any = identity.createParcel({ receiverMobile: '+254700500002', originPudoDid: origin.did, destPudoDid: dest.did, dimensionsCm: { l: 30, w: 20, h: 10 }, weightKg: 1.6 } as never, asConsumer(sender.personDid));
+    // The response is the sender's authenticated twin VIEW — never the raw parcel.
+    expect(res.parcel.relation).toBe('sent');
+    expect(res.parcel.did).toMatch(/^did:glos:/);
+    expect(res.parcel.status).toBe('Created');
+    // The drop-off credential: a printable label carrying the PUBLIC tracking key, no handover secret.
+    expect(res.label.svg).toContain(res.parcel.trackingKey);
+    // The price is ALWAYS the locked (cheapest) leg — flexible's rebate rail is vendor-only, so a person
+    // is never quoted the ceiling. Tied to the live quote, not just non-zero.
+    expect(res.price.routeMode).toBe('locked');
+    const liveQuote: any = routing.quoteShipment(origin.did, dest.did, parcels.get(res.parcel.parcelId).size);
+    expect(res.price.total).toBe(liveQuote.locked.total);
+    expect(res.price.ceiling).toBe(liveQuote.flexible.total);
+    expect(res.journey.hops.length).toBeGreaterThanOrEqual(2);
+    // Nothing in the response leaks the receiver's number.
+    expect(JSON.stringify(res)).not.toContain('+254700500002');
+    // The raw record: cash-at-counter, price-locked, both parties joined by hash.
+    const p = parcels.get(res.parcel.parcelId);
+    expect(p.paymentMode).toBe('cash');
+    expect(p.paidStatus).toBe('unpaid');
+    expect(p.shipmentCost).toBe(res.price.total);
+    expect(p.senderPhoneHash).toBe(sender.phoneHash);
+    expect(p.receiverPhoneHash).toBeDefined();
+    await flush();
+    // The twin is BORN at mint with its planned journey — before any drop-off (the DT invariant, now for people).
+    expect(twin.shipment(p.parcelId)?.state).toBe('created');
+    expect(context.has(p.parcelId)).toBe(true);
+    // And it lands in the sender's home as 'sent' + the receiver's as 'received' immediately.
+    expect(parcels.forPhoneHash(sender.phoneHash).sent.some((v) => v.parcelId === p.parcelId)).toBe(true);
+    expect(parcels.forPhoneHash(hashPhone('+254700500002')!).received.some((v) => v.parcelId === p.parcelId)).toBe(true);
+  });
+
+  it('PG1: genesis parity — a person mint and a vendor mint of the SAME box price identically', () => {
+    const origin = onboardAgent('PGP O', 'NorthTown', 50);
+    const dest = onboardAgent('PGP D', 'NorthTown', 50);
+    const vendor = vendors.register({ name: 'PGPV' });
+    vendors.topUp(vendor.vendorId, 200);
+    const vendorRes: any = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700500004', dimensionsCm: { l: 30, w: 20, h: 10 }, weightKg: 1.6, routeMode: 'locked', contentPhotoRef: 'c.jpg' } as never, { role: 'genesis', did: vendor.did } as never);
+    const sender = enrollPerson('+254700500003');
+    const mine: any = identity.createParcel({ receiverMobile: '+254700500004', originPudoDid: origin.did, destPudoDid: dest.did, dimensionsCm: { l: 30, w: 20, h: 10 }, weightKg: 1.6 } as never, asConsumer(sender.personDid));
+    const a: any = parcels.get(mine.parcel.parcelId);
+    const b: any = vendorRes.parcel;
+    // Identity artefacts exist on both (but differ per shipment).
+    for (const k of ['did', 'trackingKey', 'label']) {
+      expect(a[k]).toBeDefined();
+      expect(b[k]).toBeDefined();
+    }
+    // The SAME box on the SAME lane must derive and price IDENTICALLY — the epic's thesis, pinned.
+    for (const k of ['size', 'cargoClass', 'routeMode', 'routeKm', 'nodeFees', 'transportCost', 'platformFee', 'shipmentCost', 'ceilingCost']) {
+      expect(a[k]).toEqual(b[k]);
+    }
+  });
+
+  it('PG1: a P4+ load is refused (no un-billable person freight) — nothing is registered', () => {
+    const origin = onboardAgent('PG1H O', 'NorthTown', 50);
+    const dest = onboardAgent('PG1H D', 'NorthTown', 50);
+    const sender = enrollPerson('+254700500005');
+    expect(() => identity.createParcel({ receiverMobile: '+254700500006', originPudoDid: origin.did, destPudoDid: dest.did, dimensionsCm: { l: 120, w: 100, h: 100 }, weightKg: 300 } as never, asConsumer(sender.personDid))).toThrow(/dedicated freight/);
+    // No orphaned freight was minted for either party.
+    expect(dispatch.freightsForPhoneHash(hashPhone('+254700500006')!)).toHaveLength(0);
+    const home: any = identity.myParcels(asConsumer(sender.personDid));
+    expect(home.freights).toHaveLength(0);
+    expect(home.sent).toHaveLength(0);
+  });
+
+  it('PG1: same-shop sends and implausible receiver numbers are refused before anything is created', () => {
+    const origin = onboardAgent('PG1S', 'NorthTown', 50);
+    const dest = onboardAgent('PG1S D', 'NorthTown', 50);
+    const sender = enrollPerson('+254700500007');
+    expect(() => identity.createParcel({ receiverMobile: '+254700500008', originPudoDid: origin.did, destPudoDid: origin.did, dimensionsCm: { l: 10, w: 10, h: 5 }, weightKg: 0.5 } as never, asConsumer(sender.personDid))).toThrow(/different shops/);
+    // A typo'd receiver number would orphan the parcel from every home — the phone join IS the delivery contract.
+    expect(() => identity.createParcel({ receiverMobile: 'abc', originPudoDid: origin.did, destPudoDid: dest.did, dimensionsCm: { l: 10, w: 10, h: 5 }, weightKg: 0.5 } as never, asConsumer(sender.personDid))).toThrow(/valid receiver phone/);
+    const home: any = identity.myParcels(asConsumer(sender.personDid));
+    expect(home.sent).toHaveLength(0);
   });
 
   it('runs the inbound e-commerce flow: webhook → intake → bus → shelve → collect, with vendor callbacks', async () => {

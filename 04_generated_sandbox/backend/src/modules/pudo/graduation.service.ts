@@ -36,9 +36,12 @@ export class GraduationService implements OnModuleInit {
   onModuleInit(): void {
     // DT: the digital twin is BORN at creation, not at physical intake. A paid inbound parcel (or one settled
     // later) becomes a first-class control-tower + M4 entity the moment it is minted — with its planned journey
-    // — so it is visible and route-known before it is ever dropped off. (Outbound is created AT drop-off, so its
-    // twin is still born by onAccepted below.)
+    // — so it is visible and route-known before it is ever dropped off. (A walk-up accepted at the counter is
+    // created AT drop-off, so its twin is still born by onAccepted below.)
     this.events.subscribe<{ parcelId: string; originAgentDid?: string }>(GlosEvent.Pudo.ParcelPaid, (e) => this.onCreated(e.payload));
+    // PG1: a person's in-app pre-mint births the twin the same way a paid vendor mint does — route-known
+    // before drop-off. Payment (cash at the counter) is a state on the parcel, not a gate on the twin.
+    this.events.subscribe<{ parcelId: string }>(GlosEvent.Pudo.ParcelMinted, (e) => this.onCreated(e.payload));
     this.events.subscribe<{ parcelId: string; agentDid: string; destZone: string }>(GlosEvent.Pudo.ParcelAccepted, (e) => this.onAccepted(e.payload));
     this.events.subscribe<{ parcelId: string }>(GlosEvent.Pudo.ParcelHandedToBus, (e) => this.scan(e.payload.parcelId, 'HANDOVER'));
     this.events.subscribe<{ parcelId: string }>(GlosEvent.Pudo.ParcelReadyForPickup, (e) => this.scan(e.payload.parcelId, 'OUT_FOR_DELIVERY'));

@@ -322,6 +322,21 @@ export class InboundOrderDto {
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => OrderItemDto) items?: OrderItemDto[];
 }
 
+/** PG1 — a signed-in person's in-app peer-send mint (the Send app's parcel genesis). The sender's identity
+ *  comes from the TOKEN, never the body; real dims + weight are REQUIRED and the size tier is DERIVED,
+ *  exactly like the vendor mint (no self-declared S/M/L/HEAVY). No routeMode: a person's send is always
+ *  priced at the LOCKED (cheapest) leg — the flexible ceiling's delivery rebate rides the vendor prepaid
+ *  rail, which a cash-at-counter person doesn't have, so flexible would silently overcharge them. */
+export class ConsumerSendDto {
+  @IsString() receiverMobile!: string;
+  @IsString() originPudoDid!: string;
+  @IsString() destPudoDid!: string;
+  @ValidateNested() @Type(() => DimensionsDto) dimensionsCm!: DimensionsDto;
+  @IsNumber() @Min(0.01) weightKg!: number;
+  @IsOptional() @IsBoolean() fragile?: boolean;
+  @IsOptional() @IsIn(CARGO_NATURES) natureCode?: CargoNature;
+}
+
 export class IntakeDto {
   @IsOptional() @IsString() agentDid?: string; // operator-override only; normal actors are pinned to their token
 }

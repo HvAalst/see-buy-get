@@ -788,6 +788,76 @@ export class ParcelService implements OnApplicationBootstrap {
     return { parcel, label: bill.paid ? label : null, paid: bill.paid };
   }
 
+  // --- consumer pre-mint (PG1) — the Send app's parcel genesis, identical to the vendor console's ---
+
+  /**
+   * PG1 — a signed-in PERSON mints their peer send in-app, BEFORE drop-off: the same derived size +
+   * cargo gate, the same price lock, the same shipment DID + twin-with-journey + printable label the
+   * vendor mint gets. Cash at the counter: nothing is billed here — the price LOCKS now and the shop
+   * collects it at the drop-off scan, so the label issues immediately (it is the sender's drop-off
+   * credential, not a payment receipt).
+   */
+  createConsumerSend(input: { senderPersonDid: string; senderPhoneHash: string; receiverMobile: string; originAgentDid: string; destAgentDid: string; dimensionsCm: { l: number; w: number; h: number }; weightKg: number; fragile?: boolean; natureCode?: CargoNature; quote: ShipmentQuote }): { parcel: Parcel; label: PhygitalLabel } {
+    const origin = this.agents.get(input.originAgentDid);
+    const dest = this.agents.get(input.destAgentDid);
+    if (input.originAgentDid === input.destAgentDid) throw new GlosError('INVALID_INPUT', 'Drop-off and collection shop must be two different shops');
+    const size = classifySize({ ...input.dimensionsCm, kg: input.weightKg });
+    const natureCode: CargoNature = input.natureCode ?? 'GEN';
+    const cargoClass = this.cargo.classify({ kg: input.weightKg, dimsCm: [input.dimensionsCm.l, input.dimensionsCm.w, input.dimensionsCm.h] });
+    if (this.cargo.dedicatedRequired(cargoClass)) {
+      throw new GlosError('CARGO_REQUIRES_DEDICATED', `Cargo class ${cargoClass} is too large for the PUDO network — it needs dedicated freight transport`);
+    }
+    const parcelId = `PUD-${randomBytes(5).toString('hex').toUpperCase()}`;
+    const trackingKey = `T-${randomBytes(5).toString('hex').toUpperCase()}`;
+    const now = new Date().toISOString();
+    const anchorTxId = this.ledger.anchor({ p: parcelId, s: input.senderPersonDid, o: input.originAgentDid, d: input.destAgentDid, at: now }).txId;
+    const quote = input.quote;
+    // Always the LOCKED (cheapest) leg: flexible's ceiling is refunded on delivery via the VENDOR prepaid
+    // rail (rebateFlexible), which a cash-at-counter person has no account on — flexible here would just
+    // keep the over-hold. ceilingCost stays stamped for artefact parity with the vendor mint.
+    const routeMode = 'locked' as const;
+    const chosen = quote.locked;
+    const parcel: Parcel = {
+      parcelId,
+      did: this.mintShipmentDid(parcelId, 'outbound'), // DT — the twin's stable GLOS identity, minted at creation
+      direction: 'outbound',
+      size,
+      dimensionsCm: input.dimensionsCm,
+      weightKg: input.weightKg,
+      cargoClass,
+      natureCode,
+      fragile: input.fragile ?? false,
+      originAgentDid: input.originAgentDid,
+      committedNodeDid: input.originAgentDid,
+      originZone: origin.zone,
+      destZone: dest.zone,
+      destAgentDid: input.destAgentDid,
+      // The sender is an authenticated PERSON: the join key is their verified-phone HASH (S32d — never the
+      // number). 'app' marks an in-app mint the way 'vendor' marks a store mint.
+      senderMobile: 'app',
+      senderPhoneHash: input.senderPhoneHash,
+      receiverMobile: input.receiverMobile,
+      receiverPhoneHash: hashPhone(input.receiverMobile) || undefined,
+      paymentMode: 'cash', // collected by the shop at drop-off, against the locked price below
+      status: 'Created',
+      trackingKey,
+      routeMode,
+      routeKm: quote.totalKm,
+      nodeFees: quote.nodeFees,
+      transportCost: chosen.transport,
+      platformFee: Math.round((chosen.total - chosen.base) * 100) / 100,
+      shipmentCost: chosen.total,
+      ceilingCost: quote.flexible.total,
+      paidStatus: 'unpaid',
+      acceptedAt: now,
+      scans: [{ at: now, status: 'CREATED', by: input.senderPersonDid, note: `peer send · drop off at ${origin.shopName}`, anchorTxId }],
+    };
+    parcel.label = this.label(parcel, dest.shopName); // outbound branch: tracking key, no handover secret
+    this.parcels.set(parcelId, parcel);
+    void this.events.publish(GlosEvent.Pudo.ParcelMinted, { parcelId, originAgentDid: input.originAgentDid, destAgentDid: input.destAgentDid }, { source: 'pudo' }).catch(() => undefined);
+    return { parcel, label: parcel.label };
+  }
+
   /** What the e-commerce checkout charges the buyer (reported only — full price, or up to the cap). */
   private buyerCharge(policy: ShippingPolicy, cost: number, subtotal: number): number {
     if (policy.mode === 'full') return cost;

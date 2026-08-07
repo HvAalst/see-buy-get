@@ -8951,6 +8951,27 @@
             "description": ""
           }
         }
+      },
+      "post": {
+        "operationId": "Identity.createParcel",
+        "summary": "",
+        "description": "PG1 — parcel genesis from the sender's own phone: the IDENTICAL mint the vendor console gets (derived\nsize + cargo gate, locked price, shipment DID + twin + planned journey + printable label at creation).\nCash at the counter: the price locks NOW and the shop collects it at drop-off — so the label (the\nsender's drop-off credential) issues immediately. The sender's identity comes from the TOKEN, never\nthe body. A P4+ load is REFUSED here (not diverted like a vendor's): the freight lane bills a shipper\nat claim through the vendor prepaid rail, and a person has no billing rail yet — a silent divert would\nbe un-priced, un-consented free freight (the driver still gets paid). Refusing keeps the money\ninvariant; the Send UI explains and points at a PUDO shop.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsumerSendDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
       }
     },
     "/v1/sbg/identity/parcels/{id}": {
@@ -13939,6 +13960,52 @@
         },
         "required": [
           "role"
+        ]
+      },
+      "ConsumerSendDto": {
+        "type": "object",
+        "properties": {
+          "receiverMobile": {
+            "type": "string"
+          },
+          "originPudoDid": {
+            "type": "string"
+          },
+          "destPudoDid": {
+            "type": "string"
+          },
+          "dimensionsCm": {
+            "$ref": "#/components/schemas/DimensionsDto"
+          },
+          "weightKg": {
+            "type": "number",
+            "minimum": 0.01
+          },
+          "fragile": {
+            "type": "boolean"
+          },
+          "natureCode": {
+            "type": "string",
+            "enum": [
+              "GEN",
+              "FOD",
+              "FOP",
+              "HAZ-CHEM",
+              "HAZ-DUST",
+              "HAZ-BIO",
+              "HAZ-FLAM",
+              "FRG",
+              "ODR",
+              "HUM"
+            ]
+          }
+        },
+        "required": [
+          "receiverMobile",
+          "originPudoDid",
+          "destPudoDid",
+          "dimensionsCm",
+          "weightKg"
         ]
       },
       "PodDto": {

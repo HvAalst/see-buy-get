@@ -55,6 +55,7 @@ export const GlosEvent = {
     WalletToppedUp: 'pudo.wallet_topped_up',
     InboundCreated: 'pudo.inbound_created',
     ParcelPaid: 'pudo.parcel_paid', // vendor prepaid the full cost → label unblocked + drop-off PUDO notified
+    ParcelMinted: 'pudo.parcel_minted', // PG1 — a person pre-minted a peer send in-app (cash at drop-off) → twin + journey born now
     ParcelAccepted: 'pudo.parcel_accepted',
     ParcelHandedToBus: 'pudo.parcel_handed_to_bus',
     ParcelShortShipped: 'pudo.parcel_short_shipped', // a waiting parcel knowingly left behind at handover (short-ship)

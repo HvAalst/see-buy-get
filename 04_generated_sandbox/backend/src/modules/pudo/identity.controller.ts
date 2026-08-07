@@ -1,15 +1,20 @@
 import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import { Public } from '../../foundation/auth/public.decorator';
-import { Roles } from '../../foundation/auth/scopes.decorator';
+import { Roles, Scopes } from '../../foundation/auth/scopes.decorator';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
+import { GlosError } from '../../foundation/http/glos-error';
+import { isPlausiblePhone } from '../../foundation/identity/phone';
 import { PersonService } from './person.service';
 import { OtpService } from './otp.service';
 import { ParcelService } from './parcel.service';
 import { DispatchService } from './dispatch.service';
+import { CargoService } from './cargo.service';
+import { RoutingService } from './routing.service';
+import { classifySize } from './pudo.config';
 import { InviteService } from './invite.service';
 import { toInviteView } from './invite.types';
-import { BuyerDisputeDto, CreateInviteDto, EnrollDto, PinLoginDto, PodDto, ProfileDto, SetPinDto, SwitchRoleDto } from './pudo.dto';
+import { BuyerDisputeDto, ConsumerSendDto, CreateInviteDto, EnrollDto, PinLoginDto, PodDto, ProfileDto, SetPinDto, SwitchRoleDto } from './pudo.dto';
 
 /**
  * Identity — the authenticated consumer surface (S20). "One person, one account, many roles."
@@ -30,6 +35,8 @@ export class IdentityController {
     private readonly parcels: ParcelService,
     private readonly invites: InviteService,
     private readonly dispatch: DispatchService,
+    private readonly cargo: CargoService,
+    private readonly routing: RoutingService,
   ) {}
 
   /**
@@ -98,6 +105,59 @@ export class IdentityController {
   myParcels(@Actor() actor: IntrospectionResult) {
     const person = this.persons.requireByDid(actor.did!);
     return { ...this.parcels.forPhoneHash(person.phoneHash), freights: this.dispatch.freightsForPhoneHash(person.phoneHash) };
+  }
+
+  /**
+   * PG1 — parcel genesis from the sender's own phone: the IDENTICAL mint the vendor console gets (derived
+   * size + cargo gate, locked price, shipment DID + twin + planned journey + printable label at creation).
+   * Cash at the counter: the price locks NOW and the shop collects it at drop-off — so the label (the
+   * sender's drop-off credential) issues immediately. The sender's identity comes from the TOKEN, never
+   * the body. A P4+ load is REFUSED here (not diverted like a vendor's): the freight lane bills a shipper
+   * at claim through the vendor prepaid rail, and a person has no billing rail yet — a silent divert would
+   * be un-priced, un-consented free freight (the driver still gets paid). Refusing keeps the money
+   * invariant; the Send UI explains and points at a PUDO shop.
+   */
+  @Scopes('shipment:create')
+  @Roles('consumer')
+  @Post('parcels')
+  createParcel(@Body() dto: ConsumerSendDto, @Actor() actor: IntrospectionResult) {
+    const person = this.persons.requireByDid(actor.did!);
+    if (!isPlausiblePhone(dto.receiverMobile)) throw new GlosError('PHONE_INVALID', 'Enter a valid receiver phone number — it is how they get their parcel');
+    if (dto.originPudoDid === dto.destPudoDid) throw new GlosError('INVALID_INPUT', 'Pick two different shops');
+    const dims: [number, number, number] = [dto.dimensionsCm.l, dto.dimensionsCm.w, dto.dimensionsCm.h];
+    const cargoClass = this.cargo.classify({ kg: dto.weightKg, dimsCm: dims });
+    if (this.cargo.dedicatedRequired(cargoClass)) {
+      throw new GlosError('CARGO_REQUIRES_DEDICATED', `Cargo class ${cargoClass} is too large for the parcel network — ask at a PUDO shop about dedicated freight (personal freight booking is coming)`);
+    }
+    const size = classifySize({ ...dto.dimensionsCm, kg: dto.weightKg });
+    const quote = this.routing.quoteShipment(dto.originPudoDid, dto.destPudoDid, size);
+    const { parcel, label } = this.parcels.createConsumerSend({
+      senderPersonDid: person.personDid,
+      senderPhoneHash: person.phoneHash,
+      receiverMobile: dto.receiverMobile,
+      originAgentDid: dto.originPudoDid,
+      destAgentDid: dto.destPudoDid,
+      dimensionsCm: dto.dimensionsCm,
+      weightKg: dto.weightKg,
+      fragile: dto.fragile,
+      natureCode: dto.natureCode,
+      quote,
+    });
+    // Field-picked response (S25): the sender's authenticated twin view + their drop-off credential + the
+    // locked price + the planned journey — never the raw Parcel (it carries the counterparty's number).
+    let journey: { hops: string[]; mdpRouted: boolean; pickupReadyAt: string } | undefined;
+    try {
+      const j = this.routing.planJourney({ originAgentDid: parcel.originAgentDid, destAgentDid: parcel.destAgentDid!, weightKg: parcel.weightKg });
+      journey = { hops: j.hops.map((h) => h.label), mdpRouted: j.mdpRouted, pickupReadyAt: j.pickupReadyAt };
+    } catch {
+      journey = undefined; // best-effort, like the public track surface — the mint itself already succeeded
+    }
+    return {
+      parcel: this.parcels.consumerParcel(parcel.parcelId, person.phoneHash),
+      label,
+      price: { routeMode: parcel.routeMode, total: parcel.shipmentCost, transport: parcel.transportCost, nodeFees: parcel.nodeFees, platformFee: parcel.platformFee, km: parcel.routeKm, ceiling: parcel.ceilingCost },
+      journey,
+    };
   }
 
   /** One parcel the caller is a party to — the authenticated twin + status timeline (404 to a non-party). */
