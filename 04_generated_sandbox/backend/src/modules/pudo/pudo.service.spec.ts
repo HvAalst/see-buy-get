@@ -31,6 +31,7 @@ import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
 import { InviteService } from './invite.service';
 import { hashPhone } from '../../foundation/identity/phone';
+import { SCOPES_KEY } from '../../foundation/auth/scopes.decorator';
 import { createHmac } from 'crypto';
 import { DigitalTwinService } from '../m7/digital-twin.service';
 import { TrackingService } from '../m4/tracking.service';
@@ -390,7 +391,7 @@ describe('PUDO Light', () => {
     const dest = onboardAgent(`${tag} Dest`, 'NorthTown', 50);
     const vendor = vendors.register({ name: `${tag}Vendor` });
     vendors.topUp(vendor.vendorId, 50);
-    const res = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700111', size: 'M', contentPhotoRef: 'c.jpg' } as never) as { parcel: any; paid: boolean };
+    const res = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700111', size: 'M', contentPhotoRef: 'c.jpg' } as never, { role: 'genesis', did: vendor.did } as never) as { parcel: any; paid: boolean };
     return { origin, dest, vendor, res };
   };
 
@@ -455,6 +456,68 @@ describe('PUDO Light', () => {
     expect(p.label!.svg).not.toContain('Collect at the shop'); // outbound → no collection-code line
     // The reprint endpoint returns the same label.
     expect(controller.parcelLabel('QR-OB').parcelId).toBe('QR-OB');
+  });
+
+  // --- PG0: the vendor WRITE surface is owner-gated (mint / settle / top-up / profile) ---
+
+  it('PG0: minting is owner-scoped — another store (or no actor) cannot bill this store', () => {
+    const origin = onboardAgent('PG0 O', 'NorthTown', 50);
+    const dest = onboardAgent('PG0 D', 'NorthTown', 50);
+    const mine = vendors.register({ name: 'Mine' });
+    const other = vendors.register({ name: 'Other' });
+    vendors.topUp(mine.vendorId, 100);
+    const dto = { vendorId: mine.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: 'c.jpg' } as never;
+    expect(() => controller.createInbound(dto, { role: 'genesis', did: other.did } as never)).toThrow(/not yours/);
+    expect(() => controller.createInbound(dto, undefined as never)).toThrow(/not yours/);
+    const own: any = controller.createInbound(dto, { role: 'genesis', did: mine.did } as never);
+    expect(own.parcel).toBeDefined();
+    const op: any = controller.createInbound(dto, { role: 'operator' } as never);
+    expect(op.parcel).toBeDefined();
+  });
+
+  it('PG0: settle / top-up / profile updates are gated to the owning store', () => {
+    const origin = onboardAgent('PG0S O', 'NorthTown', 50);
+    const dest = onboardAgent('PG0S D', 'NorthTown', 50);
+    const mine = vendors.register({ name: 'MineS' });
+    const other = vendors.register({ name: 'OtherS' });
+    // Mint with an empty balance so the order lands unpaid and there is something to settle.
+    const minted: any = controller.createInbound({ vendorId: mine.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: 'c.jpg' } as never, { role: 'genesis', did: mine.did } as never);
+    expect(minted.paid).toBe(false);
+    expect(() => controller.settleParcel(minted.parcel.parcelId, { role: 'genesis', did: other.did } as never)).toThrow(/not yours/);
+    expect(() => controller.topUpVendor(mine.vendorId, { amount: 100 } as never, { role: 'genesis', did: other.did } as never)).toThrow(/not yours/);
+    expect(() => controller.updateVendor(mine.vendorId, { callbackUrl: 'https://evil.example/hook' } as never, { role: 'genesis', did: other.did } as never)).toThrow(/not yours/);
+    controller.topUpVendor(mine.vendorId, { amount: 100 } as never, { role: 'genesis', did: mine.did } as never);
+    const settled: any = controller.settleParcel(minted.parcel.parcelId, { role: 'genesis', did: mine.did } as never);
+    expect(settled.paid).toBe(true);
+    // The owner-ALLOW side of the profile gate — without it, an always-throw regression stays green.
+    const updated: any = controller.updateVendor(mine.vendorId, { callbackUrl: 'https://mine.example/hook' } as never, { role: 'genesis', did: mine.did } as never);
+    expect(updated.callbackUrl).toBe('https://mine.example/hook');
+  });
+
+  it('PG0: a mint cannot bind another store’s checkout handoff', () => {
+    const origin = onboardAgent('PG0C O', 'NorthTown', 50);
+    const dest = onboardAgent('PG0C D', 'NorthTown', 50);
+    const mine = vendors.register({ name: 'MineC' });
+    const other = vendors.register({ name: 'OtherC' });
+    vendors.topUp(mine.vendorId, 100);
+    const chk = vendors.captureCheckout({ vendorId: other.vendorId, destAgentDid: dest.did, buyerEmail: 'b@example.com', buyerMobile: '+254700999', externalOrderId: 'EXT-1' });
+    expect(() => controller.createInbound({ vendorId: mine.vendorId, checkoutId: chk.id, originPudoDid: origin.did, destPudoDid: dest.did, size: 'M', contentPhotoRef: 'c.jpg' } as never, { role: 'genesis', did: mine.did } as never)).toThrow(/different store/);
+    // The victim's handoff is untouched — still open in THEIR inbox.
+    expect(vendors.checkout(chk.id).consumed).toBe(false);
+  });
+
+  it('PG0: the four write routes carry their scope labels (guard metadata pinned)', () => {
+    expect(Reflect.getMetadata(SCOPES_KEY, SbgController.prototype.updateVendor)).toEqual(['vendor:manage:self']);
+    expect(Reflect.getMetadata(SCOPES_KEY, SbgController.prototype.topUpVendor)).toEqual(['vendor:manage:self']);
+    expect(Reflect.getMetadata(SCOPES_KEY, SbgController.prototype.settleParcel)).toEqual(['shipment:create']);
+    expect(Reflect.getMetadata(SCOPES_KEY, SbgController.prototype.createInbound)).toEqual(['shipment:create']);
+  });
+
+  it('PG0: a storeless walk-up parcel cannot be settled by a store token', () => {
+    const origin = onboardAgent('PG0W', 'NorthTown', 50);
+    const store = vendors.register({ name: 'StoreW' });
+    parcels.accept({ agentDid: origin.did, parcelId: 'QR-PG0', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'g.jpg' });
+    expect(() => controller.settleParcel('QR-PG0', { role: 'genesis', did: store.did } as never)).toThrow(/minting store/);
   });
 
   it('runs the inbound e-commerce flow: webhook → intake → bus → shelve → collect, with vendor callbacks', async () => {
@@ -1962,7 +2025,7 @@ describe('PUDO Light', () => {
     const dest = onboardAgent('Budget Dest', 'NorthTown', 50);
     const vendor = vendors.register({ name: 'CapVendor', shippingPolicy: { maxTransportSpend: 25 } });
     vendors.topUp(vendor.vendorId, 500);
-    const res = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', weightKg: 300, contentPhotoRef: 'c.jpg' } as never) as { diverted?: boolean; freight?: { maxSpend?: number } };
+    const res = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', weightKg: 300, contentPhotoRef: 'c.jpg' } as never, { role: 'genesis', did: vendor.did } as never) as { diverted?: boolean; freight?: { maxSpend?: number } };
     expect(res.diverted).toBe(true);
     expect(res.freight?.maxSpend).toBe(25);
   });
@@ -2151,14 +2214,14 @@ describe('PUDO Light', () => {
     const vendor = vendors.register({ name: 'PalletVendor' });
     vendors.topUp(vendor.vendorId, 50);
 
-    const diverted: any = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', weightKg: 300, contentPhotoRef: 'c.jpg', natureCode: 'GEN' } as never);
+    const diverted: any = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', weightKg: 300, contentPhotoRef: 'c.jpg', natureCode: 'GEN' } as never, { role: 'genesis', did: vendor.did } as never);
     expect(diverted.diverted).toBe(true);
     expect(diverted.cargoClass).toBe('P5'); // 300 kg
     expect(diverted.freight.freightId).toBeDefined();
     expect(diverted.freight.requiredEquipment.length).toBeGreaterThan(0); // discrete → real handling gear
     expect(diverted.freight.shipperDid).toBe(vendor.vendorId); // the vendor is the shipper
 
-    const normal: any = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: 'c.jpg' } as never);
+    const normal: any = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: 'c.jpg' } as never, { role: 'genesis', did: vendor.did } as never);
     expect(normal.diverted).toBeUndefined(); // a normal order still mints a parcel
     expect(normal.parcel).toBeDefined();
   });
@@ -2200,7 +2263,7 @@ describe('PUDO Light', () => {
     const dest = onboardAgent('Gap Dest', 'NorthTown', 50);
     const vendor = vendors.register({ name: 'GapVendor' });
     vendors.topUp(vendor.vendorId, 50);
-    const res: any = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', weightKg: 300, contentPhotoRef: 'c.jpg' } as never);
+    const res: any = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', weightKg: 300, contentPhotoRef: 'c.jpg' } as never, { role: 'genesis', did: vendor.did } as never);
     expect(res.diverted).toBe(true);
     expect(res.freight.equipmentGaps.slice().sort()).toEqual(['dest', 'origin']); // neither shop can lift a pallet
   });
@@ -2219,7 +2282,7 @@ describe('PUDO Light', () => {
     const vendor = vendors.register({ name: 'ShipVendor' });
     vendors.topUp(vendor.vendorId, 50);
     const buyer = '+254700123456';
-    const res: any = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: buyer, externalOrderId: 'ORD-99', weightKg: 300, contentPhotoRef: 'c.jpg' } as never);
+    const res: any = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: buyer, externalOrderId: 'ORD-99', weightKg: 300, contentPhotoRef: 'c.jpg' } as never, { role: 'genesis', did: vendor.did } as never);
     expect(res.diverted).toBe(true);
     expect(res.freight.trackingKey).toMatch(/^T-/);
 

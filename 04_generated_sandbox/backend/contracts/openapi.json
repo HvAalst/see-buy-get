@@ -5223,7 +5223,7 @@
       "patch": {
         "operationId": "Sbg.updateVendor",
         "summary": "",
-        "description": "Update the store profile: map pin (origin-PUDO ranking), address, callback URL, split policy.",
+        "description": "Update the store profile: map pin (origin-PUDO ranking), address, callback URL, split policy.\n Owner-scoped (PG0): the callback URL + split policy are the store's webhook/money config — an\n unlabelled write would let ANY token redirect another store's callbacks or rewrite its pricing.",
         "parameters": [
           {
             "name": "id",
@@ -5964,7 +5964,7 @@
       "post": {
         "operationId": "Sbg.topUpVendor",
         "summary": "",
-        "description": "Vendor prepays its balance with the per-country daughter company.",
+        "description": "Vendor prepays its balance with the per-country daughter company. Owner-scoped (PG0): money movement\n on a store's book is the store's own action, even in the crediting direction.",
         "parameters": [
           {
             "name": "id",
@@ -6335,7 +6335,7 @@
       "post": {
         "operationId": "Sbg.settleParcel",
         "summary": "",
-        "description": "Retry the prepaid gate on an unpaid shipment after a top-up → issue the label + ParcelPaid.",
+        "description": "Retry the prepaid gate on an unpaid shipment after a top-up → issue the label + ParcelPaid.\n Owner-scoped (PG0): settling BILLS the minting store's balance, so only that store (or an\n operator) may trigger it — a storeless walk-up parcel has no settle path at all.",
         "parameters": [
           {
             "name": "id",
@@ -6392,7 +6392,7 @@
       "post": {
         "operationId": "Sbg.createInbound",
         "summary": "",
-        "description": "Vendor mint: an order ships → create the inbound parcel + phygital label + collection code + tracking key.",
+        "description": "Vendor mint: an order ships → create the inbound parcel + phygital label + collection code + tracking key.\n Owner-scoped (PG0): the mint BILLS dto.vendorId's prepaid balance, and vendorId comes from the BODY —\n without the gate any valid token could mint against (and drain) another store's book.",
         "parameters": [],
         "requestBody": {
           "required": true,

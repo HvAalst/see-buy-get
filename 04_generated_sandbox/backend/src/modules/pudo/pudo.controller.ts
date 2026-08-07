@@ -410,18 +410,24 @@ export class SbgController {
     return VendorService.publicView(this.vendors.get(id));
   }
 
-  /** Update the store profile: map pin (origin-PUDO ranking), address, callback URL, split policy. */
+  /** Update the store profile: map pin (origin-PUDO ranking), address, callback URL, split policy.
+   *  Owner-scoped (PG0): the callback URL + split policy are the store's webhook/money config — an
+   *  unlabelled write would let ANY token redirect another store's callbacks or rewrite its pricing. */
+  @Scopes('vendor:manage:self')
   @Patch('vendors/:id')
-  updateVendor(@Param('id') id: string, @Body() dto: UpdateVendorDto) {
+  updateVendor(@Param('id') id: string, @Body() dto: UpdateVendorDto, @Actor() actor: IntrospectionResult) {
+    this.assertVendorOwner(id, actor);
     return VendorService.publicView(this.vendors.updateProfile(id, dto));
   }
 
   /**
-   * OWNER GATE for a vendor's own data. 404 on an unknown store; 403 unless the caller IS that store — a
-   * vendor's token carries did = vendor.did (mintActorToken at vendors/login), so we compare the acting
-   * DID to the record; an operator (client-secret gated) may act on any store. Without this, an unlabelled
-   * route is admitted for ANY valid token and the path id alone would expose one store's orders + buyer
-   * PII to another. `@Scopes('vendor:read:self')` additionally keeps non-vendor roles off these routes.
+   * OWNER GATE for a vendor's own data AND writes (PG0). 404 on an unknown store; 403 unless the caller IS
+   * that store — a vendor's token carries did = vendor.did (mintActorToken at vendors/login), so we compare
+   * the acting DID to the record; an operator (client-secret gated) may act on any store. Without this, an
+   * unlabelled route is admitted for ANY valid token: on reads the path id alone would expose one store's
+   * orders + buyer PII to another, and on writes (mint / settle / top-up / profile) the BODY's vendorId
+   * would let any token bill or reconfigure another store. `@Scopes(...)` additionally keeps roles that
+   * never carry vendor authority off these routes.
    */
   private assertVendorOwner(id: string, actor: IntrospectionResult): void {
     const vendor = this.vendors.get(id); // 404 if unknown
@@ -623,9 +629,12 @@ export class SbgController {
     return this.vehicles.setPrice(id, dto.price);
   }
 
-  /** Vendor prepays its balance with the per-country daughter company. */
+  /** Vendor prepays its balance with the per-country daughter company. Owner-scoped (PG0): money movement
+   *  on a store's book is the store's own action, even in the crediting direction. */
+  @Scopes('vendor:manage:self')
   @Post('vendors/:id/top-up')
-  topUpVendor(@Param('id') id: string, @Body() dto: TopUpDto) {
+  topUpVendor(@Param('id') id: string, @Body() dto: TopUpDto, @Actor() actor: IntrospectionResult) {
+    this.assertVendorOwner(id, actor);
     return VendorService.publicView(this.vendors.topUp(id, dto.amount));
   }
 
@@ -667,9 +676,17 @@ export class SbgController {
     return this.vendors.vendorLedgerCsv(id, query);
   }
 
-  /** Retry the prepaid gate on an unpaid shipment after a top-up → issue the label + ParcelPaid. */
+  /** Retry the prepaid gate on an unpaid shipment after a top-up → issue the label + ParcelPaid.
+   *  Owner-scoped (PG0): settling BILLS the minting store's balance, so only that store (or an
+   *  operator) may trigger it — a storeless walk-up parcel has no settle path at all. */
+  @Scopes('shipment:create')
   @Post('parcels/:id/settle')
-  settleParcel(@Param('id') id: string) {
+  settleParcel(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    if (actor?.role !== 'operator') {
+      const vendorId = this.parcels.get(id).vendorId;
+      if (!vendorId) throw new GlosError('FORBIDDEN', 'Only the minting store may settle a shipment');
+      this.assertVendorOwner(vendorId, actor);
+    }
     return this.parcels.settleUnpaid(id);
   }
 
@@ -721,11 +738,18 @@ export class SbgController {
     }));
   }
 
-  /** Vendor mint: an order ships → create the inbound parcel + phygital label + collection code + tracking key. */
+  /** Vendor mint: an order ships → create the inbound parcel + phygital label + collection code + tracking key.
+   *  Owner-scoped (PG0): the mint BILLS dto.vendorId's prepaid balance, and vendorId comes from the BODY —
+   *  without the gate any valid token could mint against (and drain) another store's book. */
+  @Scopes('shipment:create')
   @Post('inbound/orders')
-  createInbound(@Body() dto: InboundOrderDto) {
+  createInbound(@Body() dto: InboundOrderDto, @Actor() actor: IntrospectionResult) {
+    this.assertVendorOwner(dto.vendorId, actor);
     const vendor = this.vendors.get(dto.vendorId);
     const handoff = dto.checkoutId ? this.vendors.checkout(dto.checkoutId) : undefined;
+    // A checkout handoff is itself store-owned: binding another store's handoff would pull its buyer
+    // contact into this store's parcel AND consume it out of the victim's incoming-orders inbox.
+    if (handoff && handoff.vendorId !== dto.vendorId) throw new GlosError('FORBIDDEN', 'This checkout belongs to a different store');
     const destPudoDid = dto.destPudoDid ?? handoff?.destAgentDid;
     if (!destPudoDid) throw new GlosError('FIELD_REQUIRED', 'A destination PUDO is required');
     // Derive the size, then quote the route from the open-data participant rates.
