@@ -1429,6 +1429,13 @@
   border: 1.5px solid var(--bd);
   border-radius: var(--r-ctl);
   overflow: hidden;
+  /* Leaflet gives its panes + zoom/attribution controls very high z-indexes (up to 1000). Without a
+     stacking context here those escape to the document root and paint OVER the bottom nav (z 40) and any
+     open Sheet (z 61) — the map bleeds across the footer and hides a shop-detail sheet. Isolate it so all
+     of Leaflet's internal z-indexes resolve inside this one box, which sits in normal flow beneath both. */
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
 }
 .pmap-leaflet .leaflet-container {
   height: 100%;
