@@ -657,6 +657,35 @@ describe('PUDO Light', () => {
     expect(() => controller.intakePreview(parcelId, { role: 'agent', did: elsewhere.did } as never)).toThrow(/another shop/);
   });
 
+  it('PG2: voiding a peer-send nets the shop wallet to zero — refunds the LOCKED price + claws back the labour fee', () => {
+    const { origin, parcelId, due } = mintPeerSend('PG2V', '40');
+    expect(due).not.toBeCloseTo(2.0, 2); // the price is NOT the WHOLESALE+labour coincidence — the bug would hide there
+    const before = gate.canTransact(origin.did).balance;
+    controller.intake(parcelId, { dropoffPhotoRef: 'd.jpg' } as never, { role: 'agent', did: origin.did } as never);
+    expect(gate.canTransact(origin.did).balance).toBeCloseTo(before - due + 0.4, 2); // remitted the cash, earned labour
+    parcels.void(parcelId, origin.did, 'torn.jpg');
+    // A full reversal: the locked price back, the labour fee clawed back → exactly the pre-intake balance.
+    expect(gate.canTransact(origin.did).balance).toBeCloseTo(before, 2);
+  });
+
+  it('PG2: operator-cancelling an At_PUDO peer-send reverses the intake the same way', () => {
+    const { origin, parcelId, due } = mintPeerSend('PG2X', '50');
+    const before = gate.canTransact(origin.did).balance;
+    controller.intake(parcelId, { dropoffPhotoRef: 'd.jpg' } as never, { role: 'agent', did: origin.did } as never);
+    expect(gate.canTransact(origin.did).balance).toBeCloseTo(before - due + 0.4, 2);
+    controller.cancelParcel(parcelId, { reason: 'test' } as never, { role: 'operator' } as never);
+    expect(gate.canTransact(origin.did).balance).toBeCloseTo(before, 2);
+  });
+
+  it('PG2: a legacy walk-up cash void still refunds WHOLESALE (the peer-send fix left it untouched)', () => {
+    const origin = onboardAgent('PG2W2', 'NorthTown', 50);
+    const before = gate.canTransact(origin.did).balance;
+    parcels.accept({ agentDid: origin.did, parcelId: 'QR-PG2W2', size: 'M', destZone: 'SouthTown', senderMobile: '+254700611200', receiverMobile: '+254700611201', dropoffPhotoRef: 'g.jpg' });
+    expect(gate.canTransact(origin.did).balance).toBeCloseTo(before - 1.6, 2); // walk-up cash charged WHOLESALE, no labour
+    parcels.void('QR-PG2W2', origin.did, 'torn.jpg');
+    expect(gate.canTransact(origin.did).balance).toBeCloseTo(before, 2);
+  });
+
   it('PG2: the parcel list is PROJECTED — no phones, hashes or handover secrets for non-operators', () => {
     const origin = onboardAgent('PG2L', 'NorthTown', 50);
     parcels.accept({ agentDid: origin.did, parcelId: 'QR-PG2L', size: 'M', destZone: 'SouthTown', senderMobile: '+254700611119', receiverMobile: '+254700611118', dropoffPhotoRef: 'g.jpg' });

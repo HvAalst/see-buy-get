@@ -713,9 +713,26 @@ export class ParcelService implements OnApplicationBootstrap {
     this.media.link(voidedPhotoRef, { type: 'parcel', id: parcel.parcelId }, 'dropoff');
     this.media.anchorParcelTerminal(parcel.parcelId);
     this.scan(parcel, 'Voided', agentDid, 'voided + refunded');
-    if (parcel.paymentMode === 'cash') this.gate.refund(agentDid, WHOLESALE, parcel.parcelId);
+    this.reverseIntakeCharge(parcel, agentDid);
     void this.events.publish(GlosEvent.Pudo.ParcelVoided, { parcelId, agentDid }, { source: 'pudo' }).catch(() => undefined);
     return parcel;
+  }
+
+  /**
+   * Undo the money an At_PUDO cash intake moved, so a void/cancel nets the agent wallet to zero. TWO cash
+   * intakes charge differently and must be reversed differently: a peer-send (senderMobile 'app') was
+   * charged its LOCKED shipmentCost AND credited a LABOUR_FEE at intake — reverse BOTH; a legacy walk-up
+   * was charged a flat WHOLESALE and paid no labour — refund WHOLESALE. A prepaid vendor inbound moved no
+   * agent cash here (its billing is the vendor's), so nothing to reverse.
+   */
+  private reverseIntakeCharge(parcel: Parcel, agentDid: string): void {
+    if (parcel.paymentMode !== 'cash') return;
+    if (parcel.senderMobile === 'app') {
+      this.gate.refund(agentDid, parcel.shipmentCost ?? 0, parcel.parcelId); // the locked price the shop remitted
+      this.gate.clawbackLabour(agentDid, LABOUR_FEE, parcel.parcelId); // reverse the +LABOUR_FEE paid at intake
+    } else {
+      this.gate.refund(agentDid, WHOLESALE, parcel.parcelId);
+    }
   }
 
   /** Reverse logistics: cancel a parcel that has NOT yet been delivered/picked up. Refunds a cash
@@ -723,7 +740,8 @@ export class ParcelService implements OnApplicationBootstrap {
   cancel(parcelId: string, by = 'ops', reason?: string): Parcel {
     const parcel = this.require(parcelId);
     if (!['Created', 'At_PUDO', 'At_MDP'].includes(parcel.status)) throw new GlosError('INVALID_STATE', `Cannot cancel a ${parcel.status} parcel`);
-    if (parcel.paymentMode === 'cash' && parcel.status === 'At_PUDO') this.gate.refund(parcel.originAgentDid, WHOLESALE, parcel.parcelId);
+    // Only an At_PUDO cash parcel moved agent cash at intake; reverse it flow-correctly (peer-send vs walk-up).
+    if (parcel.status === 'At_PUDO') this.reverseIntakeCharge(parcel, parcel.originAgentDid);
     parcel.status = 'Voided';
     this.media.anchorParcelTerminal(parcel.parcelId); // S26: shipment-proof retention starts at this terminal state
     this.scan(parcel, 'Voided', by, reason ? `cancelled · ${reason}` : 'cancelled');
@@ -978,7 +996,7 @@ export class ParcelService implements OnApplicationBootstrap {
     // adopt(), not link(): the photo id came from the CLIENT — only a photo the acting shop owns and that
     // isn't attached elsewhere may bind here (S29/S33a media-laundering guard).
     this.media.adopt(dropoffPhotoRef, agentDid, { type: 'parcel', id: parcelId }, 'dropoff');
-    this.gate.chargeShipping(agentDid, due, parcelId); // remit the collected cash
+    if (due > 0) this.gate.chargeShipping(agentDid, due, parcelId); // remit the collected cash (a 0-priced route charges nothing)
     this.gate.payLabour(agentDid, LABOUR_FEE, parcelId, 'parcel');
     void this.events.publish(GlosEvent.Pudo.ParcelAccepted, { parcelId, agentDid, destZone: parcel.destZone, mode: 'cash' }, { source: 'pudo' }).catch(() => undefined);
     return parcel;

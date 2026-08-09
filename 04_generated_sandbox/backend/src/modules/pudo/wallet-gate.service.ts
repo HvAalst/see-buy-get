@@ -168,10 +168,23 @@ export class WalletGateService {
     return entry;
   }
 
-  /** Reverse a shipping charge within the void window. */
-  refund(did: string, amount: number, parcelId: string): PudoLedgerEntry {
+  /** Reverse a shipping charge within the void window. A 0 refund is a no-op (a zero-priced parcel was
+   *  never charged) — never trip the wallet's positive-amount assertion on a reversal. */
+  refund(did: string, amount: number, parcelId: string): PudoLedgerEntry | null {
+    if (amount <= 0) return null;
     this.wallet.credit(did, amount);
     const entry = this.record('REFUND', '+', amount, did, parcelId, 'parcel');
+    this.agents.refreshLock(did);
+    return entry;
+  }
+
+  /** Reverse a labour payout when a paid intake is undone (void / cancel of a peer-send). A negative
+   *  LABOR_PAYOUT — the same signed-labour convention sortLabour uses — so the reversal is a truthful
+   *  ledger row, not a mislabelled charge. Balances the +LABOUR_FEE credited at intake back to zero. */
+  clawbackLabour(did: string, amount: number, parcelId: string): PudoLedgerEntry | null {
+    if (amount <= 0) return null;
+    this.wallet.debit(did, amount);
+    const entry = this.record('LABOR_PAYOUT', '-', amount, did, parcelId, 'parcel');
     this.agents.refreshLock(did);
     return entry;
   }
