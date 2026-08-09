@@ -20,7 +20,7 @@ export type SbgErrorCode =
   | 'BAG_MISADDRESSED' | 'SHELF_FULL' | 'NO_CAPACITY_AVAILABLE' | 'OTP_INVALID' | 'OTP_LOCKED' | 'PIN_INVALID' | 'UNAUTHORIZED'
   | 'AUTH_FAILED' | 'AUTH_CODE_INVALID' | 'AUTH_NOT_ACTIVE' | 'PAYMENT_REQUIRED' | 'WALLET_INSUFFICIENT'
   | 'FORBIDDEN' | 'WRONG_PUDO' | 'AGENT_LOCKED' | 'PIN_LOCKED' | 'ROLE_NOT_HELD' | 'MEDIA_LOCKED' | 'CARGO_REQUIRES_DEDICATED' | 'CARGO_INCOMPATIBLE' | 'VEHICLE_MISSING_CAPABILITY' | 'NOT_FOUND' | 'CONFLICT' | 'DUPLICATE' | 'INCOMPLETE_MANIFEST' | 'INVITE_LIMIT'
-  | 'MEDIA_EXPIRED' | 'MEDIA_TOO_LARGE' | 'UNSUPPORTED_MEDIA' | 'RATE_LIMITED'
+  | 'MEDIA_EXPIRED' | 'MEDIA_TOO_LARGE' | 'UNSUPPORTED_MEDIA' | 'RATE_LIMITED' | 'PRICE_CHANGED'
   | 'INTERNAL'
   | 'NETWORK' | 'TIMEOUT' | 'CLIENT_OUTDATED'; // client-synthesised (no HTTP response)
 
@@ -110,6 +110,7 @@ const PRESENTATION: Partial<Record<SbgErrorCode, ErrorPresentation>> = {
   MEDIA_EXPIRED: { icon: 'clock', tone: 'info', say: 'error.photo_expired' },
   MEDIA_LOCKED: { icon: 'lock', tone: 'info', say: 'error.photo_locked' },
   RATE_LIMITED: { icon: 'clock', tone: 'info', say: 'error.slow_down' },
+  PRICE_CHANGED: { icon: 'wallet', tone: 'warn', say: 'error.price_changed' },
   UNAUTHORIZED: { icon: 'key', tone: 'danger', say: 'error.sign_in' },
   FORBIDDEN: { icon: 'block', tone: 'danger', say: 'error.not_allowed' },
   VALIDATION_FAILED: { icon: 'edit', tone: 'warn', say: 'error.check_fields' },
