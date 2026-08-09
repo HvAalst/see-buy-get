@@ -69,8 +69,9 @@ function PhoneField({ id, state, actions, hint }: { id: string; state: SendState
 }
 
 function LoginView({ state, actions, busy }: { state: SendState; actions: SendActions; busy: boolean }) {
-  // Once the number is confirmed (remembered on this device), signing back in is PIN-only.
-  const known = state.authPhone.trim().length > 0;
+  // PIN-only ONLY when the number was remembered from a prior session — never just because a digit was
+  // typed (that would collapse the field mid-entry for a first-time signer).
+  const known = state.phoneKnown;
   const ready = phoneReady(state.authPhone) && codeReady(state.authPin, 4);
   return (
     <>

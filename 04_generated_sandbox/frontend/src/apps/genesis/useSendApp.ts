@@ -78,6 +78,9 @@ export interface SendState {
   authMode: AuthMode;
   authStep: AuthStep;
   authPhone: string;
+  /** True only when the phone was REMEMBERED from a prior session (device storage) → login is PIN-only.
+   *  A first-time typist keeps the editable field; typing a digit must never flip the input to read-only. */
+  phoneKnown: boolean;
   authCode: string; // the 6-digit OTP
   authPin: string; // the 4-digit PIN
   authBusy: boolean;
@@ -154,6 +157,7 @@ const INITIAL: SendState = {
   authMode: 'login',
   authStep: 'phone',
   authPhone: '',
+  phoneKnown: false,
   authCode: '',
   authPin: '',
   authBusy: false,
@@ -202,7 +206,8 @@ export function useSendApp() {
   });
 
   useEffect(() => {
-    setState((s) => ({ ...s, recent: recentKeys(), authPhone: readPhone() ?? '' }));
+    const remembered = readPhone();
+    setState((s) => ({ ...s, recent: recentKeys(), authPhone: remembered ?? '', phoneKnown: Boolean(remembered) }));
   }, []);
 
   // S24: opened via an invite link (/send/?invite=<token>). A device that already holds a session is a
@@ -446,7 +451,9 @@ export function useSendApp() {
     setDid(data.personId); // triggers restore() → loadParcels()
   }, []);
 
-  const setAuthPhone = useCallback((v: string) => setState((s) => ({ ...s, authPhone: v, authError: null })), []);
+  // Any manual edit (typing, "Not you?", pick-from-contacts) means the number is no longer the remembered
+  // one → drop PIN-only mode so the editable field stays put while they type.
+  const setAuthPhone = useCallback((v: string) => setState((s) => ({ ...s, authPhone: v, phoneKnown: false, authError: null })), []);
   const setAuthCode = useCallback((v: string) => setState((s) => ({ ...s, authCode: v, authError: null })), []);
   const setAuthPin = useCallback((v: string) => setState((s) => ({ ...s, authPin: v, authError: null })), []);
   // A navigation bumps the auth epoch so any in-flight request bails out instead of clobbering the step.
