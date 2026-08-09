@@ -91,18 +91,32 @@ export function createAgentApi(sbg: SbgClient) {
     /** One parcel by sticker id (drives the release flow's state machine). */
     parcel: (id: string) => sbg.request((c) => c.GET('/v1/sbg/parcels/{id}', { params: { path: { id } } })),
 
-    /** Take in a walk-up drop-off: sticker + size + destination + phones + proof photo. */
+    /** Take in a walk-up drop-off: sticker + MEASURED dims (the tier is derived) + destination PUDO +
+     *  phones + proof photo. `size` is kept only as a legacy fallback. */
     accept: (body: {
       agentDid: string;
       parcelId: string;
-      size: 'S' | 'M' | 'L' | 'HEAVY';
+      size?: 'S' | 'M' | 'L' | 'HEAVY';
+      dimensionsCm?: { l: number; w: number; h: number };
+      weightKg?: number;
       destZone: string;
+      destPudoDid?: string;
       senderMobile: string;
       receiverMobile: string;
       dropoffPhotoRef: string;
+      fragile?: boolean;
       // S30 — the commodity's primary cargo nature (default GEN server-side). Union mirrors CARGO_NATURES.
       natureCode?: 'GEN' | 'FOD' | 'FOP' | 'HAZ-CHEM' | 'HAZ-DUST' | 'HAZ-BIO' | 'HAZ-FLAM' | 'FRG' | 'ODR' | 'HUM';
     }) => sbg.request((c) => c.POST('/v1/sbg/parcels/accept', { body })),
+
+    /** The public shop directory — the destination PUDOs the counter can send toward (Map/Address picker). */
+    networkPoints: () => sbg.request((c) => c.GET('/v1/sbg/network/points')),
+
+    /** Resolve a typed area/place to a point (the "Address" intake mode → rank the nearest PUDO). */
+    geocode: (q: string) => sbg.request((c) => c.GET('/v1/sbg/geocode', { params: { query: { q } } })),
+
+    /** Derive the size tier + cargo class from measured dims (shown live at the counter before accept). */
+    classify: (l: number, w: number, h: number, kg: number) => sbg.request((c) => c.POST('/v1/sbg/size/classify', { body: { l, w, h, kg } })),
 
     /** PG4 — what a scanned sticker IS before confirming: a pre-minted peer send (with the cash due), a
      *  store order, or an already-used sticker. 404 = a fresh sticker → the walk-up form. Server-pinned

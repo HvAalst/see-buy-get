@@ -15,18 +15,21 @@ import type { IconName } from '../../shared/ui/Icon';
 import { agentConfig, clearDid, createAgentClient, purgeAgentTokens, readDid, readEmail, saveDid, saveEmail } from './api';
 import { signal } from '../../shared/feedback';
 import { triggerDownload } from '../../shared/download';
-import { EMPTY_ACCEPT, destinationZones, otpValid, type AcceptForm } from './logic';
+import { EMPTY_ACCEPT, otpValid, parseDims, type AcceptForm, type DimsForm } from './logic';
+import type { GeoPoint } from '../../shared/geo';
 import type {
   AgentLedgerRow,
   AgentParcelRow,
   AgentView,
   ArriveView,
+  ClassifyView,
   CollectView,
-  CorridorRow,
   GateView,
+  GeocodeView,
   HandoverView,
   IntakePreview,
   LedgerSummary,
+  NetworkPoint,
   ParcelView,
   RatesView,
   ReceiveBagView,
@@ -80,7 +83,6 @@ export interface AgentState {
   screen: Screen;
   agent: AgentView | null;
   gate: GateView | null;
-  zones: string[];
   /** Parcels waiting at this shop for the bus (loaded when the handover screen opens). */
   shopParcels: ParcelView[];
   shopParcelsState: 'idle' | 'loading' | 'ready' | 'error';
@@ -104,6 +106,15 @@ export interface AgentState {
   stale: boolean;
 
   accept: AcceptForm;
+  /** The destination-PUDO directory for the walk-up picker (Map/Address). */
+  acceptPoints: NetworkPoint[];
+  acceptPointsState: 'idle' | 'loading' | 'ready' | 'error';
+  /** The derived tier + cargo class for the measured dims (null until all four are entered). */
+  acceptDerived: ClassifyView | null;
+  /** The geocoded point for the Address mode's nearest-first sort (+ a plain note on the match/quality). */
+  acceptNear: GeoPoint | null;
+  acceptGeoBusy: boolean;
+  acceptGeoNote: string | null;
   /** DT — the label the last accept produced, shown to print + stick on the parcel (null once dismissed). */
   acceptedLabel: { parcelId: string; trackingKey?: string; svg?: string } | null;
   /** PG4 — the scanned sticker resolved to an EXISTING parcel (a pre-minted send, a store order, or an
@@ -134,7 +145,6 @@ const INITIAL: AgentState = {
   screen: 'home',
   agent: null,
   gate: null,
-  zones: [],
   shopParcels: [],
   shopParcelsState: 'idle',
   rates: null,
@@ -154,6 +164,12 @@ const INITIAL: AgentState = {
   refreshing: false,
   stale: false,
   accept: { ...EMPTY_ACCEPT },
+  acceptPoints: [],
+  acceptPointsState: 'idle',
+  acceptDerived: null,
+  acceptNear: null,
+  acceptGeoBusy: false,
+  acceptGeoNote: null,
   acceptedLabel: null,
   preMint: null,
   preMintState: 'idle',
@@ -279,17 +295,11 @@ export function useAgentApp() {
       }
       const gate = narrow<GateView>(gateR.data);
 
-      // Corridors soft-fail: accepting can still use a typed destination.
-      const corR = await client.api.corridors();
-      if (superseded()) return;
-      const zones = corR.error ? [] : destinationZones(narrow<CorridorRow[]>(corR.data), agent.zone);
-
       setState((s) => ({
         ...s,
         phase: 'ready',
         agent,
         gate,
-        zones,
         error: null,
         stale: false,
         refreshing: false,
@@ -443,6 +453,19 @@ export function useAgentApp() {
     setState((s) => ({ ...s, shopParcels: rows, shopParcelsState: 'ready' }));
   }, [client, did, fail]);
 
+  /** The destination directory for the walk-up picker (Map/Address). Loaded when the accept screen opens. */
+  const loadAcceptPoints = useCallback(async () => {
+    if (!client) return;
+    if (stateRef.current.acceptPointsState === 'loading' || stateRef.current.acceptPointsState === 'ready') return;
+    setState((s) => ({ ...s, acceptPointsState: 'loading' }));
+    const r = await client.api.networkPoints();
+    if (r.error) {
+      setState((s) => ({ ...s, acceptPointsState: 'error' }));
+      return;
+    }
+    setState((s) => ({ ...s, acceptPoints: narrow<NetworkPoint[]>(r.data) ?? [], acceptPointsState: 'ready' }));
+  }, [client]);
+
   const loadRates = useCallback(async () => {
     if (!client) return;
     setState((s) => ({ ...s, ratesState: 'loading' }));
@@ -550,8 +573,9 @@ export function useAgentApp() {
       }));
       if (screen === 'handover' || screen === 'void') void loadShopParcels();
       if (screen === 'rates') void loadRates();
+      if (screen === 'accept') void loadAcceptPoints();
     },
-    [loadShopParcels, loadRates],
+    [loadShopParcels, loadRates, loadAcceptPoints],
   );
 
   /* ---------------------------------------------------------------- forms */
@@ -559,6 +583,61 @@ export function useAgentApp() {
   const setAccept = useCallback((p: Partial<AcceptForm>) => {
     setState((s) => ({ ...s, accept: { ...s.accept, ...p } }));
   }, []);
+
+  /* --- walk-up intake: measure + destination picker (Map | Address) --- */
+
+  // A dims edit invalidates the derived tier AND supersedes any classify already in flight for the old
+  // dims — bump the epoch so a stale result can't repopulate the just-cleared tier (and flip the P4+ warn).
+  const deriveEpoch = useRef(0);
+  const setDims = useCallback((patch: Partial<DimsForm>) => {
+    deriveEpoch.current++;
+    setState((s) => ({ ...s, accept: { ...s.accept, dims: { ...s.accept.dims, ...patch } }, acceptDerived: null }));
+  }, []);
+
+  // Classify the measured dims → the tier + cargo class (shown as a pill; P4+ warns + blocks). Epoch-guarded.
+  const deriveSize = useCallback(async () => {
+    const parsed = parseDims(stateRef.current.accept.dims);
+    if (!client || !parsed) return;
+    const epoch = ++deriveEpoch.current;
+    const r = await client.api.classify(parsed.l, parsed.w, parsed.h, parsed.kg);
+    if (epoch !== deriveEpoch.current || r.error) return;
+    setState((s) => ({ ...s, acceptDerived: narrow<ClassifyView>(r.data) }));
+  }, [client]);
+
+  // The typed area drives the nearest-first sort + the confidence note — but ONLY after Find geocodes it.
+  // Editing the text (or switching mode) drops the stale near-point/note so the list + distances can never
+  // lag behind what the box says.
+  const setAddress = useCallback((v: string) => {
+    setState((s) => ({ ...s, accept: { ...s.accept, addressText: v }, acceptNear: null, acceptGeoNote: null }));
+  }, []);
+
+  const setDestMode = useCallback((mode: 'map' | 'address') => {
+    setState((s) => ({ ...s, accept: { ...s.accept, destMode: mode }, acceptNear: null, acceptGeoNote: null }));
+  }, []);
+
+  const pickDest = useCallback((point: { did: string; zone: string; shopName: string }) => {
+    setState((s) => ({ ...s, accept: { ...s.accept, destPudoDid: point.did, destZone: point.zone, destShopName: point.shopName } }));
+  }, []);
+
+  // Geocode the typed area → a point the destination list sorts nearest-first around, with a plain note on
+  // the match quality (exact / approximate / best-guess) so an approximate pin isn't mistaken for exact.
+  const geocodeEpoch = useRef(0);
+  const geocodeAddress = useCallback(async () => {
+    const q = stateRef.current.accept.addressText.trim();
+    if (!client || !q) return;
+    const epoch = ++geocodeEpoch.current;
+    setState((s) => ({ ...s, acceptGeoBusy: true, acceptGeoNote: null }));
+    const r = await client.api.geocode(q);
+    if (epoch !== geocodeEpoch.current) return;
+    if (r.error || !r.data) {
+      setState((s) => ({ ...s, acceptGeoBusy: false, acceptGeoNote: 'Could not find that place — try a nearby area, or use the map.' }));
+      return;
+    }
+    const g = narrow<GeocodeView>(r.data);
+    const where = g.matched ?? q;
+    const note = g.confidence === 'exact' ? `Nearest shops to ${where} first.` : g.confidence === 'approx' ? `Nearest shops near ${where} first (approximate).` : 'That place is not on our map — showing a best guess. Use the map if it looks off.';
+    setState((s) => ({ ...s, acceptGeoBusy: false, acceptNear: g.location, acceptGeoNote: note }));
+  }, [client]);
   const setHandover = useCallback((p: Partial<AgentState['handover']>) => {
     setState((s) => ({ ...s, handover: { ...s.handover, ...p } }));
   }, []);
@@ -680,18 +759,24 @@ export function useAgentApp() {
   const submitAccept = useCallback(async () => {
     if (!client || !did) return;
     const f = stateRef.current.accept;
-    if (!f.size) return;
+    const dims = parseDims(f.dims);
+    // A dedicated (P4+) load can't ride the bus — the server refuses it, so don't even send it.
+    if (!dims || !f.destPudoDid || stateRef.current.acceptDerived?.dedicated) return;
     await run('accept', async () => {
       const r = await client.api.accept({
         agentDid: did,
         // The created id becomes the canonical Map key; uppercase it so it matches the
         // printed (uppercase) sticker on every later scan/lookup.
         parcelId: f.parcelId.trim().toUpperCase(),
-        size: f.size as 'S' | 'M' | 'L' | 'HEAVY',
+        // The tier is DERIVED server-side from these measurements (no manual size).
+        dimensionsCm: { l: dims.l, w: dims.w, h: dims.h },
+        weightKg: dims.kg,
         destZone: f.destZone.trim(),
+        destPudoDid: f.destPudoDid,
         senderMobile: f.senderMobile.trim() || 'n/a',
         receiverMobile: f.receiverMobile.trim() || 'n/a',
         dropoffPhotoRef: f.photoRef,
+        fragile: f.fragile || undefined,
         natureCode: f.natureCode,
       });
       if (r.error) return fail(r.error);
@@ -699,7 +784,7 @@ export function useAgentApp() {
       // DT — capture the label the parcel was born with so the agent can print it and stick it on the parcel
       // (peer-send parcels never had one). Clearing the form but staying on the accept screen; a Sheet shows it.
       const p = narrow<{ parcelId: string; trackingKey?: string; label?: { svg?: string } }>(r.data);
-      setState((s) => ({ ...s, accept: { ...EMPTY_ACCEPT }, acceptedLabel: p ? { parcelId: p.parcelId, trackingKey: p.trackingKey, svg: p.label?.svg } : null }));
+      setState((s) => ({ ...s, accept: { ...EMPTY_ACCEPT }, acceptDerived: null, acceptNear: null, acceptGeoNote: null, acceptedLabel: p ? { parcelId: p.parcelId, trackingKey: p.trackingKey, svg: p.label?.svg } : null }));
       pushToast({ tone: 'ok', icon: 'box', title: 'Parcel accepted', detail: 'A tracking message has been sent.' });
       await refresh();
     });
@@ -993,6 +1078,12 @@ export function useAgentApp() {
       loadEarnings,
       exportLedger,
       setAccept,
+      setDims,
+      deriveSize,
+      setAddress,
+      setDestMode,
+      pickDest,
+      geocodeAddress,
       setHandover,
       toggleHandover,
       setRelease,

@@ -68,6 +68,33 @@ export interface ParcelView {
   acceptedAt?: string;
 }
 
+/** A destination PUDO the counter can pick from the public directory (Map/Address intake picker). */
+export interface NetworkPoint {
+  did: string;
+  shopName: string;
+  zone: string;
+  location?: { lat: number; lng: number };
+  landmark?: string;
+  openState: 'open' | 'closed';
+  pricePerParcel: number;
+  rating?: { count: number; average: number } | null;
+  freeSlots?: number;
+}
+
+/** GET /sbg/geocode — a typed area/place resolved to a point (the Address intake mode). */
+export interface GeocodeView {
+  location: { lat: number; lng: number };
+  confidence: 'exact' | 'approx' | 'fallback';
+  matched?: string;
+}
+
+/** POST /sbg/size/classify — the derived tier + cargo class for measured dims (shown live at the counter). */
+export interface ClassifyView {
+  size: ParcelSize;
+  cargoClass: string;
+  dedicated: boolean;
+}
+
 /** PG4 — what the counter learns about a scanned sticker BEFORE confirming (GET parcels/:id/intake-preview). */
 export interface IntakePreview {
   parcelId: string;

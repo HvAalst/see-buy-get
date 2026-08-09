@@ -6,7 +6,8 @@
  * so the PWA and the old page can never disagree about what "locked" or "12% above" means.
  */
 
-import type { AgentStatus, AgentView, Benchmark, CorridorRow, GateView, ParcelSize, ParcelStatus, ParcelView } from './types';
+import { distanceLabel, haversineKm, type GeoPoint } from '../../shared/geo';
+import type { AgentStatus, AgentView, Benchmark, CorridorRow, GateView, NetworkPoint, ParcelSize, ParcelStatus, ParcelView } from './types';
 
 /* ------------------------------------------------------------------- gate -- */
 
@@ -91,25 +92,97 @@ export const NATURES: Array<{ key: CargoNature; label: string }> = [
   { key: 'HAZ-FLAM', label: 'Gas, fuel or flammable' },
 ];
 
+/** The measure-your-parcel fields (free-typed strings until they parse). */
+export interface DimsForm {
+  l: string;
+  w: string;
+  h: string;
+  kg: string;
+}
+
+/** The redesigned walk-up intake: MEASURE the parcel (tier derived), pick a destination PUDO by Map or
+ *  Address, plus nature, phones and a photo. No manual S/M/L/HEAVY, no typed zone. */
 export interface AcceptForm {
   parcelId: string;
-  size: ParcelSize | '';
-  destZone: string;
+  dims: DimsForm;
+  fragile: boolean;
+  natureCode: CargoNature;
+  /** How the counter is picking the destination: on a map, or by typing an area. */
+  destMode: 'map' | 'address';
+  destPudoDid: string;
+  destZone: string; // the picked shop's zone (carried to accept())
+  destShopName: string; // for display
+  addressText: string; // the Address-mode query
   senderMobile: string;
   receiverMobile: string;
   photoRef: string;
-  natureCode: CargoNature;
 }
 
 export const EMPTY_ACCEPT: AcceptForm = {
   parcelId: '',
-  size: '',
+  dims: { l: '', w: '', h: '', kg: '' },
+  fragile: false,
+  natureCode: 'GEN',
+  destMode: 'map',
+  destPudoDid: '',
   destZone: '',
+  destShopName: '',
+  addressText: '',
   senderMobile: '',
   receiverMobile: '',
   photoRef: '',
-  natureCode: 'GEN',
 };
+
+/** The smallest measurement we accept, in cm — 1 mm, so a thin item (a letter ~0.5 cm) is shippable.
+ *  Mirrors the backend @Min. */
+export const MIN_DIM_CM = 0.1;
+
+/** Accept a European decimal comma ("0,5") as well as a dot before parsing. */
+function num(s: string): number {
+  return Number(String(s).trim().replace(',', '.'));
+}
+
+/** Parse the measured dims, or null while anything is missing/invalid (explicit range checks — never a
+ *  `Number(x) || fallback` that lets a truthy negative slip through). */
+export function parseDims(d: DimsForm): { l: number; w: number; h: number; kg: number } | null {
+  const l = num(d.l);
+  const w = num(d.w);
+  const h = num(d.h);
+  const kg = num(d.kg);
+  const cm = (v: number) => Number.isFinite(v) && v >= MIN_DIM_CM;
+  if (!cm(l) || !cm(w) || !cm(h)) return null;
+  if (!Number.isFinite(kg) || kg < 0.01) return null;
+  return { l, w, h, kg };
+}
+
+/** The plain-words presentation of a DERIVED tier. */
+export function sizeMeta(size: ParcelSize): { label: string; hint: string } {
+  return SIZES.find((s) => s.key === size) ?? { key: size, label: size, hint: '' };
+}
+
+/**
+ * Destination PUDOs the counter can pick: open ones first; with a reference point (a geocoded address),
+ * NEAREST first; otherwise A→Z. Mirrors the Send app's picker so a shop and a sender rank shops the same.
+ */
+export function selectablePoints(points: NetworkPoint[] | null, excludeDid?: string, near?: GeoPoint | null): NetworkPoint[] {
+  return (points ?? [])
+    .filter((p) => p.did !== excludeDid) // never offer the accepting shop as its own destination (origin ≠ dest)
+    .sort((a, b) => {
+      if (a.openState !== b.openState) return a.openState === 'open' ? -1 : 1;
+      if (near) {
+        const da = a.location ? haversineKm(near, a.location) : Number.POSITIVE_INFINITY;
+        const db = b.location ? haversineKm(near, b.location) : Number.POSITIVE_INFINITY;
+        if (da !== db) return da - db;
+      }
+      return a.shopName.localeCompare(b.shopName);
+    });
+}
+
+/** The "400 m away" suffix for a destination row, when both ends are known. */
+export function pointDistance(p: NetworkPoint, near: GeoPoint | null | undefined): string | null {
+  if (!near || !p.location) return null;
+  return distanceLabel(haversineKm(near, p.location));
+}
 
 /**
  * What still blocks the accept. Ordered by the physical flow at the counter, so the first
@@ -117,8 +190,8 @@ export const EMPTY_ACCEPT: AcceptForm = {
  */
 export function acceptMissing(f: AcceptForm): string | null {
   if (!f.parcelId.trim()) return 'Scan the parcel sticker first.';
-  if (!f.size) return 'Tap the size of the parcel.';
-  if (!f.destZone.trim()) return 'Pick where it is going.';
+  if (!parseDims(f.dims)) return 'Measure the parcel: length, width, height and weight.';
+  if (!f.destPudoDid) return 'Pick where it is going.';
   if (!f.photoRef) return 'Take the proof photo.';
   return null;
 }

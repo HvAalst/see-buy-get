@@ -11,15 +11,19 @@ import {
   isVoidable,
   money,
   otpValid,
+  parseDims,
+  pointDistance,
   priceBand,
   releaseStage,
   roundMoney,
+  selectablePoints,
+  sizeMeta,
   statusNotice,
   voidCountdownLabel,
   voidRemainingMs,
   voidableParcels,
 } from './logic';
-import type { AgentView, Benchmark, CorridorRow, GateView, ParcelView } from './types';
+import type { AgentView, Benchmark, CorridorRow, GateView, NetworkPoint, ParcelView } from './types';
 
 const agent = (over: Partial<AgentView> = {}): AgentView => ({
   agentId: 'ag_1',
@@ -89,12 +93,49 @@ describe('destinationZones', () => {
 });
 
 describe('acceptMissing', () => {
-  it('walks the counter flow in order', () => {
+  const dims = { l: '30', w: '20', h: '10', kg: '1.6' };
+  it('walks the redesigned counter flow in order: sticker → measure → destination → photo', () => {
     expect(acceptMissing(EMPTY_ACCEPT)).toContain('sticker');
-    expect(acceptMissing({ ...EMPTY_ACCEPT, parcelId: 'P-1' })).toContain('size');
-    expect(acceptMissing({ ...EMPTY_ACCEPT, parcelId: 'P-1', size: 'M' })).toContain('going');
-    expect(acceptMissing({ ...EMPTY_ACCEPT, parcelId: 'P-1', size: 'M', destZone: 'Z-B' })).toContain('photo');
-    expect(acceptMissing({ ...EMPTY_ACCEPT, parcelId: 'P-1', size: 'M', destZone: 'Z-B', photoRef: 'p.jpg' })).toBeNull();
+    expect(acceptMissing({ ...EMPTY_ACCEPT, parcelId: 'P-1' })).toContain('Measure');
+    expect(acceptMissing({ ...EMPTY_ACCEPT, parcelId: 'P-1', dims })).toContain('going');
+    expect(acceptMissing({ ...EMPTY_ACCEPT, parcelId: 'P-1', dims, destPudoDid: 'did:agent:b', destZone: 'Z-B' })).toContain('photo');
+    expect(acceptMissing({ ...EMPTY_ACCEPT, parcelId: 'P-1', dims, destPudoDid: 'did:agent:b', destZone: 'Z-B', photoRef: 'p.jpg' })).toBeNull();
+  });
+
+  it('an incomplete or sub-1mm measurement still blocks', () => {
+    expect(acceptMissing({ ...EMPTY_ACCEPT, parcelId: 'P-1', dims: { l: '30', w: '20', h: '', kg: '1' }, destPudoDid: 'x', photoRef: 'p.jpg' })).toContain('Measure');
+    expect(acceptMissing({ ...EMPTY_ACCEPT, parcelId: 'P-1', dims: { l: '30', w: '20', h: '0.05', kg: '1' }, destPudoDid: 'x', photoRef: 'p.jpg' })).toContain('Measure');
+  });
+});
+
+describe('intake measure + destination helpers', () => {
+  it('parseDims accepts a thin item + a decimal comma, down to the 1 mm floor', () => {
+    expect(parseDims({ l: '30', w: '20', h: '10', kg: '1.6' })).toEqual({ l: 30, w: 20, h: 10, kg: 1.6 });
+    expect(parseDims({ l: '21', w: '10', h: '0,5', kg: '0,02' })).toEqual({ l: 21, w: 10, h: 0.5, kg: 0.02 }); // comma + thin
+    expect(parseDims({ l: '-30', w: '20', h: '10', kg: '1' })).toBeNull(); // a truthy negative must NOT slip through
+    expect(parseDims({ l: '30', w: '20', h: '0.05', kg: '1' })).toBeNull(); // below the floor
+  });
+
+  it('sizeMeta gives a derived tier its plain words', () => {
+    expect(sizeMeta('M').label).toBe('Medium');
+    expect(sizeMeta('HEAVY').hint).toBe('Over 20 kg');
+  });
+
+  const pt = (over: Partial<NetworkPoint>): NetworkPoint => ({ did: 'd', shopName: 'Shop', zone: 'Z-A', openState: 'open', pricePerParcel: 1, ...over });
+
+  it('selectablePoints excludes the accepting shop, puts open first, then nearest (with a ref) else A→Z', () => {
+    const near = { lat: -1.3, lng: 36.84 };
+    const pts = [
+      pt({ did: 'far', shopName: 'Far', location: { lat: -1.2, lng: 36.7 } }),
+      pt({ did: 'closed', shopName: 'AClosed', openState: 'closed', location: { lat: -1.301, lng: 36.841 } }),
+      pt({ did: 'close', shopName: 'Close', location: { lat: -1.301, lng: 36.841 } }),
+      pt({ did: 'self', shopName: 'MyOwnShop', location: { lat: -1.3, lng: 36.84 } }),
+    ];
+    // 'self' is the accepting shop → excluded even though it is the nearest of all.
+    expect(selectablePoints(pts, 'self', near).map((p) => p.did)).toEqual(['close', 'far', 'closed']);
+    expect(selectablePoints(pts, 'self').map((p) => p.shopName)).toEqual(['Close', 'Far', 'AClosed']); // no ref → open A→Z, then closed
+    expect(pointDistance(pts[2], near)).toContain('away');
+    expect(pointDistance(pt({ location: undefined }), near)).toBeNull();
   });
 });
 

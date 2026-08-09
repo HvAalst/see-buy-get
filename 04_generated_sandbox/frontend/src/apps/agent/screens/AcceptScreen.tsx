@@ -1,5 +1,6 @@
-import { Button, Card, ErrorNote, GlanceNumber, Note, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
-import { NATURES, SIZES, acceptMissing, parcelStatusWord } from '../logic';
+import { Button, Card, ErrorNote, GlanceNumber, Icon, Note, PlaceMap, Pill, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
+import { NATURES, acceptMissing, parcelStatusWord, pointDistance, selectablePoints, sizeMeta } from '../logic';
+import type { NetworkPoint } from '../types';
 import type { AgentActions, AgentState } from '../useAgentApp';
 import { PhotoField } from './PhotoField';
 
@@ -23,7 +24,9 @@ function openLabel(svg: string) {
  */
 export function AcceptScreen({ state, actions }: AcceptScreenProps) {
   const f = state.accept;
-  const missing = acceptMissing(f);
+  // What blocks the walk-up accept: a missing field, OR a dedicated (P4+) load that can't ride the bus (the
+  // server would refuse it, so the button + the read-aloud must not tell the clerk to tap).
+  const blockReason = acceptMissing(f) ?? (state.acceptDerived?.dedicated ? 'Too big for the bus — it needs a freight truck. You cannot take it in here.' : null);
   // Only a SETTLED preview drives the confirm card — never a stale one still resolving under a new scan.
   const pm = state.preMintState === 'ready' ? state.preMint : null;
   const booked = pm && (pm.kind === 'peer_send' || pm.kind === 'vendor_order');
@@ -113,24 +116,50 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
 
       {!walkUp ? null : (
         <>
-      <Card label="How big is it?">
-        <div class="sizes" role="group" aria-label="Parcel size">
-          {SIZES.map((s) => (
-            <button
-              key={s.key}
-              type="button"
-              class={`size${f.size === s.key ? ' size--on' : ''}`}
-              aria-pressed={f.size === s.key}
-              onClick={() => actions.setAccept({ size: s.key })}
-            >
-              <span class="size__k">{s.label}</span>
-              <span class="size__h">{s.hint}</span>
-            </button>
+      <Card label="Dimensions">
+        <div class="dims">
+          {(
+            [
+              ['l', 'Length cm'],
+              ['w', 'Width cm'],
+              ['h', 'Height cm'],
+              ['kg', 'Weight kg'],
+            ] as const
+          ).map(([k, label]) => (
+            <div key={k} class="field">
+              <label class="field__label" for={`accept-dim-${k}`}>
+                {label}
+              </label>
+              <input
+                id={`accept-dim-${k}`}
+                class="input"
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.1"
+                value={f.dims[k]}
+                onInput={(e) => actions.setDims({ [k]: e.currentTarget.value } as never)}
+                onBlur={() => void actions.deriveSize()}
+              />
+            </div>
           ))}
         </div>
+        {state.acceptDerived ? (
+          <Pill tone={state.acceptDerived.dedicated ? 'warn' : 'info'}>{`Size ${sizeMeta(state.acceptDerived.size).label} — ${sizeMeta(state.acceptDerived.size).hint}`}</Pill>
+        ) : (
+          <p class="card__note">Fill all four — the size is worked out for you, so there is nothing to argue about later.</p>
+        )}
+        <label class="checkline" style="margin-top:12px">
+          <input type="checkbox" checked={f.fragile} onChange={(e) => actions.setAccept({ fragile: e.currentTarget.checked })} />
+          <span>Fragile — keep it off two-wheelers</span>
+        </label>
       </Card>
 
-      <Card label="What kind of goods?">
+      {state.acceptDerived?.dedicated ? (
+        <Note tone="warn" icon="truck" title="Too big for the bus" detail="This is dedicated-freight cargo — it can't ride the shared bus. Arrange a freight truck; taking it in here will be refused." />
+      ) : null}
+
+      <Card label="What's inside?">
         <select class="select" value={f.natureCode} onChange={(e) => actions.setAccept({ natureCode: e.currentTarget.value as typeof f.natureCode })}>
           {NATURES.map((n) => (
             <option key={n.key} value={n.key}>
@@ -138,29 +167,10 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
             </option>
           ))}
         </select>
-        <p class="card__note">This keeps unsafe mixes apart — e.g. cement dust never travels with fresh food.</p>
+        <p class="card__note">Most parcels are general goods. This keeps unsafe mixes apart — e.g. cement dust never travels with fresh food.</p>
       </Card>
 
-      <Card label="Where is it going?">
-        {state.zones.length ? (
-          <select class="select" value={f.destZone} onChange={(e) => actions.setAccept({ destZone: e.currentTarget.value })}>
-            <option value="">Pick the destination</option>
-            {state.zones.map((z) => (
-              <option key={z} value={z}>
-                {z}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <input
-            class="input"
-            value={f.destZone}
-            onInput={(e) => actions.setAccept({ destZone: e.currentTarget.value })}
-            placeholder="Destination zone"
-            autocapitalize="characters"
-          />
-        )}
-      </Card>
+      <DestinationCard state={state} actions={actions} />
 
       <Card label="Phone numbers">
         <div class="field">
@@ -202,14 +212,14 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
       </Card>
 
       <div class="scr__cta">
-        <Button onClick={() => void actions.submitAccept()} disabled={Boolean(missing)} busy={state.busy === 'accept'}>
+        <Button onClick={() => void actions.submitAccept()} disabled={Boolean(blockReason)} busy={state.busy === 'accept'}>
           Confirm and accept
         </Button>
-        {missing ? <p class="hint" style="margin-top:8px">{missing}</p> : null}
+        {blockReason ? <p class="hint" style="margin-top:8px">{blockReason}</p> : null}
       </div>
 
       <div class="scr__foot">
-        <ReadAloud text={() => missing ?? 'Everything is filled in. Tap confirm and accept.'} label="What is still missing?" />
+        <ReadAloud text={() => blockReason ?? 'Everything is filled in. Tap confirm and accept.'} label="What is still missing?" />
       </div>
         </>
       )}
@@ -251,5 +261,94 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
         ) : null}
       </Sheet>
     </div>
+  );
+}
+
+/**
+ * The destination-PUDO picker (walk-up intake): a Map | Address toggle over the same shop directory. On the
+ * map, tap a pin or a row to pick the collection shop. In Address mode, type an area and tap Find — the
+ * shops re-rank nearest-first around it (place/area geocoding, flagged when only approximate). Either way
+ * the pick is a specific dest PUDO, not a coarse zone.
+ */
+function DestinationCard({ state, actions }: { state: AgentState; actions: AgentActions }) {
+  const f = state.accept;
+  const near = f.destMode === 'address' ? state.acceptNear : null;
+  // Exclude the accepting shop — a parcel can't be sent to the shop taking it in.
+  const points = selectablePoints(state.acceptPoints, state.agent?.did ?? undefined, near);
+  const mapPins = points.filter((p) => p.location && p.openState === 'open').map((p) => ({ id: p.did, label: p.shopName, point: p.location! }));
+  const pick = (p: NetworkPoint) => actions.pickDest({ did: p.did, zone: p.zone, shopName: p.shopName });
+
+  return (
+    <Card label="Where does it go?">
+      {/* Names the picking METHOD, not the surface — so it doesn't collide with PlaceMap's own Map/Simple toggle. */}
+      <div class="seg" role="group" aria-label="How to pick the destination">
+        <button type="button" class={`seg__btn${f.destMode === 'map' ? ' seg__btn--on' : ''}`} aria-pressed={f.destMode === 'map'} onClick={() => actions.setDestMode('map')}>
+          <Icon name="home" size={18} /> Pick a shop
+        </button>
+        <button type="button" class={`seg__btn${f.destMode === 'address' ? ' seg__btn--on' : ''}`} aria-pressed={f.destMode === 'address'} onClick={() => actions.setDestMode('address')}>
+          <Icon name="search" size={18} /> By area
+        </button>
+      </div>
+
+      {state.acceptPointsState === 'loading' ? <p class="hint" style="margin-top:10px">Finding shops…</p> : null}
+      {state.acceptPointsState === 'error' ? (
+        <p class="hint" style="margin-top:10px">Couldn’t load shops. <button type="button" class="linkbtn" onClick={() => actions.go('accept')}>Try again</button></p>
+      ) : null}
+
+      {f.destMode === 'address' ? (
+        <>
+          <div class="reg__dates" style="margin-top:10px">
+            <div class="field" style="flex:1">
+              <label class="field__label" for="dest-address">Area or place</label>
+              <input id="dest-address" class="input" value={f.addressText} onInput={(e) => actions.setAddress(e.currentTarget.value)} placeholder="e.g. Westlands, Karen, Thika" autocapitalize="words" />
+            </div>
+            <Button variant="outline" full={false} chevron={false} busy={state.acceptGeoBusy} onClick={() => void actions.geocodeAddress()}>
+              Find
+            </Button>
+          </div>
+          {state.acceptGeoNote ? <p class="card__note">{state.acceptGeoNote}</p> : null}
+        </>
+      ) : null}
+
+      {f.destMode === 'map' && mapPins.length ? (
+        <div style="margin-top:10px">
+          <PlaceMap
+            label={`Map of ${mapPins.length} shops`}
+            pins={mapPins}
+            selectedId={f.destPudoDid || null}
+            reference={near}
+            onPick={(did) => { const p = points.find((x) => x.did === did); if (p) pick(p); }}
+          />
+        </div>
+      ) : null}
+
+      {points.length ? (
+        <div class="rows" role="list" style="margin-top:10px">
+          {points.map((p) => (
+            <DestRow key={p.did} point={p} picked={f.destPudoDid === p.did} away={pointDistance(p, near)} onPick={() => pick(p)} />
+          ))}
+        </div>
+      ) : state.acceptPointsState === 'ready' ? (
+        <p class="hint" style="margin-top:10px">No shops on the network to send toward yet.</p>
+      ) : null}
+
+      {f.destShopName ? <p class="card__note">Going to <b>{f.destShopName}</b>.</p> : null}
+    </Card>
+  );
+}
+
+function DestRow({ point, picked, away, onPick }: { point: NetworkPoint; picked: boolean; away: string | null; onPick: () => void }) {
+  const closed = point.openState === 'closed';
+  return (
+    <button type="button" class="row" disabled={closed} aria-pressed={picked} onClick={onPick}>
+      <span class="row__ic">
+        <Icon name={picked ? 'check' : 'home'} size={24} />
+      </span>
+      <span class="row__body">
+        <span class="row__t">{point.shopName}</span>
+        <span class="row__s">{closed ? 'Closed right now' : `${away ? `${away} · ` : ''}Zone ${point.zone}${point.landmark ? ` · ${point.landmark}` : ''}`}</span>
+      </span>
+      <span class="row__end">{closed ? <Pill tone="idle" dot>Closed</Pill> : <Icon name="chevronRight" size={22} />}</span>
+    </button>
   );
 }

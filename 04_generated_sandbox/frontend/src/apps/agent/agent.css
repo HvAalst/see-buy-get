@@ -264,3 +264,26 @@
   width: 100%;
   height: auto;
 }
+
+/* The measure-your-parcel grid + fragile toggle (walk-up intake redesign — mirrors the vendor/Send form). */
+.dims {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.checkline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  color: var(--tx2);
+  min-height: var(--tap);
+}
+
+.checkline input {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--blue);
+}
