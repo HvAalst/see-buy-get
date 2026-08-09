@@ -4938,6 +4938,8 @@
     "/v1/sbg/parcels": {
       "get": {
         "operationId": "Sbg.listParcels",
+        "summary": "",
+        "description": "The operational parcel list (agent + hub screens). PG2: PROJECTED for everyone but an operator —\n the raw record carries phones, hashes and the handover secrets (collection code / OTP), none of\n which a list surface needs; before this, ANY valid token could read them all.",
         "parameters": [
           {
             "name": "status",
@@ -4962,10 +4964,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Parcel"
-                  }
+                  "type": "object"
                 }
               }
             }
@@ -5646,7 +5645,7 @@
       "post": {
         "operationId": "Sbg.classify",
         "summary": "",
-        "description": "Derive the size tier from dimensions (cm) + weight (kg) — live preview for the mint form. S32c also\n returns the cargo class + whether it needs dedicated freight, so the mint form can warn BEFORE minting\n that a P4+ load won't ride the parcel network (it will be diverted to the dedicated-freight lane).",
+        "description": "Derive the size tier from dimensions (cm) + weight (kg) — live preview for the mint form. S32c also\n returns the cargo class + whether it needs dedicated freight, so the mint form can warn BEFORE minting\n that a P4+ load won't ride the parcel network (it will be diverted to the dedicated-freight lane).\n  (PG3): a pure derivation over the open size/cargo thresholds — no data is read, nothing is\n written. The anonymous Send wizard needs it: dims+weight are the ONLY size input now (no self-declared\n tiers), and a guest pricing a parcel must derive the tier before the (equally public) quote.",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -6422,7 +6421,7 @@
       "post": {
         "operationId": "Sbg.intake",
         "summary": "",
-        "description": "Origin PUDO scans the vendor's parcel in.",
+        "description": "Origin PUDO scans a parcel in: a vendor's inbound (prepaid — labour fee) or a person's pre-minted\n peer send (PG2 — cash collected against the locked price, drop-off photo required). ONE scan surface;\n the parcel's own record decides which intake it is.",
         "parameters": [
           {
             "name": "id",
@@ -6453,6 +6452,28 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/v1/sbg/parcels/{id}/intake-preview": {
+      "get": {
+        "operationId": "Sbg.intakePreview",
+        "summary": "",
+        "description": "PG2 — what the counter must know about a scanned parcel BEFORE confirming intake: what it is, what\n cash is due, where it goes. Field-picked (no phones, no handover secrets) and pinned to the acting\n shop — the same WRONG_PUDO rule the intake itself enforces, so the answer doubles as \"is this mine\n to take in\".",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
           }
         }
       }
@@ -12659,6 +12680,9 @@
         "properties": {
           "agentDid": {
             "type": "string"
+          },
+          "dropoffPhotoRef": {
+            "type": "string"
           }
         }
       },
@@ -13998,6 +14022,11 @@
               "ODR",
               "HUM"
             ]
+          },
+          "expectedTotal": {
+            "type": "number",
+            "description": "The locked total the sender consented to at the quote step. If the market moved before mint, the\n server rejects with PRICE_CHANGED (carrying the fresh total) so the app can re-confirm — never\n silently bill a different amount than the one shown.",
+            "minimum": 0
           }
         },
         "required": [

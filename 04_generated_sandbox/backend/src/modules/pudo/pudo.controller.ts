@@ -10,7 +10,7 @@ import { AuthService } from '../../foundation/auth/auth.service';
 import { AgentService } from './agent.service';
 import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
-import { ParcelService } from './parcel.service';
+import { operationalParcelView, ParcelService } from './parcel.service';
 import { MonitorService } from './monitor.service';
 import { RatingService } from './rating.service';
 import { VendorService } from './vendor.service';
@@ -330,9 +330,13 @@ export class SbgController {
     return this.parcels.void(id, actingDid(actor, dto.agentDid), dto.voidedPhotoRef);
   }
 
+  /** The operational parcel list (agent + hub screens). PG2: PROJECTED for everyone but an operator —
+   *  the raw record carries phones, hashes and the handover secrets (collection code / OTP), none of
+   *  which a list surface needs; before this, ANY valid token could read them all. */
   @Get('parcels')
-  listParcels(@Query('status') status?: string, @Query('agent') agent?: string) {
-    return this.parcels.list({ status: status as never, agentDid: agent });
+  listParcels(@Query('status') status?: string, @Query('agent') agent?: string, @Actor() actor?: IntrospectionResult) {
+    const rows = this.parcels.list({ status: status as never, agentDid: agent });
+    return actor?.role === 'operator' ? rows : rows.map(operationalParcelView);
   }
 
   @Get('parcels/:id')
@@ -523,7 +527,11 @@ export class SbgController {
 
   /** Derive the size tier from dimensions (cm) + weight (kg) — live preview for the mint form. S32c also
    *  returns the cargo class + whether it needs dedicated freight, so the mint form can warn BEFORE minting
-   *  that a P4+ load won't ride the parcel network (it will be diverted to the dedicated-freight lane). */
+   *  that a P4+ load won't ride the parcel network (it will be diverted to the dedicated-freight lane).
+   *  @Public (PG3): a pure derivation over the open size/cargo thresholds — no data is read, nothing is
+   *  written. The anonymous Send wizard needs it: dims+weight are the ONLY size input now (no self-declared
+   *  tiers), and a guest pricing a parcel must derive the tier before the (equally public) quote. */
+  @Public()
   @Post('size/classify')
   classify(@Body() dto: ClassifyDto) {
     const cargoClass = this.cargo.classify({ kg: dto.kg, dimsCm: [dto.l, dto.w, dto.h] });
@@ -813,10 +821,43 @@ export class SbgController {
     return result;
   }
 
-  /** Origin PUDO scans the vendor's parcel in. */
+  /** Origin PUDO scans a parcel in: a vendor's inbound (prepaid — labour fee) or a person's pre-minted
+   *  peer send (PG2 — cash collected against the locked price, drop-off photo required). ONE scan surface;
+   *  the parcel's own record decides which intake it is. */
   @Post('parcels/:id/intake')
   intake(@Param('id') id: string, @Body() dto: IntakeDto, @Actor() actor: IntrospectionResult) {
-    return this.parcels.intakeInbound(id, actingDid(actor, dto.agentDid));
+    const did = actingDid(actor, dto.agentDid);
+    if (this.parcels.get(id).direction === 'outbound') return this.parcels.intakeConsumerSend(id, did, dto.dropoffPhotoRef);
+    return this.parcels.intakeInbound(id, did);
+  }
+
+  /** PG2 — what the counter must know about a scanned parcel BEFORE confirming intake: what it is, what
+   *  cash is due, where it goes. Field-picked (no phones, no handover secrets) and pinned to the acting
+   *  shop — the same WRONG_PUDO rule the intake itself enforces, so the answer doubles as "is this mine
+   *  to take in". */
+  @Scopes('parcel:accept')
+  @Get('parcels/:id/intake-preview')
+  intakePreview(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    const parcel = this.parcels.get(id);
+    if (actor?.role !== 'operator' && parcel.originAgentDid !== actor?.did) {
+      throw new GlosError('WRONG_PUDO', 'This parcel is booked for drop-off at another shop');
+    }
+    const kind = parcel.vendorId ? 'vendor_order' : parcel.senderMobile === 'app' ? 'peer_send' : 'walk_up';
+    // A vendor order is intakeable only once the store has actually PAID (intakeInbound hard-requires
+    // ParcelPaid); a peer send stays unpaid-by-design until the cash is collected at THIS counter.
+    const intakeReady = parcel.status === 'Created' && (kind !== 'vendor_order' || parcel.paidStatus === 'ParcelPaid');
+    return {
+      parcelId: parcel.parcelId,
+      kind,
+      status: parcel.status,
+      intakeReady,
+      size: parcel.size,
+      weightKg: parcel.weightKg,
+      fragile: parcel.fragile ?? false,
+      destZone: parcel.destZone,
+      destShopName: parcel.destAgentDid ? this.agents.get(parcel.destAgentDid).shopName : undefined,
+      cashDue: kind === 'peer_send' ? parcel.shipmentCost ?? 0 : 0,
+    };
   }
 
   /** Destination PUDO shelves an arrived parcel → Ready_For_Pickup + buyer notified. */

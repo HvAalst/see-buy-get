@@ -335,10 +335,17 @@ export class ConsumerSendDto {
   @IsNumber() @Min(0.01) weightKg!: number;
   @IsOptional() @IsBoolean() fragile?: boolean;
   @IsOptional() @IsIn(CARGO_NATURES) natureCode?: CargoNature;
+  /** The locked total the sender consented to at the quote step. If the market moved before mint, the
+   *  server rejects with PRICE_CHANGED (carrying the fresh total) so the app can re-confirm — never
+   *  silently bill a different amount than the one shown. */
+  @IsOptional() @IsNumber() @Min(0) expectedTotal?: number;
 }
 
 export class IntakeDto {
   @IsOptional() @IsString() agentDid?: string; // operator-override only; normal actors are pinned to their token
+  /** PG2 — required when the scanned parcel is a person's pre-minted peer send (walk-up parity: the
+   *  drop-off photo is the fraud defence, taken at the counter). Ignored for a vendor inbound. */
+  @IsOptional() @IsString() dropoffPhotoRef?: string;
 }
 
 export class ShelveDto {

@@ -205,6 +205,46 @@ export function agentParcelsToCsv(rows: Parcel[], agentDid: string): string {
 }
 import { qrSvgGroup } from '../../foundation/label/qr';
 
+/** PG2 — the OPERATIONAL projection of a parcel for the shared agent/hub list surface: everything the
+ *  counter, handover and sort screens work with, NOTHING personal — no phones or hashes, no handover
+ *  secrets (collection code / OTP), no label or scan bodies, no dispute material. The raw record leaves
+ *  only on owner-scoped or operator surfaces. */
+export function operationalParcelView(p: Parcel) {
+  return {
+    parcelId: p.parcelId,
+    did: p.did,
+    direction: p.direction,
+    size: p.size,
+    weightKg: p.weightKg,
+    dimensionsCm: p.dimensionsCm,
+    fragile: p.fragile,
+    cargoClass: p.cargoClass,
+    natureCode: p.natureCode,
+    originAgentDid: p.originAgentDid,
+    originZone: p.originZone,
+    destZone: p.destZone,
+    destAgentDid: p.destAgentDid,
+    committedNodeDid: p.committedNodeDid,
+    corridorId: p.corridorId,
+    toteId: p.toteId,
+    atMdpId: p.atMdpId,
+    driverBadgeId: p.driverBadgeId,
+    binSlot: p.binSlot,
+    status: p.status,
+    paymentMode: p.paymentMode,
+    paidStatus: p.paidStatus,
+    shipmentCost: p.shipmentCost,
+    vendorId: p.vendorId,
+    externalOrderId: p.externalOrderId,
+    trackingKey: p.trackingKey,
+    shortShippedAt: p.shortShippedAt,
+    shortShipReason: p.shortShipReason,
+    acceptedAt: p.acceptedAt,
+    handedToBusAt: p.handedToBusAt,
+    deliveredAt: p.deliveredAt,
+  };
+}
+
 interface AcceptInput {
   agentDid: string;
   parcelId: string; // pre-printed QR sticker id
@@ -912,6 +952,36 @@ export class ParcelService implements OnApplicationBootstrap {
       // track ladder derives its words from `status`, so dropping the note removes the leak with no UI cost.
       steps: parcel.scans.map((s) => ({ status: s.status, at: s.at })),
     };
+  }
+
+  /**
+   * PG2 — origin PUDO scans a PERSON's pre-minted parcel in (Created → At_PUDO): the counter half of the
+   * in-app mint. The shop collects the LOCKED price in cash and remits it from its wallet (then earns the
+   * same labour fee as any intake — its net is exactly a vendor intake plus holding the cash), the drop-off
+   * photo is taken NOW (walk-up parity, fraud defence), and acceptedAt is re-stamped — the void window runs
+   * from PHYSICAL drop-off, not from the at-home mint.
+   */
+  intakeConsumerSend(parcelId: string, agentDid: string, dropoffPhotoRef?: string): Parcel {
+    const parcel = this.require(parcelId);
+    if (parcel.direction !== 'outbound' || !parcel.senderPhoneHash || parcel.vendorId) throw new GlosError('INVALID_STATE', 'Not a pre-minted peer send');
+    if (parcel.status !== 'Created') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Created`);
+    if (parcel.originAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Drop-off only at the shop the sender chose — the price is locked to that route');
+    if (!dropoffPhotoRef) throw new GlosError('PHOTO_REQUIRED', 'A drop-off photo is mandatory (fraud defence)');
+    const due = parcel.shipmentCost ?? 0;
+    const gate = this.gate.canTransact(agentDid);
+    if (!gate.ok || gate.balance < due) throw new GlosError('WALLET_INSUFFICIENT', 'Insufficient funds to remit this parcel — top up first.');
+    parcel.status = 'At_PUDO';
+    parcel.acceptedAt = new Date().toISOString();
+    parcel.dropoffPhotoRef = dropoffPhotoRef;
+    parcel.paidStatus = 'ParcelPaid'; // the sender paid the shop in cash, against the price locked at mint
+    this.scan(parcel, 'At_PUDO', agentDid, 'peer-send drop-off · cash collected');
+    // adopt(), not link(): the photo id came from the CLIENT — only a photo the acting shop owns and that
+    // isn't attached elsewhere may bind here (S29/S33a media-laundering guard).
+    this.media.adopt(dropoffPhotoRef, agentDid, { type: 'parcel', id: parcelId }, 'dropoff');
+    this.gate.chargeShipping(agentDid, due, parcelId); // remit the collected cash
+    this.gate.payLabour(agentDid, LABOUR_FEE, parcelId, 'parcel');
+    void this.events.publish(GlosEvent.Pudo.ParcelAccepted, { parcelId, agentDid, destZone: parcel.destZone, mode: 'cash' }, { source: 'pudo' }).catch(() => undefined);
+    return parcel;
   }
 
   /** Origin PUDO scans the vendor's parcel in (Created → At_PUDO). Pre-paid: labour fee, no gate. */

@@ -131,6 +131,13 @@ export class IdentityController {
     }
     const size = classifySize({ ...dto.dimensionsCm, kg: dto.weightKg });
     const quote = this.routing.quoteShipment(dto.originPudoDid, dto.destPudoDid, size);
+    // Fail closed on price drift: a consumer send is billed the LOCKED leg (createConsumerSend), so the
+    // sender's consented total must match the fresh locked quote. If the market moved between the quote
+    // and this mint, refuse with the new total so the app can re-confirm — never silently bill a
+    // different amount than the one shown at "Make my label".
+    if (dto.expectedTotal != null && Math.abs(dto.expectedTotal - quote.locked.total) > 0.001) {
+      throw new GlosError('PRICE_CHANGED', `The price is now ${quote.locked.total.toFixed(2)} — please review it before sending`, { newTotal: quote.locked.total });
+    }
     const { parcel, label } = this.parcels.createConsumerSend({
       senderPersonDid: person.personDid,
       senderPhoneHash: person.phoneHash,

@@ -600,6 +600,117 @@ describe('PUDO Light', () => {
     expect(home.sent).toHaveLength(0);
   });
 
+  // --- PG2: the counter half of the in-app mint — intake, preview, and the projected list ---
+
+  const mintPeerSend = (tag: string, phoneSeq: string) => {
+    const origin = onboardAgent(`${tag} O`, 'NorthTown', 50);
+    const dest = onboardAgent(`${tag} D`, 'NorthTown', 50);
+    const sender = enrollPerson(`+2547006${phoneSeq}001`);
+    const res: any = identity.createParcel({ receiverMobile: `+2547006${phoneSeq}002`, originPudoDid: origin.did, destPudoDid: dest.did, dimensionsCm: { l: 30, w: 20, h: 10 }, weightKg: 1.6 } as never, asConsumer(sender.personDid));
+    return { origin, dest, sender, parcelId: res.parcel.parcelId as string, due: res.price.total as number };
+  };
+
+  it('PG2: drop-off of a pre-minted send — cash remitted at the locked price, labour fee earned, twin advances', async () => {
+    const flush = () => new Promise((r) => setImmediate(r));
+    twin.onModuleInit();
+    graduation.onModuleInit();
+    const { origin, parcelId, due } = mintPeerSend('PG2', '00');
+    await flush();
+    const before = gate.canTransact(origin.did).balance;
+    const p: any = controller.intake(parcelId, { dropoffPhotoRef: 'drop.jpg' } as never, { role: 'agent', did: origin.did } as never);
+    expect(p.status).toBe('At_PUDO');
+    expect(p.paidStatus).toBe('ParcelPaid');
+    expect(p.dropoffPhotoRef).toBe('drop.jpg');
+    // The shop remits the LOCKED price it just collected in cash, and earns the same labour fee as any intake.
+    expect(gate.canTransact(origin.did).balance).toBeCloseTo(before - due + 0.4, 2);
+    await flush();
+    // The twin (born at mint) ADVANCES to picked_up — its created-time journey is kept, not re-registered.
+    expect(twin.shipment(parcelId)?.state).toBe('picked_up');
+    expect(context.get(parcelId)?.legs[0].origin).toBe('PG2 O');
+  });
+
+  it('PG2: intake is refused at the wrong shop, without a photo, twice, and on an unfunded shop wallet', () => {
+    const { origin, parcelId } = mintPeerSend('PG2R', '10');
+    const elsewhere = onboardAgent('PG2R X', 'NorthTown', 50);
+    expect(() => controller.intake(parcelId, { dropoffPhotoRef: 'd.jpg' } as never, { role: 'agent', did: elsewhere.did } as never)).toThrow(/shop the sender chose/);
+    expect(() => controller.intake(parcelId, {} as never, { role: 'agent', did: origin.did } as never)).toThrow(/photo/);
+    // Double intake: the first succeeds, the second finds the parcel already At_PUDO.
+    controller.intake(parcelId, { dropoffPhotoRef: 'd.jpg' } as never, { role: 'agent', did: origin.did } as never);
+    expect(() => controller.intake(parcelId, { dropoffPhotoRef: 'd.jpg' } as never, { role: 'agent', did: origin.did } as never)).toThrow(/expected Created/);
+    // A shop that never funded its wallet cannot remit — the no-money-no-scan gate holds for peer sends too.
+    const brokeOrigin = onboardAgent('PG2B O', 'NorthTown', 0);
+    const dest = onboardAgent('PG2B D', 'NorthTown', 50);
+    const sender = enrollPerson('+254700620001');
+    const res: any = identity.createParcel({ receiverMobile: '+254700620002', originPudoDid: brokeOrigin.did, destPudoDid: dest.did, dimensionsCm: { l: 30, w: 20, h: 10 }, weightKg: 1.6 } as never, asConsumer(sender.personDid));
+    expect(() => controller.intake(res.parcel.parcelId, { dropoffPhotoRef: 'd.jpg' } as never, { role: 'agent', did: brokeOrigin.did } as never)).toThrow(/Insufficient funds/);
+  });
+
+  it('PG2: the intake preview tells the counter what is due — and only the booked shop may ask', () => {
+    const { origin, dest, parcelId, due } = mintPeerSend('PG2P', '30');
+    const preview: any = controller.intakePreview(parcelId, { role: 'agent', did: origin.did } as never);
+    expect(preview.kind).toBe('peer_send');
+    expect(preview.intakeReady).toBe(true);
+    expect(preview.cashDue).toBe(due);
+    expect(preview.destShopName).toBe(dest.shopName);
+    expect(JSON.stringify(preview)).not.toContain('+2547006');
+    const elsewhere = onboardAgent('PG2P X', 'NorthTown', 50);
+    expect(() => controller.intakePreview(parcelId, { role: 'agent', did: elsewhere.did } as never)).toThrow(/another shop/);
+  });
+
+  it('PG2: the parcel list is PROJECTED — no phones, hashes or handover secrets for non-operators', () => {
+    const origin = onboardAgent('PG2L', 'NorthTown', 50);
+    parcels.accept({ agentDid: origin.did, parcelId: 'QR-PG2L', size: 'M', destZone: 'SouthTown', senderMobile: '+254700611119', receiverMobile: '+254700611118', dropoffPhotoRef: 'g.jpg' });
+    const rows: any[] = controller.listParcels('At_PUDO', origin.did, { role: 'agent', did: origin.did } as never) as never;
+    const mine = rows.find((r) => r.parcelId === 'QR-PG2L');
+    expect(mine).toBeDefined();
+    expect(mine.destZone).toBe('SouthTown'); // the operational fields the screens use survive
+    const dump = JSON.stringify(rows);
+    expect(dump).not.toContain('+254700611119');
+    expect(dump).not.toContain('PhoneHash');
+    expect(dump).not.toContain('collectionCode');
+    expect(dump).not.toContain('"otp"');
+    // The operator watchtower still sees the raw record.
+    const raw: any[] = controller.listParcels('At_PUDO', origin.did, { role: 'operator' } as never) as never;
+    expect(JSON.stringify(raw.find((r) => r.parcelId === 'QR-PG2L'))).toContain('+254700611119');
+  });
+
+  it('PG1: the mint fails closed on price drift — a wrong expectedTotal is refused, the right one goes through', () => {
+    const origin = onboardAgent('PGD O', 'NorthTown', 50);
+    const dest = onboardAgent('PGD D', 'NorthTown', 50);
+    const s1 = enrollPerson('+254700530001');
+    const s2 = enrollPerson('+254700530003');
+    // A stale/incorrect consented total is rejected with the fresh price in the error params.
+    let thrown: any;
+    try {
+      identity.createParcel({ receiverMobile: '+254700530002', originPudoDid: origin.did, destPudoDid: dest.did, dimensionsCm: { l: 30, w: 20, h: 10 }, weightKg: 1.6, expectedTotal: 999999 } as never, asConsumer(s1.personDid));
+    } catch (e) {
+      thrown = e;
+    }
+    expect(thrown?.code).toBe('PRICE_CHANGED');
+    expect(thrown?.params?.newTotal).toBeGreaterThan(0);
+    // The correct locked total (the same route quotes the same price) mints normally.
+    const good: any = identity.createParcel({ receiverMobile: '+254700530004', originPudoDid: origin.did, destPudoDid: dest.did, dimensionsCm: { l: 30, w: 20, h: 10 }, weightKg: 1.6, expectedTotal: thrown.params.newTotal } as never, asConsumer(s2.personDid));
+    expect(good.parcel.did).toMatch(/^did:glos:/);
+    expect(good.price.total).toBe(thrown.params.newTotal);
+  });
+
+  it('PG2: an unpaid Created vendor order is NOT intakeReady (the counter must not take it in before the store pays)', () => {
+    const origin = onboardAgent('PG2U O', 'NorthTown', 50);
+    const dest = onboardAgent('PG2U D', 'NorthTown', 50);
+    const vendor = vendors.register({ name: 'PG2U' }); // no top-up → the mint lands unpaid
+    const minted: any = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: 'c.jpg' } as never, { role: 'genesis', did: vendor.did } as never);
+    expect(minted.paid).toBe(false);
+    const preview: any = controller.intakePreview(minted.parcel.parcelId, { role: 'agent', did: origin.did } as never);
+    expect(preview.kind).toBe('vendor_order');
+    expect(preview.status).toBe('Created');
+    expect(preview.intakeReady).toBe(false); // awaiting the store's payment
+    // Once settled it becomes intakeable.
+    controller.topUpVendor(vendor.vendorId, { amount: 100 } as never, { role: 'genesis', did: vendor.did } as never);
+    controller.settleParcel(minted.parcel.parcelId, { role: 'genesis', did: vendor.did } as never);
+    const after: any = controller.intakePreview(minted.parcel.parcelId, { role: 'agent', did: origin.did } as never);
+    expect(after.intakeReady).toBe(true);
+  });
+
   it('PG1: same-shop sends and implausible receiver numbers are refused before anything is created', () => {
     const origin = onboardAgent('PG1S', 'NorthTown', 50);
     const dest = onboardAgent('PG1S D', 'NorthTown', 50);
