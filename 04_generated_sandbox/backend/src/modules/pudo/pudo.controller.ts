@@ -726,13 +726,6 @@ export class SbgController {
   }
 
   /**
-   * The public network directory — the sanitized slice of the agent register a SENDER needs to
-   * choose a drop-off or delivery point: name, zone, pin, open state, the open-data handling
-   * price, rating and free shelf slots. NOTHING operational leaves here: no balance, no device,
-   * no vault refs, no requirements — that is what keeps this @Public while GET /agents stays
-   * token-gated (S3).
-   */
-  /**
    * Resolve a free-text place/area/landmark to a point — the agent's "Address" intake mode geocodes a
    * typed area, then ranks the network points nearest-first client-side. @Public for the same open-data
    * reasoning as /quote + /network/points: a pure offline gazetteer lookup, no data read or written.
@@ -745,6 +738,13 @@ export class SbgController {
     return this.geocoder.geocode(q);
   }
 
+  /**
+   * The public network directory — the sanitized slice of the agent register a SENDER needs to
+   * choose a drop-off or delivery point: name, zone, pin, open state, the open-data handling
+   * price, rating and free shelf slots. NOTHING operational leaves here: no balance, no device,
+   * no vault refs, no requirements — that is what keeps this @Public while GET /agents stays
+   * token-gated (S3).
+   */
   @Public()
   @Get('network/points')
   networkPoints() {

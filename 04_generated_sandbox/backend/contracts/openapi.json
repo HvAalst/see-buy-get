@@ -6378,7 +6378,7 @@
       "get": {
         "operationId": "Sbg.geocode",
         "summary": "",
-        "description": "The public network directory — the sanitized slice of the agent register a SENDER needs to\nchoose a drop-off or delivery point: name, zone, pin, open state, the open-data handling\nprice, rating and free shelf slots. NOTHING operational leaves here: no balance, no device,\nno vault refs, no requirements — that is what keeps this  while GET /agents stays\ntoken-gated (S3).",
+        "description": "Resolve a free-text place/area/landmark to a point — the agent's \"Address\" intake mode geocodes a\ntyped area, then ranks the network points nearest-first client-side.  for the same open-data\nreasoning as /quote + /network/points: a pure offline gazetteer lookup, no data read or written.\n`confidence` (exact | approx | fallback) lets the UI flag an approximate pin.",
         "parameters": [
           {
             "name": "q",
@@ -6406,6 +6406,8 @@
     "/v1/sbg/network/points": {
       "get": {
         "operationId": "Sbg.networkPoints",
+        "summary": "",
+        "description": "The public network directory — the sanitized slice of the agent register a SENDER needs to\nchoose a drop-off or delivery point: name, zone, pin, open state, the open-data handling\nprice, rating and free shelf slots. NOTHING operational leaves here: no balance, no device,\nno vault refs, no requirements — that is what keeps this  while GET /agents stays\ntoken-gated (S3).",
         "parameters": [],
         "responses": {
           "200": {

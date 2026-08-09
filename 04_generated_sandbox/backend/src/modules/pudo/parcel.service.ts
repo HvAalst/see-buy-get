@@ -458,6 +458,9 @@ export class ParcelService implements OnApplicationBootstrap {
   accept(input: AcceptInput): Parcel {
     if (this.parcels.has(input.parcelId)) throw new GlosError('PARCEL_EXISTS', `Parcel ${input.parcelId} already exists`);
     if (!input.dropoffPhotoRef) throw new GlosError('PHOTO_REQUIRED', 'A drop-off photo is mandatory (fraud defence)');
+    // A parcel can't be sent to the shop taking it in (origin == destination is unroutable — destZone would
+    // equal originZone and never match a corridor). Mirrors createConsumerSend's same-shop refusal.
+    if (input.destPudoDid && input.destPudoDid === input.agentDid) throw new GlosError('INVALID_INPUT', 'A parcel cannot be sent to the shop taking it in — pick a different destination.');
     const agent = this.agents.get(input.agentDid);
     const mode: PaymentMode = input.paymentMode ?? 'cash';
 
@@ -467,9 +470,10 @@ export class ParcelService implements OnApplicationBootstrap {
     }
 
     // The redesigned counter MEASURES the parcel (dims + weight) → derive the tier + cargo class exactly
-    // like the vendor/Send mint, so a size can't be under-declared. The legacy declared-tier path (size,
-    // weight from a tier constant) still works for a caller that sends only a size.
-    const size: ParcelSize = input.dimensionsCm && input.weightKg != null ? classifySize({ ...input.dimensionsCm, kg: input.weightKg }) : input.size ?? 'M';
+    // like the vendor/Send mint (createInbound), so a size can't be under-declared. Dims present → derive
+    // (defaulting the kg for classification when weight is absent, mirroring the sibling); no dims → trust
+    // the legacy declared size tier.
+    const size: ParcelSize = input.dimensionsCm ? classifySize({ ...input.dimensionsCm, kg: input.weightKg ?? SIZE_WEIGHT_KG[input.size ?? 'M'] }) : input.size ?? 'M';
     const weightKg = input.weightKg ?? SIZE_WEIGHT_KG[size];
     const dimsCm: [number, number, number] | undefined = input.dimensionsCm ? [input.dimensionsCm.l, input.dimensionsCm.w, input.dimensionsCm.h] : undefined;
     // S30: derive the cargo class from the measurements (dims + weight). A class needing dedicated

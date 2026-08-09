@@ -612,6 +612,17 @@ describe('PUDO Light', () => {
     expect(() => parcels.accept({ agentDid: origin.did, parcelId: 'QR-AD2', dimensionsCm: { l: 120, w: 100, h: 100 }, weightKg: 300, destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'g.jpg' } as never)).toThrow(/dedicated freight/);
   });
 
+  it('intake redesign: dims WITHOUT weight still derive the tier (parity with the vendor mint — not the M fallback)', () => {
+    const origin = onboardAgent('AD3', 'NorthTown', 50);
+    const p = parcels.accept({ agentDid: origin.did, parcelId: 'QR-AD3', dimensionsCm: { l: 60, w: 50, h: 40 }, destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'g.jpg' } as never);
+    expect(p.size).toBe('L'); // 60×50×40 → L, derived from dims alone
+  });
+
+  it('intake redesign: a parcel cannot be sent to the shop taking it in (origin ≠ destination)', () => {
+    const origin = onboardAgent('AD4', 'NorthTown', 50);
+    expect(() => parcels.accept({ agentDid: origin.did, parcelId: 'QR-AD4', dimensionsCm: { l: 30, w: 20, h: 10 }, weightKg: 1.6, destZone: origin.zone, destPudoDid: origin.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'g.jpg' } as never)).toThrow(/shop taking it in/);
+  });
+
   it('intake redesign: the public geocode resolves a known place (for the Address → nearest-PUDO mode)', () => {
     const g: any = controller.geocode('Westlands');
     expect(typeof g.location.lat).toBe('number');
