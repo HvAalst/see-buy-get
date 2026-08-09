@@ -6374,11 +6374,38 @@
         }
       }
     },
+    "/v1/sbg/geocode": {
+      "get": {
+        "operationId": "Sbg.geocode",
+        "summary": "",
+        "description": "The public network directory — the sanitized slice of the agent register a SENDER needs to\nchoose a drop-off or delivery point: name, zone, pin, open state, the open-data handling\nprice, rating and free shelf slots. NOTHING operational leaves here: no balance, no device,\nno vault refs, no requirements — that is what keeps this  while GET /agents stays\ntoken-gated (S3).",
+        "parameters": [
+          {
+            "name": "q",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/network/points": {
       "get": {
         "operationId": "Sbg.networkPoints",
-        "summary": "",
-        "description": "The public network directory — the sanitized slice of the agent register a SENDER needs to\nchoose a drop-off or delivery point: name, zone, pin, open state, the open-data handling\nprice, rating and free shelf slots. NOTHING operational leaves here: no balance, no device,\nno vault refs, no requirements — that is what keeps this  while GET /agents stays\ntoken-gated (S3).",
         "parameters": [],
         "responses": {
           "200": {
@@ -11625,6 +11652,28 @@
           "amount"
         ]
       },
+      "DimensionsDto": {
+        "type": "object",
+        "properties": {
+          "l": {
+            "type": "number",
+            "minimum": 0.1
+          },
+          "w": {
+            "type": "number",
+            "minimum": 0.1
+          },
+          "h": {
+            "type": "number",
+            "minimum": 0.1
+          }
+        },
+        "required": [
+          "l",
+          "w",
+          "h"
+        ]
+      },
       "AcceptParcelDto": {
         "type": "object",
         "properties": {
@@ -11636,12 +11685,20 @@
           },
           "size": {
             "type": "string",
+            "description": "The redesigned counter measures the parcel: dims + weight → the tier is DERIVED (like the vendor/Send\n mint). `size` remains for the legacy declared-tier path; at least one of {dimensionsCm+weightKg, size}\n should be present (the service falls back to M if truly nothing is given).",
             "enum": [
               "S",
               "M",
               "L",
               "HEAVY"
             ]
+          },
+          "dimensionsCm": {
+            "$ref": "#/components/schemas/DimensionsDto"
+          },
+          "weightKg": {
+            "type": "number",
+            "minimum": 0.01
           },
           "destZone": {
             "type": "string"
@@ -11687,7 +11744,6 @@
         },
         "required": [
           "parcelId",
-          "size",
           "destZone",
           "senderMobile",
           "receiverMobile",
@@ -12564,28 +12620,6 @@
           "verified",
           "status",
           "createdAt"
-        ]
-      },
-      "DimensionsDto": {
-        "type": "object",
-        "properties": {
-          "l": {
-            "type": "number",
-            "minimum": 0.1
-          },
-          "w": {
-            "type": "number",
-            "minimum": 0.1
-          },
-          "h": {
-            "type": "number",
-            "minimum": 0.1
-          }
-        },
-        "required": [
-          "l",
-          "w",
-          "h"
         ]
       },
       "InboundOrderDto": {

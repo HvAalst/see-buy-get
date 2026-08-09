@@ -597,6 +597,29 @@ describe('PUDO Light', () => {
     expect(res.parcel.size).toBe('S');
   });
 
+  it('intake redesign: a walk-up accept DERIVES the tier from measured dims (no manual size picker)', () => {
+    const origin = onboardAgent('AD1', 'NorthTown', 50);
+    const p = parcels.accept({ agentDid: origin.did, parcelId: 'QR-AD1', dimensionsCm: { l: 42, w: 30, h: 18 }, weightKg: 3.5, destZone: 'SouthTown', senderMobile: '+254700700001', receiverMobile: '+254700700002', dropoffPhotoRef: 'g.jpg' } as never);
+    expect(p.size).toBe('M'); // 42×30×18 @ 3.5 kg → M per SIZE_LIMITS
+    expect(p.dimensionsCm).toEqual({ l: 42, w: 30, h: 18 });
+    // A thin letter derives to S (the 1 mm floor lets it through).
+    const p2 = parcels.accept({ agentDid: origin.did, parcelId: 'QR-AD1B', dimensionsCm: { l: 21, w: 10, h: 0.5 }, weightKg: 0.02, destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'g.jpg' } as never);
+    expect(p2.size).toBe('S');
+  });
+
+  it('intake redesign: a genuinely heavy walk-up is refused (routes to dedicated freight, not the bus)', () => {
+    const origin = onboardAgent('AD2', 'NorthTown', 50);
+    expect(() => parcels.accept({ agentDid: origin.did, parcelId: 'QR-AD2', dimensionsCm: { l: 120, w: 100, h: 100 }, weightKg: 300, destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'g.jpg' } as never)).toThrow(/dedicated freight/);
+  });
+
+  it('intake redesign: the public geocode resolves a known place (for the Address → nearest-PUDO mode)', () => {
+    const g: any = controller.geocode('Westlands');
+    expect(typeof g.location.lat).toBe('number');
+    expect(typeof g.location.lng).toBe('number');
+    expect(g.confidence).toBe('exact');
+    expect(() => controller.geocode('')).toThrow(); // a blank query is refused
+  });
+
   it('PG1: a P4+ load is refused (no un-billable person freight) — nothing is registered', () => {
     const origin = onboardAgent('PG1H O', 'NorthTown', 50);
     const dest = onboardAgent('PG1H D', 'NorthTown', 50);

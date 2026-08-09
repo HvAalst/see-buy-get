@@ -248,7 +248,9 @@ export function operationalParcelView(p: Parcel) {
 interface AcceptInput {
   agentDid: string;
   parcelId: string; // pre-printed QR sticker id
-  size: ParcelSize;
+  size?: ParcelSize; // legacy declared tier; DERIVED from dimensionsCm+weightKg when those are supplied
+  dimensionsCm?: { l: number; w: number; h: number }; // the redesigned counter measures the parcel
+  weightKg?: number;
   destZone: string;
   senderMobile: string;
   receiverMobile: string;
@@ -464,22 +466,28 @@ export class ParcelService implements OnApplicationBootstrap {
       throw new GlosError('WALLET_INSUFFICIENT', 'Insufficient funds. Top up to accept parcels.');
     }
 
-    const weightKg = SIZE_WEIGHT_KG[input.size];
-    // S30: derive the cargo class (a walk-up parcel has no measured dims, so from weight alone → at most P2)
-    // and stamp the primary nature (default GEN). A class needing dedicated transport can never be a
-    // counter parcel; the gate is defensive against a future size table that admits heavier walk-ups.
+    // The redesigned counter MEASURES the parcel (dims + weight) → derive the tier + cargo class exactly
+    // like the vendor/Send mint, so a size can't be under-declared. The legacy declared-tier path (size,
+    // weight from a tier constant) still works for a caller that sends only a size.
+    const size: ParcelSize = input.dimensionsCm && input.weightKg != null ? classifySize({ ...input.dimensionsCm, kg: input.weightKg }) : input.size ?? 'M';
+    const weightKg = input.weightKg ?? SIZE_WEIGHT_KG[size];
+    const dimsCm: [number, number, number] | undefined = input.dimensionsCm ? [input.dimensionsCm.l, input.dimensionsCm.w, input.dimensionsCm.h] : undefined;
+    // S30: derive the cargo class from the measurements (dims + weight). A class needing dedicated
+    // transport can never be a counter parcel — refuse it here so a genuinely heavy walk-up is sent to the
+    // dedicated-freight lane instead of onto the bus (the counter can't book freight yet — a later slice).
     const natureCode: CargoNature = input.natureCode ?? 'GEN';
-    const cargoClass = this.cargo.classify({ kg: weightKg });
+    const cargoClass = this.cargo.classify({ kg: weightKg, dimsCm });
     if (this.cargo.dedicatedRequired(cargoClass)) {
       throw new GlosError('CARGO_REQUIRES_DEDICATED', `Cargo class ${cargoClass} is too large for the PUDO network — it needs dedicated freight transport`);
     }
     const now = new Date().toISOString();
-    const anchorTxId = this.ledger.anchor({ p: input.parcelId, a: input.agentDid, s: input.size, dest: input.destZone, photo: input.dropoffPhotoRef, at: now }).txId;
+    const anchorTxId = this.ledger.anchor({ p: input.parcelId, a: input.agentDid, s: size, dest: input.destZone, photo: input.dropoffPhotoRef, at: now }).txId;
     const parcel: Parcel = {
       parcelId: input.parcelId,
       did: this.mintShipmentDid(input.parcelId, 'outbound'), // DT — the twin's stable GLOS identity, minted at creation
       direction: 'outbound',
-      size: input.size,
+      size,
+      dimensionsCm: input.dimensionsCm,
       weightKg,
       cargoClass,
       natureCode,

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Header, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, Inject, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiQuery } from '@nestjs/swagger';
 import { GlosError } from '../../foundation/http/glos-error';
 import { Public } from '../../foundation/auth/public.decorator';
@@ -32,6 +32,7 @@ import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
 import { AcceptParcelDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, CoupleDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, OverdraftDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetPriceDto, ShelfDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
 import { classifySize, SIZE_WEIGHT_KG } from './pudo.config';
 import { haversineKm } from './geo';
+import { GEOCODER, Geocoder } from './geocoder';
 
 interface ModuleInfo {
   module: string;
@@ -70,6 +71,7 @@ export class SbgController {
     private readonly persons: PersonService,
     private readonly cargo: CargoService,
     private readonly market: MarketPulseService,
+    @Inject(GEOCODER) private readonly geocoder: Geocoder,
   ) {}
 
   // --- phone verification (mandatory at onboarding — control-tower contact + GPS) ---
@@ -730,6 +732,19 @@ export class SbgController {
    * no vault refs, no requirements — that is what keeps this @Public while GET /agents stays
    * token-gated (S3).
    */
+  /**
+   * Resolve a free-text place/area/landmark to a point — the agent's "Address" intake mode geocodes a
+   * typed area, then ranks the network points nearest-first client-side. @Public for the same open-data
+   * reasoning as /quote + /network/points: a pure offline gazetteer lookup, no data read or written.
+   * `confidence` (exact | approx | fallback) lets the UI flag an approximate pin.
+   */
+  @Public()
+  @Get('geocode')
+  geocode(@Query('q') q?: string) {
+    if (!q || !q.trim()) throw new GlosError('FIELD_REQUIRED', 'Enter a place or area to look up');
+    return this.geocoder.geocode(q);
+  }
+
   @Public()
   @Get('network/points')
   networkPoints() {

@@ -97,10 +97,24 @@ export class DriverDto {
   @IsOptional() @IsString() badgeId?: string;
 }
 
+/** A measured parcel: length × width × height in cm. Declared here (before its first user) so the
+ *  emitDecoratorMetadata reference in AcceptParcelDto's @Type resolves without a temporal-dead-zone error. */
+class DimensionsDto {
+  // 1 mm floor, not 1 cm — a thin item (an envelope / a letter at ~0.5 cm thick) is a valid parcel.
+  @IsNumber() @Min(0.1) l!: number;
+  @IsNumber() @Min(0.1) w!: number;
+  @IsNumber() @Min(0.1) h!: number;
+}
+
 export class AcceptParcelDto {
   @IsOptional() @IsString() agentDid?: string; // operator-override only; normal actors are pinned to their token
   @IsString() parcelId!: string;
-  @IsIn(['S', 'M', 'L', 'HEAVY']) size!: 'S' | 'M' | 'L' | 'HEAVY';
+  /** The redesigned counter measures the parcel: dims + weight → the tier is DERIVED (like the vendor/Send
+   *  mint). `size` remains for the legacy declared-tier path; at least one of {dimensionsCm+weightKg, size}
+   *  should be present (the service falls back to M if truly nothing is given). */
+  @IsOptional() @IsIn(['S', 'M', 'L', 'HEAVY']) size?: 'S' | 'M' | 'L' | 'HEAVY';
+  @IsOptional() @ValidateNested() @Type(() => DimensionsDto) dimensionsCm?: DimensionsDto;
+  @IsOptional() @IsNumber() @Min(0.01) weightKg?: number;
   @IsString() destZone!: string;
   @IsString() senderMobile!: string;
   @IsString() receiverMobile!: string;
@@ -278,12 +292,6 @@ class OrderItemDto {
   @IsNumber() @Min(1) qty!: number;
 }
 
-class DimensionsDto {
-  // 1 mm floor, not 1 cm — a thin item (an envelope / a letter at ~0.5 cm thick) is a valid parcel.
-  @IsNumber() @Min(0.1) l!: number;
-  @IsNumber() @Min(0.1) w!: number;
-  @IsNumber() @Min(0.1) h!: number;
-}
 
 /** A buyer's checkout selection captured by the embedded node / webhook / manual entry. */
 export class CheckoutDto {
