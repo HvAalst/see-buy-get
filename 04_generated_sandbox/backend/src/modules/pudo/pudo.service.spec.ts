@@ -588,6 +588,15 @@ describe('PUDO Light', () => {
     }
   });
 
+  it('PG1: a thin item (a 0.5 cm letter) mints — the size floor is 1 mm, not 1 cm', () => {
+    const origin = onboardAgent('PGT O', 'NorthTown', 50);
+    const dest = onboardAgent('PGT D', 'NorthTown', 50);
+    const sender = enrollPerson('+254700540001');
+    const res: any = identity.createParcel({ receiverMobile: '+254700540002', originPudoDid: origin.did, destPudoDid: dest.did, dimensionsCm: { l: 21, w: 10, h: 0.5 }, weightKg: 0.02 } as never, asConsumer(sender.personDid));
+    expect(res.parcel.did).toMatch(/^did:glos:/);
+    expect(res.parcel.size).toBe('S');
+  });
+
   it('PG1: a P4+ load is refused (no un-billable person freight) — nothing is registered', () => {
     const origin = onboardAgent('PG1H O', 'NorthTown', 50);
     const dest = onboardAgent('PG1H D', 'NorthTown', 50);

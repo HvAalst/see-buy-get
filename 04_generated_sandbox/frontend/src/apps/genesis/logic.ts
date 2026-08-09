@@ -34,16 +34,26 @@ export interface DimsForm {
 
 export const EMPTY_DIMS: DimsForm = { l: '', w: '', h: '', kg: '' };
 
+/** The smallest measurement we accept, in cm — 1 mm, so a thin item (an envelope / a letter at ~0.5 cm
+ *  thick) is shippable. Mirrors the backend's @Min. */
+export const MIN_DIM_CM = 0.1;
+
+/** Accept a European decimal comma ("0,5") as well as a dot before parsing. */
+function num(s: string): number {
+  return Number(String(s).trim().replace(',', '.'));
+}
+
 /**
  * Parse the typed dims + weight, or null while anything is missing/invalid. Explicit range checks —
- * never `Number(x) || fallback` (a truthy negative would slip through and 400 the backend's @Min).
+ * never `Number(x) || fallback` (a truthy negative would slip through and 400 the backend's @Min). The
+ * floor is 1 mm, not 1 cm, so a letter's thickness is a valid measurement.
  */
 export function parseDims(d: DimsForm): { l: number; w: number; h: number; kg: number } | null {
-  const l = Number(d.l);
-  const w = Number(d.w);
-  const h = Number(d.h);
-  const kg = Number(d.kg);
-  const cm = (v: number) => Number.isFinite(v) && v >= 1;
+  const l = num(d.l);
+  const w = num(d.w);
+  const h = num(d.h);
+  const kg = num(d.kg);
+  const cm = (v: number) => Number.isFinite(v) && v >= MIN_DIM_CM;
   if (!cm(l) || !cm(w) || !cm(h)) return null;
   if (!Number.isFinite(kg) || kg < 0.01) return null;
   return { l, w, h, kg };

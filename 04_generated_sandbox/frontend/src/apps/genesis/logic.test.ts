@@ -111,7 +111,13 @@ describe('dims (PG3)', () => {
     expect(parseDims({ l: '30', w: '20', h: '', kg: '1.6' })).toBeNull(); // missing
     expect(parseDims({ l: '-30', w: '20', h: '10', kg: '1.6' })).toBeNull(); // a truthy negative must NOT slip through
     expect(parseDims({ l: '30', w: '20', h: '10', kg: '0' })).toBeNull(); // weightless
-    expect(parseDims({ l: '0.5', w: '20', h: '10', kg: '1' })).toBeNull(); // below the 1 cm floor
+  });
+
+  it('accepts a thin item (a letter at 0.5 cm) and a decimal comma, down to the 1 mm floor', () => {
+    expect(parseDims({ l: '21', w: '10', h: '0.5', kg: '0.02' })).toEqual({ l: 21, w: 10, h: 0.5, kg: 0.02 }); // a letter
+    expect(parseDims({ l: '21', w: '10', h: '0,5', kg: '0,02' })).toEqual({ l: 21, w: 10, h: 0.5, kg: 0.02 }); // European comma
+    expect(parseDims({ l: '30', w: '20', h: '0.1', kg: '1' })).toEqual({ l: 30, w: 20, h: 0.1, kg: 1 }); // exactly the floor
+    expect(parseDims({ l: '30', w: '20', h: '0.05', kg: '1' })).toBeNull(); // below the 1 mm floor
   });
 
   it('dimsBlocker gates the Continue in plain words', () => {

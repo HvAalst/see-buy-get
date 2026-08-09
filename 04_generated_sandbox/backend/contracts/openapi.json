@@ -12350,15 +12350,15 @@
         "properties": {
           "l": {
             "type": "number",
-            "minimum": 1
+            "minimum": 0.1
           },
           "w": {
             "type": "number",
-            "minimum": 1
+            "minimum": 0.1
           },
           "h": {
             "type": "number",
-            "minimum": 1
+            "minimum": 0.1
           },
           "kg": {
             "type": "number",
@@ -12571,15 +12571,15 @@
         "properties": {
           "l": {
             "type": "number",
-            "minimum": 1
+            "minimum": 0.1
           },
           "w": {
             "type": "number",
-            "minimum": 1
+            "minimum": 0.1
           },
           "h": {
             "type": "number",
-            "minimum": 1
+            "minimum": 0.1
           }
         },
         "required": [

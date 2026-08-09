@@ -279,9 +279,10 @@ class OrderItemDto {
 }
 
 class DimensionsDto {
-  @IsNumber() @Min(1) l!: number;
-  @IsNumber() @Min(1) w!: number;
-  @IsNumber() @Min(1) h!: number;
+  // 1 mm floor, not 1 cm — a thin item (an envelope / a letter at ~0.5 cm thick) is a valid parcel.
+  @IsNumber() @Min(0.1) l!: number;
+  @IsNumber() @Min(0.1) w!: number;
+  @IsNumber() @Min(0.1) h!: number;
 }
 
 /** A buyer's checkout selection captured by the embedded node / webhook / manual entry. */
@@ -296,9 +297,9 @@ export class CheckoutDto {
 }
 
 export class ClassifyDto {
-  @IsNumber() @Min(1) l!: number;
-  @IsNumber() @Min(1) w!: number;
-  @IsNumber() @Min(1) h!: number;
+  @IsNumber() @Min(0.1) l!: number;
+  @IsNumber() @Min(0.1) w!: number;
+  @IsNumber() @Min(0.1) h!: number;
   @IsNumber() @Min(0.01) kg!: number;
 }
 
