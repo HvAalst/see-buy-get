@@ -68,6 +68,21 @@ export interface ParcelView {
   acceptedAt?: string;
 }
 
+/** PG4 — what the counter learns about a scanned sticker BEFORE confirming (GET parcels/:id/intake-preview). */
+export interface IntakePreview {
+  parcelId: string;
+  kind: 'peer_send' | 'vendor_order' | 'walk_up';
+  status: ParcelStatus;
+  intakeReady: boolean;
+  size: ParcelSize;
+  weightKg: number;
+  fragile: boolean;
+  destZone: string;
+  destShopName?: string;
+  /** The locked price the shop collects in cash — 0 for a prepaid store order. */
+  cashDue: number;
+}
+
 export interface HandoverView {
   handed: string[];
   vehicle?: string;

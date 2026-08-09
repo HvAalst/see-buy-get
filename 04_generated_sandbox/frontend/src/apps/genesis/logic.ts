@@ -17,6 +17,52 @@ export const SIZES: Array<{ key: ParcelSize; label: string; hint: string }> = [
   { key: 'HEAVY', label: 'Heavy', hint: 'Over 20 kg' },
 ];
 
+/** The plain-words presentation of a DERIVED tier (PG3: sizes are computed from dims, never tapped). */
+export function sizeMeta(size: ParcelSize): { key: ParcelSize; label: string; hint: string } {
+  return SIZES.find((s) => s.key === size) ?? { key: size, label: size, hint: '' };
+}
+
+/* ------------------------------------------------------------- dims (PG3) -- */
+
+/** The measure-your-parcel form: free-typed strings until they parse (identical to the vendor mint). */
+export interface DimsForm {
+  l: string;
+  w: string;
+  h: string;
+  kg: string;
+}
+
+export const EMPTY_DIMS: DimsForm = { l: '', w: '', h: '', kg: '' };
+
+/**
+ * Parse the typed dims + weight, or null while anything is missing/invalid. Explicit range checks —
+ * never `Number(x) || fallback` (a truthy negative would slip through and 400 the backend's @Min).
+ */
+export function parseDims(d: DimsForm): { l: number; w: number; h: number; kg: number } | null {
+  const l = Number(d.l);
+  const w = Number(d.w);
+  const h = Number(d.h);
+  const kg = Number(d.kg);
+  const cm = (v: number) => Number.isFinite(v) && v >= 1;
+  if (!cm(l) || !cm(w) || !cm(h)) return null;
+  if (!Number.isFinite(kg) || kg < 0.01) return null;
+  return { l, w, h, kg };
+}
+
+/** What blocks the parcel step's Continue (empty string when nothing does). */
+export function dimsBlocker(d: DimsForm): string {
+  return parseDims(d) ? '' : 'Measure the parcel: length, width, height and weight';
+}
+
+/** The done-screen instructions — what turns the minted label into a moving parcel. */
+export function mintChecklist(shopName: string, total: number): string[] {
+  return [
+    `Take the parcel to ${shopName} and show this label`,
+    `Pay ${money(total)} there — cash is fine`,
+    'The receiver already sees it in their app',
+  ];
+}
+
 /* ------------------------------------------------------------------ money -- */
 
 export function money(v: number | null | undefined): string {
@@ -60,24 +106,13 @@ export function pointLine(p: NetworkPoint): string {
 
 /* ------------------------------------------------------------------ quote -- */
 
-export interface PriceCard {
-  key: 'locked' | 'flexible';
-  title: string;
-  sub: string;
-  total: number;
-}
-
 /**
- * The two ways to buy the same journey, CHEAPEST FIRST — a sender comparing prices reads
- * top-down, and anchoring on the dearer option would be a dark pattern. `locked` rides the
- * bottom of the per-km market (waits for that carrier); `flexible` pays the top so any
- * passing vehicle can take it.
+ * PG3 — ONE price, the LOCKED (cheapest) leg. That is what a booked send actually costs (the backend
+ * prices every person's parcel at the locked leg; flexible's ceiling-then-rebate is a vendor-rail
+ * contract), so showing a dearer "fastest" card would advertise a price nobody here can pay.
  */
-export function priceCards(q: QuoteView): PriceCard[] {
-  return [
-    { key: 'locked', title: 'Cheapest', sub: 'Waits for the lowest-price bus', total: q.locked.total },
-    { key: 'flexible', title: 'Fastest', sub: 'Any bus can take it', total: q.flexible.total },
-  ];
+export function lockedPrice(q: QuoteView): { total: number; sub: string } {
+  return { total: q.locked.total, sub: 'Rides the lowest-price bus on this route' };
 }
 
 /** "Shop A → Central hub → Shop B" — the journey in names, not ids. */
@@ -86,10 +121,7 @@ export function journeyLine(q: QuoteView): string {
 }
 
 export function quoteSummary(q: QuoteView): string {
-  return (
-    `${Math.round(q.totalKm)} kilometres across ${q.hops.length} stops. ` +
-    `Cheapest ${money(q.locked.total)}, fastest ${money(q.flexible.total)}.`
-  );
+  return `${Math.round(q.totalKm)} kilometres across ${q.hops.length} stops. The price is ${money(q.locked.total)}.`;
 }
 
 /* ------------------------------------------------------------------ track -- */

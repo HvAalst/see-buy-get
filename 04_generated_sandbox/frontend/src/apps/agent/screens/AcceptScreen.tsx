@@ -1,5 +1,5 @@
-import { Button, Card, ErrorNote, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
-import { NATURES, SIZES, acceptMissing } from '../logic';
+import { Button, Card, ErrorNote, GlanceNumber, Note, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
+import { NATURES, SIZES, acceptMissing, parcelStatusWord } from '../logic';
 import type { AgentActions, AgentState } from '../useAgentApp';
 import { PhotoField } from './PhotoField';
 
@@ -16,32 +16,103 @@ function openLabel(svg: string) {
 }
 
 /**
- * Take in a walk-up drop-off. One card per counter step: sticker, size, destination,
- * phones, proof photo. The CTA's helper line always names the NEXT missing thing.
+ * Take in a parcel. Scanning the sticker decides which counter this is (PG4): a code the
+ * network already knows — a peer send booked in the Send app (collect the locked cash) or
+ * a prepaid store order — shows a confirm card with everything pre-filled; a fresh sticker
+ * falls through to the walk-up form (size, destination, phones, photo) exactly as before.
  */
 export function AcceptScreen({ state, actions }: AcceptScreenProps) {
   const f = state.accept;
   const missing = acceptMissing(f);
+  // Only a SETTLED preview drives the confirm card — never a stale one still resolving under a new scan.
+  const pm = state.preMintState === 'ready' ? state.preMint : null;
+  const booked = pm && (pm.kind === 'peer_send' || pm.kind === 'vendor_order');
+  // The walk-up form applies to a FRESH sticker (idle) or when a preview blipped (error, so a plain
+  // walk-up is never blocked by a network hiccup). While a code is resolving, neither shows.
+  const walkUp = state.preMintState === 'idle' || state.preMintState === 'error';
 
   return (
     <div class="scr">
       <h1 class="scr__title">Take in a parcel</h1>
-      <p class="scr__lede">Stick a sticker on it, then fill this in together with the customer.</p>
+      <p class="scr__lede">Scan the label or sticker first — booked parcels fill themselves in.</p>
 
       {state.error ? <ErrorNote error={state.error} /> : null}
 
       <Card>
         <ScanField
           id="sticker"
-          label="Parcel sticker"
+          label="Parcel label or sticker"
           value={f.parcelId}
           onValue={(v) => actions.setAccept({ parcelId: v })}
           expect="parcel"
-          placeholder="Scan or type the sticker ID"
+          placeholder="Scan or type the code"
           upper
         />
+        {state.preMintState === 'loading' ? <p class="card__note">Checking the code…</p> : null}
       </Card>
 
+      {state.preMintState === 'error' && state.preMintError ? <ErrorNote error={state.preMintError} onRetry={actions.retryPreview} /> : null}
+
+      {pm && !booked ? (
+        <Note tone="warn" icon="warning" title="This sticker is already in use" detail={`It belongs to a parcel that is ${parcelStatusWord(pm.status).toLowerCase()}. Every new parcel needs a fresh sticker.`} />
+      ) : null}
+
+      {pm && booked && !pm.intakeReady ? (
+        pm.kind === 'vendor_order' && pm.status === 'Created' ? (
+          <Note tone="warn" icon="wallet" title="Awaiting the store's payment" detail="Don't take this in yet — the store must top up and pay for the shipment first." />
+        ) : (
+          <Note tone="warn" icon="warning" title="Already taken in" detail={`This parcel is ${parcelStatusWord(pm.status).toLowerCase()} — nothing to do at the counter.`} />
+        )
+      ) : null}
+
+      {pm && booked && pm.intakeReady ? (
+        <>
+          {pm.kind === 'peer_send' ? (
+            <GlanceNumber label="Collect in cash" value={pm.cashDue.toFixed(2)} sub="The price was locked when the sender booked — no arguing at the counter." />
+          ) : (
+            <Note tone="info" icon="wallet" title="Prepaid by the store" detail="Nothing to collect — the store already paid for this shipment." />
+          )}
+
+          <Card label={pm.kind === 'peer_send' ? 'Booked in the Send app' : 'Store order'}>
+            <div class="kv">
+              <span>Going to</span>
+              <b>{pm.destShopName ?? pm.destZone}</b>
+            </div>
+            <div class="kv">
+              <span>Size</span>
+              <b>{`${pm.size} · ${pm.weightKg} kg${pm.fragile ? ' · fragile' : ''}`}</b>
+            </div>
+          </Card>
+
+          {pm.kind === 'peer_send' ? (
+            <Card label="Proof photo">
+              <PhotoField id="intake-photo" value={state.intakePhotoRef} label="Take the proof photo" upload={(file) => actions.uploadPhoto('dropoff', file)} onCapture={actions.setIntakePhoto} />
+              <p class="card__note">One photo of the parcel on your counter protects you if anything is disputed.</p>
+            </Card>
+          ) : null}
+
+          <div class="scr__cta">
+            <Button
+              onClick={() => void actions.submitIntake()}
+              disabled={pm.kind === 'peer_send' && !state.intakePhotoRef}
+              busy={state.busy === 'intake'}
+            >
+              {pm.kind === 'peer_send' ? `Collect ${pm.cashDue.toFixed(2)} and take it in` : 'Take it in'}
+            </Button>
+            {pm.kind === 'peer_send' && !state.intakePhotoRef ? <p class="hint" style="margin-top:8px">The proof photo first.</p> : null}
+          </div>
+
+          <div class="scr__foot">
+            <ReadAloud
+              text={() => (pm.kind === 'peer_send' ? `A booked parcel. Collect ${pm.cashDue.toFixed(2)} in cash, take the proof photo, then take it in.` : 'A prepaid store order. Take the photo-free intake — nothing to collect.')}
+              label="Read this aloud"
+            />
+          </div>
+        </>
+      ) : null}
+
+      {!walkUp ? null : (
+        <>
       <Card label="How big is it?">
         <div class="sizes" role="group" aria-label="Parcel size">
           {SIZES.map((s) => (
@@ -140,6 +211,23 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
       <div class="scr__foot">
         <ReadAloud text={() => missing ?? 'Everything is filled in. Tap confirm and accept.'} label="What is still missing?" />
       </div>
+        </>
+      )}
+
+      {/* PG4 — the booked-parcel intake confirmation: what was collected, where it goes next. */}
+      <Sheet open={Boolean(state.intakeDone)} onClose={actions.dismissIntakeDone} title="Parcel taken in">
+        {state.intakeDone ? (
+          <>
+            <p class="t-body">
+              {state.intakeDone.kind === 'peer_send'
+                ? `Cash collected: ${state.intakeDone.cashDue.toFixed(2)}. The sender's label is already on the parcel.`
+                : 'Prepaid store order — nothing to collect.'}
+            </p>
+            {state.intakeDone.destShopName ? <p class="hint">{`It travels to ${state.intakeDone.destShopName}. It will appear in your handover list for the next bus.`}</p> : null}
+            <Button onClick={actions.dismissIntakeDone}>Done — take in another</Button>
+          </>
+        ) : null}
+      </Sheet>
 
       {/* DT — the parcel is born with a printable label; show it so the agent prints + sticks it on the parcel. */}
       <Sheet open={Boolean(state.acceptedLabel)} onClose={actions.dismissAcceptedLabel} title="Parcel label ready">

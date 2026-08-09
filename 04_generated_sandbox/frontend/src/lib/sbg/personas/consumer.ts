@@ -33,6 +33,12 @@ export function createConsumerApi(sbg: SbgClient) {
     /** The receiver/sender home: every parcel this person is a party to, sent + received (by phoneHash). */
     myParcels: () => sbg.request((c) => c.GET('/v1/sbg/identity/parcels')),
 
+    /** PG3 — mint a peer send in-app (the identical genesis the vendor console gets): receiver + the two
+     *  shops + REAL dims/weight (the size tier is derived server-side). Cash at the counter: the response
+     *  carries the locked price + the label the sender shows at drop-off. */
+    createParcel: (body: { receiverMobile: string; originPudoDid: string; destPudoDid: string; dimensionsCm: { l: number; w: number; h: number }; weightKg: number; fragile?: boolean; expectedTotal?: number }) =>
+      sbg.request((c) => c.POST('/v1/sbg/identity/parcels', { body })),
+
     /** One parcel the person is a party to — the authenticated twin + status timeline (404 to a non-party). */
     parcel: (id: string) => sbg.request((c) => c.GET('/v1/sbg/identity/parcels/{id}', { params: { path: { id } } })),
 

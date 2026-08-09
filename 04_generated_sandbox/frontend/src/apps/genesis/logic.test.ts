@@ -3,20 +3,24 @@ import {
   LADDER,
   cleanPhone,
   codeReady,
+  dimsBlocker,
   isOffLadder,
   journeyLine,
   ladderIndex,
+  lockedPrice,
   mapsHref,
+  mintChecklist,
   money,
   normalizeKey,
   parcelRowLine,
+  parseDims,
   phoneBlocker,
   phoneReady,
   pinBlocker,
   pointDistance,
   pointLine,
-  priceCards,
   quoteSummary,
+  sizeMeta,
   relationWord,
   roleMeta,
   selectablePoints,
@@ -88,18 +92,43 @@ describe('selectablePoints', () => {
 });
 
 describe('quote presentation', () => {
-  it('price cards run cheapest first — never anchored on the dear option', () => {
-    const cards = priceCards(quote());
-    expect(cards.map((c) => c.key)).toEqual(['locked', 'flexible']);
-    expect(cards[0].total).toBeLessThan(cards[1].total);
+  it('the ONE price shown is the locked (cheapest) leg — what a booked send actually costs', () => {
+    expect(lockedPrice(quote()).total).toBe(4.4);
   });
 
   it('journeyLine names every hop', () => {
     expect(journeyLine(quote())).toBe('Mama Njeri → Central hub → Riverside');
   });
 
-  it('quoteSummary speaks distance, stops and both prices', () => {
-    expect(quoteSummary(quote())).toBe('12 kilometres across 3 stops. Cheapest 4.40, fastest 6.60.');
+  it('quoteSummary speaks distance, stops and the price', () => {
+    expect(quoteSummary(quote())).toBe('12 kilometres across 3 stops. The price is 4.40.');
+  });
+});
+
+describe('dims (PG3)', () => {
+  it('parses only a complete, positive set of measurements', () => {
+    expect(parseDims({ l: '30', w: '20', h: '10', kg: '1.6' })).toEqual({ l: 30, w: 20, h: 10, kg: 1.6 });
+    expect(parseDims({ l: '30', w: '20', h: '', kg: '1.6' })).toBeNull(); // missing
+    expect(parseDims({ l: '-30', w: '20', h: '10', kg: '1.6' })).toBeNull(); // a truthy negative must NOT slip through
+    expect(parseDims({ l: '30', w: '20', h: '10', kg: '0' })).toBeNull(); // weightless
+    expect(parseDims({ l: '0.5', w: '20', h: '10', kg: '1' })).toBeNull(); // below the 1 cm floor
+  });
+
+  it('dimsBlocker gates the Continue in plain words', () => {
+    expect(dimsBlocker({ l: '', w: '', h: '', kg: '' })).toContain('Measure the parcel');
+    expect(dimsBlocker({ l: '30', w: '20', h: '10', kg: '1.6' })).toBe('');
+  });
+
+  it('sizeMeta gives the derived tier its plain words', () => {
+    expect(sizeMeta('M').label).toBe('Medium');
+    expect(sizeMeta('HEAVY').hint).toBe('Over 20 kg');
+  });
+
+  it('mintChecklist tells the sender the three things that matter', () => {
+    const items = mintChecklist('Mama Njeri', 4.4);
+    expect(items[0]).toContain('Mama Njeri');
+    expect(items[1]).toContain('4.40');
+    expect(items).toHaveLength(3);
   });
 });
 

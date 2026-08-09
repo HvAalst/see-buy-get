@@ -25,6 +25,7 @@ import type {
   CorridorRow,
   GateView,
   HandoverView,
+  IntakePreview,
   LedgerSummary,
   ParcelView,
   RatesView,
@@ -105,6 +106,16 @@ export interface AgentState {
   accept: AcceptForm;
   /** DT — the label the last accept produced, shown to print + stick on the parcel (null once dismissed). */
   acceptedLabel: { parcelId: string; trackingKey?: string; svg?: string } | null;
+  /** PG4 — the scanned sticker resolved to an EXISTING parcel (a pre-minted send, a store order, or an
+   *  in-use sticker); null/idle = a fresh sticker → the walk-up form. */
+  preMint: IntakePreview | null;
+  preMintState: 'idle' | 'loading' | 'ready' | 'error';
+  preMintError: SbgError | null;
+  /** Bumped to re-fire the preview for an unchanged code (a retry after a transient failure). */
+  previewNonce: number;
+  intakePhotoRef: string;
+  /** The last completed intake — drives the "taken in, cash collected" sheet. */
+  intakeDone: { parcelId: string; kind: IntakePreview['kind']; cashDue: number; destShopName?: string } | null;
   /** `missed` is the last server verdict of parcels for this bus still waiting (the S25 gate). */
   handover: { badge: string; selected: string[]; missed: string[] };
   release: { stickerId: string; parcel: ParcelView | null; otp: string; issuedOtp: string | null; stars: number; photoRef: string };
@@ -144,6 +155,12 @@ const INITIAL: AgentState = {
   stale: false,
   accept: { ...EMPTY_ACCEPT },
   acceptedLabel: null,
+  preMint: null,
+  preMintState: 'idle',
+  preMintError: null,
+  previewNonce: 0,
+  intakePhotoRef: '',
+  intakeDone: null,
   handover: { ...EMPTY_HANDOVER },
   release: { ...EMPTY_RELEASE },
   collect: { ...EMPTY_COLLECT },
@@ -691,6 +708,71 @@ export function useAgentApp() {
   /** DT — dismiss the printed-label sheet and return to the shop home. */
   const dismissAcceptedLabel = useCallback(() => setState((s) => ({ ...s, acceptedLabel: null, screen: 'home' })), []);
 
+  /* -------------------------------------------------- pre-minted intake (PG4) */
+
+  // The scanned sticker might already BE a parcel — a peer send booked in the Send app (cash due at this
+  // counter), a store order, or a sticker that is simply in use. Resolve it as the id is typed/scanned;
+  // 404 = a fresh sticker → the walk-up form stays. Debounced; a re-scan clears the PREVIOUS parcel's
+  // preview + its proof photo SYNCHRONOUSLY (so A's cash card + A's photo can never sit under B's code —
+  // charging or evidencing the wrong parcel), and the async result is epoch-guarded against abandonment.
+  const previewEpoch = useRef(0);
+  useEffect(() => {
+    const id = state.accept.parcelId.trim().toUpperCase();
+    const epoch = ++previewEpoch.current;
+    if (!client || id.length < 6) {
+      setState((s) => (s.preMint || s.preMintState !== 'idle' || s.intakePhotoRef ? { ...s, preMint: null, preMintState: 'idle', preMintError: null, intakePhotoRef: '' } : s));
+      return;
+    }
+    // Drop the stale parcel + its photo the instant a new code is scheduled, not when the fetch lands.
+    setState((s) => (s.preMint || s.preMintState !== 'loading' || s.intakePhotoRef ? { ...s, preMint: null, preMintState: 'loading', preMintError: null, intakePhotoRef: '' } : s));
+    const t = setTimeout(async () => {
+      const r = await client.api.intakePreview(id);
+      if (epoch !== previewEpoch.current) return;
+      if (r.error) {
+        if (isSignInRequired(r.error)) return fail(r.error); // an expired shift → the shell's one sign-in route
+        const fresh = r.error.status === 404; // an unknown id IS the normal walk-up case, not an error
+        setState((s) => ({ ...s, preMint: null, preMintState: fresh ? 'idle' : 'error', preMintError: fresh ? null : r.error }));
+        return;
+      }
+      setState((s) => ({ ...s, preMint: narrow<IntakePreview>(r.data), preMintState: 'ready', preMintError: null }));
+    }, 350);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [client, state.accept.parcelId, state.previewNonce]);
+
+  const setIntakePhoto = useCallback((ref: string) => setState((s) => ({ ...s, intakePhotoRef: ref })), []);
+
+  /** Re-run the preview for the current code (an unchanged id won't re-fire the effect on its own). */
+  const retryPreview = useCallback(() => setState((s) => ({ ...s, previewNonce: s.previewNonce + 1 })), []);
+
+  /** Take in a pre-minted parcel: cash (peer send, photo required) or prepaid (store order). */
+  const submitIntake = useCallback(async () => {
+    if (!client || !did) return;
+    const pm = stateRef.current.preMint;
+    const photo = stateRef.current.intakePhotoRef;
+    // Only ever act on a SETTLED preview — never a stale one still on screen during a re-scan's fetch.
+    if (!pm || stateRef.current.preMintState !== 'ready' || (pm.kind === 'peer_send' && !photo)) return;
+    await run('intake', async () => {
+      const r = await client.api.intake(pm.parcelId, pm.kind === 'peer_send' ? photo : undefined);
+      if (r.error) return fail(r.error);
+      buzz();
+      previewEpoch.current++; // the form reset below must not race a stale preview into the cleared state
+      setState((s) => ({
+        ...s,
+        accept: { ...EMPTY_ACCEPT },
+        intakePhotoRef: '',
+        preMint: null,
+        preMintState: 'idle',
+        preMintError: null,
+        intakeDone: { parcelId: pm.parcelId, kind: pm.kind, cashDue: pm.cashDue, destShopName: pm.destShopName },
+      }));
+      pushToast({ tone: 'ok', icon: 'wallet', title: 'Parcel taken in', detail: pm.kind === 'peer_send' ? `Collect ${pm.cashDue.toFixed(2)} in cash from the sender.` : 'Prepaid by the store — nothing to collect.' });
+      await refresh();
+    });
+  }, [client, did, run, fail, pushToast, refresh]);
+
+  const dismissIntakeDone = useCallback(() => setState((s) => ({ ...s, intakeDone: null })), []);
+
   /**
    * Hand the selected parcels to the bus. `shortShipReason` opts into the S25 short-ship: it is passed
    * only when the agent has knowingly chosen to leave the waiting parcels behind. Without it, the server
@@ -921,6 +1003,10 @@ export function useAgentApp() {
       setPrice,
       submitAccept,
       dismissAcceptedLabel,
+      setIntakePhoto,
+      retryPreview,
+      submitIntake,
+      dismissIntakeDone,
       submitHandover,
       findRelease,
       markArrived,

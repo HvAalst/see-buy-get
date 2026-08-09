@@ -76,6 +76,35 @@ export interface TrackView {
   destinationLocation?: { lat: number; lng: number };
 }
 
+/* ------------------------------------------------- booking (PG3) -- */
+
+/** The derived tier + cargo class for typed dims + weight (POST /size/classify, @Public). */
+export interface ClassifyView {
+  size: ParcelSize;
+  cargoClass: string;
+  /** True = too big for the parcel network — a person's send is refused (dedicated freight is vendor-only for now). */
+  dedicated: boolean;
+}
+
+/** The locked price a mint returns — what the sender pays in cash at the drop-off shop. */
+export interface MintPrice {
+  routeMode: 'locked' | 'flexible';
+  total: number;
+  transport?: number;
+  nodeFees?: number;
+  platformFee?: number;
+  km?: number;
+  ceiling?: number;
+}
+
+/** POST /identity/parcels — the sender's authenticated twin + their drop-off credential + the locked price. */
+export interface MintResult {
+  parcel: ConsumerParcelView;
+  label: { parcelId: string; qrPayload: string; svg: string };
+  price: MintPrice;
+  journey?: { hops: string[]; mdpRouted: boolean; pickupReadyAt: string };
+}
+
 /* ------------------------------------------------- identity (S20/S21) -- */
 
 /** The person-facing roles a consumer may hold (mirrors backend PersonRole / lib/sbg). */

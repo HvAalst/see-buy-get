@@ -104,6 +104,16 @@ export function createAgentApi(sbg: SbgClient) {
       natureCode?: 'GEN' | 'FOD' | 'FOP' | 'HAZ-CHEM' | 'HAZ-DUST' | 'HAZ-BIO' | 'HAZ-FLAM' | 'FRG' | 'ODR' | 'HUM';
     }) => sbg.request((c) => c.POST('/v1/sbg/parcels/accept', { body })),
 
+    /** PG4 — what a scanned sticker IS before confirming: a pre-minted peer send (with the cash due), a
+     *  store order, or an already-used sticker. 404 = a fresh sticker → the walk-up form. Server-pinned
+     *  to the acting shop (WRONG_PUDO for a parcel booked elsewhere). */
+    intakePreview: (id: string) => sbg.request((c) => c.GET('/v1/sbg/parcels/{id}/intake-preview', { params: { path: { id } } })),
+
+    /** PG4 — take a PRE-MINTED parcel in: a peer send (collect the locked price in cash + proof photo)
+     *  or a store order (prepaid, no photo). One scan surface; the parcel's record decides. */
+    intake: (id: string, dropoffPhotoRef?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/parcels/{id}/intake', { params: { path: { id } }, body: dropoffPhotoRef ? { dropoffPhotoRef } : {} })),
+
     /**
      * Hand selected parcels to the scanned driver badge (the bus moment). The server runs the S25
      * completeness gate: a short load is refused (INCOMPLETE_MANIFEST, with the missed ids in params)

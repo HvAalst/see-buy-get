@@ -12,7 +12,7 @@ import {
   type SbgConfig,
   type SeededAppClient,
 } from '../../lib/sbg';
-import type { AuthResult, NetworkPoint, ParcelSize, PersonRole, QuoteView, TrackView } from './types';
+import type { AuthResult, ClassifyView, NetworkPoint, ParcelSize, PersonRole, QuoteView, TrackView } from './types';
 
 const APP_VERSION = '1.0.0';
 
@@ -37,6 +37,12 @@ export function fetchQuote(originDid: string, destDid: string, size: ParcelSize)
 
 export function fetchTrack(key: string): Promise<Result<TrackView>> {
   return publicRequest<TrackView>(sendConfig(), `/v1/sbg/track/${encodeURIComponent(key)}`);
+}
+
+/** PG3 — derive the size tier + cargo class from typed dims + weight (@Public: a pure computation over
+ *  the open thresholds). The wizard's ONLY size input — no self-declared S/M/L/HEAVY anywhere. */
+export function classifyParcel(dims: { l: number; w: number; h: number }, kg: number): Promise<Result<ClassifyView>> {
+  return publicRequest<ClassifyView>(sendConfig(), '/v1/sbg/size/classify', { body: { ...dims, kg } });
 }
 
 /* -------------------------------------------------- consumer identity (S20/S21) -- */

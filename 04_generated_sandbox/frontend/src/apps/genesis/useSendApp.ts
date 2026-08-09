@@ -28,11 +28,12 @@ import {
   type InviteEntry,
 } from './api';
 import { pickPhoneFromContacts, readSmsOtp } from '../../shared/device';
-import { cleanPhone, codeReady, normalizeKey, phoneReady } from './logic';
-import type { AuthResult, ConsumerParcelView, InviteSummary, InviteView, MyParcels, NetworkPoint, ParcelSize, PersonRole, PersonView, QuoteView, SwitchResult, TrackView } from './types';
+import { classifyParcel } from './api';
+import { cleanPhone, codeReady, normalizeKey, parseDims, phoneReady, EMPTY_DIMS, type DimsForm } from './logic';
+import type { AuthResult, ClassifyView, ConsumerParcelView, InviteSummary, InviteView, MintResult, MyParcels, NetworkPoint, PersonRole, PersonView, QuoteView, SwitchResult, TrackView } from './types';
 
 export type Screen = 'send' | 'track' | 'parcels' | 'account';
-export type WizardStep = 'size' | 'from' | 'to' | 'quote';
+export type WizardStep = 'parcel' | 'from' | 'to' | 'quote' | 'book' | 'done';
 /** The consumer sign-in flow: enroll walks phone → code → pin; login is phone + pin together. */
 export type AuthMode = 'login' | 'enroll';
 export type AuthStep = 'phone' | 'code' | 'pin';
@@ -42,7 +43,12 @@ export interface SendState {
 
   /* --- the send wizard, one decision per step --- */
   step: WizardStep;
-  size: ParcelSize | null;
+  /** PG3: what the sender MEASURED — the size tier is derived from this, never tapped. */
+  dims: DimsForm;
+  fragile: boolean;
+  derived: ClassifyView | null; // the server-derived tier + cargo class for the typed dims
+  deriveBusy: boolean;
+  deriveError: SbgError | null;
   fromDid: string | null;
   toDid: string | null;
   points: NetworkPoint[];
@@ -51,6 +57,13 @@ export interface SendState {
   quote: QuoteView | null;
   quoteState: 'idle' | 'loading' | 'ready' | 'error';
   quoteError: SbgError | null;
+  /** PG3: the booking half (signed-in only) — receiver + the mint result. */
+  receiverMobile: string;
+  mintBusy: boolean;
+  mintError: SbgError | null;
+  minted: MintResult | null;
+  /** The drop-off shop name snapshotted at mint (so the done screen names the RIGHT shop after back-nav). */
+  mintedFromName: string | null;
 
   /* --- track --- */
   key: string;
@@ -112,8 +125,12 @@ export interface SendState {
 
 const INITIAL: SendState = {
   screen: 'send',
-  step: 'size',
-  size: null,
+  step: 'parcel',
+  dims: EMPTY_DIMS,
+  fragile: false,
+  derived: null,
+  deriveBusy: false,
+  deriveError: null,
   fromDid: null,
   toDid: null,
   points: [],
@@ -122,6 +139,11 @@ const INITIAL: SendState = {
   quote: null,
   quoteState: 'idle',
   quoteError: null,
+  receiverMobile: '',
+  mintBusy: false,
+  mintError: null,
+  minted: null,
+  mintedFromName: null,
   key: '',
   result: null,
   trackState: 'idle',
@@ -216,17 +238,38 @@ export function useSendApp() {
 
   /* ----------------------------------------------------------------- wizard */
 
-  const pickSize = useCallback(
-    (size: ParcelSize) => {
-      setState((s) => ({ ...s, size, step: 'from' }));
-      if (stateRef.current.pointsState === 'idle' || stateRef.current.pointsState === 'error') void loadPoints();
-    },
-    [loadPoints],
-  );
+  const setDims = useCallback((patch: Partial<DimsForm>) => {
+    // Any edit invalidates the derived tier — it belongs to the previous measurements.
+    setState((s) => ({ ...s, dims: { ...s.dims, ...patch }, derived: null, deriveError: null }));
+  }, []);
+
+  const setFragile = useCallback((fragile: boolean) => setState((s) => ({ ...s, fragile })), []);
+
+  const deriveEpoch = useRef(0);
+
+  /** Classify the typed dims (the ONLY way a size exists here), then move to the drop-off picker —
+   *  unless the load needs dedicated freight, in which case the step stays and explains. */
+  const submitParcel = useCallback(async () => {
+    const parsed = parseDims(stateRef.current.dims);
+    if (!parsed) return;
+    const epoch = ++deriveEpoch.current;
+    setState((s) => ({ ...s, deriveBusy: true, deriveError: null }));
+    const r = await classifyParcel({ l: parsed.l, w: parsed.w, h: parsed.h }, parsed.kg);
+    if (epoch !== deriveEpoch.current) return;
+    if (r.error || !r.data) {
+      setState((s) => ({ ...s, deriveBusy: false, deriveError: r.error ?? null }));
+      return;
+    }
+    const derived = r.data;
+    setState((s) => ({ ...s, deriveBusy: false, derived, step: derived.dedicated ? s.step : 'from' }));
+    if (!derived.dedicated && (stateRef.current.pointsState === 'idle' || stateRef.current.pointsState === 'error')) void loadPoints();
+  }, [loadPoints]);
 
   const quoteEpoch = useRef(0);
 
-  const runQuote = useCallback(async (fromDid: string, toDid: string, size: ParcelSize) => {
+  const runQuote = useCallback(async (fromDid: string, toDid: string) => {
+    const size = stateRef.current.derived?.size;
+    if (!size) return;
     const epoch = ++quoteEpoch.current;
     setState((s) => ({ ...s, step: 'quote', quote: null, quoteState: 'loading', quoteError: null }));
     const r = await fetchQuote(fromDid, toDid, size);
@@ -245,23 +288,29 @@ export function useSendApp() {
   const pickTo = useCallback(
     (did: string) => {
       setState((s) => ({ ...s, toDid: did }));
-      const { fromDid, size } = stateRef.current;
-      if (fromDid && size) void runQuote(fromDid, did, size);
+      const { fromDid } = stateRef.current;
+      if (fromDid) void runQuote(fromDid, did);
     },
     [runQuote],
   );
 
   const retryQuote = useCallback(() => {
-    const { fromDid, toDid, size } = stateRef.current;
-    if (fromDid && toDid && size) void runQuote(fromDid, toDid, size);
+    const { fromDid, toDid } = stateRef.current;
+    if (fromDid && toDid) void runQuote(fromDid, toDid);
   }, [runQuote]);
 
+  const mintEpoch = useRef(0);
+
   const backTo = useCallback((step: WizardStep) => {
-    setState((s) => ({ ...s, step, quoteState: step === 'quote' ? s.quoteState : 'idle', quote: step === 'quote' ? s.quote : null }));
+    mintEpoch.current++; // abandoning the book step invalidates any in-flight mint (it must not yank us to 'done')
+    setState((s) => ({ ...s, step, quoteState: step === 'quote' ? s.quoteState : 'idle', quote: step === 'quote' ? s.quote : null, mintError: null }));
   }, []);
 
   const startAgain = useCallback(() => {
-    setState((s) => ({ ...INITIAL, screen: 'send', points: s.points, pointsState: s.pointsState, recent: s.recent, identity: s.identity, authPhone: s.authPhone }));
+    mintEpoch.current++;
+    // Keep the public wizard scaffolding AND a not-yet-redeemed invite token (resetting the wizard must not
+    // consume it — only signOut deliberately drops it).
+    setState((s) => ({ ...INITIAL, screen: 'send', points: s.points, pointsState: s.pointsState, recent: s.recent, identity: s.identity, authPhone: s.authPhone, inviteToken: s.inviteToken, invited: s.invited }));
   }, []);
 
   /* ------------------------------------------------------------------ track */
@@ -369,7 +418,10 @@ export function useSendApp() {
     setState((s) => ({
       ...s,
       identity: { personId: data.personId, roles: data.roles ?? [], hasPin: data.hasPin ?? true, createdAt: data.createdAt ?? '', displayName: data.displayName, avatarMediaId: data.avatarMediaId },
-      screen: 'parcels',
+      // A guest who tapped "Sign in to book it" mid-wizard returns to their booking (the quote survives sign-in
+      // and the CTA becomes "Book this send"); every other sign-in lands on My parcels.
+      screen: (s.step === 'quote' || s.step === 'book') && s.quote ? 'send' : 'parcels',
+      mintBusy: false, // a session that died mid-mint must not leave the CTA spinning after re-sign-in
       authBusy: false,
       authError: null,
       authCode: '',
@@ -494,6 +546,13 @@ export function useSendApp() {
       purgeConsumerTokens(null);
       clearDid();
       setDid(null);
+      // A booking is bound to the signed-in person: their receiver number (PII) + the minted label (a
+      // drop-off credential) must not survive to the next person on a shared phone, and the wizard must
+      // never strand a guest on a dead "Make my label". Reset the whole wizard/booking half to INITIAL and
+      // bump the epochs so an in-flight classify/quote/mint can't resurrect state after sign-out.
+      deriveEpoch.current++;
+      quoteEpoch.current++;
+      mintEpoch.current++;
       setState((s) => ({
         ...s,
         identity: null,
@@ -508,6 +567,23 @@ export function useSendApp() {
         media: [], // clear the signed-out person's media (bytes are owner-gated, but don't show stale cells)
         mediaState: 'idle',
         mediaRemoving: null,
+        // The wizard/booking half back to INITIAL (public points/recent/track survive).
+        step: 'parcel',
+        dims: EMPTY_DIMS,
+        fragile: false,
+        derived: null,
+        deriveBusy: false,
+        deriveError: null,
+        fromDid: null,
+        toDid: null,
+        quote: null,
+        quoteState: 'idle',
+        quoteError: null,
+        receiverMobile: '',
+        mintBusy: false,
+        mintError: null,
+        minted: null,
+        mintedFromName: null,
         screen: error ? s.screen : 'send',
         authMode: 'login',
         authStep: 'phone',
@@ -528,6 +604,56 @@ export function useSendApp() {
   useEffect(() => {
     signOutRef.current = signOut;
   }, [signOut]);
+
+  /* ------------------------------------------------------------ booking (PG3) */
+
+  const setReceiver = useCallback((v: string) => setState((s) => ({ ...s, receiverMobile: v, mintError: null })), []);
+
+  /** Confirm the receiver's number from the address book instead of typing it (Android Contact Picker). */
+  const pickReceiverContact = useCallback(async () => {
+    const tel = await pickPhoneFromContacts();
+    if (tel) setState((s) => ({ ...s, receiverMobile: tel, mintError: null }));
+  }, []);
+
+  const toBook = useCallback(() => setState((s) => ({ ...s, step: 'book', mintError: null })), []);
+
+  /** The mint: the SAME genesis the vendor console gets, from the sender's own phone. On success the
+   *  wizard lands on the label (their drop-off credential) and My Parcels refreshes underneath. */
+  const submitMint = useCallback(async () => {
+    const { dims, fragile, fromDid, toDid, receiverMobile, quote, points } = stateRef.current;
+    const parsed = parseDims(dims);
+    const receiver = cleanPhone(receiverMobile);
+    if (!client || !parsed || !fromDid || !toDid || !phoneReady(receiver)) return;
+    // Snapshot the drop-off shop name NOW: the done screen must name the shop the parcel was actually
+    // minted at, even if the user back-navigates and re-picks a different shop while this is in flight.
+    const fromName = points.find((p) => p.did === fromDid)?.shopName ?? null;
+    const expectedTotal = quote?.locked.total; // consent to THIS price; the server fails closed if it drifted
+    const epoch = ++mintEpoch.current;
+    setState((s) => ({ ...s, mintBusy: true, mintError: null }));
+    const r = await client.api.createParcel({
+      receiverMobile: receiver,
+      originPudoDid: fromDid,
+      destPudoDid: toDid,
+      dimensionsCm: { l: parsed.l, w: parsed.w, h: parsed.h },
+      weightKg: parsed.kg,
+      fragile: fragile || undefined,
+      expectedTotal,
+    });
+    if (epoch !== mintEpoch.current) return; // the booking was abandoned (back / start again) — don't teleport
+    if (r.error) {
+      if (isSignInRequired(r.error)) return signOutRef.current(r.error);
+      // The market moved between the quote and the mint: bounce the sender back to the fresh price to re-consent.
+      if (r.error.code === 'PRICE_CHANGED') {
+        setState((s) => ({ ...s, mintBusy: false, mintError: r.error }));
+        if (fromDid && toDid) void runQuote(fromDid, toDid);
+        return;
+      }
+      setState((s) => ({ ...s, mintBusy: false, mintError: r.error }));
+      return;
+    }
+    setState((s) => ({ ...s, mintBusy: false, minted: narrow<MintResult>(r.data), mintedFromName: fromName, step: 'done' }));
+    void loadParcels(); // the new send is already in their home
+  }, [client, loadParcels, runQuote]);
 
   /* -------------------------------------------------- my parcels + account */
 
@@ -831,7 +957,9 @@ export function useSendApp() {
     notifications: client?.notifications ?? null,
     actions: {
       go,
-      pickSize,
+      setDims,
+      setFragile,
+      submitParcel,
       pickFrom,
       pickTo,
       retryQuote,
@@ -840,6 +968,11 @@ export function useSendApp() {
       loadPoints,
       runTrack,
       setKey,
+      // booking (PG3)
+      setReceiver,
+      pickReceiverContact,
+      toBook,
+      submitMint,
       // identity
       setAuthPhone,
       setAuthCode,
