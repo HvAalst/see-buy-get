@@ -9,12 +9,13 @@ import type { AgentService } from './agent.service';
 import type { FleetService } from './fleet.service';
 import type { ToteService } from './tote.service';
 import type { MdpService } from './mdp.service';
+import type { DispatchService } from './dispatch.service';
 
 type Geo = { lat: number; lng: number };
 
 interface HarnessOpts {
-  // rule 1
-  parcel?: { receiverPhoneHash?: string; destAgentDid?: string; destZone?: string } | null;
+  // rule 1 + rule 4 (senderMobile picks the peer-send vs vendor copy)
+  parcel?: { receiverPhoneHash?: string; destAgentDid?: string; destZone?: string; senderMobile?: string } | null;
   personByHash?: Record<string, { personDid: string }>;
   // agents: did → { shopName?, location? } (used by rule 1 shop name, rule 2 pickup geo, rule 3 dest check)
   agents?: Record<string, { shopName?: string; location?: Geo }>;
@@ -22,6 +23,8 @@ interface HarnessOpts {
   totes?: Record<string, { code: string; locationId: string; destinationLabel?: string }>;
   activeDrivers?: Array<{ driverDid: string; location?: Geo; lastLocatedAt?: string }>;
   mdps?: Record<string, { location: Geo }>;
+  // rule 5 — which drivers' vehicles can carry the posted freight (default: all)
+  canCarry?: (driverDid: string) => boolean;
 }
 
 /** Build a dispatcher over a real EventBus + NotificationService, with fake domain lookups. */
@@ -55,8 +58,11 @@ function harness(opts: HarnessOpts) {
       return m;
     },
   } as unknown as MdpService;
+  const dispatch = {
+    freightCarryableByDriver: (_freightId: string, driverDid: string) => (opts.canCarry ? opts.canCarry(driverDid) : true),
+  } as unknown as DispatchService;
 
-  const dispatcher = new NotificationDispatcher(events, notifications, parcels, persons, agents, fleet, totes, mdps);
+  const dispatcher = new NotificationDispatcher(events, notifications, parcels, persons, agents, fleet, totes, mdps, dispatch);
   dispatcher.onModuleInit();
   return { events, notifications, outbox };
 }
@@ -212,5 +218,97 @@ describe('NotificationDispatcher — rule 3: PUDO agent "bus inbound" (N3)', () 
     const noDest = harness({ agents: { 'did:agent:dest': {} } });
     await noDest.events.publish(GlosEvent.Pudo.BagLoaded, { parcels: 2 });
     expect(noDest.notifications.inboxFor('did:agent:dest')).toHaveLength(0);
+  });
+});
+
+describe('NotificationDispatcher — rule 4: drop-off PUDO "a parcel is coming in" (genesis)', () => {
+  it('tells the origin PUDO to expect a paid vendor mint (ParcelPaid, once — at mint or settle)', async () => {
+    const { events, notifications } = harness({
+      parcel: { senderMobile: 'vendor', destZone: 'Kisumu' },
+      agents: { 'did:agent:origin': { shopName: 'Mama Sarah Shop' } },
+    });
+    await events.publish(GlosEvent.Pudo.ParcelPaid, { parcelId: 'PUD-1', originAgentDid: 'did:agent:origin', amount: 12 });
+    const inbox = notifications.inboxFor('did:agent:origin');
+    expect(inbox).toHaveLength(1);
+    expect(inbox[0]).toMatchObject({ kind: 'intake_expected', title: 'A parcel is coming in' });
+    expect(inbox[0].body).toContain('store shipment');
+    expect(JSON.stringify(inbox[0])).not.toContain('Kisumu'); // destination zone is not leaked to the drop-off shop payload
+  });
+
+  it('tells the origin PUDO to expect a person peer-send (ParcelMinted), with take-in-at-counter copy', async () => {
+    const { events, notifications } = harness({
+      parcel: { senderMobile: 'app' },
+      agents: { 'did:agent:origin': { shopName: 'Mama Sarah Shop' } },
+    });
+    await events.publish(GlosEvent.Pudo.ParcelMinted, { parcelId: 'PUD-2', originAgentDid: 'did:agent:origin', destAgentDid: 'did:agent:dest' });
+    const inbox = notifications.inboxFor('did:agent:origin');
+    expect(inbox).toHaveLength(1);
+    expect(inbox[0].body).toContain('booked parcel');
+  });
+
+  it('skips when the origin is not a real PUDO agent, or is absent', async () => {
+    const notAgent = harness({ parcel: { senderMobile: 'app' }, agents: {} });
+    await notAgent.events.publish(GlosEvent.Pudo.ParcelMinted, { parcelId: 'PUD-3', originAgentDid: 'mdp-1' });
+    expect(notAgent.notifications.inboxFor('mdp-1')).toHaveLength(0);
+
+    const noOrigin = harness({ parcel: { senderMobile: 'app' }, agents: { 'did:agent:origin': {} } });
+    await noOrigin.events.publish(GlosEvent.Pudo.ParcelMinted, { parcelId: 'PUD-4' });
+    expect(noOrigin.notifications.inboxFor('did:agent:origin')).toHaveLength(0);
+  });
+
+  it('is idempotent — a re-published ParcelPaid for the same parcel does NOT stack a second inbox row', async () => {
+    const { events, notifications } = harness({
+      parcel: { senderMobile: 'vendor' },
+      agents: { 'did:agent:origin': { shopName: 'Mama Sarah Shop' } },
+    });
+    await events.publish(GlosEvent.Pudo.ParcelPaid, { parcelId: 'PUD-5', originAgentDid: 'did:agent:origin', amount: 12 });
+    await events.publish(GlosEvent.Pudo.ParcelPaid, { parcelId: 'PUD-5', originAgentDid: 'did:agent:origin', amount: 12 });
+    expect(notifications.inboxFor('did:agent:origin')).toHaveLength(1); // the SW-tag can't dedupe the record — onMinted does
+  });
+
+  it('does NOT subscribe InboundCreated — so a paid mint (which fires BOTH events) notifies exactly once', async () => {
+    // A paid vendor createInbound publishes InboundCreated AND ParcelPaid; Rule 4 listens to ParcelPaid only.
+    const { events, notifications } = harness({
+      parcel: { senderMobile: 'vendor' },
+      agents: { 'did:agent:origin': { shopName: 'Mama Sarah Shop' } },
+    });
+    await events.publish(GlosEvent.Pudo.InboundCreated, { parcelId: 'PUD-6', originAgentDid: 'did:agent:origin', destAgentDid: 'did:agent:dest' });
+    expect(notifications.inboxFor('did:agent:origin')).toHaveLength(0); // InboundCreated alone → nothing
+    await events.publish(GlosEvent.Pudo.ParcelPaid, { parcelId: 'PUD-6', originAgentDid: 'did:agent:origin', amount: 12 });
+    expect(notifications.inboxFor('did:agent:origin')).toHaveLength(1); // …only ParcelPaid notifies
+  });
+});
+
+describe('NotificationDispatcher — rule 5: driver "load near you" for a posted freight (genesis)', () => {
+  const at = (lat: number, lng: number): Geo => ({ lat, lng });
+  const D = (driverDid: string, location?: Geo, lastLocatedAt: string | undefined = new Date().toISOString()) => ({ driverDid, location, lastLocatedAt });
+
+  it('pings active drivers near the freight pickup, reusing the tote matching', async () => {
+    const { events, notifications } = harness({
+      activeDrivers: [D('d-near', at(0, 0.01)), D('d-far', at(5, 5)), D('d-nogps', undefined)],
+    });
+    await events.publish(GlosEvent.Pudo.FreightPosted, { freightId: 'frt_1', destLabel: 'Kisumu', pickupLocation: at(0, 0), weightKg: 300 });
+    const near = notifications.inboxFor('d-near');
+    expect(near).toHaveLength(1);
+    expect(near[0]).toMatchObject({ kind: 'load_nearby', title: 'A load is near you' });
+    expect(near[0].body).toBe('A freight load to Kisumu is ready to claim nearby.');
+    expect(notifications.inboxFor('d-far')).toHaveLength(0);
+    expect(notifications.inboxFor('d-nogps')).toHaveLength(0);
+  });
+
+  it('does nothing when the freight has no pickup coordinate', async () => {
+    const { events, notifications } = harness({ activeDrivers: [D('d', at(0, 0))] });
+    await events.publish(GlosEvent.Pudo.FreightPosted, { freightId: 'frt_2', destLabel: 'Kisumu', weightKg: 300 });
+    expect(notifications.inboxFor('d')).toHaveLength(0);
+  });
+
+  it('pings ONLY nearby drivers whose vehicle can carry the freight — a bike driver near a pallet is skipped', async () => {
+    const { events, notifications } = harness({
+      activeDrivers: [D('d-truck', at(0, 0.01)), D('d-bike', at(0, 0.011))], // both near
+      canCarry: (driverDid) => driverDid === 'd-truck', // only the truck is fit for the pallet
+    });
+    await events.publish(GlosEvent.Pudo.FreightPosted, { freightId: 'frt_3', destLabel: 'Kisumu', pickupLocation: at(0, 0), weightKg: 300 });
+    expect(notifications.inboxFor('d-truck')).toHaveLength(1);
+    expect(notifications.inboxFor('d-bike')).toHaveLength(0); // near, but can't carry it
   });
 });

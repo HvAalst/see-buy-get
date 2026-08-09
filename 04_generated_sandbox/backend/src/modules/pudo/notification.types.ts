@@ -31,8 +31,9 @@ export interface PushSubscriptionRecord {
   lastSeenAt?: string;
 }
 
-/** The closed vocabulary of what we push. The spine (N1) fires `test`; N2/N3 add the rest. */
-export const NOTIFICATION_KINDS = ['test', 'parcel_ready', 'load_nearby', 'bus_inbound'] as const;
+/** The closed vocabulary of what we push. The spine (N1) fires `test`; N2/N3 add the rest;
+ *  `intake_expected` (a parcel minted → its drop-off PUDO should expect it) is the genesis rule. */
+export const NOTIFICATION_KINDS = ['test', 'parcel_ready', 'load_nearby', 'bus_inbound', 'intake_expected'] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 
 /**

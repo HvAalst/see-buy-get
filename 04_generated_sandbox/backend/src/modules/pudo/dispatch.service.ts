@@ -220,6 +220,11 @@ export class DispatchService {
       createdAt: new Date().toISOString(),
     };
     this.freights.set(freight.freightId, freight);
+    // A posted load reaches drivers lazily via suggest() (pull); ALSO push it now so drivers near the
+    // pickup hear about it at genesis (the notification dispatcher matches on freight.pickupLocation).
+    void this.events
+      .publish(GlosEvent.Pudo.FreightPosted, { freightId: freight.freightId, code: freight.code, pickupLocation: freight.pickupLocation, destLabel: freight.destLabel, weightKg: freight.weightKg, cargoClass: freight.cargoClass }, { source: 'pudo' })
+      .catch(() => undefined);
     return freight;
   }
 
@@ -422,6 +427,25 @@ export class DispatchService {
     const toteKg = this.totes.list().filter((t) => t.claimedBy === driverDid && (t.status === 'claimed' || t.status === 'in_transit')).reduce((s, t) => s + t.weightKg, 0);
     const freightKg = [...this.freights.values()].filter((f) => f.claimedBy === driverDid && (f.status === 'claimed' || f.status === 'in_transit')).reduce((s, f) => s + f.weightKg, 0);
     return Math.round((vehicle.capacityKg - toteKg - freightKg) * 100) / 100;
+  }
+
+  /**
+   * Can this driver's CURRENTLY-coupled vehicle carry this freight? A capability-fitness check only —
+   * the same capabilities / equipment / bulk / fragile predicate claim() enforces (loadRequirements +
+   * hasEquipmentFor), minus the claim-time capacity/budget gates. Used to TARGET a freight-posted
+   * notification at drivers who could actually claim it, so a bike/small-van driver is never pinged for a
+   * pallet. Never throws (a notification filter): an uncoupled driver or an unknown freight → false.
+   */
+  freightCarryableByDriver(freightId: string, driverDid: string): boolean {
+    const vehicle = this.fleet.vehicleForDriver(driverDid);
+    if (!vehicle || !this.freights.has(freightId)) return false;
+    const need = this.loadRequirements('freight', freightId);
+    return !(
+      need.capabilities.some((cap) => !vehicle[cap]) ||
+      !DispatchService.hasEquipmentFor(vehicle, need.equipment) ||
+      (need.bulk && !vehicle.carriesBulk) ||
+      (need.fragile && !vehicle.allowsFragile)
+    );
   }
 
   /** Loads the driver currently holds (claimed or on the vehicle). */

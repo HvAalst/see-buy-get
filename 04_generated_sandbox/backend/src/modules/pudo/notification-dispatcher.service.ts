@@ -8,6 +8,7 @@ import { AgentService } from './agent.service';
 import { FleetService } from './fleet.service';
 import { ToteService } from './tote.service';
 import { MdpService } from './mdp.service';
+import { DispatchService } from './dispatch.service';
 import { haversineKm } from './geo';
 import { GeoPoint } from './pudo.types';
 import { MARKET_SUPPLY_STALE_MIN } from './pudo.config';
@@ -22,8 +23,9 @@ import { MARKET_SUPPLY_STALE_MIN } from './pudo.config';
  * never throws back into the bus (which would retry/dead-letter the event and disturb other
  * subscribers) — a missed notification must never break the shipment flow that triggered it.
  *
- * Three headline scenarios: the BUYER ("your parcel has arrived at the pickup point"), the DRIVER
- * ("a load is near you"), and the PUDO AGENT ("a bus with your parcels is inbound").
+ * Scenarios: the BUYER ("your parcel has arrived"), the DRIVER ("a load is near you" — a ready tote OR a
+ * freshly-posted freight), and the PUDO AGENT ("a bus with your parcels is inbound" on arrival, and — at
+ * GENESIS — "a parcel is coming in" so the DROP-OFF shop expects a minted vendor order / peer-send).
  */
 @Injectable()
 export class NotificationDispatcher implements OnModuleInit {
@@ -42,6 +44,7 @@ export class NotificationDispatcher implements OnModuleInit {
     private readonly fleet: FleetService,
     private readonly totes: ToteService,
     private readonly mdps: MdpService,
+    private readonly dispatch: DispatchService,
   ) {}
 
   onModuleInit(): void {
@@ -57,6 +60,15 @@ export class NotificationDispatcher implements OnModuleInit {
     this.events.subscribe<{ destinationNodeId?: string; parcels?: number; code?: string }>(GlosEvent.Pudo.BagLoaded, (e) =>
       this.onBagLoaded(e.payload),
     );
+    // Rule 4 (PUDO agent, at GENESIS) — a parcel was minted + PAID; tell its DROP-OFF PUDO to expect it.
+    // ParcelPaid fires exactly ONCE per vendor parcel (at a paid mint, OR at a settle after a top-up), so
+    // this catches both without double-recording; a person's peer-send fires ParcelMinted (cash at the
+    // counter, no prepay). Both carry originAgentDid; an unpaid vendor order is silent until it settles.
+    this.events.subscribe<{ parcelId: string; originAgentDid?: string }>(GlosEvent.Pudo.ParcelPaid, (e) => this.onMinted(e.payload));
+    this.events.subscribe<{ parcelId: string; originAgentDid?: string }>(GlosEvent.Pudo.ParcelMinted, (e) => this.onMinted(e.payload));
+    // Rule 5 (driver) — a dedicated-freight load was posted; ping active drivers near its pickup (same
+    // live-GPS matching as a ready tote), so a heavy divert reaches a truck at genesis, not only via pull.
+    this.events.subscribe<{ freightId: string; destLabel?: string; pickupLocation?: GeoPoint }>(GlosEvent.Pudo.FreightPosted, (e) => this.onFreightPosted(e.payload));
   }
 
   /**
@@ -111,19 +123,7 @@ export class NotificationDispatcher implements OnModuleInit {
       const pickup = this.nodeLocation(tote.locationId);
       if (!pickup) return; // the origin isn't a fixed point (on a bus, or unknown) — can't say "near you"
 
-      // "Near you" must mean near you NOW. An active coupling keeps its LAST reported GPS forever (the
-      // app can background / lose signal without ending the session), so a frozen hours-old position is
-      // not live. Apply the SAME freshness window the market engine uses for this exact list
-      // (MARKET_SUPPLY_STALE_MIN) — a missing or too-old (or unparseable → fail-safe excluded) fix drops out.
-      const now = Date.now();
-      const staleMs = MARKET_SUPPLY_STALE_MIN * 60_000;
-      const nearby = this.fleet
-        .list({ status: 'active' })
-        .filter((a) => a.location && a.lastLocatedAt && now - new Date(a.lastLocatedAt).getTime() <= staleMs)
-        .map((a) => ({ driverDid: a.driverDid, km: haversineKm(a.location as GeoPoint, pickup) }))
-        .filter((d) => d.km <= NotificationDispatcher.NEARBY_DRIVER_KM)
-        .sort((a, b) => a.km - b.km)
-        .slice(0, NotificationDispatcher.NEARBY_DRIVER_CAP);
+      const nearby = this.nearbyActiveDrivers(pickup);
       if (nearby.length === 0) return;
 
       const where = tote.destinationLabel ?? payload.destination;
@@ -142,6 +142,95 @@ export class NotificationDispatcher implements OnModuleInit {
       );
     } catch (err) {
       this.logger.warn(`load-nearby notify failed for ${payload.code}: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * The active drivers whose LIVE position is within range of a pickup, distance-sorted and capped — the
+   * honest "near you", matched on real GPS not a declared route. "Near you" must mean near you NOW: an
+   * active coupling keeps its LAST reported GPS forever (the app can background / lose signal without
+   * ending the session), so a frozen hours-old position is not live. Apply the SAME freshness window the
+   * market engine uses for this exact list (MARKET_SUPPLY_STALE_MIN) — a missing/too-old (or unparseable →
+   * fail-safe excluded) fix drops out. Shared by the tote rule (2) and the freight rule (5).
+   */
+  private nearbyActiveDrivers(pickup: GeoPoint): Array<{ driverDid: string; km: number }> {
+    const now = Date.now();
+    const staleMs = MARKET_SUPPLY_STALE_MIN * 60_000;
+    return this.fleet
+      .list({ status: 'active' })
+      .filter((a) => a.location && a.lastLocatedAt && now - new Date(a.lastLocatedAt).getTime() <= staleMs)
+      .map((a) => ({ driverDid: a.driverDid, km: haversineKm(a.location as GeoPoint, pickup) }))
+      .filter((d) => d.km <= NotificationDispatcher.NEARBY_DRIVER_KM)
+      .sort((a, b) => a.km - b.km)
+      .slice(0, NotificationDispatcher.NEARBY_DRIVER_CAP);
+  }
+
+  /**
+   * The GENESIS scenario (Rule 4): a parcel was minted, so tell its DROP-OFF PUDO to expect it. The
+   * recipient is the origin agent DID carried on the event; a mint whose origin isn't a real PUDO agent
+   * (defensive — a hub/unknown node) is skipped. The copy differs for a vendor order vs a person's
+   * peer-send (read from the parcel), but neither the fare nor any secret rides the lock screen — the
+   * agent sees the cash due + details in-app when they scan it in.
+   */
+  private async onMinted(payload: { parcelId: string; originAgentDid?: string }): Promise<void> {
+    const originDid = payload.originAgentDid;
+    if (!originDid) return;
+    try {
+      this.agents.get(originDid); // the drop-off must be a real PUDO agent (throws for a hub/unknown node)
+    } catch {
+      return;
+    }
+    try {
+      // Idempotent: a mint publishes ParcelPaid AND (for a paid vendor) fires once, but a future re-fire /
+      // a naive second subscription must not stack a second inbox row (the dedupe tag is SW-only, not on the
+      // record). If this parcel already told this shop it's coming, do nothing — mirrors graduation.onCreated.
+      const already = this.notifications.inboxFor(originDid).some((n) => n.kind === 'intake_expected' && (n.data as { parcelId?: string } | undefined)?.parcelId === payload.parcelId);
+      if (already) return;
+      const parcel = this.parcels.get(payload.parcelId);
+      const isPeerSend = parcel.senderMobile === 'app';
+      await this.notifications.notify(originDid, {
+        kind: 'intake_expected',
+        title: 'A parcel is coming in',
+        body: isPeerSend
+          ? 'A booked parcel is on its way to your counter — take it in when the sender drops it off.'
+          : 'A store shipment is on its way to your counter — scan it in when it arrives.',
+        link: '/',
+        // One notification per minted parcel — a re-published mint/settle collapses onto the same one.
+        tag: `intake:${payload.parcelId}`,
+        data: { parcelId: payload.parcelId },
+      });
+    } catch (err) {
+      this.logger.warn(`intake-expected notify failed for ${payload.parcelId}: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * The freight scenario (Rule 5): a dedicated-freight load was posted to the marketplace. Unlike a tote
+   * the load carries its own pickup coordinate, so we match drivers on it directly and push. Reuses the
+   * exact live-GPS matching of Rule 2, so a heavy divert reaches a nearby truck at genesis.
+   */
+  private async onFreightPosted(payload: { freightId: string; destLabel?: string; pickupLocation?: GeoPoint }): Promise<void> {
+    try {
+      if (!payload.pickupLocation) return;
+      // Unlike a tote (any bus carries it), a dedicated freight needs a fit vehicle. Ping only the nearby
+      // drivers whose CURRENT vehicle could actually carry it — a bike driver never gets a pallet alert.
+      // (claim() re-checks capability regardless; this just keeps the audience honest.)
+      const nearby = this.nearbyActiveDrivers(payload.pickupLocation).filter((d) => this.dispatch.freightCarryableByDriver(payload.freightId, d.driverDid));
+      if (nearby.length === 0) return;
+      await Promise.all(
+        nearby.map((d) =>
+          this.notifications.notify(d.driverDid, {
+            kind: 'load_nearby',
+            title: 'A load is near you',
+            body: payload.destLabel ? `A freight load to ${payload.destLabel} is ready to claim nearby.` : 'A freight load is ready to claim nearby.',
+            link: '/',
+            tag: `freight:${payload.freightId}`,
+            data: { freightId: payload.freightId },
+          }),
+        ),
+      );
+    } catch (err) {
+      this.logger.warn(`freight-nearby notify failed for ${payload.freightId}: ${(err as Error).message}`);
     }
   }
 

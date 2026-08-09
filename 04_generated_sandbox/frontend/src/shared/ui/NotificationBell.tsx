@@ -17,6 +17,7 @@ const KIND_ICON: Record<string, IconName> = {
   parcel_ready: 'box',
   load_nearby: 'truck',
   bus_inbound: 'bag',
+  intake_expected: 'box',
   test: 'bell',
 };
 
