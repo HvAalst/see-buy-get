@@ -109,6 +109,9 @@ export const ROAD_CIRCUITY_FACTOR = 1.35;
 // claim once it is full OR has waited this long; suggestions auto-ignore if unanswered within the TTL.
 export const TOTE_MAX_WAIT_H = 24; // max time a tote waits before it is offered even if not full
 export const OFFER_TTL_MIN = 10; // a suggestion auto-ignores if the driver does not answer in time
+// F1 — an early-CLAIMED scheduled freight not picked up by this long AFTER its pickup date is a no-show:
+// it is released back to the marketplace (and the shipper rebated) so an early reservation can't strand it.
+export const FREIGHT_NOSHOW_GRACE_H = 12;
 export const DISPATCH_MAX_DETOUR_KM = 8; // a pickup may be at most this far off the planned A→B route
 export const DISPATCH_MAX_PICKUP_MIN = 30; // and at most this many minutes from the driver's start
 

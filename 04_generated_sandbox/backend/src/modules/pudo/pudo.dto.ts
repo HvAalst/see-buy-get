@@ -1,4 +1,4 @@
-import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsIn, IsNumber, IsObject, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
+import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsIn, IsNumber, IsObject, IsOptional, IsString, Matches, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { TRUCK_SUBTYPES } from './fleet.config';
 import { MEDIA_KINDS, MediaKind } from './media.types';
@@ -634,6 +634,13 @@ export class RegisterFreightDto {
   @IsOptional() @IsBoolean() bulk?: boolean;
   /** S32 — the freight's primary cargo nature (default GEN); drives the required vehicle capability. */
   @IsOptional() @IsIn(CARGO_NATURES) natureCode?: CargoNature;
+  /** F1 — a FUTURE pickup date: the load is booked for later. Must be a full datetime WITH an offset (Z or
+   *  ±HH:MM) so the instant is unambiguous — a date-only or offset-less string would resolve to a server-
+   *  timezone-dependent moment. Absent = ship now. */
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/, { message: 'scheduledPickupAt must be a full datetime with a timezone offset (e.g. 2026-07-25T09:00:00Z)' }) scheduledPickupAt?: string;
+  /** F1 — the shipper's early-claim choice for a scheduled load: true (default) → a driver may RESERVE it
+   *  ahead of its pickup date; false → it stays out of the marketplace until due. */
+  @IsOptional() @IsBoolean() allowEarlyClaim?: boolean;
 }
 
 /** S32b — a driver advancing a claimed freight (pickup/deliver). driverDid is the claimer, verified against

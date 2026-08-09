@@ -18,7 +18,7 @@ import { MediaService } from './media.service';
 import { MarketPulseStore } from './market-pulse.store';
 import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, VEHICLE_SPEC } from './fleet.config';
 import { Router, ROUTER } from './router';
-import { DEFAULT_PRICE_PER_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, OFFER_TTL_MIN, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
+import { DEFAULT_PRICE_PER_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, OFFER_TTL_MIN, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
 import { Claimable, ClaimableKind, Freight, FreightShipmentView, FreightStatus, Offer, RoutePlan } from './dispatch.types';
@@ -172,8 +172,20 @@ export class DispatchService {
     return { code: t.code, status: t.status };
   }
 
-  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number }): Freight {
+  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean }, now: number = Date.now()): Freight {
     this.freightSeq += 1;
+    // A future pickup date parks the load for later; a past/absent date ships now. A supplied-but-unparseable
+    // date is a CALLER ERROR — fail closed (never silently ship-now what was meant to be scheduled). Store the
+    // canonical UTC instant so the later due-comparison is unambiguous.
+    let scheduledPickupAt: string | undefined;
+    if (input.scheduledPickupAt != null) {
+      const t = new Date(input.scheduledPickupAt).getTime();
+      if (Number.isNaN(t)) throw new GlosError('INVALID_INPUT', 'scheduledPickupAt is not a valid date/time');
+      if (t > now) scheduledPickupAt = new Date(t).toISOString();
+    }
+    const scheduled = scheduledPickupAt != null;
+    // The shipper's early-claim choice (default: allow — a scarce truck can commit ahead of the date).
+    const allowEarlyClaim = input.allowEarlyClaim ?? true;
     // S32: give the freight a cargo model so it matches vehicles like a tote does — class (from weight+dims)
     // drives the required equipment, the primary nature drives the required vehicle capability.
     const natureCode: CargoNature = input.natureCode ?? 'GEN';
@@ -216,16 +228,75 @@ export class DispatchService {
       // S34c — a positive, finite cap only; a zero/negative/NaN budget is treated as "no cap" (never a load
       // nobody can ever afford to move) so a bad value can't silently strand a diverted order.
       maxSpend: input.maxSpend != null && Number.isFinite(input.maxSpend) && input.maxSpend > 0 ? Math.round(input.maxSpend * 100) / 100 : undefined,
-      status: 'available',
+      // A scheduled load is booked for later; if allowEarlyClaim it is still reservable now (see availableLoads).
+      scheduledPickupAt,
+      allowEarlyClaim,
+      status: scheduled ? 'scheduled' : 'available',
       createdAt: new Date().toISOString(),
     };
     this.freights.set(freight.freightId, freight);
-    // A posted load reaches drivers lazily via suggest() (pull); ALSO push it now so drivers near the
-    // pickup hear about it at genesis (the notification dispatcher matches on freight.pickupLocation).
-    void this.events
-      .publish(GlosEvent.Pudo.FreightPosted, { freightId: freight.freightId, code: freight.code, pickupLocation: freight.pickupLocation, destLabel: freight.destLabel, weightKg: freight.weightKg, cargoClass: freight.cargoClass }, { source: 'pudo' })
-      .catch(() => undefined);
+    // Ping nearby drivers NOW for a ship-now load OR an early-claimable scheduled one (so a scarce truck can
+    // commit ahead of the date). A no-early-claim scheduled load stays silent until due (publishReadyFreight).
+    if (!scheduled || allowEarlyClaim) {
+      void this.events
+        .publish(GlosEvent.Pudo.FreightPosted, { freightId: freight.freightId, code: freight.code, pickupLocation: freight.pickupLocation, destLabel: freight.destLabel, weightKg: freight.weightKg, cargoClass: freight.cargoClass }, { source: 'pudo' })
+        .catch(() => undefined);
+    }
     return freight;
+  }
+
+  /**
+   * The scheduled-freight maintenance pass — the freight analogue of publishReady() for totes. Called lazily
+   * from suggest() (a driver requesting work always sees the current picture) and safe to call anywhere:
+   *  1. PROMOTE a scheduled load whose pickup date has arrived to 'available'. A no-early-claim load pings
+   *     drivers now (its first ping); an early-claimable one already pinged at booking, so it flips silently.
+   *  2. RELEASE a no-show: an EARLY-claimed scheduled load not picked up by its date + grace goes back to the
+   *     marketplace (rebating the shipper if billed), so an early reservation can never strand a shipment.
+   * Returns the freightIds promoted.
+   */
+  publishReadyFreight(now: number = Date.now()): string[] {
+    const activated: string[] = [];
+    const ping = (f: Freight) =>
+      void this.events
+        .publish(GlosEvent.Pudo.FreightPosted, { freightId: f.freightId, code: f.code, pickupLocation: f.pickupLocation, destLabel: f.destLabel, weightKg: f.weightKg, cargoClass: f.cargoClass }, { source: 'pudo' })
+        .catch(() => undefined);
+    for (const f of this.freights.values()) {
+      if (!f.scheduledPickupAt) continue;
+      const due = new Date(f.scheduledPickupAt).getTime();
+      if (f.status === 'scheduled' && due <= now) {
+        // Its date arrived while still unclaimed → it becomes a normal available load.
+        f.status = 'available';
+        this.freights.set(f.freightId, f);
+        activated.push(f.freightId);
+        if (!f.allowEarlyClaim) ping(f); // an early-claim load already pinged at booking — don't double-notify
+      } else if (
+        (f.status === 'claimed' || f.status === 'scheduled') &&
+        f.claimedBy &&
+        !f.pickedUpAt &&
+        // The grace window runs from the LATER of the pickup date and the claim instant — never from the fixed
+        // date alone. A load claimed AFTER its date (a late reservation, or a load re-claimed after an earlier
+        // release) gets a full fresh grace from its claim, so it can't be re-released before the driver can pick
+        // up — the thrash that anchoring purely to a now-past `due` would cause.
+        now > Math.max(due, f.claimedAt ? new Date(f.claimedAt).getTime() : due) + FREIGHT_NOSHOW_GRACE_H * 3_600_000
+      ) {
+        // A no-show: reserved ahead, but not picked up by the pickup date + grace → free it + undo the charge.
+        if (f.paidStatus === 'billed' && f.shipperDid && this.vendors.has(f.shipperDid)) {
+          this.vendors.rebate(f.shipperDid, f.freightId, shipperCharge(f.lockedPrice ?? 0), 'freight no-show release');
+        }
+        f.status = 'available';
+        f.scheduledPickupAt = undefined; // its date has passed — it's now a plain ship-now load: no stale gate, no 'scheduled' timeline, and this loop skips it forever after (so it can never no-show-release twice)
+        f.claimedBy = undefined;
+        f.claimedAt = undefined;
+        f.lockedPrice = undefined;
+        f.priceBreakdown = undefined;
+        f.lockedAt = undefined;
+        f.paidStatus = undefined;
+        f.driverPaid = undefined;
+        this.freights.set(f.freightId, f);
+        ping(f); // back on the market — re-notify nearby drivers
+      }
+    }
+    return activated;
   }
 
   /** Every diverted freight a buyer (by phone hash) is a party to — the "my shipments" freight section. */
@@ -240,7 +311,8 @@ export class DispatchService {
   /** The buyer-facing, PII-free projection of a freight job + its status timeline (built from the stamped
    *  transition times). Never carries the buyer's number, the shipper, or the pickup coordinates. */
   static toShipmentView(f: Freight): FreightShipmentView {
-    const timeline: Array<{ status: Freight['status']; at: string }> = [{ status: 'available', at: f.createdAt }];
+    // A scheduled load's first milestone is 'scheduled' (booked for a future date), not 'available'.
+    const timeline: Array<{ status: Freight['status']; at: string }> = [{ status: f.scheduledPickupAt ? 'scheduled' : 'available', at: f.createdAt }];
     if (f.claimedAt) timeline.push({ status: 'claimed', at: f.claimedAt });
     if (f.pickedUpAt) timeline.push({ status: 'in_transit', at: f.pickedUpAt });
     if (f.deliveredAt) timeline.push({ status: 'delivered', at: f.deliveredAt });
@@ -255,6 +327,7 @@ export class DispatchService {
       externalOrderId: f.externalOrderId,
       equipmentGaps: f.equipmentGaps,
       createdAt: f.createdAt,
+      scheduledPickupAt: f.scheduledPickupAt,
       timeline,
       tempBreached: f.tempBreached, // S33b — the only temp fact a buyer sees (a boolean; never the readings)
     };
@@ -268,6 +341,7 @@ export class DispatchService {
     const vehicle = this.fleet.vehicleForDriver(driverDid);
     if (!vehicle) throw new GlosError('NOT_COUPLED', 'Couple the driver to a vehicle before requesting work');
     this.publishReady(now);
+    this.publishReadyFreight(now); // any scheduled freight that has come due joins the marketplace now
     const remaining = this.remainingCapacity(driverDid);
     const profile = this.pricingProfile(vehicle); // S34 — fixed for this driver+vehicle across all offers here
     const floor = minEarn != null && Number.isFinite(minEarn) && minEarn > 0 ? minEarn : undefined;
@@ -351,7 +425,8 @@ export class DispatchService {
     if (offer.kind === 'tote') this.totes.markClaimed(offer.ref, offer.driverDid);
     else {
       const f = this.requireFreight(offer.ref);
-      if (f.status !== 'available') throw new GlosError('INVALID_STATE', `Freight is ${f.status}`);
+      // Claimable when live ('available') OR when it's a scheduled load the shipper opened to early reservation.
+      if (!(f.status === 'available' || (f.status === 'scheduled' && f.allowEarlyClaim))) throw new GlosError('INVALID_STATE', `Freight is ${f.status}`);
       // S34 — compute the price to LOCK. The market can surge afterwards and the driver can edit their profile,
       // but what is agreed at this instant never changes. Recompute against THIS vehicle's current profile
       // (defaults resolved for a legacy vehicle) and the multiplier now, over the distance the offer was priced
@@ -374,7 +449,7 @@ export class DispatchService {
       }
       f.status = 'claimed';
       f.claimedBy = offer.driverDid;
-      f.claimedAt = new Date().toISOString();
+      f.claimedAt = new Date(now).toISOString(); // stamp the injected clock — the no-show deadline is anchored to this
       f.priceBreakdown = breakdown;
       f.lockedPrice = breakdown.total;
       f.lockedAt = f.claimedAt;
@@ -458,10 +533,13 @@ export class DispatchService {
   /** Freight is picked up (claimed → in_transit) then delivered (→ delivered, capacity released). S32b: when
    *  a driver DID is given (the authenticated driver-app path), only the driver who CLAIMED it may advance it —
    *  a claimed freight is that driver's obligation, not a free-for-all. */
-  pickupFreight(freightId: string, driverDid?: string, check?: { confirmed?: string[]; securementPhotoId?: string }): Freight {
+  pickupFreight(freightId: string, driverDid?: string, check?: { confirmed?: string[]; securementPhotoId?: string }, now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
     if (driverDid && f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
     if (f.status !== 'claimed') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected claimed`);
+    // A load reserved ahead of its date can't be picked up before it — the cargo (or the consolidated lot)
+    // isn't ready yet. It becomes pickable on/after the booked pickup date.
+    if (f.scheduledPickupAt && now < new Date(f.scheduledPickupAt).getTime()) throw new GlosError('INVALID_STATE', `Pickup is booked for ${f.scheduledPickupAt} — it can't be collected before then`);
     // S33 — the load-safety gate. Every dedicated freight must clear the load-safety checklist THIS cargo
     // requires (re-derived from the freight, so a client that under-reports can't bypass it) AND carry a
     // securement photo, before it leaves the pickup. The check happens BEFORE any mutation, so a failed gate
@@ -562,7 +640,8 @@ export class DispatchService {
 
   private availableLoads(): Claimable[] {
     const totes = this.totes.list({ status: 'available' }).map((t) => this.wrapTote(t.code)).filter((c): c is Claimable => c != null);
-    const freight = [...this.freights.values()].filter((f) => f.status === 'available').map((f) => this.wrapFreight(f));
+    // 'available' loads, PLUS a scheduled load the shipper lets drivers reserve ahead of its date (early claim).
+    const freight = [...this.freights.values()].filter((f) => f.status === 'available' || (f.status === 'scheduled' && f.allowEarlyClaim)).map((f) => this.wrapFreight(f));
     return [...totes, ...freight];
   }
 
@@ -598,7 +677,7 @@ export class DispatchService {
   private wrapFreight(f: Freight): Claimable {
     // S32: freight now carries its cargo model, so it matches vehicles on capability AND equipment like a tote.
     // S32b: status lets the driver app drive the claimed → picked-up → delivered flow in-app.
-    return { kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached };
+    return { kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached };
   }
 
   private vehicleCanCarry(vehicle: Vehicle, load: Claimable, remainingKg: number): boolean {

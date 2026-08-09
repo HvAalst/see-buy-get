@@ -14,7 +14,9 @@ export class RoutePlan {
 }
 
 export type ClaimableKind = 'tote' | 'freight';
-export type FreightStatus = 'available' | 'claimed' | 'in_transit' | 'delivered';
+// 'scheduled' — booked for a FUTURE pickup date; held out of the driver marketplace until due, then
+// promoted to 'available' (the freight analogue of a tote that isn't full/aged yet).
+export type FreightStatus = 'scheduled' | 'available' | 'claimed' | 'in_transit' | 'delivered';
 
 /** A bulk/dedicated freight job (sugar/cement, or a P4+ order diverted out of the PUDO network) — trucks
  *  only, never via MDP. Same marketplace as totes. */
@@ -74,6 +76,13 @@ export class Freight {
   // Only meaningful for a temperature-controlled cargo (tempBand(natureCode) != null).
   tempReadings?: TempReading[];
   tempBreached?: boolean;
+  // A future pickup date (canonical UTC ISO). Set → the load is booked for later. Pickup is gated to on/after
+  // this time regardless of when it is claimed.
+  scheduledPickupAt?: string;
+  // F1 — the SHIPPER's choice for a scheduled load: true (default) → drivers can RESERVE it ahead of its date
+  // (it shows in the marketplace + pings now, so a scarce truck can commit early); false → it stays hidden
+  // until due. Ignored for a ship-now load.
+  allowEarlyClaim?: boolean;
   status: FreightStatus;
   claimedBy?: string;
   createdAt: string;
@@ -92,6 +101,8 @@ export class FreightShipmentView {
   externalOrderId?: string;
   equipmentGaps!: Array<'origin' | 'dest'>;
   createdAt!: string;
+  /** When the load is booked to be picked up (ISO) — set for a scheduled/planned freight, absent for ship-now. */
+  scheduledPickupAt?: string;
   timeline!: Array<{ status: FreightStatus; at: string }>;
   /** S33b — for a cold-chain order, whether its temperature chain was broken in transit (a PII-free boolean:
    *  the buyer sees "temperature maintained" vs a "temperature alert", never the raw readings). */
@@ -117,6 +128,8 @@ export class Claimable {
   /** S32b — the underlying tote/freight status (available | claimed | in_transit | …). Lets the driver app
    *  decide the next action on a claimed load: a claimed freight needs PICK-UP, an in-transit one needs DELIVER. */
   status?: string;
+  /** F1 — a booked-for-later freight's pickup date, so the driver's offer reads "reserve now, pick up on <date>". */
+  scheduledPickupAt?: string;
   /** S31 — vehicle capabilities this load's cargo requires (a tote's perishable/hazardous parcels →
    *  cold chain / hazmat). A vehicle lacking any is not offered the load. */
   requiredCapabilities?: VehicleCapability[];

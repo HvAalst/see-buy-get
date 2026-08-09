@@ -13622,6 +13622,15 @@
               "ODR",
               "HUM"
             ]
+          },
+          "scheduledPickupAt": {
+            "type": "string",
+            "description": "F1 — a FUTURE pickup date: the load is booked for later. Must be a full datetime WITH an offset (Z or\n ±HH:MM) so the instant is unambiguous — a date-only or offset-less string would resolve to a server-\n timezone-dependent moment. Absent = ship now.",
+            "pattern": "/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$/"
+          },
+          "allowEarlyClaim": {
+            "type": "boolean",
+            "description": "F1 — the shipper's early-claim choice for a scheduled load: true (default) → a driver may RESERVE it\n ahead of its pickup date; false → it stays out of the marketplace until due."
           }
         },
         "required": [
@@ -13780,6 +13789,12 @@
             }
           },
           "tempBreached": {
+            "type": "boolean"
+          },
+          "scheduledPickupAt": {
+            "type": "string"
+          },
+          "allowEarlyClaim": {
             "type": "boolean"
           },
           "status": {

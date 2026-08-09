@@ -218,11 +218,11 @@ export class VendorService {
   }
 
   /** Refund a flexible parcel's over-hold (ceiling − actual) back to the vendor after delivery. */
-  rebate(vendorId: string, parcelId: string, amount: number): Vendor {
+  rebate(vendorId: string, parcelId: string, amount: number, note = 'flexible-route rebate'): Vendor {
     const vendor = this.get(vendorId);
     if (amount <= 0) return vendor;
     vendor.balance = Math.round((vendor.balance + amount) * 100) / 100;
-    this.book(vendor, 'REBATE', '+', amount, parcelId, 'flexible-route rebate');
+    this.book(vendor, 'REBATE', '+', amount, parcelId, note);
     this.vendors.set(vendor.vendorId, vendor); // durable money
     return vendor;
   }

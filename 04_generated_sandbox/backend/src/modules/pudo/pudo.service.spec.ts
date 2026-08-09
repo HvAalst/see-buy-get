@@ -2197,6 +2197,133 @@ describe('PUDO Light', () => {
     expect(insight.cells[0].factor).toBe(2);
   });
 
+  it('F1: a scheduled load is RESERVABLE ahead of its date (early claim, default) but pickup is gated to the date', () => {
+    const pickup = { lat: -1.2, lng: 36.8 };
+    const dest = { lat: -1.22, lng: 36.82 };
+    const noon = new Date('2026-07-22T11:00:00').getTime();
+    const tomorrow = new Date(noon + 24 * 3_600_000).toISOString();
+    const f = dispatch.registerFreight({ description: 'Teff to Merkato', pickupLocation: pickup, pickupLabel: 'Coop', destLabel: 'Merkato', destLocation: dest, weightKg: 5000, bulk: true, scheduledPickupAt: tomorrow }, noon);
+    expect(f.status).toBe('scheduled');
+    expect(f.allowEarlyClaim).toBe(true); // default
+
+    const driver = coupleTipper('F1E', { min: 0.8, max: 1.5 });
+    // Offered BEFORE its date (a scarce truck can commit early) and the offer carries the pickup date.
+    const [offer] = dispatch.suggest(driver.did, { from: pickup, to: dest }, noon).filter((o) => o.ref === f.freightId);
+    expect(offer).toBeDefined();
+    dispatch.claim(offer.offerId, noon);
+    expect(dispatch.listFreight().find((x) => x.freightId === f.freightId)!.status).toBe('claimed');
+    // But it can't be PICKED UP before its date (the cargo isn't ready) …
+    expect(() => dispatch.pickupFreight(f.freightId, driver.did, { securementPhotoId: 'x.jpg' }, noon)).toThrow(/before then/);
+    // … and on/after the date the date-gate is open (it now fails on the safety checklist, not the date).
+    expect(() => dispatch.pickupFreight(f.freightId, driver.did, {}, noon + 24 * 3_600_000 + 1)).toThrow(/checklist|secured load/i);
+  });
+
+  it('F1: allowEarlyClaim=false holds a scheduled load out of the marketplace until due, then promotes it', () => {
+    const pickup = { lat: -1.2, lng: 36.8 };
+    const dest = { lat: -1.22, lng: 36.82 };
+    const t0 = new Date('2026-07-22T11:00:00').getTime();
+    const f = dispatch.registerFreight({ description: 'Held', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: dest, weightKg: 1000, bulk: true, scheduledPickupAt: new Date(t0 + 3_600_000).toISOString(), allowEarlyClaim: false }, t0);
+    expect(f.status).toBe('scheduled');
+    const driver = coupleTipper('F1H', { min: 0.8, max: 1.5 });
+    expect(dispatch.suggest(driver.did, { from: pickup, to: dest }, t0).some((o) => o.ref === f.freightId)).toBe(false); // not offered before due
+    expect(dispatch.publishReadyFreight(t0)).not.toContain(f.freightId);
+    expect(dispatch.publishReadyFreight(t0 + 3_600_001)).toContain(f.freightId); // due → promoted
+    expect(dispatch.suggest(driver.did, { from: pickup, to: dest }, t0 + 3_600_002).some((o) => o.ref === f.freightId)).toBe(true);
+  });
+
+  it('F1: a no-show early claim is released back to the marketplace + the shipper is rebated', () => {
+    const pickup = { lat: -1.2, lng: 36.8 };
+    const t0 = new Date('2026-07-22T11:00:00').getTime();
+    const due = t0 + 24 * 3_600_000;
+    const vendor = vendors.register({ name: 'CoopShipper' });
+    vendors.topUp(vendor.vendorId, 500);
+    const f = dispatch.registerFreight({ description: 'Reserved', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 1000, bulk: true, shipperDid: vendor.vendorId, scheduledPickupAt: new Date(due).toISOString() }, t0);
+    const driver = coupleTipper('F1N', { min: 0.8, max: 1.5 });
+    const before = vendors.balanceOf(vendor.vendorId);
+    const [offer] = dispatch.suggest(driver.did, { from: pickup, to: pickup }, t0).filter((o) => o.ref === f.freightId);
+    dispatch.claim(offer.offerId, t0); // reserved early → the vendor is billed
+    expect(vendors.balanceOf(vendor.vendorId)).toBeLessThan(before);
+    // The driver never shows: past the pickup date + grace, still not picked up → released + rebated.
+    dispatch.publishReadyFreight(due + 13 * 3_600_000);
+    const rel = dispatch.listFreight().find((x) => x.freightId === f.freightId)!;
+    expect(rel.status).toBe('available');
+    expect(rel.claimedBy).toBeUndefined();
+    expect(vendors.balanceOf(vendor.vendorId)).toBeCloseTo(before, 2); // charge undone
+  });
+
+  it('F1: a released no-show load can be re-claimed without thrashing — no re-release, no ledger churn', () => {
+    const pickup = { lat: -1.2, lng: 36.8 };
+    const t0 = new Date('2026-07-22T11:00:00').getTime();
+    const due = t0 + 24 * 3_600_000;
+    const vendor = vendors.register({ name: 'CoopShipper2' });
+    vendors.topUp(vendor.vendorId, 500);
+    const f = dispatch.registerFreight({ description: 'Reserved', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 1000, bulk: true, shipperDid: vendor.vendorId, scheduledPickupAt: new Date(due).toISOString() }, t0);
+
+    // First driver reserves early, then no-shows → released + rebated, and the now-past date is cleared.
+    const d1 = coupleTipper('F1R1', { min: 0.8, max: 1.5 });
+    const [o1] = dispatch.suggest(d1.did, { from: pickup, to: pickup }, t0).filter((o) => o.ref === f.freightId);
+    dispatch.claim(o1.offerId, t0);
+    dispatch.publishReadyFreight(due + 13 * 3_600_000);
+    const freed = dispatch.listFreight().find((x) => x.freightId === f.freightId)!;
+    expect(freed.status).toBe('available');
+    expect(freed.scheduledPickupAt).toBeUndefined(); // stale date gone → a plain ship-now load
+
+    // A second driver re-claims the freed load. Its no-show grace now runs from THIS claim, and the load
+    // carries no past date — so the maintenance pass fired by the very next suggest() can't re-release it.
+    const reclaimAt = due + 20 * 3_600_000;
+    const d2 = coupleTipper('F1R2', { min: 0.8, max: 1.5 });
+    const [o2] = dispatch.suggest(d2.did, { from: pickup, to: pickup }, reclaimAt).filter((o) => o.ref === f.freightId);
+    expect(o2).toBeDefined();
+    dispatch.claim(o2.offerId, reclaimAt);
+    const billings = () => vendors.settlementsFor(vendor.vendorId).filter((s) => s.type === 'BILLING').length;
+    const rebates = () => vendors.settlementsFor(vendor.vendorId).filter((s) => s.type === 'REBATE').length;
+    const [b0, r0, bal0] = [billings(), rebates(), vendors.balanceOf(vendor.vendorId)];
+
+    dispatch.publishReadyFreight(reclaimAt + 1); // the exact thrash trigger — the pass right after re-claim
+    dispatch.publishReadyFreight(reclaimAt + 6 * 3_600_000); // still within the fresh 12h grace
+    const settled = dispatch.listFreight().find((x) => x.freightId === f.freightId)!;
+    expect(settled.status).toBe('claimed'); // held by the re-claimer, not churned back to the market
+    expect(settled.claimedBy).toBe(d2.did);
+    expect(billings()).toBe(b0); // no phantom re-bill
+    expect(rebates()).toBe(r0); // no phantom re-rebate
+    expect(vendors.balanceOf(vendor.vendorId)).toBeCloseTo(bal0, 2);
+    // The no-show release books a truthful, searchable ledger note (not the parcel-path 'flexible-route rebate').
+    expect(vendors.settlementsFor(vendor.vendorId).some((s) => s.type === 'REBATE' && s.note === 'freight no-show release')).toBe(true);
+  });
+
+  it('F1: a promoted scheduled load claimed long after its date is not instantly re-released (grace runs from the claim)', () => {
+    const pickup = { lat: -1.2, lng: 36.8 };
+    const t0 = new Date('2026-07-22T11:00:00').getTime();
+    const due = t0 + 3_600_000;
+    const vendor = vendors.register({ name: 'CoopShipper3' });
+    vendors.topUp(vendor.vendorId, 500);
+    // Held off the market (no early claim), then promoted at its date — the promotion keeps the pickup date.
+    const f = dispatch.registerFreight({ description: 'Held', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 1000, bulk: true, shipperDid: vendor.vendorId, scheduledPickupAt: new Date(due).toISOString(), allowEarlyClaim: false }, t0);
+    dispatch.publishReadyFreight(due + 1); // → 'available' (scheduledPickupAt still set)
+
+    // A driver claims it well after the date + the 12h grace (it sat unclaimed on the market a while).
+    const claimAt = due + 50 * 3_600_000;
+    const d = coupleTipper('F1P', { min: 0.8, max: 1.5 });
+    const [o] = dispatch.suggest(d.did, { from: pickup, to: pickup }, claimAt).filter((x) => x.ref === f.freightId);
+    expect(o).toBeDefined();
+    dispatch.claim(o.offerId, claimAt);
+    dispatch.publishReadyFreight(claimAt + 1); // must NOT no-show it: its grace anchors to the claim, not the old date
+    const held = dispatch.listFreight().find((x) => x.freightId === f.freightId)!;
+    expect(held.status).toBe('claimed');
+    expect(held.claimedBy).toBe(d.did);
+  });
+
+  it('F1: an unparseable schedule is refused (fail-closed); a past date ships now; a future date is canonicalised', () => {
+    const pickup = { lat: -1.2, lng: 36.8 };
+    const t0 = new Date('2026-07-22T11:00:00').getTime();
+    expect(() => dispatch.registerFreight({ description: 'Bad', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', weightKg: 1000, bulk: true, scheduledPickupAt: 'not-a-date' }, t0)).toThrow();
+    const past = dispatch.registerFreight({ description: 'Now', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', weightKg: 1000, bulk: true, scheduledPickupAt: new Date(t0 - 3_600_000).toISOString() }, t0);
+    expect(past.status).toBe('available');
+    expect(past.scheduledPickupAt).toBeUndefined();
+    const future = dispatch.registerFreight({ description: 'Later', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', weightKg: 1000, bulk: true, scheduledPickupAt: '2026-07-25T09:00:00.000Z' }, t0);
+    expect(future.scheduledPickupAt).toBe('2026-07-25T09:00:00.000Z'); // canonical UTC
+  });
+
   it('S34b: a thin zone below the demand threshold does not surge', () => {
     const pickup = { lat: -1.35, lng: 36.95 };
     for (let i = 0; i < 2; i++) dispatch.registerFreight({ description: `L${i}`, pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: { lat: -1.36, lng: 36.96 }, weightKg: 1000, bulk: true });
