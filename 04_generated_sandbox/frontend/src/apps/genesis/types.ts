@@ -26,8 +26,11 @@ export interface NetworkPoint {
   landmark?: string;
   openState: 'open' | 'closed';
   pricePerParcel: number;
-  rating?: { count: number; average: number } | null;
+  // REP1 — the PII-free public reputation: the aggregate + a cold-start flag (a mean of one review is noise,
+  // so below the backend's floor `isNew` is true and the UI shows "New" instead of a headline average).
+  rating?: { count: number; average: number; isNew?: boolean } | null;
   freeSlots?: number;
+  since?: string; // REP1 — "serving since" (the shop's onboarding date; a public trust signal, not PII)
 }
 
 export interface QuoteHop {

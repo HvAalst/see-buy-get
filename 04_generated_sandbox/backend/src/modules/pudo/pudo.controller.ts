@@ -814,6 +814,7 @@ export class SbgController {
       pricePerParcel: a.pricePerParcel,
       rating: this.ratings.agentRating(a.did),
       freeSlots: this.shelf.available(a.did),
+      since: a.createdAt, // REP1 — a "serving since" trust signal for the public profile (an onboarding date, not PII)
     }));
   }
 
@@ -964,6 +965,28 @@ export class SbgController {
   @Get('agents/:did/rating')
   agentRating(@Param('did') did: string) {
     return this.ratings.agentRating(did);
+  }
+
+  /**
+   * REP1 — a provider's PUBLIC reputation profile: a PII-free trust surface (name, zone, pin, the aggregate
+   * stars + count, a "new" flag below the min-ratings floor, and serving-since). @Public for the same
+   * open-data reasoning as /network/points — nothing operational (no balance, device, vault refs or PII)
+   * leaves here, and the agent's did + shop name + zone + pin are already public there. Agents only for now;
+   * drivers/fleet/MDP get profiles in later reputation slices (this 404s a non-agent did until then).
+   */
+  @Public()
+  @Get('reputation/:did')
+  reputationProfile(@Param('did') did: string) {
+    const a = this.agents.get(did); // 404 if the did is not a rated provider (agents only in REP1)
+    return {
+      did: a.did,
+      kind: 'agent' as const,
+      name: a.shopName,
+      zone: a.zone,
+      location: a.location,
+      rating: this.ratings.agentRating(a.did),
+      since: a.createdAt,
+    };
   }
 
   // --- operator control tower (↔ M7/SSE light) — operator only ---

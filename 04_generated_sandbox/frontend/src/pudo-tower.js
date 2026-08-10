@@ -131,7 +131,7 @@ function agentsPanel() {
       el('td', {}, [el('span', { className: `pt__chip pt__chip--${d.cls}`, text: d.label })]),
       el('td', { text: fmtMoney(a.balance) }),
       el('td', { text: a.capacity != null ? `${a.freeSlots}/${a.capacity}` : '—' }),
-      el('td', { text: a.rating?.count ? `${a.rating.stars.toFixed(1)}★` : '—' }),
+      el('td', { text: a.rating?.count ? `${a.rating.average.toFixed(1)}★` : '—' }),
     ]);
   });
   return el('div', { className: 'pt__panel' }, [

@@ -10,7 +10,7 @@ import { SbgController } from './pudo.controller';
 import { IdentityController } from './identity.controller';
 import { MediaService } from './media.service';
 import { MonitorService } from './monitor.service';
-import { RatingService } from './rating.service';
+import { RatingService, MIN_PUBLIC_RATINGS } from './rating.service';
 import { GraduationService } from './graduation.service';
 import { VendorService } from './vendor.service';
 import { VendorCallbackService } from './vendor-callback.service';
@@ -354,6 +354,63 @@ describe('PUDO Light', () => {
     expect(r.agentComposite).toBe(5);
     expect(core.get(origin.did)?.reputationScore).toBe(5); // written back to the GLOS operational core
     expect(rating.agentRating(origin.did).count).toBe(1);
+  });
+
+  it('REP1: agentRating exposes `average` + a cold-start "New" flag; ratings are one-per-parcel + PII-hashed', () => {
+    const origin = onboardAgent('Rep Shop', 'NorthTown', 50);
+    const corridor = corridors.addCorridor({ name: 'NS-rep', originZone: 'NorthTown', destZone: 'SouthTown' });
+    const driver = corridors.addDriver({ driverDid: 'did:glos:d-rep', name: 'D', corridorId: corridor.corridorId });
+    const deliver = (parcelId: string) => {
+      parcels.accept({ agentDid: origin.did, parcelId, size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'r.jpg' } as never);
+      parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: [parcelId] } as never);
+      const arr = parcels.arrive(parcelId, origin.did);
+      parcels.pickup(parcelId, origin.did, arr.otp);
+    };
+
+    // Rename fix: the aggregate is `average` (what the frontend reads) — the mis-named `stars` is gone.
+    deliver('QR-R1');
+    rating.rate({ parcelId: 'QR-R1', stars: 4, raterMobile: '+254700111' });
+    let r = rating.agentRating(origin.did);
+    expect(r.average).toBe(4);
+    expect((r as { stars?: number }).stars).toBeUndefined();
+    expect(r.count).toBe(1);
+    expect(r.isNew).toBe(true); // 1 < MIN_PUBLIC_RATINGS
+
+    // Idempotent: re-rating the SAME parcel replaces (last-wins) — the count never inflates.
+    rating.rate({ parcelId: 'QR-R1', stars: 2, raterMobile: '+254700111' });
+    r = rating.agentRating(origin.did);
+    expect(r.count).toBe(1);
+    expect(r.average).toBe(2);
+
+    // PII at rest: the record hashes the rater — never the cleartext number.
+    const rec = rating.list().find((x) => x.parcelId === 'QR-R1')!;
+    expect(rec.raterHash).toBeTruthy();
+    expect(rec.raterHash).not.toBe('+254700111');
+    expect((rec as { raterMobile?: string }).raterMobile).toBeUndefined();
+
+    // Cold-start clears once real volume arrives (≥ MIN distinct parcels rated).
+    for (let i = 2; i <= MIN_PUBLIC_RATINGS; i++) {
+      deliver(`QR-R${i}`);
+      rating.rate({ parcelId: `QR-R${i}`, stars: 5, raterMobile: `+2547002${i}` });
+    }
+    expect(rating.agentRating(origin.did).count).toBe(MIN_PUBLIC_RATINGS);
+    expect(rating.agentRating(origin.did).isNew).toBe(false);
+  });
+
+  it('REP1: the public reputation profile is PII-free (name/zone/pin/rating/since) and 404s a non-provider', () => {
+    const origin = onboardAgent('Profile Shop', 'NorthTown', 50);
+    const p = controller.reputationProfile(origin.did) as Record<string, unknown> & { rating: { count: number; isNew: boolean } };
+    expect(p.kind).toBe('agent');
+    expect(p.name).toBe(origin.shopName);
+    expect(p.zone).toBe('NorthTown');
+    expect(p.rating.count).toBe(0);
+    expect(p.rating.isNew).toBe(true);
+    expect(p.since).toBeTruthy();
+    // No operational/PII leakage on the public surface.
+    expect(p.balance).toBeUndefined();
+    expect(p.vaultRef).toBeUndefined();
+    expect(p.deviceImei).toBeUndefined();
+    expect(() => controller.reputationProfile('did:glos:not-a-shop')).toThrow();
   });
 
   it('graduates a PUDO parcel onto the M4 timeline + M7 twin (one pane of glass)', async () => {

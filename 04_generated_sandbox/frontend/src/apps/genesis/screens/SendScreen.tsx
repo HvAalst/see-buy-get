@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks';
 import { Button, Card, Checklist, ErrorNote, Icon, Note, PlaceMap, Pill, ReadAloud, ShopDetailSheet } from '../../../shared/ui';
 import { fromPlaceWords } from '../../../shared/placewords';
-import { cleanPhone, dimsBlocker, journeyLine, lockedPrice, mintChecklist, money, phoneReady, pointDistance, pointLine, quoteSummary, selectablePoints, sizeMeta } from '../logic';
+import { cleanPhone, dimsBlocker, journeyLine, lockedPrice, mintChecklist, money, phoneReady, pointDistance, pointLine, quoteSummary, reputationLine, selectablePoints, servingSince, sizeMeta } from '../logic';
 import type { NetworkPoint } from '../types';
 import type { SendActions, SendState } from '../useSendApp';
 
@@ -215,14 +215,17 @@ function PointStep({ state, actions, kind }: SendScreenProps & { kind: 'from' | 
   );
 }
 
-/** The detail lines a shop preview shows (what the row can't): price, distance, open state, slots, rating. */
+/** The detail lines a shop's public profile shows (what the row can't): price, distance, open state, slots,
+ *  reputation (honest "New" when unrated) and how long it has served. REP1 turns this preview into a real
+ *  public profile the sender can weigh before committing. */
 function shopFacts(shop: NetworkPoint, away: string | null): string[] {
   return [
     `${money(shop.pricePerParcel)} to handle your parcel`,
     away ? `${away} from your place` : `In zone ${shop.zone}`,
     shop.openState === 'open' ? 'Open now' : 'Closed right now',
     ...(shop.freeSlots != null ? [`${shop.freeSlots} ${shop.freeSlots === 1 ? 'space' : 'spaces'} free`] : []),
-    ...(shop.rating?.count ? [`Rated ${shop.rating.average.toFixed(1)} by ${shop.rating.count}`] : []),
+    reputationLine(shop.rating), // REP1 — always shown, honest about the cold start
+    ...(servingSince(shop.since) ? [servingSince(shop.since)!] : []),
   ];
 }
 

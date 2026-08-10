@@ -110,8 +110,30 @@ export function pointLine(p: NetworkPoint): string {
   const bits = [`Zone ${p.zone}`];
   if (p.landmark) bits.push(p.landmark);
   bits.push(`${money(p.pricePerParcel)} handling`);
-  if (p.rating?.count) bits.push(`rated ${p.rating.average.toFixed(1)}`);
+  // REP1 — only a RELIABLE average on the compact row: not an unrated shop, and not a lone review (isNew).
+  // The detail sheet carries the honest "New" wording; a crowded row just drops the chip.
+  if (p.rating && p.rating.count && !p.rating.isNew) bits.push(`rated ${p.rating.average.toFixed(1)}`);
   return bits.join(' · ');
+}
+
+/**
+ * REP1 — the plain-words reputation line for a shop's PUBLIC PROFILE (the detail sheet). Honest about the
+ * cold start: an unrated or barely-rated shop reads "New", never a headline average manufactured from a
+ * single review (the same "don't trust a median of one" discipline as the price benchmark).
+ */
+export function reputationLine(rating: NetworkPoint['rating']): string {
+  if (!rating || !rating.count) return 'New — no ratings yet';
+  if (rating.isNew) return `New — ${rating.count} rating${rating.count === 1 ? '' : 's'} so far`;
+  return `Rated ${rating.average.toFixed(1)} by ${rating.count}`;
+}
+
+/** REP1 — a "Serving since <year>" trust line for the profile, or null when the onboarding date is unknown.
+ *  Reads the year in UTC (the stored instant's own calendar), so a late-December onboarding doesn't render a
+ *  different year for a viewer east/west of UTC (e.g. EAT, UTC+3). */
+export function servingSince(since: string | undefined): string | null {
+  if (!since) return null;
+  const t = Date.parse(since);
+  return Number.isNaN(t) ? null : `Serving since ${new Date(t).getUTCFullYear()}`;
 }
 
 /* ------------------------------------------------------------------ quote -- */

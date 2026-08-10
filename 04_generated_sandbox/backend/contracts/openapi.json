@@ -6710,6 +6710,35 @@
         ],
         "responses": {
           "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/reputation/{did}": {
+      "get": {
+        "operationId": "Sbg.reputationProfile",
+        "summary": "",
+        "description": "REP1 — a provider's PUBLIC reputation profile: a PII-free trust surface (name, zone, pin, the aggregate\nstars + count, a \"new\" flag below the min-ratings floor, and serving-since).  for the same\nopen-data reasoning as /network/points — nothing operational (no balance, device, vault refs or PII)\nleaves here, and the agent's did + shop name + zone + pin are already public there. Agents only for now;\ndrivers/fleet/MDP get profiles in later reputation slices (this 404s a non-agent did until then).",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
             "description": ""
           }
         }

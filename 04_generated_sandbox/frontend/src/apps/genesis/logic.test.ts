@@ -20,6 +20,8 @@ import {
   pointDistance,
   pointLine,
   quoteSummary,
+  reputationLine,
+  servingSince,
   sizeMeta,
   relationWord,
   roleMeta,
@@ -88,6 +90,29 @@ describe('selectablePoints', () => {
       'Zone Z-A · By the mosque · 1.50 handling · rated 4.6',
     );
     expect(pointLine(point())).toBe('Zone Z-A · 1.50 handling');
+  });
+});
+
+describe('REP1 reputation display', () => {
+  it('pointLine drops the average chip for a lone/cold-start review (isNew), keeps it once reliable', () => {
+    expect(pointLine(point({ rating: { count: 1, average: 5, isNew: true } }))).toBe('Zone Z-A · 1.50 handling'); // no chip from one review
+    expect(pointLine(point({ rating: { count: 40, average: 4.5, isNew: false } }))).toBe('Zone Z-A · 1.50 handling · rated 4.5');
+  });
+
+  it('reputationLine is honest about the cold start (never a headline average from one review)', () => {
+    expect(reputationLine(null)).toBe('New — no ratings yet');
+    expect(reputationLine({ count: 0, average: 0, isNew: true })).toBe('New — no ratings yet');
+    expect(reputationLine({ count: 1, average: 5, isNew: true })).toBe('New — 1 rating so far');
+    expect(reputationLine({ count: 2, average: 4.5, isNew: true })).toBe('New — 2 ratings so far');
+    expect(reputationLine({ count: 12, average: 4.62, isNew: false })).toBe('Rated 4.6 by 12');
+  });
+
+  it('servingSince renders the UTC year (tz-stable), or null when unknown/unparseable', () => {
+    expect(servingSince('2026-03-09T10:00:00.000Z')).toBe('Serving since 2026');
+    // A late-December UTC instant reads the SAME year everywhere — not the next year for a viewer east of UTC.
+    expect(servingSince('2025-12-31T23:30:00.000Z')).toBe('Serving since 2025');
+    expect(servingSince(undefined)).toBeNull();
+    expect(servingSince('not-a-date')).toBeNull();
   });
 });
 

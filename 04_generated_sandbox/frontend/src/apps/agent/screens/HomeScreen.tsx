@@ -37,7 +37,13 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
         value={money(agent?.balance)}
         sub={
           agent
-            ? `You charge ${money(agent.pricePerParcel)} per parcel${agent.rating?.count ? ` · rated ${agent.rating.average.toFixed(1)} by ${agent.rating.count}` : ''}`
+            ? `You charge ${money(agent.pricePerParcel)} per parcel${
+                agent.rating?.count
+                  ? agent.rating.isNew
+                    ? ` · ${agent.rating.count} rating${agent.rating.count === 1 ? '' : 's'} so far`
+                    : ` · rated ${agent.rating.average.toFixed(1)} by ${agent.rating.count}`
+                  : ''
+              }`
             : undefined
         }
         aside={

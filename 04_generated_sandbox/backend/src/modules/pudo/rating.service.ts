@@ -6,14 +6,28 @@ import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { AgentService } from './agent.service';
 import { ParcelService } from './parcel.service';
+import { hashPhone } from '../../foundation/identity/phone';
+
+/** REP1 — below this rating count a public reputation reads as "New" rather than a headline average: a
+ *  mean of one review is noise, and a lone 1-star (or 5-star) must not brand a provider. Mirrors the
+ *  priceBand "never benchmark against a median of one" lesson. */
+export const MIN_PUBLIC_RATINGS = 3;
 
 export interface RatingRecord {
   id: string;
   parcelId: string;
   agentDid: string;
   stars: number; // 1–5
-  raterMobile: string;
+  raterHash: string; // REP1 — the rater's phone HASH, never the cleartext (the record is PII-at-rest otherwise)
   at: string;
+}
+
+/** REP1 — the PII-free public rating a reputation surface shows: the aggregate only, plus a cold-start flag. */
+export interface PublicRating {
+  agentDid: string;
+  average: number; // 0 when unrated; the field the whole frontend already reads (was mis-named `stars`)
+  count: number;
+  isNew: boolean; // count < MIN_PUBLIC_RATINGS → show "New", not a headline average
 }
 
 /**
@@ -42,12 +56,27 @@ export class RatingService {
     if (!(input.stars >= 1 && input.stars <= 5)) throw new GlosError('INVALID_RATING', 'Stars must be 1–5');
 
     const agentDid = parcel.originAgentDid;
-    const record: RatingRecord = { id: `rat_${randomBytes(6).toString('hex')}`, parcelId: input.parcelId, agentDid, stars: input.stars, raterMobile: input.raterMobile, at: new Date().toISOString() };
-    this.ratings.push(record);
+    const raterHash = hashPhone(input.raterMobile) || 'anon'; // never store the cleartext number
+    const now = new Date().toISOString();
 
+    // REP1 — one rating per parcel: a re-rating REPLACES the earlier one (last-wins), it never adds a second
+    // vote. Without this a buyer (or a script) could POST the same parcel's rating repeatedly and inflate both
+    // the count and the average. The tally is adjusted by the delta, not re-incremented.
+    const existing = this.ratings.find((r) => r.parcelId === input.parcelId);
+    let record: RatingRecord;
     const t = this.tally.get(agentDid) ?? { sum: 0, count: 0 };
-    t.sum += input.stars;
-    t.count += 1;
+    if (existing) {
+      t.sum += input.stars - existing.stars; // count unchanged — same single vote, new value
+      existing.stars = input.stars;
+      existing.raterHash = raterHash;
+      existing.at = now;
+      record = existing;
+    } else {
+      record = { id: `rat_${randomBytes(6).toString('hex')}`, parcelId: input.parcelId, agentDid, stars: input.stars, raterHash, at: now };
+      this.ratings.push(record);
+      t.sum += input.stars;
+      t.count += 1;
+    }
     this.tally.set(agentDid, t);
     const composite = Math.round((t.sum / t.count) * 100) / 100;
 
@@ -58,9 +87,14 @@ export class RatingService {
     return { rating: record, agentComposite: composite };
   }
 
-  agentRating(agentDid: string): { agentDid: string; stars: number; count: number } {
+  agentRating(agentDid: string): PublicRating {
     const t = this.tally.get(agentDid) ?? { sum: 0, count: 0 };
-    return { agentDid, stars: t.count ? Math.round((t.sum / t.count) * 100) / 100 : 0, count: t.count };
+    return {
+      agentDid,
+      average: t.count ? Math.round((t.sum / t.count) * 100) / 100 : 0,
+      count: t.count,
+      isNew: t.count < MIN_PUBLIC_RATINGS,
+    };
   }
 
   /** Network agent-retention metric: share of onboarded agents still ACTIVE (steel-thread KPI). */

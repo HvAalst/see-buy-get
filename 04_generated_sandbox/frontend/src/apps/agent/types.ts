@@ -32,7 +32,7 @@ export interface AgentView {
   status: AgentStatus;
   /** Merged in by the controller alongside the record. */
   balance: number;
-  rating?: { count: number; average: number } | null;
+  rating?: { count: number; average: number; isNew?: boolean } | null;
 }
 
 /** GET /agents/{did}/can-transact — the 'no money, no scan' gate as readable state. */
@@ -77,7 +77,7 @@ export interface NetworkPoint {
   landmark?: string;
   openState: 'open' | 'closed';
   pricePerParcel: number;
-  rating?: { count: number; average: number } | null;
+  rating?: { count: number; average: number; isNew?: boolean } | null;
   freeSlots?: number;
 }
 
