@@ -139,6 +139,46 @@ export class Tote {
   claimedBy?: string; // driverDid that claimed it
 }
 
+export type ConsignmentStatus = 'open' | 'posted';
+
+/** F3 — one member deposit into a consolidation lot. THIN attribution: `memberRef` is a free-text label
+ *  (a farmer name / receipt number), NOT an on-platform identity — the cooperative reconciles member
+ *  deposits and payout off-platform. */
+export class ConsignmentDeposit {
+  memberRef: string;
+  weightKg: number;
+  at: string;
+}
+
+/**
+ * F3 — a consolidation CONSIGNMENT: the bulk analogue of a Tote (`consignment : bulk :: tote : parcels`). A
+ * durable dry commodity (grain, dry food, cement) accumulates member deposits toward a truckload; when the
+ * lot is FULL (>= targetKg) or AGED it posts itself to the dispatch marketplace as ONE bulk freight (via the
+ * F1 registerFreight path). Perishables never consolidate — a cold-chain commodity books freight directly
+ * (immediate/planned). Settlement is OFF-PLATFORM like an F2 counter freight: no shipper is billed on-platform
+ * (the freight posts without a shipperDid → 'unpaid'); the cooperative pays the haul and splits it among
+ * members off-platform, optionally capped by a cash budget (maxSpend).
+ */
+export class Consignment {
+  consignmentId: string;
+  code: string; // human-readable LOT-007
+  status: ConsignmentStatus;
+  ownerDid: string; // the cooperative / aggregating PUDO that owns the lot (owner-scoped)
+  natureCode: CargoNature; // the commodity — must be durable (non-perishable); drives the vehicle capability
+  pickupLabel: string; // where the lot is aggregated (the owner's site) — the freight's pickup
+  pickupLocation: GeoPoint;
+  destLabel: string; // where the truckload goes
+  destLocation?: GeoPoint;
+  targetKg: number; // a truckload target — the lot is full at/above this
+  weightKg: number; // accumulated deposit weight
+  deposits: ConsignmentDeposit[];
+  maxSpend?: number; // optional cash budget cap for the eventual haul (→ the freight's maxSpend)
+  openedAt: string;
+  filledAt?: string; // when the FIRST deposit arrived — drives the aged-out publish (like a tote's filledAt); undefined until then
+  postedAt?: string;
+  freightId?: string; // the marketplace freight it became, once posted
+}
+
 /** The next hop the system computes for a parcel while sorting it at an MDP. */
 export class NextHop {
   type: 'pudo' | 'mdp';

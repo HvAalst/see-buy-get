@@ -126,6 +126,23 @@ export function createAgentApi(sbg: SbgClient) {
       allowEarlyClaim?: boolean;
     }) => sbg.request((c) => c.POST('/v1/sbg/parcels/book-freight', { body })),
 
+    /** F3 — open a consolidation LOT for a durable dry commodity (owner-scoped; the acting shop is the owner
+     *  and its site becomes the freight's pickup). A perishable commodity is refused server-side. */
+    openConsignment: (body: {
+      natureCode?: 'GEN' | 'FOD' | 'FOP' | 'HAZ-CHEM' | 'HAZ-DUST' | 'HAZ-BIO' | 'HAZ-FLAM' | 'FRG' | 'ODR' | 'HUM';
+      destLabel: string;
+      destLocation?: { lat: number; lng: number };
+      targetKg: number;
+      maxSpend?: number;
+    }) => sbg.request((c) => c.POST('/v1/sbg/consignments', { body })),
+
+    /** F3 — record a member deposit (kg) into a lot; the lot auto-posts as one bulk freight once it fills. */
+    depositConsignment: (code: string, body: { memberRef: string; weightKg: number }) =>
+      sbg.request((c) => c.POST('/v1/sbg/consignments/{code}/deposit', { params: { path: { code } }, body })),
+
+    /** F3 — this shop's consolidation lots (owner-scoped). */
+    consignments: (owner: string) => sbg.request((c) => c.GET('/v1/sbg/consignments', { params: { query: { owner } } })),
+
     /** The public shop directory — the destination PUDOs the counter can send toward (Map/Address picker). */
     networkPoints: () => sbg.request((c) => c.GET('/v1/sbg/network/points')),
 

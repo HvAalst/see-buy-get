@@ -18,6 +18,7 @@ const JOBS: Array<{ screen: Screen; icon: IconName; title: string; sub: string; 
   { screen: 'receivebag', icon: 'bag', title: 'Receive a bag', sub: 'A bus dropped a bag for your shop' },
   { screen: 'void', icon: 'refresh', title: 'Undo a drop-off', sub: 'Cancel a parcel you just took in' },
   { screen: 'rates', icon: 'scale', title: 'Prices near you', sub: 'See what nearby shops charge' },
+  { screen: 'consignments', icon: 'bag', title: 'Consolidation lots', sub: 'Pool goods into a truckload' },
 ];
 
 export function HomeScreen({ state, actions }: HomeScreenProps) {

@@ -2,6 +2,7 @@ import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { BottomNav, Button, Checklist, FeedbackFlash, Icon, NotificationBell, Pill, TopBar, type NavItem } from '../../shared/ui';
 import { AcceptScreen } from './screens/AcceptScreen';
 import { CollectScreen } from './screens/CollectScreen';
+import { ConsignmentsScreen } from './screens/ConsignmentsScreen';
 import { HandoverScreen } from './screens/HandoverScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { RatesScreen } from './screens/RatesScreen';
@@ -108,6 +109,8 @@ function ScreenRouter({ screen, state, actions }: { screen: Screen; state: Agent
       return <VoidScreen state={state} actions={actions} />;
     case 'rates':
       return <RatesScreen state={state} actions={actions} />;
+    case 'consignments':
+      return <ConsignmentsScreen state={state} actions={actions} />;
     case 'records':
       return <RecordsScreen state={state} actions={actions} />;
     default:

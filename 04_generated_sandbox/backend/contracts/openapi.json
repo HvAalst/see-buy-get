@@ -8386,6 +8386,124 @@
         }
       }
     },
+    "/v1/sbg/consignments": {
+      "post": {
+        "operationId": "Sbg.openConsignment",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenConsignmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Consignment"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "Sbg.listConsignments",
+        "summary": "",
+        "description": "F3 — a cooperative's own consolidation lots (owner-scoped; an operator must name the owner).",
+        "parameters": [
+          {
+            "name": "owner",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Consignment"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/consignments/{code}/deposit": {
+      "post": {
+        "operationId": "Sbg.depositConsignment",
+        "summary": "",
+        "description": "F3 — record a member deposit into a lot (auto-posts the freight the moment the lot fills). Owner-scoped\n to the lot's owner (403 for another shop).",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsignmentDepositDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Consignment"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/consignments/publish-ready": {
+      "post": {
+        "operationId": "Sbg.publishReadyConsignments",
+        "summary": "",
+        "description": "F3 — sweep: post every full/aged lot to the marketplace (operator-triggered; a cron would call this).",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/drivers/{did}/suggest-work": {
       "post": {
         "operationId": "Sbg.suggestWork",
@@ -13965,6 +14083,155 @@
         },
         "required": [
           "celsius"
+        ]
+      },
+      "OpenConsignmentDto": {
+        "type": "object",
+        "properties": {
+          "ownerDid": {
+            "type": "string"
+          },
+          "natureCode": {
+            "type": "string",
+            "enum": [
+              "GEN",
+              "FOD",
+              "FOP",
+              "HAZ-CHEM",
+              "HAZ-DUST",
+              "HAZ-BIO",
+              "HAZ-FLAM",
+              "FRG",
+              "ODR",
+              "HUM"
+            ]
+          },
+          "destLabel": {
+            "type": "string"
+          },
+          "destLocation": {
+            "$ref": "#/components/schemas/GeoDto"
+          },
+          "targetKg": {
+            "type": "number",
+            "minimum": 1
+          },
+          "maxSpend": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "destLabel",
+          "targetKg"
+        ]
+      },
+      "ConsignmentDeposit": {
+        "type": "object",
+        "properties": {
+          "memberRef": {
+            "type": "string"
+          },
+          "weightKg": {
+            "type": "number"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "memberRef",
+          "weightKg",
+          "at"
+        ]
+      },
+      "Consignment": {
+        "type": "object",
+        "properties": {
+          "consignmentId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "status": {
+            "type": "object"
+          },
+          "ownerDid": {
+            "type": "string"
+          },
+          "natureCode": {
+            "type": "object"
+          },
+          "pickupLabel": {
+            "type": "string"
+          },
+          "pickupLocation": {
+            "$ref": "#/components/schemas/GeoPoint"
+          },
+          "destLabel": {
+            "type": "string"
+          },
+          "destLocation": {
+            "$ref": "#/components/schemas/GeoPoint"
+          },
+          "targetKg": {
+            "type": "number"
+          },
+          "weightKg": {
+            "type": "number"
+          },
+          "deposits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConsignmentDeposit"
+            }
+          },
+          "maxSpend": {
+            "type": "number"
+          },
+          "openedAt": {
+            "type": "string"
+          },
+          "filledAt": {
+            "type": "string"
+          },
+          "postedAt": {
+            "type": "string"
+          },
+          "freightId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "consignmentId",
+          "code",
+          "status",
+          "ownerDid",
+          "natureCode",
+          "pickupLabel",
+          "pickupLocation",
+          "destLabel",
+          "targetKg",
+          "weightKg",
+          "deposits",
+          "openedAt"
+        ]
+      },
+      "ConsignmentDepositDto": {
+        "type": "object",
+        "properties": {
+          "memberRef": {
+            "type": "string"
+          },
+          "weightKg": {
+            "type": "number",
+            "minimum": 0.01
+          }
+        },
+        "required": [
+          "memberRef",
+          "weightKg"
         ]
       },
       "SuggestRouteDto": {

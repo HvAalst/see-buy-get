@@ -5,7 +5,9 @@ import {
   acceptMissing,
   bookFreightMissing,
   canAccept,
+  consignmentProgress,
   destinationZones,
+  DURABLE_NATURES,
   gateNotice,
   parseBudget,
   plannedPickupIso,
@@ -176,6 +178,19 @@ describe('book freight (F2)', () => {
     expect(bookFreightMissing({ ...base, freightWhen: 'planned', freightDate: '' }, now)).toContain('planned pickup date');
     expect(bookFreightMissing({ ...base, freightWhen: 'planned', freightDate: '2026-08-09T09:00' }, now)).toContain('future'); // a past date
     expect(bookFreightMissing({ ...base, freightWhen: 'planned', freightDate: '2026-08-20T09:00' }, now)).toBeNull();
+  });
+});
+
+describe('consolidation lots (F3)', () => {
+  it('DURABLE_NATURES excludes perishables (fresh/frozen) but keeps dry goods', () => {
+    expect(DURABLE_NATURES).not.toContain('FOP'); // perishable → books freight directly, never consolidates
+    expect(DURABLE_NATURES).toContain('FOD'); // dry food is durable
+  });
+
+  it('consignmentProgress reports accumulated vs target, clamped to 0–100%', () => {
+    expect(consignmentProgress({ weightKg: 900, targetKg: 1000 })).toEqual({ pct: 90, label: '900 / 1000 kg' });
+    expect(consignmentProgress({ weightKg: 1200, targetKg: 1000 }).pct).toBe(100); // an over-full lot clamps at 100
+    expect(consignmentProgress({ weightKg: 0, targetKg: 0 }).pct).toBe(0); // no divide-by-zero
   });
 });
 

@@ -18,6 +18,7 @@ import { ShelfService } from './shelf.service';
 import { RoutingService } from './routing.service';
 import { MdpService } from './mdp.service';
 import { ToteService } from './tote.service';
+import { ConsignmentService } from './consignment.service';
 import { VehicleService } from './vehicle.service';
 import { DriverService } from './driver.service';
 import { FleetService } from './fleet.service';
@@ -63,6 +64,7 @@ describe('PUDO Light', () => {
   let routing: RoutingService;
   let mdps: MdpService;
   let totes: ToteService;
+  let consignments: ConsignmentService;
   let vehicles: VehicleService;
   let drivers: DriverService;
   let fleet: FleetService;
@@ -92,7 +94,7 @@ describe('PUDO Light', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
-        GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, ToteService, VehicleService, DriverService, FleetService, DispatchService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
+        GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, ToteService, ConsignmentService, VehicleService, DriverService, FleetService, DispatchService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
@@ -112,6 +114,7 @@ describe('PUDO Light', () => {
     routing = moduleRef.get(RoutingService);
     mdps = moduleRef.get(MdpService);
     totes = moduleRef.get(ToteService);
+    consignments = moduleRef.get(ConsignmentService);
     vehicles = moduleRef.get(VehicleService);
     drivers = moduleRef.get(DriverService);
     fleet = moduleRef.get(FleetService);
@@ -2758,6 +2761,78 @@ describe('PUDO Light', () => {
     // An operator override books from the named shop.
     const asOp: any = controller.bookFreight({ agentDid: shopB.did, dimensionsCm: { l: 120, w: 100, h: 100 }, weightKg: 200, destPudoDid: dest.did, budgetCap: 40 } as never, { role: 'operator' } as never);
     expect(dispatch.listFreight().find((x) => x.freightId === asOp.freightId)!.pickupLabel).toBe(shopB.shopName);
+  });
+
+  // --- F3: consolidation consignments (durable dry commodities) — the bulk analogue of totes ---
+
+  it('F3: opens a durable consolidation lot; refuses a perishable commodity and a non-positive target', () => {
+    const owner = onboardAgent('Coop Hub', 'NorthTown', 50);
+    const lot = consignments.open({ ownerDid: owner.did, natureCode: 'FOD', pickupLabel: owner.shopName, pickupLocation: owner.location, destLabel: 'Merkato', targetKg: 10000 });
+    expect(lot.status).toBe('open');
+    expect(lot.code).toMatch(/^LOT-/);
+    // A perishable (cold-chain, tempBand != null) can't consolidate — it books freight directly.
+    expect(() => consignments.open({ ownerDid: owner.did, natureCode: 'FOP', pickupLabel: owner.shopName, pickupLocation: owner.location, destLabel: 'Merkato', targetKg: 10000 })).toThrow(/perishable/);
+    expect(() => consignments.open({ ownerDid: owner.did, natureCode: 'FOD', pickupLabel: owner.shopName, pickupLocation: owner.location, destLabel: 'Merkato', targetKg: 0 })).toThrow(/target/);
+  });
+
+  it('F3: deposits accumulate and a FULL lot auto-posts as one bulk, off-platform (no shipper) freight', () => {
+    const owner = onboardAgent('Coop Full', 'NorthTown', 50);
+    const dest = { lat: -1.28, lng: 36.82 };
+    const lot = consignments.open({ ownerDid: owner.did, natureCode: 'FOD', pickupLabel: owner.shopName, pickupLocation: owner.location, destLabel: 'Merkato', destLocation: dest, targetKg: 1000, maxSpend: 200 });
+    consignments.deposit(lot.code, 'farmer-A', 400);
+    consignments.deposit(lot.code, 'farmer-B', 500);
+    expect(consignments.requireByCode(lot.code).status).toBe('open'); // 900 < 1000 → still filling
+    const full = consignments.deposit(lot.code, 'farmer-C', 200); // 1100 ≥ 1000 → auto-posts
+    expect(full.status).toBe('posted');
+    expect(full.freightId).toBeDefined();
+    expect(full.weightKg).toBe(1100);
+    expect(full.deposits.length).toBe(3);
+
+    const f = dispatch.listFreight().find((x) => x.freightId === full.freightId)!;
+    expect(f.bulk).toBe(true); // loose durable commodity → tipper/hopper, no handling equipment
+    expect(f.weightKg).toBe(1100);
+    expect(f.natureCode).toBe('FOD');
+    expect(f.pickupLabel).toBe(owner.shopName); // the coop's site is the pickup
+    expect(f.shipperDid).toBeUndefined(); // OFF-PLATFORM — no shipper billed on-platform
+    expect(f.maxSpend).toBe(200); // the cash cap rode across to the haul
+
+    // A posted lot is closed to further deposits.
+    expect(() => consignments.deposit(lot.code, 'farmer-D', 50)).toThrow(/posted/);
+  });
+
+  it('F3: the aged sweep runs from the FIRST DEPOSIT (not open) — posts an aged partial, holds a late-filled or empty lot', () => {
+    const owner = onboardAgent('Coop Aged', 'NorthTown', 50);
+    const t0 = new Date('2026-07-22T09:00:00Z').getTime();
+    const base = { ownerDid: owner.did, natureCode: 'FOD' as const, pickupLabel: owner.shopName, pickupLocation: owner.location, destLabel: 'Merkato', targetKg: 10000 };
+
+    const partial = consignments.open(base, t0);
+    consignments.deposit(partial.code, 'farmer-A', 300, t0); // first goods at t0
+    const empty = consignments.open(base, t0); // never receives a deposit
+    // A standing lot opened at t0 whose FIRST goods only arrive at t0+100h must NOT be force-posted right after.
+    const late = consignments.open(base, t0);
+    consignments.deposit(late.code, 'farmer-B', 300, t0 + 100 * 3_600_000);
+
+    const posted = consignments.publishReadyConsignments(t0 + 101 * 3_600_000); // 101h after open
+    expect(posted).toContain(partial.consignmentId); // its goods waited 101h ≥ 96h → aged out, posts what accumulated
+    expect(posted).not.toContain(empty.consignmentId); // empty → nothing to ship, stays open
+    expect(posted).not.toContain(late.consignmentId); // goods only 1h old → the deposit gets its full window
+    expect(consignments.requireByCode(partial.code).status).toBe('posted');
+    expect(consignments.requireByCode(empty.code).status).toBe('open');
+    expect(consignments.requireByCode(late.code).status).toBe('open');
+  });
+
+  it('F3: consignment endpoints are owner-scoped — another shop cannot deposit into a lot', () => {
+    const owner = onboardAgent('Coop Owner', 'NorthTown', 50);
+    const other = onboardAgent('Other Shop', 'NorthTown', 50);
+    const lot: any = controller.openConsignment({ natureCode: 'FOD', destLabel: 'Merkato', targetKg: 5000 } as never, { role: 'pudo', did: owner.did } as never);
+    expect(lot.pickupLabel).toBe(owner.shopName); // the owner's site is resolved as the pickup
+    // Another shop cannot deposit into someone else's lot.
+    expect(() => controller.depositConsignment(lot.code, { memberRef: 'x', weightKg: 100 } as never, { role: 'pudo', did: other.did } as never)).toThrow(/not yours/);
+    // The owner can, and an operator can list on their behalf.
+    const after: any = controller.depositConsignment(lot.code, { memberRef: 'farmer-A', weightKg: 100 } as never, { role: 'pudo', did: owner.did } as never);
+    expect(after.weightKg).toBe(100);
+    const listed: any[] = controller.listConsignments(owner.did, undefined as never, { role: 'operator' } as never) as never;
+    expect(listed.some((l) => l.code === lot.code)).toBe(true);
   });
 
   it('S32: claim() re-checks bulk — a re-coupled non-bulk vehicle cannot reserve a bulk freight', () => {

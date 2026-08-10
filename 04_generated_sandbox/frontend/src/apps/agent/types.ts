@@ -81,6 +81,25 @@ export interface NetworkPoint {
   freeSlots?: number;
 }
 
+/** F3 — a consolidation lot the shop owns: durable dry commodity accumulating toward a truckload, posting
+ *  as one bulk freight when full or aged. */
+export interface ConsignmentView {
+  consignmentId: string;
+  code: string;
+  status: 'open' | 'posted';
+  ownerDid: string;
+  natureCode: string;
+  pickupLabel: string;
+  destLabel: string;
+  targetKg: number;
+  weightKg: number;
+  deposits: Array<{ memberRef: string; weightKg: number; at: string }>;
+  maxSpend?: number;
+  openedAt: string;
+  postedAt?: string;
+  freightId?: string;
+}
+
 /** GET /sbg/geocode — a typed area/place resolved to a point (the Address intake mode). */
 export interface GeocodeView {
   location: { lat: number; lng: number };

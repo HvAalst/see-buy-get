@@ -112,6 +112,11 @@ export const OFFER_TTL_MIN = 10; // a suggestion auto-ignores if the driver does
 // F1 — an early-CLAIMED scheduled freight not picked up by this long AFTER its pickup date is a no-show:
 // it is released back to the marketplace (and the shipper rebated) so an early reservation can't strand it.
 export const FREIGHT_NOSHOW_GRACE_H = 12;
+// F3 — a consolidation consignment (durable dry commodity) posts to the marketplace once it is FULL or once
+// it has waited this long unfilled, mirroring a tote's full-or-aged publish. Durable goods can sit while a
+// truckload builds, so the aged window is generous. MAX target caps a single lot at a sane truckload.
+export const CONSIGNMENT_MAX_WAIT_H = 96; // 4 days
+export const MAX_CONSIGNMENT_TARGET_KG = 40_000;
 export const DISPATCH_MAX_DETOUR_KM = 8; // a pickup may be at most this far off the planned A→B route
 export const DISPATCH_MAX_PICKUP_MIN = 30; // and at most this many minutes from the driver's start
 

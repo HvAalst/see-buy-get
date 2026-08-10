@@ -23,6 +23,7 @@ import type {
   AgentView,
   ArriveView,
   ClassifyView,
+  ConsignmentView,
   CollectView,
   GateView,
   GeocodeView,
@@ -35,7 +36,7 @@ import type {
   ReceiveBagView,
 } from './types';
 
-export type Screen = 'home' | 'accept' | 'handover' | 'release' | 'collect' | 'receivebag' | 'rates' | 'void' | 'records';
+export type Screen = 'home' | 'accept' | 'handover' | 'release' | 'collect' | 'receivebag' | 'rates' | 'void' | 'records' | 'consignments';
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
 
 /* --- R4 registers: the shop's parcel history + earnings, server-side searched / filtered / paged --- */
@@ -88,6 +89,9 @@ export interface AgentState {
   shopParcelsState: 'idle' | 'loading' | 'ready' | 'error';
   rates: RatesView | null;
   ratesState: 'idle' | 'loading' | 'ready' | 'error';
+  /** F3 — the shop's consolidation lots (loaded when the Consignments screen opens). */
+  consignments: ConsignmentView[];
+  consignmentsState: 'idle' | 'loading' | 'ready' | 'error';
   /** R4 — the shop's parcel-history register (a filtered/paged page). */
   parcelHist: AgentParcelRow[];
   parcelHistTotal: number;
@@ -161,6 +165,8 @@ const INITIAL: AgentState = {
   shopParcelsState: 'idle',
   rates: null,
   ratesState: 'idle',
+  consignments: [],
+  consignmentsState: 'idle',
   parcelHist: [],
   parcelHistTotal: 0,
   parcelHistState: 'idle',
@@ -492,6 +498,19 @@ export function useAgentApp() {
     setState((s) => ({ ...s, rates: narrow<RatesView>(r.data), ratesState: 'ready' }));
   }, [client, fail]);
 
+  /** F3 — the shop's consolidation lots. Loaded when the Consignments screen opens. */
+  const loadConsignments = useCallback(async () => {
+    if (!client || !did) return;
+    setState((s) => ({ ...s, consignmentsState: 'loading' }));
+    const r = await client.api.consignments(did);
+    if (r.error) {
+      setState((s) => ({ ...s, consignmentsState: 'error' }));
+      fail(r.error);
+      return;
+    }
+    setState((s) => ({ ...s, consignments: narrow<ConsignmentView[]>(r.data) ?? [], consignmentsState: 'ready' }));
+  }, [client, did, fail]);
+
   /* ----------------------------------------------------- registers (R4) */
 
   const histEpoch = useRef(0);
@@ -587,8 +606,9 @@ export function useAgentApp() {
       if (screen === 'handover' || screen === 'void') void loadShopParcels();
       if (screen === 'rates') void loadRates();
       if (screen === 'accept') void loadAcceptPoints();
+      if (screen === 'consignments') void loadConsignments();
     },
-    [loadShopParcels, loadRates, loadAcceptPoints],
+    [loadShopParcels, loadRates, loadAcceptPoints, loadConsignments],
   );
 
   /* ---------------------------------------------------------------- forms */
@@ -844,6 +864,41 @@ export function useAgentApp() {
 
   /** F2 — dismiss the booked-freight receipt and return to the shop home. */
   const dismissBookedFreight = useCallback(() => setState((s) => ({ ...s, bookedFreight: null, screen: 'home' })), []);
+
+  /** F3 — open a consolidation lot for a durable dry commodity. */
+  const openConsignment = useCallback(
+    async (input: { natureCode: string; destLabel: string; targetKg: number; maxSpend?: number }) => {
+      if (!client || !did || !input.destLabel.trim() || !(input.targetKg > 0)) return;
+      await run('open-consignment', async () => {
+        const r = await client.api.openConsignment({ natureCode: input.natureCode as never, destLabel: input.destLabel.trim(), targetKg: input.targetKg, maxSpend: input.maxSpend });
+        if (r.error) return fail(r.error);
+        buzz();
+        pushToast({ tone: 'ok', icon: 'bag', title: 'Lot opened', detail: 'Add member deposits until it fills.' });
+        await loadConsignments();
+      });
+    },
+    [client, did, run, fail, pushToast, loadConsignments],
+  );
+
+  /** F3 — record a member deposit into a lot; it auto-posts a freight once full. */
+  const depositConsignment = useCallback(
+    async (code: string, memberRef: string, weightKg: number) => {
+      if (!client || !did || !memberRef.trim() || !(weightKg > 0)) return;
+      await run(`deposit-${code}`, async () => {
+        const r = await client.api.depositConsignment(code, { memberRef: memberRef.trim(), weightKg });
+        if (r.error) return fail(r.error);
+        buzz();
+        const lot = narrow<ConsignmentView>(r.data);
+        pushToast(
+          lot?.status === 'posted'
+            ? { tone: 'ok', icon: 'truck', title: 'Lot full — freight posted', detail: `A truck will be found for lot ${lot.code}.` }
+            : { tone: 'ok', icon: 'bag', title: 'Deposit added', detail: lot ? `${lot.weightKg} / ${lot.targetKg} kg so far.` : undefined },
+        );
+        await loadConsignments();
+      });
+    },
+    [client, did, run, fail, pushToast, loadConsignments],
+  );
 
   /* -------------------------------------------------- pre-minted intake (PG4) */
 
@@ -1148,6 +1203,9 @@ export function useAgentApp() {
       dismissAcceptedLabel,
       submitBookFreight,
       dismissBookedFreight,
+      loadConsignments,
+      openConsignment,
+      depositConsignment,
       setIntakePhoto,
       retryPreview,
       submitIntake,

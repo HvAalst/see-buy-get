@@ -29,6 +29,7 @@ import { ShelfService } from './shelf.service';
 import { RoutingService } from './routing.service';
 import { MdpService } from './mdp.service';
 import { ToteService } from './tote.service';
+import { ConsignmentService } from './consignment.service';
 import { VehicleService } from './vehicle.service';
 import { DriverService } from './driver.service';
 import { FleetService } from './fleet.service';
@@ -51,7 +52,7 @@ import { CargoService } from './cargo.service';
 @Module({
   imports: [M1Module, M4Module, M7Module],
   controllers: [SbgController, IdentityController, MediaController, NotificationsController],
-  providers: [AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService, GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, ToteService, VehicleService, DriverService, FleetService, DispatchService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, NotificationService, NotificationDispatcher, OutboxPushSender, { provide: PUSH_SENDER, useExisting: OutboxPushSender }, GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder }, HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter }],
+  providers: [AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService, GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, ToteService, ConsignmentService, VehicleService, DriverService, FleetService, DispatchService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, NotificationService, NotificationDispatcher, OutboxPushSender, { provide: PUSH_SENDER, useExisting: OutboxPushSender }, GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder }, HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter }],
   exports: [AgentService, ParcelService, MonitorService, RatingService, MdpService, ToteService, VehicleService, DriverService, FleetService, DispatchService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, NotificationService, OutboxPushSender],
 })
 export class PudoModule {}

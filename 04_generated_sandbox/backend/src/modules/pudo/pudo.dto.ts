@@ -678,6 +678,23 @@ export class FreightActionDto {
   @IsOptional() @IsString() securementPhotoId?: string;
 }
 
+/** F3 — a cooperative opens a consolidation lot for a durable dry commodity. The owner's site (the freight's
+ *  pickup) is resolved from the owner agent, not the body; dest is where the truckload goes. */
+export class OpenConsignmentDto {
+  @IsOptional() @IsString() ownerDid?: string; // operator-override only; a normal owner is pinned to its token
+  @IsOptional() @IsIn(CARGO_NATURES) natureCode?: CargoNature; // must be durable (non-perishable) — the service refuses cold-chain
+  @IsString() destLabel!: string;
+  @IsOptional() @ValidateNested() @Type(() => GeoDto) destLocation?: GeoDto;
+  @IsNumber() @Min(1) targetKg!: number; // the truckload target the lot fills toward
+  @IsOptional() @IsNumber() @Min(0) maxSpend?: number; // optional cash budget cap for the eventual haul (0 = no cap)
+}
+
+/** F3 — a member deposit (kg) into a consolidation lot. memberRef is a free label (thin attribution). */
+export class ConsignmentDepositDto {
+  @IsString() memberRef!: string;
+  @IsNumber() @Min(0.01) weightKg!: number;
+}
+
 /** S33b — a driver logging a temperature reading for a cold-chain freight in transit. */
 export class RecordTempDto {
   @IsOptional() @IsString() driverDid?: string;

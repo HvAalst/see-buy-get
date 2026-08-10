@@ -92,6 +92,17 @@ export const NATURES: Array<{ key: CargoNature; label: string }> = [
   { key: 'HAZ-FLAM', label: 'Gas, fuel or flammable' },
 ];
 
+/** F3 — the durable dry commodities a consolidation lot may hold (grain/dry food, general goods, cement/
+ *  powder). Perishables are excluded — they book freight directly; the backend enforces the same via tempBand,
+ *  this is the curated on-screen subset. */
+export const DURABLE_NATURES: CargoNature[] = ['GEN', 'FOD', 'HAZ-DUST'];
+
+/** F3 — a lot's fill progress for the UI: the accumulated vs target weight with a clamped percentage. */
+export function consignmentProgress(lot: { weightKg: number; targetKg: number }): { pct: number; label: string } {
+  const pct = lot.targetKg > 0 ? Math.min(100, Math.max(0, Math.round((lot.weightKg / lot.targetKg) * 100))) : 0;
+  return { pct, label: `${lot.weightKg} / ${lot.targetKg} kg` };
+}
+
 /** The measure-your-parcel fields (free-typed strings until they parse). */
 export interface DimsForm {
   l: string;

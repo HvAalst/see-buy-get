@@ -18,6 +18,7 @@ import { ShelfService } from './shelf.service';
 import { RoutingService } from './routing.service';
 import { MdpService } from './mdp.service';
 import { ToteService } from './tote.service';
+import { ConsignmentService } from './consignment.service';
 import { VehicleService } from './vehicle.service';
 import { DriverService } from './driver.service';
 import { FleetService } from './fleet.service';
@@ -29,7 +30,7 @@ import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
-import { AcceptParcelDto, BookFreightDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, CoupleDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, OverdraftDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetPriceDto, ShelfDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
+import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, CoupleDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, OverdraftDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetPriceDto, ShelfDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
 import { classifySize, SIZE_WEIGHT_KG } from './pudo.config';
 import { haversineKm } from './geo';
 import { GEOCODER, Geocoder } from './geocoder';
@@ -60,6 +61,7 @@ export class SbgController {
     private readonly routing: RoutingService,
     private readonly mdps: MdpService,
     private readonly totes: ToteService,
+    private readonly consignments: ConsignmentService,
     private readonly vehicles: VehicleService,
     private readonly drivers: DriverService,
     private readonly fleet: FleetService,
@@ -1371,6 +1373,58 @@ export class SbgController {
   @Post('dispatch/freight/:id/temperature')
   freightTemp(@Param('id') id: string, @Body() dto: RecordTempDto) {
     return this.dispatch.recordTemp(id, dto.celsius, dto.driverDid);
+  }
+
+  // --- F3: consolidation consignments (durable dry commodities) — the bulk analogue of totes ---
+
+  /** F3 — a cooperative opens a consolidation LOT for a durable dry commodity: members deposit toward a
+   *  truckload, and when it is full or aged it posts itself as one bulk freight (off-platform, like an F2
+   *  counter freight). Owner-scoped: the acting agent (operator may override) is the aggregating PUDO, and its
+   *  site is the freight's pickup. A perishable commodity is refused here — it books freight directly. */
+  @Post('consignments')
+  openConsignment(@Body() dto: OpenConsignmentDto, @Actor() actor: IntrospectionResult) {
+    const ownerDid = actingDid(actor, dto.ownerDid);
+    const owner = this.agents.get(ownerDid); // 404 if the acting id is not an agent
+    // The dest is a hand-named market (rarely a network PUDO), so backfill its coordinates by geocoding the
+    // label when a pin isn't given — otherwise the eventual haul would price at zero trip distance (the driver
+    // hauls the full route but is paid only the deadhead). A gazetteer fallback still beats no coordinate.
+    const destLocation = dto.destLocation ?? (dto.destLabel.trim() ? this.geocoder.geocode(dto.destLabel).location : undefined);
+    return this.consignments.open({
+      ownerDid,
+      natureCode: dto.natureCode,
+      pickupLabel: owner.shopName,
+      pickupLocation: owner.location,
+      destLabel: dto.destLabel,
+      destLocation,
+      targetKg: dto.targetKg,
+      maxSpend: dto.maxSpend,
+    });
+  }
+
+  /** F3 — record a member deposit into a lot (auto-posts the freight the moment the lot fills). Owner-scoped
+   *  to the lot's owner (403 for another shop). */
+  @Post('consignments/:code/deposit')
+  depositConsignment(@Param('code') code: string, @Body() dto: ConsignmentDepositDto, @Actor() actor: IntrospectionResult) {
+    const lot = this.consignments.requireByCode(code); // 404 unknown
+    this.assertAgentOwner(lot.ownerDid, actor);
+    return this.consignments.deposit(code, dto.memberRef, dto.weightKg);
+  }
+
+  /** F3 — a cooperative's own consolidation lots (owner-scoped; an operator must name the owner). */
+  @Get('consignments')
+  @ApiQuery({ name: 'owner', required: false })
+  @ApiQuery({ name: 'status', required: false })
+  listConsignments(@Query('owner') owner: string, @Query('status') status: string, @Actor() actor: IntrospectionResult) {
+    const ownerDid = actingDid(actor, owner);
+    this.assertAgentOwner(ownerDid, actor);
+    return this.consignments.list({ ownerDid, status: status as never });
+  }
+
+  /** F3 — sweep: post every full/aged lot to the marketplace (operator-triggered; a cron would call this). */
+  @Roles('operator')
+  @Post('consignments/publish-ready')
+  publishReadyConsignments() {
+    return { posted: this.consignments.publishReadyConsignments() };
   }
 
   /** A driver declares a route A→B → the platform suggests the loads sitting on the way. */
