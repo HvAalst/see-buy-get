@@ -116,6 +116,14 @@ export interface AcceptForm {
   senderMobile: string;
   receiverMobile: string;
   photoRef: string;
+  // F2 — the counter-freight fields (only used when the DERIVED class is dedicated/P4+; a bus-sized load
+  // ignores them). A too-big walk-up is booked as freight instead of refused: a cash budget cap, immediate or
+  // planned pickup, and an optional customer phone.
+  budgetCap: string; // the cash cap the customer prepays → the freight's maxSpend ceiling
+  freightWhen: 'now' | 'planned';
+  freightDate: string; // a datetime-local value (local time), when planned
+  allowEarlyClaim: boolean; // planned: may a driver reserve it before its date (default true)
+  customerMobile: string; // optional — the walk-in customer's phone (joins it to their "my shipments")
 }
 
 export const EMPTY_ACCEPT: AcceptForm = {
@@ -131,6 +139,11 @@ export const EMPTY_ACCEPT: AcceptForm = {
   senderMobile: '',
   receiverMobile: '',
   photoRef: '',
+  budgetCap: '',
+  freightWhen: 'now',
+  freightDate: '',
+  allowEarlyClaim: true,
+  customerMobile: '',
 };
 
 /** The smallest measurement we accept, in cm — 1 mm, so a thin item (a letter ~0.5 cm) is shippable.
@@ -193,6 +206,42 @@ export function acceptMissing(f: AcceptForm): string | null {
   if (!parseDims(f.dims)) return 'Measure the parcel: length, width, height and weight.';
   if (!f.destPudoDid) return 'Pick where it is going.';
   if (!f.photoRef) return 'Take the proof photo.';
+  return null;
+}
+
+/* ----------------------------------------------------------- book freight (F2) -- */
+
+/** Parse the cash budget cap (accepts a decimal comma), or null while it's missing / not a positive amount. */
+export function parseBudget(s: string): number | null {
+  const v = num(s);
+  return Number.isFinite(v) && v > 0 ? roundMoney(v) : null;
+}
+
+/**
+ * Convert the planned-pickup datetime-local value → a canonical ISO instant WITH a timezone offset (what the
+ * API's @Matches guard requires), or undefined for an immediate booking / an empty or unparseable date. A
+ * datetime-local string carries no offset, so it is read as LOCAL time and normalised to a UTC instant here.
+ */
+export function plannedPickupIso(f: Pick<AcceptForm, 'freightWhen' | 'freightDate'>): string | undefined {
+  if (f.freightWhen !== 'planned' || !f.freightDate) return undefined;
+  const t = Date.parse(f.freightDate);
+  return Number.isNaN(t) ? undefined : new Date(t).toISOString();
+}
+
+/**
+ * What still blocks a counter FREIGHT booking (the dedicated/P4+ branch), ordered by the counter flow so the
+ * first missing thing is the next thing to do. No sticker and no proof photo — freight isn't scanned onto a
+ * shelf; the tracking code IS the artefact. `now` is injected so this stays pure and testable.
+ */
+export function bookFreightMissing(f: AcceptForm, now: number): string | null {
+  if (!parseDims(f.dims)) return 'Measure the load: length, width, height and weight.';
+  if (!f.destPudoDid) return 'Pick where it is going.';
+  if (parseBudget(f.budgetCap) == null) return 'Set the cash budget — the most the customer will pay.';
+  if (f.freightWhen === 'planned') {
+    const t = Date.parse(f.freightDate);
+    if (!f.freightDate || Number.isNaN(t)) return 'Choose the planned pickup date.';
+    if (t <= now) return 'The planned pickup date must be in the future.';
+  }
   return null;
 }
 

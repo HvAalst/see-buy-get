@@ -15,7 +15,7 @@ import type { IconName } from '../../shared/ui/Icon';
 import { agentConfig, clearDid, createAgentClient, purgeAgentTokens, readDid, readEmail, saveDid, saveEmail } from './api';
 import { signal } from '../../shared/feedback';
 import { triggerDownload } from '../../shared/download';
-import { EMPTY_ACCEPT, otpValid, parseDims, type AcceptForm, type DimsForm } from './logic';
+import { bookFreightMissing, EMPTY_ACCEPT, otpValid, parseBudget, parseDims, plannedPickupIso, type AcceptForm, type DimsForm } from './logic';
 import type { GeoPoint } from '../../shared/geo';
 import type {
   AgentLedgerRow,
@@ -117,6 +117,18 @@ export interface AgentState {
   acceptGeoNote: string | null;
   /** DT — the label the last accept produced, shown to print + stick on the parcel (null once dismissed). */
   acceptedLabel: { parcelId: string; trackingKey?: string; svg?: string } | null;
+  /** F2 — the freight the last counter booking produced: the FRT code + tracking key to print for the
+   *  customer, plus the site-equipment advisory. Null until a booking succeeds / once dismissed. */
+  bookedFreight: {
+    code: string;
+    trackingKey?: string;
+    status: string;
+    scheduledPickupAt?: string;
+    destLabel: string;
+    cargoClass: string;
+    equipmentGaps?: Array<'origin' | 'dest'>;
+    maxSpend?: number;
+  } | null;
   /** PG4 — the scanned sticker resolved to an EXISTING parcel (a pre-minted send, a store order, or an
    *  in-use sticker); null/idle = a fresh sticker → the walk-up form. */
   preMint: IntakePreview | null;
@@ -171,6 +183,7 @@ const INITIAL: AgentState = {
   acceptGeoBusy: false,
   acceptGeoNote: null,
   acceptedLabel: null,
+  bookedFreight: null,
   preMint: null,
   preMintState: 'idle',
   preMintError: null,
@@ -793,6 +806,45 @@ export function useAgentApp() {
   /** DT — dismiss the printed-label sheet and return to the shop home. */
   const dismissAcceptedLabel = useCallback(() => setState((s) => ({ ...s, acceptedLabel: null, screen: 'home' })), []);
 
+  /**
+   * F2 — book a too-big (dedicated/P4+) walk-up as FREIGHT. Only fires for a dedicated load with a valid
+   * booking (dims + destination PUDO + a cash cap, and a future date when planned); the same guard the CTA
+   * uses, re-checked here so a stale click can't send. The agent is the originator; the customer's cash cap
+   * becomes the freight's ceiling and settles off-platform — no wallet is billed.
+   */
+  const submitBookFreight = useCallback(async () => {
+    if (!client || !did) return;
+    const f = stateRef.current.accept;
+    const dims = parseDims(f.dims);
+    const cap = parseBudget(f.budgetCap);
+    if (!dims || !cap || !f.destPudoDid || !stateRef.current.acceptDerived?.dedicated) return;
+    if (bookFreightMissing(f, Date.now())) return;
+    await run('book-freight', async () => {
+      const r = await client.api.bookFreight({
+        agentDid: did,
+        dimensionsCm: { l: dims.l, w: dims.w, h: dims.h },
+        weightKg: dims.kg,
+        natureCode: f.natureCode,
+        fragile: f.fragile || undefined,
+        destPudoDid: f.destPudoDid,
+        customerMobile: f.customerMobile.trim() || undefined,
+        budgetCap: cap,
+        scheduledPickupAt: plannedPickupIso(f),
+        // Only meaningful for a planned load; omit it for an immediate one so the server keeps its default.
+        allowEarlyClaim: f.freightWhen === 'planned' ? f.allowEarlyClaim : undefined,
+      });
+      if (r.error) return fail(r.error);
+      buzz();
+      const fr = narrow<AgentState['bookedFreight']>(r.data);
+      setState((s) => ({ ...s, accept: { ...EMPTY_ACCEPT }, acceptDerived: null, acceptNear: null, acceptGeoNote: null, bookedFreight: fr }));
+      pushToast({ tone: 'ok', icon: 'truck', title: 'Freight booked', detail: fr ? `Collect the cash, hand the customer code ${fr.code}.` : 'A driver will be found for this load.' });
+      await refresh();
+    });
+  }, [client, did, run, fail, pushToast, refresh]);
+
+  /** F2 — dismiss the booked-freight receipt and return to the shop home. */
+  const dismissBookedFreight = useCallback(() => setState((s) => ({ ...s, bookedFreight: null, screen: 'home' })), []);
+
   /* -------------------------------------------------- pre-minted intake (PG4) */
 
   // The scanned sticker might already BE a parcel — a peer send booked in the Send app (cash due at this
@@ -1094,6 +1146,8 @@ export function useAgentApp() {
       setPrice,
       submitAccept,
       dismissAcceptedLabel,
+      submitBookFreight,
+      dismissBookedFreight,
       setIntakePhoto,
       retryPreview,
       submitIntake,

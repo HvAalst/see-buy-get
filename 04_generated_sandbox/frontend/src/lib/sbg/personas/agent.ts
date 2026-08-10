@@ -109,6 +109,23 @@ export function createAgentApi(sbg: SbgClient) {
       natureCode?: 'GEN' | 'FOD' | 'FOP' | 'HAZ-CHEM' | 'HAZ-DUST' | 'HAZ-BIO' | 'HAZ-FLAM' | 'FRG' | 'ODR' | 'HUM';
     }) => sbg.request((c) => c.POST('/v1/sbg/parcels/accept', { body })),
 
+    /** F2 — book a too-big (dedicated, P4+) walk-up as FREIGHT instead of refusing it. The agent is the
+     *  on-platform originator; the customer pays a CASH `budgetCap` (→ the freight's maxSpend ceiling) at the
+     *  counter and settles off-platform, so no wallet is billed. Immediate (no date) or planned
+     *  (`scheduledPickupAt` + `allowEarlyClaim`, reusing F1). Returns the FRT code + a tracking key to print. */
+    bookFreight: (body: {
+      agentDid: string;
+      dimensionsCm: { l: number; w: number; h: number };
+      weightKg: number;
+      natureCode?: 'GEN' | 'FOD' | 'FOP' | 'HAZ-CHEM' | 'HAZ-DUST' | 'HAZ-BIO' | 'HAZ-FLAM' | 'FRG' | 'ODR' | 'HUM';
+      fragile?: boolean;
+      destPudoDid: string;
+      customerMobile?: string;
+      budgetCap: number;
+      scheduledPickupAt?: string;
+      allowEarlyClaim?: boolean;
+    }) => sbg.request((c) => c.POST('/v1/sbg/parcels/book-freight', { body })),
+
     /** The public shop directory — the destination PUDOs the counter can send toward (Map/Address picker). */
     networkPoints: () => sbg.request((c) => c.GET('/v1/sbg/network/points')),
 

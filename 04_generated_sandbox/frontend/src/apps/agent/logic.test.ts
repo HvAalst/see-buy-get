@@ -3,9 +3,12 @@ import {
   EMPTY_ACCEPT,
   VOID_WINDOW_MS,
   acceptMissing,
+  bookFreightMissing,
   canAccept,
   destinationZones,
   gateNotice,
+  parseBudget,
+  plannedPickupIso,
   handoverSummary,
   homeSummary,
   isVoidable,
@@ -136,6 +139,43 @@ describe('intake measure + destination helpers', () => {
     expect(selectablePoints(pts, 'self').map((p) => p.shopName)).toEqual(['Close', 'Far', 'AClosed']); // no ref → open A→Z, then closed
     expect(pointDistance(pts[2], near)).toContain('away');
     expect(pointDistance(pt({ location: undefined }), near)).toBeNull();
+  });
+});
+
+describe('book freight (F2)', () => {
+  const dims = { l: '120', w: '100', h: '100', kg: '200' };
+  const now = Date.parse('2026-08-10T12:00:00Z');
+
+  it('parseBudget takes a positive amount (comma ok) and rejects zero / negative / blank', () => {
+    expect(parseBudget('40')).toBe(40);
+    expect(parseBudget('12,5')).toBe(12.5); // decimal comma
+    expect(parseBudget('0')).toBeNull();
+    expect(parseBudget('-5')).toBeNull();
+    expect(parseBudget('')).toBeNull();
+    expect(parseBudget('abc')).toBeNull();
+  });
+
+  it('plannedPickupIso converts a datetime-local to an ISO instant with an offset, only when planned', () => {
+    expect(plannedPickupIso({ freightWhen: 'now', freightDate: '2026-08-11T09:00' })).toBeUndefined();
+    expect(plannedPickupIso({ freightWhen: 'planned', freightDate: '' })).toBeUndefined();
+    expect(plannedPickupIso({ freightWhen: 'planned', freightDate: 'not-a-date' })).toBeUndefined();
+    const iso = plannedPickupIso({ freightWhen: 'planned', freightDate: '2026-08-11T09:00' });
+    expect(iso).toMatch(/Z$/); // canonical UTC (an offset the server's @Matches guard accepts)
+    expect(Number.isNaN(Date.parse(iso!))).toBe(false);
+  });
+
+  it('bookFreightMissing gates dims, destination, a positive cash cap, and a future planned date', () => {
+    const base = { ...EMPTY_ACCEPT, dims, destPudoDid: 'did:agent:b', budgetCap: '40' };
+    expect(bookFreightMissing({ ...EMPTY_ACCEPT }, now)).toContain('Measure');
+    expect(bookFreightMissing({ ...EMPTY_ACCEPT, dims }, now)).toContain('going');
+    expect(bookFreightMissing({ ...EMPTY_ACCEPT, dims, destPudoDid: 'did:agent:b' }, now)).toContain('cash budget');
+    expect(bookFreightMissing({ ...base, budgetCap: '0' }, now)).toContain('cash budget'); // a zero cap is no cap
+    // A ship-now booking with all fields is complete (no sticker, no photo — freight isn't shelved).
+    expect(bookFreightMissing({ ...base, freightWhen: 'now' }, now)).toBeNull();
+    // Planned needs a real, FUTURE date.
+    expect(bookFreightMissing({ ...base, freightWhen: 'planned', freightDate: '' }, now)).toContain('planned pickup date');
+    expect(bookFreightMissing({ ...base, freightWhen: 'planned', freightDate: '2026-08-09T09:00' }, now)).toContain('future'); // a past date
+    expect(bookFreightMissing({ ...base, freightWhen: 'planned', freightDate: '2026-08-20T09:00' }, now)).toBeNull();
   });
 });
 

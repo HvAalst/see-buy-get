@@ -2627,6 +2627,82 @@ describe('PUDO Light', () => {
     expect(normal.parcel).toBeDefined();
   });
 
+  // --- F2: the counter books a too-big walk-up as FREIGHT (cash off-platform, the agent is the originator) ---
+
+  it('F2: the counter books a dedicated walk-up as freight — unpaid cash off-platform, maxSpend=cap, tracking code, agent wallet untouched', () => {
+    const origin = onboardAgent('Counter Shop', 'NorthTown', 50); // funded → we can prove the wallet is never billed
+    const dest = onboardAgent('Far Shop', 'NorthTown', 0);
+    const balBefore = agents.balance(origin.did);
+
+    const res: any = controller.bookFreight(
+      { dimensionsCm: { l: 120, w: 100, h: 100 }, weightKg: 200, destPudoDid: dest.did, budgetCap: 40, customerMobile: '+254700900' } as never,
+      { role: 'pudo', did: origin.did } as never,
+    );
+    expect(res.code).toMatch(/^FRT-/);
+    expect(res.trackingKey).toBeTruthy();
+    expect(res.status).toBe('available'); // immediate
+    expect(res.cargoClass).toBe('P4'); // 200 kg discrete
+    expect(res.maxSpend).toBe(40); // the cash cap became the ceiling
+
+    const f = dispatch.listFreight().find((x) => x.freightId === res.freightId)!;
+    expect(f.shipperDid).toBeUndefined(); // no on-platform shipper → it settles as cash off-platform
+    expect(f.pickupLabel).toBe(origin.shopName); // the booking shop is the origin
+    expect(f.buyerPhoneHash).toBeTruthy();
+    expect(f.buyerPhoneHash).not.toBe('+254700900'); // the customer is joined by HASH, never the cleartext
+
+    // A fit truck claims it: the shipper side is 'unpaid' (never billed to a wallet); the agent's balance is untouched.
+    const d = drivers.register({ displayName: 'F2E', fullName: 'F2E', nationalId: 'ID-F2E', mobile: '+2547F2E', licenceClasses: ['truck'], licenceNumber: 'L-F2E', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const v = vehicles.register({ plate: 'V-F2E', vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 10_000, ownerName: 'X', equipment: ['TLT'] });
+    fleet.couple(d.did, v.vehicleId);
+    const [offer] = dispatch.suggest(d.did, { from: origin.location, to: dest.location }).filter((o) => o.ref === res.freightId);
+    expect(offer).toBeDefined();
+    dispatch.claim(offer.offerId);
+    const claimed = dispatch.listFreight().find((x) => x.freightId === res.freightId)!;
+    expect(claimed.paidStatus).toBe('unpaid'); // no wallet billed — cash settles off-platform
+    expect(agents.balance(origin.did)).toBeCloseTo(balBefore, 2); // the agent's parcel-sized wallet was NOT charged a truck haul
+  });
+
+  it('F2: a bus-sized load is refused as freight — take it in as a normal parcel', () => {
+    const origin = onboardAgent('Small Shop', 'NorthTown', 50);
+    const dest = onboardAgent('Other Shop', 'NorthTown', 0);
+    expect(() =>
+      controller.bookFreight({ dimensionsCm: { l: 20, w: 20, h: 10 }, weightKg: 1, destPudoDid: dest.did, budgetCap: 40 } as never, { role: 'pudo', did: origin.did } as never),
+    ).toThrow(/normal parcel/);
+  });
+
+  it('F2: the counter cannot book freight to its own shop', () => {
+    const origin = onboardAgent('Self Shop', 'NorthTown', 50);
+    expect(() =>
+      controller.bookFreight({ dimensionsCm: { l: 120, w: 100, h: 100 }, weightKg: 200, destPudoDid: origin.did, budgetCap: 40 } as never, { role: 'pudo', did: origin.did } as never),
+    ).toThrow(/different destination/);
+  });
+
+  it('F2: a planned counter freight is scheduled for later (reusing F1); an immediate one is available now', () => {
+    const origin = onboardAgent('Plan Shop', 'NorthTown', 50);
+    const dest = onboardAgent('Plan Dest', 'NorthTown', 0);
+    const tomorrow = new Date(Date.now() + 24 * 3_600_000).toISOString();
+    const planned: any = controller.bookFreight({ dimensionsCm: { l: 120, w: 100, h: 100 }, weightKg: 200, destPudoDid: dest.did, budgetCap: 40, scheduledPickupAt: tomorrow, allowEarlyClaim: false } as never, { role: 'pudo', did: origin.did } as never);
+    expect(planned.status).toBe('scheduled');
+    expect(planned.scheduledPickupAt).toBe(tomorrow); // canonical UTC (already ISO)
+    const now: any = controller.bookFreight({ dimensionsCm: { l: 120, w: 100, h: 100 }, weightKg: 200, destPudoDid: dest.did, budgetCap: 40 } as never, { role: 'pudo', did: origin.did } as never);
+    expect(now.status).toBe('available');
+    expect(now.scheduledPickupAt).toBeUndefined();
+  });
+
+  it('F2: a non-operator is pinned to its own shop; an operator may book on behalf of a shop', () => {
+    const shopA = onboardAgent('Shop A', 'NorthTown', 50);
+    const shopB = onboardAgent('Shop B', 'NorthTown', 50);
+    const dest = onboardAgent('Dest Shop', 'NorthTown', 0);
+    // A books but names B — the token pin ignores the override: the origin is A (the caller), not B.
+    const asA: any = controller.bookFreight({ agentDid: shopB.did, dimensionsCm: { l: 120, w: 100, h: 100 }, weightKg: 200, destPudoDid: dest.did, budgetCap: 40 } as never, { role: 'pudo', did: shopA.did } as never);
+    expect(dispatch.listFreight().find((x) => x.freightId === asA.freightId)!.pickupLabel).toBe(shopA.shopName);
+    // An operator override books from the named shop.
+    const asOp: any = controller.bookFreight({ agentDid: shopB.did, dimensionsCm: { l: 120, w: 100, h: 100 }, weightKg: 200, destPudoDid: dest.did, budgetCap: 40 } as never, { role: 'operator' } as never);
+    expect(dispatch.listFreight().find((x) => x.freightId === asOp.freightId)!.pickupLabel).toBe(shopB.shopName);
+  });
+
   it('S32: claim() re-checks bulk — a re-coupled non-bulk vehicle cannot reserve a bulk freight', () => {
     const d = drivers.register({ displayName: 'BLK', fullName: 'B', nationalId: 'ID-BLK', mobile: '+254900101', licenceClasses: ['truck', 'van'], licenceNumber: 'L-BLK', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
     drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });

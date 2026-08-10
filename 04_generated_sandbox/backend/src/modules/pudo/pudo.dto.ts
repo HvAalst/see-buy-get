@@ -1,8 +1,14 @@
-import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsIn, IsNumber, IsObject, IsOptional, IsString, Matches, Min, ValidateNested } from 'class-validator';
+import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsIn, IsNumber, IsObject, IsOptional, IsString, Matches, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { TRUCK_SUBTYPES } from './fleet.config';
 import { MEDIA_KINDS, MediaKind } from './media.types';
 import { CARGO_NATURES, CargoNature, EQUIPMENT, Equipment } from './cargo.types';
+
+/** F1 — a scheduled pickup instant must be a full datetime WITH a timezone offset (Z or ±HH:MM), so the
+ *  moment is unambiguous — a date-only or offset-less string would resolve to a server-timezone-dependent
+ *  instant. Shared by every DTO that books a future pickup (RegisterFreightDto, BookFreightDto). */
+const SCHEDULED_PICKUP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/;
+const SCHEDULED_PICKUP_MSG = 'scheduledPickupAt must be a full datetime with a timezone offset (e.g. 2026-07-25T09:00:00Z)';
 
 class GeoDto {
   @IsNumber() lat!: number;
@@ -637,10 +643,29 @@ export class RegisterFreightDto {
   /** F1 — a FUTURE pickup date: the load is booked for later. Must be a full datetime WITH an offset (Z or
    *  ±HH:MM) so the instant is unambiguous — a date-only or offset-less string would resolve to a server-
    *  timezone-dependent moment. Absent = ship now. */
-  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/, { message: 'scheduledPickupAt must be a full datetime with a timezone offset (e.g. 2026-07-25T09:00:00Z)' }) scheduledPickupAt?: string;
+  @IsOptional() @Matches(SCHEDULED_PICKUP_RE, { message: SCHEDULED_PICKUP_MSG }) scheduledPickupAt?: string;
   /** F1 — the shipper's early-claim choice for a scheduled load: true (default) → a driver may RESERVE it
    *  ahead of its pickup date; false → it stays out of the marketplace until due. */
   @IsOptional() @IsBoolean() allowEarlyClaim?: boolean;
+}
+
+/** F2 — the PUDO counter books a too-big (dedicated, P4+) walk-up as FREIGHT instead of refusing it. The
+ *  agent measures the load, picks a destination PUDO, and sets a CASH budget cap (the most the walk-in
+ *  customer will pay — dispatch won't let a driver claim above it). Immediate or planned pickup (reusing the
+ *  F1 scheduled fields). A phone-less customer just carries the printed tracking code. */
+export class BookFreightDto {
+  @IsOptional() @IsString() agentDid?: string; // operator-override only; a normal agent is pinned to its token
+  // @IsDefined() — @ValidateNested alone short-circuits on an omitted field, so a required nested object needs an
+  // explicit presence guard, else a missing dims 500s in the controller instead of returning a clean 400.
+  @IsDefined() @ValidateNested() @Type(() => DimensionsDto) dimensionsCm!: DimensionsDto; // freight is always measured (no declared tier)
+  @IsNumber() @Min(0.01) weightKg!: number;
+  @IsOptional() @IsIn(CARGO_NATURES) natureCode?: CargoNature;
+  @IsOptional() @IsBoolean() fragile?: boolean;
+  @IsString() destPudoDid!: string; // a network PUDO — its coordinates + equipment drive routing, pricing and the site-gap advisory
+  @IsOptional() @IsString() customerMobile?: string; // optional — the walk-in customer's phone (joins it to their "my shipments")
+  @IsNumber() @Min(0.01) budgetCap!: number; // the cash cap the customer prepays → the freight's maxSpend ceiling
+  @IsOptional() @Matches(SCHEDULED_PICKUP_RE, { message: SCHEDULED_PICKUP_MSG }) scheduledPickupAt?: string; // absent = ship now; present = planned
+  @IsOptional() @IsBoolean() allowEarlyClaim?: boolean; // planned only: may a driver reserve it before the date (default true)
 }
 
 /** S32b — a driver advancing a claimed freight (pickup/deliver). driverDid is the claimer, verified against

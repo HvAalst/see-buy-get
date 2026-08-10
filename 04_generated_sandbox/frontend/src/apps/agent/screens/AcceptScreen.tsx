@@ -1,5 +1,5 @@
 import { Button, Card, ErrorNote, GlanceNumber, Icon, Note, PlaceMap, Pill, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
-import { NATURES, acceptMissing, parcelStatusWord, pointDistance, selectablePoints, sizeMeta } from '../logic';
+import { NATURES, acceptMissing, bookFreightMissing, parcelStatusWord, pointDistance, selectablePoints, sizeMeta } from '../logic';
 import type { NetworkPoint } from '../types';
 import type { AgentActions, AgentState } from '../useAgentApp';
 import { PhotoField } from './PhotoField';
@@ -16,6 +16,21 @@ function openLabel(svg: string) {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
+/** F2 — a human day/time for the freight receipt (the booking confirmation, not a data surface). */
+function whenText(iso?: string): string {
+  if (!iso) return '';
+  const t = Date.parse(iso);
+  return Number.isNaN(t) ? '' : new Date(t).toLocaleString();
+}
+
+/** F2 — the plain-words site-equipment advisory shown on the freight receipt (which end can't lift the load). */
+function freightGapDetail(gaps: Array<'origin' | 'dest'>): string {
+  const here = gaps.includes('origin');
+  const there = gaps.includes('dest');
+  const where = here && there ? 'to load it here and unload it at the destination' : here ? 'to load it here' : 'to unload it at the destination';
+  return `This load may need a forklift or tail-lift ${where}. Arrange it before the truck arrives.`;
+}
+
 /**
  * Take in a parcel. Scanning the sticker decides which counter this is (PG4): a code the
  * network already knows — a peer send booked in the Send app (collect the locked cash) or
@@ -24,9 +39,11 @@ function openLabel(svg: string) {
  */
 export function AcceptScreen({ state, actions }: AcceptScreenProps) {
   const f = state.accept;
-  // What blocks the walk-up accept: a missing field, OR a dedicated (P4+) load that can't ride the bus (the
-  // server would refuse it, so the button + the read-aloud must not tell the clerk to tap).
-  const blockReason = acceptMissing(f) ?? (state.acceptDerived?.dedicated ? 'Too big for the bus — it needs a freight truck. You cannot take it in here.' : null);
+  // A dedicated (P4+) walk-up no longer dead-ends (F2): it switches the tail to the "book as freight" flow.
+  // So the parcel-accept block is just the missing walk-up fields; the freight branch owns its own block.
+  const isDedicated = Boolean(state.acceptDerived?.dedicated);
+  const blockReason = acceptMissing(f);
+  const freightBlock = bookFreightMissing(f, Date.now());
   // Only a SETTLED preview drives the confirm card — never a stale one still resolving under a new scan.
   const pm = state.preMintState === 'ready' ? state.preMint : null;
   const booked = pm && (pm.kind === 'peer_send' || pm.kind === 'vendor_order');
@@ -155,10 +172,6 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
         </label>
       </Card>
 
-      {state.acceptDerived?.dedicated ? (
-        <Note tone="warn" icon="truck" title="Too big for the bus" detail="This is dedicated-freight cargo — it can't ride the shared bus. Arrange a freight truck; taking it in here will be refused." />
-      ) : null}
-
       <Card label="What's inside?">
         <select class="select" value={f.natureCode} onChange={(e) => actions.setAccept({ natureCode: e.currentTarget.value as typeof f.natureCode })}>
           {NATURES.map((n) => (
@@ -171,6 +184,23 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
       </Card>
 
       <DestinationCard state={state} actions={actions} />
+
+      {isDedicated ? (
+        <>
+          <Note tone="info" icon="truck" title="Too big for the bus — book it as freight" detail="This is dedicated cargo: it needs a truck, not the shared bus. Book it as freight here — set the cash budget, and the pickup day if it isn't going today." />
+          <FreightBookingCard state={state} actions={actions} />
+          <div class="scr__cta">
+            <Button onClick={() => void actions.submitBookFreight()} disabled={Boolean(freightBlock)} busy={state.busy === 'book-freight'}>
+              Book the freight
+            </Button>
+            {freightBlock ? <p class="hint" style="margin-top:8px">{freightBlock}</p> : null}
+          </div>
+          <div class="scr__foot">
+            <ReadAloud text={() => freightBlock ?? 'Everything is filled in. Collect the cash budget, then book the freight.'} label="What is still missing?" />
+          </div>
+        </>
+      ) : (
+        <>
 
       <Card label="Phone numbers">
         <div class="field">
@@ -223,6 +253,8 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
       </div>
         </>
       )}
+        </>
+      )}
 
       {/* PG4 — the booked-parcel intake confirmation: what was collected, where it goes next. */}
       <Sheet open={Boolean(state.intakeDone)} onClose={actions.dismissIntakeDone} title="Parcel taken in">
@@ -257,6 +289,33 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
             <Button variant="link" onClick={actions.dismissAcceptedLabel}>
               Done — take in another
             </Button>
+          </>
+        ) : null}
+      </Sheet>
+
+      {/* F2 — the counter-freight receipt: the tracking code to print, the cash cap to collect, and a lifting advisory. */}
+      <Sheet open={Boolean(state.bookedFreight)} onClose={actions.dismissBookedFreight} title="Freight booked">
+        {state.bookedFreight ? (
+          <>
+            <p class="t-body">
+              {state.bookedFreight.status === 'scheduled'
+                ? `Booked for pickup on ${whenText(state.bookedFreight.scheduledPickupAt)}. A truck can reserve it ahead of the day.`
+                : 'On the marketplace now — a nearby truck will be offered this load.'}
+            </p>
+            <Card label="Tracking code">
+              <p class="t-body">
+                <b style="font-size:22px; letter-spacing:1px">{state.bookedFreight.code}</b>
+              </p>
+              <p class="card__note">Write this on the customer’s receipt — it is how they follow the shipment.</p>
+              {state.bookedFreight.trackingKey ? <p class="hint">Key: {state.bookedFreight.trackingKey}</p> : null}
+            </Card>
+            {state.bookedFreight.maxSpend != null ? (
+              <p class="hint">Collect up to {state.bookedFreight.maxSpend.toFixed(2)} in cash now — give change once the driver’s price is set.</p>
+            ) : null}
+            {state.bookedFreight.equipmentGaps?.length ? (
+              <Note tone="warn" icon="warning" title="Lifting help may be needed" detail={freightGapDetail(state.bookedFreight.equipmentGaps)} />
+            ) : null}
+            <Button onClick={actions.dismissBookedFreight}>Done — book another</Button>
           </>
         ) : null}
       </Sheet>
@@ -333,6 +392,69 @@ function DestinationCard({ state, actions }: { state: AgentState; actions: Agent
       ) : null}
 
       {f.destShopName ? <p class="card__note">Going to <b>{f.destShopName}</b>.</p> : null}
+    </Card>
+  );
+}
+
+/**
+ * F2 — the counter-freight booking card (shown only for a dedicated/P4+ walk-up). The cash budget cap (the
+ * most the customer will pay → the freight's ceiling), immediate vs planned pickup (a future day, with the
+ * F1 early-reservation choice), and an optional customer phone. No sticker, no proof photo — freight isn't
+ * shelved; the printed tracking code is the artefact.
+ */
+function FreightBookingCard({ state, actions }: { state: AgentState; actions: AgentActions }) {
+  const f = state.accept;
+  return (
+    <Card label="Book as freight">
+      <div class="field">
+        <label class="field__label" for="freight-budget">
+          Cash budget — the most the customer will pay
+        </label>
+        <input
+          id="freight-budget"
+          class="input"
+          type="number"
+          inputMode="decimal"
+          min="0"
+          step="0.5"
+          value={f.budgetCap}
+          onInput={(e) => actions.setAccept({ budgetCap: e.currentTarget.value })}
+          placeholder="e.g. 40"
+        />
+      </div>
+      <p class="card__note">No driver can be paid more than this. Collect it in cash now; give change once the price is set.</p>
+
+      <div class="seg" role="group" aria-label="When is it picked up" style="margin-top:12px">
+        <button type="button" class={`seg__btn${f.freightWhen === 'now' ? ' seg__btn--on' : ''}`} aria-pressed={f.freightWhen === 'now'} onClick={() => actions.setAccept({ freightWhen: 'now' })}>
+          <Icon name="truck" size={18} /> Ship now
+        </button>
+        <button type="button" class={`seg__btn${f.freightWhen === 'planned' ? ' seg__btn--on' : ''}`} aria-pressed={f.freightWhen === 'planned'} onClick={() => actions.setAccept({ freightWhen: 'planned' })}>
+          <Icon name="clock" size={18} /> Planned
+        </button>
+      </div>
+
+      {f.freightWhen === 'planned' ? (
+        <>
+          <div class="field" style="margin-top:12px">
+            <label class="field__label" for="freight-date">
+              Pickup day and time
+            </label>
+            <input id="freight-date" class="input" type="datetime-local" value={f.freightDate} onInput={(e) => actions.setAccept({ freightDate: e.currentTarget.value })} />
+          </div>
+          <label class="checkline" style="margin-top:12px">
+            <input type="checkbox" checked={f.allowEarlyClaim} onChange={(e) => actions.setAccept({ allowEarlyClaim: e.currentTarget.checked })} />
+            <span>Let a driver reserve it before the day — useful when trucks are scarce</span>
+          </label>
+        </>
+      ) : null}
+
+      <div class="field" style="margin-top:12px">
+        <label class="field__label" for="freight-phone">
+          Customer phone (optional)
+        </label>
+        <input id="freight-phone" class="input" type="tel" inputMode="tel" value={f.customerMobile} onInput={(e) => actions.setAccept({ customerMobile: e.currentTarget.value })} placeholder="07…" autocomplete="off" />
+      </div>
+      <p class="card__note">If they have a phone they can follow the shipment. If not, the printed code is enough.</p>
     </Card>
   );
 }

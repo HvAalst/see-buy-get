@@ -29,7 +29,7 @@ import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
-import { AcceptParcelDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, CoupleDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, OverdraftDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetPriceDto, ShelfDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
+import { AcceptParcelDto, BookFreightDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, CoupleDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, OverdraftDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetPriceDto, ShelfDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
 import { classifySize, SIZE_WEIGHT_KG } from './pudo.config';
 import { haversineKm } from './geo';
 import { GEOCODER, Geocoder } from './geocoder';
@@ -310,6 +310,62 @@ export class SbgController {
   @Post('parcels/accept')
   accept(@Body() dto: AcceptParcelDto, @Actor() actor: IntrospectionResult) {
     return this.parcels.accept({ ...dto, agentDid: actingDid(actor, dto.agentDid) });
+  }
+
+  /** F2 — the counter books a too-big (dedicated, P4+) walk-up as FREIGHT instead of refusing it (the perishable
+   *  "book immediate or planned" + rural "the shop IS the PUDO" path). The acting agent is pinned to its token
+   *  (operator may override) and is the on-platform originator; the customer pays a CASH budget cap at the counter
+   *  (→ the freight's maxSpend ceiling, so no driver can claim above it) and settles OFF-PLATFORM — no shipperDid,
+   *  so the load stays 'unpaid' and the agent's parcel-sized wallet is never billed a truck haul (the driver is
+   *  still paid on delivery by the platform, as for any bulletin freight). Immediate or planned (F1). Returns a
+   *  tracking code the agent prints for a phone-less customer. */
+  @Post('parcels/book-freight')
+  bookFreight(@Body() dto: BookFreightDto, @Actor() actor: IntrospectionResult) {
+    const agentDid = actingDid(actor, dto.agentDid);
+    const origin = this.agents.get(agentDid); // 404 if the acting id is not an agent
+    if (dto.destPudoDid === agentDid) throw new GlosError('INVALID_INPUT', 'A shipment cannot be sent to the shop booking it — pick a different destination.');
+    const dest = this.agents.get(dto.destPudoDid); // 404 on an unknown destination
+    const dimsCm: [number, number, number] = [dto.dimensionsCm.l, dto.dimensionsCm.w, dto.dimensionsCm.h];
+    const cargoClass = this.cargo.classify({ kg: dto.weightKg, dimsCm });
+    // Freight is the DEDICATED (P4+) lane only. A bus-sized load must be taken in as a normal parcel, not booked
+    // as a truck haul — reject it so the counter can't turn an ordinary parcel into an (unpaid) freight job.
+    if (!this.cargo.dedicatedRequired(cargoClass)) {
+      throw new GlosError('INVALID_INPUT', `A ${cargoClass} load fits the parcel network — take it in as a normal parcel, not freight.`);
+    }
+    const freight = this.dispatch.registerFreight({
+      description: `Counter freight (${cargoClass}) booked at ${origin.shopName}`,
+      pickupLocation: origin.location,
+      pickupLabel: origin.shopName,
+      destLabel: dest.shopName,
+      destLocation: dest.location,
+      weightKg: dto.weightKg,
+      dimensionsCm: dimsCm,
+      natureCode: dto.natureCode,
+      fragile: dto.fragile,
+      bulk: false, // a walk-up dedicated load is DISCRETE/palletised — it needs real handling equipment, not a tipper
+      // shipperDid intentionally omitted: a cash counter booking settles OFF-PLATFORM (paidStatus 'unpaid'), so
+      // no wallet is billed — the customer's cash cap is the money, held by the agent (the F2 model the user chose).
+      originEquipment: origin.equipment,
+      destEquipment: dest.equipment,
+      buyerMobile: dto.customerMobile, // hashed on the freight (never the cleartext) so the customer can track it
+      maxSpend: dto.budgetCap, // the cash cap → dispatch won't OFFER or let a driver CLAIM above it
+      scheduledPickupAt: dto.scheduledPickupAt,
+      allowEarlyClaim: dto.allowEarlyClaim,
+    });
+    // A focused, PII-free receipt for the counter: the human FRT code + the public tracking key to print, the
+    // status/date, and the site-equipment advisory (a small shop may not be able to load a pallet).
+    return {
+      freightId: freight.freightId,
+      code: freight.code,
+      trackingKey: freight.trackingKey,
+      status: freight.status,
+      scheduledPickupAt: freight.scheduledPickupAt,
+      destLabel: freight.destLabel,
+      weightKg: freight.weightKg,
+      cargoClass: freight.cargoClass,
+      equipmentGaps: freight.equipmentGaps,
+      maxSpend: freight.maxSpend,
+    };
   }
 
   @Post('parcels/handover')

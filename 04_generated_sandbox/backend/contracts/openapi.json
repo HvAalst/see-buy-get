@@ -4803,6 +4803,29 @@
         }
       }
     },
+    "/v1/sbg/parcels/book-freight": {
+      "post": {
+        "operationId": "Sbg.bookFreight",
+        "summary": "",
+        "description": "F2 — the counter books a too-big (dedicated, P4+) walk-up as FREIGHT instead of refusing it (the perishable\n \"book immediate or planned\" + rural \"the shop IS the PUDO\" path). The acting agent is pinned to its token\n (operator may override) and is the on-platform originator; the customer pays a CASH budget cap at the counter\n (→ the freight's maxSpend ceiling, so no driver can claim above it) and settles OFF-PLATFORM — no shipperDid,\n so the load stays 'unpaid' and the agent's parcel-sized wallet is never billed a truck haul (the driver is\n still paid on delivery by the platform, as for any bulletin freight). Immediate or planned (F1). Returns a\n tracking code the agent prints for a phone-less customer.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookFreightDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/parcels/handover": {
       "post": {
         "operationId": "Sbg.handover",
@@ -12047,6 +12070,62 @@
           "scans"
         ]
       },
+      "BookFreightDto": {
+        "type": "object",
+        "properties": {
+          "agentDid": {
+            "type": "string"
+          },
+          "dimensionsCm": {
+            "$ref": "#/components/schemas/DimensionsDto"
+          },
+          "weightKg": {
+            "type": "number",
+            "minimum": 0.01
+          },
+          "natureCode": {
+            "type": "string",
+            "enum": [
+              "GEN",
+              "FOD",
+              "FOP",
+              "HAZ-CHEM",
+              "HAZ-DUST",
+              "HAZ-BIO",
+              "HAZ-FLAM",
+              "FRG",
+              "ODR",
+              "HUM"
+            ]
+          },
+          "fragile": {
+            "type": "boolean"
+          },
+          "destPudoDid": {
+            "type": "string"
+          },
+          "customerMobile": {
+            "type": "string"
+          },
+          "budgetCap": {
+            "type": "number",
+            "minimum": 0.01
+          },
+          "scheduledPickupAt": {
+            "type": "string",
+            "pattern": "SCHEDULED_PICKUP_RE"
+          },
+          "allowEarlyClaim": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "dimensionsCm",
+          "weightKg",
+          "destPudoDid",
+          "budgetCap"
+        ]
+      },
       "HandoverDto": {
         "type": "object",
         "properties": {
@@ -13626,7 +13705,7 @@
           "scheduledPickupAt": {
             "type": "string",
             "description": "F1 — a FUTURE pickup date: the load is booked for later. Must be a full datetime WITH an offset (Z or\n ±HH:MM) so the instant is unambiguous — a date-only or offset-less string would resolve to a server-\n timezone-dependent moment. Absent = ship now.",
-            "pattern": "/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$/"
+            "pattern": "SCHEDULED_PICKUP_RE"
           },
           "allowEarlyClaim": {
             "type": "boolean",
