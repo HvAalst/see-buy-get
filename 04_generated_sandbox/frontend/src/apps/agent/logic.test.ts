@@ -7,6 +7,7 @@ import {
   canAccept,
   consignmentProgress,
   destinationZones,
+  DRIVER_ISSUE_LABELS,
   DURABLE_NATURES,
   gateNotice,
   parseBudget,
@@ -191,6 +192,14 @@ describe('consolidation lots (F3)', () => {
     expect(consignmentProgress({ weightKg: 900, targetKg: 1000 })).toEqual({ pct: 90, label: '900 / 1000 kg' });
     expect(consignmentProgress({ weightKg: 1200, targetKg: 1000 }).pct).toBe(100); // an over-full lot clamps at 100
     expect(consignmentProgress({ weightKg: 0, targetKg: 0 }).pct).toBe(0); // no divide-by-zero
+  });
+});
+
+describe('driver ratings (REP2)', () => {
+  it('DRIVER_ISSUE_LABELS covers the movement-leg failings with plain words', () => {
+    const keys = DRIVER_ISSUE_LABELS.map((i) => i.key);
+    expect(keys).toEqual(expect.arrayContaining(['LATE_PICKUP', 'KEPT_OVERNIGHT', 'AFTER_HOURS', 'EQUIPMENT_FAILURE']));
+    expect(DRIVER_ISSUE_LABELS.every((i) => i.label.length > 0)).toBe(true);
   });
 });
 

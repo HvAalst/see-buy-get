@@ -6722,6 +6722,38 @@
         }
       }
     },
+    "/v1/sbg/drivers/{did}/rate": {
+      "post": {
+        "operationId": "Sbg.rateDriver",
+        "summary": "",
+        "description": "REP2 — an AGENT rates a DRIVER on the movement leg (pickup punctuality, on-time / after-hours arrival,\novernight holds, care, equipment). The acting agent is pinned to its token (operator may override). Gated\non a REAL interaction: the agent must have handed to / received from this driver (a badge is not secret, so\n\"knowing it\" is not enough). One rating per agent↔driver pair, last-wins.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RateDriverDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/reputation/{did}": {
       "get": {
         "operationId": "Sbg.reputationProfile",
@@ -6739,7 +6771,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       }
@@ -12987,6 +13026,44 @@
         "required": [
           "stars",
           "raterMobile"
+        ]
+      },
+      "RateDriverDto": {
+        "type": "object",
+        "properties": {
+          "issues": {
+            "type": "array",
+            "enum": [
+              "LATE_PICKUP",
+              "LATE_ARRIVAL",
+              "KEPT_OVERNIGHT",
+              "AFTER_HOURS",
+              "EQUIPMENT_FAILURE",
+              "ROUGH_HANDLING"
+            ],
+            "items": {
+              "type": "string",
+              "enum": [
+                "LATE_PICKUP",
+                "LATE_ARRIVAL",
+                "KEPT_OVERNIGHT",
+                "AFTER_HOURS",
+                "EQUIPMENT_FAILURE",
+                "ROUGH_HANDLING"
+              ]
+            }
+          },
+          "agentDid": {
+            "type": "string"
+          },
+          "stars": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 5
+          }
+        },
+        "required": [
+          "stars"
         ]
       },
       "AssignNodeDto": {

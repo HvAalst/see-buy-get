@@ -91,6 +91,15 @@ export function createAgentApi(sbg: SbgClient) {
     /** One parcel by sticker id (drives the release flow's state machine). */
     parcel: (id: string) => sbg.request((c) => c.GET('/v1/sbg/parcels/{id}', { params: { path: { id } } })),
 
+    /** REP2 — rate a driver this shop just handed to / received from (stars + specific issue flags). Gated
+     *  server-side on the real interaction. */
+    rateDriver: (driverDid: string, body: { stars: number; issues?: string[] }) =>
+      // issues are the checked issue keys — valid DRIVER_ISSUES members; cast to satisfy the enum-array contract.
+      sbg.request((c) => c.POST('/v1/sbg/drivers/{did}/rate', { params: { path: { did: driverDid } }, body: { stars: body.stars, issues: body.issues as never } })),
+
+    /** REP2 — a provider's public reputation profile (a driver or an agent): PII-free name + aggregate rating. */
+    reputation: (did: string) => sbg.request((c) => c.GET('/v1/sbg/reputation/{did}', { params: { path: { did } } })),
+
     /** Take in a walk-up drop-off: sticker + MEASURED dims (the tier is derived) + destination PUDO +
      *  phones + proof photo. `size` is kept only as a legacy fallback. */
     accept: (body: {

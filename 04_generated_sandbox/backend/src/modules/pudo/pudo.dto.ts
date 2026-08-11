@@ -1,5 +1,7 @@
-import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsIn, IsNumber, IsObject, IsOptional, IsString, Matches, Min, ValidateNested } from 'class-validator';
+import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsIn, IsNumber, IsObject, IsOptional, IsString, Matches, Max, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { DRIVER_ISSUES, DriverIssue } from './rating.service';
 import { TRUCK_SUBTYPES } from './fleet.config';
 import { MEDIA_KINDS, MediaKind } from './media.types';
 import { CARGO_NATURES, CargoNature, EQUIPMENT, Equipment } from './cargo.types';
@@ -174,6 +176,14 @@ export class PingDto {
 export class RateDto {
   @IsNumber() @Min(1) stars!: number;
   @IsString() raterMobile!: string;
+}
+
+/** REP2 — an agent rates a driver on the movement leg (stars + the specific failings it witnessed). */
+export class RateDriverDto {
+  @IsOptional() @IsString() agentDid?: string; // operator-override only; a normal agent is pinned to its token
+  @IsNumber() @Min(1) @Max(5) stars!: number;
+  // @ApiPropertyOptional so the emitted contract is an ARRAY of the enum (the plugin otherwise infers a scalar).
+  @IsOptional() @IsArray() @IsIn([...DRIVER_ISSUES], { each: true }) @ApiPropertyOptional({ enum: DRIVER_ISSUES, isArray: true }) issues?: DriverIssue[];
 }
 
 export class DriverPayoutDto {

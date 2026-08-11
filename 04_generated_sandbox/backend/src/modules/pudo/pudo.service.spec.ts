@@ -2835,6 +2835,57 @@ describe('PUDO Light', () => {
     expect(listed.some((l) => l.code === lot.code)).toBe(true);
   });
 
+  // --- REP2: an AGENT rates a DRIVER on the movement leg (verified interaction, one-per-pair, driver profile) ---
+
+  const mkFleetDriver = (tag: string) => {
+    const corridor = corridors.addCorridor({ name: `RC-${tag}`, originZone: 'NorthTown', destZone: 'SouthTown' });
+    const d = coupleTipper(tag, { min: 0.8, max: 1.5 });
+    fleet.assignCorridor(d.did, corridor.corridorId);
+    return { d, badge: drivers.get(d.did).badgeId! };
+  };
+  const handOff = (agent: { did: string }, badge: string, parcelId: string) => {
+    parcels.accept({ agentDid: agent.did, parcelId, size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'r.jpg' } as never);
+    parcels.handover({ agentDid: agent.did, driverBadgeId: badge, parcelIds: [parcelId] } as never);
+  };
+
+  it('REP2: an agent rates a driver it served (issues + stars); the driver gets a PII-free profile; a stranger is refused', () => {
+    const agent = onboardAgent('Rating Shop', 'NorthTown', 50);
+    const { d, badge } = mkFleetDriver('RD1');
+    handOff(agent, badge, 'QR-RD1');
+
+    const res: any = controller.rateDriver(d.did, { stars: 2, issues: ['LATE_PICKUP', 'EQUIPMENT_FAILURE', 'LATE_PICKUP'] } as never, { role: 'pudo', did: agent.did } as never);
+    expect(res.driverComposite).toBe(2);
+    expect(res.rating.issues.slice().sort()).toEqual(['EQUIPMENT_FAILURE', 'LATE_PICKUP']); // deduped + validated
+    expect(rating.driverRating(d.did)).toMatchObject({ average: 2, count: 1, isNew: true });
+
+    // The driver's PUBLIC profile resolves — display name + rating only, never PII.
+    const profile = controller.reputationProfile(d.did) as Record<string, unknown> & { rating: { count: number } };
+    expect(profile.kind).toBe('driver');
+    expect(profile.name).toBeTruthy();
+    expect(profile.rating.count).toBe(1);
+    expect(profile.nationalId).toBeUndefined();
+    expect(profile.licenceNumber).toBeUndefined();
+    expect(profile.mobile).toBeUndefined();
+
+    // A shop that never dealt with this driver cannot rate them (a badge is not a secret).
+    const stranger = onboardAgent('Stranger Shop', 'NorthTown', 50);
+    expect(() => controller.rateDriver(d.did, { stars: 5 } as never, { role: 'pudo', did: stranger.did } as never)).toThrow(/handed parcels to|received/);
+  });
+
+  it('REP2: one rating per agent↔driver pair (last-wins); the composite averages across agents', () => {
+    const a1 = onboardAgent('Coop A1', 'NorthTown', 50);
+    const a2 = onboardAgent('Coop A2', 'NorthTown', 50);
+    const { d, badge } = mkFleetDriver('RD2');
+    handOff(a1, badge, 'QR-A1');
+    handOff(a2, badge, 'QR-A2');
+
+    controller.rateDriver(d.did, { stars: 4 } as never, { role: 'pudo', did: a1.did } as never);
+    controller.rateDriver(d.did, { stars: 2 } as never, { role: 'pudo', did: a1.did } as never); // a1 revises — last-wins, not a 2nd vote
+    expect(rating.driverRating(d.did)).toMatchObject({ average: 2, count: 1 });
+    controller.rateDriver(d.did, { stars: 4 } as never, { role: 'pudo', did: a2.did } as never); // a2 adds → avg (2+4)/2
+    expect(rating.driverRating(d.did)).toMatchObject({ average: 3, count: 2 });
+  });
+
   it('S32: claim() re-checks bulk — a re-coupled non-bulk vehicle cannot reserve a bulk freight', () => {
     const d = drivers.register({ displayName: 'BLK', fullName: 'B', nationalId: 'ID-BLK', mobile: '+254900101', licenceClasses: ['truck', 'van'], licenceNumber: 'L-BLK', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
     drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });

@@ -103,6 +103,17 @@ export function consignmentProgress(lot: { weightKg: number; targetKg: number })
   return { pct, label: `${lot.weightKg} / ${lot.targetKg} kg` };
 }
 
+/** REP2 — the driver failings an agent can flag alongside the star rating, in plain words (the movement
+ *  leg the shop actually witnesses). Keys mirror the backend DRIVER_ISSUES. */
+export const DRIVER_ISSUE_LABELS: Array<{ key: string; label: string }> = [
+  { key: 'LATE_PICKUP', label: 'Late to pick up' },
+  { key: 'LATE_ARRIVAL', label: 'Arrived late' },
+  { key: 'KEPT_OVERNIGHT', label: 'Kept parcels overnight' },
+  { key: 'AFTER_HOURS', label: 'Came after opening hours' },
+  { key: 'EQUIPMENT_FAILURE', label: 'Vehicle or equipment problem' },
+  { key: 'ROUGH_HANDLING', label: 'Rough handling' },
+];
+
 /** The measure-your-parcel fields (free-typed strings until they parse). */
 export interface DimsForm {
   l: string;

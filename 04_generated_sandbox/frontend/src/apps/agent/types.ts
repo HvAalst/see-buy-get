@@ -136,6 +136,8 @@ export interface HandoverView {
   expected?: string[];
   missed?: string[];
   shortShipped?: boolean;
+  /** REP2 — the fleet driver who took the batch, so the shop can rate them for this leg (absent for a legacy driver). */
+  driverDid?: string;
 }
 
 export interface ArriveView {
@@ -150,6 +152,18 @@ export interface CollectView {
 
 export interface ReceiveBagView {
   delivered: string[];
+  /** REP2 — the driver who carried the bag here, so the receiving shop can rate the arrival. */
+  driverDid?: string;
+}
+
+/** REP2 — a provider's public reputation profile (a driver or an agent): PII-free name + aggregate rating. */
+export interface ReputationProfileView {
+  did: string;
+  kind: 'agent' | 'driver';
+  name: string;
+  zone?: string;
+  rating: { average: number; count: number; isNew?: boolean };
+  since?: string;
 }
 
 export interface Benchmark {

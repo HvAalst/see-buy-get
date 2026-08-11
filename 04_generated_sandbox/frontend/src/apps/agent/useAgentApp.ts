@@ -34,6 +34,7 @@ import type {
   ParcelView,
   RatesView,
   ReceiveBagView,
+  ReputationProfileView,
 } from './types';
 
 export type Screen = 'home' | 'accept' | 'handover' | 'release' | 'collect' | 'receivebag' | 'rates' | 'void' | 'records' | 'consignments';
@@ -150,6 +151,8 @@ export interface AgentState {
   receivebag: { code: string };
   /** The reverse-logistics window: which recent drop-off is being undone, + its torn-label photo. */
   void: { parcelId: string | null; photoRef: string };
+  /** REP2 — the "rate the driver" prompt, opened after a handover/bag-receipt. `profile` fills in once fetched. */
+  driverRating: { driverDid: string; profile: ReputationProfileView | null } | null;
 }
 
 const EMPTY_HANDOVER = { badge: '', selected: [] as string[], missed: [] as string[] };
@@ -201,6 +204,7 @@ const INITIAL: AgentState = {
   collect: { ...EMPTY_COLLECT },
   receivebag: { code: '' },
   void: { parcelId: null, photoRef: '' },
+  driverRating: null,
 };
 
 const isOffline = (e: SbgError) => e.code === 'NETWORK' || e.code === 'TIMEOUT';
@@ -865,6 +869,39 @@ export function useAgentApp() {
   /** F2 — dismiss the booked-freight receipt and return to the shop home. */
   const dismissBookedFreight = useCallback(() => setState((s) => ({ ...s, bookedFreight: null, screen: 'home' })), []);
 
+  /* -------------------------------------------------------- REP2: rate a driver */
+
+  /** REP2 — open the "rate the driver" prompt (after a handover / bag-receipt) and fetch the driver's public
+   *  profile so the sheet can show who they are and their standing rating. */
+  const openRateDriver = useCallback(
+    async (driverDid: string) => {
+      if (!client || !driverDid) return;
+      setState((s) => ({ ...s, driverRating: { driverDid, profile: null } }));
+      const r = await client.api.reputation(driverDid);
+      if (r.error) return; // the sheet still works without the name/current rating
+      setState((s) => (s.driverRating?.driverDid === driverDid ? { ...s, driverRating: { driverDid, profile: narrow<ReputationProfileView>(r.data) } } : s));
+    },
+    [client],
+  );
+
+  const dismissRateDriver = useCallback(() => setState((s) => ({ ...s, driverRating: null })), []);
+
+  /** REP2 — submit the shop's rating of the driver (stars + issue tags) for the leg just completed. */
+  const submitDriverRating = useCallback(
+    async (stars: number, issues: string[]) => {
+      const driverDid = stateRef.current.driverRating?.driverDid;
+      if (!client || !driverDid || !(stars >= 1 && stars <= 5)) return;
+      await run('rate-driver', async () => {
+        const r = await client.api.rateDriver(driverDid, { stars, issues: issues.length ? issues : undefined });
+        if (r.error) return fail(r.error);
+        buzz();
+        setState((s) => ({ ...s, driverRating: null }));
+        pushToast({ tone: 'ok', icon: 'star', title: 'Driver rated', detail: 'Thank you — this helps the whole network.' });
+      });
+    },
+    [client, run, fail, pushToast],
+  );
+
   /** F3 — open a consolidation lot for a durable dry commodity. */
   const openConsignment = useCallback(
     async (input: { natureCode: string; destLabel: string; targetKg: number; maxSpend?: number }) => {
@@ -1015,8 +1052,9 @@ export function useAgentApp() {
             : undefined,
       });
       await refresh();
+      if (v?.driverDid) void openRateDriver(v.driverDid); // REP2 — offer to rate the driver for this pickup
     });
-  }, [client, did, run, fail, pushToast, refresh, loadShopParcels]);
+  }, [client, did, run, fail, pushToast, refresh, loadShopParcels, openRateDriver]);
 
   // `override` carries a freshly scanned value: a camera read sets state AND calls here in
   // the same tick, and stateRef has not caught up yet, so the scan passes its value in.
@@ -1139,8 +1177,9 @@ export function useAgentApp() {
         detail: `${v?.delivered?.length ?? 0} parcel(s) shelved for pickup.`,
       });
       await refresh();
+      if (v?.driverDid) void openRateDriver(v.driverDid); // REP2 — offer to rate the driver for this arrival
     });
-  }, [client, did, run, fail, pushToast, refresh]);
+  }, [client, did, run, fail, pushToast, refresh, openRateDriver]);
 
   /**
    * Reverse logistics (compendium Ch 16.1): undo a drop-off inside the 5-minute window with
@@ -1222,6 +1261,9 @@ export function useAgentApp() {
       openVoid,
       setVoidPhoto,
       submitVoid,
+      openRateDriver,
+      submitDriverRating,
+      dismissRateDriver,
       uploadPhoto,
       pushToast,
       dismissToast,

@@ -211,10 +211,11 @@ export class MdpService {
    * (outbound), then empty the tote — freeing it for reuse AND releasing the carrying driver's
    * reserved capacity. This closes the last mile of the tote flow (the PUDO-side equivalent of dropBag).
    */
-  deliverBag(agentDid: string, code: string): { code: string; agentDid: string; delivered: string[] } {
+  deliverBag(agentDid: string, code: string): { code: string; agentDid: string; delivered: string[]; driverDid?: string } {
     const agent = this.agents.get(agentDid);
     const tote = this.totes.requireByCode(code);
     if (!tote.parcels.length) throw new GlosError('BAG_EMPTY', `Bag ${code} is empty`);
+    const driverDid = tote.claimedBy; // REP2 — the driver who carried the bag here, captured before empty() clears it
     if (tote.destinationNodeId && tote.destinationNodeId !== agentDid) throw new GlosError('BAG_MISADDRESSED', `Bag ${code} is addressed to ${tote.destinationLabel || tote.destinationNodeId}, not ${agent.shopName}`);
     const delivered: string[] = [];
     for (const parcelId of [...tote.parcels]) {
@@ -226,7 +227,7 @@ export class MdpService {
     }
     this.totes.empty(code, agentDid); // free the tote + release the driver's reserved capacity
     void this.events.publish(GlosEvent.Pudo.BagDelivered, { code, agentDid, delivered: delivered.length }, { source: 'pudo' }).catch(() => undefined);
-    return { code, agentDid, delivered };
+    return { code, agentDid, delivered, driverDid };
   }
 
   /**

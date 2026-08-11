@@ -5,6 +5,7 @@ import { CollectScreen } from './screens/CollectScreen';
 import { ConsignmentsScreen } from './screens/ConsignmentsScreen';
 import { HandoverScreen } from './screens/HandoverScreen';
 import { HomeScreen } from './screens/HomeScreen';
+import { RateDriverSheet } from './screens/RateDriverSheet';
 import { RatesScreen } from './screens/RatesScreen';
 import { RecordsScreen } from './screens/RecordsScreen';
 import { ReceiveBagScreen } from './screens/ReceiveBagScreen';
@@ -86,6 +87,9 @@ export function App() {
       </main>
 
       <BottomNav<Tab> items={tabs} active={tab} onSelect={(key) => actions.go(key as Screen)} />
+
+      {/* REP2 — the "rate the driver" prompt (after a handover / bag-receipt); keyed so the form resets per driver. */}
+      <RateDriverSheet key={state.driverRating?.driverDid ?? 'none'} state={state} actions={actions} />
 
       <Toasts state={state} actions={actions} />
       <FeedbackFlash />

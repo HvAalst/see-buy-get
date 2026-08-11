@@ -30,7 +30,7 @@ import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
-import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, CoupleDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, OverdraftDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetPriceDto, ShelfDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
+import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, CoupleDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, OverdraftDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetPriceDto, ShelfDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
 import { classifySize, SIZE_WEIGHT_KG } from './pudo.config';
 import { haversineKm } from './geo';
 import { GEOCODER, Geocoder } from './geocoder';
@@ -970,6 +970,31 @@ export class SbgController {
   }
 
   /**
+   * REP2 — an AGENT rates a DRIVER on the movement leg (pickup punctuality, on-time / after-hours arrival,
+   * overnight holds, care, equipment). The acting agent is pinned to its token (operator may override). Gated
+   * on a REAL interaction: the agent must have handed to / received from this driver (a badge is not secret, so
+   * "knowing it" is not enough). One rating per agent↔driver pair, last-wins.
+   */
+  @Post('drivers/:did/rate')
+  rateDriver(@Param('did') did: string, @Body() dto: RateDriverDto, @Actor() actor: IntrospectionResult) {
+    const agentDid = actingDid(actor, dto.agentDid);
+    this.agents.get(agentDid); // the rater must be an agent (404 otherwise)
+    this.assertServedByDriver(did, agentDid, actor); // verified-interaction gate (operator bypasses)
+    return this.ratings.rateDriver({ driverDid: did, byAgentDid: agentDid, stars: dto.stars, issues: dto.issues });
+  }
+
+  /** REP2 gate — the agent may rate a driver only for a real handover/receipt: a parcel this shop took in or
+   *  handed out that this driver actually carried (its driverBadgeId matches the driver's badge). Prevents a
+   *  shop trashing a driver it never dealt with. Operator bypasses (it acts on the network's behalf). */
+  private assertServedByDriver(driverDid: string, agentDid: string, actor?: IntrospectionResult): void {
+    const driver = this.drivers.get(driverDid); // 404 on an unknown driver
+    if (actor?.role === 'operator') return;
+    const badge = driver.badgeId;
+    const served = Boolean(badge) && this.parcels.list({}).some((p) => p.driverBadgeId === badge && (p.originAgentDid === agentDid || p.destAgentDid === agentDid));
+    if (!served) throw new GlosError('FORBIDDEN', 'You can only rate a driver you have handed parcels to or received a bag from');
+  }
+
+  /**
    * REP1 — a provider's PUBLIC reputation profile: a PII-free trust surface (name, zone, pin, the aggregate
    * stars + count, a "new" flag below the min-ratings floor, and serving-since). @Public for the same
    * open-data reasoning as /network/points — nothing operational (no balance, device, vault refs or PII)
@@ -979,16 +1004,15 @@ export class SbgController {
   @Public()
   @Get('reputation/:did')
   reputationProfile(@Param('did') did: string) {
-    const a = this.agents.get(did); // 404 if the did is not a rated provider (agents only in REP1)
-    return {
-      did: a.did,
-      kind: 'agent' as const,
-      name: a.shopName,
-      zone: a.zone,
-      location: a.location,
-      rating: this.ratings.agentRating(a.did),
-      since: a.createdAt,
-    };
+    // A rated provider is an AGENT (REP1) or a DRIVER (REP2). Try the agent registry first, then the driver
+    // registry; 404 only if the did is neither. Both surfaces are PII-free (a shop name/zone/pin, or a driver's
+    // non-PII display name — never a national ID, licence or phone).
+    const agent = this.agents.list().find((a) => a.did === did);
+    if (agent) {
+      return { did: agent.did, kind: 'agent' as const, name: agent.shopName, zone: agent.zone, location: agent.location, rating: this.ratings.agentRating(agent.did), since: agent.createdAt };
+    }
+    const d = this.drivers.get(did); // 404 if the did is neither an agent nor a driver
+    return { did: d.did, kind: 'driver' as const, name: d.displayName, rating: this.ratings.driverRating(d.did), since: d.createdAt };
   }
 
   // --- operator control tower (↔ M7/SSE light) — operator only ---

@@ -264,6 +264,7 @@ interface AcceptInput {
 export interface HandoverResult {
   manifestId: string;
   driverBadgeId: string;
+  driverDid?: string; // REP2 — the fleet driver who took the batch (rateable); absent for a legacy corridor driver
   corridorId?: string;
   vehicle: 'bus' | 'truck';
   handed: string[];
@@ -662,7 +663,9 @@ export class ParcelService implements OnApplicationBootstrap {
     // Pay the agent the handover fee once for the batch.
     if (handed.length) this.gate.payLabour(input.agentDid, HANDOVER_FEE, manifestId, 'manifest');
 
-    return { manifestId, driverBadgeId: badgeId, corridorId, vehicle: fleet ? vehicleType : this.corridors.chooseVehicle(loadKg), handed, rejected, expected, missed, shortShipped: missed.length > 0 };
+    // REP2 — surface the DID of the fleet driver who took the batch, so the shop can rate them for this leg
+    // (a legacy corridor-whitelist driver has no registry DID and isn't rateable → undefined).
+    return { manifestId, driverBadgeId: badgeId, driverDid: fleet ? fleet.driverDid : undefined, corridorId, vehicle: fleet ? vehicleType : this.corridors.chooseVehicle(loadKg), handed, rejected, expected, missed, shortShipped: missed.length > 0 };
   }
 
   /** Arrival at the destination PUDO → Ready_For_Pickup; OTP issued to the receiver. */
