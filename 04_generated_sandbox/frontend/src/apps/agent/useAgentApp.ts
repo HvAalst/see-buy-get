@@ -893,7 +893,12 @@ export function useAgentApp() {
       if (!client || !driverDid || !(stars >= 1 && stars <= 5)) return;
       await run('rate-driver', async () => {
         const r = await client.api.rateDriver(driverDid, { stars, issues: issues.length ? issues : undefined });
-        if (r.error) return fail(r.error);
+        if (r.error) {
+          // The rate sheet is a modal that covers the screen's ErrorNote, so surface the failure as a toast
+          // (which renders above it) — otherwise a failed submit looks identical to a saved one.
+          pushToast({ tone: 'danger', icon: 'warning', title: 'Could not save the rating', detail: errorSentence(r.error) });
+          return fail(r.error);
+        }
         buzz();
         setState((s) => ({ ...s, driverRating: null }));
         pushToast({ tone: 'ok', icon: 'star', title: 'Driver rated', detail: 'Thank you — this helps the whole network.' });

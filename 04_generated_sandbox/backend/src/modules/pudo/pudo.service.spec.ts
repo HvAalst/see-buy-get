@@ -2886,6 +2886,65 @@ describe('PUDO Light', () => {
     expect(rating.driverRating(d.did)).toMatchObject({ average: 3, count: 2 });
   });
 
+  it('REP2: the DEST shop that receives a parcel can rate the carrying driver (the bag-receipt half of the gate)', () => {
+    const origin = onboardAgent('Origin Shop', 'NorthTown', 50);
+    const dest = onboardAgent('Dest Shop', 'SouthTown', 50);
+    const { d, badge } = mkFleetDriver('RD3'); // corridor NorthTown → SouthTown
+    parcels.accept({ agentDid: origin.did, parcelId: 'QR-DEST', size: 'M', destZone: 'SouthTown', destPudoDid: dest.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'r.jpg' } as never);
+    parcels.handover({ agentDid: origin.did, driverBadgeId: badge, parcelIds: ['QR-DEST'] } as never);
+    // The DEST shop (the one that receives the driver's late bag) can rate them — the interaction is proven by
+    // the parcel it is the destination of, carried by this driver.
+    const res: any = controller.rateDriver(d.did, { stars: 3, issues: ['KEPT_OVERNIGHT'] } as never, { role: 'pudo', did: dest.did } as never);
+    expect(res.driverComposite).toBe(3);
+    expect(rating.driverRating(d.did).count).toBe(1);
+
+    // The fix that makes the bag path work: an On_Bus leg stamps the carrying driver's badge onto the parcel
+    // (a bag-carried parcel used to keep it undefined, so the dest shop could never prove the interaction).
+    parcels.accept({ agentDid: origin.did, parcelId: 'QR-BAG', size: 'M', destZone: 'SouthTown', destPudoDid: dest.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'r.jpg' } as never);
+    parcels.setTransit('QR-BAG', 'On_Bus', badge, 'bag leg');
+    expect(parcels.get('QR-BAG').driverBadgeId).toBe(badge);
+  });
+
+  // --- REP3: DERIVED reputation — a FLEET (aggregate of its drivers) + an MDP hub (operational scorecard) ---
+
+  const activateManager = (name: string, n: string) => {
+    const m = managers.register({ companyName: name, contactPhone: `+2548${n}`, ownerFullName: `O${n}`, ownerNationalId: `MGR-${n}`, location: { lat: -1.2, lng: 36.8 }, requirements: { businessRegistrationNo: `BRN-${n}`, transportOperatorLicence: `TOL-${n}`, taxId: `TAX-${n}` } } as never);
+    managers.submitKyc(m.did, { businessRegCertRef: 'r', operatorLicenceRef: 'l', ownerIdRef: 'i', proofOfAddressRef: 'a' });
+    managers.decideKyc(m.did, true);
+    managers.recordBond(m.did);
+    return m;
+  };
+  const mkManagedDriver = (mgrDid: string, tag: string) =>
+    drivers.register({ displayName: tag, fullName: tag, nationalId: `ND-${tag}`, mobile: `+2547${tag}`, licenceClasses: ['motorcycle'], criminalRecordClear: true, managerDid: mgrDid } as never);
+
+  it('REP3: a FLEET inherits the count-weighted aggregate of its drivers ratings', () => {
+    const mgr = activateManager('Speedy Freight', 'R3');
+    const d1 = mkManagedDriver(mgr.did, 'FD1');
+    const d2 = mkManagedDriver(mgr.did, 'FD2');
+    rating.rateDriver({ driverDid: d1.did, byAgentDid: 'a1', stars: 4 });
+    rating.rateDriver({ driverDid: d1.did, byAgentDid: 'a2', stars: 2 }); // d1: sum 6, count 2
+    rating.rateDriver({ driverDid: d2.did, byAgentDid: 'a1', stars: 3 }); // d2: sum 3, count 1
+
+    const fr = rating.fleetRating(mgr.did, [d1.did, d2.did]);
+    expect(fr.average).toBe(3); // (6+3)/(2+1) — count-weighted, not a mean-of-means
+    expect(fr.count).toBe(3);
+
+    const profile = controller.reputationProfile(mgr.did) as Record<string, unknown> & { rating: { average: number }; memberCount: number };
+    expect(profile.kind).toBe('fleet');
+    expect(profile.name).toBe('Speedy Freight');
+    expect(profile.rating.average).toBe(3);
+    expect(profile.memberCount).toBe(2);
+  });
+
+  it('REP3: an MDP hub resolves a derived operational scorecard (an empty hub reads clean)', () => {
+    const hub = mdps.register({ name: 'Central Hub', zones: ['NorthTown'], location: { lat: -1.2, lng: 36.8 } });
+    expect(monitor.mdpScorecard(hub.mdpId)).toEqual({ handling: 0, stuck: 0, onTimeRate: 1 });
+    const profile = controller.reputationProfile(hub.did) as Record<string, unknown> & { scorecard: { onTimeRate: number } };
+    expect(profile.kind).toBe('mdp');
+    expect(profile.name).toBe('Central Hub');
+    expect(profile.scorecard.onTimeRate).toBe(1);
+  });
+
   it('S32: claim() re-checks bulk — a re-coupled non-bulk vehicle cannot reserve a bulk freight', () => {
     const d = drivers.register({ displayName: 'BLK', fullName: 'B', nationalId: 'ID-BLK', mobile: '+254900101', licenceClasses: ['truck', 'van'], licenceNumber: 'L-BLK', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
     drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });

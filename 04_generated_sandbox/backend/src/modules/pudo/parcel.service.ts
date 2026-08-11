@@ -1115,7 +1115,14 @@ export class ParcelService implements OnApplicationBootstrap {
     const parcel = this.require(parcelId);
     parcel.status = status;
     parcel.toteId = toteId;
-    if (status === 'On_Bus' && !parcel.handedToBusAt) parcel.handedToBusAt = new Date().toISOString();
+    // On an On_Bus leg `by` is the carrying driver's badge (the bag/tote path — dropBag's At_MDP `by` is the hub
+    // name, so only stamp On_Bus). Track the CURRENT carrier per leg, exactly as the direct handover stamps it —
+    // otherwise a bag parcel keeps driverBadgeId undefined and REP2's "received a bag from" rating can't verify
+    // the interaction (the dest shop could never rate the driver that actually delivered its late bag).
+    if (status === 'On_Bus') {
+      parcel.driverBadgeId = by;
+      if (!parcel.handedToBusAt) parcel.handedToBusAt = new Date().toISOString();
+    }
     this.scan(parcel, status, by, note);
     return parcel;
   }

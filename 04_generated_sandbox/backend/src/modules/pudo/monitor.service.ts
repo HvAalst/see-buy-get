@@ -70,6 +70,19 @@ export class MonitorService {
     return flags;
   }
 
+  /**
+   * REP3 — a hub's DERIVED operational scorecard (MDPs aren't star-rated; they earn a reputation by moving
+   * parcels through fast). `handling` is its current inbound queue, `stuck` the parcels that have dwelt past
+   * the hub SLA (MDP_DWELL_H — the very signal the Stuck_At_MDP flag uses, so no new tracking), and
+   * `onTimeRate` the share still within SLA. An empty queue reads a clean 1.0.
+   */
+  mdpScorecard(mdpId: string): { handling: number; stuck: number; onTimeRate: number } {
+    const atMdp = this.parcels.list({ status: 'At_MDP' }).filter((p) => p.atMdpId === mdpId);
+    const stuck = atMdp.filter((p) => hoursSince(p.scans[p.scans.length - 1]?.at) > MDP_DWELL_H).length;
+    const handling = atMdp.length;
+    return { handling, stuck, onTimeRate: handling ? Math.round((1 - stuck / handling) * 100) / 100 : 1 };
+  }
+
   /** Operator dashboard — answers 'is the network moving / are agents online / is money flowing / what's on fire' in 5s. */
   dashboard() {
     const allAgents = this.agents.list();

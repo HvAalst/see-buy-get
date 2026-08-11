@@ -1004,15 +1004,30 @@ export class SbgController {
   @Public()
   @Get('reputation/:did')
   reputationProfile(@Param('did') did: string) {
-    // A rated provider is an AGENT (REP1) or a DRIVER (REP2). Try the agent registry first, then the driver
-    // registry; 404 only if the did is neither. Both surfaces are PII-free (a shop name/zone/pin, or a driver's
-    // non-PII display name — never a national ID, licence or phone).
+    // A rated provider is an AGENT (REP1), a DRIVER (REP2), a FLEET or an MDP hub (REP3). Resolve across the
+    // registries; 404 only if the did is none. Every surface is PII-free (shop/driver/company name, zone/pin —
+    // never a national ID, licence or phone).
     const agent = this.agents.list().find((a) => a.did === did);
     if (agent) {
       return { did: agent.did, kind: 'agent' as const, name: agent.shopName, zone: agent.zone, location: agent.location, rating: this.ratings.agentRating(agent.did), since: agent.createdAt };
     }
-    const d = this.drivers.get(did); // 404 if the did is neither an agent nor a driver
-    return { did: d.did, kind: 'driver' as const, name: d.displayName, rating: this.ratings.driverRating(d.did), since: d.createdAt };
+    const driver = this.drivers.list({}).find((x) => x.did === did);
+    if (driver) {
+      return { did: driver.did, kind: 'driver' as const, name: driver.displayName, rating: this.ratings.driverRating(driver.did), since: driver.createdAt };
+    }
+    // REP3 — a FLEET's DERIVED rating: the count-weighted aggregate of the drivers it fields.
+    const fleet = this.managers.list().find((m) => m.did === did);
+    if (fleet) {
+      const driverDids = this.drivers.list({ managerDid: fleet.did }).map((x) => x.did);
+      return { did: fleet.did, kind: 'fleet' as const, name: fleet.companyName, rating: this.ratings.fleetRating(fleet.did, driverDids), memberCount: driverDids.length, since: fleet.createdAt };
+    }
+    // REP3 — an MDP hub's DERIVED operational scorecard (on-time / dwell), not a star rating: hubs earn a
+    // reputation by moving parcels through fast, not by being rated.
+    const mdp = this.mdps.list().find((m) => m.did === did);
+    if (mdp) {
+      return { did: mdp.did, kind: 'mdp' as const, name: mdp.name, scorecard: this.monitor.mdpScorecard(mdp.mdpId) };
+    }
+    throw new GlosError('NOT_FOUND', 'No rated provider with that id');
   }
 
   // --- operator control tower (↔ M7/SSE light) — operator only ---

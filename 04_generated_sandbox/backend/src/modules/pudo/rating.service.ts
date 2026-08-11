@@ -127,6 +127,25 @@ export class RatingService {
   }
 
   /**
+   * REP3 — a FLEET's DERIVED rating: the count-weighted aggregate of its drivers' ratings (all their stars
+   * over the total number of ratings), with the same cold-start rule. A fleet is only as good as the drivers
+   * it fields, and a fleet with 30 ratings across its drivers is more trustworthy than one with 2 — so weight
+   * by volume, not a mean-of-means. The caller supplies the fleet's driver DIDs (it owns the roster).
+   */
+  fleetRating(fleetDid: string, driverDids: string[]): PublicRating {
+    let sum = 0;
+    let count = 0;
+    for (const did of driverDids) {
+      const t = this.driverTally.get(did);
+      if (t) {
+        sum += t.sum;
+        count += t.count;
+      }
+    }
+    return { agentDid: fleetDid, average: count ? Math.round((sum / count) * 100) / 100 : 0, count, isNew: count < MIN_PUBLIC_RATINGS };
+  }
+
+  /**
    * REP2 — an AGENT rates a DRIVER on the movement leg. ONE rating per (agent, driver) pair, last-wins: the
    * agent's standing opinion of that driver, updatable — never a second vote (so one agent can't ballot-stuff
    * a driver up or down). The CALLER must first prove the agent actually handed to / received from the driver
