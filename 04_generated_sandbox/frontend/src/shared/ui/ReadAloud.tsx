@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Icon } from './Icon';
+import { t, useLocale } from '../i18n';
 
 export interface ReadAloudProps {
   /**
@@ -8,6 +9,7 @@ export interface ReadAloudProps {
    * closure too — a captured string would speak yesterday's number.
    */
   text: () => string;
+  /** Defaults to the translated "Read this screen aloud". Pass a getter/string only to override the label. */
   label?: string;
 }
 
@@ -33,7 +35,8 @@ export function stopSpeaking(): void {
  * Tap to hear the screen. Second tap stops. Where the Web Speech API is missing the control
  * is not rendered at all — a dead speaker button teaches a non-reader that the app lies.
  */
-export function ReadAloud({ text, label = 'Read this screen aloud' }: ReadAloudProps) {
+export function ReadAloud({ text, label }: ReadAloudProps) {
+  useLocale(); // re-render (and re-translate the label) when the language changes
   const [supported] = useState(isSpeechSupported);
   const [speaking, setSpeaking] = useState(false);
 
@@ -68,7 +71,7 @@ export function ReadAloud({ text, label = 'Read this screen aloud' }: ReadAloudP
       aria-pressed={speaking}
     >
       <Icon name={speaking ? 'speakerOff' : 'speaker'} size={22} class="readaloud__ic" />
-      <span>{speaking ? 'Stop' : label}</span>
+      <span>{speaking ? t('common.stop') : (label ?? t('common.readAloud'))}</span>
     </button>
   );
 }

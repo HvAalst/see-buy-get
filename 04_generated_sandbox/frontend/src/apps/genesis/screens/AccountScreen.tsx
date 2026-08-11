@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { AuthImage, Button, Card, CodeBoxes, ErrorNote, Icon, MediaLibrary, Note, Pill, ReadAloud, Sheet } from '../../../shared/ui';
+import { AuthImage, Button, Card, CodeBoxes, ErrorNote, Icon, LanguageSwitcher, MediaLibrary, Note, Pill, ReadAloud, Sheet } from '../../../shared/ui';
+import { useT } from '../../../shared/i18n';
 import { codeReady, roleMeta } from '../logic';
 import { ROLE_APPS } from '../api';
 import { InviteSheet } from './InviteSheet';
@@ -18,6 +19,7 @@ export interface AccountScreenProps {
  * in a sheet (its own context, its own primary); sign-out is the outline action.
  */
 export function AccountScreen({ state, actions }: AccountScreenProps) {
+  const t = useT(); // re-render this screen's translated strings when the language changes
   const [pinOpen, setPinOpen] = useState(false);
   const [newPin, setNewPin] = useState('');
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -40,7 +42,7 @@ export function AccountScreen({ state, actions }: AccountScreenProps) {
 
   return (
     <div class="scr">
-      <h1 class="scr__title">{id.displayName ? `Hi, ${id.displayName}` : 'Your account'}</h1>
+      <h1 class="scr__title">{id.displayName ? t('common.greeting', { name: id.displayName }) : t('account.title')}</h1>
       <p class="scr__lede">Signed in as {state.authPhone || 'your phone'}.</p>
 
       {state.accountError ? <ErrorNote error={state.accountError} /> : null}
@@ -116,6 +118,10 @@ export function AccountScreen({ state, actions }: AccountScreenProps) {
           </Card>
         )}
       </section>
+
+      <Card title="Language">
+        <LanguageSwitcher />
+      </Card>
 
       <Card title="Sign in">
         <div class="rows">

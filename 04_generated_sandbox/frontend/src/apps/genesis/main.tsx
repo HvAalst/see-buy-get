@@ -1,6 +1,7 @@
 import { render } from 'preact';
 import '../../shared/tokens.css';
 import { App } from './app';
+import { initI18n } from '../../shared/i18n';
 
 /**
  * Send PWA entry.
@@ -18,4 +19,5 @@ import { App } from './app';
  * applied by an explicit tap.
  */
 const host = document.getElementById('app');
+initI18n(); // adopt the saved/device language + stamp <html lang/dir> before first paint
 if (host) render(<App />, host);
