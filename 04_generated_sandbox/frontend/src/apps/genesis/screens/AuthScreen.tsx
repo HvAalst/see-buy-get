@@ -1,4 +1,5 @@
 import { Button, Card, Checklist, CodeBoxes, ErrorNote, Note, ReadAloud } from '../../../shared/ui';
+import { useT } from '../../../shared/i18n';
 import { canPickContact } from '../../../shared/device';
 import { codeReady, phoneReady } from '../logic';
 import type { SendActions, SendState } from '../useSendApp';
@@ -15,11 +16,12 @@ export interface AuthScreenProps {
  * blue CTA per step; the mode/step switches are plain links.
  */
 export function AuthScreen({ state, actions }: AuthScreenProps) {
+  const t = useT();
   const busy = state.authBusy;
 
   return (
     <div class="scr">
-      {state.invited ? <Note tone="ok" icon="person" title="You've been invited to SeeBuyGet" detail="Join to send, track and collect parcels." /> : null}
+      {state.invited ? <Note tone="ok" icon="person" title={t('send.auth.invitedTitle')} detail={t('send.auth.invitedDetail')} /> : null}
 
       {state.authMode === 'login' ? (
         <LoginView state={state} actions={actions} busy={busy} />
@@ -31,14 +33,14 @@ export function AuthScreen({ state, actions }: AuthScreenProps) {
         <ReadAloud
           text={() =>
             state.authMode === 'login'
-              ? 'Enter your phone number and your four digit PIN to see your parcels.'
+              ? t('send.auth.aloudLogin')
               : state.authStep === 'phone'
-                ? 'Enter your phone number and we will send you a code.'
+                ? t('send.auth.aloudPhone')
                 : state.authStep === 'code'
-                  ? 'Type the code we sent to your phone.'
-                  : 'Choose a four digit PIN you will remember.'
+                  ? t('send.auth.aloudCode')
+                  : t('send.auth.aloudPin')
           }
-          label="Read this aloud"
+          label={t('send.readAloud')}
         />
       </div>
     </div>
@@ -47,9 +49,10 @@ export function AuthScreen({ state, actions }: AuthScreenProps) {
 
 /** A phone-number field with the optional "pick from contacts" shortcut (Android only; hidden elsewhere). */
 function PhoneField({ id, state, actions, hint }: { id: string; state: SendState; actions: SendActions; hint: 'send' | 'next' }) {
+  const t = useT();
   return (
     <div class="field">
-      <label class="field__label" for={id}>Your phone number</label>
+      <label class="field__label" for={id}>{t('send.auth.yourPhone')}</label>
       <input
         id={id}
         class="input"
@@ -62,76 +65,78 @@ function PhoneField({ id, state, actions, hint }: { id: string; state: SendState
         enterkeyhint={hint}
       />
       {canPickContact() ? (
-        <Button variant="link" chevron={false} onClick={() => void actions.pickContact()}>Pick from my contacts</Button>
+        <Button variant="link" chevron={false} onClick={() => void actions.pickContact()}>{t('send.pickContacts')}</Button>
       ) : null}
     </div>
   );
 }
 
 function LoginView({ state, actions, busy }: { state: SendState; actions: SendActions; busy: boolean }) {
+  const t = useT();
   // PIN-only ONLY when the number was remembered from a prior session — never just because a digit was
   // typed (that would collapse the field mid-entry for a first-time signer).
   const known = state.phoneKnown;
   const ready = phoneReady(state.authPhone) && codeReady(state.authPin, 4);
   return (
     <>
-      <h1 class="scr__title">Your parcels</h1>
-      <p class="scr__lede">{known ? 'Enter your PIN to see everything you send and receive.' : 'Sign in with your phone and PIN.'}</p>
+      <h1 class="scr__title">{t('send.auth.loginTitle')}</h1>
+      <p class="scr__lede">{known ? t('send.auth.ledeKnown') : t('send.auth.ledeNew')}</p>
 
       {state.authError ? <ErrorNote error={state.authError} /> : null}
 
       <Card>
         {known ? (
           <div class="field">
-            <span class="field__label">Your phone number</span>
+            <span class="field__label">{t('send.auth.yourPhone')}</span>
             <p class="signedas">{state.authPhone}</p>
-            <Button variant="link" chevron={false} onClick={() => actions.setAuthPhone('')}>Not you? Use a different number</Button>
+            <Button variant="link" chevron={false} onClick={() => actions.setAuthPhone('')}>{t('send.auth.notYou')}</Button>
           </div>
         ) : (
           <PhoneField id="auth-phone" state={state} actions={actions} hint="next" />
         )}
         <div class="field">
-          <span class="field__label">Your 4-digit PIN</span>
-          <CodeBoxes id="auth-pin" label="Your 4-digit PIN" length={4} value={state.authPin} onInput={actions.setAuthPin} disabled={busy} />
+          <span class="field__label">{t('send.auth.pin')}</span>
+          <CodeBoxes id="auth-pin" label={t('send.auth.pin')} length={4} value={state.authPin} onInput={actions.setAuthPin} disabled={busy} />
         </div>
       </Card>
 
       <div class="scr__cta">
         <Button chevron={false} onClick={() => void actions.submitLogin()} disabled={!ready} busy={busy}>
-          Sign in
+          {t('send.auth.signIn')}
         </Button>
       </div>
 
       <div class="scr__foot">
-        <Button variant="link" onClick={() => actions.setAuthMode('enroll')}>New here? Create an account</Button>
-        <Button variant="link" onClick={() => actions.setAuthMode('enroll')}>Forgot your PIN?</Button>
+        <Button variant="link" onClick={() => actions.setAuthMode('enroll')}>{t('send.auth.newHere')}</Button>
+        <Button variant="link" onClick={() => actions.setAuthMode('enroll')}>{t('send.auth.forgot')}</Button>
       </div>
     </>
   );
 }
 
 function EnrollView({ state, actions, busy }: { state: SendState; actions: SendActions; busy: boolean }) {
+  const t = useT();
   if (state.authStep === 'code') {
     return (
       <>
-        <h1 class="scr__title">Enter the code</h1>
-        <p class="scr__lede">We sent a 6-digit code to {state.authPhone}.</p>
+        <h1 class="scr__title">{t('send.auth.codeTitle')}</h1>
+        <p class="scr__lede">{t('send.auth.codeLede', { phone: state.authPhone })}</p>
         {state.authError ? <ErrorNote error={state.authError} showDetail /> : null}
         <Card>
           <div class="field">
-            <span class="field__label">The 6-digit code</span>
-            <CodeBoxes id="auth-otp" label="The 6-digit code" length={6} value={state.authCode} onInput={actions.setAuthCode} disabled={busy} />
+            <span class="field__label">{t('send.auth.codeLabel')}</span>
+            <CodeBoxes id="auth-otp" label={t('send.auth.codeLabel')} length={6} value={state.authCode} onInput={actions.setAuthCode} disabled={busy} />
           </div>
-          {state.authDevCode ? <p class="hint">Test code: {state.authDevCode}</p> : null}
+          {state.authDevCode ? <p class="hint">{t('send.auth.testCode', { code: state.authDevCode })}</p> : null}
         </Card>
         <div class="scr__cta">
           <Button chevron={false} onClick={() => void actions.submitCode()} disabled={!codeReady(state.authCode, 6)} busy={busy}>
-            Check the code
+            {t('send.auth.checkCode')}
           </Button>
         </div>
         <div class="scr__foot">
-          <Button variant="link" onClick={() => void actions.requestCode()}>Send a new code</Button>
-          <Button variant="link" onClick={() => actions.authBack()}>Change the number</Button>
+          <Button variant="link" onClick={() => void actions.requestCode()}>{t('send.auth.newCode')}</Button>
+          <Button variant="link" onClick={() => actions.authBack()}>{t('send.auth.changeNumber')}</Button>
         </div>
       </>
     );
@@ -140,22 +145,22 @@ function EnrollView({ state, actions, busy }: { state: SendState; actions: SendA
   if (state.authStep === 'pin') {
     return (
       <>
-        <h1 class="scr__title">Choose a PIN</h1>
-        <p class="scr__lede">Pick 4 digits you will remember — you use it to sign in next time.</p>
+        <h1 class="scr__title">{t('send.auth.pinTitle')}</h1>
+        <p class="scr__lede">{t('send.auth.pinLede')}</p>
         {state.authError ? <ErrorNote error={state.authError} /> : null}
         <Card>
           <div class="field">
-            <span class="field__label">Your new 4-digit PIN</span>
-            <CodeBoxes id="auth-newpin" label="Your new 4-digit PIN" length={4} value={state.authPin} onInput={actions.setAuthPin} disabled={busy} />
+            <span class="field__label">{t('send.newPin')}</span>
+            <CodeBoxes id="auth-newpin" label={t('send.newPin')} length={4} value={state.authPin} onInput={actions.setAuthPin} disabled={busy} />
           </div>
         </Card>
         <div class="scr__cta">
           <Button chevron={false} onClick={() => void actions.submitEnroll()} disabled={!codeReady(state.authPin, 4)} busy={busy}>
-            Create my account
+            {t('send.auth.createAccount')}
           </Button>
         </div>
         <div class="scr__foot">
-          <Button variant="link" onClick={() => actions.authBack()}>Back</Button>
+          <Button variant="link" onClick={() => actions.authBack()}>{t('common.back')}</Button>
         </div>
       </>
     );
@@ -163,22 +168,22 @@ function EnrollView({ state, actions, busy }: { state: SendState; actions: SendA
 
   return (
     <>
-      <h1 class="scr__title">Create your account</h1>
-      <p class="scr__lede">One account for everything you send and receive. We only use your number to reach you.</p>
+      <h1 class="scr__title">{t('send.auth.title')}</h1>
+      <p class="scr__lede">{t('send.auth.lede')}</p>
       {state.authError ? <ErrorNote error={state.authError} /> : null}
       <Card>
         <PhoneField id="enroll-phone" state={state} actions={actions} hint="send" />
       </Card>
       <div class="scr__cta">
         <Button chevron={false} onClick={() => void actions.requestCode()} disabled={!phoneReady(state.authPhone)} busy={busy}>
-          Send me a code
+          {t('send.auth.sendCode')}
         </Button>
       </div>
       <Card tone="soft">
-        <Checklist items={['One account for sending and receiving', 'Your number is never shown to other people', 'Sign in with a 4-digit PIN after this']} />
+        <Checklist items={[t('send.auth.perk1'), t('send.auth.perk2'), t('send.auth.perk3')]} />
       </Card>
       <div class="scr__foot">
-        <Button variant="link" onClick={() => actions.setAuthMode('login')}>I already have an account</Button>
+        <Button variant="link" onClick={() => actions.setAuthMode('login')}>{t('send.auth.haveAccount')}</Button>
       </div>
     </>
   );

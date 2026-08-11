@@ -1,4 +1,5 @@
 import { Button, Card, ErrorNote, Icon, Note, ReadAloud } from '../../../shared/ui';
+import { useT } from '../../../shared/i18n';
 import { toPlaceWords } from '../../../shared/placewords';
 import { LADDER, ladderIndex, mapsHref, showCollectCard, statusPresentation, stepTime, trackSummary } from '../logic';
 import type { SendActions, SendState } from '../useSendApp';
@@ -14,19 +15,20 @@ export interface TrackScreenProps {
  * the ladder and render as a full-width note instead.
  */
 export function TrackScreen({ state, actions }: TrackScreenProps) {
-  const t = state.result;
-  const offLadder = t && ladderIndex(t.status) === -1;
-  const at = t ? ladderIndex(t.status) : -1;
+  const t = useT();
+  const res = state.result;
+  const offLadder = res && ladderIndex(res.status) === -1;
+  const at = res ? ladderIndex(res.status) : -1;
 
   return (
     <div class="scr">
-      <h1 class="scr__title">Where is my parcel?</h1>
-      <p class="scr__lede">Type the tracking code from your message.</p>
+      <h1 class="scr__title">{t('send.track.title')}</h1>
+      <p class="scr__lede">{t('send.track.lede')}</p>
 
       <Card>
         <div class="field">
           <label class="field__label" for="track-key">
-            Tracking code
+            {t('send.track.codeLabel')}
           </label>
           <input
             id="track-key"
@@ -49,66 +51,66 @@ export function TrackScreen({ state, actions }: TrackScreenProps) {
         <div style="margin-top:12px">
           {/* Once a result is on screen, the way-finding CTA takes the solid slot (one per screen). */}
           <Button
-            variant={t ? 'outline' : 'primary'}
+            variant={res ? 'outline' : 'primary'}
             chevron={false}
             onClick={() => void actions.runTrack()}
             disabled={!state.key.trim()}
             busy={state.trackState === 'loading'}
           >
-            Find my parcel
+            {t('send.track.find')}
           </Button>
         </div>
       </Card>
 
       {state.trackState === 'error' && state.trackError ? <ErrorNote error={state.trackError} onRetry={() => void actions.runTrack()} /> : null}
 
-      {t && offLadder ? (
+      {res && offLadder ? (
         <Note
           tone="danger"
-          icon={statusPresentation(t.status).icon}
-          title={statusPresentation(t.status).word}
-          detail={`Ask at ${t.destination} — they can see what happened.`}
+          icon={statusPresentation(res.status, t).icon}
+          title={statusPresentation(res.status, t).word}
+          detail={t('send.track.offDetail', { dest: res.destination })}
         />
       ) : null}
 
-      {t && !offLadder ? (
+      {res && !offLadder ? (
         <>
-          <section class={`now now--${statusPresentation(t.status).tone}`} aria-live="polite">
-            <Icon name={statusPresentation(t.status).icon} size={34} class="now__ic" />
+          <section class={`now now--${statusPresentation(res.status, t).tone}`} aria-live="polite">
+            <Icon name={statusPresentation(res.status, t).icon} size={34} class="now__ic" />
             <span class="now__body">
-              <span class="now__word">{statusPresentation(t.status).word}</span>
+              <span class="now__word">{statusPresentation(res.status, t).word}</span>
               <span class="now__sub">
-                {t.status === 'Ready_For_Pickup'
-                  ? `Collect it at ${t.destination}`
-                  : t.status === 'Delivered'
-                    ? `Handed over at ${t.destination}`
-                    : `Going to ${t.destination}`}
+                {res.status === 'Ready_For_Pickup'
+                  ? t('send.track.collectAt', { dest: res.destination })
+                  : res.status === 'Delivered'
+                    ? t('send.track.handedAt', { dest: res.destination })
+                    : t('send.track.goingTo', { dest: res.destination })}
               </span>
             </span>
           </section>
 
-          {showCollectCard(t.status) ? (
+          {showCollectCard(res.status) ? (
             <>
-              <div class="row row--static" role="group" aria-label="Where to collect">
+              <div class="row row--static" role="group" aria-label={t('send.track.whereCollect')}>
                 <span class="row__ic">
                   <Icon name="home" size={24} />
                 </span>
                 <span class="row__body">
-                  <span class="row__t">{t.destination}</span>
-                  <span class="row__s">{t.destinationLandmark ?? `Zone ${t.destZone}`}</span>
-                  {t.destinationLocation ? <span class="row__s words">{toPlaceWords(t.destinationLocation)}</span> : null}
+                  <span class="row__t">{res.destination}</span>
+                  <span class="row__s">{res.destinationLandmark ?? t('send.zone', { zone: res.destZone })}</span>
+                  {res.destinationLocation ? <span class="row__s words">{toPlaceWords(res.destinationLocation)}</span> : null}
                 </span>
               </div>
-              {t.destinationLocation ? (
+              {res.destinationLocation ? (
                 <ReadAloud
-                  text={() => `The shop's three words are: ${toPlaceWords(t.destinationLocation!).split(' ').join(', ')}.`}
-                  label="Say where it is"
+                  text={() => t('send.track.sayWords', { words: toPlaceWords(res.destinationLocation!).split(' ').join(', ') })}
+                  label={t('send.track.sayWhere')}
                 />
               ) : null}
-              {t.status === 'Ready_For_Pickup' && mapsHref(t) ? (
+              {res.status === 'Ready_For_Pickup' && mapsHref(res) ? (
                 <div class="scr__cta">
-                  <a class="btn btn--primary btn--full" href={mapsHref(t)!} target="_blank" rel="noopener">
-                    Show me the way
+                  <a class="btn btn--primary btn--full" href={mapsHref(res)!} target="_blank" rel="noopener">
+                    {t('send.track.showWay')}
                     <Icon name="chevronRight" size={20} class="btn__chev" />
                   </a>
                 </div>
@@ -116,13 +118,13 @@ export function TrackScreen({ state, actions }: TrackScreenProps) {
             </>
           ) : null}
 
-          <Card label="The journey so far">
+          <Card label={t('send.track.journeySoFar')}>
             <ol class="ladder">
               {LADDER.map((s, i) => {
-                const p = statusPresentation(s);
+                const p = statusPresentation(s, t);
                 const done = i < at;
                 const now = i === at;
-                const step = t.steps.find((x) => x.status === s);
+                const step = res.steps.find((x) => x.status === s);
                 return (
                   <li key={s} class={`ladder__rung${done ? ' ladder__rung--done' : ''}${now ? ' ladder__rung--now' : ''}`}>
                     <span class="ladder__ic" aria-hidden="true">
@@ -141,7 +143,7 @@ export function TrackScreen({ state, actions }: TrackScreenProps) {
       ) : null}
 
       {state.recent.length ? (
-        <Card title="Parcels you looked up before" tone="soft">
+        <Card title={t('send.track.recentTitle')} tone="soft">
           <div class="rows" role="list">
             {state.recent.map((k) => (
               <button key={k} type="button" class="row" onClick={() => void actions.runTrack(k)}>
@@ -162,8 +164,8 @@ export function TrackScreen({ state, actions }: TrackScreenProps) {
 
       <div class="scr__foot">
         <ReadAloud
-          text={() => (t ? trackSummary(t) : 'Type the tracking code from your message, then tap find my parcel.')}
-          label="Read this aloud"
+          text={() => (res ? trackSummary(res, t) : t('send.track.aloudPrompt'))}
+          label={t('send.readAloud')}
         />
       </div>
     </div>

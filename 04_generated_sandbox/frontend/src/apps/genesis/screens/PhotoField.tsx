@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
+import { useT } from '../../../shared/i18n';
 
 export interface PhotoFieldProps {
   /** The captured mediaId, '' while empty. */
@@ -19,6 +20,7 @@ export interface PhotoFieldProps {
  * field (podPhotoRef / dispute photoRef) now holds a real mediaId. A local preview shows instantly.
  */
 export function PhotoField({ value, onCapture, upload, label, id, disabled }: PhotoFieldProps) {
+  const t = useT();
   const input = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -60,7 +62,7 @@ export function PhotoField({ value, onCapture, upload, label, id, disabled }: Ph
       {preview ? <img class="photo__preview" src={preview} alt="" /> : null}
       <button type="button" class={`photo__btn${done ? ' photo__btn--done' : ''}`} disabled={disabled || busy} onClick={() => input.current?.click()}>
         <Icon name={busy ? 'clock' : done ? 'check' : 'camera'} size={24} />
-        <span>{busy ? 'Uploading…' : done ? 'Photo captured — tap to retake' : failed ? 'Upload failed — tap to try again' : label}</span>
+        <span>{busy ? t('send.photo.uploading') : done ? t('send.photo.captured') : failed ? t('send.photo.failed') : label}</span>
       </button>
     </div>
   );

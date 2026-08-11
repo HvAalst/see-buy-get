@@ -6,20 +6,29 @@
 
 import { distanceLabel, haversineKm, type GeoPoint } from '../../shared/geo';
 import type { IconName } from '../../shared/ui/Icon';
+import type { MessageKey } from '../../shared/i18n';
 import type { ConsumerParcelView, NetworkPoint, ParcelSize, ParcelStatus, PersonRole, QuoteView, TrackView } from './types';
+
+/**
+ * The translate function, threaded into every prose-producing helper so this module stays pure (no direct
+ * catalog import at call time) and testable. Callers pass the `t` from `useT()` (components) or the plain
+ * `t` (the hook). English is the base catalog, so a test passing the real `t` sees the English literals.
+ */
+export type Translate = (key: MessageKey, params?: Record<string, string | number>) => string;
 
 /* ------------------------------------------------------------------ sizes -- */
 
-export const SIZES: Array<{ key: ParcelSize; label: string; hint: string }> = [
-  { key: 'S', label: 'Small', hint: 'Fits in one hand' },
-  { key: 'M', label: 'Medium', hint: 'Shoebox' },
-  { key: 'L', label: 'Large', hint: 'Needs both arms' },
-  { key: 'HEAVY', label: 'Heavy', hint: 'Over 20 kg' },
-];
+const SIZE_KEYS: Record<ParcelSize, { labelKey: MessageKey; hintKey: MessageKey }> = {
+  S: { labelKey: 'send.size.s.label', hintKey: 'send.size.s.hint' },
+  M: { labelKey: 'send.size.m.label', hintKey: 'send.size.m.hint' },
+  L: { labelKey: 'send.size.l.label', hintKey: 'send.size.l.hint' },
+  HEAVY: { labelKey: 'send.size.heavy.label', hintKey: 'send.size.heavy.hint' },
+};
 
 /** The plain-words presentation of a DERIVED tier (PG3: sizes are computed from dims, never tapped). */
-export function sizeMeta(size: ParcelSize): { key: ParcelSize; label: string; hint: string } {
-  return SIZES.find((s) => s.key === size) ?? { key: size, label: size, hint: '' };
+export function sizeMeta(size: ParcelSize, t: Translate): { key: ParcelSize; label: string; hint: string } {
+  const k = SIZE_KEYS[size];
+  return k ? { key: size, label: t(k.labelKey), hint: t(k.hintKey) } : { key: size, label: size, hint: '' };
 }
 
 /* ------------------------------------------------------------- dims (PG3) -- */
@@ -60,16 +69,16 @@ export function parseDims(d: DimsForm): { l: number; w: number; h: number; kg: n
 }
 
 /** What blocks the parcel step's Continue (empty string when nothing does). */
-export function dimsBlocker(d: DimsForm): string {
-  return parseDims(d) ? '' : 'Measure the parcel: length, width, height and weight';
+export function dimsBlocker(d: DimsForm, t: Translate): string {
+  return parseDims(d) ? '' : t('send.logic.dimsBlocker');
 }
 
 /** The done-screen instructions — what turns the minted label into a moving parcel. */
-export function mintChecklist(shopName: string, total: number): string[] {
+export function mintChecklist(shopName: string, total: number, t: Translate): string[] {
   return [
-    `Take the parcel to ${shopName} and show this label`,
-    `Pay ${money(total)} there — cash is fine`,
-    'The receiver already sees it in their app',
+    t('send.logic.mintTake', { shop: shopName }),
+    t('send.logic.mintPay', { price: money(total) }),
+    t('send.logic.mintReceiverSees'),
   ];
 }
 
@@ -106,13 +115,13 @@ export function pointDistance(p: NetworkPoint, near: GeoPoint | null | undefined
   return distanceLabel(haversineKm(near, p.location));
 }
 
-export function pointLine(p: NetworkPoint): string {
-  const bits = [`Zone ${p.zone}`];
+export function pointLine(p: NetworkPoint, t: Translate): string {
+  const bits = [t('send.zone', { zone: p.zone })];
   if (p.landmark) bits.push(p.landmark);
-  bits.push(`${money(p.pricePerParcel)} handling`);
+  bits.push(t('send.logic.handling', { price: money(p.pricePerParcel) }));
   // REP1 — only a RELIABLE average on the compact row: not an unrated shop, and not a lone review (isNew).
   // The detail sheet carries the honest "New" wording; a crowded row just drops the chip.
-  if (p.rating && p.rating.count && !p.rating.isNew) bits.push(`rated ${p.rating.average.toFixed(1)}`);
+  if (p.rating && p.rating.count && !p.rating.isNew) bits.push(t('send.logic.rated', { avg: p.rating.average.toFixed(1) }));
   return bits.join(' · ');
 }
 
@@ -121,19 +130,19 @@ export function pointLine(p: NetworkPoint): string {
  * cold start: an unrated or barely-rated shop reads "New", never a headline average manufactured from a
  * single review (the same "don't trust a median of one" discipline as the price benchmark).
  */
-export function reputationLine(rating: NetworkPoint['rating']): string {
-  if (!rating || !rating.count) return 'New — no ratings yet';
-  if (rating.isNew) return `New — ${rating.count} rating${rating.count === 1 ? '' : 's'} so far`;
-  return `Rated ${rating.average.toFixed(1)} by ${rating.count}`;
+export function reputationLine(rating: NetworkPoint['rating'], t: Translate): string {
+  if (!rating || !rating.count) return t('send.logic.repNone');
+  if (rating.isNew) return rating.count === 1 ? t('send.logic.repNewOne') : t('send.logic.repNewMany', { count: rating.count });
+  return t('send.logic.repRated', { avg: rating.average.toFixed(1), count: rating.count });
 }
 
 /** REP1 — a "Serving since <year>" trust line for the profile, or null when the onboarding date is unknown.
  *  Reads the year in UTC (the stored instant's own calendar), so a late-December onboarding doesn't render a
  *  different year for a viewer east/west of UTC (e.g. EAT, UTC+3). */
-export function servingSince(since: string | undefined): string | null {
+export function servingSince(since: string | undefined, t: Translate): string | null {
   if (!since) return null;
-  const t = Date.parse(since);
-  return Number.isNaN(t) ? null : `Serving since ${new Date(t).getUTCFullYear()}`;
+  const ms = Date.parse(since);
+  return Number.isNaN(ms) ? null : t('send.logic.servingSince', { year: new Date(ms).getUTCFullYear() });
 }
 
 /* ------------------------------------------------------------------ quote -- */
@@ -143,8 +152,8 @@ export function servingSince(since: string | undefined): string | null {
  * prices every person's parcel at the locked leg; flexible's ceiling-then-rebate is a vendor-rail
  * contract), so showing a dearer "fastest" card would advertise a price nobody here can pay.
  */
-export function lockedPrice(q: QuoteView): { total: number; sub: string } {
-  return { total: q.locked.total, sub: 'Rides the lowest-price bus on this route' };
+export function lockedPrice(q: QuoteView, t: Translate): { total: number; sub: string } {
+  return { total: q.locked.total, sub: t('send.logic.lockedSub') };
 }
 
 /** "Shop A → Central hub → Shop B" — the journey in names, not ids. */
@@ -152,8 +161,8 @@ export function journeyLine(q: QuoteView): string {
   return q.hops.map((h) => h.label).join(' → ');
 }
 
-export function quoteSummary(q: QuoteView): string {
-  return `${Math.round(q.totalKm)} kilometres across ${q.hops.length} stops. The price is ${money(q.locked.total)}.`;
+export function quoteSummary(q: QuoteView, t: Translate): string {
+  return t('send.logic.quoteSummary', { km: Math.round(q.totalKm), stops: q.hops.length, price: money(q.locked.total) });
 }
 
 /* ------------------------------------------------------------------ track -- */
@@ -177,31 +186,33 @@ export interface StatusPresentation {
 }
 
 /** Plain words for every state — grade-3 reading level, no logistics jargon. */
-export function statusPresentation(status: ParcelStatus): StatusPresentation {
+export function statusPresentation(status: ParcelStatus, t: Translate): StatusPresentation {
   switch (status) {
     case 'Created':
-      return { word: 'Label made', icon: 'edit', tone: 'info' };
+      return { word: t('send.status.created'), icon: 'edit', tone: 'info' };
     case 'At_PUDO':
-      return { word: 'At the shop', icon: 'home', tone: 'info' };
+      return { word: t('send.status.atPudo'), icon: 'home', tone: 'info' };
     case 'On_Bus':
-      return { word: 'On the bus', icon: 'truck', tone: 'info' };
+      return { word: t('send.status.onBus'), icon: 'truck', tone: 'info' };
     case 'At_MDP':
-      return { word: 'At the sort hub', icon: 'grid', tone: 'info' };
+      return { word: t('send.status.atMdp'), icon: 'grid', tone: 'info' };
     case 'Ready_For_Pickup':
-      return { word: 'Ready to collect', icon: 'box', tone: 'ok' };
+      return { word: t('send.status.ready'), icon: 'box', tone: 'ok' };
     case 'Delivered':
-      return { word: 'Delivered', icon: 'check', tone: 'ok' };
+      return { word: t('send.status.delivered'), icon: 'check', tone: 'ok' };
     case 'Disputed':
-      return { word: 'Problem reported', icon: 'warning', tone: 'danger' };
+      return { word: t('send.status.disputed'), icon: 'warning', tone: 'danger' };
     case 'Voided':
-      return { word: 'Cancelled', icon: 'block', tone: 'danger' };
+      return { word: t('send.status.voided'), icon: 'block', tone: 'danger' };
   }
 }
 
-export function trackSummary(t: TrackView): string {
-  const p = statusPresentation(t.status);
-  const where = t.status === 'Ready_For_Pickup' || t.status === 'Delivered' ? ` at ${t.destination}` : '';
-  return `Parcel ${t.ref}: ${p.word.toLowerCase()}${where}.`;
+export function trackSummary(view: TrackView, t: Translate): string {
+  const status = statusPresentation(view.status, t).word.toLowerCase();
+  const atDest = view.status === 'Ready_For_Pickup' || view.status === 'Delivered';
+  return atDest
+    ? t('send.logic.trackAt', { ref: view.ref, status, dest: view.destination })
+    : t('send.logic.trackPlain', { ref: view.ref, status });
 }
 
 /** When a step happened, in the reader's locale — falls back to the raw string. */
@@ -248,11 +259,11 @@ export function codeReady(code: string, length = 4): boolean {
 }
 
 /** What blocks the primary CTA on each auth step (empty string when nothing does). */
-export function phoneBlocker(phone: string): string {
-  return phoneReady(phone) ? '' : 'Enter your phone number';
+export function phoneBlocker(phone: string, t: Translate): string {
+  return phoneReady(phone) ? '' : t('send.logic.phoneBlocker');
 }
-export function pinBlocker(pin: string): string {
-  return codeReady(pin, 4) ? '' : 'Enter your 4-digit PIN';
+export function pinBlocker(pin: string, t: Translate): string {
+  return codeReady(pin, 4) ? '' : t('send.logic.pinBlocker');
 }
 
 export interface RoleMeta {
@@ -261,31 +272,32 @@ export interface RoleMeta {
   blurb: string;
 }
 
-/** Plain, non-jargon presentation for each role in the switcher. */
-export const ROLE_META: Record<PersonRole, RoleMeta> = {
-  consumer: { label: 'You', icon: 'person', blurb: 'Send and receive parcels' },
-  driver: { label: 'Driver', icon: 'truck', blurb: 'Carry parcels on your route' },
-  agent: { label: 'Shop', icon: 'home', blurb: 'Run a pick-up point' },
-  mdp: { label: 'Sort hub', icon: 'grid', blurb: 'Sort parcels between towns' },
-  fleet_manager: { label: 'Fleet', icon: 'route', blurb: 'Manage your vehicles and drivers' },
-  vendor: { label: 'Store', icon: 'bag', blurb: 'Sell and ship to pick-up points' },
+/** Plain, non-jargon presentation for each role in the switcher (icon + the label/blurb catalog keys). */
+const ROLE_KEYS: Record<PersonRole, { icon: IconName; labelKey: MessageKey; blurbKey: MessageKey }> = {
+  consumer: { icon: 'person', labelKey: 'send.role.consumer.label', blurbKey: 'send.role.consumer.blurb' },
+  driver: { icon: 'truck', labelKey: 'send.role.driver.label', blurbKey: 'send.role.driver.blurb' },
+  agent: { icon: 'home', labelKey: 'send.role.agent.label', blurbKey: 'send.role.agent.blurb' },
+  mdp: { icon: 'grid', labelKey: 'send.role.mdp.label', blurbKey: 'send.role.mdp.blurb' },
+  fleet_manager: { icon: 'route', labelKey: 'send.role.fleet.label', blurbKey: 'send.role.fleet.blurb' },
+  vendor: { icon: 'bag', labelKey: 'send.role.vendor.label', blurbKey: 'send.role.vendor.blurb' },
 };
 
-export function roleMeta(role: PersonRole): RoleMeta {
-  return ROLE_META[role] ?? { label: role, icon: 'person', blurb: '' };
+export function roleMeta(role: PersonRole, t: Translate): RoleMeta {
+  const k = ROLE_KEYS[role];
+  return k ? { label: t(k.labelKey), icon: k.icon, blurb: t(k.blurbKey) } : { label: role, icon: 'person', blurb: '' };
 }
 
 /* -------------------------------------------------- my parcels (S21) -- */
 
 /** "You are sending" / "Coming to you" — the person's side of a parcel, in plain words. */
-export function relationWord(relation: 'sent' | 'received'): string {
-  return relation === 'received' ? 'Coming to you' : 'You are sending';
+export function relationWord(relation: 'sent' | 'received', t: Translate): string {
+  return relation === 'received' ? t('send.relation.received') : t('send.relation.sent');
 }
 
 /** The one-line subtitle under a parcel row: where it is headed + the kind of send. */
-export function parcelRowLine(p: ConsumerParcelView): string {
-  const bits = [p.relation === 'received' ? `From ${p.originZone}` : `To ${p.destZone}`];
-  bits.push(p.vendorOrder ? 'Store order' : 'Personal send');
+export function parcelRowLine(p: ConsumerParcelView, t: Translate): string {
+  const bits = [p.relation === 'received' ? t('send.logic.rowFrom', { zone: p.originZone }) : t('send.logic.rowTo', { zone: p.destZone })];
+  bits.push(p.vendorOrder ? t('send.logic.storeOrder') : t('send.logic.personalSend'));
   return bits.join(' · ');
 }
 

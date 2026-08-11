@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { t } from '../../shared/i18n'; // English is the base catalog, so the real `t` yields the English literals
 import {
   LADDER,
   cleanPhone,
@@ -86,39 +87,39 @@ describe('selectablePoints', () => {
   });
 
   it('pointLine folds zone, landmark, price and rating into one sentence', () => {
-    expect(pointLine(point({ landmark: 'By the mosque', rating: { count: 12, average: 4.62 } }))).toBe(
+    expect(pointLine(point({ landmark: 'By the mosque', rating: { count: 12, average: 4.62 } }), t)).toBe(
       'Zone Z-A · By the mosque · 1.50 handling · rated 4.6',
     );
-    expect(pointLine(point())).toBe('Zone Z-A · 1.50 handling');
+    expect(pointLine(point(), t)).toBe('Zone Z-A · 1.50 handling');
   });
 });
 
 describe('REP1 reputation display', () => {
   it('pointLine drops the average chip for a lone/cold-start review (isNew), keeps it once reliable', () => {
-    expect(pointLine(point({ rating: { count: 1, average: 5, isNew: true } }))).toBe('Zone Z-A · 1.50 handling'); // no chip from one review
-    expect(pointLine(point({ rating: { count: 40, average: 4.5, isNew: false } }))).toBe('Zone Z-A · 1.50 handling · rated 4.5');
+    expect(pointLine(point({ rating: { count: 1, average: 5, isNew: true } }), t)).toBe('Zone Z-A · 1.50 handling'); // no chip from one review
+    expect(pointLine(point({ rating: { count: 40, average: 4.5, isNew: false } }), t)).toBe('Zone Z-A · 1.50 handling · rated 4.5');
   });
 
   it('reputationLine is honest about the cold start (never a headline average from one review)', () => {
-    expect(reputationLine(null)).toBe('New — no ratings yet');
-    expect(reputationLine({ count: 0, average: 0, isNew: true })).toBe('New — no ratings yet');
-    expect(reputationLine({ count: 1, average: 5, isNew: true })).toBe('New — 1 rating so far');
-    expect(reputationLine({ count: 2, average: 4.5, isNew: true })).toBe('New — 2 ratings so far');
-    expect(reputationLine({ count: 12, average: 4.62, isNew: false })).toBe('Rated 4.6 by 12');
+    expect(reputationLine(null, t)).toBe('New — no ratings yet');
+    expect(reputationLine({ count: 0, average: 0, isNew: true }, t)).toBe('New — no ratings yet');
+    expect(reputationLine({ count: 1, average: 5, isNew: true }, t)).toBe('New — 1 rating so far');
+    expect(reputationLine({ count: 2, average: 4.5, isNew: true }, t)).toBe('New — 2 ratings so far');
+    expect(reputationLine({ count: 12, average: 4.62, isNew: false }, t)).toBe('Rated 4.6 by 12');
   });
 
   it('servingSince renders the UTC year (tz-stable), or null when unknown/unparseable', () => {
-    expect(servingSince('2026-03-09T10:00:00.000Z')).toBe('Serving since 2026');
+    expect(servingSince('2026-03-09T10:00:00.000Z', t)).toBe('Serving since 2026');
     // A late-December UTC instant reads the SAME year everywhere — not the next year for a viewer east of UTC.
-    expect(servingSince('2025-12-31T23:30:00.000Z')).toBe('Serving since 2025');
-    expect(servingSince(undefined)).toBeNull();
-    expect(servingSince('not-a-date')).toBeNull();
+    expect(servingSince('2025-12-31T23:30:00.000Z', t)).toBe('Serving since 2025');
+    expect(servingSince(undefined, t)).toBeNull();
+    expect(servingSince('not-a-date', t)).toBeNull();
   });
 });
 
 describe('quote presentation', () => {
   it('the ONE price shown is the locked (cheapest) leg — what a booked send actually costs', () => {
-    expect(lockedPrice(quote()).total).toBe(4.4);
+    expect(lockedPrice(quote(), t).total).toBe(4.4);
   });
 
   it('journeyLine names every hop', () => {
@@ -126,7 +127,7 @@ describe('quote presentation', () => {
   });
 
   it('quoteSummary speaks distance, stops and the price', () => {
-    expect(quoteSummary(quote())).toBe('12 kilometres across 3 stops. The price is 4.40.');
+    expect(quoteSummary(quote(), t)).toBe('12 kilometres across 3 stops. The price is 4.40.');
   });
 });
 
@@ -146,17 +147,17 @@ describe('dims (PG3)', () => {
   });
 
   it('dimsBlocker gates the Continue in plain words', () => {
-    expect(dimsBlocker({ l: '', w: '', h: '', kg: '' })).toContain('Measure the parcel');
-    expect(dimsBlocker({ l: '30', w: '20', h: '10', kg: '1.6' })).toBe('');
+    expect(dimsBlocker({ l: '', w: '', h: '', kg: '' }, t)).toContain('Measure the parcel');
+    expect(dimsBlocker({ l: '30', w: '20', h: '10', kg: '1.6' }, t)).toBe('');
   });
 
   it('sizeMeta gives the derived tier its plain words', () => {
-    expect(sizeMeta('M').label).toBe('Medium');
-    expect(sizeMeta('HEAVY').hint).toBe('Over 20 kg');
+    expect(sizeMeta('M', t).label).toBe('Medium');
+    expect(sizeMeta('HEAVY', t).hint).toBe('Over 20 kg');
   });
 
   it('mintChecklist tells the sender the three things that matter', () => {
-    const items = mintChecklist('Mama Njeri', 4.4);
+    const items = mintChecklist('Mama Njeri', 4.4, t);
     expect(items[0]).toContain('Mama Njeri');
     expect(items[1]).toContain('4.40');
     expect(items).toHaveLength(3);
@@ -176,15 +177,15 @@ describe('track', () => {
 
   it('every status has plain words and a drawable icon', () => {
     for (const s of [...LADDER, 'Disputed', 'Voided'] as const) {
-      const p = statusPresentation(s);
+      const p = statusPresentation(s, t);
       expect(p.word.length).toBeGreaterThan(0);
       expect(p.icon.length).toBeGreaterThan(0);
     }
-    expect(statusPresentation('Ready_For_Pickup')).toEqual({ word: 'Ready to collect', icon: 'box', tone: 'ok' });
+    expect(statusPresentation('Ready_For_Pickup', t)).toEqual({ word: 'Ready to collect', icon: 'box', tone: 'ok' });
   });
 
   it('trackSummary names the destination only once the parcel is there', () => {
-    const t = (status: TrackView['status']): TrackView => ({
+    const mkTrack = (status: TrackView['status']): TrackView => ({
       ref: 'P-1',
       status,
       size: 'M',
@@ -192,8 +193,8 @@ describe('track', () => {
       destZone: 'Z-B',
       steps: [],
     });
-    expect(trackSummary(t('On_Bus'))).toBe('Parcel P-1: on the bus.');
-    expect(trackSummary(t('Ready_For_Pickup'))).toBe('Parcel P-1: ready to collect at Riverside.');
+    expect(trackSummary(mkTrack('On_Bus'), t)).toBe('Parcel P-1: on the bus.');
+    expect(trackSummary(mkTrack('Ready_For_Pickup'), t)).toBe('Parcel P-1: ready to collect at Riverside.');
   });
 
   it('stepTime falls back to the raw string on garbage', () => {
@@ -222,29 +223,29 @@ describe('Send app — identity + my-parcels logic (S21)', () => {
   it('gates the phone and PIN CTAs on readiness', () => {
     expect(phoneReady('0712345678')).toBe(true);
     expect(phoneReady('12345')).toBe(false);
-    expect(phoneBlocker('0712345678')).toBe('');
-    expect(phoneBlocker('123')).toMatch(/phone/i);
+    expect(phoneBlocker('0712345678', t)).toBe('');
+    expect(phoneBlocker('123', t)).toMatch(/phone/i);
     expect(codeReady('1234', 4)).toBe(true);
     expect(codeReady('123', 4)).toBe(false);
     expect(codeReady('123456', 6)).toBe(true);
     expect(codeReady('12a4', 4)).toBe(false);
-    expect(pinBlocker('1234')).toBe('');
-    expect(pinBlocker('12')).toMatch(/PIN/);
+    expect(pinBlocker('1234', t)).toBe('');
+    expect(pinBlocker('12', t)).toMatch(/PIN/);
   });
 
   it('gives every role a plain label + a real icon name', () => {
-    expect(roleMeta('consumer').label).toBe('You');
-    expect(roleMeta('driver').icon).toBe('truck');
-    expect(roleMeta('fleet_manager').label).toBe('Fleet');
+    expect(roleMeta('consumer', t).label).toBe('You');
+    expect(roleMeta('driver', t).icon).toBe('truck');
+    expect(roleMeta('fleet_manager', t).label).toBe('Fleet');
   });
 
   it('describes a parcel from the person\'s side', () => {
-    expect(relationWord('received')).toMatch(/you/i);
-    expect(relationWord('sent')).toMatch(/sending/i);
+    expect(relationWord('received', t)).toMatch(/you/i);
+    expect(relationWord('sent', t)).toMatch(/sending/i);
     const recv = mkParcel({ relation: 'received', originZone: 'NorthTown', vendorOrder: true });
-    expect(parcelRowLine(recv)).toBe('From NorthTown · Store order');
+    expect(parcelRowLine(recv, t)).toBe('From NorthTown · Store order');
     const sent = mkParcel({ relation: 'sent', destZone: 'EastTown', vendorOrder: false });
-    expect(parcelRowLine(sent)).toBe('To EastTown · Personal send');
+    expect(parcelRowLine(sent, t)).toBe('To EastTown · Personal send');
   });
 
   it('sorts a person\'s parcels: act-now first, then in-flight, then done — newest within each', () => {

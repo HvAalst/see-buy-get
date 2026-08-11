@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, Checklist, CodeCard, ErrorNote, Icon, Note, Pill, ReadAloud, Sheet } from '../../../shared/ui';
+import { useT } from '../../../shared/i18n';
 import { PhotoField } from './PhotoField';
 import { LADDER, isOffLadder, ladderIndex, parcelRowLine, relationWord, sortForPerson, statusPresentation, stepTime } from '../logic';
 import type { ConsumerParcelView, FreightShipmentView, ParcelStatus } from '../types';
@@ -19,6 +20,7 @@ const PILL_TONE = { ok: 'ok', info: 'info', danger: 'danger' } as const;
  * reached by identity, not by pasting a code.
  */
 export function MyParcelsScreen({ state, actions }: MyParcelsScreenProps) {
+  const t = useT();
   useEffect(() => {
     if (state.parcelsState === 'idle') void actions.loadParcels();
   }, [state.parcelsState, actions]);
@@ -33,46 +35,47 @@ export function MyParcelsScreen({ state, actions }: MyParcelsScreenProps) {
 
   return (
     <div class="scr">
-      <h1 class="scr__title">My parcels</h1>
-      <p class="scr__lede">Everything you send and receive, in one place.</p>
+      <h1 class="scr__title">{t('send.parcels.title')}</h1>
+      <p class="scr__lede">{t('send.parcels.lede')}</p>
 
       {state.parcelsState === 'error' && state.parcelsError ? (
         <ErrorNote error={state.parcelsError} onRetry={() => void actions.loadParcels()} />
       ) : null}
 
       {received.length ? (
-        <ParcelGroup title="Coming to you" items={received} actions={actions} />
+        <ParcelGroup title={t('send.relation.received')} items={received} actions={actions} />
       ) : null}
       {sent.length ? (
-        <ParcelGroup title="You are sending" items={sent} actions={actions} />
+        <ParcelGroup title={t('send.relation.sent')} items={sent} actions={actions} />
       ) : null}
 
       {freights.length ? <FreightGroup items={freights} /> : null}
 
       {empty ? (
         <Card tone="soft">
-          <Checklist items={['Parcels sent to your number show up here', 'So do the ones you send', 'No code to type — it is your account']} />
+          <Checklist items={[t('send.parcels.emptySentHere'), t('send.parcels.emptySoDo'), t('send.parcels.emptyNoCode')]} />
         </Card>
       ) : null}
 
-      {state.parcelsState === 'loading' && !state.parcels ? <p class="hint">Loading your parcels…</p> : null}
+      {state.parcelsState === 'loading' && !state.parcels ? <p class="hint">{t('send.parcels.loading')}</p> : null}
 
       <div class="scr__foot">
         <Button variant="link" onClick={() => void actions.loadParcels()} busy={state.parcelsState === 'loading'}>
-          Refresh
+          {t('send.parcels.refresh')}
         </Button>
-        <ReadAloud text={() => (empty ? 'You have no parcels yet.' : 'Your parcels are listed here, the ones coming to you first.')} label="Read this aloud" />
+        <ReadAloud text={() => (empty ? t('send.parcels.aloudEmpty') : t('send.parcels.aloudSome'))} label={t('send.readAloud')} />
       </div>
     </div>
   );
 }
 
 function ParcelGroup({ title, items, actions }: { title: string; items: ConsumerParcelView[]; actions: SendActions }) {
+  const t = useT();
   return (
     <Card title={title}>
       <div class="rows">
         {items.map((p) => {
-          const pres = statusPresentation(p.status);
+          const pres = statusPresentation(p.status, t);
           return (
             <button key={p.parcelId} type="button" class="row" onClick={() => void actions.openParcel(p.parcelId)}>
               <span class="row__ic">
@@ -80,7 +83,7 @@ function ParcelGroup({ title, items, actions }: { title: string; items: Consumer
               </span>
               <span class="row__body">
                 <span class="row__t">{p.parcelId}</span>
-                <span class="row__s">{parcelRowLine(p)}</span>
+                <span class="row__s">{parcelRowLine(p, t)}</span>
               </span>
               <span class="row__end">
                 <Pill tone={PILL_TONE[pres.tone]} dot>{pres.word}</Pill>
@@ -96,28 +99,29 @@ function ParcelGroup({ title, items, actions }: { title: string; items: Consumer
 
 /** S32d — the buyer's dedicated-freight orders (too big for the parcel network). Informational rows: a
  *  diverted order stays visible with its status; the carrier/pickup flow is handled off the shelves. */
-const FREIGHT_STATUS: Record<string, { word: string; tone: 'ok' | 'info' | 'idle' }> = {
-  available: { word: 'Finding a truck', tone: 'idle' },
-  claimed: { word: 'Truck assigned', tone: 'info' },
-  in_transit: { word: 'On the way', tone: 'info' },
-  delivered: { word: 'Delivered', tone: 'ok' },
+const FREIGHT_STATUS: Record<string, { wordKey: 'send.parcels.freightAvailable' | 'send.parcels.freightClaimed' | 'send.parcels.freightInTransit' | 'send.status.delivered'; tone: 'ok' | 'info' | 'idle' }> = {
+  available: { wordKey: 'send.parcels.freightAvailable', tone: 'idle' },
+  claimed: { wordKey: 'send.parcels.freightClaimed', tone: 'info' },
+  in_transit: { wordKey: 'send.parcels.freightInTransit', tone: 'info' },
+  delivered: { wordKey: 'send.status.delivered', tone: 'ok' },
 };
 
 function FreightGroup({ items }: { items: FreightShipmentView[] }) {
+  const t = useT();
   return (
-    <Card title="Dedicated freight">
-      <p class="card__note">Orders too big for the parcel network — carried on a dedicated truck.</p>
+    <Card title={t('send.parcels.freightTitle')}>
+      <p class="card__note">{t('send.parcels.freightNote')}</p>
       <div class="rows">
         {items.map((fr) => {
-          const s = FREIGHT_STATUS[fr.status] ?? { word: fr.status, tone: 'info' as const };
+          const s = FREIGHT_STATUS[fr.status];
           return (
             <div key={fr.freightId} class="row row--static">
               <span class="row__ic"><Icon name="truck" size={24} /></span>
               <span class="row__body">
                 <span class="row__t">{fr.code}</span>
-                <span class="row__s">{`To ${fr.destLabel} · ${fr.weightKg} kg · class ${fr.cargoClass}`}</span>
+                <span class="row__s">{t('send.parcels.freightRow', { dest: fr.destLabel, kg: fr.weightKg, cls: fr.cargoClass })}</span>
               </span>
-              <span class="row__end"><Pill tone={s.tone} dot>{s.word}</Pill></span>
+              <span class="row__end"><Pill tone={s ? s.tone : 'info'} dot>{s ? t(s.wordKey) : fr.status}</Pill></span>
             </div>
           );
         })}
@@ -127,7 +131,8 @@ function FreightGroup({ items }: { items: FreightShipmentView[] }) {
 }
 
 function ParcelDetail({ parcel, state, actions }: { parcel: ConsumerParcelView; state: SendState; actions: SendActions }) {
-  const pres = statusPresentation(parcel.status);
+  const t = useT();
+  const pres = statusPresentation(parcel.status, t);
   const at = ladderIndex(parcel.status);
   const off = isOffLadder(parcel.status);
   const stepFor = (s: ParcelStatus) => parcel.timeline.find((x) => x.status === s || (s === 'Created' && x.status === 'CREATED'));
@@ -146,14 +151,14 @@ function ParcelDetail({ parcel, state, actions }: { parcel: ConsumerParcelView; 
     <div class="scr">
       <div class="scr__back">
         <Button variant="link" chevron={false} onClick={() => actions.closeParcel()}>
-          <Icon name="chevronLeft" size={20} /> All parcels
+          <Icon name="chevronLeft" size={20} /> {t('send.parcels.allParcels')}
         </Button>
       </div>
 
       <h1 class="scr__title">{parcel.parcelId}</h1>
-      <p class="scr__lede">{relationWord(parcel.relation)} · {parcel.relation === 'received' ? `from ${parcel.originZone}` : `to ${parcel.destZone}`}</p>
+      <p class="scr__lede">{relationWord(parcel.relation, t)} · {parcel.relation === 'received' ? t('send.parcels.detailFrom', { zone: parcel.originZone }) : t('send.parcels.detailTo', { zone: parcel.destZone })}</p>
       {/* DT — the shipment's stable digital-twin identity, from creation. */}
-      {parcel.did ? <p class="hint" style="word-break:break-all">Shipment ID: {parcel.did}</p> : null}
+      {parcel.did ? <p class="hint" style="word-break:break-all">{t('send.parcels.shipmentId', { did: parcel.did })}</p> : null}
 
       <section class={`now now--${pres.tone}`} aria-live="polite">
         <Icon name={pres.icon} size={34} class="now__ic" />
@@ -161,12 +166,12 @@ function ParcelDetail({ parcel, state, actions }: { parcel: ConsumerParcelView; 
           <span class="now__word">{pres.word}</span>
           <span class="now__sub">
             {parcel.status === 'Ready_For_Pickup'
-              ? `Ready to collect in ${parcel.destZone}`
+              ? t('send.parcels.readyIn', { zone: parcel.destZone })
               : parcel.status === 'Delivered'
-                ? `Handed over in ${parcel.destZone}`
+                ? t('send.parcels.handedIn', { zone: parcel.destZone })
                 : parcel.relation === 'received'
-                  ? `On its way to ${parcel.destZone}`
-                  : `On its way from ${parcel.originZone}`}
+                  ? t('send.parcels.onWayTo', { zone: parcel.destZone })
+                  : t('send.parcels.onWayFrom', { zone: parcel.originZone })}
           </span>
         </span>
       </section>
@@ -181,8 +186,8 @@ function ParcelDetail({ parcel, state, actions }: { parcel: ConsumerParcelView; 
           the PUDO scans it. Delivered in the app, never by SMS. Present only when it is theirs to collect. */}
       {parcel.collectToken ? (
         <>
-          <CodeCard label="Show this to collect" code={parcel.collectToken.code} scanAs="collect" sayLabel="Hear your code" />
-          <p class="hint">Show the code to the shop, or let them scan it.</p>
+          <CodeCard label={t('send.parcels.showToCollect')} code={parcel.collectToken.code} scanAs="collect" sayLabel={t('send.parcels.hearCode')} />
+          <p class="hint">{t('send.parcels.showCode')}</p>
         </>
       ) : null}
 
@@ -191,35 +196,35 @@ function ParcelDetail({ parcel, state, actions }: { parcel: ConsumerParcelView; 
         <Note
           tone="danger"
           icon="warning"
-          title="Problem reported"
-          detail={parcel.disputeReason ? `You reported: ${parcel.disputeReason}` : 'The seller and our team have been told.'}
+          title={t('send.parcels.problemTitle')}
+          detail={parcel.disputeReason ? t('send.parcels.problemYou', { reason: parcel.disputeReason }) : t('send.parcels.problemTold')}
         />
       ) : null}
 
       {/* S23: once it is delivered, the receiver keeps their own proof of what arrived, and can report a
           problem — a reason + a photo — which routes to the seller (or the sender) and the control tower. */}
       {canAct ? (
-        <Card label="Got your parcel?">
-          <PhotoField id="pod-photo" value={parcel.podPhotoRef ?? ''} label="Add a photo of what you received" upload={(file) => actions.uploadPhoto('pod', file)} onCapture={(ref) => void actions.submitPod(ref)} disabled={state.podBusy} />
+        <Card label={t('send.parcels.gotParcel')}>
+          <PhotoField id="pod-photo" value={parcel.podPhotoRef ?? ''} label={t('send.parcels.addPodPhoto')} upload={(file) => actions.uploadPhoto('pod', file)} onCapture={(ref) => void actions.submitPod(ref)} disabled={state.podBusy} />
           <div style="margin-top:10px">
             <Button variant="outline" chevron={false} onClick={() => { setReason(''); setPhoto(''); setDisputeOpen(true); }}>
-              Report a problem
+              {t('send.parcels.reportProblem')}
             </Button>
           </div>
         </Card>
       ) : null}
 
       {parcel.items?.length ? (
-        <Card label="What is inside">
-          <Checklist items={parcel.items.map((it) => `${it.qty} × ${it.name}`)} />
+        <Card label={t('send.parcels.whatsInside')}>
+          <Checklist items={parcel.items.map((it) => t('send.parcels.itemLine', { qty: it.qty, name: it.name }))} />
         </Card>
       ) : null}
 
       {off ? null : (
-        <Card label="The journey so far">
+        <Card label={t('send.track.journeySoFar')}>
           <ol class="ladder">
             {LADDER.map((s, i) => {
-              const p = statusPresentation(s);
+              const p = statusPresentation(s, t);
               const done = i < at;
               const now = i === at;
               const step = stepFor(s);
@@ -239,29 +244,29 @@ function ParcelDetail({ parcel, state, actions }: { parcel: ConsumerParcelView; 
         </Card>
       )}
 
-      {parcel.trackingKey ? <p class="hint">Share code: {parcel.trackingKey}</p> : null}
+      {parcel.trackingKey ? <p class="hint">{t('send.parcels.shareCode', { key: parcel.trackingKey })}</p> : null}
 
       <div class="scr__foot">
-        <ReadAloud text={() => `Parcel ${parcel.parcelId}: ${pres.word.toLowerCase()}.`} label="Read this aloud" />
+        <ReadAloud text={() => t('send.parcels.aloudParcel', { id: parcel.parcelId, status: pres.word.toLowerCase() })} label={t('send.readAloud')} />
       </div>
 
-      <Sheet open={disputeOpen} onClose={() => setDisputeOpen(false)} title="Report a problem">
+      <Sheet open={disputeOpen} onClose={() => setDisputeOpen(false)} title={t('send.parcels.reportProblem')}>
         {state.disputeError ? <ErrorNote error={state.disputeError} /> : null}
         <div class="field">
-          <label class="field__label" for="dispute-reason">What is wrong?</label>
+          <label class="field__label" for="dispute-reason">{t('send.parcels.disputeWhat')}</label>
           <input
             id="dispute-reason"
             class="input"
             value={reason}
             onInput={(e) => setReason(e.currentTarget.value)}
-            placeholder="e.g. the box was empty"
+            placeholder={t('send.parcels.disputeReasonPh')}
           />
         </div>
-        <PhotoField id="dispute-photo" value={photo} label="Photo of what you received" upload={(file) => actions.uploadPhoto('dispute', file)} onCapture={setPhoto} disabled={state.disputeBusy} />
+        <PhotoField id="dispute-photo" value={photo} label={t('send.parcels.disputePhoto')} upload={(file) => actions.uploadPhoto('dispute', file)} onCapture={setPhoto} disabled={state.disputeBusy} />
         <Button chevron={false} disabled={!reason.trim() || !photo} busy={state.disputeBusy} onClick={() => void actions.submitDispute(reason, photo)}>
-          Send the report
+          {t('send.parcels.disputeSend')}
         </Button>
-        <Button variant="link" onClick={() => setDisputeOpen(false)}>Cancel</Button>
+        <Button variant="link" onClick={() => setDisputeOpen(false)}>{t('common.cancel')}</Button>
       </Sheet>
     </div>
   );

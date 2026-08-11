@@ -1,5 +1,6 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { BottomNav, Icon, NotificationBell, TopBar, type NavItem } from '../../shared/ui';
+import { useT } from '../../shared/i18n';
 import { SendScreen } from './screens/SendScreen';
 import { TrackScreen } from './screens/TrackScreen';
 import { AuthScreen } from './screens/AuthScreen';
@@ -15,22 +16,23 @@ import './send.css';
  * phone+PIN sign-in only when tapped; a returning user with a live token restores silently past it.
  */
 export function App() {
+  const t = useT();
   const { state, actions, notifications } = useSendApp();
   const sw = useRegisterSW();
   const [needRefresh] = sw.needRefresh;
 
   const tabs: NavItem<Screen>[] = [
-    { key: 'send', label: 'Send', icon: 'send' },
-    { key: 'track', label: 'Track', icon: 'search' },
-    { key: 'parcels', label: 'My parcels', icon: 'box' },
-    { key: 'account', label: 'Account', icon: 'person' },
+    { key: 'send', label: t('send.nav.send'), icon: 'send' },
+    { key: 'track', label: t('send.nav.track'), icon: 'search' },
+    { key: 'parcels', label: t('send.nav.parcels'), icon: 'box' },
+    { key: 'account', label: t('send.nav.account'), icon: 'person' },
   ];
 
   return (
     <div class="app">
       <TopBar
-        title="SeeBuyGet Send"
-        subtitle="See the price. Pay at the shop."
+        title={t('send.appTitle')}
+        subtitle={t('send.appTagline')}
         end={
           notifications || needRefresh ? (
             <>
@@ -42,8 +44,8 @@ export function App() {
                   type="button"
                   class="topbar__lead"
                   onClick={() => void sw.updateServiceWorker(true)}
-                  aria-label="A new version is ready — update now"
-                  title="Update the app"
+                  aria-label={t('send.update.aria')}
+                  title={t('send.update.title')}
                 >
                   <Icon name="refresh" size={24} />
                 </button>
@@ -74,10 +76,11 @@ function Router({ state, actions }: { state: SendState; actions: SendActions }) 
 }
 
 function Boot() {
+  const t = useT();
   return (
     <div class="boot" role="status" aria-live="polite">
       <span class="boot__spinner" aria-hidden="true" />
-      <p class="boot__word">Opening your account…</p>
+      <p class="boot__word">{t('send.boot')}</p>
     </div>
   );
 }

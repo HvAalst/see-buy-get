@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { t } from '../../shared/i18n'; // plain t(): toasts/outbound text are built at action time in the sender's active locale
 import { isSignInRequired, narrow, type SbgError } from '../../lib/sbg';
 import type { MediaKind } from '../../lib/sbg/personas/media';
 import { downscaleImage, type MediaView } from '../../shared/media';
@@ -770,7 +771,7 @@ export function useSendApp() {
         setState((s) => ({ ...s, accountBusy: false, accountError: r.error }));
         return;
       }
-      setState((s) => ({ ...s, accountBusy: false, accountNote: 'PIN updated', identity: s.identity ? { ...s.identity, hasPin: true } : s.identity }));
+      setState((s) => ({ ...s, accountBusy: false, accountNote: t('send.toast.pinUpdated'), identity: s.identity ? { ...s.identity, hasPin: true } : s.identity }));
     },
     [client],
   );
@@ -793,7 +794,7 @@ export function useSendApp() {
         return false;
       }
       const view = narrow<PersonView>(r.data);
-      setState((s) => ({ ...s, savingProfile: false, accountNote: 'Name saved', identity: s.identity ? { ...s.identity, displayName: view?.displayName } : s.identity }));
+      setState((s) => ({ ...s, savingProfile: false, accountNote: t('send.toast.nameSaved'), identity: s.identity ? { ...s.identity, displayName: view?.displayName } : s.identity }));
       return true;
     },
     [client],
@@ -812,7 +813,7 @@ export function useSendApp() {
       const mediaId = await uploadPhoto('avatar', file);
       if (readDid() !== startDid) return; // a different (or no) person now
       if (!mediaId) {
-        const err: SbgError = { code: 'INVALID_INPUT', status: 0, title: 'Photo not saved', detail: 'Could not upload that image — try a different photo.', retryable: true };
+        const err: SbgError = { code: 'INVALID_INPUT', status: 0, title: t('send.toast.photoNotSavedTitle'), detail: t('send.toast.photoNotSavedDetail'), retryable: true };
         setState((s) => ({ ...s, avatarBusy: false, accountError: err }));
         return;
       }
@@ -827,7 +828,7 @@ export function useSendApp() {
       setState((s) => ({
         ...s,
         avatarBusy: false,
-        accountNote: 'Photo updated',
+        accountNote: t('send.toast.photoUpdated'),
         identity: s.identity ? { ...s.identity, avatarMediaId: view?.avatarMediaId } : s.identity,
         mediaState: 'idle', // the new avatar (and the purge of the old) → refresh the library next visit
       }));
@@ -914,12 +915,12 @@ export function useSendApp() {
         const r = await client.api.createInvite([channel]);
         if (r.error) {
           if (isSignInRequired(r.error)) return signOutRef.current(r.error);
-          setState((s) => ({ ...s, inviteSending: null, inviteNote: r.error.code === 'INVITE_LIMIT' ? 'You have too many open invites' : 'Could not create the invite' }));
+          setState((s) => ({ ...s, inviteSending: null, inviteNote: r.error.code === 'INVITE_LIMIT' ? t('send.toast.inviteTooMany') : t('send.toast.inviteCreateFail') }));
           return;
         }
         token = narrow<InviteView>(r.data)?.token ?? '';
         if (!token) {
-          setState((s) => ({ ...s, inviteSending: null, inviteNote: 'Could not create the invite' }));
+          setState((s) => ({ ...s, inviteSending: null, inviteNote: t('send.toast.inviteCreateFail') }));
           return;
         }
       }
@@ -929,20 +930,20 @@ export function useSendApp() {
       // SeeBuyGet"); a person who hasn't named themselves still gets the zero-friction "Join me" text.
       const senderName = stateRef.current.identity?.displayName?.trim();
       const text = senderName
-        ? `Join ${senderName} on SeeBuyGet — send, track & collect parcels.`
-        : 'Join me on SeeBuyGet — send, track & collect parcels.';
+        ? t('send.toast.inviteTextNamed', { name: senderName })
+        : t('send.toast.inviteTextAnon');
       const how = await openChannel(channel, { text, url, tel: contact.tel || undefined, email: contact.email || undefined });
 
       // Persist the token→contact map ON DEVICE. Re-read at write time + a functional state update so a
       // stale snapshot can never clobber another entry, and dedupe by token so a re-send updates in place.
       // `delivered` gates the "Sent" pill: a failed open keeps the token (reusable) but shows Send to retry.
-      const entry: InviteEntry = { token, name: contact.name || contact.tel || 'Shared link', tel: contact.tel, at: new Date().toISOString(), delivered: how !== 'failed' };
+      const entry: InviteEntry = { token, name: contact.name || contact.tel || t('send.toast.sharedLink'), tel: contact.tel, at: new Date().toISOString(), delivered: how !== 'failed' };
       writeInviteMap(personId, [...readInviteMap(personId).filter((e) => e.token !== token), entry]);
       setState((s) => ({
         ...s,
         inviteSending: null,
         inviteMap: [...s.inviteMap.filter((e) => e.token !== token), entry],
-        inviteNote: how === 'copied' ? 'Link copied' : how === 'failed' ? 'Could not open that app — try another way' : 'Invite sent — they show as joined once they sign up',
+        inviteNote: how === 'copied' ? t('send.toast.linkCopied') : how === 'failed' ? t('send.toast.inviteOpenFail') : t('send.toast.inviteSent'),
       }));
       void loadInvites();
     },

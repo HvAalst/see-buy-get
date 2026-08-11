@@ -1,7 +1,8 @@
 import { useState } from 'preact/hooks';
 import { Button, Card, Checklist, ErrorNote, Icon, Note, PlaceMap, Pill, ReadAloud, ShopDetailSheet } from '../../../shared/ui';
+import { useT } from '../../../shared/i18n';
 import { fromPlaceWords } from '../../../shared/placewords';
-import { cleanPhone, dimsBlocker, journeyLine, lockedPrice, mintChecklist, money, phoneReady, pointDistance, pointLine, quoteSummary, reputationLine, selectablePoints, servingSince, sizeMeta } from '../logic';
+import { cleanPhone, dimsBlocker, journeyLine, lockedPrice, mintChecklist, money, phoneReady, pointDistance, pointLine, quoteSummary, reputationLine, selectablePoints, servingSince, sizeMeta, type Translate } from '../logic';
 import type { NetworkPoint } from '../types';
 import type { SendActions, SendState } from '../useSendApp';
 
@@ -34,8 +35,9 @@ export function SendScreen({ state, actions }: SendScreenProps) {
 }
 
 function StepDots({ at }: { at: number }) {
+  const t = useT();
   return (
-    <div class="dots" role="img" aria-label={`Step ${at} of 4`}>
+    <div class="dots" role="img" aria-label={t('send.stepDots', { at })}>
       {[1, 2, 3, 4].map((n) => (
         <span key={n} class={`dots__dot${n === at ? ' dots__dot--on' : n < at ? ' dots__dot--done' : ''}`} />
       ))}
@@ -46,28 +48,29 @@ function StepDots({ at }: { at: number }) {
 /* ----------------------------------------------------------------- parcel -- */
 
 function ParcelStep({ state, actions }: SendScreenProps) {
-  const blocked = dimsBlocker(state.dims);
+  const t = useT();
+  const blocked = dimsBlocker(state.dims, t);
   const derived = state.derived;
 
   return (
     <div class="scr">
       <StepDots at={1} />
-      <h1 class="scr__title">What are you sending?</h1>
-      <p class="scr__lede">Measure it — the size comes from the numbers, same as in any shop.</p>
+      <h1 class="scr__title">{t('send.parcel.title')}</h1>
+      <p class="scr__lede">{t('send.parcel.lede')}</p>
 
-      <Card label="Measurements">
+      <Card label={t('send.parcel.measurements')}>
         <div class="dims">
           {(
             [
-              ['l', 'Length cm'],
-              ['w', 'Width cm'],
-              ['h', 'Height cm'],
-              ['kg', 'Weight kg'],
+              ['l', 'send.parcel.dimL'],
+              ['w', 'send.parcel.dimW'],
+              ['h', 'send.parcel.dimH'],
+              ['kg', 'send.parcel.dimKg'],
             ] as const
-          ).map(([k, label]) => (
+          ).map(([k, labelKey]) => (
             <div key={k} class="field">
               <label class="field__label" for={`send-dim-${k}`}>
-                {label}
+                {t(labelKey)}
               </label>
               <input
                 id={`send-dim-${k}`}
@@ -82,10 +85,10 @@ function ParcelStep({ state, actions }: SendScreenProps) {
             </div>
           ))}
         </div>
-        {derived ? <Pill tone={derived.dedicated ? 'warn' : 'info'}>{`${sizeMeta(derived.size).label} — ${sizeMeta(derived.size).hint}`}</Pill> : <p class="card__note">Fill all four, then continue — the size tier is worked out for you.</p>}
+        {derived ? <Pill tone={derived.dedicated ? 'warn' : 'info'}>{`${sizeMeta(derived.size, t).label} — ${sizeMeta(derived.size, t).hint}`}</Pill> : <p class="card__note">{t('send.parcel.fillHint')}</p>}
         <label class="checkline" style="margin-top:12px">
           <input type="checkbox" checked={state.fragile} onChange={(e) => actions.setFragile(e.currentTarget.checked)} />
-          <span>Fragile — keep it off two-wheelers</span>
+          <span>{t('send.parcel.fragile')}</span>
         </label>
       </Card>
 
@@ -93,26 +96,26 @@ function ParcelStep({ state, actions }: SendScreenProps) {
         <Note
           tone="warn"
           icon="truck"
-          title="Too big for the parcel network"
-          detail="This needs dedicated freight — a truck with the right lifting gear. Ask at a PUDO shop; booking heavy freight from here is coming."
+          title={t('send.parcel.dedicatedTitle')}
+          detail={t('send.parcel.dedicatedDetail')}
         />
       ) : null}
 
       {state.deriveError ? <ErrorNote error={state.deriveError} onRetry={() => void actions.submitParcel()} /> : null}
 
-      <Card title="How it works" tone="soft">
-        <Checklist items={['See the price before you decide', state.identity ? 'Book it here — your label is ready before you leave home' : 'Sign in to book it — or just walk up and pay at the shop', 'The receiver collects it from a shop near them']} />
+      <Card title={t('send.parcel.howTitle')} tone="soft">
+        <Checklist items={[t('send.parcel.howPrice'), state.identity ? t('send.parcel.howBook') : t('send.parcel.howWalkUp'), t('send.parcel.howCollect')]} />
       </Card>
 
       <div class="scr__cta">
         <Button busy={state.deriveBusy} disabled={Boolean(blocked) || Boolean(derived?.dedicated)} onClick={() => void actions.submitParcel()}>
-          Continue
+          {t('send.parcel.continue')}
         </Button>
         {blocked ? <p class="hint" style="margin-top:8px">{blocked}</p> : null}
       </div>
 
       <div class="scr__foot">
-        <ReadAloud text={() => 'What are you sending? Measure the parcel: length, width and height in centimetres, and the weight in kilograms.'} label="Read this aloud" />
+        <ReadAloud text={() => t('send.parcel.aloud')} label={t('send.readAloud')} />
       </div>
     </div>
   );
@@ -121,6 +124,7 @@ function ParcelStep({ state, actions }: SendScreenProps) {
 /* ------------------------------------------------------------ from / to -- */
 
 function PointStep({ state, actions, kind }: SendScreenProps & { kind: 'from' | 'to' }) {
+  const t = useT();
   const from = kind === 'from';
   /**
    * The three words are the address substitute: type (or repeat aloud) where you are —
@@ -140,20 +144,20 @@ function PointStep({ state, actions, kind }: SendScreenProps & { kind: 'from' | 
   return (
     <div class="scr">
       <StepDots at={from ? 2 : 3} />
-      <h1 class="scr__title">{from ? 'Where will you drop it off?' : 'Where is it going?'}</h1>
-      <p class="scr__lede">{from ? 'Tap the shop nearest to you — on the map or in the list.' : 'Tap the shop nearest to the person receiving it.'}</p>
+      <h1 class="scr__title">{from ? t('send.point.titleFrom') : t('send.point.titleTo')}</h1>
+      <p class="scr__lede">{from ? t('send.point.ledeFrom') : t('send.point.ledeTo')}</p>
 
-      {state.pointsState === 'loading' ? <p class="hint">Finding shops…</p> : null}
+      {state.pointsState === 'loading' ? <p class="hint">{t('send.point.finding')}</p> : null}
       {state.pointsState === 'error' && state.pointsError ? <ErrorNote error={state.pointsError} onRetry={() => void actions.loadPoints()} /> : null}
       {state.pointsState === 'ready' && points.length === 0 ? (
         <Card>
-          <p class="t-body">No shops are on the network here yet.</p>
+          <p class="t-body">{t('send.point.none')}</p>
         </Card>
       ) : null}
 
       {points.length ? (
         <PlaceMap
-          label={`Map of ${points.length} shops${near ? ' with your three-words place marked' : ''}`}
+          label={near ? t('send.point.mapLabelWords', { count: points.length }) : t('send.point.mapLabel', { count: points.length })}
           pins={points.filter((p) => p.location && p.openState === 'open').map((p) => ({ id: p.did, label: p.shopName, point: p.location! }))}
           selectedId={openShop ?? picked}
           onPick={setOpenShop}
@@ -161,7 +165,7 @@ function PointStep({ state, actions, kind }: SendScreenProps & { kind: 'from' | 
         />
       ) : null}
 
-      <Card label={from ? 'Where are you? Say it in three words' : 'Where is the receiver? Say it in three words'}>
+      <Card label={from ? t('send.point.wordsFrom') : t('send.point.wordsTo')}>
         <input
           class="input"
           value={wordsText}
@@ -173,10 +177,10 @@ function PointStep({ state, actions, kind }: SendScreenProps & { kind: 'from' | 
         />
         <p class="card__note">
           {near
-            ? 'Found it — the nearest shops are now first.'
+            ? t('send.point.wordsFound')
             : wordsText.trim()
-              ? 'Not a place yet — three words, like on a shop sign.'
-              : 'Every place has three words — shops show theirs on a sign. No street name needed.'}
+              ? t('send.point.wordsNot')
+              : t('send.point.wordsEmpty')}
         </p>
       </Card>
 
@@ -188,13 +192,13 @@ function PointStep({ state, actions, kind }: SendScreenProps & { kind: 'from' | 
 
       <div class="scr__foot">
         <Button variant="link" full={false} onClick={() => actions.backTo(from ? 'parcel' : 'from')}>
-          Go back a step
+          {t('send.point.back')}
         </Button>
         <ReadAloud
           text={() =>
-            `${points.length} shops to choose from. ${near ? 'The nearest is first.' : ''} ${from ? 'Pick where you will drop the parcel off.' : 'Pick where it is going.'}`
+            `${t('send.point.aloudCount', { count: points.length })} ${near ? t('send.point.aloudNearest') : ''} ${from ? t('send.point.aloudPickFrom') : t('send.point.aloudPickTo')}`
           }
-          label="Read this aloud"
+          label={t('send.readAloud')}
         />
       </div>
 
@@ -202,12 +206,12 @@ function PointStep({ state, actions, kind }: SendScreenProps & { kind: 'from' | 
           list rows still commit directly; the shared sheet is the same on every shop picker (G4b). */}
       <ShopDetailSheet
         open={!!preview}
-        title={preview?.shopName ?? 'Pickup point'}
-        subtitle={preview ? [preview.landmark, `Zone ${preview.zone}`].filter(Boolean).join(' · ') : undefined}
-        lines={preview ? shopFacts(preview, pointDistance(preview, near)) : []}
+        title={preview?.shopName ?? t('send.point.sheetTitle')}
+        subtitle={preview ? [preview.landmark, t('send.zone', { zone: preview.zone })].filter(Boolean).join(' · ') : undefined}
+        lines={preview ? shopFacts(preview, pointDistance(preview, near), t) : []}
         location={preview?.location ?? null}
         onChoose={preview ? () => { const did = preview.did; setOpenShop(null); pick(did); } : undefined}
-        chooseLabel="Choose this pickup"
+        chooseLabel={t('send.point.choose')}
         chooseDisabled={preview?.openState === 'closed'}
         onClose={() => setOpenShop(null)}
       />
@@ -218,18 +222,19 @@ function PointStep({ state, actions, kind }: SendScreenProps & { kind: 'from' | 
 /** The detail lines a shop's public profile shows (what the row can't): price, distance, open state, slots,
  *  reputation (honest "New" when unrated) and how long it has served. REP1 turns this preview into a real
  *  public profile the sender can weigh before committing. */
-function shopFacts(shop: NetworkPoint, away: string | null): string[] {
+function shopFacts(shop: NetworkPoint, away: string | null, t: Translate): string[] {
   return [
-    `${money(shop.pricePerParcel)} to handle your parcel`,
-    away ? `${away} from your place` : `In zone ${shop.zone}`,
-    shop.openState === 'open' ? 'Open now' : 'Closed right now',
-    ...(shop.freeSlots != null ? [`${shop.freeSlots} ${shop.freeSlots === 1 ? 'space' : 'spaces'} free`] : []),
-    reputationLine(shop.rating), // REP1 — always shown, honest about the cold start
-    ...(servingSince(shop.since) ? [servingSince(shop.since)!] : []),
+    t('send.point.factHandle', { price: money(shop.pricePerParcel) }),
+    away ? t('send.point.factAway', { dist: away }) : t('send.point.factZone', { zone: shop.zone }),
+    shop.openState === 'open' ? t('send.point.openNow') : t('send.point.closedNow'),
+    ...(shop.freeSlots != null ? [shop.freeSlots === 1 ? t('send.point.slotOne', { count: shop.freeSlots }) : t('send.point.slotMany', { count: shop.freeSlots })] : []),
+    reputationLine(shop.rating, t), // REP1 — always shown, honest about the cold start
+    ...(servingSince(shop.since, t) ? [servingSince(shop.since, t)!] : []),
   ];
 }
 
 function PointRow({ point, picked, away, onPick }: { point: NetworkPoint; picked: boolean; away: string | null; onPick: () => void }) {
+  const t = useT();
   const closed = point.openState === 'closed';
   return (
     <button type="button" class="row" disabled={closed} aria-pressed={picked} onClick={onPick}>
@@ -238,12 +243,12 @@ function PointRow({ point, picked, away, onPick }: { point: NetworkPoint; picked
       </span>
       <span class="row__body">
         <span class="row__t">{point.shopName}</span>
-        <span class="row__s">{closed ? 'Closed right now' : `${away ? `${away} · ` : ''}${pointLine(point)}`}</span>
+        <span class="row__s">{closed ? t('send.point.closedNow') : `${away ? `${away} · ` : ''}${pointLine(point, t)}`}</span>
       </span>
       <span class="row__end">
         {closed ? (
           <Pill tone="idle" dot>
-            Closed
+            {t('send.point.closed')}
           </Pill>
         ) : (
           <Icon name="chevronRight" size={22} />
@@ -256,6 +261,7 @@ function PointRow({ point, picked, away, onPick }: { point: NetworkPoint; picked
 /* ------------------------------------------------------------------ quote -- */
 
 function QuoteStep({ state, actions }: SendScreenProps) {
+  const t = useT();
   const q = state.quote;
   const from = state.points.find((p) => p.did === state.fromDid);
   const signedIn = Boolean(state.identity);
@@ -263,38 +269,38 @@ function QuoteStep({ state, actions }: SendScreenProps) {
   return (
     <div class="scr">
       <StepDots at={4} />
-      <h1 class="scr__title">Here is the price</h1>
+      <h1 class="scr__title">{t('send.quote.title')}</h1>
 
-      {state.quoteState === 'loading' ? <p class="hint">Working out the journey…</p> : null}
+      {state.quoteState === 'loading' ? <p class="hint">{t('send.quote.working')}</p> : null}
       {state.quoteState === 'error' && state.quoteError ? <ErrorNote error={state.quoteError} onRetry={actions.retryQuote} /> : null}
 
       {/* The market moved between the price and the mint — we bounced back here with the fresh price to re-confirm. */}
       {state.mintError?.code === 'PRICE_CHANGED' ? (
-        <Note tone="warn" icon="wallet" title="The price just changed" detail="The route's price moved while you were booking. Here's the new price — tap Book this send to go ahead." />
+        <Note tone="warn" icon="wallet" title={t('send.quote.changedTitle')} detail={t('send.quote.changedDetail')} />
       ) : null}
 
       {q ? (
         <>
           <div class="prices">
             <div class="price price--lead">
-              <span class="price__title">The price</span>
-              <span class="price__total">{money(lockedPrice(q).total)}</span>
-              <span class="price__sub">{lockedPrice(q).sub}</span>
+              <span class="price__title">{t('send.quote.priceTitle')}</span>
+              <span class="price__total">{money(lockedPrice(q, t).total)}</span>
+              <span class="price__sub">{lockedPrice(q, t).sub}</span>
             </div>
           </div>
 
-          <Card label="The journey">
+          <Card label={t('send.quote.journey')}>
             <p class="t-body">{journeyLine(q)}</p>
-            <p class="card__note">{`About ${Math.round(q.totalKm)} km · shop and hub fees ${money(q.nodeFees)} inside the price`}</p>
+            <p class="card__note">{t('send.quote.about', { km: Math.round(q.totalKm), fees: money(q.nodeFees) })}</p>
           </Card>
 
           {signedIn ? null : (
-            <Card title="What you do next">
+            <Card title={t('send.quote.nextTitle')}>
               <Checklist
                 items={[
-                  `Take the parcel to ${from?.shopName ?? 'your drop-off shop'}`,
-                  'Pay there — cash is fine',
-                  'You get a tracking code by message',
+                  t('send.quote.nextTake', { shop: from?.shopName ?? t('send.dropShop') }),
+                  t('send.quote.nextPay'),
+                  t('send.quote.nextCode'),
                 ]}
               />
             </Card>
@@ -305,21 +311,21 @@ function QuoteStep({ state, actions }: SendScreenProps) {
       {q ? (
         <div class="scr__cta">
           {signedIn ? (
-            <Button onClick={actions.toBook}>Book this send</Button>
+            <Button onClick={actions.toBook}>{t('send.quote.book')}</Button>
           ) : (
-            <Button onClick={() => actions.go('account')}>Sign in to book it</Button>
+            <Button onClick={() => actions.go('account')}>{t('send.quote.signIn')}</Button>
           )}
         </div>
       ) : null}
 
       <div class="scr__foot">
         <Button variant="link" full={false} onClick={() => actions.backTo('to')}>
-          Change the delivery shop
+          {t('send.quote.changeShop')}
         </Button>
         <Button variant="link" full={false} onClick={actions.startAgain}>
-          Price another parcel
+          {t('send.quote.another')}
         </Button>
-        <ReadAloud text={() => (q ? quoteSummary(q) : 'The price is still loading.')} label="Read this aloud" />
+        <ReadAloud text={() => (q ? quoteSummary(q, t) : t('send.quote.aloudLoading'))} label={t('send.readAloud')} />
       </div>
     </div>
   );
@@ -328,6 +334,7 @@ function QuoteStep({ state, actions }: SendScreenProps) {
 /* ------------------------------------------------------------------- book -- */
 
 function BookStep({ state, actions }: SendScreenProps) {
+  const t = useT();
   const q = state.quote;
   const from = state.points.find((p) => p.did === state.fromDid);
   const to = state.points.find((p) => p.did === state.toDid);
@@ -335,13 +342,13 @@ function BookStep({ state, actions }: SendScreenProps) {
 
   return (
     <div class="scr">
-      <h1 class="scr__title">Who is it going to?</h1>
-      <p class="scr__lede">Their number is how the parcel finds them — they see it in their app and collect with it.</p>
+      <h1 class="scr__title">{t('send.book.title')}</h1>
+      <p class="scr__lede">{t('send.book.lede')}</p>
 
-      <Card label="The receiver">
+      <Card label={t('send.book.receiver')}>
         <div class="field">
           <label class="field__label" for="rcv-phone">
-            Receiver&rsquo;s phone number
+            {t('send.book.phoneLabel')}
           </label>
           <input
             id="rcv-phone"
@@ -354,29 +361,29 @@ function BookStep({ state, actions }: SendScreenProps) {
           />
         </div>
         <Button variant="link" full={false} onClick={() => void actions.pickReceiverContact()}>
-          Pick from my contacts
+          {t('send.pickContacts')}
         </Button>
       </Card>
 
-      <Card label="Your send">
+      <Card label={t('send.book.yourSend')}>
         <div class="kv">
-          <span>From</span>
+          <span>{t('send.book.from')}</span>
           <b>{from?.shopName ?? '—'}</b>
         </div>
         <div class="kv">
-          <span>To</span>
+          <span>{t('send.book.to')}</span>
           <b>{to?.shopName ?? '—'}</b>
         </div>
         {state.derived ? (
           <div class="kv">
-            <span>Size</span>
-            <b>{sizeMeta(state.derived.size).label}</b>
+            <span>{t('send.book.size')}</span>
+            <b>{sizeMeta(state.derived.size, t).label}</b>
           </div>
         ) : null}
         {q ? (
           <div class="kv">
-            <span>You pay at the shop</span>
-            <b>{money(lockedPrice(q).total)}</b>
+            <span>{t('send.youPay')}</span>
+            <b>{money(lockedPrice(q, t).total)}</b>
           </div>
         ) : null}
       </Card>
@@ -385,16 +392,16 @@ function BookStep({ state, actions }: SendScreenProps) {
 
       <div class="scr__cta">
         <Button busy={state.mintBusy} disabled={!ready} onClick={() => void actions.submitMint()}>
-          Make my label
+          {t('send.book.makeLabel')}
         </Button>
-        {!ready ? <p class="hint" style="margin-top:8px">Enter the receiver&rsquo;s number first.</p> : null}
+        {!ready ? <p class="hint" style="margin-top:8px">{t('send.book.enterNumber')}</p> : null}
       </div>
 
       <div class="scr__foot">
         <Button variant="link" full={false} onClick={() => actions.backTo('quote')}>
-          Go back to the price
+          {t('send.book.backToPrice')}
         </Button>
-        <ReadAloud text={() => `Type the receiver's phone number, then make the label. You pay ${q ? money(lockedPrice(q).total) : 'the price'} in cash when you drop the parcel at ${from?.shopName ?? 'the shop'}.`} label="Read this aloud" />
+        <ReadAloud text={() => t('send.book.aloud', { price: q ? money(lockedPrice(q, t).total) : t('send.book.thePrice'), shop: from?.shopName ?? t('send.book.theShop') })} label={t('send.readAloud')} />
       </div>
     </div>
   );
@@ -403,9 +410,10 @@ function BookStep({ state, actions }: SendScreenProps) {
 /* ------------------------------------------------------------------- done -- */
 
 function DoneStep({ state, actions }: SendScreenProps) {
+  const t = useT();
   const m = state.minted;
   // The shop the parcel was actually minted at — snapshotted at mint, immune to any later back-navigation.
-  const fromName = state.mintedFromName ?? 'your drop-off shop';
+  const fromName = state.mintedFromName ?? t('send.dropShop');
   if (!m) return null;
   const svg = m.label?.svg ?? null;
 
@@ -418,58 +426,58 @@ function DoneStep({ state, actions }: SendScreenProps) {
 
   return (
     <div class="scr">
-      <h1 class="scr__title">Your label is ready</h1>
-      <p class="scr__lede">The parcel already exists on the network — show this at the shop and it is on its way.</p>
+      <h1 class="scr__title">{t('send.done.title')}</h1>
+      <p class="scr__lede">{t('send.done.lede')}</p>
 
       {/* Trusted markup: the SVG comes from OUR backend's mint response, nothing user-authored. */}
       {svg ? <div class="labelbox" dangerouslySetInnerHTML={{ __html: svg }} /> : null}
 
-      <Card title="What happens next">
-        <Checklist items={mintChecklist(fromName, m.price.total)} />
+      <Card title={t('send.done.nextTitle')}>
+        <Checklist items={mintChecklist(fromName, m.price.total, t)} />
       </Card>
 
       {m.journey ? (
-        <Card title="Planned journey">
+        <Card title={t('send.done.journeyTitle')}>
           <p class="t-body">{m.journey.hops.join(' → ')}</p>
           <p class="card__note">
-            {m.journey.mdpRouted ? 'Routed through a sorting hub. ' : 'Direct local hop. '}
-            {m.journey.pickupReadyAt ? `Ready for collection around ${new Date(m.journey.pickupReadyAt).toLocaleString()}.` : ''}
+            {m.journey.mdpRouted ? t('send.done.routedHub') : t('send.done.directHop')}
+            {m.journey.pickupReadyAt ? t('send.done.readyAround', { time: new Date(m.journey.pickupReadyAt).toLocaleString() }) : ''}
           </p>
         </Card>
       ) : null}
 
-      <Card label="Keep for your records">
+      <Card label={t('send.done.recordsTitle')}>
         <div class="kv">
-          <span>Parcel</span>
+          <span>{t('send.done.parcel')}</span>
           <b class="mono-t">{m.parcel.parcelId}</b>
         </div>
         {m.parcel.trackingKey ? (
           <div class="kv">
-            <span>Tracking key</span>
+            <span>{t('send.done.trackingKey')}</span>
             <b class="mono-t">{m.parcel.trackingKey}</b>
           </div>
         ) : null}
         <div class="kv">
-          <span>You pay at the shop</span>
+          <span>{t('send.youPay')}</span>
           <b>{money(m.price.total)}</b>
         </div>
       </Card>
 
       <div class="scr__cta">
         <Button onClick={openLabel} disabled={!svg}>
-          Open and print the label
+          {t('send.done.openLabel')}
         </Button>
       </div>
 
       <Button variant="outline" onClick={() => actions.go('parcels')}>
-        See it in My parcels
+        {t('send.done.seeInParcels')}
       </Button>
 
       <div class="scr__foot">
         <Button variant="link" full={false} onClick={actions.startAgain}>
-          Send another parcel
+          {t('send.done.another')}
         </Button>
-        <ReadAloud text={() => `Your label is ready. Take the parcel to ${fromName}, show the label, and pay ${money(m.price.total)} in cash. The receiver already sees it in their app.`} label="Read this aloud" />
+        <ReadAloud text={() => t('send.done.aloud', { shop: fromName, price: money(m.price.total) })} label={t('send.readAloud')} />
       </div>
     </div>
   );
