@@ -1,0 +1,207 @@
+/**
+ * Home (network landing/hub) app — English base slice. Namespace: home.* (keep every key prefixed).
+ * Filled during the per-app i18n extraction; spread into the composed base catalog in en.ts.
+ * Not `as const` — values must be typed `string` so a translation may differ from the English literal.
+ */
+export const enHome = {
+  // Shell (app.tsx).
+  'home.appTitle': 'SeeBuyGet',
+  'home.back': 'Back',
+  'home.update.aria': 'A new version is ready — update now',
+  'home.update.title': 'Update the app',
+  'home.subtitle.joining': 'Joining as {role}',
+  'home.subtitle.roles': 'Join the network',
+  'home.subtitle.signin': 'Sign in',
+  'home.subtitle.welcome': 'Send · collect · earn',
+
+  // Shared within Home (reused across screens).
+  'home.readAloud': 'Read this aloud',
+  'home.goBack': 'Go back',
+  'home.continue': 'Continue',
+  'home.zone': 'Zone {zone}',
+  'home.openNow': 'Open now',
+  'home.closedNow': 'Closed right now',
+
+  // The five roles — plain-words presentation resolved by roleMeta() in logic.ts. Each role carries the
+  // full label ("A shop"), its lowercased form ("a shop", for "Join as …"), an article-stripped name
+  // ("shop", for the sign-in list), a short app noun ("Open the shop app"), plus the blurb and promise.
+  'home.role.pudo.label': 'A shop',
+  'home.role.pudo.labelLower': 'a shop',
+  'home.role.pudo.name': 'shop',
+  'home.role.pudo.appNoun': 'shop',
+  'home.role.pudo.blurb': 'Take in and hand out parcels from your counter.',
+  'home.role.pudo.promise': 'Earn on every parcel. Connect your community.',
+  'home.role.driver.label': 'A driver',
+  'home.role.driver.labelLower': 'a driver',
+  'home.role.driver.name': 'driver',
+  'home.role.driver.appNoun': 'driver',
+  'home.role.driver.blurb': 'Carry parcels on the road you already drive.',
+  'home.role.driver.promise': 'Fill your empty space. Get paid per load.',
+  'home.role.mdp.label': 'A sort hub',
+  'home.role.mdp.labelLower': 'a sort hub',
+  'home.role.mdp.name': 'sort hub',
+  'home.role.mdp.appNoun': 'hub',
+  'home.role.mdp.blurb': 'Sort parcels between routes for the network.',
+  'home.role.mdp.promise': 'Earn a fee on every parcel you sort.',
+  'home.role.vendor.label': 'An online store',
+  'home.role.vendor.labelLower': 'an online store',
+  'home.role.vendor.name': 'online store',
+  'home.role.vendor.appNoun': 'store',
+  'home.role.vendor.blurb': 'Ship your orders to a shop the buyer picks.',
+  'home.role.vendor.promise': 'Click-and-collect without your own couriers.',
+  'home.role.fleet.label': 'A fleet office',
+  'home.role.fleet.labelLower': 'a fleet office',
+  'home.role.fleet.name': 'fleet office',
+  'home.role.fleet.appNoun': 'fleet office',
+  'home.role.fleet.blurb': 'Run vehicles and drivers on the network.',
+  'home.role.fleet.promise': 'Dispatch, shifts and cargo in one console.',
+
+  // Welcome screen (the front door).
+  'home.welcome.title': 'Parcels, without an address',
+  'home.welcome.lede': 'Send it to a shop. Collect it from a shop. Pay at the counter. SeeBuyGet is the network of shops, drivers and hubs that moves it in between.',
+  'home.welcome.sendTrack': 'Send or track a parcel',
+  'home.welcome.earn': 'Earn with SeeBuyGet',
+  'home.welcome.howTitle': 'How it works',
+  'home.welcome.how1': 'See the price before you send — no account needed',
+  'home.welcome.how2': 'Drop it at a shop near you, pay there',
+  'home.welcome.how3': 'The person collecting gets a code by message',
+  'home.welcome.trackTitle': 'Where is my parcel?',
+  'home.welcome.trackSub': 'Track it with the code from your message',
+  'home.welcome.haveAccount': 'I already work with SeeBuyGet',
+  'home.welcome.haveAccountSub': 'Open your shop, driver, hub, store or fleet app',
+  'home.welcome.spoken': 'Welcome to SeeBuyGet. Send a parcel, track one, or join the network as a shop, a driver, a hub or a store.',
+
+  // Roles screen (the "what are you?" chooser).
+  'home.roles.title': 'What are you?',
+  'home.roles.lede': 'Pick the one that fits. You can join in a few minutes.',
+  'home.roles.byInvite': 'By invite',
+  'home.roles.aloudLead': 'Pick what you are.',
+  'home.roles.aloudRole': '{label}: {promise}',
+  'home.roles.aloudLabel': 'Read the choices aloud',
+
+  // Sign-in screen (route an existing participant to their own app's door).
+  'home.signin.title': 'Open your app',
+  'home.signin.lede': 'Pick the one you work with.',
+  'home.signin.credVendor': 'Store ID and secret',
+  'home.signin.credInvite': 'Fleet sign-in code',
+  'home.signin.credSignup': 'Email and password',
+  'home.signin.justSending': 'Just sending or tracking',
+  'home.signin.noAccount': 'No account needed',
+  'home.signin.open': 'Open',
+  'home.signin.noAccountYet': 'I do not have an account yet',
+  'home.signin.aloud': 'Pick the app you work with: shop, driver, sort hub, online store, or fleet office.',
+
+  // Join wizard — shared.
+  'home.join.step': 'Step {at} of {total}',
+  'home.join.joinAs': 'Join as {role}',
+
+  // Join wizard — the spoken lines (logic.ts joinSpoken).
+  'home.join.spoken.phone': 'Joining as {role}. Type the phone number you use every day — we send a code to it.',
+  'home.join.spoken.code': 'Type the code we just sent to your phone.',
+  'home.join.spoken.aboutDriver': 'Tell us about yourself.',
+  'home.join.spoken.aboutPlace': 'Tell us about your place.',
+  'home.join.spoken.where': 'Tap the map to show where you are. No street address needed.',
+  'home.join.spoken.login': 'Last step. Pick an email and a password to sign in with.',
+  'home.join.spoken.done': 'You are in.',
+
+  // Join wizard — the step blockers (logic.ts stepBlocker; the CTA hint that says the next thing to do).
+  'home.block.phone': 'Type the phone number you use every day.',
+  'home.block.code': 'Type the code we sent you.',
+  'home.block.nameStore': 'Name your store.',
+  'home.block.nameShop': 'Name your shop.',
+  'home.block.nameHub': 'Name your hub.',
+  'home.block.nameGeneric': 'Type the name people will see.',
+  'home.block.fullName': 'Type your full name.',
+  'home.block.idNumber': 'Type your ID number.',
+  'home.block.drive': 'Pick what you drive.',
+  'home.block.location': 'Tap the map to drop a pin where you are.',
+  'home.block.zone': 'Pick the area you serve.',
+  'home.block.email': 'Type an email you can open.',
+  'home.block.password': 'Use at least 6 characters.',
+
+  // Join wizard — step: phone.
+  'home.join.phone.lede': 'Your phone number is your key to the network. We send a code to check it works.',
+  'home.join.phone.label': 'Phone number',
+  'home.join.phone.cta': 'Send me the code',
+
+  // Join wizard — step: code.
+  'home.join.code.title': 'Type the code',
+  'home.join.code.lede': 'We sent it to {phone}.',
+  'home.join.code.label': 'Your code',
+  'home.join.code.boxLabel': 'The code sent to your phone',
+  'home.join.code.sandbox': 'Sandbox: your code is {code}',
+  'home.join.code.cta': 'Check the code',
+
+  // Join wizard — step: about.
+  'home.join.about.titleDriver': 'About you',
+  'home.join.about.titlePlace': 'About your place',
+  'home.join.about.nameShop': 'Shop name',
+  'home.join.about.nameHub': 'Hub name',
+  'home.join.about.nameStore': 'Store name',
+  'home.join.about.nameDriver': 'Your name as drivers see it',
+  'home.join.about.phShop': 'Mama Sarah Shop',
+  'home.join.about.phDriver': 'Amos K.',
+  'home.join.about.phHub': 'Central Sort',
+  'home.join.about.phStore': 'Nairobi Threads',
+  'home.join.about.country': 'Country',
+  'home.join.about.fullName': 'Your full name',
+  'home.join.about.fullNamePh': 'As on your ID',
+  'home.join.about.idNumber': 'ID number',
+  'home.join.about.privacyNote': 'Your name and ID are kept private — they never show on the network.',
+  'home.join.about.driveTitle': 'What do you drive?',
+  'home.join.about.driveNote': 'A bike or motorcycle starts today. Anything heavier needs a licence check first.',
+  'home.join.about.ctaVendor': 'Create my store',
+
+  // Join wizard — step: where.
+  'home.join.where.titleDriver': 'Where do you start?',
+  'home.join.where.title': 'Where are you?',
+  'home.join.where.lede': 'Tap the map to drop your pin — or tap a shop to see it. No street address needed.',
+  'home.join.where.mapLabel': 'Tap the map to drop your pin',
+  'home.join.where.wordsTitle': 'Your three words',
+  'home.join.where.wordsNote': 'Say these three words and anyone can find you. Put them on your sign.',
+  'home.join.where.wordsAloud': 'Your three words are: {words}.',
+  'home.join.where.wordsAloudLabel': 'Say them aloud',
+  'home.join.where.noPin': 'Tap the map above to drop your pin',
+  'home.join.where.areaTitle': 'Which area do you serve?',
+  'home.join.where.areaPlaceholder': 'Pick your area',
+  'home.join.where.landmarkLabel': 'Nearest landmark (optional)',
+  'home.join.where.landmarkPh': 'Blue gate, next to the market',
+  'home.join.where.shopFallback': 'Shop',
+
+  // Join wizard — step: login.
+  'home.join.login.title': 'How you sign in',
+  'home.join.login.lede': 'This is what opens your app from now on.',
+  'home.join.login.email': 'Email',
+  'home.join.login.password': 'Password',
+  'home.join.login.passwordPh': 'At least 6 characters',
+
+  // Join wizard — step: done.
+  'home.join.done.title': 'You are in',
+  'home.join.done.ledeVendor': 'Your store is registered.',
+  'home.join.done.ledeWelcome': 'Welcome to SeeBuyGet, {name}.',
+  'home.join.done.storeId': 'Store ID',
+  'home.join.done.storeSecret': 'Store secret — shown once',
+  'home.join.done.writeDown': 'Write these down now',
+  'home.join.done.secret1': 'The secret opens your store app',
+  'home.join.done.secret2': 'It also signs your order callbacks',
+  'home.join.done.secret3': 'SeeBuyGet cannot show it again',
+  'home.join.done.whatNext': 'What happens next',
+  'home.join.done.active1': 'Your app is ready to open',
+  'home.join.done.active2': 'Sign in with your email and password',
+  'home.join.done.active3': 'Your phone number stays your key',
+  'home.join.done.pending1': 'SeeBuyGet checks your details — usually same day',
+  'home.join.done.pending2': 'You can open your app and look around now',
+  'home.join.done.pending3': 'You start working the moment you are approved',
+  'home.join.done.openApp': 'Open the {name} app',
+  'home.join.done.restart': 'Back to the start',
+
+  // Join wizard — invite-only branch (fleet).
+  'home.join.invite.title': '{role} joins by invite',
+  'home.join.invite.lede': 'A fleet office is set up by SeeBuyGet operations — vehicles, drivers and the operating bond are checked before the console opens. You will be given a sign-in code.',
+  'home.join.invite.whatYouGet': 'What you get',
+  'home.join.invite.get1': 'A live map of your vehicles and drivers',
+  'home.join.invite.get2': 'Shift and cargo tracking',
+  'home.join.invite.get3': 'Your own vehicle and driver registry',
+  'home.join.invite.haveCode': 'I have a code — open the fleet app',
+  'home.join.invite.pickElse': 'Pick something else',
+};

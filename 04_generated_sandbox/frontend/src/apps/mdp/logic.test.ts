@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { t } from '../../shared/i18n'; // English is the base catalog, so the real `t` yields the English literals
 import {
   SWATCH_COUNT,
   addToQueue,
@@ -110,8 +111,8 @@ describe('bags', () => {
   });
 
   it('bagLine says destination and count in plain words', () => {
-    expect(bagLine(tote({ destinationLabel: 'Mama Njeri', parcels: ['a', 'b'] }))).toBe('→ Mama Njeri · 2 parcels');
-    expect(bagLine(tote({ destinationLabel: undefined, destinationNodeId: undefined }))).toBe('→ unassigned · 1 parcel');
+    expect(bagLine(tote({ destinationLabel: 'Mama Njeri', parcels: ['a', 'b'] }), t)).toBe('→ Mama Njeri · 2 parcels');
+    expect(bagLine(tote({ destinationLabel: undefined, destinationNodeId: undefined }), t)).toBe('→ unassigned · 1 parcel');
   });
 });
 
@@ -125,8 +126,8 @@ describe('placeLine', () => {
   });
 
   it('names the hop kind a worker understands', () => {
-    expect(placeLine(sort('pudo'))).toBe('→ Riverside (last mile)');
-    expect(placeLine(sort('mdp'))).toBe('→ Riverside (onward hub)');
+    expect(placeLine(sort('pudo'), t)).toBe('→ Riverside (last mile)');
+    expect(placeLine(sort('mdp'), t)).toBe('→ Riverside (onward hub)');
   });
 });
 
@@ -134,16 +135,16 @@ describe('priceBand', () => {
   const bm: Benchmark = { count: 4, median: 0.5, p25: 0.4, p75: 0.6, min: 0.3, max: 0.8 };
 
   it('mirrors the agent band with hub wording', () => {
-    expect(priceBand(0.75, bm)?.headline).toContain('50% more than nearby hubs');
-    expect(priceBand(0.5, bm)?.showMatch).toBe(false);
-    expect(priceBand(0.75, null)).toBeNull();
+    expect(priceBand(0.75, bm, t)?.headline).toContain('50% more than nearby hubs');
+    expect(priceBand(0.5, bm, t)?.showMatch).toBe(false);
+    expect(priceBand(0.75, null, t)).toBeNull();
   });
 });
 
 describe('speaking', () => {
   it('reads the floor state in plain words', () => {
-    expect(homeSummary(1, 2)).toBe('1 parcel to sort. 2 outbound bags building.');
-    expect(sortSummary(0, null)).toContain('queue is empty');
+    expect(homeSummary(1, 2, t)).toBe('1 parcel to sort. 2 outbound bags building.');
+    expect(sortSummary(0, null, t)).toContain('queue is empty');
     expect(
       sortSummary(3, {
         parcelId: 'P-1',
@@ -151,7 +152,7 @@ describe('speaking', () => {
         toteCode: 'BAG-2',
         toteId: 't',
         fillPct: 10,
-      }),
+      }, t),
     ).toBe('Place parcel P-1 in bag BAG-2. 3 left to sort.');
     expect(money(0.5)).toBe('0.50');
   });

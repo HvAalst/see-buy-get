@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, CheckGate, Checklist, ErrorNote, GlanceNumber, Icon, Note, OpenInMaps, PhotoField, Pill, ReadAloud, Sheet } from '../../../shared/ui';
+import { useT } from '../../../shared/i18n';
 import { canLoadBag, capacitySubLine, claimControl, isFull, loadsSummary, money, usedPercent } from '../logic';
 import type { Claimable } from '../types';
 import type { DriverActions, DriverState } from '../useDriverApp';
@@ -10,6 +11,7 @@ export interface LoadsScreenProps {
 }
 
 export function LoadsScreen({ state, actions }: LoadsScreenProps) {
+  const t = useT();
   const [pick, setPick] = useState<Claimable | null>(null);
   const [gate, setGate] = useState<Claimable | null>(null); // S33 — the freight in the load/unload safety gate
   const [tempFor, setTempFor] = useState<Claimable | null>(null); // S33b — the freight whose temperature we're logging
@@ -18,18 +20,18 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
 
   return (
     <div class="scr">
-      <h1 class="scr__title">My loads</h1>
+      <h1 class="scr__title">{t('driver.nav.loads')}</h1>
 
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
 
       {v ? (
         <GlanceNumber
-          label="Space left on the van"
+          label={t('driver.home.spaceLabel')}
           value={state.remaining}
           unit="kg"
           percent={usedPercent(v.capacityKg, state.remaining)}
           alert={isFull(state.remaining)}
-          sub={capacitySubLine(state.remaining, v.capacityKg, state.claims.length)}
+          sub={capacitySubLine(state.remaining, v.capacityKg, state.claims.length, t)}
         />
       ) : null}
 
@@ -37,14 +39,14 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
         <Note
           tone="warn"
           icon="badge"
-          title="No badge on your record"
-          detail="You cannot scan bags onto the van until the office adds your badge number."
+          title={t('driver.loads.noBadgeTitle')}
+          detail={t('driver.loads.noBadgeDetail')}
         />
       ) : null}
 
       {state.claims.length === 0 ? (
-        <Card title="Nothing claimed yet" tone="soft">
-          <Checklist items={['Pick a route', 'Claim the loads on your way', 'Scan each bag onto the van']} />
+        <Card title={t('driver.loads.emptyTitle')} tone="soft">
+          <Checklist items={[t('driver.loads.empty1'), t('driver.loads.empty2'), t('driver.loads.empty3')]} />
         </Card>
       ) : (
         <ul class="rows">
@@ -58,9 +60,9 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                 </span>
                 <span class="row__body">
                   <span class="load__ref">{c.code ?? c.ref}</span>
-                  <span class="load__meta">{`${c.pickupLabel} → ${c.destLabel} · ${c.weightKg} kg`}</span>
+                  <span class="load__meta">{t('driver.loads.meta', { pickup: c.pickupLabel, dest: c.destLabel, kg: c.weightKg })}</span>
                   {/* S34 — the locked earning rides on the claimed freight, so a driver always sees what this job pays. */}
-                  {c.lockedPrice != null ? <span class="load__earn">You earn {money(c.lockedPrice)}</span> : null}
+                  {c.lockedPrice != null ? <span class="load__earn">{t('driver.loads.youEarn', { amount: money(c.lockedPrice) })}</span> : null}
                 </span>
               </>
             );
@@ -73,17 +75,17 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                     class="row"
                     onClick={() => setPick(c)}
                     disabled={!hasBadge || busy}
-                    aria-label={`Load ${c.code ?? c.ref} onto the van`}
+                    aria-label={t('driver.loads.loadAria', { ref: c.code ?? c.ref })}
                   >
                     {body}
                     <span class="row__end">
-                      <Pill tone="info">Load on</Pill>
+                      <Pill tone="info">{t('driver.loads.loadOn')}</Pill>
                       <Icon name="chevronRight" size={22} />
                     </span>
                   </button>
                   {c.pickupLocation ? (
                     <div class="load__nav">
-                      <OpenInMaps point={c.pickupLocation} label={`Navigate to ${c.pickupLabel}`} />
+                      <OpenInMaps point={c.pickupLocation} label={t('driver.navigateTo', { label: c.pickupLabel })} />
                     </div>
                   ) : null}
                 </li>
@@ -102,18 +104,18 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                     class="row"
                     onClick={() => setGate(c)}
                     disabled={freightBusy}
-                    aria-label={`${isPickup ? 'Pick up' : 'Deliver'} freight ${c.code ?? c.ref}`}
+                    aria-label={isPickup ? t('driver.loads.pickupAria', { ref: c.code ?? c.ref }) : t('driver.loads.deliverAria', { ref: c.code ?? c.ref })}
                   >
                     {body}
                     <span class="row__end">
-                      <Pill tone={isPickup ? 'info' : 'ok'}>{isPickup ? 'Pick up' : 'Deliver'}</Pill>
+                      <Pill tone={isPickup ? 'info' : 'ok'}>{isPickup ? t('driver.loads.pickup') : t('driver.loads.deliver')}</Pill>
                       <Icon name="chevronRight" size={22} />
                     </span>
                   </button>
                   {/* G3 — before pickup, offer turn-by-turn to the pickup point. */}
                   {isPickup && c.pickupLocation ? (
                     <div class="load__nav">
-                      <OpenInMaps point={c.pickupLocation} label={`Navigate to ${c.pickupLabel}`} />
+                      <OpenInMaps point={c.pickupLocation} label={t('driver.navigateTo', { label: c.pickupLabel })} />
                     </div>
                   ) : null}
                   {/* S33b — an in-transit cold-chain load: show the safe band + last reading + a log control. */}
@@ -129,10 +131,10 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                   <span class="row__end">
                     {control === 'onboard' ? (
                       <Pill tone="ok" dot>
-                        On board
+                        {t('driver.loads.onBoard')}
                       </Pill>
                     ) : (
-                      <Pill tone="idle">In progress</Pill>
+                      <Pill tone="idle">{t('driver.loads.inProgress')}</Pill>
                     )}
                   </span>
                 </div>
@@ -143,18 +145,18 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
       )}
 
       <div class="scr__cta">
-        <Button onClick={() => actions.go('route')}>Find more work</Button>
+        <Button onClick={() => actions.go('route')}>{t('driver.loads.findMore')}</Button>
       </div>
 
       <div class="scr__foot">
-        <ReadAloud text={() => loadsSummary(state.claims, state.remaining)} />
+        <ReadAloud text={() => loadsSummary(state.claims, state.remaining, t)} />
       </div>
 
-      <Sheet open={!!pick} onClose={() => setPick(null)} title="Put this bag on the van?">
+      <Sheet open={!!pick} onClose={() => setPick(null)} title={t('driver.loads.pickSheetTitle')}>
         {pick ? (
           <>
-            <p class="t-body">{`${pick.ref} — ${pick.weightKg} kg, going to ${pick.destLabel}.`}</p>
-            <Checklist items={['Every parcel inside moves to your van', 'The shop is told it has left', 'Your delivery is booked against your badge']} />
+            <p class="t-body">{t('driver.loads.pickBody', { ref: pick.ref, kg: pick.weightKg, dest: pick.destLabel })}</p>
+            <Checklist items={[t('driver.loads.pick1'), t('driver.loads.pick2'), t('driver.loads.pick3')]} />
             <Button
               chevron={false}
               busy={state.busy === `load:${pick.ref}`}
@@ -164,10 +166,10 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                 void actions.loadBag(ref);
               }}
             >
-              Yes, it is on board
+              {t('driver.loads.pickConfirm')}
             </Button>
             <Button variant="link" onClick={() => setPick(null)}>
-              Not yet
+              {t('driver.notYet')}
             </Button>
           </>
         ) : null}
@@ -181,6 +183,7 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
 
 /** S33b — the cold-chain strip under an in-transit freight row: the safe band, the last reading, and a log control. */
 function TempStrip({ claim, onLog }: { claim: Claimable; onLog: () => void }) {
+  const t = useT();
   const band = claim.tempBand!;
   const breached = claim.tempBreached;
   return (
@@ -188,13 +191,12 @@ function TempStrip({ claim, onLog }: { claim: Claimable; onLog: () => void }) {
       <span class="temp-strip__info">
         {breached ? <Icon name="warning" size={18} class="temp-strip__ic" /> : null}
         <span>
-          {breached ? 'Temperature breached — keep ' : 'Keep '}
-          {band.minC}–{band.maxC}°C
-          {claim.lastTempC != null ? ` · last ${claim.lastTempC}°C` : ''}
+          {t(breached ? 'driver.loads.tempBreachedKeep' : 'driver.loads.tempKeep', { min: band.minC, max: band.maxC })}
+          {claim.lastTempC != null ? t('driver.loads.tempLast', { temp: claim.lastTempC }) : ''}
         </span>
       </span>
       <Button variant="link" full={false} onClick={onLog}>
-        Log temp
+        {t('driver.loads.logTemp')}
       </Button>
     </div>
   );
@@ -202,6 +204,7 @@ function TempStrip({ claim, onLog }: { claim: Claimable; onLog: () => void }) {
 
 /** S33b — log a temperature reading for a cold-chain freight in transit. */
 function TempSheet({ claim, state, actions, onClose }: { claim: Claimable | null; state: DriverState; actions: DriverActions; onClose: () => void }) {
+  const t = useT();
   const [val, setVal] = useState('');
   useEffect(() => setVal(''), [claim?.ref]);
   const band = claim?.tempBand;
@@ -209,13 +212,13 @@ function TempSheet({ claim, state, actions, onClose }: { claim: Claimable | null
   const valid = val.trim() !== '' && Number.isFinite(num);
   const busy = claim ? state.busy === `temp:${claim.ref}` : false;
   return (
-    <Sheet open={!!claim} onClose={onClose} title="Log temperature">
+    <Sheet open={!!claim} onClose={onClose} title={t('driver.loads.logTempTitle')}>
       {claim && band ? (
         <>
-          <p class="t-body">{`Keep this load between ${band.minC}°C and ${band.maxC}°C. Enter the current reading.`}</p>
+          <p class="t-body">{t('driver.loads.logTempBody', { min: band.minC, max: band.maxC })}</p>
           <div class="field">
             <label class="field__label" for={`temp-${claim.ref}`}>
-              Temperature °C
+              {t('driver.loads.tempFieldLabel')}
             </label>
             <input id={`temp-${claim.ref}`} class="input" type="number" inputMode="decimal" step="0.1" value={val} onInput={(e) => setVal(e.currentTarget.value)} />
           </div>
@@ -230,11 +233,11 @@ function TempSheet({ claim, state, actions, onClose }: { claim: Claimable | null
                 onClose();
               }}
             >
-              Log this reading
+              {t('driver.loads.logReading')}
             </Button>
           </div>
           <Button variant="link" onClick={onClose}>
-            Cancel
+            {t('driver.cancel')}
           </Button>
         </>
       ) : null}
@@ -249,6 +252,7 @@ function TempSheet({ claim, state, actions, onClose }: { claim: Claimable | null
  * driver clears is exactly the checklist the server requires.
  */
 function FreightGate({ claim, state, actions, onClose }: { claim: Claimable | null; state: DriverState; actions: DriverActions; onClose: () => void }) {
+  const t = useT();
   const [checked, setChecked] = useState<string[]>([]);
   const [photoId, setPhotoId] = useState('');
   useEffect(() => {
@@ -263,20 +267,24 @@ function FreightGate({ claim, state, actions, onClose }: { claim: Claimable | nu
   const busy = claim ? state.busy === `freight:${claim.ref}` : false;
 
   return (
-    <Sheet open={!!claim} onClose={onClose} title={isPickup ? 'Load-safety check' : 'Unload check'}>
+    <Sheet open={!!claim} onClose={onClose} title={isPickup ? t('driver.loads.loadSafetyTitle') : t('driver.loads.unloadTitle')}>
       {claim ? (
         <>
-          <p class="t-body">{`${claim.code ?? claim.ref} — ${claim.weightKg} kg to ${claim.destLabel}. Confirm each item before you ${isPickup ? 'pick this up' : 'mark it delivered'}.`}</p>
+          <p class="t-body">
+            {isPickup
+              ? t('driver.loads.gateBodyPickup', { ref: claim.code ?? claim.ref, kg: claim.weightKg, dest: claim.destLabel })
+              : t('driver.loads.gateBodyDeliver', { ref: claim.code ?? claim.ref, kg: claim.weightKg, dest: claim.destLabel })}
+          </p>
           <CheckGate items={items} checked={checked} onChange={setChecked} disabled={busy} />
           {isPickup ? (
             <div class="field" style="margin-top:14px">
-              <span class="field__label">Photo of the secured load</span>
+              <span class="field__label">{t('driver.loads.securePhotoLabel')}</span>
               <PhotoField
                 id={`sec-${claim.ref}`}
                 value={photoId}
                 upload={(f) => actions.uploadPhoto('securement', f)}
                 onCapture={setPhotoId}
-                label="Take a photo of the secured load"
+                label={t('driver.loads.securePhotoAria')}
                 disabled={busy}
               />
             </div>
@@ -293,12 +301,12 @@ function FreightGate({ claim, state, actions, onClose }: { claim: Claimable | nu
                 onClose();
               }}
             >
-              {isPickup ? 'Confirm pickup' : 'Confirm delivery'}
+              {isPickup ? t('driver.loads.confirmPickup') : t('driver.loads.confirmDelivery')}
             </Button>
-            {!allChecked ? <p class="hint" style="margin-top:8px">Tick every item to continue.</p> : !photoOk ? <p class="hint" style="margin-top:8px">Add a photo of the secured load.</p> : null}
+            {!allChecked ? <p class="hint" style="margin-top:8px">{t('driver.loads.tickAll')}</p> : !photoOk ? <p class="hint" style="margin-top:8px">{t('driver.loads.addPhoto')}</p> : null}
           </div>
           <Button variant="link" onClick={onClose}>
-            Not yet
+            {t('driver.notYet')}
           </Button>
         </>
       ) : null}

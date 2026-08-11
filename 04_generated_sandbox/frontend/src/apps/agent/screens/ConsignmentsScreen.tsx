@@ -1,10 +1,9 @@
 import { useState } from 'preact/hooks';
 import { Button, Card, ErrorNote, Note, Pill } from '../../../shared/ui';
-import { DURABLE_NATURES, NATURES, consignmentProgress } from '../logic';
+import { useT } from '../../../shared/i18n';
+import { DURABLE_NATURES, consignmentProgress, natureLabel } from '../logic';
 import type { ConsignmentView } from '../types';
 import type { AgentActions, AgentState } from '../useAgentApp';
-
-const natureLabel = (key: string): string => NATURES.find((n) => n.key === key)?.label ?? key;
 
 export interface ConsignmentsScreenProps {
   state: AgentState;
@@ -18,23 +17,24 @@ export interface ConsignmentsScreenProps {
  * co-op reconciles member deposits and payout, and pays the eventual haul (capped by the optional cash cap).
  */
 export function ConsignmentsScreen({ state, actions }: ConsignmentsScreenProps) {
+  const t = useT();
   return (
     <div class="scr">
-      <h1 class="scr__title">Consolidation lots</h1>
-      <p class="scr__lede">Pool members’ durable goods into a truckload. When a lot fills, it books a freight truck on its own.</p>
+      <h1 class="scr__title">{t('agent.consignments.title')}</h1>
+      <p class="scr__lede">{t('agent.consignments.lede')}</p>
 
       {state.error ? <ErrorNote error={state.error} /> : null}
 
       <OpenLotCard state={state} actions={actions} />
 
-      {state.consignmentsState === 'loading' ? <p class="hint" style="margin-top:12px">Loading your lots…</p> : null}
+      {state.consignmentsState === 'loading' ? <p class="hint" style="margin-top:12px">{t('agent.consignments.loading')}</p> : null}
       {state.consignmentsState === 'error' ? (
         <p class="hint" style="margin-top:12px">
-          Couldn’t load your lots. <button type="button" class="linkbtn" onClick={() => void actions.loadConsignments()}>Try again</button>
+          {t('agent.consignments.loadFail')} <button type="button" class="linkbtn" onClick={() => void actions.loadConsignments()}>{t('agent.tryAgain')}</button>
         </p>
       ) : null}
       {state.consignmentsState === 'ready' && state.consignments.length === 0 ? (
-        <p class="hint" style="margin-top:12px">No lots yet. Open one above to start pooling deposits.</p>
+        <p class="hint" style="margin-top:12px">{t('agent.consignments.empty')}</p>
       ) : null}
 
       {state.consignments.map((lot) => (
@@ -45,6 +45,7 @@ export function ConsignmentsScreen({ state, actions }: ConsignmentsScreenProps) 
 }
 
 function OpenLotCard({ state, actions }: ConsignmentsScreenProps) {
+  const t = useT();
   const [nature, setNature] = useState<string>(DURABLE_NATURES[0]);
   const [dest, setDest] = useState('');
   const [target, setTarget] = useState('');
@@ -52,40 +53,40 @@ function OpenLotCard({ state, actions }: ConsignmentsScreenProps) {
   const targetKg = Number(target);
   const ready = dest.trim().length > 0 && targetKg > 0;
   return (
-    <Card label="Open a new lot">
+    <Card label={t('agent.consignments.openLot')}>
       <div class="field">
         <label class="field__label" for="lot-nature">
-          What is being pooled?
+          {t('agent.consignments.whatPooled')}
         </label>
         <select id="lot-nature" class="select" value={nature} onChange={(e) => setNature(e.currentTarget.value)}>
           {DURABLE_NATURES.map((k) => (
             <option key={k} value={k}>
-              {natureLabel(k)}
+              {natureLabel(k, t)}
             </option>
           ))}
         </select>
       </div>
       <div class="field" style="margin-top:12px">
         <label class="field__label" for="lot-dest">
-          Where does the truckload go?
+          {t('agent.consignments.whereGo')}
         </label>
-        <input id="lot-dest" class="input" value={dest} onInput={(e) => setDest(e.currentTarget.value)} placeholder="e.g. Merkato market" autocapitalize="words" />
+        <input id="lot-dest" class="input" value={dest} onInput={(e) => setDest(e.currentTarget.value)} placeholder={t('agent.consignments.destPh')} autocapitalize="words" />
       </div>
       <div class="dims" style="margin-top:12px">
         <div class="field">
           <label class="field__label" for="lot-target">
-            Truckload target (kg)
+            {t('agent.consignments.targetLabel')}
           </label>
-          <input id="lot-target" class="input" type="number" inputMode="decimal" min="1" step="100" value={target} onInput={(e) => setTarget(e.currentTarget.value)} placeholder="e.g. 10000" />
+          <input id="lot-target" class="input" type="number" inputMode="decimal" min="1" step="100" value={target} onInput={(e) => setTarget(e.currentTarget.value)} placeholder={t('agent.consignments.targetPh')} />
         </div>
         <div class="field">
           <label class="field__label" for="lot-cap">
-            Cash cap (optional)
+            {t('agent.consignments.capLabel')}
           </label>
-          <input id="lot-cap" class="input" type="number" inputMode="decimal" min="0" step="1" value={cap} onInput={(e) => setCap(e.currentTarget.value)} placeholder="e.g. 300" />
+          <input id="lot-cap" class="input" type="number" inputMode="decimal" min="0" step="1" value={cap} onInput={(e) => setCap(e.currentTarget.value)} placeholder={t('agent.consignments.capPh')} />
         </div>
       </div>
-      <p class="card__note">The cash cap is the most the co-op will pay a driver to move the full load. Members’ deposits and payout are settled off the app.</p>
+      <p class="card__note">{t('agent.consignments.capNote')}</p>
       <div class="scr__cta">
         <Button
           disabled={!ready}
@@ -98,7 +99,7 @@ function OpenLotCard({ state, actions }: ConsignmentsScreenProps) {
             setCap('');
           }}
         >
-          Start the lot
+          {t('agent.consignments.startLot')}
         </Button>
       </div>
     </Card>
@@ -106,39 +107,40 @@ function OpenLotCard({ state, actions }: ConsignmentsScreenProps) {
 }
 
 function LotCard({ lot, state, actions }: { lot: ConsignmentView; state: AgentState; actions: AgentActions }) {
+  const t = useT();
   const [member, setMember] = useState('');
   const [kg, setKg] = useState('');
   const kgN = Number(kg);
   const prog = consignmentProgress(lot);
   const posted = lot.status === 'posted';
   return (
-    <Card label={`${lot.code} · ${natureLabel(lot.natureCode)}`} aside={<Pill tone={posted ? 'ok' : 'info'} dot>{posted ? 'Freight booked' : 'Filling'}</Pill>}>
+    <Card label={`${lot.code} · ${natureLabel(lot.natureCode, t)}`} aside={<Pill tone={posted ? 'ok' : 'info'} dot>{posted ? t('agent.consignments.freightBooked') : t('agent.consignments.filling')}</Pill>}>
       <div class="kv">
-        <span>To</span>
+        <span>{t('agent.consignments.to')}</span>
         <b>{lot.destLabel}</b>
       </div>
       <div class="kv">
-        <span>Pooled</span>
+        <span>{t('agent.consignments.pooled')}</span>
         <b>{`${prog.label} (${prog.pct}%)`}</b>
       </div>
-      {lot.deposits.length ? <p class="card__note">{`${lot.deposits.length} deposit${lot.deposits.length === 1 ? '' : 's'} from members.`}</p> : null}
+      {lot.deposits.length ? <p class="card__note">{lot.deposits.length === 1 ? t('agent.consignments.depositsOne', { count: lot.deposits.length }) : t('agent.consignments.depositsMany', { count: lot.deposits.length })}</p> : null}
 
       {posted ? (
-        <Note tone="ok" icon="truck" title="Posted to drivers" detail="This lot is on the freight marketplace — a truck will pick it up." />
+        <Note tone="ok" icon="truck" title={t('agent.consignments.postedTitle')} detail={t('agent.consignments.postedDetail')} />
       ) : (
         <>
           <div class="dims" style="margin-top:12px">
             <div class="field">
               <label class="field__label" for={`m-${lot.code}`}>
-                Member
+                {t('agent.consignments.member')}
               </label>
-              <input id={`m-${lot.code}`} class="input" value={member} onInput={(e) => setMember(e.currentTarget.value)} placeholder="Name or receipt no." />
+              <input id={`m-${lot.code}`} class="input" value={member} onInput={(e) => setMember(e.currentTarget.value)} placeholder={t('agent.consignments.memberPh')} />
             </div>
             <div class="field">
               <label class="field__label" for={`k-${lot.code}`}>
-                Weight (kg)
+                {t('agent.consignments.weightLabel')}
               </label>
-              <input id={`k-${lot.code}`} class="input" type="number" inputMode="decimal" min="0.01" step="1" value={kg} onInput={(e) => setKg(e.currentTarget.value)} placeholder="e.g. 400" />
+              <input id={`k-${lot.code}`} class="input" type="number" inputMode="decimal" min="0.01" step="1" value={kg} onInput={(e) => setKg(e.currentTarget.value)} placeholder={t('agent.consignments.weightPh')} />
             </div>
           </div>
           <Button
@@ -152,7 +154,7 @@ function LotCard({ lot, state, actions }: { lot: ConsignmentView; state: AgentSt
               setKg('');
             }}
           >
-            Add deposit
+            {t('agent.consignments.addDeposit')}
           </Button>
         </>
       )}

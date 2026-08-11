@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
 import { Button, Card, Checklist, ErrorNote, GlanceNumber, Icon, Note, Pill, QrBlock, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
+import { useT } from '../../../shared/i18n';
 import { qrPayload } from '../../../shared/qr';
 import {
   canStartShift,
@@ -25,50 +26,51 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
 /* ============================================================== off shift == */
 
 function OffShift({ state, actions }: HomeScreenProps) {
-  const notice = driverStatusNotice(state.driver?.status);
+  const t = useT();
+  const notice = driverStatusNotice(state.driver?.status, t);
   const ready = canStartShift(state.driver?.status);
 
   return (
     <div class="scr">
-      <h1 class="scr__title">Start your shift</h1>
-      <p class="scr__lede">Scan the QR sticker on the dashboard of the vehicle you are driving today.</p>
+      <h1 class="scr__title">{t('driver.home.startTitle')}</h1>
+      <p class="scr__lede">{t('driver.home.startLede')}</p>
 
-      {notice ? <Note tone="warn" icon="clock" title="Not activated yet" detail={notice} /> : null}
+      {notice ? <Note tone="warn" icon="clock" title={t('driver.home.notActivated')} detail={notice} /> : null}
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
 
       <Card>
         <ScanField
           id="qr"
-          label="Vehicle QR"
+          label={t('driver.home.qrLabel')}
           value={state.form.vehicleQr}
           onValue={(v) => actions.setForm({ vehicleQr: v.trim() })}
           expect="vehicle"
-          placeholder="Scan the code on the dashboard"
+          placeholder={t('driver.home.qrPlaceholder')}
           enterKeyHint="go"
         />
-        <p class="card__note">Scanning the dashboard sticker couples you to that vehicle for the day.</p>
+        <p class="card__note">{t('driver.home.qrNote')}</p>
       </Card>
 
       <div class="scr__cta">
         <Button onClick={() => void actions.startShift()} disabled={!ready} busy={state.busy === 'start'}>
-          Start shift
+          {t('driver.home.startShift')}
         </Button>
       </div>
 
-      <Card title="What happens when you scan" tone="soft">
+      <Card title={t('driver.home.whatHappens')} tone="soft">
         <Checklist
           items={[
-            'This van becomes yours for the day',
-            'You can pick up loads on your route',
-            'End the shift to hand the van back',
+            t('driver.home.scan1'),
+            t('driver.home.scan2'),
+            t('driver.home.scan3'),
           ]}
         />
       </Card>
 
       <div class="scr__foot">
-        <ReadAloud text={offShiftSummary} label="Read this aloud" />
+        <ReadAloud text={() => offShiftSummary(t)} label={t('driver.readAloud')} />
         <Button variant="link" full={false} onClick={actions.signOut}>
-          Not you? Sign out
+          {t('driver.home.notYou')}
         </Button>
       </div>
     </div>
@@ -78,10 +80,11 @@ function OffShift({ state, actions }: HomeScreenProps) {
 /* =============================================================== on shift == */
 
 function OnShift({ state, actions }: HomeScreenProps) {
+  const t = useT();
   const [confirm, setConfirm] = useState<'end' | 'rate' | null>(null);
   const [badgeOpen, setBadgeOpen] = useState(false);
   const v = state.vehicle!;
-  const band = rateBand(v.pricePerKm, state.rates?.benchmark);
+  const band = rateBand(v.pricePerKm, state.rates?.benchmark, t);
   const pct = usedPercent(v.capacityKg, state.remaining);
 
   return (
@@ -90,48 +93,48 @@ function OnShift({ state, actions }: HomeScreenProps) {
 
       {/* The one big number: how much room is left, readable at arm's length. */}
       <GlanceNumber
-        label="Space left on the van"
+        label={t('driver.home.spaceLabel')}
         value={state.remaining}
         unit="kg"
         percent={pct}
         alert={isFull(state.remaining)}
-        sub={capacitySubLine(state.remaining, v.capacityKg, state.claims.length)}
+        sub={capacitySubLine(state.remaining, v.capacityKg, state.claims.length, t)}
       />
 
       <Card
-        label="Your vehicle"
-        aside={v.verified ? <Pill tone="ok">Checked</Pill> : <Pill tone="idle">Not checked</Pill>}
+        label={t('driver.home.yourVehicle')}
+        aside={v.verified ? <Pill tone="ok">{t('driver.home.checked')}</Pill> : <Pill tone="idle">{t('driver.home.notChecked')}</Pill>}
       >
         <p class="plate">{v.plate}</p>
         <p class="veh__class">
           {v.vehicleClass}
           {v.truckSubtype ? ` · ${v.truckSubtype.replace(/_/g, ' ')}` : ''}
-          {` · carries up to ${v.capacityKg} kg`}
+          {t('driver.home.carriesUpTo', { kg: v.capacityKg })}
         </p>
         <Button variant="link" full={false} danger onClick={() => setConfirm('end')}>
-          End my shift
+          {t('driver.home.endMyShift')}
         </Button>
       </Card>
 
       {band ? (
-        <Card title="Your price" label="Your per-kilometre price">
+        <Card title={t('driver.home.priceTitle')} label={t('driver.home.priceLabel')}>
           <p class="t-body">{band.headline}</p>
           <p class="card__note">{band.detail}</p>
           {band.showMatch ? (
             <Button variant="link" full={false} onClick={() => setConfirm('rate')}>
-              {band.matchLabel} per km
+              {t('driver.home.matchPerKm', { label: band.matchLabel })}
             </Button>
           ) : null}
         </Card>
       ) : null}
 
       <div class="scr__cta">
-        <Button onClick={() => actions.go('route')}>Find work on my route</Button>
+        <Button onClick={() => actions.go('route')}>{t('driver.home.findWork')}</Button>
       </div>
 
       {state.route ? (
         <Button variant="outline" busy={state.busy === 'suggest'} onClick={() => void actions.repeatRoute()}>
-          {`Repeat: ${state.route.fromLabel} → ${state.route.toLabel}`}
+          {t('driver.repeat', { from: state.route.fromLabel, to: state.route.toLabel })}
         </Button>
       ) : null}
 
@@ -140,8 +143,8 @@ function OnShift({ state, actions }: HomeScreenProps) {
           <Icon name="box" size={24} />
         </span>
         <span class="row__body">
-          <span class="row__t">My loads</span>
-          <span class="row__s">Claimed shipments — load them on</span>
+          <span class="row__t">{t('driver.nav.loads')}</span>
+          <span class="row__s">{t('driver.home.myLoadsSub')}</span>
         </span>
         <span class="row__end">
           {state.claims.length ? <span class="row__count">{state.claims.length}</span> : null}
@@ -157,8 +160,8 @@ function OnShift({ state, actions }: HomeScreenProps) {
             <Icon name="badge" size={24} />
           </span>
           <span class="row__body">
-            <span class="row__t">Show my badge</span>
-            <span class="row__s">For the shop or hub to scan at pick-up</span>
+            <span class="row__t">{t('driver.home.showBadge')}</span>
+            <span class="row__s">{t('driver.home.showBadgeSub')}</span>
           </span>
           <span class="row__end">
             <Icon name="chevronRight" size={22} />
@@ -167,26 +170,26 @@ function OnShift({ state, actions }: HomeScreenProps) {
       ) : null}
 
       <div class="scr__foot">
-        <ReadAloud text={() => shiftSummary(v.plate, state.remaining, state.claims.length)} />
+        <ReadAloud text={() => shiftSummary(v.plate, state.remaining, state.claims.length, t)} />
       </div>
 
-      <Sheet open={badgeOpen} onClose={() => setBadgeOpen(false)} title="Your driver badge">
-        <p class="t-body">Hold this up at the counter. The shop or hub scans it to hand you their parcels.</p>
+      <Sheet open={badgeOpen} onClose={() => setBadgeOpen(false)} title={t('driver.home.badgeSheetTitle')}>
+        <p class="t-body">{t('driver.home.badgeBody')}</p>
         <QrBlock
           value={qrPayload('badge', state.driver!.badgeId!)}
           size={188}
           caption={state.driver!.badgeId}
-          label={`Driver badge ${state.driver!.badgeId} as a scannable code`}
+          label={t('driver.home.badgeQrLabel', { id: state.driver!.badgeId! })}
         />
-        <Checklist items={['Works with no signal', 'They can also type the code under it']} />
+        <Checklist items={[t('driver.home.badge1'), t('driver.home.badge2')]} />
         <Button variant="link" onClick={() => setBadgeOpen(false)}>
-          Close
+          {t('driver.close')}
         </Button>
       </Sheet>
 
-      <Sheet open={confirm === 'end'} onClose={() => setConfirm(null)} title="End your shift?">
-        <p class="t-body">{`${v.plate} goes back to the fleet. You will not be offered any more work today.`}</p>
-        <Checklist items={['Anything already on board stays your job', 'You can start a new shift any time']} />
+      <Sheet open={confirm === 'end'} onClose={() => setConfirm(null)} title={t('driver.home.endSheetTitle')}>
+        <p class="t-body">{t('driver.home.endBody', { plate: v.plate })}</p>
+        <Checklist items={[t('driver.home.end1'), t('driver.home.end2')]} />
         <Button
           chevron={false}
           busy={state.busy === 'end'}
@@ -195,18 +198,18 @@ function OnShift({ state, actions }: HomeScreenProps) {
             void actions.endShift();
           }}
         >
-          Yes, end my shift
+          {t('driver.home.endConfirm')}
         </Button>
         <Button variant="link" onClick={() => setConfirm(null)}>
-          Keep driving
+          {t('driver.home.keepDriving')}
         </Button>
       </Sheet>
 
-      <Sheet open={confirm === 'rate'} onClose={() => setConfirm(null)} title="Match the market price?">
+      <Sheet open={confirm === 'rate'} onClose={() => setConfirm(null)} title={t('driver.home.rateSheetTitle')}>
         {band ? (
           <>
-            <p class="t-body">{`Your price changes to ${band.matchPrice.toFixed(3)} per kilometre — what most drivers charge.`}</p>
-            <Checklist items={['Shippers compare prices before offering work', 'You can change it back any time']} />
+            <p class="t-body">{t('driver.home.rateBody', { price: band.matchPrice.toFixed(3) })}</p>
+            <Checklist items={[t('driver.home.rate1'), t('driver.home.rate2')]} />
             <Button
               chevron={false}
               busy={state.busy === 'rate'}
@@ -215,10 +218,10 @@ function OnShift({ state, actions }: HomeScreenProps) {
                 void actions.matchRate(v.vehicleId, band.matchPrice);
               }}
             >
-              {`Set ${band.matchPrice.toFixed(3)} per km`}
+              {t('driver.home.setPerKm', { price: band.matchPrice.toFixed(3) })}
             </Button>
             <Button variant="link" onClick={() => setConfirm(null)}>
-              Leave my price alone
+              {t('driver.home.leavePrice')}
             </Button>
           </>
         ) : null}

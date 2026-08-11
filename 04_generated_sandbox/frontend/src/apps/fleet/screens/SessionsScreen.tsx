@@ -1,4 +1,5 @@
 import { Button, Card, ErrorNote, ReadAloud } from '../../../shared/ui';
+import { useT } from '../../../shared/i18n';
 import { freeDrivers, freeVehicles, shortDid } from '../logic';
 import type { FleetActions, FleetState } from '../useFleetApp';
 
@@ -12,6 +13,7 @@ export interface SessionsScreenProps {
  * dashboard QR; this screen couples on their behalf and ends sessions.
  */
 export function SessionsScreen({ state, actions }: SessionsScreenProps) {
+  const t = useT();
   const f = state.cForm;
   const drivers = freeDrivers(state.drivers, state.assignments);
   const vehicles = freeVehicles(state.vehicles, state.assignments);
@@ -20,27 +22,27 @@ export function SessionsScreen({ state, actions }: SessionsScreenProps) {
     <div class="scr">
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
 
-      <Card title="Couple manually">
-        <p class="card__note">Use this when a driver cannot scan — a coupling made here is the same shift session.</p>
+      <Card title={t('fleet.sessions.coupleTitle')}>
+        <p class="card__note">{t('fleet.sessions.coupleNote')}</p>
         <div class="field">
           <label class="field__label" for="c-driver">
-            Driver
+            {t('fleet.sessions.driver')}
           </label>
           <select id="c-driver" class="select" value={f.driverDid} onChange={(e) => actions.setCForm({ driverDid: e.currentTarget.value })}>
-            <option value="">Pick a free driver…</option>
+            <option value="">{t('fleet.sessions.pickDriver')}</option>
             {drivers.map((d) => (
               <option key={d.did} value={d.did}>
-                {`${d.displayName} (${(d.licence?.classes ?? []).join('/') || 'any'})`}
+                {`${d.displayName} (${(d.licence?.classes ?? []).join('/') || t('fleet.sessions.anyClass')})`}
               </option>
             ))}
           </select>
         </div>
         <div class="field" style="margin-top:12px">
           <label class="field__label" for="c-vehicle">
-            Vehicle
+            {t('fleet.sessions.vehicle')}
           </label>
           <select id="c-vehicle" class="select" value={f.vehicleId} onChange={(e) => actions.setCForm({ vehicleId: e.currentTarget.value })}>
-            <option value="">Pick a free vehicle…</option>
+            <option value="">{t('fleet.sessions.pickVehicle')}</option>
             {vehicles.map((v) => (
               <option key={v.vehicleId} value={v.vehicleId}>
                 {`${v.plate} · ${v.vehicleClass} · ${v.capacityKg} kg`}
@@ -50,10 +52,10 @@ export function SessionsScreen({ state, actions }: SessionsScreenProps) {
         </div>
         <div class="field" style="margin-top:12px">
           <label class="field__label" for="c-corridor">
-            Corridor (optional)
+            {t('fleet.sessions.corridor')}
           </label>
           <select id="c-corridor" class="select" value={f.corridorId} onChange={(e) => actions.setCForm({ corridorId: e.currentTarget.value })}>
-            <option value="">No corridor</option>
+            <option value="">{t('fleet.sessions.noCorridor')}</option>
             {state.corridors.map((c) => (
               <option key={c.corridorId} value={c.corridorId}>
                 {`${c.name} (${c.originZone} → ${c.destZone})`}
@@ -63,14 +65,14 @@ export function SessionsScreen({ state, actions }: SessionsScreenProps) {
         </div>
         <div style="margin-top:14px">
           <Button chevron={false} onClick={() => void actions.couple()} disabled={!f.driverDid || !f.vehicleId} busy={state.busy === 'couple'}>
-            Couple
+            {t('fleet.sessions.coupleCta')}
           </Button>
         </div>
       </Card>
 
-      <Card title={`On duty now · ${state.assignments.length}`}>
+      <Card title={t('fleet.sessions.onDutyTitle', { count: state.assignments.length })}>
         {state.assignments.length === 0 ? (
-          <p class="hint">No drivers on shift.</p>
+          <p class="hint">{t('fleet.sessions.noDrivers')}</p>
         ) : (
           <div class="rows" role="list">
             {state.assignments.map((a) => {
@@ -85,7 +87,7 @@ export function SessionsScreen({ state, actions }: SessionsScreenProps) {
                   </span>
                   <span class="row__end">
                     <Button variant="link" full={false} danger busy={state.busy === `uncouple:${a.driverDid}`} onClick={() => void actions.uncouple(a.driverDid)}>
-                      End session
+                      {t('fleet.sessions.endSession')}
                     </Button>
                   </span>
                 </div>
@@ -97,8 +99,8 @@ export function SessionsScreen({ state, actions }: SessionsScreenProps) {
 
       <div class="scr__foot">
         <ReadAloud
-          text={() => `${state.assignments.length} sessions on duty. ${drivers.length} drivers and ${vehicles.length} vehicles are free to couple.`}
-          label="Read this aloud"
+          text={() => t('fleet.sessions.aloud', { sessions: state.assignments.length, drivers: drivers.length, vehicles: vehicles.length })}
+          label={t('fleet.readAloud')}
         />
       </div>
     </div>

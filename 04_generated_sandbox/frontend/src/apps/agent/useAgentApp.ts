@@ -10,6 +10,7 @@ import {
 } from '../../lib/sbg';
 import type { MediaKind } from '../../lib/sbg/personas/media';
 import { downscaleImage } from '../../shared/media';
+import { t } from '../../shared/i18n'; // plain t(): toasts/notes are built at action time in the shop's active locale
 import { errorSentence } from '../../shared/ui';
 import type { IconName } from '../../shared/ui/Icon';
 import { agentConfig, clearDid, createAgentClient, purgeAgentTokens, readDid, readEmail, saveDid, saveEmail } from './api';
@@ -396,8 +397,8 @@ export function useAgentApp() {
           error: {
             code: 'FORBIDDEN',
             status: 403,
-            title: 'Not a shop account',
-            detail: `This sign-in belongs to a ${login.role} account — open the ${login.role} app instead.`,
+            title: t('agent.toast.notShopTitle'),
+            detail: t('agent.toast.notShopDetail', { role: login.role }),
             retryable: false,
           },
         }));
@@ -451,12 +452,12 @@ export function useAgentApp() {
         const { dataUrl, thumbDataUrl } = await downscaleImage(file);
         const r = await client.api.uploadMedia(kind, dataUrl, thumbDataUrl);
         if (r.error) {
-          pushToast({ tone: 'danger', icon: 'camera', title: 'Photo upload failed', detail: errorSentence(r.error) });
+          pushToast({ tone: 'danger', icon: 'camera', title: t('agent.toast.photoUploadFail'), detail: errorSentence(r.error) });
           return null;
         }
         return narrow<{ mediaId: string }>(r.data)?.mediaId ?? null;
       } catch {
-        pushToast({ tone: 'danger', icon: 'camera', title: 'Could not read that photo', detail: 'Try taking it again.' });
+        pushToast({ tone: 'danger', icon: 'camera', title: t('agent.toast.photoReadFail'), detail: t('agent.toast.photoReadFailDetail') });
         return null;
       }
     },
@@ -667,12 +668,12 @@ export function useAgentApp() {
     const r = await client.api.geocode(q);
     if (epoch !== geocodeEpoch.current) return;
     if (r.error || !r.data) {
-      setState((s) => ({ ...s, acceptGeoBusy: false, acceptGeoNote: 'Could not find that place — try a nearby area, or use the map.' }));
+      setState((s) => ({ ...s, acceptGeoBusy: false, acceptGeoNote: t('agent.toast.geoNotFound') }));
       return;
     }
     const g = narrow<GeocodeView>(r.data);
     const where = g.matched ?? q;
-    const note = g.confidence === 'exact' ? `Nearest shops to ${where} first.` : g.confidence === 'approx' ? `Nearest shops near ${where} first (approximate).` : 'That place is not on our map — showing a best guess. Use the map if it looks off.';
+    const note = g.confidence === 'exact' ? t('agent.toast.geoExact', { where }) : g.confidence === 'approx' ? t('agent.toast.geoApprox', { where }) : t('agent.toast.geoGuess');
     setState((s) => ({ ...s, acceptGeoBusy: false, acceptNear: g.location, acceptGeoNote: note }));
   }, [client]);
   const setHandover = useCallback((p: Partial<AgentState['handover']>) => {
@@ -730,7 +731,7 @@ export function useAgentApp() {
       const r = await client.api.parcelsExport(did, { q: q.q || undefined, status: q.status || undefined, role: q.role || undefined, from: q.from || undefined, to: q.to || undefined, sort: q.sort });
       if (r.error) return fail(r.error);
       triggerDownload('parcels.csv', narrow<string>(r.data));
-      pushToast({ tone: 'ok', icon: 'check', title: 'History exported', detail: 'Saved parcels.csv to your device.' });
+      pushToast({ tone: 'ok', icon: 'check', title: t('agent.toast.historyExported'), detail: t('agent.toast.historyExportedDetail') });
     });
   }, [client, did, run, fail, pushToast]);
 
@@ -742,7 +743,7 @@ export function useAgentApp() {
       const r = await client.api.ledgerExport(did, { q: q.q || undefined, type: q.type || undefined, direction: q.direction || undefined, from: q.from || undefined, to: q.to || undefined, sort: q.sort });
       if (r.error) return fail(r.error);
       triggerDownload('earnings.csv', narrow<string>(r.data));
-      pushToast({ tone: 'ok', icon: 'check', title: 'Earnings exported', detail: 'Saved earnings.csv to your device.' });
+      pushToast({ tone: 'ok', icon: 'check', title: t('agent.toast.earningsExported'), detail: t('agent.toast.earningsExportedDetail') });
     });
   }, [client, did, run, fail, pushToast]);
 
@@ -753,7 +754,7 @@ export function useAgentApp() {
         const r = await client.api.topUp(did, amount);
         if (r.error) return fail(r.error);
         buzz();
-        pushToast({ tone: 'ok', icon: 'wallet', title: 'Wallet topped up', detail: `Added ${amount.toFixed(2)}.` });
+        pushToast({ tone: 'ok', icon: 'wallet', title: t('agent.toast.walletTopped'), detail: t('agent.toast.walletToppedDetail', { amount: amount.toFixed(2) }) });
         await refresh();
       });
     },
@@ -769,8 +770,8 @@ export function useAgentApp() {
         buzz();
         pushToast(
           open
-            ? { tone: 'ok', icon: 'check', title: 'Shop is open', detail: 'You will get parcels again.' }
-            : { tone: 'info', icon: 'clock', title: 'Shop marked closed', detail: 'No new parcels will be routed here.' },
+            ? { tone: 'ok', icon: 'check', title: t('agent.toast.shopOpen'), detail: t('agent.toast.shopOpenDetail') }
+            : { tone: 'info', icon: 'clock', title: t('agent.toast.shopClosed'), detail: t('agent.toast.shopClosedDetail') },
         );
         await refresh();
       });
@@ -785,7 +786,7 @@ export function useAgentApp() {
         const r = await client.api.setPrice(did, price);
         if (r.error) return fail(r.error);
         buzz();
-        pushToast({ tone: 'ok', icon: 'wallet', title: 'Price updated', detail: `You now charge ${price.toFixed(2)} per parcel.` });
+        pushToast({ tone: 'ok', icon: 'wallet', title: t('agent.toast.priceUpdated'), detail: t('agent.toast.priceUpdatedDetail', { price: price.toFixed(2) }) });
         await refresh();
         if (stateRef.current.screen === 'rates') await loadRates();
       });
@@ -822,7 +823,7 @@ export function useAgentApp() {
       // (peer-send parcels never had one). Clearing the form but staying on the accept screen; a Sheet shows it.
       const p = narrow<{ parcelId: string; trackingKey?: string; label?: { svg?: string } }>(r.data);
       setState((s) => ({ ...s, accept: { ...EMPTY_ACCEPT }, acceptDerived: null, acceptNear: null, acceptGeoNote: null, acceptedLabel: p ? { parcelId: p.parcelId, trackingKey: p.trackingKey, svg: p.label?.svg } : null }));
-      pushToast({ tone: 'ok', icon: 'box', title: 'Parcel accepted', detail: 'A tracking message has been sent.' });
+      pushToast({ tone: 'ok', icon: 'box', title: t('agent.toast.parcelAccepted'), detail: t('agent.toast.parcelAcceptedDetail') });
       await refresh();
     });
   }, [client, did, run, fail, pushToast, refresh]);
@@ -842,7 +843,7 @@ export function useAgentApp() {
     const dims = parseDims(f.dims);
     const cap = parseBudget(f.budgetCap);
     if (!dims || !cap || !f.destPudoDid || !stateRef.current.acceptDerived?.dedicated) return;
-    if (bookFreightMissing(f, Date.now())) return;
+    if (bookFreightMissing(f, Date.now(), t)) return;
     await run('book-freight', async () => {
       const r = await client.api.bookFreight({
         agentDid: did,
@@ -861,7 +862,7 @@ export function useAgentApp() {
       buzz();
       const fr = narrow<AgentState['bookedFreight']>(r.data);
       setState((s) => ({ ...s, accept: { ...EMPTY_ACCEPT }, acceptDerived: null, acceptNear: null, acceptGeoNote: null, bookedFreight: fr }));
-      pushToast({ tone: 'ok', icon: 'truck', title: 'Freight booked', detail: fr ? `Collect the cash, hand the customer code ${fr.code}.` : 'A driver will be found for this load.' });
+      pushToast({ tone: 'ok', icon: 'truck', title: t('agent.toast.freightBooked'), detail: fr ? t('agent.toast.freightBookedCode', { code: fr.code }) : t('agent.toast.freightBookedFallback') });
       await refresh();
     });
   }, [client, did, run, fail, pushToast, refresh]);
@@ -896,12 +897,12 @@ export function useAgentApp() {
         if (r.error) {
           // The rate sheet is a modal that covers the screen's ErrorNote, so surface the failure as a toast
           // (which renders above it) — otherwise a failed submit looks identical to a saved one.
-          pushToast({ tone: 'danger', icon: 'warning', title: 'Could not save the rating', detail: errorSentence(r.error) });
+          pushToast({ tone: 'danger', icon: 'warning', title: t('agent.toast.ratingFail'), detail: errorSentence(r.error) });
           return fail(r.error);
         }
         buzz();
         setState((s) => ({ ...s, driverRating: null }));
-        pushToast({ tone: 'ok', icon: 'star', title: 'Driver rated', detail: 'Thank you — this helps the whole network.' });
+        pushToast({ tone: 'ok', icon: 'star', title: t('agent.toast.driverRated'), detail: t('agent.toast.driverRatedDetail') });
       });
     },
     [client, run, fail, pushToast],
@@ -915,7 +916,7 @@ export function useAgentApp() {
         const r = await client.api.openConsignment({ natureCode: input.natureCode as never, destLabel: input.destLabel.trim(), targetKg: input.targetKg, maxSpend: input.maxSpend });
         if (r.error) return fail(r.error);
         buzz();
-        pushToast({ tone: 'ok', icon: 'bag', title: 'Lot opened', detail: 'Add member deposits until it fills.' });
+        pushToast({ tone: 'ok', icon: 'bag', title: t('agent.toast.lotOpened'), detail: t('agent.toast.lotOpenedDetail') });
         await loadConsignments();
       });
     },
@@ -933,8 +934,8 @@ export function useAgentApp() {
         const lot = narrow<ConsignmentView>(r.data);
         pushToast(
           lot?.status === 'posted'
-            ? { tone: 'ok', icon: 'truck', title: 'Lot full — freight posted', detail: `A truck will be found for lot ${lot.code}.` }
-            : { tone: 'ok', icon: 'bag', title: 'Deposit added', detail: lot ? `${lot.weightKg} / ${lot.targetKg} kg so far.` : undefined },
+            ? { tone: 'ok', icon: 'truck', title: t('agent.toast.lotFull'), detail: t('agent.toast.lotFullDetail', { code: lot.code }) }
+            : { tone: 'ok', icon: 'bag', title: t('agent.toast.depositAdded'), detail: lot ? t('agent.toast.depositAddedDetail', { done: lot.weightKg, target: lot.targetKg }) : undefined },
         );
         await loadConsignments();
       });
@@ -1000,7 +1001,7 @@ export function useAgentApp() {
         preMintError: null,
         intakeDone: { parcelId: pm.parcelId, kind: pm.kind, cashDue: pm.cashDue, destShopName: pm.destShopName },
       }));
-      pushToast({ tone: 'ok', icon: 'wallet', title: 'Parcel taken in', detail: pm.kind === 'peer_send' ? `Collect ${pm.cashDue.toFixed(2)} in cash from the sender.` : 'Prepaid by the store — nothing to collect.' });
+      pushToast({ tone: 'ok', icon: 'wallet', title: t('agent.toast.parcelTakenIn'), detail: pm.kind === 'peer_send' ? t('agent.toast.takenInCash', { amount: pm.cashDue.toFixed(2) }) : t('agent.toast.takenInPrepaid') });
       await refresh();
     });
   }, [client, did, run, fail, pushToast, refresh]);
@@ -1049,11 +1050,11 @@ export function useAgentApp() {
       pushToast({
         tone: left ? 'warn' : 'ok',
         icon: 'truck',
-        title: `${v?.handed?.length ?? f.selected.length} parcel(s) on the bus`,
+        title: t('agent.toast.onBusTitle', { count: v?.handed?.length ?? f.selected.length }),
         detail: left
-          ? `${left} left behind — the control tower has been told.`
+          ? t('agent.toast.onBusLeft', { count: left })
           : v?.vehicle
-            ? `Loaded onto ${v.vehicle}.`
+            ? t('agent.toast.onBusLoaded', { vehicle: v.vehicle })
             : undefined,
       });
       await refresh();
@@ -1090,7 +1091,7 @@ export function useAgentApp() {
       const otp = narrow<ArriveView>(r.data)?.otp ?? null;
       const again = await client.api.parcel(f.parcel!.parcelId);
       setRelease({ parcel: again.error ? f.parcel : narrow<ParcelView>(again.data), issuedOtp: otp });
-      pushToast({ tone: 'ok', icon: 'keypad', title: 'Code sent to the customer' });
+      pushToast({ tone: 'ok', icon: 'keypad', title: t('agent.toast.codeSent') });
     });
   }, [client, did, run, fail, pushToast, setRelease]);
 
@@ -1104,7 +1105,7 @@ export function useAgentApp() {
       buzz();
       const again = await client.api.parcel(f.parcel!.parcelId);
       setRelease({ parcel: again.error ? f.parcel : narrow<ParcelView>(again.data), otp: '' });
-      pushToast({ tone: 'ok', icon: 'check', title: 'Delivered', detail: 'The customer has the parcel.' });
+      pushToast({ tone: 'ok', icon: 'check', title: t('agent.toast.delivered'), detail: t('agent.toast.deliveredDetail') });
     });
   }, [client, did, run, fail, pushToast, setRelease]);
 
@@ -1117,7 +1118,7 @@ export function useAgentApp() {
       if (r.error) return fail(r.error);
       buzz();
       setState((s) => ({ ...s, release: { ...EMPTY_RELEASE }, screen: 'home' }));
-      pushToast({ tone: 'ok', icon: 'star', title: 'Thank you', detail: 'Rating recorded.' });
+      pushToast({ tone: 'ok', icon: 'star', title: t('agent.toast.thankYou'), detail: t('agent.toast.thankYouDetail') });
     });
   }, [client, run, fail, pushToast]);
 
@@ -1145,7 +1146,7 @@ export function useAgentApp() {
       if (r.error) return fail(r.error);
       buzz();
       setState((s) => ({ ...s, collect: { ...EMPTY_COLLECT }, screen: 'home' }));
-      pushToast({ tone: 'ok', icon: 'check', title: 'Handed over', detail: 'Order closed.' });
+      pushToast({ tone: 'ok', icon: 'check', title: t('agent.toast.handedOver'), detail: t('agent.toast.handedOverDetail') });
     });
   }, [client, did, run, fail, pushToast]);
 
@@ -1158,7 +1159,7 @@ export function useAgentApp() {
       if (r.error) return fail(r.error);
       buzz();
       setState((s) => ({ ...s, collect: { ...EMPTY_COLLECT }, screen: 'home' }));
-      pushToast({ tone: 'info', icon: 'warning', title: 'Dispute filed', detail: 'The store has been notified.' });
+      pushToast({ tone: 'info', icon: 'warning', title: t('agent.toast.disputeFiled'), detail: t('agent.toast.disputeFiledDetail') });
     });
   }, [client, did, run, fail, pushToast]);
 
@@ -1178,8 +1179,8 @@ export function useAgentApp() {
       pushToast({
         tone: 'ok',
         icon: 'bag',
-        title: 'Bag received',
-        detail: `${v?.delivered?.length ?? 0} parcel(s) shelved for pickup.`,
+        title: t('agent.toast.bagReceived'),
+        detail: t('agent.toast.bagReceivedDetail', { count: v?.delivered?.length ?? 0 }),
       });
       await refresh();
       if (v?.driverDid) void openRateDriver(v.driverDid); // REP2 — offer to rate the driver for this arrival
@@ -1205,7 +1206,7 @@ export function useAgentApp() {
       }
       signal('ok');
       setState((s) => ({ ...s, void: { parcelId: null, photoRef: '' }, screen: 'home' }));
-      pushToast({ tone: 'ok', icon: 'refresh', title: 'Drop-off undone', detail: 'Your wallet was refunded.' });
+      pushToast({ tone: 'ok', icon: 'refresh', title: t('agent.toast.dropoffUndone'), detail: t('agent.toast.dropoffUndoneDetail') });
       await refresh();
     });
   }, [client, did, run, fail, pushToast, refresh, loadShopParcels]);

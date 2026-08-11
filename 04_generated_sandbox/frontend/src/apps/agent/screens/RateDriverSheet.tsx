@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
 import { Button, Icon, Sheet } from '../../../shared/ui';
+import { useT } from '../../../shared/i18n';
 import { DRIVER_ISSUE_LABELS } from '../logic';
 import type { AgentActions, AgentState } from '../useAgentApp';
 
@@ -10,6 +11,7 @@ import type { AgentActions, AgentState } from '../useAgentApp';
  * driver. The server gates the submission on the real interaction, so this can't rate a stranger.
  */
 export function RateDriverSheet({ state, actions }: { state: AgentState; actions: AgentActions }) {
+  const t = useT();
   const rd = state.driverRating;
   const [stars, setStars] = useState(0);
   const [issues, setIssues] = useState<string[]>([]);
@@ -19,35 +21,35 @@ export function RateDriverSheet({ state, actions }: { state: AgentState; actions
   const current = rd?.profile?.rating;
 
   return (
-    <Sheet open={Boolean(rd)} onClose={actions.dismissRateDriver} title="Rate the driver">
-      <p class="t-body">{name ? `How did ${name} do on this run?` : 'How did the driver do on this run?'}</p>
-      {current && current.count && !current.isNew ? <p class="hint">{`Currently rated ${current.average.toFixed(1)} by ${current.count} shop${current.count === 1 ? '' : 's'}.`}</p> : null}
+    <Sheet open={Boolean(rd)} onClose={actions.dismissRateDriver} title={t('agent.rateDriver.title')}>
+      <p class="t-body">{name ? t('agent.rateDriver.howNamed', { name }) : t('agent.rateDriver.howAnon')}</p>
+      {current && current.count && !current.isNew ? <p class="hint">{current.count === 1 ? t('agent.rateDriver.currentOne', { avg: current.average.toFixed(1), count: current.count }) : t('agent.rateDriver.currentMany', { avg: current.average.toFixed(1), count: current.count })}</p> : null}
 
-      <div class="stars" role="group" aria-label="Stars">
+      <div class="stars" role="group" aria-label={t('agent.rateDriver.starsAria')}>
         {[1, 2, 3, 4, 5].map((n) => (
-          <button key={n} type="button" class={`starbtn${stars >= n ? ' starbtn--on' : ''}`} aria-pressed={stars >= n} aria-label={`${n} star${n === 1 ? '' : 's'}`} onClick={() => setStars(n)}>
+          <button key={n} type="button" class={`starbtn${stars >= n ? ' starbtn--on' : ''}`} aria-pressed={stars >= n} aria-label={n === 1 ? t('agent.rateDriver.starOne', { n }) : t('agent.rateDriver.starMany', { n })} onClick={() => setStars(n)}>
             <Icon name="star" size={28} />
           </button>
         ))}
       </div>
 
-      <p class="card__note" style="margin-top:12px">Anything that went wrong? (optional)</p>
-      <div class="rows" role="group" aria-label="What went wrong">
+      <p class="card__note" style="margin-top:12px">{t('agent.rateDriver.wrongPrompt')}</p>
+      <div class="rows" role="group" aria-label={t('agent.rateDriver.wrongAria')}>
         {DRIVER_ISSUE_LABELS.map((it) => (
           <label key={it.key} class="checkline">
             <input type="checkbox" checked={issues.includes(it.key)} onChange={() => toggle(it.key)} />
-            <span>{it.label}</span>
+            <span>{t(it.labelKey)}</span>
           </label>
         ))}
       </div>
 
       <div class="scr__cta">
         <Button disabled={!stars} busy={state.busy === 'rate-driver'} onClick={() => void actions.submitDriverRating(stars, issues)}>
-          Save the rating
+          {t('agent.saveRating')}
         </Button>
       </div>
       <Button variant="link" onClick={actions.dismissRateDriver}>
-        Skip
+        {t('agent.rateDriver.skip')}
       </Button>
     </Sheet>
   );

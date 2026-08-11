@@ -1,4 +1,5 @@
 import { Button, Card, Checklist, Icon, ReadAloud } from '../../../shared/ui';
+import { useT } from '../../../shared/i18n';
 import { welcomeSpoken } from '../logic';
 import type { HomeActions } from '../useHomeApp';
 
@@ -12,31 +13,29 @@ export interface WelcomeScreenProps {
  * exactly those two and nothing more.
  */
 export function WelcomeScreen({ actions }: WelcomeScreenProps) {
+  const t = useT();
   return (
     <div class="scr">
-      <h1 class="scr__title">Parcels, without an address</h1>
-      <p class="scr__lede">
-        Send it to a shop. Collect it from a shop. Pay at the counter. SeeBuyGet is the network of shops, drivers and hubs that
-        moves it in between.
-      </p>
+      <h1 class="scr__title">{t('home.welcome.title')}</h1>
+      <p class="scr__lede">{t('home.welcome.lede')}</p>
 
       <div class="scr__cta">
         <a class="btn btn--primary btn--full" href="/send/">
-          Send or track a parcel
+          {t('home.welcome.sendTrack')}
           <Icon name="chevronRight" size={20} class="btn__chev" />
         </a>
       </div>
 
       <Button variant="outline" onClick={() => actions.go('roles')}>
-        Earn with SeeBuyGet
+        {t('home.welcome.earn')}
       </Button>
 
-      <Card title="How it works" tone="soft">
+      <Card title={t('home.welcome.howTitle')} tone="soft">
         <Checklist
           items={[
-            'See the price before you send — no account needed',
-            'Drop it at a shop near you, pay there',
-            'The person collecting gets a code by message',
+            t('home.welcome.how1'),
+            t('home.welcome.how2'),
+            t('home.welcome.how3'),
           ]}
         />
       </Card>
@@ -47,8 +46,8 @@ export function WelcomeScreen({ actions }: WelcomeScreenProps) {
             <Icon name="search" size={24} />
           </span>
           <span class="row__body">
-            <span class="row__t">Where is my parcel?</span>
-            <span class="row__s">Track it with the code from your message</span>
+            <span class="row__t">{t('home.welcome.trackTitle')}</span>
+            <span class="row__s">{t('home.welcome.trackSub')}</span>
           </span>
           <span class="row__end">
             <Icon name="chevronRight" size={22} />
@@ -59,8 +58,8 @@ export function WelcomeScreen({ actions }: WelcomeScreenProps) {
             <Icon name="key" size={24} />
           </span>
           <span class="row__body">
-            <span class="row__t">I already work with SeeBuyGet</span>
-            <span class="row__s">Open your shop, driver, hub, store or fleet app</span>
+            <span class="row__t">{t('home.welcome.haveAccount')}</span>
+            <span class="row__s">{t('home.welcome.haveAccountSub')}</span>
           </span>
           <span class="row__end">
             <Icon name="chevronRight" size={22} />
@@ -69,7 +68,7 @@ export function WelcomeScreen({ actions }: WelcomeScreenProps) {
       </div>
 
       <div class="scr__foot">
-        <ReadAloud text={welcomeSpoken} label="Read this aloud" />
+        <ReadAloud text={() => welcomeSpoken(t)} label={t('home.readAloud')} />
       </div>
     </div>
   );

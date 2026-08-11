@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { Button, Card, Checklist, ErrorNote, ReadAloud, Sheet } from '../../../shared/ui';
+import { useT } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
 import type { AgentActions } from '../useAgentApp';
 
@@ -10,13 +11,12 @@ export interface SignInScreenProps {
   busy: boolean;
 }
 
-const SPOKEN = 'Sign in with the email and password you used when your shop joined SeeBuyGet.';
-
 /**
  * The real S2 sign-in (email + password → an actor token), not a pasted DID: a shop's
  * account carries money, so it gets the credential the backend actually verifies.
  */
 export function SignInScreen({ actions, error, busy }: SignInScreenProps) {
+  const t = useT();
   const [email, setEmail] = useState(actions.readEmail() ?? '');
   const [password, setPassword] = useState('');
   const [help, setHelp] = useState(false);
@@ -28,15 +28,15 @@ export function SignInScreen({ actions, error, busy }: SignInScreenProps) {
 
   return (
     <form class="scr" onSubmit={submit}>
-      <h1 class="scr__title">Open your shop</h1>
-      <p class="scr__lede">Sign in with your shop's email and password.</p>
+      <h1 class="scr__title">{t('agent.signin.title')}</h1>
+      <p class="scr__lede">{t('agent.signin.lede')}</p>
 
       {error ? <ErrorNote error={error} /> : null}
 
       <Card>
         <div class="field">
           <label class="field__label" for="email">
-            Email
+            {t('agent.signin.email')}
           </label>
           <input
             id="email"
@@ -53,7 +53,7 @@ export function SignInScreen({ actions, error, busy }: SignInScreenProps) {
         </div>
         <div class="field" style="margin-top:12px">
           <label class="field__label" for="password">
-            Password
+            {t('agent.signin.password')}
           </label>
           <input
             id="password"
@@ -61,7 +61,7 @@ export function SignInScreen({ actions, error, busy }: SignInScreenProps) {
             type="password"
             value={password}
             onInput={(e) => setPassword(e.currentTarget.value)}
-            placeholder="Your password"
+            placeholder={t('agent.signin.passwordPh')}
             autocomplete="current-password"
             enterkeyhint="go"
           />
@@ -70,21 +70,21 @@ export function SignInScreen({ actions, error, busy }: SignInScreenProps) {
 
       <div class="scr__cta">
         <Button type="submit" disabled={!email.trim() || !password} busy={busy}>
-          Sign in
+          {t('agent.signin.signIn')}
         </Button>
       </div>
 
-      <Card title="Your money stays safe" tone="soft">
+      <Card title={t('agent.signin.safeTitle')} tone="soft">
         <Checklist
-          items={['Only this sign-in can touch the wallet', 'Signing out removes the key from this tablet', 'SeeBuyGet staff never ask for your password']}
+          items={[t('agent.signin.safe1'), t('agent.signin.safe2'), t('agent.signin.safe3')]}
         />
       </Card>
 
       <div class="scr__foot">
         <Button variant="link" full={false} onClick={() => setHelp(true)}>
-          I forgot my password
+          {t('agent.signin.forgot')}
         </Button>
-        <ReadAloud text={() => SPOKEN} label="Read this aloud" />
+        <ReadAloud text={() => t('agent.signin.spoken')} label={t('agent.readAloud')} />
       </div>
 
       <ForgotSheet open={help} onClose={() => setHelp(false)} actions={actions} email={email} />
@@ -97,6 +97,7 @@ export function SignInScreen({ actions, error, busy }: SignInScreenProps) {
  * infra), so the flow completes on-device: request → token shown → new password → done.
  */
 function ForgotSheet({ open, onClose, actions, email: initial }: { open: boolean; onClose: () => void; actions: AgentActions; email: string }) {
+  const t = useT();
   const [email, setEmail] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<SbgError | null>(null);
@@ -137,20 +138,20 @@ function ForgotSheet({ open, onClose, actions, email: initial }: { open: boolean
   };
 
   return (
-    <Sheet open={open} onClose={close} title="Reset your password">
+    <Sheet open={open} onClose={close} title={t('agent.signin.resetTitle')}>
       {error ? <ErrorNote error={error} /> : null}
       {done ? (
         <>
-          <p class="t-body">Your password is changed. Sign in with the new one.</p>
+          <p class="t-body">{t('agent.signin.resetDone')}</p>
           <Button chevron={false} onClick={close}>
-            Back to sign in
+            {t('agent.signin.backToSignIn')}
           </Button>
         </>
       ) : !sent ? (
         <>
           <div class="field">
             <label class="field__label" for="fp-email">
-              Email
+              {t('agent.signin.email')}
             </label>
             <input
               id="fp-email"
@@ -163,15 +164,15 @@ function ForgotSheet({ open, onClose, actions, email: initial }: { open: boolean
             />
           </div>
           <Button chevron={false} busy={busy} disabled={!email.trim()} onClick={() => void request()}>
-            Send me a reset code
+            {t('agent.signin.sendReset')}
           </Button>
         </>
       ) : (
         <>
-          {issued ? <p class="hint">{`Sandbox: your reset code is ${issued}`}</p> : <p class="hint">Check your email for the reset code.</p>}
+          {issued ? <p class="hint">{t('agent.signin.sandboxCode', { code: issued })}</p> : <p class="hint">{t('agent.signin.checkEmail')}</p>}
           <div class="field">
             <label class="field__label" for="fp-token">
-              Reset code
+              {t('agent.signin.resetCode')}
             </label>
             <input
               id="fp-token"
@@ -185,7 +186,7 @@ function ForgotSheet({ open, onClose, actions, email: initial }: { open: boolean
           </div>
           <div class="field" style="margin-top:12px">
             <label class="field__label" for="fp-pass">
-              New password
+              {t('agent.signin.newPassword')}
             </label>
             <input
               id="fp-pass"
@@ -197,7 +198,7 @@ function ForgotSheet({ open, onClose, actions, email: initial }: { open: boolean
             />
           </div>
           <Button chevron={false} busy={busy} disabled={!token.trim() || password.length < 6} onClick={() => void apply()}>
-            Set the new password
+            {t('agent.signin.setPassword')}
           </Button>
         </>
       )}

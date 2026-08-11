@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, Checklist, ErrorNote, Icon, Note, Pill, ReadAloud, Sheet } from '../../../shared/ui';
+import { useT } from '../../../shared/i18n';
 import { voidCountdownLabel, voidRemainingMs, voidableParcels } from '../logic';
 import type { AgentActions, AgentState } from '../useAgentApp';
 import { PhotoField } from './PhotoField';
@@ -20,10 +21,11 @@ export interface VoidScreenProps {
  * the proof the label is destroyed and cannot be re-used.
  */
 export function VoidScreen({ state, actions }: VoidScreenProps) {
+  const t = useT();
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const t = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(t);
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
   }, []);
 
   const rows = voidableParcels(state.shopParcels, now);
@@ -33,16 +35,16 @@ export function VoidScreen({ state, actions }: VoidScreenProps) {
 
   return (
     <div class="scr">
-      <h1 class="scr__title">Undo a drop-off</h1>
-      <p class="scr__lede">Took one in by mistake? You have five minutes to undo it and get your money back.</p>
+      <h1 class="scr__title">{t('agent.void.title')}</h1>
+      <p class="scr__lede">{t('agent.void.lede')}</p>
 
       {state.error ? <ErrorNote error={state.error} onRetry={() => actions.go('void')} /> : null}
 
-      <Card label={`You can still undo (${rows.length})`}>
+      <Card label={t('agent.void.canUndo', { count: rows.length })}>
         {loading ? (
-          <p class="hint">Getting your recent drop-offs…</p>
+          <p class="hint">{t('agent.void.getting')}</p>
         ) : rows.length === 0 ? (
-          <p class="hint">Nothing to undo. Only a parcel you took in within the last five minutes can be undone.</p>
+          <p class="hint">{t('agent.void.nothingCard')}</p>
         ) : (
           <div class="rows" role="list">
             {rows.map((p) => (
@@ -52,11 +54,11 @@ export function VoidScreen({ state, actions }: VoidScreenProps) {
                 </span>
                 <span class="row__body">
                   <span class="row__t mono-t">{p.parcelId}</span>
-                  <span class="row__s">{`${p.size} · to ${p.destZone}`}</span>
+                  <span class="row__s">{`${p.size} · ${t('agent.void.toZone', { zone: p.destZone })}`}</span>
                 </span>
                 <span class="row__end">
                   <Pill tone="warn" dot>
-                    {voidCountdownLabel(voidRemainingMs(p.acceptedAt, now))}
+                    {voidCountdownLabel(voidRemainingMs(p.acceptedAt, now), t)}
                   </Pill>
                 </span>
               </button>
@@ -69,52 +71,52 @@ export function VoidScreen({ state, actions }: VoidScreenProps) {
         <ReadAloud
           text={() =>
             rows.length
-              ? `${rows.length} drop-off${rows.length === 1 ? '' : 's'} can still be undone. Tap one, photograph the torn label, and confirm.`
-              : 'Nothing to undo. Only a parcel taken in within the last five minutes can be undone.'
+              ? (rows.length === 1 ? t('agent.void.aloudOne', { count: rows.length }) : t('agent.void.aloudMany', { count: rows.length }))
+              : t('agent.void.aloudNone')
           }
-          label="Read this aloud"
+          label={t('agent.readAloud')}
         />
       </div>
 
-      <Sheet open={Boolean(selected)} onClose={() => actions.openVoid(null)} title="Undo this drop-off?">
+      <Sheet open={Boolean(selected)} onClose={() => actions.openVoid(null)} title={t('agent.void.sheetTitle')}>
         {selected ? (
           <>
             <div class="kv">
-              <span>Parcel</span>
+              <span>{t('agent.void.parcel')}</span>
               <b class="mono-t">{selected.parcelId}</b>
             </div>
             <div class="kv">
-              <span>Time left</span>
-              <b>{voidCountdownLabel(selectedMs)}</b>
+              <span>{t('agent.void.timeLeft')}</span>
+              <b>{voidCountdownLabel(selectedMs, t)}</b>
             </div>
 
             {selectedMs <= 0 ? (
-              <Note tone="warn" icon="clock" title="The window has closed" detail="This one can no longer be undone. Ask the control tower." />
+              <Note tone="warn" icon="clock" title={t('agent.void.closedTitle')} detail={t('agent.void.closedDetail')} />
             ) : (
               <>
                 <p class="t-body" style="margin-top:8px">
-                  Tear the label off the parcel and photograph it — that is the proof it cannot be used again.
+                  {t('agent.void.tearLabel')}
                 </p>
                 <PhotoField
                   id="void-photo"
                   value={state.void.photoRef}
-                  label="Photo of the torn label"
+                  label={t('agent.void.tornPhoto')}
                   upload={(file) => actions.uploadPhoto('dropoff', file)}
                   onCapture={(ref) => actions.setVoidPhoto(ref)}
                 />
-                <Checklist items={['Your wallet is refunded straight away', 'The parcel is cancelled for good']} />
+                <Checklist items={[t('agent.void.check1'), t('agent.void.check2')]} />
                 <Button
                   chevron={false}
                   disabled={!state.void.photoRef || selectedMs <= 0}
                   busy={state.busy === 'void'}
                   onClick={() => void actions.submitVoid()}
                 >
-                  Undo and refund me
+                  {t('agent.void.undoRefund')}
                 </Button>
               </>
             )}
             <Button variant="link" onClick={() => actions.openVoid(null)}>
-              Keep the parcel
+              {t('agent.void.keepParcel')}
             </Button>
           </>
         ) : null}

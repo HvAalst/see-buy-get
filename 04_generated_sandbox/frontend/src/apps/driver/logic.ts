@@ -6,6 +6,7 @@
  * PWA and the old page can never disagree about what "72 / 800 kg" or "12% above" means.
  */
 
+import type { Translate } from '../../shared/i18n';
 import type { AgentRow, Benchmark, Claimable, DriverStatus, MdpRow, NodeOption, PriceBreakdown } from './types';
 
 /* -------------------------------------------------------------- capacity -- */
@@ -34,10 +35,10 @@ export function isFull(remainingKg: number): boolean {
 }
 
 /** One line of plain language under the big number. Units spelled out, no abbreviations. */
-export function capacitySubLine(remainingKg: number, capacityKg: number, claimCount: number): string {
-  const loads = claimCount === 1 ? '1 load claimed' : `${claimCount} loads claimed`;
-  if (remainingKg <= 0) return `Your van is full — ${loads}. Deliver something to free up space.`;
-  return `Free space out of ${capacityKg} kg — ${loads}.`;
+export function capacitySubLine(remainingKg: number, capacityKg: number, claimCount: number, t: Translate): string {
+  const loads = claimCount === 1 ? t('driver.logic.loadClaimedOne') : t('driver.logic.loadClaimedMany', { count: claimCount });
+  if (remainingKg <= 0) return t('driver.logic.vanFull', { loads });
+  return t('driver.logic.freeSpace', { kg: capacityKg, loads });
 }
 
 /* ------------------------------------------------------------------ rate -- */
@@ -73,23 +74,27 @@ export function roundPrice(price: number): number {
  * Queried without lat/lng on purpose — vehicles roam, so the meaningful comparison is the
  * whole network, not a radius around wherever the phone happens to be.
  */
-export function rateBand(pricePerKm: number | null | undefined, benchmark: Benchmark | null | undefined): RateBand | null {
+export function rateBand(pricePerKm: number | null | undefined, benchmark: Benchmark | null | undefined, t: Translate): RateBand | null {
   if (!benchmark || !benchmark.count) return null;
 
   const mine = Number(pricePerKm ?? 0);
   const pct = benchmark.median > 0 ? Math.round(((mine - benchmark.median) / benchmark.median) * 100) : 0;
-  const word = pct > 1 ? `${pct}% above` : pct < -1 ? `${-pct}% below` : 'at';
+  const word = pct > 1 ? t('driver.logic.rateAbove', { pct }) : pct < -1 ? t('driver.logic.rateBelow', { pct: -pct }) : t('driver.logic.rateAt');
 
   const headline =
     pct > 1
-      ? `You charge ${pct}% more than most drivers.`
+      ? t('driver.logic.rateMore', { pct })
       : pct < -1
-        ? `You charge ${-pct}% less than most drivers.`
-        : 'You charge about the same as most drivers.';
+        ? t('driver.logic.rateLess', { pct: -pct })
+        : t('driver.logic.rateSame');
 
-  const detail =
-    `Your rate ${mine.toFixed(3)} per km. Most drivers charge ${benchmark.median.toFixed(3)} ` +
-    `(${benchmark.min.toFixed(3)}–${benchmark.max.toFixed(3)} across ${benchmark.count} vehicles).`;
+  const detail = t('driver.logic.rateDetail', {
+    mine: mine.toFixed(3),
+    median: benchmark.median.toFixed(3),
+    min: benchmark.min.toFixed(3),
+    max: benchmark.max.toFixed(3),
+    count: benchmark.count,
+  });
 
   return {
     pct,
@@ -98,16 +103,16 @@ export function rateBand(pricePerKm: number | null | undefined, benchmark: Bench
     detail,
     showMatch: Math.abs(pct) > 1,
     matchPrice: roundPrice(benchmark.median),
-    matchLabel: `Match ${benchmark.median.toFixed(3)}`,
+    matchLabel: t('driver.logic.matchLabel', { price: benchmark.median.toFixed(3) }),
   };
 }
 
 /* ---------------------------------------------------------------- driver -- */
 
 /** The office must activate a driver before any shift can start. Null when they are ACTIVE. */
-export function driverStatusNotice(status: DriverStatus | undefined): string | null {
+export function driverStatusNotice(status: DriverStatus | undefined, t: Translate): string | null {
   if (!status || status === 'ACTIVE') return null;
-  return `Your driver account is ${status.replace(/_/g, ' ').toLowerCase()}. The fleet office must activate you before you can start a shift.`;
+  return t('driver.logic.statusNotice', { status: status.replace(/_/g, ' ').toLowerCase() });
 }
 
 export function canStartShift(status: DriverStatus | undefined): boolean {
@@ -120,24 +125,25 @@ export function canStartShift(status: DriverStatus | undefined): boolean {
  * The read-aloud screen summary. Units are spelled out ("kilograms", never "kg") because a
  * speech synthesiser reads "kg" as the letters k-g.
  */
-export function shiftSummary(plate: string, remainingKg: number, claimCount: number): string {
-  return `On shift with ${plate}. Remaining capacity ${remainingKg} kilograms. ${claimCount} claimed loads.`;
+export function shiftSummary(plate: string, remainingKg: number, claimCount: number, t: Translate): string {
+  return t('driver.logic.shiftSummary', { plate, kg: remainingKg, count: claimCount });
 }
 
-export function offShiftSummary(): string {
-  return 'Scan the vehicle QR on the dashboard to start your shift.';
+export function offShiftSummary(t: Translate): string {
+  return t('driver.logic.offShiftSummary');
 }
 
-export function offersSummary(count: number): string {
-  if (count === 0) return 'No shipments waiting on this route right now.';
-  if (count === 1) return 'One shipment on your way. Swipe to see it, then claim it.';
-  return `${count} shipments on your way. Swipe through them, then claim the ones you want.`;
+export function offersSummary(count: number, t: Translate): string {
+  if (count === 0) return t('driver.logic.offersNone');
+  if (count === 1) return t('driver.logic.offersOne');
+  return t('driver.logic.offersMany', { count });
 }
 
-export function loadsSummary(claims: Claimable[], remainingKg: number): string {
-  if (claims.length === 0) return 'You have no claimed loads. Find work on your route to pick some up.';
-  const noun = claims.length === 1 ? 'load' : 'loads';
-  return `${claims.length} claimed ${noun}. Remaining capacity ${remainingKg} kilograms.`;
+export function loadsSummary(claims: Claimable[], remainingKg: number, t: Translate): string {
+  if (claims.length === 0) return t('driver.logic.loadsNone');
+  return claims.length === 1
+    ? t('driver.logic.loadsOne', { count: claims.length, kg: remainingKg })
+    : t('driver.logic.loadsMany', { count: claims.length, kg: remainingKg });
 }
 
 /* ---------------------------------------------------------------- offers -- */
@@ -154,16 +160,16 @@ export function secondsLeft(expiresAt: string, now: number = Date.now()): number
 }
 
 /** "4 min left" / "45 sec left" / "Gone". Never a bare number. */
-export function countdownLabel(seconds: number): string {
-  if (seconds <= 0) return 'Gone';
-  if (seconds < 60) return `${seconds} sec left`;
-  return `${Math.floor(seconds / 60)} min left`;
+export function countdownLabel(seconds: number, t: Translate): string {
+  if (seconds <= 0) return t('driver.logic.gone');
+  if (seconds < 60) return t('driver.logic.secLeft', { seconds });
+  return t('driver.logic.minLeft', { min: Math.floor(seconds / 60) });
 }
 
 /** Detour, weight, time and (for freight) the earning in one plain sentence for the read-aloud summary. */
-export function offerSpoken(o: { message: string; weightKg: number; destLabel: string; detourKm: number; price?: PriceBreakdown }): string {
-  const base = `${o.message} ${o.weightKg} kilograms to ${o.destLabel}. ${o.detourKm} kilometres extra driving.`;
-  return o.price ? `${base} You earn ${money(o.price.total)}.` : base;
+export function offerSpoken(o: { message: string; weightKg: number; destLabel: string; detourKm: number; price?: PriceBreakdown }, t: Translate): string {
+  const base = t('driver.logic.offerSpokenBase', { message: o.message, kg: o.weightKg, dest: o.destLabel, detour: o.detourKm });
+  return o.price ? t('driver.logic.offerSpokenEarn', { base, amount: money(o.price.total) }) : base;
 }
 
 /* ---------------------------------------------------------------- pricing -- */
@@ -198,14 +204,14 @@ export function lastReadingBreached(readings: Array<{ breach: boolean }> | undef
  * can see and trust: the flag-down fee, the distance × the rate actually applied, and — only when the
  * market moved the rate off the base — a note that a busy- or quiet-time rate is in effect.
  */
-export function priceBreakdownLines(price: PriceBreakdown | undefined): string[] {
+export function priceBreakdownLines(price: PriceBreakdown | undefined, t: Translate): string[] {
   if (!price) return [];
   const lines = [
-    `Base fee ${money(price.baseFee)}`,
-    `${price.distanceKm} km at ${price.effectiveRate.toFixed(3)} per km`,
+    t('driver.logic.baseFee', { amount: money(price.baseFee) }),
+    t('driver.logic.distanceAt', { km: price.distanceKm, rate: price.effectiveRate.toFixed(3) }),
   ];
-  if (price.multiplier > 1) lines.push(`Busy-time rate: ${Math.round((price.multiplier - 1) * 100)}% more per km`);
-  else if (price.multiplier < 1) lines.push(`Quiet-time rate: ${Math.round((1 - price.multiplier) * 100)}% less per km`);
+  if (price.multiplier > 1) lines.push(t('driver.logic.busyRate', { pct: Math.round((price.multiplier - 1) * 100) }));
+  else if (price.multiplier < 1) lines.push(t('driver.logic.quietRate', { pct: Math.round((1 - price.multiplier) * 100) }));
   return lines;
 }
 
@@ -240,10 +246,10 @@ export function canLoadBag(badgeId: string | undefined): boolean {
 /* ----------------------------------------------------------------- nodes -- */
 
 /** Hubs and shops flattened into one pick-list. Agents with no location cannot be routed to. */
-export function nodeOptions(mdps: MdpRow[] | null, agents: AgentRow[] | null): NodeOption[] {
+export function nodeOptions(mdps: MdpRow[] | null, agents: AgentRow[] | null, t: Translate): NodeOption[] {
   const hubs = (mdps ?? [])
     .filter((m) => m?.location)
-    .map((m) => ({ id: m.mdpId, label: `${m.name} (hub)`, lat: m.location.lat, lng: m.location.lng }));
+    .map((m) => ({ id: m.mdpId, label: t('driver.logic.hubLabel', { name: m.name }), lat: m.location.lat, lng: m.location.lng }));
   const shops = (agents ?? [])
     .filter((a) => a?.location)
     .map((a) => ({ id: a.did, label: a.shopName, lat: a.location!.lat, lng: a.location!.lng }));

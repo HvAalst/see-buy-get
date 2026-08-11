@@ -76,6 +76,9 @@ export function t(key: MessageKey, params?: Record<string, string | number>): st
   return params ? interpolate(msg, params) : msg;
 }
 
+/** The signature of `t`, for threading into pure logic functions (they take it as a trailing param). */
+export type Translate = (key: MessageKey, params?: Record<string, string | number>) => string;
+
 /** The ergonomic hook for screens: returns `t` AND re-renders the component when the language changes, so its
  *  strings update live on a switch. (Use plain `t()` only outside components, where there is nothing to re-render.) */
 export function useT(): typeof t {

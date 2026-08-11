@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { isMintSourced, narrow, type SbgError } from '../../lib/sbg';
+import { t } from '../../shared/i18n'; // plain t(): toasts/notes are built at action time in the store's active locale
 import { triggerDownload } from '../../shared/download';
 import type { IconName } from '../../shared/ui/Icon';
 import {
@@ -194,9 +195,9 @@ export function useVendorApp() {
 
   /* ---------------------------------------------------------------- toasts */
 
-  const pushToast = useCallback((t: Omit<Toast, 'id'>) => {
+  const pushToast = useCallback((toast: Omit<Toast, 'id'>) => {
     const id = ++toastSeq.current;
-    setState((s) => ({ ...s, toasts: [...s.toasts, { ...t, id }] }));
+    setState((s) => ({ ...s, toasts: [...s.toasts, { ...toast, id }] }));
     const handle = window.setTimeout(() => {
       toastTimers.current.delete(handle);
       setState((s) => ({ ...s, toasts: s.toasts.filter((x) => x.id !== id) }));
@@ -642,9 +643,10 @@ export function useVendorApp() {
       if (diverted?.diverted) {
         // S32c: advise if a pickup/dropoff site can't handle the cargo (no lifting gear) — arrange it.
         const gaps = diverted.freight?.equipmentGaps ?? [];
-        const gapNote = gaps.length ? ` Arrange lifting equipment at the ${gaps.map((g) => (g === 'origin' ? 'pickup' : 'destination')).join(' and ')}.` : '';
+        const sites = gaps.map((g) => (g === 'origin' ? t('vendor.toast.sitePickup') : t('vendor.toast.siteDestination'))).join(' and ');
+        const gapNote = gaps.length ? ' ' + t('vendor.toast.freightGap', { sites }) : '';
         setState((s) => ({ ...s, minted: null, mintStep: 'source' }));
-        pushToast({ tone: 'info', icon: 'truck', title: 'Sent to dedicated freight', detail: `This load is too big for the parcel network (class ${diverted.cargoClass}) — a dedicated-freight job was created.${gapNote}` });
+        pushToast({ tone: 'info', icon: 'truck', title: t('vendor.toast.freightTitle'), detail: t('vendor.toast.freightDetail', { cls: diverted.cargoClass ?? '' }) + gapNote });
         await refresh();
         return;
       }
@@ -652,8 +654,8 @@ export function useVendorApp() {
       setState((s) => ({ ...s, minted, mintedJourney: null, mintStep: 'label' }));
       pushToast(
         minted.paid
-          ? { tone: 'ok', icon: 'check', title: 'Label minted', detail: 'Print it and stick it on the parcel.' }
-          : { tone: 'warn', icon: 'wallet', title: 'Order created — unpaid', detail: 'Top up, then release the label.' },
+          ? { tone: 'ok', icon: 'check', title: t('vendor.toast.mintedTitle'), detail: t('vendor.toast.mintedDetail') }
+          : { tone: 'warn', icon: 'wallet', title: t('vendor.toast.unpaidTitle'), detail: t('vendor.toast.unpaidDetail') },
       );
       // DT — the parcel is born with a digital twin + a planned route; fetch it to show on the label step.
       const pid = minted?.parcel?.parcelId;
@@ -675,7 +677,7 @@ export function useVendorApp() {
       await run(`settle:${parcelId}`, async () => {
         const r = await client.api.settle(parcelId);
         if (r.error) return fail(r.error);
-        pushToast({ tone: 'ok', icon: 'check', title: 'Paid', detail: 'The label is released.' });
+        pushToast({ tone: 'ok', icon: 'check', title: t('vendor.toast.paidTitle'), detail: t('vendor.toast.paidDetail') });
         const again = await client.api.order(creds.vendorId, parcelId);
         if (!again.error) {
           setState((s) => ({
@@ -695,7 +697,7 @@ export function useVendorApp() {
       await run('topup', async () => {
         const r = await client.api.topUp(creds.vendorId, amount);
         if (r.error) return fail(r.error);
-        pushToast({ tone: 'ok', icon: 'wallet', title: 'Balance topped up', detail: `Added ${amount.toFixed(2)}.` });
+        pushToast({ tone: 'ok', icon: 'wallet', title: t('vendor.toast.topUpTitle'), detail: t('vendor.toast.topUpDetail', { amount: amount.toFixed(2) }) });
         await refresh();
       });
     },
@@ -709,7 +711,7 @@ export function useVendorApp() {
       await run('location', async () => {
         const r = await client.api.update(creds.vendorId, { location });
         if (r.error) return fail(r.error);
-        pushToast({ tone: 'ok', icon: 'pin', title: 'Store pin saved' });
+        pushToast({ tone: 'ok', icon: 'pin', title: t('vendor.toast.pinSaved') });
         await refresh();
       });
     },
@@ -754,7 +756,7 @@ export function useVendorApp() {
       });
       if (r.error) return fail(r.error);
       triggerDownload('shipments.csv', narrow<string>(r.data));
-      pushToast({ tone: 'ok', icon: 'check', title: 'Shipments exported', detail: 'Saved shipments.csv to your device.' });
+      pushToast({ tone: 'ok', icon: 'check', title: t('vendor.toast.shipmentsExported'), detail: t('vendor.toast.shipmentsExportedDetail') });
     });
   }, [client, creds, run, fail, pushToast]);
 
@@ -773,7 +775,7 @@ export function useVendorApp() {
       });
       if (r.error) return fail(r.error);
       triggerDownload('bookkeeping.csv', narrow<string>(r.data));
-      pushToast({ tone: 'ok', icon: 'check', title: 'Books exported', detail: 'Saved bookkeeping.csv to your device.' });
+      pushToast({ tone: 'ok', icon: 'check', title: t('vendor.toast.booksExported'), detail: t('vendor.toast.booksExportedDetail') });
     });
   }, [client, creds, run, fail, pushToast]);
 
@@ -785,7 +787,7 @@ export function useVendorApp() {
       await run('policy', async () => {
         const r = await client.api.update(creds.vendorId, { shippingPolicy: patch });
         if (r.error) return fail(r.error);
-        pushToast({ tone: 'ok', icon: 'check', title: 'Policy saved' });
+        pushToast({ tone: 'ok', icon: 'check', title: t('vendor.toast.policySaved') });
         await refresh();
       });
     },
@@ -798,7 +800,7 @@ export function useVendorApp() {
       await run('callback', async () => {
         const r = await client.api.update(creds.vendorId, { callbackUrl });
         if (r.error) return fail(r.error);
-        pushToast({ tone: 'ok', icon: 'check', title: callbackUrl ? 'Callback URL saved' : 'Callback URL removed' });
+        pushToast({ tone: 'ok', icon: 'check', title: callbackUrl ? t('vendor.toast.callbackSaved') : t('vendor.toast.callbackRemoved') });
         await refresh();
       });
     },

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { t } from '../../shared/i18n'; // English is the base catalog, so the real `t` yields the English literals
 import {
   EMPTY_DRIVER,
   EMPTY_VEHICLE,
@@ -55,27 +56,27 @@ describe('registry', () => {
 
 describe('forms', () => {
   it('vehicle form: plate → owner → truck body, in that order', () => {
-    expect(vehicleMissing(EMPTY_VEHICLE)).toContain('plate');
-    expect(vehicleMissing({ ...EMPTY_VEHICLE, plate: 'K 1' })).toContain('owner');
-    expect(vehicleMissing({ ...EMPTY_VEHICLE, plate: 'K 1', ownerName: 'A', vehicleClass: 'truck' })).toContain('truck body');
-    expect(vehicleMissing({ ...EMPTY_VEHICLE, plate: 'K 1', ownerName: 'A' })).toBeNull();
+    expect(vehicleMissing(EMPTY_VEHICLE, t)).toContain('plate');
+    expect(vehicleMissing({ ...EMPTY_VEHICLE, plate: 'K 1' }, t)).toContain('owner');
+    expect(vehicleMissing({ ...EMPTY_VEHICLE, plate: 'K 1', ownerName: 'A', vehicleClass: 'truck' }, t)).toContain('truck body');
+    expect(vehicleMissing({ ...EMPTY_VEHICLE, plate: 'K 1', ownerName: 'A' }, t)).toBeNull();
   });
 
   it('vehicle form: the price-multiplier corridor is both-or-neither, and never inverted (S34)', () => {
     const ok = { ...EMPTY_VEHICLE, plate: 'K 1', ownerName: 'A' } as const;
-    expect(vehicleMissing({ ...ok, minMultiplier: '1.5', maxMultiplier: '0.8' })).toContain('cannot be above'); // inverted
-    expect(vehicleMissing({ ...ok, minMultiplier: '0.8', maxMultiplier: '1.5' })).toBeNull(); // floor ≤ ceiling
-    expect(vehicleMissing({ ...ok, minMultiplier: '1.2' })).toContain('both'); // a lone bound would be silently paired
-    expect(vehicleMissing({ ...ok, maxMultiplier: '0.5' })).toContain('both'); // a lone ceiling too
-    expect(vehicleMissing({ ...ok, baseFee: '5' })).toBeNull(); // base fee alone is always fine
+    expect(vehicleMissing({ ...ok, minMultiplier: '1.5', maxMultiplier: '0.8' }, t)).toContain('cannot be above'); // inverted
+    expect(vehicleMissing({ ...ok, minMultiplier: '0.8', maxMultiplier: '1.5' }, t)).toBeNull(); // floor ≤ ceiling
+    expect(vehicleMissing({ ...ok, minMultiplier: '1.2' }, t)).toContain('both'); // a lone bound would be silently paired
+    expect(vehicleMissing({ ...ok, maxMultiplier: '0.5' }, t)).toContain('both'); // a lone ceiling too
+    expect(vehicleMissing({ ...ok, baseFee: '5' }, t)).toBeNull(); // base fee alone is always fine
   });
 
   it('driver form: heavy selection demands the licence number', () => {
     const filled = { ...EMPTY_DRIVER, displayName: 'D', fullName: 'D Full', nationalId: 'N1', mobile: '07' };
-    expect(driverMissing(filled)).toBeNull();
-    expect(driverMissing({ ...filled, classes: ['van'] })).toContain('licence');
-    expect(driverMissing({ ...filled, classes: ['van'], licenceNumber: 'L-9' })).toBeNull();
-    expect(driverMissing({ ...filled, classes: [] })).toContain('at least one');
+    expect(driverMissing(filled, t)).toBeNull();
+    expect(driverMissing({ ...filled, classes: ['van'] }, t)).toContain('licence');
+    expect(driverMissing({ ...filled, classes: ['van'], licenceNumber: 'L-9' }, t)).toBeNull();
+    expect(driverMissing({ ...filled, classes: [] }, t)).toContain('at least one');
   });
 
   it('toggleClass flips membership without duplicating', () => {
@@ -144,9 +145,9 @@ describe('views', () => {
   });
 
   it('subtypeLine folds the capability flags into one sentence', () => {
-    expect(subtypeLine({ id: 'refrigerated', label: 'Refrigerated box', capacityKg: 2500, coldChain: true })).toBe(
+    expect(subtypeLine({ id: 'refrigerated', label: 'Refrigerated box', capacityKg: 2500, coldChain: true }, t)).toBe(
       'Refrigerated box: about 2500 kg · cold-chain',
     );
-    expect(subtypeLine(undefined)).toBeNull();
+    expect(subtypeLine(undefined, t)).toBeNull();
   });
 });

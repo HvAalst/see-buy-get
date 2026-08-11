@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { t } from '../../shared/i18n'; // English is the base catalog, so the real `t` yields the English literals
 import {
   canLoadBag,
   canStartShift,
@@ -51,9 +52,9 @@ describe('usedPercent — the capacity bar', () => {
   });
 
   it('says how much room is left in plain language', () => {
-    expect(capacitySubLine(600, 800, 1)).toBe('Free space out of 800 kg — 1 load claimed.');
-    expect(capacitySubLine(600, 800, 3)).toBe('Free space out of 800 kg — 3 loads claimed.');
-    expect(capacitySubLine(0, 800, 2)).toContain('Your van is full');
+    expect(capacitySubLine(600, 800, 1, t)).toBe('Free space out of 800 kg — 1 load claimed.');
+    expect(capacitySubLine(600, 800, 3, t)).toBe('Free space out of 800 kg — 3 loads claimed.');
+    expect(capacitySubLine(0, 800, 2, t)).toContain('Your van is full');
   });
 });
 
@@ -61,49 +62,49 @@ describe('rateBand — per-km price against the network median', () => {
   const b: Benchmark = { count: 12, median: 0.8, p25: 0.7, p75: 0.9, min: 0.5, max: 1.2 };
 
   it('renders nothing without a benchmark — a median of one vehicle is not a market', () => {
-    expect(rateBand(0.9, null)).toBeNull();
-    expect(rateBand(0.9, undefined)).toBeNull();
-    expect(rateBand(0.9, { ...b, count: 0 })).toBeNull();
+    expect(rateBand(0.9, null, t)).toBeNull();
+    expect(rateBand(0.9, undefined, t)).toBeNull();
+    expect(rateBand(0.9, { ...b, count: 0 }, t)).toBeNull();
   });
 
   it('computes the whole-percent delta and the legacy wording', () => {
-    expect(rateBand(1.0, b)?.pct).toBe(25);
-    expect(rateBand(1.0, b)?.word).toBe('25% above');
-    expect(rateBand(0.6, b)?.pct).toBe(-25);
-    expect(rateBand(0.6, b)?.word).toBe('25% below');
+    expect(rateBand(1.0, b, t)?.pct).toBe(25);
+    expect(rateBand(1.0, b, t)?.word).toBe('25% above');
+    expect(rateBand(0.6, b, t)?.pct).toBe(-25);
+    expect(rateBand(0.6, b, t)?.word).toBe('25% below');
   });
 
   it('treats ±1% as a dead zone, for both the wording and the action', () => {
-    const almost = rateBand(0.806, b); // +0.75% -> rounds to 1
+    const almost = rateBand(0.806, b, t); // +0.75% -> rounds to 1
     expect(almost?.pct).toBe(1);
     expect(almost?.word).toBe('at');
     expect(almost?.showMatch).toBe(false);
 
-    const under = rateBand(0.794, b); // -0.75% -> rounds to -1
+    const under = rateBand(0.794, b, t); // -0.75% -> rounds to -1
     expect(under?.word).toBe('at');
     expect(under?.showMatch).toBe(false);
 
-    expect(rateBand(0.82, b)?.showMatch).toBe(true); // +2.5%
+    expect(rateBand(0.82, b, t)?.showMatch).toBe(true); // +2.5%
   });
 
   it('offers a match price rounded to 3 decimals, matching the display', () => {
-    const band = rateBand(1.0, { ...b, median: 0.8266666 });
+    const band = rateBand(1.0, { ...b, median: 0.8266666 }, t);
     expect(band?.matchPrice).toBe(0.827);
     expect(band?.matchLabel).toBe('Match 0.827');
   });
 
   it('treats a zero median as no delta rather than dividing by zero', () => {
-    expect(rateBand(1.0, { ...b, median: 0 })?.pct).toBe(0);
+    expect(rateBand(1.0, { ...b, median: 0 }, t)?.pct).toBe(0);
   });
 
   it('defaults a missing price to zero rather than producing NaN', () => {
-    expect(rateBand(null, b)?.pct).toBe(-100);
+    expect(rateBand(null, b, t)?.pct).toBe(-100);
   });
 
   it('speaks plain language, not just numbers', () => {
-    expect(rateBand(1.0, b)?.headline).toBe('You charge 25% more than most drivers.');
-    expect(rateBand(0.6, b)?.headline).toBe('You charge 25% less than most drivers.');
-    expect(rateBand(0.8, b)?.headline).toBe('You charge about the same as most drivers.');
+    expect(rateBand(1.0, b, t)?.headline).toBe('You charge 25% more than most drivers.');
+    expect(rateBand(0.6, b, t)?.headline).toBe('You charge 25% less than most drivers.');
+    expect(rateBand(0.8, b, t)?.headline).toBe('You charge about the same as most drivers.');
   });
 
   it('rounds a price to 3 decimals', () => {
@@ -120,9 +121,9 @@ describe('driver status gate', () => {
   });
 
   it('explains the block without underscores or shouting', () => {
-    expect(driverStatusNotice('ACTIVE')).toBeNull();
-    expect(driverStatusNotice('KYC_PENDING')).toContain('kyc pending');
-    expect(driverStatusNotice('SUSPENDED')).toContain('suspended');
+    expect(driverStatusNotice('ACTIVE', t)).toBeNull();
+    expect(driverStatusNotice('KYC_PENDING', t)).toContain('kyc pending');
+    expect(driverStatusNotice('SUSPENDED', t)).toContain('suspended');
   });
 });
 
@@ -136,9 +137,9 @@ describe('offer countdown', () => {
   });
 
   it('labels the remaining time in words', () => {
-    expect(countdownLabel(240)).toBe('4 min left');
-    expect(countdownLabel(45)).toBe('45 sec left');
-    expect(countdownLabel(0)).toBe('Gone');
+    expect(countdownLabel(240, t)).toBe('4 min left');
+    expect(countdownLabel(45, t)).toBe('45 sec left');
+    expect(countdownLabel(0, t)).toBe('Gone');
   });
 });
 
@@ -174,6 +175,7 @@ describe('route node list', () => {
         { did: 'a1', shopName: 'Mama Shop', location: { lat: 3, lng: 4 } },
         { did: 'a2', shopName: 'Nowhere Shop' },
       ],
+      t,
     );
     expect(nodes).toEqual([
       { id: 'm1', label: 'North (hub)', lat: 1, lng: 2 },
@@ -182,19 +184,19 @@ describe('route node list', () => {
   });
 
   it('survives both lists being absent', () => {
-    expect(nodeOptions(null, null)).toEqual([]);
+    expect(nodeOptions(null, null, t)).toEqual([]);
   });
 });
 
 describe('spoken summaries', () => {
   it('spells units out — a synthesiser reads "kg" as two letters', () => {
-    expect(shiftSummary('CA 123-456', 640, 2)).toBe('On shift with CA 123-456. Remaining capacity 640 kilograms. 2 claimed loads.');
+    expect(shiftSummary('CA 123-456', 640, 2, t)).toBe('On shift with CA 123-456. Remaining capacity 640 kilograms. 2 claimed loads.');
   });
 
   it('says why an offer list is empty', () => {
-    expect(offersSummary(0)).toContain('No shipments');
-    expect(offersSummary(1)).toContain('One shipment');
-    expect(offersSummary(4)).toContain('4 shipments');
+    expect(offersSummary(0, t)).toContain('No shipments');
+    expect(offersSummary(1, t)).toContain('One shipment');
+    expect(offersSummary(4, t)).toContain('4 shipments');
   });
 });
 
@@ -208,7 +210,7 @@ describe('freight pricing (S34)', () => {
   });
 
   it('breaks a price into plain lines a driver can trust', () => {
-    const lines = priceBreakdownLines(price);
+    const lines = priceBreakdownLines(price, t);
     expect(lines[0]).toBe('Base fee 10.00');
     expect(lines[1]).toBe('12 km at 0.575 per km');
     expect(lines[2]).toContain('Busy-time rate'); // multiplier > 1
@@ -216,15 +218,15 @@ describe('freight pricing (S34)', () => {
   });
 
   it('names a quiet-time discount and omits any note at the neutral rate', () => {
-    expect(priceBreakdownLines({ ...price, multiplier: 0.8 }).some((l) => l.includes('Quiet-time'))).toBe(true);
-    expect(priceBreakdownLines({ ...price, multiplier: 1 })).toHaveLength(2); // no surge/discount note
-    expect(priceBreakdownLines(undefined)).toEqual([]);
+    expect(priceBreakdownLines({ ...price, multiplier: 0.8 }, t).some((l) => l.includes('Quiet-time'))).toBe(true);
+    expect(priceBreakdownLines({ ...price, multiplier: 1 }, t)).toHaveLength(2); // no surge/discount note
+    expect(priceBreakdownLines(undefined, t)).toEqual([]);
   });
 
   it('adds the earning to the spoken offer only when the load is priced', () => {
     const base = { message: 'Ready.', weightKg: 200, destLabel: 'Site', detourKm: 3 };
-    expect(offerSpoken({ ...base, price })).toContain('You earn 16.90');
-    expect(offerSpoken(base)).not.toContain('You earn');
+    expect(offerSpoken({ ...base, price }, t)).toContain('You earn 16.90');
+    expect(offerSpoken(base, t)).not.toContain('You earn');
   });
 
   it('minEarnFilter keeps only a finite POSITIVE floor — everything else means "show all"', () => {

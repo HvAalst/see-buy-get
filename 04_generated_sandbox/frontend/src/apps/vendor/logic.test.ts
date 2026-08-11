@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { t } from '../../shared/i18n'; // English is the base catalog, so the real `t` yields the English literals
 import {
   EMPTY_MINT,
   dimsComplete,
@@ -46,8 +47,8 @@ const quote = (locked = 4.4, flexible = 6.6): QuoteView => ({
 
 describe('policy', () => {
   it('reads the split in plain words', () => {
-    expect(policyLine({ mode: 'full', freeOverSubtotal: 50, buyerContributionCap: 3 })).toContain('whole shipping price');
-    const capped = policyLine({ mode: 'capped', freeOverSubtotal: 50, buyerContributionCap: 3 });
+    expect(policyLine({ mode: 'full', freeOverSubtotal: 50, buyerContributionCap: 3 }, t)).toContain('whole shipping price');
+    const capped = policyLine({ mode: 'capped', freeOverSubtotal: 50, buyerContributionCap: 3 }, t);
     expect(capped).toContain('at most 3.00');
     expect(capped).toContain('over 50.00');
   });
@@ -56,13 +57,13 @@ describe('policy', () => {
 describe('status words', () => {
   it('every status has merchant words and a drawable icon', () => {
     for (const s of ['Created', 'At_PUDO', 'On_Bus', 'At_MDP', 'Ready_For_Pickup', 'Delivered', 'Disputed', 'Voided'] as const) {
-      const p = orderStatus(s);
+      const p = orderStatus(s, t);
       expect(p.word.length).toBeGreaterThan(0);
       expect(p.icon.length).toBeGreaterThan(0);
     }
-    expect(orderStatus('Created').tone).toBe('warn'); // the merchant still has to act
-    expect(paidWord('ParcelPaid')).toEqual({ word: 'Paid', tone: 'ok' });
-    expect(paidWord('Unpaid').tone).toBe('warn');
+    expect(orderStatus('Created', t).tone).toBe('warn'); // the merchant still has to act
+    expect(paidWord('ParcelPaid', t)).toEqual({ word: 'Paid', tone: 'ok' });
+    expect(paidWord('Unpaid', t).tone).toBe('warn');
   });
 });
 
@@ -74,12 +75,12 @@ describe('mint wizard', () => {
   });
 
   it('mintMissing walks the wizard order', () => {
-    expect(mintMissing(EMPTY_MINT)).toContain('Measure');
+    expect(mintMissing(EMPTY_MINT, t)).toContain('Measure');
     const measured = { ...EMPTY_MINT, l: '20', w: '10', h: '5', kg: '1' };
-    expect(mintMissing(measured)).toContain('photo');
-    expect(mintMissing({ ...measured, photoRef: 'p.jpg' })).toContain('buyer collects');
-    expect(mintMissing({ ...measured, photoRef: 'p.jpg', destDid: 'did:d' })).toContain('drop-off');
-    expect(mintMissing({ ...measured, photoRef: 'p.jpg', destDid: 'did:d', originDid: 'did:o' })).toBeNull();
+    expect(mintMissing(measured, t)).toContain('photo');
+    expect(mintMissing({ ...measured, photoRef: 'p.jpg' }, t)).toContain('buyer collects');
+    expect(mintMissing({ ...measured, photoRef: 'p.jpg', destDid: 'did:d' }, t)).toContain('drop-off');
+    expect(mintMissing({ ...measured, photoRef: 'p.jpg', destDid: 'did:d', originDid: 'did:o' }, t)).toBeNull();
   });
 
   it('fromHandoff prefIlls the buyer side and pins the checkout id', () => {
@@ -91,8 +92,8 @@ describe('mint wizard', () => {
   });
 
   it('handoffLine counts items and names the buyer', () => {
-    expect(handoffLine(handoff({ items: [{ name: 'Shirt', qty: 2 }], externalOrderId: 'SO-1' }))).toBe('2 items · SO-1 · amina@example.com');
-    expect(handoffLine(handoff())).toBe('order · amina@example.com');
+    expect(handoffLine(handoff({ items: [{ name: 'Shirt', qty: 2 }], externalOrderId: 'SO-1' }), t)).toBe('2 items · SO-1 · amina@example.com');
+    expect(handoffLine(handoff(), t)).toBe('order · amina@example.com');
   });
 });
 
@@ -119,7 +120,7 @@ describe('originRows', () => {
 
 describe('price cards', () => {
   it('cheapest first, always', () => {
-    const cards = priceCards(quote());
+    const cards = priceCards(quote(), t);
     expect(cards.map((c) => c.key)).toEqual(['locked', 'flexible']);
     expect(cards[0].total).toBeLessThan(cards[1].total);
   });
@@ -127,8 +128,8 @@ describe('price cards', () => {
 
 describe('speaking', () => {
   it('reads balance, motion and the unpaid nudge', () => {
-    expect(ordersSummary(12.5, 3, 0)).toBe('Balance 12.50. 3 orders on the move.');
-    expect(ordersSummary(0, 1, 1)).toContain('1 unpaid — top up to release it.');
+    expect(ordersSummary(12.5, 3, 0, t)).toBe('Balance 12.50. 3 orders on the move.');
+    expect(ordersSummary(0, 1, 1, t)).toContain('1 unpaid — top up to release it.');
     expect(money(undefined)).toBe('0.00');
   });
 });

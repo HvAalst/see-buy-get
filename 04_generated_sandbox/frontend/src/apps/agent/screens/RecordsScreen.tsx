@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, Chip, GlanceNumber, Icon, Pager, ReadAloud, SearchInput, Sheet } from '../../../shared/ui';
+import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
 import { useDebounced } from '../../../shared/useDebounced';
 import { agentLedgerTypeWord, money, parcelRoleWord, parcelStatusWord } from '../logic';
 import { EARN_LIMIT, HIST_LIMIT, type AgentActions, type AgentState, type EarnQuery, type HistQuery } from '../useAgentApp';
@@ -18,6 +19,7 @@ type View = 'parcels' | 'earnings';
  * vendor's registers (an agent looks things up and exports; the vendor's bulk multi-select is not surfaced).
  */
 export function RecordsScreen({ state, actions }: RecordsScreenProps) {
+  const t = useT();
   const [view, setView] = useState<View>('parcels');
 
   useEffect(() => {
@@ -28,12 +30,12 @@ export function RecordsScreen({ state, actions }: RecordsScreenProps) {
 
   return (
     <div class="scr">
-      <div class="seg" role="group" aria-label="Records view">
+      <div class="seg" role="group" aria-label={t('agent.records.viewAria')}>
         <button type="button" aria-pressed={view === 'parcels'} class={`seg__btn${view === 'parcels' ? ' seg__btn--on' : ''}`} onClick={() => setView('parcels')}>
-          Parcels
+          {t('agent.records.parcels')}
         </button>
         <button type="button" aria-pressed={view === 'earnings'} class={`seg__btn${view === 'earnings' ? ' seg__btn--on' : ''}`} onClick={() => setView('earnings')}>
-          Earnings
+          {t('agent.records.earnings')}
         </button>
       </div>
 
@@ -47,6 +49,7 @@ export function RecordsScreen({ state, actions }: RecordsScreenProps) {
 const STATUS_OPTIONS: ParcelStatus[] = ['Created', 'At_PUDO', 'On_Bus', 'At_MDP', 'Ready_For_Pickup', 'Delivered', 'Disputed', 'Voided'];
 
 function ParcelHistory({ state, actions }: RecordsScreenProps) {
+  const t = useT();
   const [filterOpen, setFilterOpen] = useState(false);
   const [searchText, setSearchText] = useState(state.parcelHistQuery.q);
   const debounced = useDebounced(searchText, 300);
@@ -57,7 +60,7 @@ function ParcelHistory({ state, actions }: RecordsScreenProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debounced]);
 
-  const chips = histChips(q);
+  const chips = histChips(q, t);
   const filtered = q.q !== '' || chips.length > 0;
   const resetAll = () => {
     setSearchText('');
@@ -65,16 +68,16 @@ function ParcelHistory({ state, actions }: RecordsScreenProps) {
   };
   // 'idle' is the pre-load frame — treat it as loading so the first open never flashes the "nothing here" copy.
   const loading = state.parcelHistState === 'loading' || state.parcelHistState === 'idle';
-  const live = loading ? 'Loading parcels…' : state.parcelHistState === 'error' ? 'Could not load parcels.' : state.parcelHistTotal === 0 ? (filtered ? 'No parcels match your filters.' : 'No parcels yet.') : `${state.parcelHistTotal} parcel${state.parcelHistTotal === 1 ? '' : 's'} found.`;
+  const live = loading ? t('agent.records.loadingParcels') : state.parcelHistState === 'error' ? t('agent.records.errParcels') : state.parcelHistTotal === 0 ? (filtered ? t('agent.records.noMatchParcels') : t('agent.records.noParcels')) : (state.parcelHistTotal === 1 ? t('agent.records.foundOne', { count: state.parcelHistTotal }) : t('agent.records.foundMany', { count: state.parcelHistTotal }));
 
   return (
     <>
-      <Card title="Parcel history" aside={<span class="row__count">{state.parcelHistTotal}</span>}>
+      <Card title={t('agent.records.parcelHistory')} aside={<span class="row__count">{state.parcelHistTotal}</span>}>
         <div class="reg__controls">
-          <SearchInput value={searchText} onInput={setSearchText} placeholder="Search parcel, DID, tracking, zone…" label="Search parcels" />
+          <SearchInput value={searchText} onInput={setSearchText} placeholder={t('agent.records.searchParcelsPh')} label={t('agent.records.searchParcelsLabel')} />
           <button type="button" class={`reg__filter${chips.length ? ' reg__filter--on' : ''}`} onClick={() => setFilterOpen(true)}>
             <Icon name="filter" size={20} />
-            <span>{chips.length ? `Filters · ${chips.length}` : 'Filters'}</span>
+            <span>{chips.length ? t('agent.records.filtersCount', { count: chips.length }) : t('agent.records.filters')}</span>
           </button>
         </div>
         {chips.length ? (
@@ -88,13 +91,13 @@ function ParcelHistory({ state, actions }: RecordsScreenProps) {
         <div class="reg__list" aria-busy={loading}>
           {state.parcelHist.length === 0 ? (
             loading ? (
-              <p class="hint">Loading…</p>
+              <p class="hint">{t('agent.records.loadingShort')}</p>
             ) : state.parcelHistState === 'error' ? (
-              <p class="hint">Couldn’t load your parcels. <button type="button" class="linkbtn" onClick={() => actions.queryHistory({ offset: q.offset })}>Try again</button></p>
+              <p class="hint">{t('agent.records.errParcelsRetry')} <button type="button" class="linkbtn" onClick={() => actions.queryHistory({ offset: q.offset })}>{t('agent.tryAgain')}</button></p>
             ) : filtered ? (
-              <p class="hint">No parcels match. <button type="button" class="linkbtn" onClick={resetAll}>Clear filters</button></p>
+              <p class="hint">{t('agent.records.noMatchShort')} <button type="button" class="linkbtn" onClick={resetAll}>{t('agent.records.clearFilters')}</button></p>
             ) : (
-              <p class="hint">No parcels yet. Take one in and it lands here.</p>
+              <p class="hint">{t('agent.records.emptyParcels')}</p>
             )
           ) : (
             <div class={`rows${state.parcelHistState === 'loading' ? ' rows--loading' : ''}`} role="list">
@@ -108,7 +111,7 @@ function ParcelHistory({ state, actions }: RecordsScreenProps) {
         {state.parcelHistTotal > 0 ? (
           <div class="reg__export">
             <Button variant="link" full={false} busy={state.busy === 'export-history'} onClick={() => void actions.exportHistory()}>
-              Export all {state.parcelHistTotal} as CSV
+              {t('agent.records.exportCsv', { count: state.parcelHistTotal })}
             </Button>
           </div>
         ) : null}
@@ -120,6 +123,7 @@ function ParcelHistory({ state, actions }: RecordsScreenProps) {
 }
 
 function HistRow({ p }: { p: AgentParcelRow }) {
+  const t = useT();
   return (
     <div class="row row--static">
       <span class="row__ic">
@@ -127,23 +131,24 @@ function HistRow({ p }: { p: AgentParcelRow }) {
       </span>
       <span class="row__body">
         <span class="row__t mono-t">{p.parcelId}</span>
-        <span class="row__s">{`${parcelRoleWord(p.role)} · ${p.originZone} → ${p.destZone} · ${p.size}`}</span>
-        <span class="row__meta">{`${parcelStatusWord(p.status)} · ${new Date(p.createdAt).toLocaleDateString()}`}</span>
+        <span class="row__s">{`${parcelRoleWord(p.role, t)} · ${p.originZone} → ${p.destZone} · ${p.size}`}</span>
+        <span class="row__meta">{`${parcelStatusWord(p.status, t)} · ${new Date(p.createdAt).toLocaleDateString()}`}</span>
       </span>
     </div>
   );
 }
 
-function histChips(q: HistQuery): Array<{ key: string; label: string; clear: Partial<HistQuery> }> {
+function histChips(q: HistQuery, t: Translate): Array<{ key: string; label: string; clear: Partial<HistQuery> }> {
   const out: Array<{ key: string; label: string; clear: Partial<HistQuery> }> = [];
-  if (q.status) out.push({ key: 'status', label: parcelStatusWord(q.status as ParcelStatus), clear: { status: '' } });
-  if (q.role) out.push({ key: 'role', label: parcelRoleWord(q.role), clear: { role: '' } });
+  if (q.status) out.push({ key: 'status', label: parcelStatusWord(q.status as ParcelStatus, t), clear: { status: '' } });
+  if (q.role) out.push({ key: 'role', label: parcelRoleWord(q.role, t), clear: { role: '' } });
   if (q.from || q.to) out.push({ key: 'date', label: `${q.from || '…'} → ${q.to || '…'}`, clear: { from: '', to: '' } });
-  if (q.sort !== 'newest') out.push({ key: 'sort', label: 'Oldest first', clear: { sort: 'newest' } });
+  if (q.sort !== 'newest') out.push({ key: 'sort', label: t('agent.records.sortOldest'), clear: { sort: 'newest' } });
   return out;
 }
 
 function HistFilterSheet({ open, onClose, query, onApply, onClearAll }: { open: boolean; onClose: () => void; query: HistQuery; onApply: (patch: Partial<HistQuery>) => void; onClearAll: () => void }) {
+  const t = useT();
   const [draft, setDraft] = useState<HistQuery>(query);
   useEffect(() => {
     if (open) setDraft(query);
@@ -151,46 +156,46 @@ function HistFilterSheet({ open, onClose, query, onApply, onClearAll }: { open: 
   }, [open]);
   const set = (patch: Partial<HistQuery>) => setDraft((d) => ({ ...d, ...patch }));
   return (
-    <Sheet open={open} onClose={onClose} title="Filter parcels">
+    <Sheet open={open} onClose={onClose} title={t('agent.records.filterParcelsTitle')}>
       <div class="field">
-        <label class="field__label" for="h-role">What you did</label>
+        <label class="field__label" for="h-role">{t('agent.records.whatYouDid')}</label>
         <select id="h-role" class="select" value={draft.role} onChange={(e) => set({ role: e.currentTarget.value as HistQuery['role'] })}>
-          <option value="">Took in or handed out</option>
-          <option value="origin">Took in (drop-off)</option>
-          <option value="dest">Handed out (collection)</option>
+          <option value="">{t('agent.records.roleAny')}</option>
+          <option value="origin">{t('agent.records.roleOrigin')}</option>
+          <option value="dest">{t('agent.records.roleDest')}</option>
         </select>
       </div>
       <div class="field">
-        <label class="field__label" for="h-status">Status</label>
+        <label class="field__label" for="h-status">{t('agent.records.status')}</label>
         <select id="h-status" class="select" value={draft.status} onChange={(e) => set({ status: e.currentTarget.value })}>
-          <option value="">Any status</option>
+          <option value="">{t('agent.records.anyStatus')}</option>
           {STATUS_OPTIONS.map((s) => (
-            <option key={s} value={s}>{parcelStatusWord(s)}</option>
+            <option key={s} value={s}>{parcelStatusWord(s, t)}</option>
           ))}
         </select>
       </div>
       <div class="reg__dates">
         <div class="field">
-          <label class="field__label" for="h-from">From</label>
+          <label class="field__label" for="h-from">{t('agent.records.from')}</label>
           <input id="h-from" class="input" type="date" value={draft.from} onInput={(e) => set({ from: e.currentTarget.value })} />
         </div>
         <div class="field">
-          <label class="field__label" for="h-to">To</label>
+          <label class="field__label" for="h-to">{t('agent.records.to')}</label>
           <input id="h-to" class="input" type="date" value={draft.to} onInput={(e) => set({ to: e.currentTarget.value })} />
         </div>
       </div>
       <div class="field">
-        <label class="field__label" for="h-sort">Sort</label>
+        <label class="field__label" for="h-sort">{t('agent.records.sort')}</label>
         <select id="h-sort" class="select" value={draft.sort} onChange={(e) => set({ sort: e.currentTarget.value as HistQuery['sort'] })}>
-          <option value="newest">Newest first</option>
-          <option value="oldest">Oldest first</option>
+          <option value="newest">{t('agent.records.sortNewest')}</option>
+          <option value="oldest">{t('agent.records.sortOldest')}</option>
         </select>
       </div>
       <Button chevron={false} onClick={() => onApply({ status: draft.status, role: draft.role, from: draft.from, to: draft.to, sort: draft.sort })}>
-        Show parcels
+        {t('agent.records.showParcels')}
       </Button>
       <Button variant="link" onClick={onClearAll}>
-        Clear all filters
+        {t('agent.records.clearAll')}
       </Button>
     </Sheet>
   );
@@ -198,18 +203,12 @@ function HistFilterSheet({ open, onClose, query, onApply, onClearAll }: { open: 
 
 /* ----------------------------------------------------------------- earnings -- */
 
-const TYPE_OPTIONS: Array<{ value: EarnQuery['type']; label: string }> = [
-  { value: 'TOP_UP', label: 'Top-up' },
-  { value: 'LABOR_PAYOUT', label: 'Handling pay' },
-  { value: 'FEE', label: 'Shipping fee' },
-  { value: 'REFUND', label: 'Refund' },
-  { value: 'OVERDRAFT', label: 'Credit' },
-];
-const EARN_SORT: Array<{ value: EarnQuery['sort']; label: string }> = [
-  { value: 'newest', label: 'Newest first' },
-  { value: 'oldest', label: 'Oldest first' },
-  { value: 'amount_desc', label: 'Amount: high → low' },
-  { value: 'amount_asc', label: 'Amount: low → high' },
+const TYPE_OPTIONS: Array<EarnQuery['type']> = ['TOP_UP', 'LABOR_PAYOUT', 'FEE', 'REFUND', 'OVERDRAFT'];
+const EARN_SORT: Array<{ value: EarnQuery['sort']; labelKey: MessageKey }> = [
+  { value: 'newest', labelKey: 'agent.records.sortNewest' },
+  { value: 'oldest', labelKey: 'agent.records.sortOldest' },
+  { value: 'amount_desc', labelKey: 'agent.records.sortAmountDesc' },
+  { value: 'amount_asc', labelKey: 'agent.records.sortAmountAsc' },
 ];
 
 function netLabel(net: number): string {
@@ -217,6 +216,7 @@ function netLabel(net: number): string {
 }
 
 function Earnings({ state, actions }: RecordsScreenProps) {
+  const t = useT();
   const [filterOpen, setFilterOpen] = useState(false);
   const [searchText, setSearchText] = useState(state.ledgerQuery.q);
   const debounced = useDebounced(searchText, 300);
@@ -228,27 +228,27 @@ function Earnings({ state, actions }: RecordsScreenProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debounced]);
 
-  const chips = earnChips(q);
+  const chips = earnChips(q, t);
   const filtered = q.q !== '' || chips.length > 0;
   const resetAll = () => {
     setSearchText('');
     actions.queryLedger({ q: '', type: '', direction: '', from: '', to: '', sort: 'newest' });
   };
   const loading = state.ledgerState === 'loading' || state.ledgerState === 'idle';
-  const live = loading ? 'Loading earnings…' : state.ledgerState === 'error' ? 'Could not load earnings.' : state.ledgerTotal === 0 ? (filtered ? 'No entries match your filters.' : 'No entries yet.') : `${state.ledgerTotal} ${state.ledgerTotal === 1 ? 'entry' : 'entries'} found.`;
+  const live = loading ? t('agent.records.loadingEarnings') : state.ledgerState === 'error' ? t('agent.records.errEarnings') : state.ledgerTotal === 0 ? (filtered ? t('agent.records.noMatchEntries') : t('agent.records.noEntries')) : (state.ledgerTotal === 1 ? t('agent.records.foundEntryOne', { count: state.ledgerTotal }) : t('agent.records.foundEntryMany', { count: state.ledgerTotal }));
 
   return (
     <>
       {/* The BALANCE is the live wallet (state.agent), never the summary's fetch-time snapshot — a top-up on
           another screen must not leave a stale figure here. The summary drives only the in/out/net sub-line. */}
-      <GlanceNumber label="Wallet balance" value={money(state.agent?.balance)} sub={sum ? `This view · ${money(sum.in)} in · ${money(sum.out)} out · net ${netLabel(sum.net)}` : 'Your money in, out and net — for whatever you filter to below.'} />
+      <GlanceNumber label={t('agent.records.walletBalance')} value={money(state.agent?.balance)} sub={sum ? t('agent.records.viewSummary', { in: money(sum.in), out: money(sum.out), net: netLabel(sum.net) }) : t('agent.records.summaryHint')} />
 
-      <Card title="Earnings" aside={<span class="row__count">{state.ledgerTotal}</span>}>
+      <Card title={t('agent.records.earnings')} aside={<span class="row__count">{state.ledgerTotal}</span>}>
         <div class="reg__controls">
-          <SearchInput value={searchText} onInput={setSearchText} placeholder="Search reference or type…" label="Search earnings" />
+          <SearchInput value={searchText} onInput={setSearchText} placeholder={t('agent.records.searchEarningsPh')} label={t('agent.records.searchEarningsLabel')} />
           <button type="button" class={`reg__filter${chips.length ? ' reg__filter--on' : ''}`} onClick={() => setFilterOpen(true)}>
             <Icon name="filter" size={20} />
-            <span>{chips.length ? `Filters · ${chips.length}` : 'Filters'}</span>
+            <span>{chips.length ? t('agent.records.filtersCount', { count: chips.length }) : t('agent.records.filters')}</span>
           </button>
         </div>
         {chips.length ? (
@@ -262,13 +262,13 @@ function Earnings({ state, actions }: RecordsScreenProps) {
         <div class="reg__list" aria-busy={loading}>
           {state.ledger.length === 0 ? (
             loading ? (
-              <p class="hint">Loading…</p>
+              <p class="hint">{t('agent.records.loadingShort')}</p>
             ) : state.ledgerState === 'error' ? (
-              <p class="hint">Couldn’t load your earnings. <button type="button" class="linkbtn" onClick={() => actions.queryLedger({ offset: q.offset })}>Try again</button></p>
+              <p class="hint">{t('agent.records.errEarningsRetry')} <button type="button" class="linkbtn" onClick={() => actions.queryLedger({ offset: q.offset })}>{t('agent.tryAgain')}</button></p>
             ) : filtered ? (
-              <p class="hint">No entries match. <button type="button" class="linkbtn" onClick={resetAll}>Clear filters</button></p>
+              <p class="hint">{t('agent.records.noMatchEntriesShort')} <button type="button" class="linkbtn" onClick={resetAll}>{t('agent.records.clearFilters')}</button></p>
             ) : (
-              <p class="hint">No entries yet. Take in a parcel or top up and it lands here.</p>
+              <p class="hint">{t('agent.records.emptyEntries')}</p>
             )
           ) : (
             <div class={`rows${state.ledgerState === 'loading' ? ' rows--loading' : ''}`} role="list">
@@ -282,14 +282,14 @@ function Earnings({ state, actions }: RecordsScreenProps) {
         {state.ledgerTotal > 0 ? (
           <div class="reg__export">
             <Button variant="link" full={false} busy={state.busy === 'export-ledger'} onClick={() => void actions.exportLedger()}>
-              Export all {state.ledgerTotal} as CSV
+              {t('agent.records.exportCsv', { count: state.ledgerTotal })}
             </Button>
           </div>
         ) : null}
       </Card>
 
       <div class="scr__foot">
-        <ReadAloud text={() => `Balance ${money(state.agent?.balance ?? 0)}.${sum ? ` In this view: ${money(sum.in)} in, ${money(sum.out)} out, net ${sum.net < 0 ? 'minus ' : ''}${money(Math.abs(sum.net))}.` : ''}`} label="Read this aloud" />
+        <ReadAloud text={() => `${t('agent.records.aloudBalance', { balance: money(state.agent?.balance ?? 0) })}${sum ? t('agent.records.aloudView', { in: money(sum.in), out: money(sum.out), net: `${sum.net < 0 ? t('agent.records.minus') : ''}${money(Math.abs(sum.net))}` }) : ''}`} label={t('agent.readAloud')} />
       </div>
 
       <EarnFilterSheet open={filterOpen} onClose={() => setFilterOpen(false)} query={q} onApply={(patch) => { actions.queryLedger(patch); setFilterOpen(false); }} onClearAll={() => { resetAll(); setFilterOpen(false); }} />
@@ -298,13 +298,14 @@ function Earnings({ state, actions }: RecordsScreenProps) {
 }
 
 function EarnRow({ e }: { e: AgentLedgerRow }) {
+  const t = useT();
   return (
     <div class="row row--static">
       <span class="row__ic">
         <Icon name={e.sign === '+' ? 'wallet' : 'send'} size={24} />
       </span>
       <span class="row__body">
-        <span class="row__t">{agentLedgerTypeWord(e.type)}</span>
+        <span class="row__t">{agentLedgerTypeWord(e.type, t)}</span>
         {e.reference ? <span class="row__s mono-t">{e.reference}</span> : null}
         <span class="row__meta">{new Date(e.at).toLocaleDateString()}</span>
       </span>
@@ -315,16 +316,17 @@ function EarnRow({ e }: { e: AgentLedgerRow }) {
   );
 }
 
-function earnChips(q: EarnQuery): Array<{ key: string; label: string; clear: Partial<EarnQuery> }> {
+function earnChips(q: EarnQuery, t: Translate): Array<{ key: string; label: string; clear: Partial<EarnQuery> }> {
   const out: Array<{ key: string; label: string; clear: Partial<EarnQuery> }> = [];
-  if (q.type) out.push({ key: 'type', label: agentLedgerTypeWord(q.type), clear: { type: '' } });
-  if (q.direction) out.push({ key: 'direction', label: q.direction === 'in' ? 'Money in' : 'Money out', clear: { direction: '' } });
+  if (q.type) out.push({ key: 'type', label: agentLedgerTypeWord(q.type, t), clear: { type: '' } });
+  if (q.direction) out.push({ key: 'direction', label: q.direction === 'in' ? t('agent.records.moneyIn') : t('agent.records.moneyOut'), clear: { direction: '' } });
   if (q.from || q.to) out.push({ key: 'date', label: `${q.from || '…'} → ${q.to || '…'}`, clear: { from: '', to: '' } });
-  if (q.sort !== 'newest') out.push({ key: 'sort', label: EARN_SORT.find((s) => s.value === q.sort)?.label ?? q.sort, clear: { sort: 'newest' } });
+  if (q.sort !== 'newest') { const s = EARN_SORT.find((x) => x.value === q.sort); out.push({ key: 'sort', label: s ? t(s.labelKey) : q.sort, clear: { sort: 'newest' } }); }
   return out;
 }
 
 function EarnFilterSheet({ open, onClose, query, onApply, onClearAll }: { open: boolean; onClose: () => void; query: EarnQuery; onApply: (patch: Partial<EarnQuery>) => void; onClearAll: () => void }) {
+  const t = useT();
   const [draft, setDraft] = useState<EarnQuery>(query);
   useEffect(() => {
     if (open) setDraft(query);
@@ -332,47 +334,47 @@ function EarnFilterSheet({ open, onClose, query, onApply, onClearAll }: { open: 
   }, [open]);
   const set = (patch: Partial<EarnQuery>) => setDraft((d) => ({ ...d, ...patch }));
   return (
-    <Sheet open={open} onClose={onClose} title="Filter earnings">
+    <Sheet open={open} onClose={onClose} title={t('agent.records.filterEarningsTitle')}>
       <div class="field">
-        <label class="field__label" for="e-type">Type</label>
+        <label class="field__label" for="e-type">{t('agent.records.type')}</label>
         <select id="e-type" class="select" value={draft.type} onChange={(e) => set({ type: e.currentTarget.value as EarnQuery['type'] })}>
-          <option value="">Any type</option>
-          {TYPE_OPTIONS.map((t) => (
-            <option key={t.value} value={t.value}>{t.label}</option>
+          <option value="">{t('agent.records.anyType')}</option>
+          {TYPE_OPTIONS.map((ty) => (
+            <option key={ty} value={ty}>{agentLedgerTypeWord(ty, t)}</option>
           ))}
         </select>
       </div>
       <div class="field">
-        <label class="field__label" for="e-dir">Direction</label>
+        <label class="field__label" for="e-dir">{t('agent.records.direction')}</label>
         <select id="e-dir" class="select" value={draft.direction} onChange={(e) => set({ direction: e.currentTarget.value as EarnQuery['direction'] })}>
-          <option value="">Money in or out</option>
-          <option value="in">Money in</option>
-          <option value="out">Money out</option>
+          <option value="">{t('agent.records.dirAny')}</option>
+          <option value="in">{t('agent.records.moneyIn')}</option>
+          <option value="out">{t('agent.records.moneyOut')}</option>
         </select>
       </div>
       <div class="reg__dates">
         <div class="field">
-          <label class="field__label" for="e-from">From</label>
+          <label class="field__label" for="e-from">{t('agent.records.from')}</label>
           <input id="e-from" class="input" type="date" value={draft.from} onInput={(e) => set({ from: e.currentTarget.value })} />
         </div>
         <div class="field">
-          <label class="field__label" for="e-to">To</label>
+          <label class="field__label" for="e-to">{t('agent.records.to')}</label>
           <input id="e-to" class="input" type="date" value={draft.to} onInput={(e) => set({ to: e.currentTarget.value })} />
         </div>
       </div>
       <div class="field">
-        <label class="field__label" for="e-sort">Sort</label>
+        <label class="field__label" for="e-sort">{t('agent.records.sort')}</label>
         <select id="e-sort" class="select" value={draft.sort} onChange={(e) => set({ sort: e.currentTarget.value as EarnQuery['sort'] })}>
           {EARN_SORT.map((s) => (
-            <option key={s.value} value={s.value}>{s.label}</option>
+            <option key={s.value} value={s.value}>{t(s.labelKey)}</option>
           ))}
         </select>
       </div>
       <Button chevron={false} onClick={() => onApply({ type: draft.type, direction: draft.direction, from: draft.from, to: draft.to, sort: draft.sort })}>
-        Show entries
+        {t('agent.records.showEntries')}
       </Button>
       <Button variant="link" onClick={onClearAll}>
-        Clear all filters
+        {t('agent.records.clearAll')}
       </Button>
     </Sheet>
   );

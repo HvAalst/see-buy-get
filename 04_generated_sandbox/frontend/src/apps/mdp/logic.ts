@@ -4,6 +4,7 @@
  * mdp.js so the PWA and the old page can never disagree about what the floor sees.
  */
 
+import type { Translate } from '../../shared/i18n';
 import type { Benchmark, MdpView, ParcelRow, SortView, ToteView } from './types';
 
 /* ------------------------------------------------------------------- hub -- */
@@ -70,18 +71,18 @@ export function loadableBags(totes: ToteView[] | null): ToteView[] {
   return fillingBags(totes).filter((t) => t.parcels.length > 0);
 }
 
-export function bagLine(t: ToteView): string {
-  const dest = t.destinationLabel || t.destinationNodeId || 'unassigned';
-  const n = t.parcels.length;
-  return `→ ${dest} · ${n} parcel${n === 1 ? '' : 's'}`;
+export function bagLine(tote: ToteView, t: Translate): string {
+  const dest = tote.destinationLabel || tote.destinationNodeId || t('mdp.logic.unassigned');
+  const n = tote.parcels.length;
+  return n === 1 ? t('mdp.logic.bagLineOne', { dest, count: n }) : t('mdp.logic.bagLineMany', { dest, count: n });
 }
 
 /* ------------------------------------------------------------------ sort -- */
 
 /** The placement instruction, in plain words: where this parcel's bag is heading. */
-export function placeLine(sort: SortView): string {
-  const kind = sort.nextDestination.type === 'pudo' ? 'last mile' : 'onward hub';
-  return `→ ${sort.nextDestination.label} (${kind})`;
+export function placeLine(sort: SortView, t: Translate): string {
+  const kind = sort.nextDestination.type === 'pudo' ? t('mdp.logic.lastMile') : t('mdp.logic.onwardHub');
+  return t('mdp.logic.placeLine', { label: sort.nextDestination.label, kind });
 }
 
 /* ------------------------------------------------------------------ money -- */
@@ -104,7 +105,7 @@ export interface PriceBand {
 }
 
 /** The hub's sort fee against nearby hubs — same band rules as the agent app, hub wording. */
-export function priceBand(pricePerParcel: number | null | undefined, benchmark: Benchmark | null | undefined): PriceBand | null {
+export function priceBand(pricePerParcel: number | null | undefined, benchmark: Benchmark | null | undefined, t: Translate): PriceBand | null {
   if (!benchmark || !benchmark.count) return null;
 
   const mine = Number(pricePerParcel ?? 0);
@@ -112,14 +113,18 @@ export function priceBand(pricePerParcel: number | null | undefined, benchmark: 
 
   const headline =
     pct > 1
-      ? `You charge ${pct}% more than nearby hubs.`
+      ? t('mdp.logic.chargeMore', { pct })
       : pct < -1
-        ? `You charge ${-pct}% less than nearby hubs.`
-        : 'You charge about the same as nearby hubs.';
+        ? t('mdp.logic.chargeLess', { pct: -pct })
+        : t('mdp.logic.chargeSame');
 
-  const detail =
-    `Your sort fee ${money(mine)} per parcel. Nearby hubs charge ${money(benchmark.median)} ` +
-    `(${money(benchmark.min)}–${money(benchmark.max)} across ${benchmark.count} hubs).`;
+  const detail = t('mdp.logic.bandDetail', {
+    mine: money(mine),
+    median: money(benchmark.median),
+    min: money(benchmark.min),
+    max: money(benchmark.max),
+    count: benchmark.count,
+  });
 
   return {
     pct,
@@ -127,18 +132,20 @@ export function priceBand(pricePerParcel: number | null | undefined, benchmark: 
     detail,
     showMatch: Math.abs(pct) > 1,
     matchPrice: roundMoney(benchmark.median),
-    matchLabel: `Match ${money(benchmark.median)}`,
+    matchLabel: t('mdp.logic.matchLabel', { price: money(benchmark.median) }),
   };
 }
 
 /* --------------------------------------------------------------- speaking -- */
 
-export function homeSummary(unsorted: number, filling: number): string {
-  return `${unsorted} parcel${unsorted === 1 ? '' : 's'} to sort. ${filling} outbound bag${filling === 1 ? '' : 's'} building.`;
+export function homeSummary(unsorted: number, filling: number, t: Translate): string {
+  const a = unsorted === 1 ? t('mdp.logic.toSortOne', { count: unsorted }) : t('mdp.logic.toSortMany', { count: unsorted });
+  const b = filling === 1 ? t('mdp.logic.bagsBuildingOne', { count: filling }) : t('mdp.logic.bagsBuildingMany', { count: filling });
+  return `${a} ${b}`;
 }
 
-export function sortSummary(queue: number, last: SortView | null): string {
-  if (last) return `Place parcel ${last.parcelId} in bag ${last.toteCode}. ${queue} left to sort.`;
-  if (queue === 0) return 'The queue is empty. Drop a bag to unload one, or scan any parcel here.';
-  return `${queue} parcel${queue === 1 ? '' : 's'} queued. Scan the next one.`;
+export function sortSummary(queue: number, last: SortView | null, t: Translate): string {
+  if (last) return t('mdp.logic.sortPlace', { id: last.parcelId, bag: last.toteCode, count: queue });
+  if (queue === 0) return t('mdp.logic.sortEmpty');
+  return queue === 1 ? t('mdp.logic.sortQueuedOne', { count: queue }) : t('mdp.logic.sortQueuedMany', { count: queue });
 }

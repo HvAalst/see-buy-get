@@ -1,4 +1,5 @@
 import { Button, Card, Checklist, CodeBoxes, CodeCard, ErrorNote, Note, ReadAloud, ScanField } from '../../../shared/ui';
+import { useT } from '../../../shared/i18n';
 import { otpValid, releaseBlockedDetail, releaseStage } from '../logic';
 import type { AgentActions, AgentState } from '../useAgentApp';
 import { PhotoField } from './PhotoField';
@@ -14,106 +15,107 @@ export interface ReleaseScreenProps {
  * 4-digit code; delivered → take the rating. One stage on screen at a time.
  */
 export function ReleaseScreen({ state, actions }: ReleaseScreenProps) {
+  const t = useT();
   const f = state.release;
   const p = f.parcel;
   const stage = p ? releaseStage(p.status) : null;
 
   return (
     <div class="scr">
-      <h1 class="scr__title">Hand to a customer</h1>
-      <p class="scr__lede">Scan the sticker on the parcel the customer is asking for.</p>
+      <h1 class="scr__title">{t('agent.release.title')}</h1>
+      <p class="scr__lede">{t('agent.release.lede')}</p>
 
       {state.error ? <ErrorNote error={state.error} /> : null}
 
       <Card>
         <ScanField
           id="pick-id"
-          label="Parcel sticker"
+          label={t('agent.release.stickerLabel')}
           value={f.stickerId}
           onValue={(v) => actions.setRelease({ stickerId: v })}
           expect="parcel"
-          placeholder="Scan the sticker"
+          placeholder={t('agent.release.stickerPh')}
           upper
           enterKeyHint="search"
           onScan={(v) => void actions.findRelease(v)}
         />
         <div style="margin-top:12px">
           <Button chevron={false} onClick={() => void actions.findRelease()} disabled={!f.stickerId.trim()} busy={state.busy === 'find'}>
-            Find the parcel
+            {t('agent.release.findParcel')}
           </Button>
         </div>
       </Card>
 
       {p && stage === 'arrive' ? (
-        <Card title="It is still marked as on the bus" label={p.parcelId}>
-          <p class="t-body">If the driver just dropped it here, mark it arrived — the customer gets their pickup code by message.</p>
+        <Card title={t('agent.release.onBusTitle')} label={p.parcelId}>
+          <p class="t-body">{t('agent.release.onBusBody')}</p>
           <div style="margin-top:12px">
             <Button chevron={false} onClick={() => void actions.markArrived()} busy={state.busy === 'arrive'}>
-              Mark arrived — send the code
+              {t('agent.release.markArrived')}
             </Button>
           </div>
         </Card>
       ) : null}
 
       {p && stage === 'otp' ? (
-        <Card title="Confirm handover" label={p.parcelId}>
-          {p.binSlot ? <p class="t-body">{`Fetch it from shelf ${p.binSlot} first.`}</p> : null}
+        <Card title={t('agent.release.confirmHandover')} label={p.parcelId}>
+          {p.binSlot ? <p class="t-body">{t('agent.release.fetchShelf', { slot: p.binSlot })}</p> : null}
           <div class="field" style="margin-top:8px">
-            <span class="field__label">Enter the code the customer shows you</span>
-            <CodeBoxes id="otp" label="The customer's 4-digit code" value={f.otp} onInput={(otp) => actions.setRelease({ otp })} />
+            <span class="field__label">{t('agent.release.enterCode')}</span>
+            <CodeBoxes id="otp" label={t('agent.release.codeBoxLabel')} value={f.otp} onInput={(otp) => actions.setRelease({ otp })} />
           </div>
           <div style="margin-top:12px">
             <PhotoField
               id="handover-photo"
               value={f.photoRef}
-              label="Handover photo (optional)"
+              label={t('agent.release.handoverPhoto')}
               upload={(file) => actions.uploadPhoto('pod', file)}
               onCapture={(ref) => actions.setRelease({ photoRef: ref })}
             />
           </div>
           <div style="margin-top:12px">
             <Button chevron onClick={() => void actions.submitPickup()} disabled={!otpValid(f.otp)} busy={state.busy === 'pickup'}>
-              Confirm handover
+              {t('agent.release.confirmHandover')}
             </Button>
           </div>
         </Card>
       ) : null}
 
       {p && stage === 'otp' && f.issuedOtp ? (
-        <CodeCard label="Sandbox — the code sent to the customer" code={f.issuedOtp} />
+        <CodeCard label={t('agent.release.sandboxCode')} code={f.issuedOtp} />
       ) : null}
 
       {p && stage === 'rate' ? (
-        <Card title="Delivered — how did it go?" label={p.parcelId}>
-          <p class="t-body">Ask the customer to rate this delivery.</p>
-          <div class="stars" role="group" aria-label="Rate this delivery from 1 to 5">
+        <Card title={t('agent.release.rateTitle')} label={p.parcelId}>
+          <p class="t-body">{t('agent.release.rateBody')}</p>
+          <div class="stars" role="group" aria-label={t('agent.release.rateAria')}>
             {([1, 2, 3, 4, 5] as const).map((n) => (
               <button
                 key={n}
                 type="button"
                 class={`starbtn${f.stars >= n ? ' starbtn--on' : ''}`}
                 aria-pressed={f.stars >= n}
-                aria-label={`${n} out of 5`}
+                aria-label={t('agent.release.starAria', { n })}
                 onClick={() => actions.setRelease({ stars: n })}
               >
                 {n}
               </button>
             ))}
           </div>
-          <p class="hint">{f.stars === 0 ? 'Tap a number — 5 is the best.' : f.stars >= 4 ? 'Great!' : f.stars === 3 ? 'Okay' : 'We will look into it.'}</p>
+          <p class="hint">{f.stars === 0 ? t('agent.release.starHint0') : f.stars >= 4 ? t('agent.release.starHintHigh') : f.stars === 3 ? t('agent.release.starHintMid') : t('agent.release.starHintLow')}</p>
           <div style="margin-top:12px">
             <Button chevron={false} onClick={() => void actions.submitRating()} disabled={!f.stars} busy={state.busy === 'rate'}>
-              Save the rating
+              {t('agent.saveRating')}
             </Button>
           </div>
         </Card>
       ) : null}
 
-      {p && stage === 'blocked' ? <Note tone="info" icon="clock" title="Nothing to hand over" detail={releaseBlockedDetail(p.status)} /> : null}
+      {p && stage === 'blocked' ? <Note tone="info" icon="clock" title={t('agent.release.nothingTitle')} detail={releaseBlockedDetail(p.status, t)} /> : null}
 
       {p && stage === 'otp' ? (
-        <Card title="If they have no code" tone="soft">
-          <Checklist items={['The code was sent to the receiver phone', 'They can show the message instead', 'Never hand over without the code']} />
+        <Card title={t('agent.release.noCodeTitle')} tone="soft">
+          <Checklist items={[t('agent.release.noCode1'), t('agent.release.noCode2'), t('agent.release.noCode3')]} />
         </Card>
       ) : null}
 
@@ -121,16 +123,16 @@ export function ReleaseScreen({ state, actions }: ReleaseScreenProps) {
         <ReadAloud
           text={() =>
             !p
-              ? 'Scan the parcel sticker to begin.'
+              ? t('agent.release.aloudScan')
               : stage === 'otp'
-                ? 'Ask the customer for their four digit code, type it in, then confirm.'
+                ? t('agent.release.aloudOtp')
                 : stage === 'arrive'
-                  ? 'Mark the parcel arrived to send the customer their code.'
+                  ? t('agent.release.aloudArrive')
                   : stage === 'rate'
-                    ? 'Ask the customer to rate the delivery from one to five.'
-                    : releaseBlockedDetail(p.status)
+                    ? t('agent.release.aloudRate')
+                    : releaseBlockedDetail(p.status, t)
           }
-          label="Read this aloud"
+          label={t('agent.readAloud')}
         />
       </div>
     </div>

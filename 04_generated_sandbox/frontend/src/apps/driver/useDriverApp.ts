@@ -20,6 +20,7 @@ import type {
   VehicleView,
 } from './types';
 import { lastReadingBreached, minEarnFilter, nodeOptions } from './logic';
+import { t } from '../../shared/i18n';
 import { downscaleImage } from '../../shared/media';
 import { triggerDownload } from '../../shared/download';
 import type { MediaKind } from '../../lib/sbg/personas/media';
@@ -151,9 +152,9 @@ export function useDriverApp() {
 
   /* ---------------------------------------------------------------- toasts */
 
-  const pushToast = useCallback((t: Omit<Toast, 'id'>) => {
+  const pushToast = useCallback((toast: Omit<Toast, 'id'>) => {
     const id = ++toastSeq.current;
-    setState((s) => ({ ...s, toasts: [...s.toasts, { ...t, id }] }));
+    setState((s) => ({ ...s, toasts: [...s.toasts, { ...toast, id }] }));
     // A queue, not the legacy one-shot banner: the old `state.msg` was spliced in at render
     // and cleared immediately, so any unrelated re-render ate the message before it was read.
     // The handle is tracked so unmount can cancel it — an uncancelled 5.2s timer fires setState
@@ -409,7 +410,7 @@ export function useDriverApp() {
       fail(mdpR.error);
       return;
     }
-    const nodes = nodeOptions(narrow<MdpRow[]>(mdpR.data), narrow<AgentRow[]>(agentR.data));
+    const nodes = nodeOptions(narrow<MdpRow[]>(mdpR.data), narrow<AgentRow[]>(agentR.data), t);
     setState((s) => ({ ...s, nodes, nodesState: nodes.length ? 'ready' : 'error' }));
 
     // Half a list is not a list. If only /mdps failed, the pick-list silently loses every hub —
@@ -508,7 +509,7 @@ export function useDriverApp() {
       const r = await client.api.jobsExport(did, { q: q.q || undefined, status: q.status || undefined, paid: q.paid || undefined, from: q.from || undefined, to: q.to || undefined, sort: q.sort });
       if (r.error) return fail(r.error);
       triggerDownload('jobs.csv', narrow<string>(r.data));
-      pushToast({ tone: 'ok', icon: 'check', title: 'Jobs exported', detail: 'Saved jobs.csv to your device.' });
+      pushToast({ tone: 'ok', icon: 'check', title: t('driver.toast.jobsExported'), detail: t('driver.toast.jobsExportedDetail') });
     });
   }, [client, did, run, fail, pushToast]);
 
@@ -516,7 +517,7 @@ export function useDriverApp() {
     if (!client || !did) return;
     const qr = state.form.vehicleQr.trim();
     if (!qr) {
-      pushToast({ tone: 'warn', icon: 'scan', title: 'Scan the vehicle QR first.' });
+      pushToast({ tone: 'warn', icon: 'scan', title: t('driver.toast.scanQrFirst') });
       return;
     }
     await run('start', async () => {
@@ -524,7 +525,7 @@ export function useDriverApp() {
       if (r.error) return fail(r.error);
       buzz();
       setState((s) => ({ ...s, form: { ...EMPTY_FORM } }));
-      pushToast({ tone: 'ok', icon: 'truck', title: 'Shift started', detail: 'You are coupled to this vehicle.' });
+      pushToast({ tone: 'ok', icon: 'truck', title: t('driver.toast.shiftStarted'), detail: t('driver.toast.shiftStartedDetail') });
       await refresh();
     });
   }, [client, did, state.form.vehicleQr, run, fail, pushToast, refresh]);
@@ -535,7 +536,7 @@ export function useDriverApp() {
       const r = await client.api.endSession(did);
       if (r.error) return fail(r.error);
       buzz();
-      pushToast({ tone: 'ok', icon: 'check', title: 'Shift closed', detail: 'The vehicle is released.' });
+      pushToast({ tone: 'ok', icon: 'check', title: t('driver.toast.shiftClosed'), detail: t('driver.toast.shiftClosedDetail') });
       await refresh();
     });
   }, [client, did, run, fail, pushToast, refresh]);
@@ -547,7 +548,7 @@ export function useDriverApp() {
         const r = await client.api.setVehiclePrice(vehicleId, price);
         if (r.error) return fail(r.error);
         buzz();
-        pushToast({ tone: 'ok', icon: 'wallet', title: 'Rate updated', detail: 'You now charge the market rate.' });
+        pushToast({ tone: 'ok', icon: 'wallet', title: t('driver.toast.rateUpdated'), detail: t('driver.toast.rateUpdatedDetail') });
         await refresh();
       });
     },
@@ -580,7 +581,7 @@ export function useDriverApp() {
     const from = state.nodes.find((n) => n.id === state.form.fromId);
     const to = state.nodes.find((n) => n.id === state.form.toId);
     if (!from || !to) {
-      pushToast({ tone: 'warn', icon: 'pin', title: 'Pick where you start and where you are heading.' });
+      pushToast({ tone: 'warn', icon: 'pin', title: t('driver.toast.pickRoute') });
       return;
     }
     if (did) {
@@ -634,8 +635,8 @@ export function useDriverApp() {
           pushToast({
             tone: 'ok',
             icon: 'box',
-            title: `Claimed ${offer.weightKg} kg`,
-            detail: `Heading to ${offer.destLabel}.`,
+            title: t('driver.toast.claimed', { kg: offer.weightKg }),
+            detail: t('driver.toast.claimedDetail', { dest: offer.destLabel }),
           });
           await refresh();
         }
@@ -655,8 +656,8 @@ export function useDriverApp() {
         pushToast({
           tone: 'ok',
           icon: 'box',
-          title: `${ref} is on board`,
-          detail: `${moved} parcel${moved === 1 ? '' : 's'} loaded.`,
+          title: t('driver.toast.onBoard', { ref }),
+          detail: moved === 1 ? t('driver.toast.parcelsLoadedOne', { count: moved }) : t('driver.toast.parcelsLoadedMany', { count: moved }),
         });
         await refresh();
       });
@@ -672,12 +673,12 @@ export function useDriverApp() {
         const { dataUrl, thumbDataUrl } = await downscaleImage(file);
         const r = await client.api.uploadMedia(kind, dataUrl, thumbDataUrl);
         if (r.error) {
-          pushToast({ tone: 'danger', icon: 'camera', title: 'Photo upload failed', detail: 'Try taking it again.' });
+          pushToast({ tone: 'danger', icon: 'camera', title: t('driver.toast.photoFailed'), detail: t('driver.toast.photoFailedDetail') });
           return null;
         }
         return narrow<{ mediaId: string }>(r.data)?.mediaId ?? null;
       } catch {
-        pushToast({ tone: 'danger', icon: 'camera', title: 'Could not read that photo' });
+        pushToast({ tone: 'danger', icon: 'camera', title: t('driver.toast.photoUnreadable') });
         return null;
       }
     },
@@ -700,7 +701,7 @@ export function useDriverApp() {
           return fail(r.error);
         }
         buzz();
-        pushToast({ tone: 'ok', icon: 'truck', title: 'Freight picked up', detail: 'Drive it to the destination, then mark it delivered.' });
+        pushToast({ tone: 'ok', icon: 'truck', title: t('driver.toast.freightPickedUp'), detail: t('driver.toast.freightPickedUpDetail') });
         await refresh();
       });
     },
@@ -720,7 +721,7 @@ export function useDriverApp() {
           return fail(r.error);
         }
         buzz();
-        pushToast({ tone: 'ok', icon: 'check', title: 'Freight delivered', detail: 'Your van capacity is freed.' });
+        pushToast({ tone: 'ok', icon: 'check', title: t('driver.toast.freightDelivered'), detail: t('driver.toast.freightDeliveredDetail') });
         await refresh();
       });
     },
@@ -745,8 +746,8 @@ export function useDriverApp() {
         const breach = lastReadingBreached(narrow<{ tempReadings?: Array<{ breach: boolean }> }>(r.data)?.tempReadings);
         pushToast(
           breach
-            ? { tone: 'warn', icon: 'warning', title: 'Temperature out of range', detail: 'Logged — the control tower is alerted.' }
-            : { tone: 'ok', icon: 'check', title: 'Temperature logged' },
+            ? { tone: 'warn', icon: 'warning', title: t('driver.toast.tempOutOfRange'), detail: t('driver.toast.tempOutOfRangeDetail') }
+            : { tone: 'ok', icon: 'check', title: t('driver.toast.tempLogged') },
         );
         await refresh();
       });

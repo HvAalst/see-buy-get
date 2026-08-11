@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { Button, Card, Checklist, ErrorNote, ReadAloud } from '../../../shared/ui';
+import { useT } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
 import type { FleetActions } from '../useFleetApp';
 
@@ -10,10 +11,9 @@ export interface SignInScreenProps {
   busy: boolean;
 }
 
-const SPOKEN = 'Type your fleet sign-in code. SeeBuyGet gave it to your company when the fleet was activated.';
-
 /** Manager sign-in by code (FM-XXXX) — the S2 fleet login; the app then works as that fleet only. */
 export function SignInScreen({ actions, error, busy }: SignInScreenProps) {
+  const t = useT();
   const [code, setCode] = useState('');
 
   const submit = (e: JSX.TargetedEvent<HTMLFormElement>) => {
@@ -23,15 +23,15 @@ export function SignInScreen({ actions, error, busy }: SignInScreenProps) {
 
   return (
     <form class="scr" onSubmit={submit}>
-      <h1 class="scr__title">Open your fleet</h1>
-      <p class="scr__lede">Sign in with your fleet manager code.</p>
+      <h1 class="scr__title">{t('fleet.signin.title')}</h1>
+      <p class="scr__lede">{t('fleet.signin.lede')}</p>
 
       {error ? <ErrorNote error={error} /> : null}
 
       <Card>
         <div class="field">
           <label class="field__label" for="code">
-            Sign-in code
+            {t('fleet.signin.codeLabel')}
           </label>
           <input
             id="code"
@@ -45,23 +45,21 @@ export function SignInScreen({ actions, error, busy }: SignInScreenProps) {
             enterkeyhint="go"
           />
         </div>
-        <p class="card__note">SeeBuyGet issued this code when your company was activated.</p>
+        <p class="card__note">{t('fleet.signin.codeNote')}</p>
       </Card>
 
       <div class="scr__cta">
         <Button type="submit" disabled={!code.trim()} busy={busy}>
-          Sign in
+          {t('fleet.signin.submit')}
         </Button>
       </div>
 
-      <Card title="What you can do here" tone="soft">
-        <Checklist
-          items={['Register vehicles and print their dashboard QRs', 'Onboard drivers and send their papers to SeeBuyGet', 'See who is on shift, where, with what cargo']}
-        />
+      <Card title={t('fleet.signin.canDoTitle')} tone="soft">
+        <Checklist items={[t('fleet.signin.can1'), t('fleet.signin.can2'), t('fleet.signin.can3')]} />
       </Card>
 
       <div class="scr__foot">
-        <ReadAloud text={() => SPOKEN} label="Read this aloud" />
+        <ReadAloud text={() => t('fleet.signin.aloud')} label={t('fleet.readAloud')} />
       </div>
     </form>
   );

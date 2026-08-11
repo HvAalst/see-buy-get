@@ -1,5 +1,6 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { BottomNav, Button, Checklist, FeedbackFlash, Icon, NotificationBell, Pill, TopBar, type NavItem } from '../../shared/ui';
+import { useT } from '../../shared/i18n';
 import { EarningsScreen } from './screens/EarningsScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { LoadsScreen } from './screens/LoadsScreen';
@@ -13,6 +14,7 @@ import './driver.css';
 type Tab = 'home' | 'route' | 'loads' | 'earnings';
 
 export function App() {
+  const t = useT();
   const { state, actions, notifications } = useDriverApp();
   const sw = useRegisterSW();
   const [needRefresh] = sw.needRefresh;
@@ -23,7 +25,7 @@ export function App() {
   if (state.phase === 'signin') {
     return (
       <div class="app">
-        <TopBar title="SeeBuyGet Driver" subtitle="Sign in" />
+        <TopBar title={t('driver.appTitle')} subtitle={t('driver.signinSubtitle')} />
         <main class="app__scroll app__scroll--nonav">
           <SignInScreen onSignIn={actions.signIn} error={state.error} />
         </main>
@@ -36,19 +38,19 @@ export function App() {
   const tab: Tab = state.screen === 'offers' ? 'route' : (state.screen as Tab);
 
   const tabs: NavItem<Tab>[] = [
-    { key: 'home', label: 'My van', icon: 'truck' },
-    { key: 'route', label: 'Find work', icon: 'route', disabled: !onShift },
-    { key: 'loads', label: 'My loads', icon: 'box', badge: state.claims.length || undefined, disabled: !onShift },
-    { key: 'earnings', label: 'Earnings', icon: 'wallet' },
+    { key: 'home', label: t('driver.nav.home'), icon: 'truck' },
+    { key: 'route', label: t('driver.nav.route'), icon: 'route', disabled: !onShift },
+    { key: 'loads', label: t('driver.nav.loads'), icon: 'box', badge: state.claims.length || undefined, disabled: !onShift },
+    { key: 'earnings', label: t('driver.nav.earnings'), icon: 'wallet' },
   ];
 
   return (
     <div class="app">
       <TopBar
-        title="SeeBuyGet Driver"
+        title={t('driver.appTitle')}
         subtitle={state.driver?.displayName}
         onBack={state.screen === 'home' ? undefined : () => actions.go('home')}
-        backLabel="Back to my van"
+        backLabel={t('driver.backToVan')}
         end={
           <>
             <NotificationBell api={notifications} />
@@ -57,14 +59,14 @@ export function App() {
                 type="button"
                 class="topbar__lead"
                 onClick={() => void sw.updateServiceWorker(true)}
-                aria-label="A new version is ready — update now"
-                title="Update the app"
+                aria-label={t('driver.update.aria')}
+                title={t('driver.update.title')}
               >
                 <Icon name="refresh" size={24} />
               </button>
             ) : null}
             <Pill tone={onShift ? 'ok' : 'idle'} dot>
-              {onShift ? 'On shift' : 'Off duty'}
+              {onShift ? t('driver.onShift') : t('driver.offDuty')}
             </Pill>
           </>
         }
@@ -74,7 +76,7 @@ export function App() {
         {state.stale ? (
           <p class="stale">
             <Icon name="offline" size={20} />
-            <span>No signal — showing what we last knew.</span>
+            <span>{t('driver.offline')}</span>
           </p>
         ) : null}
         <ScreenRouter screen={state.screen} state={state} actions={actions} />
@@ -130,10 +132,11 @@ function Toasts({ state, actions, noNav }: { state: DriverState; actions: Driver
 }
 
 function Boot() {
+  const t = useT();
   return (
     <div class="boot">
       <span class="boot__spin" aria-hidden="true" />
-      <p>Getting your shift…</p>
+      <p>{t('driver.boot')}</p>
     </div>
   );
 }
@@ -143,14 +146,15 @@ function Boot() {
  * it any more, so every other affordance on screen would be a lie.
  */
 function UpdateGate() {
+  const t = useT();
   return (
     <div class="gate">
       <Icon name="arrowUp" size={46} class="gate__glyph" />
-      <h1 class="scr__title">This app needs updating</h1>
-      <p class="scr__lede">A newer version is required before you can carry on working.</p>
-      <Checklist items={['Nothing you have claimed is lost', 'Updating takes a few seconds']} />
+      <h1 class="scr__title">{t('driver.gate.title')}</h1>
+      <p class="scr__lede">{t('driver.gate.body')}</p>
+      <Checklist items={[t('driver.gate.item1'), t('driver.gate.item2')]} />
       {/* The one solid blue CTA on this screen — it carries its mandated right chevron. */}
-      <Button onClick={() => location.reload()}>Update now</Button>
+      <Button onClick={() => location.reload()}>{t('driver.gate.cta')}</Button>
     </div>
   );
 }

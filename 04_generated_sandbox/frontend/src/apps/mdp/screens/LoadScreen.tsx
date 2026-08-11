@@ -1,4 +1,5 @@
 import { Button, Card, ErrorNote, Icon, ReadAloud, ScanField } from '../../../shared/ui';
+import { useT } from '../../../shared/i18n';
 import { bagLine, fillPercent, loadableBags, swatchIndex } from '../logic';
 import type { MdpActions, MdpState } from '../useMdpApp';
 
@@ -12,34 +13,35 @@ export interface LoadScreenProps {
  * One scan moves the whole bag — every parcel inside goes On the bus.
  */
 export function LoadScreen({ state, actions }: LoadScreenProps) {
+  const t = useT();
   const bags = loadableBags(state.totes);
   const f = state.form;
 
   return (
     <div class="scr">
-      <h1 class="scr__title">Load a bag onward</h1>
-      <p class="scr__lede">Tap the bag you are handing to the driver, then scan their badge.</p>
+      <h1 class="scr__title">{t('mdp.load.title')}</h1>
+      <p class="scr__lede">{t('mdp.load.lede')}</p>
 
       {state.error ? <ErrorNote error={state.error} /> : null}
 
       {bags.length === 0 ? (
         <Card>
-          <p class="hint">No bags with parcels are ready to load. Sort parcels to fill one.</p>
+          <p class="hint">{t('mdp.load.noBags')}</p>
         </Card>
       ) : (
         <>
-          <Card label="Pick the bag">
-            <div class="bags" role="group" aria-label="Bags ready to load">
-              {bags.map((t) => {
-                const on = f.loadCode === t.code;
+          <Card label={t('mdp.load.pickBag')}>
+            <div class="bags" role="group" aria-label={t('mdp.load.bagsGroup')}>
+              {bags.map((bag) => {
+                const on = f.loadCode === bag.code;
                 return (
-                  <button key={t.code} type="button" class={`bagrow${on ? ' bagrow--on' : ''}`} aria-pressed={on} onClick={() => actions.pickLoadCode(t.code)}>
-                    <span class={`swatch swatch--${swatchIndex(t.destinationNodeId)}`} aria-hidden="true" />
+                  <button key={bag.code} type="button" class={`bagrow${on ? ' bagrow--on' : ''}`} aria-pressed={on} onClick={() => actions.pickLoadCode(bag.code)}>
+                    <span class={`swatch swatch--${swatchIndex(bag.destinationNodeId)}`} aria-hidden="true" />
                     <span class="bagrow__body">
-                      <span class="bagrow__code">{t.code}</span>
-                      <span class="bagrow__dest">{bagLine(t)}</span>
-                      <span class="fillbar" role="progressbar" aria-valuenow={fillPercent(t.unitsUsed)} aria-valuemin={0} aria-valuemax={100} aria-label={`${t.code} fill`}>
-                        <span style={`width:${fillPercent(t.unitsUsed)}%`} />
+                      <span class="bagrow__code">{bag.code}</span>
+                      <span class="bagrow__dest">{bagLine(bag, t)}</span>
+                      <span class="fillbar" role="progressbar" aria-valuenow={fillPercent(bag.unitsUsed)} aria-valuemin={0} aria-valuemax={100} aria-label={t('mdp.bagFillAria', { code: bag.code })}>
+                        <span style={`width:${fillPercent(bag.unitsUsed)}%`} />
                       </span>
                     </span>
                     {on ? (
@@ -56,19 +58,19 @@ export function LoadScreen({ state, actions }: LoadScreenProps) {
           <Card>
             <ScanField
               id="load-badge"
-              label="Driver badge"
+              label={t('mdp.load.driverBadge')}
               value={f.badge}
               onValue={(v) => actions.setForm({ badge: v })}
               expect="badge"
-              placeholder="Scan the badge"
+              placeholder={t('mdp.load.scanBadge')}
               upper
             />
-            <p class="card__note">One scan moves the whole bag — every parcel inside goes on the bus.</p>
+            <p class="card__note">{t('mdp.load.oneScan')}</p>
           </Card>
 
           <div class="scr__cta">
             <Button onClick={() => void actions.submitLoad()} disabled={!f.loadCode || !f.badge.trim()} busy={state.busy === 'load'}>
-              {f.loadCode ? `Load ${f.loadCode} onto the bus` : 'Pick a bag above'}
+              {f.loadCode ? t('mdp.load.loadOnto', { code: f.loadCode }) : t('mdp.load.pickAbove')}
             </Button>
           </div>
         </>
@@ -78,12 +80,12 @@ export function LoadScreen({ state, actions }: LoadScreenProps) {
         <ReadAloud
           text={() =>
             bags.length === 0
-              ? 'No bags are ready to load. Sort parcels to fill one.'
+              ? t('mdp.load.aloudEmpty')
               : f.loadCode
-                ? `Bag ${f.loadCode} is picked. Scan the driver badge, then load it.`
-                : 'Tap the bag you are handing over, then scan the driver badge.'
+                ? t('mdp.load.aloudPicked', { code: f.loadCode })
+                : t('mdp.load.aloudPick')
           }
-          label="Read this aloud"
+          label={t('mdp.readAloud')}
         />
       </div>
     </div>

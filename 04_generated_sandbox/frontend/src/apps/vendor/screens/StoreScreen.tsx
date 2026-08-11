@@ -1,8 +1,9 @@
 import { useState } from 'preact/hooks';
 import { Button, Card, ErrorNote, PlaceMap, ReadAloud, Sheet, ShopDetailSheet } from '../../../shared/ui';
+import { useT } from '../../../shared/i18n';
 import { toPlaceWords } from '../../../shared/placewords';
 import type { GeoPoint } from '../../../shared/geo';
-import { money, policyLine } from '../logic';
+import { ledgerTypeWord, money, policyLine } from '../logic';
 import type { VendorActions, VendorState } from '../useVendorApp';
 
 export interface StoreScreenProps {
@@ -12,6 +13,7 @@ export interface StoreScreenProps {
 
 /** The store's settings and books: split policy, callback wiring, settlement history. */
 export function StoreScreen({ state, actions }: StoreScreenProps) {
+  const t = useT();
   const [policyOpen, setPolicyOpen] = useState(false);
   const [url, setUrl] = useState<string | null>(null);
   const v = state.vendor;
@@ -21,28 +23,28 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
     <div class="scr">
       {state.error ? <ErrorNote error={state.error} onRetry={() => actions.go('store')} /> : null}
 
-      <Card label="Your store" aside={<b class="mono-t">{v?.vendorId}</b>}>
+      <Card label={t('vendor.store.yourStore')} aside={<b class="mono-t">{v?.vendorId}</b>}>
         <p class="t-body">{v?.name ?? '…'}</p>
         <p class="card__note">{v ? `${v.country}${v.address ? ` · ${v.address}` : ''}` : ''}</p>
       </Card>
 
-      <Card title="What the buyer pays" aside={<Button variant="link" full={false} onClick={() => setPolicyOpen(true)}>Change</Button>}>
-        <p class="t-body">{v ? policyLine(v.shippingPolicy) : ''}</p>
+      <Card title={t('vendor.store.buyerPaysTitle')} aside={<Button variant="link" full={false} onClick={() => setPolicyOpen(true)}>{t('vendor.store.change')}</Button>}>
+        <p class="t-body">{v ? policyLine(v.shippingPolicy, t) : ''}</p>
       </Card>
 
       <PinCard state={state} actions={actions} />
 
-      <Card title="Status callbacks">
-        <p class="card__note">SeeBuyGet signs every callback with your store secret — verify the signature before trusting one.</p>
+      <Card title={t('vendor.store.callbacksTitle')}>
+        <p class="card__note">{t('vendor.store.callbacksNote')}</p>
         <div class="field" style="margin-top:8px">
           <label class="field__label" for="cb-url">
-            Callback URL
+            {t('vendor.store.callbackUrl')}
           </label>
           <input id="cb-url" class="input" value={shownUrl} onInput={(e) => setUrl(e.currentTarget.value)} placeholder="https://store.example/hooks/sbg" autocapitalize="none" spellcheck={false} />
         </div>
         <div style="margin-top:12px">
           <Button chevron={false} full={false} busy={state.busy === 'callback'} disabled={url === null} onClick={() => void actions.saveCallback((url ?? '').trim())}>
-            Save
+            {t('vendor.store.save')}
           </Button>
         </div>
         {state.callbacks.length ? (
@@ -56,26 +58,26 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
           </div>
         ) : (
           <p class="hint" style="margin-top:8px">
-            Nothing sent yet.
+            {t('vendor.store.nothingSent')}
           </p>
         )}
       </Card>
 
-      <Card title="Settlement book">
-        {state.storeState === 'loading' ? <p class="hint">Getting the books…</p> : null}
-        {state.settlement.length === 0 && state.storeState === 'ready' ? <p class="hint">No entries yet.</p> : null}
+      <Card title={t('vendor.store.settlementTitle')}>
+        {state.storeState === 'loading' ? <p class="hint">{t('vendor.store.gettingBooks')}</p> : null}
+        {state.settlement.length === 0 && state.storeState === 'ready' ? <p class="hint">{t('vendor.noEntriesYet')}</p> : null}
         {state.settlement.slice(0, 10).map((s) => (
           <div key={s.id} class="kv">
-            <span>{`${s.type === 'TOP_UP' ? 'Top-up' : s.type === 'BILLING' ? 'Shipment' : 'Rebate'}${s.parcelId ? ` · ${s.parcelId}` : ''}`}</span>
+            <span>{`${ledgerTypeWord(s.type, t)}${s.parcelId ? ` · ${s.parcelId}` : ''}`}</span>
             <b>{`${s.sign}${money(s.amount)}`}</b>
           </div>
         ))}
       </Card>
 
       <div class="scr__foot">
-        <ReadAloud text={() => `Balance ${money(v?.balance)}. ${v ? policyLine(v.shippingPolicy) : ''}`} label="Read this aloud" />
+        <ReadAloud text={() => `${t('vendor.store.balanceSpoken', { balance: money(v?.balance) })}${v ? policyLine(v.shippingPolicy, t) : ''}`} label={t('vendor.readAloud')} />
         <Button variant="link" full={false} onClick={actions.signOut}>
-          Sign out of this store
+          {t('vendor.store.signOut')}
         </Button>
       </div>
 
@@ -90,17 +92,18 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
  * where it is (on the phone, in a listing) with no street name at all.
  */
 function PinCard({ state, actions }: { state: VendorState; actions: VendorActions }) {
+  const t = useT();
   const [draft, setDraft] = useState<GeoPoint | null>(null);
   const [openShop, setOpenShop] = useState<string | null>(null);
   const current = draft ?? state.vendor?.location ?? null;
   const preview = openShop ? state.points.find((p) => p.did === openShop) ?? null : null;
 
   return (
-    <Card title="Where your store is">
-      <p class="card__note">Tap the map to drop your pin, or tap a shop to see it. The network's shops are shown for bearings.</p>
+    <Card title={t('vendor.store.whereTitle')}>
+      <p class="card__note">{t('vendor.store.pinNote')}</p>
       <div style="margin-top:10px">
         <PlaceMap
-          label="Your store's pin — tap the map to move it"
+          label={t('vendor.store.pinMapLabel')}
           pins={state.points.filter((p) => p.location).map((p) => ({ id: p.did, label: p.shopName, point: p.location! }))}
           selectedId={openShop}
           onPick={setOpenShop}
@@ -113,14 +116,14 @@ function PinCard({ state, actions }: { state: VendorState; actions: VendorAction
       {/* G4b — the reference-shop pins are tappable too: an info-only preview, so no pin is a dead tap. */}
       <ShopDetailSheet
         open={!!preview}
-        title={preview?.shopName ?? 'Shop'}
-        subtitle={preview ? [preview.landmark, `Zone ${preview.zone}`].filter(Boolean).join(' · ') : undefined}
+        title={preview?.shopName ?? t('vendor.store.shopFallback')}
+        subtitle={preview ? [preview.landmark, t('vendor.zone', { zone: preview.zone })].filter(Boolean).join(' · ') : undefined}
         lines={
           preview
             ? [
-                `${money(preview.pricePerParcel)} to handle a parcel`,
-                preview.openState === 'open' ? 'Open now' : 'Closed right now',
-                ...(preview.rating?.count ? [`Rated ${preview.rating.average.toFixed(1)} by ${preview.rating.count}`] : []),
+                t('vendor.shop.handleParcel', { price: money(preview.pricePerParcel) }),
+                preview.openState === 'open' ? t('vendor.shop.openNow') : t('vendor.shop.closedNow'),
+                ...(preview.rating?.count ? [t('vendor.shop.rated', { avg: preview.rating.average.toFixed(1), count: preview.rating.count })] : []),
               ]
             : []
         }
@@ -132,20 +135,20 @@ function PinCard({ state, actions }: { state: VendorState; actions: VendorAction
           <p class="words" style="margin-top:10px">
             {toPlaceWords(current)}
           </p>
-          <ReadAloud text={() => `Your store's three words are: ${toPlaceWords(current).split(' ').join(', ')}.`} label="Say my three words" />
+          <ReadAloud text={() => t('vendor.store.wordsSpoken', { words: toPlaceWords(current).split(' ').join(', ') })} label={t('vendor.store.sayWords')} />
         </>
       ) : (
         <p class="hint" style="margin-top:10px">
-          No pin yet — tap the map.
+          {t('vendor.store.noPin')}
         </p>
       )}
       {draft ? (
         <div style="margin-top:10px">
           <Button chevron={false} full={false} busy={state.busy === 'location'} onClick={() => void actions.saveLocation(draft).then(() => setDraft(null))}>
-            Save the pin
+            {t('vendor.store.savePin')}
           </Button>
           <Button variant="link" full={false} onClick={() => setDraft(null)}>
-            Undo
+            {t('vendor.store.undo')}
           </Button>
         </div>
       ) : null}
@@ -154,6 +157,7 @@ function PinCard({ state, actions }: { state: VendorState; actions: VendorAction
 }
 
 function PolicySheet({ open, onClose, state, actions }: { open: boolean; onClose: () => void; state: VendorState; actions: VendorActions }) {
+  const t = useT();
   const p = state.vendor?.shippingPolicy;
   const [mode, setMode] = useState<'full' | 'capped'>(p?.mode ?? 'capped');
   const [cap, setCap] = useState(String(p?.buyerContributionCap ?? 3));
@@ -161,27 +165,27 @@ function PolicySheet({ open, onClose, state, actions }: { open: boolean; onClose
   const [freightCap, setFreightCap] = useState(p?.maxTransportSpend != null ? String(p.maxTransportSpend) : '');
 
   return (
-    <Sheet open={open} onClose={onClose} title="What the buyer pays">
+    <Sheet open={open} onClose={onClose} title={t('vendor.store.buyerPaysTitle')}>
       <div class="field">
         <label class="field__label" for="p-mode">
-          Split
+          {t('vendor.store.split')}
         </label>
         <select id="p-mode" class="select" value={mode} onChange={(e) => setMode(e.currentTarget.value as 'full' | 'capped')}>
-          <option value="capped">Capped — you absorb most of it</option>
-          <option value="full">Full — the buyer pays it all</option>
+          <option value="capped">{t('vendor.store.splitCapped')}</option>
+          <option value="full">{t('vendor.store.splitFull')}</option>
         </select>
       </div>
       {mode === 'capped' ? (
         <>
           <div class="field" style="margin-top:12px">
             <label class="field__label" for="p-cap">
-              Buyer pays at most
+              {t('vendor.store.buyerPaysAtMost')}
             </label>
             <input id="p-cap" class="input" type="number" inputMode="decimal" min="0" step="0.5" value={cap} onInput={(e) => setCap(e.currentTarget.value)} />
           </div>
           <div class="field" style="margin-top:12px">
             <label class="field__label" for="p-free">
-              Free for the buyer on orders over
+              {t('vendor.store.freeOver')}
             </label>
             <input id="p-free" class="input" type="number" inputMode="decimal" min="0" step="1" value={freeOver} onInput={(e) => setFreeOver(e.currentTarget.value)} />
           </div>
@@ -190,10 +194,10 @@ function PolicySheet({ open, onClose, state, actions }: { open: boolean; onClose
       {/* S34c — the freight-spend cap applies to heavy (dedicated-freight) orders, independent of the buyer split. */}
       <div class="field" style="margin-top:12px">
         <label class="field__label" for="p-freight">
-          Most you'll pay to ship a heavy order
+          {t('vendor.store.freightCapLabel')}
         </label>
-        <input id="p-freight" class="input" type="number" inputMode="decimal" min="0" step="1" placeholder="no limit" value={freightCap} onInput={(e) => setFreightCap(e.currentTarget.value)} />
-        <p class="hint" style="margin-top:6px">A big order goes by dedicated freight at a live market rate. Leave blank for no limit; set a cap and it waits for a rate within it.</p>
+        <input id="p-freight" class="input" type="number" inputMode="decimal" min="0" step="1" placeholder={t('vendor.store.freightCapPh')} value={freightCap} onInput={(e) => setFreightCap(e.currentTarget.value)} />
+        <p class="hint" style="margin-top:6px">{t('vendor.store.freightCapHint')}</p>
       </div>
       <Button
         chevron={false}
@@ -203,10 +207,10 @@ function PolicySheet({ open, onClose, state, actions }: { open: boolean; onClose
           void actions.savePolicy({ mode, buyerContributionCap: Number(cap) || 0, freeOverSubtotal: Number(freeOver) || 0, maxTransportSpend: freightCap.trim() ? Number(freightCap) || 0 : 0 });
         }}
       >
-        Save the policy
+        {t('vendor.store.savePolicy')}
       </Button>
       <Button variant="link" onClick={onClose}>
-        Keep it as it is
+        {t('vendor.store.keepPolicy')}
       </Button>
     </Sheet>
   );

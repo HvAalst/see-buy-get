@@ -1,4 +1,5 @@
 import { Button, Card, Checklist, ErrorNote, ReadAloud, ScanField } from '../../../shared/ui';
+import { useT } from '../../../shared/i18n';
 import type { AgentActions, AgentState } from '../useAgentApp';
 
 export interface ReceiveBagScreenProps {
@@ -11,19 +12,20 @@ export interface ReceiveBagScreenProps {
  * inside and frees the bag for reuse.
  */
 export function ReceiveBagScreen({ state, actions }: ReceiveBagScreenProps) {
+  const t = useT();
   const code = state.receivebag.code;
 
   return (
     <div class="scr">
-      <h1 class="scr__title">Receive a bag</h1>
-      <p class="scr__lede">Scan the code on the bag the driver handed you.</p>
+      <h1 class="scr__title">{t('agent.receivebag.title')}</h1>
+      <p class="scr__lede">{t('agent.receivebag.lede')}</p>
 
       {state.error ? <ErrorNote error={state.error} /> : null}
 
       <Card>
         <ScanField
           id="bag-code"
-          label="Bag code"
+          label={t('agent.receivebag.codeLabel')}
           value={code}
           onValue={(v) => actions.setReceiveBag(v)}
           expect="tote"
@@ -36,18 +38,18 @@ export function ReceiveBagScreen({ state, actions }: ReceiveBagScreenProps) {
 
       <div class="scr__cta">
         <Button onClick={() => void actions.submitReceiveBag()} disabled={!code.trim()} busy={state.busy === 'receivebag'}>
-          Receive and shelve
+          {t('agent.receivebag.receiveShelve')}
         </Button>
       </div>
 
-      <Card title="What happens" tone="soft">
+      <Card title={t('agent.receivebag.whatHappens')} tone="soft">
         <Checklist
-          items={['Every parcel inside goes onto your shelf', 'Each customer gets their pickup code', 'The empty bag goes back with the next bus']}
+          items={[t('agent.receivebag.step1'), t('agent.receivebag.step2'), t('agent.receivebag.step3')]}
         />
       </Card>
 
       <div class="scr__foot">
-        <ReadAloud text={() => 'Scan the bag code. Every parcel inside is shelved and the customers get their pickup codes.'} label="Read this aloud" />
+        <ReadAloud text={() => t('agent.receivebag.aloud')} label={t('agent.readAloud')} />
       </div>
     </div>
   );

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { isSignInRequired, narrow, sbgForgot, sbgLogin, sbgReset, type SbgError } from '../../lib/sbg';
 import type { IconName } from '../../shared/ui/Icon';
 import { signal } from '../../shared/feedback';
+import { t } from '../../shared/i18n';
 import { clearDid, createMdpClient, mdpConfig, purgeMdpTokens, readDid, readEmail, saveDid, saveEmail } from './api';
 import { addToQueue, dropFromQueue, findMyHub, unsortedAt } from './logic';
 import type { DropView, LoadView, MdpView, NewToteView, ParcelRow, RatesView, SortView, ToteView } from './types';
@@ -84,9 +85,9 @@ export function useMdpApp() {
 
   /* ---------------------------------------------------------------- toasts */
 
-  const pushToast = useCallback((t: Omit<Toast, 'id'>) => {
+  const pushToast = useCallback((toast: Omit<Toast, 'id'>) => {
     const id = ++toastSeq.current;
-    setState((s) => ({ ...s, toasts: [...s.toasts, { ...t, id }] }));
+    setState((s) => ({ ...s, toasts: [...s.toasts, { ...toast, id }] }));
     const handle = window.setTimeout(() => {
       toastTimers.current.delete(handle);
       setState((s) => ({ ...s, toasts: s.toasts.filter((x) => x.id !== id) }));
@@ -154,8 +155,8 @@ export function useMdpApp() {
         fail({
           code: 'NOT_FOUND',
           status: 404,
-          title: 'Hub not found',
-          detail: 'Your sign-in works, but no hub is registered under it. Ask SeeBuyGet to check the hub record.',
+          title: t('mdp.toast.hubNotFoundTitle'),
+          detail: t('mdp.toast.hubNotFoundDetail'),
           retryable: true,
         });
         return;
@@ -251,8 +252,8 @@ export function useMdpApp() {
         error: {
           code: 'FORBIDDEN',
           status: 403,
-          title: 'Not a hub account',
-          detail: `This sign-in belongs to a ${login.role} account — open the ${login.role} app instead.`,
+          title: t('mdp.toast.notHubTitle'),
+          detail: t('mdp.toast.notHubDetail', { role: login.role }),
           retryable: false,
         },
       }));
@@ -360,8 +361,8 @@ export function useMdpApp() {
       pushToast({
         tone: 'ok',
         icon: 'bag',
-        title: `${code} emptied`,
-        detail: `${emptied.length} parcel${emptied.length === 1 ? '' : 's'} ready to sort.`,
+        title: t('mdp.toast.emptied', { code }),
+        detail: emptied.length === 1 ? t('mdp.toast.dropDetailOne', { count: emptied.length }) : t('mdp.toast.dropDetailMany', { count: emptied.length }),
       });
       await refresh();
     });
@@ -412,12 +413,16 @@ export function useMdpApp() {
       if (r.error) return fail(r.error);
       buzz();
       const v = narrow<LoadView>(r.data);
+      const moved = v?.moved?.length ?? 0;
+      const dest = v?.tote?.destinationLabel;
       setState((s) => ({ ...s, form: { ...s.form, loadCode: '', badge: '' }, screen: 'home' }));
       pushToast({
         tone: 'ok',
         icon: 'truck',
-        title: `${loadCode} on the bus`,
-        detail: `${v?.moved?.length ?? 0} parcel${(v?.moved?.length ?? 0) === 1 ? '' : 's'} moving${v?.tote?.destinationLabel ? ` to ${v.tote.destinationLabel}` : ''}.`,
+        title: t('mdp.toast.onBus', { code: loadCode }),
+        detail: dest
+          ? t(moved === 1 ? 'mdp.toast.loadMovingToOne' : 'mdp.toast.loadMovingToMany', { count: moved, dest })
+          : t(moved === 1 ? 'mdp.toast.loadMovingOne' : 'mdp.toast.loadMovingMany', { count: moved }),
       });
       await refresh();
     });
@@ -445,7 +450,7 @@ export function useMdpApp() {
         const r = await client.api.setPrice(hub.mdpId, price);
         if (r.error) return fail(r.error);
         buzz();
-        pushToast({ tone: 'ok', icon: 'wallet', title: 'Sort fee updated', detail: `You now charge ${price.toFixed(2)} per parcel.` });
+        pushToast({ tone: 'ok', icon: 'wallet', title: t('mdp.toast.feeUpdatedTitle'), detail: t('mdp.toast.feeUpdatedDetail', { price: price.toFixed(2) }) });
         await refresh();
         if (stateRef.current.screen === 'rates') await loadRates();
       });

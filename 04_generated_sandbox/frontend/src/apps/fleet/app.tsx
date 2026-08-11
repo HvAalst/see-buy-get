@@ -1,5 +1,6 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { BottomNav, Button, Checklist, Icon, Pill, TopBar, type NavItem } from '../../shared/ui';
+import { useT } from '../../shared/i18n';
 import { DashboardScreen } from './screens/DashboardScreen';
 import { DriversScreen } from './screens/DriversScreen';
 import { SessionsScreen } from './screens/SessionsScreen';
@@ -10,6 +11,7 @@ import '../../shared/screens.css';
 import './fleet.css';
 
 export function App() {
+  const t = useT();
   const { state, actions } = useFleetApp();
   const sw = useRegisterSW();
   const [needRefresh] = sw.needRefresh;
@@ -20,7 +22,7 @@ export function App() {
   if (state.phase === 'signin') {
     return (
       <div class="app">
-        <TopBar title="SeeBuyGet Fleet" subtitle="Sign in" />
+        <TopBar title={t('fleet.appTitle')} subtitle={t('fleet.signInSubtitle')} />
         <main class="app__scroll app__scroll--nonav">
           <SignInScreen actions={actions} error={state.error} busy={state.busy === 'signin'} />
         </main>
@@ -32,19 +34,19 @@ export function App() {
   const onShift = state.dashboard?.sessions.active ?? 0;
 
   const tabs: NavItem<Screen>[] = [
-    { key: 'dash', label: 'Fleet', icon: 'grid' },
-    { key: 'vehicles', label: 'Vehicles', icon: 'truck' },
-    { key: 'drivers', label: 'Drivers', icon: 'person' },
-    { key: 'sessions', label: 'Shifts', icon: 'route', badge: onShift || undefined },
+    { key: 'dash', label: t('fleet.nav.dash'), icon: 'grid' },
+    { key: 'vehicles', label: t('fleet.nav.vehicles'), icon: 'truck' },
+    { key: 'drivers', label: t('fleet.nav.drivers'), icon: 'person' },
+    { key: 'sessions', label: t('fleet.nav.sessions'), icon: 'route', badge: onShift || undefined },
   ];
 
   return (
     <div class="app">
       <TopBar
-        title="SeeBuyGet Fleet"
+        title={t('fleet.appTitle')}
         subtitle={state.manager?.company}
         onBack={state.screen === 'dash' ? undefined : () => actions.go('dash')}
-        backLabel="Back to the fleet"
+        backLabel={t('fleet.backLabel')}
         end={
           <>
             {needRefresh ? (
@@ -52,14 +54,14 @@ export function App() {
                 type="button"
                 class="topbar__lead"
                 onClick={() => void sw.updateServiceWorker(true)}
-                aria-label="A new version is ready — update now"
-                title="Update the app"
+                aria-label={t('fleet.update.aria')}
+                title={t('fleet.update.title')}
               >
                 <Icon name="refresh" size={24} />
               </button>
             ) : null}
             <Pill tone={onShift ? 'ok' : 'idle'} dot>
-              {`${onShift} on shift`}
+              {t('fleet.onShift', { count: onShift })}
             </Pill>
           </>
         }
@@ -69,13 +71,13 @@ export function App() {
         {state.stale ? (
           <p class="stale">
             <Icon name="offline" size={20} />
-            <span>No signal — showing what we last knew.</span>
+            <span>{t('fleet.offline')}</span>
           </p>
         ) : null}
         <ScreenRouter screen={state.screen} state={state} actions={actions} />
         <div class="scr__foot" style="padding:8px 0 4px">
           <Button variant="link" full={false} onClick={actions.signOut}>
-            Sign out of this fleet
+            {t('fleet.signOut')}
           </Button>
         </div>
       </main>
@@ -118,22 +120,24 @@ function Toasts({ state, actions, noNav }: { state: FleetState; actions: FleetAc
 }
 
 function Boot() {
+  const t = useT();
   return (
     <div class="boot">
       <span class="boot__spin" aria-hidden="true" />
-      <p>Opening your fleet…</p>
+      <p>{t('fleet.boot')}</p>
     </div>
   );
 }
 
 function UpdateGate() {
+  const t = useT();
   return (
     <div class="gate">
       <Icon name="arrowUp" size={46} class="gate__glyph" />
-      <h1 class="scr__title">This app needs updating</h1>
-      <p class="scr__lede">A newer version is required before you can carry on working.</p>
-      <Checklist items={['Your fleet data is safe', 'Updating takes a few seconds']} />
-      <Button onClick={() => location.reload()}>Update now</Button>
+      <h1 class="scr__title">{t('fleet.gate.title')}</h1>
+      <p class="scr__lede">{t('fleet.gate.body')}</p>
+      <Checklist items={[t('fleet.gate.safe'), t('fleet.gate.quick')]} />
+      <Button onClick={() => location.reload()}>{t('fleet.gate.cta')}</Button>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
 import { Button, Card, ErrorNote, Icon, Note, Pill, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
+import { useT, type MessageKey } from '../../../shared/i18n';
 import { handoverSummary } from '../logic';
 import type { AgentActions, AgentState } from '../useAgentApp';
 
@@ -8,8 +9,13 @@ export interface HandoverScreenProps {
   actions: AgentActions;
 }
 
-/** Preset reasons a parcel is knowingly left behind — tappable, so no typing is needed to short-ship. */
-const SHORT_SHIP_REASONS = ['No space left on the bus', 'Parcel not ready', 'Driver would not take it'];
+/** Preset reasons a parcel is knowingly left behind — tappable, so no typing is needed to short-ship. The
+ *  `value` is the English note sent to the server (stable); `labelKey` is what the shopkeeper reads. */
+const SHORT_SHIP_REASONS: Array<{ value: string; labelKey: MessageKey }> = [
+  { value: 'No space left on the bus', labelKey: 'agent.handover.reasonNoSpace' },
+  { value: 'Parcel not ready', labelKey: 'agent.handover.reasonNotReady' },
+  { value: 'Driver would not take it', labelKey: 'agent.handover.reasonDriverRefused' },
+];
 
 /**
  * Hand waiting parcels to the bus: scan the driver badge, tap the parcels going on, one
@@ -21,6 +27,7 @@ const SHORT_SHIP_REASONS = ['No space left on the bus', 'Parcel not ready', 'Dri
  * so a bus can never quietly pull away with parcels left on the shelf.
  */
 export function HandoverScreen({ state, actions }: HandoverScreenProps) {
+  const t = useT();
   const f = state.handover;
   const rows = state.shopParcels;
   const loading = state.shopParcelsState === 'loading';
@@ -29,8 +36,8 @@ export function HandoverScreen({ state, actions }: HandoverScreenProps) {
 
   return (
     <div class="scr">
-      <h1 class="scr__title">Hand to the bus</h1>
-      <p class="scr__lede">Scan the driver's badge, then tap every parcel you are giving them.</p>
+      <h1 class="scr__title">{t('agent.handover.title')}</h1>
+      <p class="scr__lede">{t('agent.handover.lede')}</p>
 
       {/* The gate's INCOMPLETE_MANIFEST lands here as a warn note ("load them, or leave them behind"). */}
       {state.error ? <ErrorNote error={state.error} onRetry={() => actions.go('handover')} /> : null}
@@ -38,22 +45,22 @@ export function HandoverScreen({ state, actions }: HandoverScreenProps) {
       <Card>
         <ScanField
           id="badge"
-          label="Driver badge"
+          label={t('agent.handover.badgeLabel')}
           value={f.badge}
           onValue={(v) => actions.setHandover({ badge: v })}
           expect="badge"
-          placeholder="Scan the badge"
+          placeholder={t('agent.handover.badgePh')}
           upper
         />
       </Card>
 
-      <Card label={`Waiting at your shop (${rows.length})`}>
+      <Card label={t('agent.handover.waitingAt', { count: rows.length })}>
         {loading ? (
-          <p class="hint">Getting your parcels…</p>
+          <p class="hint">{t('agent.handover.gettingParcels')}</p>
         ) : rows.length === 0 ? (
-          <p class="hint">No parcels waiting for the bus right now.</p>
+          <p class="hint">{t('agent.handover.noWaiting')}</p>
         ) : (
-          <div class="picklist" role="group" aria-label="Parcels to hand over">
+          <div class="picklist" role="group" aria-label={t('agent.handover.pickAria')}>
             {rows.map((p) => {
               const on = f.selected.includes(p.parcelId);
               const waiting = f.missed.includes(p.parcelId);
@@ -70,9 +77,9 @@ export function HandoverScreen({ state, actions }: HandoverScreenProps) {
                   </span>
                   <span class="pick__body">
                     <span class="pick__t">{`${p.parcelId} · ${p.size}`}</span>
-                    <span class="pick__s">{`To ${p.destZone}`}</span>
+                    <span class="pick__s">{t('agent.handover.toZone', { zone: p.destZone })}</span>
                   </span>
-                  {waiting ? <span class="pick__end"><Pill tone="warn">Waiting</Pill></span> : null}
+                  {waiting ? <span class="pick__end"><Pill tone="warn">{t('agent.handover.waiting')}</Pill></span> : null}
                 </button>
               );
             })}
@@ -84,11 +91,11 @@ export function HandoverScreen({ state, actions }: HandoverScreenProps) {
         <Note
           tone="warn"
           icon="truck"
-          title={`${f.missed.length} parcel${f.missed.length === 1 ? '' : 's'} for this bus still waiting`}
-          detail="Tap the ones marked “Waiting” to load them too, or leave them behind."
+          title={f.missed.length === 1 ? t('agent.handover.missedOne', { count: f.missed.length }) : t('agent.handover.missedMany', { count: f.missed.length })}
+          detail={t('agent.handover.missedDetail')}
         />
       ) : rows.length > 0 && f.selected.length === 0 ? (
-        <Note tone="info" icon="box" title="Tap the parcels going on the bus" />
+        <Note tone="info" icon="box" title={t('agent.handover.tapGoing')} />
       ) : null}
 
       <div class="scr__cta">
@@ -97,42 +104,42 @@ export function HandoverScreen({ state, actions }: HandoverScreenProps) {
           disabled={!f.badge.trim() || f.selected.length === 0}
           busy={busy}
         >
-          {f.selected.length ? `Hand over ${f.selected.length} parcel${f.selected.length === 1 ? '' : 's'}` : 'Hand over'}
+          {f.selected.length ? (f.selected.length === 1 ? t('agent.handover.handOverOne', { count: f.selected.length }) : t('agent.handover.handOverMany', { count: f.selected.length })) : t('agent.handover.handOver')}
         </Button>
         {f.missed.length ? (
           <Button variant="outline" chevron={false} disabled={busy} onClick={() => setLeaveOpen(true)}>
-            {`Leave ${f.missed.length} behind…`}
+            {t('agent.handover.leaveBehind', { count: f.missed.length })}
           </Button>
         ) : null}
       </div>
 
       <div class="scr__foot">
-        <ReadAloud text={() => handoverSummary(rows.length, f.selected.length, f.missed.length)} label="Read this aloud" />
+        <ReadAloud text={() => handoverSummary(rows.length, f.selected.length, f.missed.length, t)} label={t('agent.readAloud')} />
       </div>
 
-      <Sheet open={leaveOpen} onClose={() => setLeaveOpen(false)} title="Leave parcels behind?">
+      <Sheet open={leaveOpen} onClose={() => setLeaveOpen(false)} title={t('agent.handover.leaveSheetTitle')}>
         <p class="hint">
-          {`${f.missed.length} parcel${f.missed.length === 1 ? '' : 's'} will stay at your shop and the office will be told. Why ${f.missed.length === 1 ? 'is it' : 'are they'} not going?`}
+          {f.missed.length === 1 ? t('agent.handover.leaveSheetOne', { count: f.missed.length }) : t('agent.handover.leaveSheetMany', { count: f.missed.length })}
         </p>
         <div class="rows">
           {SHORT_SHIP_REASONS.map((reason) => (
             <button
-              key={reason}
+              key={reason.value}
               type="button"
               class="row"
               disabled={busy}
               onClick={() => {
                 setLeaveOpen(false);
-                void actions.submitHandover(reason);
+                void actions.submitHandover(reason.value);
               }}
             >
               <span class="row__ic"><Icon name="truck" size={24} /></span>
-              <span class="row__body"><span class="row__t">{reason}</span></span>
+              <span class="row__body"><span class="row__t">{t(reason.labelKey)}</span></span>
               <span class="row__end"><Icon name="chevronRight" size={22} /></span>
             </button>
           ))}
         </div>
-        <Button variant="link" onClick={() => setLeaveOpen(false)}>Cancel</Button>
+        <Button variant="link" onClick={() => setLeaveOpen(false)}>{t('agent.cancel')}</Button>
       </Sheet>
     </div>
   );

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
+import { useT } from '../../../shared/i18n';
 
 export interface PhotoFieldProps {
   /** The captured mediaId, '' while empty. */
@@ -20,6 +21,7 @@ export interface PhotoFieldProps {
  * preview shows instantly while the bytes upload, so the worker sees their shot without a round-trip.
  */
 export function PhotoField({ value, onCapture, upload, label, id, disabled }: PhotoFieldProps) {
+  const t = useT();
   const input = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -61,7 +63,7 @@ export function PhotoField({ value, onCapture, upload, label, id, disabled }: Ph
       {preview ? <img class="photo__preview" src={preview} alt="" /> : null}
       <button type="button" class={`photo__btn${done ? ' photo__btn--done' : ''}`} disabled={disabled || busy} onClick={() => input.current?.click()}>
         <Icon name={busy ? 'clock' : done ? 'check' : 'camera'} size={24} />
-        <span>{busy ? 'Uploading…' : done ? 'Photo saved — tap to retake' : failed ? 'Upload failed — tap to try again' : label}</span>
+        <span>{busy ? t('agent.photo.uploading') : done ? t('agent.photo.saved') : failed ? t('agent.photo.failed') : label}</span>
       </button>
     </div>
   );

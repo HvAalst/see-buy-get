@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { Button, Card, Checklist, ErrorNote, ReadAloud, Sheet } from '../../../shared/ui';
+import { useT } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
 import type { MdpActions } from '../useMdpApp';
 
@@ -10,10 +11,9 @@ export interface SignInScreenProps {
   busy: boolean;
 }
 
-const SPOKEN = 'Sign in with the email and password your hub uses on SeeBuyGet.';
-
 /** The real S2 sign-in (role: mdp) — the token binds to the hub's own DID. */
 export function SignInScreen({ actions, error, busy }: SignInScreenProps) {
+  const t = useT();
   const [email, setEmail] = useState(actions.readEmail() ?? '');
   const [password, setPassword] = useState('');
   const [help, setHelp] = useState(false);
@@ -25,15 +25,15 @@ export function SignInScreen({ actions, error, busy }: SignInScreenProps) {
 
   return (
     <form class="scr" onSubmit={submit}>
-      <h1 class="scr__title">Open the sort floor</h1>
-      <p class="scr__lede">Sign in with your hub's email and password.</p>
+      <h1 class="scr__title">{t('mdp.signin.title')}</h1>
+      <p class="scr__lede">{t('mdp.signin.lede')}</p>
 
       {error ? <ErrorNote error={error} /> : null}
 
       <Card>
         <div class="field">
           <label class="field__label" for="email">
-            Email
+            {t('mdp.signin.email')}
           </label>
           <input
             id="email"
@@ -50,7 +50,7 @@ export function SignInScreen({ actions, error, busy }: SignInScreenProps) {
         </div>
         <div class="field" style="margin-top:12px">
           <label class="field__label" for="password">
-            Password
+            {t('mdp.signin.password')}
           </label>
           <input
             id="password"
@@ -58,7 +58,7 @@ export function SignInScreen({ actions, error, busy }: SignInScreenProps) {
             type="password"
             value={password}
             onInput={(e) => setPassword(e.currentTarget.value)}
-            placeholder="Your password"
+            placeholder={t('mdp.signin.passwordPh')}
             autocomplete="current-password"
             enterkeyhint="go"
           />
@@ -67,21 +67,21 @@ export function SignInScreen({ actions, error, busy }: SignInScreenProps) {
 
       <div class="scr__cta">
         <Button type="submit" disabled={!email.trim() || !password} busy={busy}>
-          Sign in
+          {t('mdp.signin.submit')}
         </Button>
       </div>
 
-      <Card title="One sign-in runs the floor" tone="soft">
+      <Card title={t('mdp.signin.cardTitle')} tone="soft">
         <Checklist
-          items={['Any worker on shift can use this tablet', 'Signing out removes the key from it', 'SeeBuyGet staff never ask for your password']}
+          items={[t('mdp.signin.item1'), t('mdp.signin.item2'), t('mdp.signin.item3')]}
         />
       </Card>
 
       <div class="scr__foot">
         <Button variant="link" full={false} onClick={() => setHelp(true)}>
-          I forgot my password
+          {t('mdp.signin.forgot')}
         </Button>
-        <ReadAloud text={() => SPOKEN} label="Read this aloud" />
+        <ReadAloud text={() => t('mdp.signin.spoken')} label={t('mdp.readAloud')} />
       </div>
 
       <ForgotSheet open={help} onClose={() => setHelp(false)} actions={actions} email={email} />
@@ -91,6 +91,7 @@ export function SignInScreen({ actions, error, busy }: SignInScreenProps) {
 
 /** Forgot/reset in one sheet — the sandbox returns the reset token in the response. */
 function ForgotSheet({ open, onClose, actions, email: initial }: { open: boolean; onClose: () => void; actions: MdpActions; email: string }) {
+  const t = useT();
   const [email, setEmail] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<SbgError | null>(null);
@@ -131,20 +132,20 @@ function ForgotSheet({ open, onClose, actions, email: initial }: { open: boolean
   };
 
   return (
-    <Sheet open={open} onClose={close} title="Reset your password">
+    <Sheet open={open} onClose={close} title={t('mdp.signin.resetTitle')}>
       {error ? <ErrorNote error={error} /> : null}
       {done ? (
         <>
-          <p class="t-body">Your password is changed. Sign in with the new one.</p>
+          <p class="t-body">{t('mdp.signin.resetDone')}</p>
           <Button chevron={false} onClick={close}>
-            Back to sign in
+            {t('mdp.signin.backToSignIn')}
           </Button>
         </>
       ) : !sent ? (
         <>
           <div class="field">
             <label class="field__label" for="fp-email">
-              Email
+              {t('mdp.signin.email')}
             </label>
             <input
               id="fp-email"
@@ -157,15 +158,15 @@ function ForgotSheet({ open, onClose, actions, email: initial }: { open: boolean
             />
           </div>
           <Button chevron={false} busy={busy} disabled={!email.trim()} onClick={() => void request()}>
-            Send me a reset code
+            {t('mdp.signin.sendReset')}
           </Button>
         </>
       ) : (
         <>
-          {issued ? <p class="hint">{`Sandbox: your reset code is ${issued}`}</p> : <p class="hint">Check your email for the reset code.</p>}
+          {issued ? <p class="hint">{t('mdp.signin.sandboxCode', { code: issued })}</p> : <p class="hint">{t('mdp.signin.checkEmail')}</p>}
           <div class="field">
             <label class="field__label" for="fp-token">
-              Reset code
+              {t('mdp.signin.resetCode')}
             </label>
             <input
               id="fp-token"
@@ -179,7 +180,7 @@ function ForgotSheet({ open, onClose, actions, email: initial }: { open: boolean
           </div>
           <div class="field" style="margin-top:12px">
             <label class="field__label" for="fp-pass">
-              New password
+              {t('mdp.signin.newPassword')}
             </label>
             <input
               id="fp-pass"
@@ -191,7 +192,7 @@ function ForgotSheet({ open, onClose, actions, email: initial }: { open: boolean
             />
           </div>
           <Button chevron={false} busy={busy} disabled={!token.trim() || password.length < 6} onClick={() => void apply()}>
-            Set the new password
+            {t('mdp.signin.setNewPassword')}
           </Button>
         </>
       )}

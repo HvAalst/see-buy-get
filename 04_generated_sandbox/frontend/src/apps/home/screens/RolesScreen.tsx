@@ -1,5 +1,6 @@
 import { Button, Icon, Pill, ReadAloud } from '../../../shared/ui';
-import { ROLES } from '../logic';
+import { useT } from '../../../shared/i18n';
+import { ROLES, roleMeta } from '../logic';
 import type { HomeActions } from '../useHomeApp';
 
 export interface RolesScreenProps {
@@ -12,39 +13,46 @@ export interface RolesScreenProps {
  * the person's own terms.
  */
 export function RolesScreen({ actions }: RolesScreenProps) {
+  const t = useT();
   return (
     <div class="scr">
-      <h1 class="scr__title">What are you?</h1>
-      <p class="scr__lede">Pick the one that fits. You can join in a few minutes.</p>
+      <h1 class="scr__title">{t('home.roles.title')}</h1>
+      <p class="scr__lede">{t('home.roles.lede')}</p>
 
       <div class="rows" role="list">
-        {ROLES.map((r) => (
-          <button key={r.id} type="button" class="row role" onClick={() => actions.startJoin(r.id)}>
-            <span class="row__ic">
-              <Icon name={r.icon} size={24} />
-            </span>
-            <span class="row__body">
-              <span class="row__t">{r.label}</span>
-              <span class="row__s">{r.blurb}</span>
-              <span class="role__promise">{r.promise}</span>
-            </span>
-            <span class="row__end">
-              {r.kind === 'invite' ? <Pill tone="idle">By invite</Pill> : null}
-              <Icon name="chevronRight" size={22} />
-            </span>
-          </button>
-        ))}
+        {ROLES.map((r) => {
+          const m = roleMeta(r, t);
+          return (
+            <button key={r.id} type="button" class="row role" onClick={() => actions.startJoin(r.id)}>
+              <span class="row__ic">
+                <Icon name={r.icon} size={24} />
+              </span>
+              <span class="row__body">
+                <span class="row__t">{m.label}</span>
+                <span class="row__s">{m.blurb}</span>
+                <span class="role__promise">{m.promise}</span>
+              </span>
+              <span class="row__end">
+                {r.kind === 'invite' ? <Pill tone="idle">{t('home.roles.byInvite')}</Pill> : null}
+                <Icon name="chevronRight" size={22} />
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       <div class="scr__foot">
         <Button variant="link" full={false} onClick={() => actions.go('welcome')}>
-          Go back
+          {t('home.goBack')}
         </Button>
         <ReadAloud
           text={() =>
-            `Pick what you are. ${ROLES.map((r) => `${r.label}: ${r.promise}`).join(' ')}`
+            `${t('home.roles.aloudLead')} ${ROLES.map((r) => {
+              const m = roleMeta(r, t);
+              return t('home.roles.aloudRole', { label: m.label, promise: m.promise });
+            }).join(' ')}`
           }
-          label="Read the choices aloud"
+          label={t('home.roles.aloudLabel')}
         />
       </div>
     </div>

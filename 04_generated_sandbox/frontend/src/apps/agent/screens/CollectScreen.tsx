@@ -1,4 +1,5 @@
 import { Button, Card, Checklist, ErrorNote, QrBlock, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
+import { useT } from '../../../shared/i18n';
 import { qrPayload } from '../../../shared/qr';
 import type { AgentActions, AgentState } from '../useAgentApp';
 import { PhotoField } from './PhotoField';
@@ -14,6 +15,7 @@ export interface CollectScreenProps {
  * checks the contents, then confirm — or file a dispute with a reason + photo.
  */
 export function CollectScreen({ state, actions }: CollectScreenProps) {
+  const t = useT();
   const f = state.collect;
   const found = f.found;
   const items = found?.parcel.items ?? [];
@@ -21,64 +23,64 @@ export function CollectScreen({ state, actions }: CollectScreenProps) {
 
   return (
     <div class="scr">
-      <h1 class="scr__title">Collect an order</h1>
-      <p class="scr__lede">Ask the buyer for their collection code.</p>
+      <h1 class="scr__title">{t('agent.collect.title')}</h1>
+      <p class="scr__lede">{t('agent.collect.lede')}</p>
 
       {state.error ? <ErrorNote error={state.error} /> : null}
 
       <Card>
         <ScanField
           id="collect-code"
-          label="Collection code"
+          label={t('agent.collect.codeLabel')}
           value={f.code}
           onValue={(v) => actions.setCollect({ code: v })}
           expect="collect"
-          placeholder="Scan or type the code"
+          placeholder={t('agent.scanPlaceholder')}
           upper
           enterKeyHint="search"
           onScan={(v) => void actions.findCollect(v)}
         />
         <div style="margin-top:12px">
           <Button chevron={false} onClick={() => void actions.findCollect()} disabled={!f.code.trim()} busy={state.busy === 'collect-find'}>
-            Find the order
+            {t('agent.collect.findOrder')}
           </Button>
         </div>
       </Card>
 
       {found ? (
         <>
-          <section class="slot" aria-label="Shelf slot">
-            <p class="slot__label">Fetch it from shelf</p>
+          <section class="slot" aria-label={t('agent.collect.shelfAria')}>
+            <p class="slot__label">{t('agent.collect.fetchFromShelf')}</p>
             <p class="slot__value">{slot ?? '—'}</p>
             <p class="slot__sub">{found.parcel.parcelId}</p>
           </section>
 
           {/* The parcel's own code, so a shelf search can be a scan rather than a squint
               at a sticker in bad light. */}
-          <Card label="Parcel code">
+          <Card label={t('agent.collect.parcelCode')}>
             <QrBlock
               value={qrPayload('parcel', found.parcel.parcelId)}
               size={132}
               caption={found.parcel.parcelId}
-              label={`Parcel ${found.parcel.parcelId} as a scannable code`}
+              label={t('agent.collect.qrLabel', { id: found.parcel.parcelId })}
             />
           </Card>
 
-          <Card label="Let the buyer check the contents">
+          <Card label={t('agent.collect.checkContents')}>
             {items.length ? (
-              <Checklist items={items.map((it) => `${it.qty} × ${it.name}`)} />
+              <Checklist items={items.map((it) => t('agent.collect.itemLine', { qty: it.qty, name: it.name }))} />
             ) : (
-              <p class="hint">No item list came with this order.</p>
+              <p class="hint">{t('agent.collect.noItems')}</p>
             )}
           </Card>
 
           <div class="scr__cta">
             <Button onClick={() => void actions.confirmCollect()} busy={state.busy === 'collect-confirm'}>
-              Hand over — all good
+              {t('agent.collect.handOverGood')}
             </Button>
           </div>
           <Button variant="outline" onClick={() => actions.setCollect({ disputing: true })}>
-            Report a problem instead
+            {t('agent.collect.reportProblem')}
           </Button>
         </>
       ) : null}
@@ -87,37 +89,37 @@ export function CollectScreen({ state, actions }: CollectScreenProps) {
         <ReadAloud
           text={() =>
             found
-              ? `Fetch the parcel from shelf ${slot ?? 'unknown'}. Let the buyer check it, then hand it over.`
-              : 'Ask the buyer for their collection code and type it in.'
+              ? t('agent.collect.aloudFound', { slot: slot ?? t('agent.collect.slotUnknown') })
+              : t('agent.collect.aloudPrompt')
           }
-          label="Read this aloud"
+          label={t('agent.readAloud')}
         />
       </div>
 
-      <Sheet open={f.disputing} onClose={() => actions.setCollect({ disputing: false })} title="What is wrong?">
+      <Sheet open={f.disputing} onClose={() => actions.setCollect({ disputing: false })} title={t('agent.collect.disputeTitle')}>
         <div class="field">
           <label class="field__label" for="dispute-reason">
-            The problem
+            {t('agent.collect.problemLabel')}
           </label>
           <input
             id="dispute-reason"
             class="input"
             value={f.reason}
             onInput={(e) => actions.setCollect({ reason: e.currentTarget.value })}
-            placeholder="e.g. the box is crushed"
+            placeholder={t('agent.collect.problemPh')}
           />
         </div>
-        <PhotoField id="dispute-photo" value={f.photoRef} label="Photo of the problem" upload={(file) => actions.uploadPhoto('dispute', file)} onCapture={(ref) => actions.setCollect({ photoRef: ref })} />
+        <PhotoField id="dispute-photo" value={f.photoRef} label={t('agent.collect.problemPhoto')} upload={(file) => actions.uploadPhoto('dispute', file)} onCapture={(ref) => actions.setCollect({ photoRef: ref })} />
         <Button
           chevron={false}
           disabled={!f.reason.trim() || !f.photoRef}
           busy={state.busy === 'dispute'}
           onClick={() => void actions.submitDispute()}
         >
-          Send the report
+          {t('agent.collect.sendReport')}
         </Button>
         <Button variant="link" onClick={() => actions.setCollect({ disputing: false })}>
-          Go back
+          {t('agent.collect.goBack')}
         </Button>
       </Sheet>
     </div>

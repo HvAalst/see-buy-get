@@ -1,5 +1,6 @@
 import { Button, Icon, Pill, ReadAloud } from '../../../shared/ui';
-import { ROLES } from '../logic';
+import { useT } from '../../../shared/i18n';
+import { ROLES, roleMeta } from '../logic';
 import type { HomeActions } from '../useHomeApp';
 
 export interface SignInScreenProps {
@@ -12,10 +13,11 @@ export interface SignInScreenProps {
  * screen's job is only to send them to the right door and say what that door asks for.
  */
 export function SignInScreen({ actions }: SignInScreenProps) {
+  const t = useT();
   return (
     <div class="scr">
-      <h1 class="scr__title">Open your app</h1>
-      <p class="scr__lede">Pick the one you work with.</p>
+      <h1 class="scr__title">{t('home.signin.title')}</h1>
+      <p class="scr__lede">{t('home.signin.lede')}</p>
 
       <div class="rows" role="list">
         {ROLES.map((r) => (
@@ -24,9 +26,9 @@ export function SignInScreen({ actions }: SignInScreenProps) {
               <Icon name={r.icon} size={24} />
             </span>
             <span class="row__body">
-              <span class="row__t">{r.label.replace('A ', '').replace('An ', '')}</span>
+              <span class="row__t">{roleMeta(r, t).name}</span>
               <span class="row__s">
-                {r.kind === 'vendor' ? 'Store ID and secret' : r.kind === 'invite' ? 'Fleet sign-in code' : 'Email and password'}
+                {r.kind === 'vendor' ? t('home.signin.credVendor') : r.kind === 'invite' ? t('home.signin.credInvite') : t('home.signin.credSignup')}
               </span>
             </span>
             <span class="row__end">
@@ -39,23 +41,23 @@ export function SignInScreen({ actions }: SignInScreenProps) {
             <Icon name="send" size={24} />
           </span>
           <span class="row__body">
-            <span class="row__t">Just sending or tracking</span>
-            <span class="row__s">No account needed</span>
+            <span class="row__t">{t('home.signin.justSending')}</span>
+            <span class="row__s">{t('home.signin.noAccount')}</span>
           </span>
           <span class="row__end">
-            <Pill tone="ok">Open</Pill>
+            <Pill tone="ok">{t('home.signin.open')}</Pill>
           </span>
         </a>
       </div>
 
       <div class="scr__foot">
         <Button variant="link" full={false} onClick={() => actions.go('welcome')}>
-          Go back
+          {t('home.goBack')}
         </Button>
         <Button variant="link" full={false} onClick={() => actions.go('roles')}>
-          I do not have an account yet
+          {t('home.signin.noAccountYet')}
         </Button>
-        <ReadAloud text={() => 'Pick the app you work with: shop, driver, sort hub, online store, or fleet office.'} label="Read this aloud" />
+        <ReadAloud text={() => t('home.signin.aloud')} label={t('home.readAloud')} />
       </div>
     </div>
   );

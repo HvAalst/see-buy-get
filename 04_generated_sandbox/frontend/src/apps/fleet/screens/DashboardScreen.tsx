@@ -1,4 +1,5 @@
 import { Card, ErrorNote, Icon, Pill, ReadAloud } from '../../../shared/ui';
+import { useT } from '../../../shared/i18n';
 import { dashboardSummary, hoursLabel, projectPositions } from '../logic';
 import type { FleetActions, FleetState } from '../useFleetApp';
 
@@ -9,6 +10,7 @@ export interface DashboardScreenProps {
 
 /** The live fleet: counts, GPS positions, working hours and cargo in motion. */
 export function DashboardScreen({ state, actions }: DashboardScreenProps) {
+  const t = useT();
   const d = state.dashboard;
   const points = projectPositions(d?.positions ?? []);
   const sessions = d?.sessions.list ?? [];
@@ -19,18 +21,22 @@ export function DashboardScreen({ state, actions }: DashboardScreenProps) {
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
 
       <div class="tiles tiles--5">
-        <Tile value={`${d?.vehicles.active ?? 0}/${d?.vehicles.total ?? 0}`} label="Vehicles active" />
-        <Tile value={`${d?.drivers.onShift ?? 0}/${d?.drivers.total ?? 0}`} label="On shift" />
-        <Tile value={String(d?.sessions.active ?? 0)} label="Sessions" />
-        <Tile value={`${d?.cargo.count ?? 0}·${d?.cargo.totalKg ?? 0}kg`} label="Cargo moving" />
-        <Tile value={hoursLabel(d?.sessions.todayHours)} label="Hours today" />
+        <Tile value={`${d?.vehicles.active ?? 0}/${d?.vehicles.total ?? 0}`} label={t('fleet.dash.tileVehicles')} />
+        <Tile value={`${d?.drivers.onShift ?? 0}/${d?.drivers.total ?? 0}`} label={t('fleet.dash.tileOnShift')} />
+        <Tile value={String(d?.sessions.active ?? 0)} label={t('fleet.dash.tileSessions')} />
+        <Tile value={`${d?.cargo.count ?? 0}·${d?.cargo.totalKg ?? 0}kg`} label={t('fleet.dash.tileCargo')} />
+        <Tile value={hoursLabel(d?.sessions.todayHours)} label={t('fleet.dash.tileHours')} />
       </div>
 
-      <Card title="Where your vehicles are" label="Live GPS">
-        <p class="card__note">Vehicles on shift that reported a position — drivers ping when they look for work.</p>
-        <div class="fmap" role="img" aria-label={`${points.length} vehicle${points.length === 1 ? '' : 's'} reporting a position`}>
+      <Card title={t('fleet.dash.mapTitle')} label={t('fleet.dash.mapLabel')}>
+        <p class="card__note">{t('fleet.dash.mapNote')}</p>
+        <div
+          class="fmap"
+          role="img"
+          aria-label={points.length === 1 ? t('fleet.dash.mapAriaOne', { count: points.length }) : t('fleet.dash.mapAriaMany', { count: points.length })}
+        >
           {points.length === 0 ? (
-            <p class="fmap__empty">No vehicle is reporting a position.</p>
+            <p class="fmap__empty">{t('fleet.dash.mapEmpty')}</p>
           ) : (
             points.map((p) => (
               <span key={p.plate} class="fmap__pt" style={`left:${p.x}%;top:${p.y}%`} title={p.title}>
@@ -42,9 +48,9 @@ export function DashboardScreen({ state, actions }: DashboardScreenProps) {
         </div>
       </Card>
 
-      <Card title="Working hours — on shift now">
+      <Card title={t('fleet.dash.hoursTitle')}>
         {sessions.length === 0 ? (
-          <p class="hint">No drivers on shift.</p>
+          <p class="hint">{t('fleet.dash.noDrivers')}</p>
         ) : (
           <div class="rows" role="list">
             {sessions.map((s) => (
@@ -54,11 +60,11 @@ export function DashboardScreen({ state, actions }: DashboardScreenProps) {
                 </span>
                 <span class="row__body">
                   <span class="row__t">{s.driverName}</span>
-                  <span class="row__s">{`${s.plate} · ${s.vehicleClass} · on duty ${hoursLabel(s.hoursOnDuty)}`}</span>
+                  <span class="row__s">{t('fleet.dash.onDutyRow', { plate: s.plate, cls: s.vehicleClass, hours: hoursLabel(s.hoursOnDuty) })}</span>
                 </span>
                 <span class="row__end">
                   <Pill tone={s.location ? 'ok' : 'idle'} dot>
-                    {s.location ? 'Located' : 'No signal'}
+                    {s.location ? t('fleet.dash.located') : t('fleet.dash.noSignal')}
                   </Pill>
                 </span>
               </div>
@@ -67,9 +73,9 @@ export function DashboardScreen({ state, actions }: DashboardScreenProps) {
         )}
       </Card>
 
-      <Card title="Cargo in motion">
+      <Card title={t('fleet.dash.cargoTitle')}>
         {cargo.length === 0 ? (
-          <p class="hint">No cargo claimed right now.</p>
+          <p class="hint">{t('fleet.dash.noCargo')}</p>
         ) : (
           <div>
             {cargo.map((c) => (
@@ -87,8 +93,8 @@ export function DashboardScreen({ state, actions }: DashboardScreenProps) {
 
       <div class="scr__foot">
         <ReadAloud
-          text={() => (d ? dashboardSummary(d) : 'The dashboard is still loading.')}
-          label="Read this aloud"
+          text={() => (d ? dashboardSummary(d, t) : t('fleet.dash.aloudLoading'))}
+          label={t('fleet.readAloud')}
         />
       </div>
     </div>

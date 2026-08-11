@@ -1,15 +1,13 @@
 import { useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { Button, Card, Checklist, ErrorNote, ReadAloud } from '../../../shared/ui';
+import { useT } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
 
 export interface SignInScreenProps {
   onSignIn: (did: string) => void;
   error: SbgError | null;
 }
-
-const SPOKEN =
-  'Type or scan your driver I D to sign in. It is on the back of your badge. You only do this once on this phone.';
 
 /**
  * Identity capture — the screen the legacy page never had.
@@ -20,6 +18,7 @@ const SPOKEN =
  * sign-in page) and then persists.
  */
 export function SignInScreen({ onSignIn, error }: SignInScreenProps) {
+  const t = useT();
   const [value, setValue] = useState('');
 
   const submit = (e: JSX.TargetedEvent<HTMLFormElement>) => {
@@ -29,15 +28,15 @@ export function SignInScreen({ onSignIn, error }: SignInScreenProps) {
 
   return (
     <form class="scr" onSubmit={submit}>
-      <h1 class="scr__title">Who is driving?</h1>
-      <p class="scr__lede">Enter your driver ID once. This phone will remember it.</p>
+      <h1 class="scr__title">{t('driver.signin.title')}</h1>
+      <p class="scr__lede">{t('driver.signin.lede')}</p>
 
       {error ? <ErrorNote error={error} /> : null}
 
       <Card>
         <div class="field">
           <label class="field__label" for="did">
-            Driver ID
+            {t('driver.signin.idLabel')}
           </label>
           <input
             id="did"
@@ -53,30 +52,30 @@ export function SignInScreen({ onSignIn, error }: SignInScreenProps) {
             inputMode="text"
           />
         </div>
-        <p class="card__note">It is printed on the back of your fleet badge.</p>
+        <p class="card__note">{t('driver.signin.idNote')}</p>
       </Card>
 
       <div class="scr__cta">
         <Button type="submit" disabled={!value.trim()}>
-          Continue
+          {t('driver.signin.continue')}
         </Button>
       </div>
 
-      <Card title="Why we ask once" tone="soft">
+      <Card title={t('driver.signin.whyTitle')} tone="soft">
         <Checklist
           items={[
-            'Your ID stays on this phone only',
-            'You will not have to type it again',
-            'The office can see you are on shift',
+            t('driver.signin.why1'),
+            t('driver.signin.why2'),
+            t('driver.signin.why3'),
           ]}
         />
       </Card>
 
       <div class="scr__foot">
         <a class="btn btn--link" href="../signin-driver.html">
-          I do not know my ID
+          {t('driver.signin.noId')}
         </a>
-        <ReadAloud text={() => SPOKEN} label="Read this aloud" />
+        <ReadAloud text={() => t('driver.signin.aloud')} label={t('driver.readAloud')} />
       </div>
     </form>
   );

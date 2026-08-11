@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { t } from '../../shared/i18n'; // English is the base catalog, so the real `t` yields the English literals
 import {
   EMPTY_ACCEPT,
   VOID_WINDOW_MS,
@@ -47,17 +48,17 @@ const gate = (over: Partial<GateView> = {}): GateView => ({ ok: true, balance: 2
 
 describe('gateNotice', () => {
   it('is silent while the gate is open', () => {
-    expect(gateNotice(agent(), gate())).toBeNull();
+    expect(gateNotice(agent(), gate(), t)).toBeNull();
   });
 
   it('a locked account outranks a thin wallet', () => {
-    const n = gateNotice(agent({ status: 'LOCKED' }), gate({ ok: false, code: 'AGENT_LOCKED', balance: -3 }));
+    const n = gateNotice(agent({ status: 'LOCKED' }), gate({ ok: false, code: 'AGENT_LOCKED', balance: -3 }), t);
     expect(n?.tone).toBe('danger');
     expect(n?.title).toBe('Account locked');
   });
 
   it('a thin wallet names the exact top-up needed', () => {
-    const n = gateNotice(agent(), gate({ ok: false, code: 'WALLET_INSUFFICIENT', balance: 0.4, shortfall: 4.6 }));
+    const n = gateNotice(agent(), gate({ ok: false, code: 'WALLET_INSUFFICIENT', balance: 0.4, shortfall: 4.6 }), t);
     expect(n?.tone).toBe('warn');
     expect(n?.detail).toContain('4.60');
   });
@@ -71,11 +72,11 @@ describe('gateNotice', () => {
 
 describe('statusNotice', () => {
   it('active and locked shops get no onboarding notice', () => {
-    expect(statusNotice('ACTIVE')).toBeNull();
-    expect(statusNotice('LOCKED')).toBeNull(); // locked is the gate's story, not onboarding's
+    expect(statusNotice('ACTIVE', t)).toBeNull();
+    expect(statusNotice('LOCKED', t)).toBeNull(); // locked is the gate's story, not onboarding's
   });
   it('a draft shop is told the office must activate it', () => {
-    expect(statusNotice('KYC_PENDING')).toContain('kyc pending');
+    expect(statusNotice('KYC_PENDING', t)).toContain('kyc pending');
   });
 });
 
@@ -101,16 +102,16 @@ describe('destinationZones', () => {
 describe('acceptMissing', () => {
   const dims = { l: '30', w: '20', h: '10', kg: '1.6' };
   it('walks the redesigned counter flow in order: sticker → measure → destination → photo', () => {
-    expect(acceptMissing(EMPTY_ACCEPT)).toContain('sticker');
-    expect(acceptMissing({ ...EMPTY_ACCEPT, parcelId: 'P-1' })).toContain('Measure');
-    expect(acceptMissing({ ...EMPTY_ACCEPT, parcelId: 'P-1', dims })).toContain('going');
-    expect(acceptMissing({ ...EMPTY_ACCEPT, parcelId: 'P-1', dims, destPudoDid: 'did:agent:b', destZone: 'Z-B' })).toContain('photo');
-    expect(acceptMissing({ ...EMPTY_ACCEPT, parcelId: 'P-1', dims, destPudoDid: 'did:agent:b', destZone: 'Z-B', photoRef: 'p.jpg' })).toBeNull();
+    expect(acceptMissing(EMPTY_ACCEPT, t)).toContain('sticker');
+    expect(acceptMissing({ ...EMPTY_ACCEPT, parcelId: 'P-1' }, t)).toContain('Measure');
+    expect(acceptMissing({ ...EMPTY_ACCEPT, parcelId: 'P-1', dims }, t)).toContain('going');
+    expect(acceptMissing({ ...EMPTY_ACCEPT, parcelId: 'P-1', dims, destPudoDid: 'did:agent:b', destZone: 'Z-B' }, t)).toContain('photo');
+    expect(acceptMissing({ ...EMPTY_ACCEPT, parcelId: 'P-1', dims, destPudoDid: 'did:agent:b', destZone: 'Z-B', photoRef: 'p.jpg' }, t)).toBeNull();
   });
 
   it('an incomplete or sub-1mm measurement still blocks', () => {
-    expect(acceptMissing({ ...EMPTY_ACCEPT, parcelId: 'P-1', dims: { l: '30', w: '20', h: '', kg: '1' }, destPudoDid: 'x', photoRef: 'p.jpg' })).toContain('Measure');
-    expect(acceptMissing({ ...EMPTY_ACCEPT, parcelId: 'P-1', dims: { l: '30', w: '20', h: '0.05', kg: '1' }, destPudoDid: 'x', photoRef: 'p.jpg' })).toContain('Measure');
+    expect(acceptMissing({ ...EMPTY_ACCEPT, parcelId: 'P-1', dims: { l: '30', w: '20', h: '', kg: '1' }, destPudoDid: 'x', photoRef: 'p.jpg' }, t)).toContain('Measure');
+    expect(acceptMissing({ ...EMPTY_ACCEPT, parcelId: 'P-1', dims: { l: '30', w: '20', h: '0.05', kg: '1' }, destPudoDid: 'x', photoRef: 'p.jpg' }, t)).toContain('Measure');
   });
 });
 
@@ -123,8 +124,8 @@ describe('intake measure + destination helpers', () => {
   });
 
   it('sizeMeta gives a derived tier its plain words', () => {
-    expect(sizeMeta('M').label).toBe('Medium');
-    expect(sizeMeta('HEAVY').hint).toBe('Over 20 kg');
+    expect(sizeMeta('M', t).label).toBe('Medium');
+    expect(sizeMeta('HEAVY', t).hint).toBe('Over 20 kg');
   });
 
   const pt = (over: Partial<NetworkPoint>): NetworkPoint => ({ did: 'd', shopName: 'Shop', zone: 'Z-A', openState: 'open', pricePerParcel: 1, ...over });
@@ -169,16 +170,16 @@ describe('book freight (F2)', () => {
 
   it('bookFreightMissing gates dims, destination, a positive cash cap, and a future planned date', () => {
     const base = { ...EMPTY_ACCEPT, dims, destPudoDid: 'did:agent:b', budgetCap: '40' };
-    expect(bookFreightMissing({ ...EMPTY_ACCEPT }, now)).toContain('Measure');
-    expect(bookFreightMissing({ ...EMPTY_ACCEPT, dims }, now)).toContain('going');
-    expect(bookFreightMissing({ ...EMPTY_ACCEPT, dims, destPudoDid: 'did:agent:b' }, now)).toContain('cash budget');
-    expect(bookFreightMissing({ ...base, budgetCap: '0' }, now)).toContain('cash budget'); // a zero cap is no cap
+    expect(bookFreightMissing({ ...EMPTY_ACCEPT }, now, t)).toContain('Measure');
+    expect(bookFreightMissing({ ...EMPTY_ACCEPT, dims }, now, t)).toContain('going');
+    expect(bookFreightMissing({ ...EMPTY_ACCEPT, dims, destPudoDid: 'did:agent:b' }, now, t)).toContain('cash budget');
+    expect(bookFreightMissing({ ...base, budgetCap: '0' }, now, t)).toContain('cash budget'); // a zero cap is no cap
     // A ship-now booking with all fields is complete (no sticker, no photo — freight isn't shelved).
-    expect(bookFreightMissing({ ...base, freightWhen: 'now' }, now)).toBeNull();
+    expect(bookFreightMissing({ ...base, freightWhen: 'now' }, now, t)).toBeNull();
     // Planned needs a real, FUTURE date.
-    expect(bookFreightMissing({ ...base, freightWhen: 'planned', freightDate: '' }, now)).toContain('planned pickup date');
-    expect(bookFreightMissing({ ...base, freightWhen: 'planned', freightDate: '2026-08-09T09:00' }, now)).toContain('future'); // a past date
-    expect(bookFreightMissing({ ...base, freightWhen: 'planned', freightDate: '2026-08-20T09:00' }, now)).toBeNull();
+    expect(bookFreightMissing({ ...base, freightWhen: 'planned', freightDate: '' }, now, t)).toContain('planned pickup date');
+    expect(bookFreightMissing({ ...base, freightWhen: 'planned', freightDate: '2026-08-09T09:00' }, now, t)).toContain('future'); // a past date
+    expect(bookFreightMissing({ ...base, freightWhen: 'planned', freightDate: '2026-08-20T09:00' }, now, t)).toBeNull();
   });
 });
 
@@ -199,7 +200,7 @@ describe('driver ratings (REP2)', () => {
   it('DRIVER_ISSUE_LABELS covers the movement-leg failings with plain words', () => {
     const keys = DRIVER_ISSUE_LABELS.map((i) => i.key);
     expect(keys).toEqual(expect.arrayContaining(['LATE_PICKUP', 'KEPT_OVERNIGHT', 'AFTER_HOURS', 'EQUIPMENT_FAILURE']));
-    expect(DRIVER_ISSUE_LABELS.every((i) => i.label.length > 0)).toBe(true);
+    expect(DRIVER_ISSUE_LABELS.every((i) => t(i.labelKey).length > 0)).toBe(true);
   });
 });
 
@@ -227,18 +228,18 @@ describe('priceBand', () => {
   const bm: Benchmark = { count: 8, median: 2, p25: 1.5, p75: 2.5, min: 1, max: 3 };
 
   it('needs a usable benchmark', () => {
-    expect(priceBand(1.5, null)).toBeNull();
-    expect(priceBand(1.5, { ...bm, count: 0 })).toBeNull();
+    expect(priceBand(1.5, null, t)).toBeNull();
+    expect(priceBand(1.5, { ...bm, count: 0 }, t)).toBeNull();
   });
 
   it('reads above / below / at with a ±1% dead zone', () => {
-    expect(priceBand(2.5, bm)?.headline).toContain('25% more');
-    expect(priceBand(1.5, bm)?.headline).toContain('25% less');
-    expect(priceBand(2.01, bm)?.showMatch).toBe(false);
+    expect(priceBand(2.5, bm, t)?.headline).toContain('25% more');
+    expect(priceBand(1.5, bm, t)?.headline).toContain('25% less');
+    expect(priceBand(2.01, bm, t)?.showMatch).toBe(false);
   });
 
   it('the match price is money-rounded exactly as it will be PATCHed', () => {
-    const b = priceBand(3, { ...bm, median: 1.999 });
+    const b = priceBand(3, { ...bm, median: 1.999 }, t);
     expect(b?.matchPrice).toBe(2);
     expect(roundMoney(1.006)).toBe(1.01);
     expect(roundMoney(2.994)).toBe(2.99);
@@ -252,23 +253,23 @@ describe('speaking', () => {
   });
 
   it('home summary reads the gate and the closed state', () => {
-    expect(homeSummary(agent({ balance: 12.5, openState: 'closed' }), gate({ ok: false }))).toBe(
+    expect(homeSummary(agent({ balance: 12.5, openState: 'closed' }), gate({ ok: false }), t)).toBe(
       'Wallet balance 12.50. Top up to accept parcels. Your shop is marked closed.',
     );
   });
 
   it('handover summary counts the waiting and the chosen', () => {
-    expect(handoverSummary(0, 0)).toContain('No parcels');
-    expect(handoverSummary(3, 2)).toContain('3 parcels');
+    expect(handoverSummary(0, 0, 0, t)).toContain('No parcels');
+    expect(handoverSummary(3, 2, 0, t)).toContain('3 parcels');
   });
 
   it('handover summary speaks the parcels still owed to the bus after the gate refuses (S25)', () => {
-    const said = handoverSummary(3, 1, 2);
+    const said = handoverSummary(3, 1, 2, t);
     expect(said).toContain('2 for this bus are still waiting');
     expect(said).toContain('leave them behind');
     // No missed → the plain "finish the handover" prompt, never the short-ship wording.
-    expect(handoverSummary(3, 3, 0)).toContain('finish the handover');
-    expect(handoverSummary(3, 3, 0)).not.toContain('still waiting');
+    expect(handoverSummary(3, 3, 0, t)).toContain('finish the handover');
+    expect(handoverSummary(3, 3, 0, t)).not.toContain('still waiting');
   });
 });
 
@@ -310,8 +311,8 @@ describe('void / reverse logistics', () => {
   });
 
   it('the countdown speaks plainly and never shows a bare number', () => {
-    expect(voidCountdownLabel(VOID_WINDOW_MS)).toBe('5 min left to undo');
-    expect(voidCountdownLabel(45_000)).toBe('45 sec left to undo');
-    expect(voidCountdownLabel(0)).toBe('Window closed');
+    expect(voidCountdownLabel(VOID_WINDOW_MS, t)).toBe('5 min left to undo');
+    expect(voidCountdownLabel(45_000, t)).toBe('45 sec left to undo');
+    expect(voidCountdownLabel(0, t)).toBe('Window closed');
   });
 });

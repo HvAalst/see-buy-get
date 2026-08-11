@@ -10,6 +10,7 @@ import {
   type Result,
   type SbgConfig,
 } from '../../lib/sbg';
+import { t } from '../../shared/i18n';
 import type { ManagerView } from './types';
 
 const APP_VERSION = '1.0.0';
@@ -79,7 +80,7 @@ function drop(key: string): void {
 export const readManager = (): { did: string; company: string } | null => {
   const did = get(DID_KEY);
   if (!did) return null;
-  return { did, company: get(COMPANY_KEY) ?? 'My fleet' };
+  return { did, company: get(COMPANY_KEY) ?? t('fleet.myFleetFallback') };
 };
 export const saveManager = (did: string, company: string): void => {
   set(DID_KEY, did);

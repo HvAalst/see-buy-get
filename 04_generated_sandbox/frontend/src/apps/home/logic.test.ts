@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { t } from '../../shared/i18n'; // English is the base catalog, so the real `t` yields the English literals
 import {
   EMPTY_JOIN,
   ROLES,
@@ -9,6 +10,7 @@ import {
   phoneLooksValid,
   prevStep,
   roleById,
+  roleMeta,
   signupBody,
   stepBlocker,
   stepsFor,
@@ -38,7 +40,7 @@ describe('roles', () => {
     for (const r of ROLES) {
       expect(r.app).toMatch(/^\/[a-z]+\/$/);
       expect(['signup', 'vendor', 'invite']).toContain(r.kind);
-      expect(r.promise.length).toBeGreaterThan(0);
+      expect(roleMeta(r, t).promise.length).toBeGreaterThan(0);
     }
     // The three roles the backend's /auth/signup actually supports.
     expect(ROLES.filter((r) => r.kind === 'signup').map((r) => r.id)).toEqual(['pudo', 'driver', 'mdp']);
@@ -80,24 +82,24 @@ describe('wizard steps', () => {
 describe('stepBlocker', () => {
   it('walks a shop through in order', () => {
     const shop = role('pudo');
-    expect(stepBlocker(shop, 'phone', EMPTY_JOIN)).toContain('phone');
-    expect(stepBlocker(shop, 'phone', filled())).toBeNull();
-    expect(stepBlocker(shop, 'about', { ...filled(), displayName: '' })).toContain('shop');
-    expect(stepBlocker(shop, 'about', { ...filled(), fullName: '' })).toContain('full name');
-    expect(stepBlocker(shop, 'where', { ...filled(), location: null })).toContain('map');
-    expect(stepBlocker(shop, 'where', filled())).toBeNull();
-    expect(stepBlocker(shop, 'login', { ...filled(), password: '123' })).toContain('6 characters');
-    expect(stepBlocker(shop, 'login', filled())).toBeNull();
+    expect(stepBlocker(shop, 'phone', EMPTY_JOIN, t)).toContain('phone');
+    expect(stepBlocker(shop, 'phone', filled(), t)).toBeNull();
+    expect(stepBlocker(shop, 'about', { ...filled(), displayName: '' }, t)).toContain('shop');
+    expect(stepBlocker(shop, 'about', { ...filled(), fullName: '' }, t)).toContain('full name');
+    expect(stepBlocker(shop, 'where', { ...filled(), location: null }, t)).toContain('map');
+    expect(stepBlocker(shop, 'where', filled(), t)).toBeNull();
+    expect(stepBlocker(shop, 'login', { ...filled(), password: '123' }, t)).toContain('6 characters');
+    expect(stepBlocker(shop, 'login', filled(), t)).toBeNull();
   });
 
   it('a driver must say what they drive; a hub needs no personal ID', () => {
-    expect(stepBlocker(role('driver'), 'about', { ...filled(), licenceClasses: [] })).toContain('what you drive');
-    expect(stepBlocker(role('mdp'), 'about', { ...filled(), fullName: '', nationalId: '' })).toBeNull();
+    expect(stepBlocker(role('driver'), 'about', { ...filled(), licenceClasses: [] }, t)).toContain('what you drive');
+    expect(stepBlocker(role('mdp'), 'about', { ...filled(), fullName: '', nationalId: '' }, t)).toBeNull();
   });
 
   it('a store only needs its name', () => {
-    expect(stepBlocker(role('vendor'), 'about', EMPTY_JOIN)).toContain('Name your store');
-    expect(stepBlocker(role('vendor'), 'about', { ...EMPTY_JOIN, displayName: 'Nairobi Threads' })).toBeNull();
+    expect(stepBlocker(role('vendor'), 'about', EMPTY_JOIN, t)).toContain('Name your store');
+    expect(stepBlocker(role('vendor'), 'about', { ...EMPTY_JOIN, displayName: 'Nairobi Threads' }, t)).toBeNull();
   });
 });
 
@@ -141,7 +143,7 @@ describe('signupBody', () => {
 describe('speaking', () => {
   it('every step has a spoken line', () => {
     for (const step of stepsFor('signup')) {
-      expect(joinSpoken(role('pudo'), step).length).toBeGreaterThan(0);
+      expect(joinSpoken(role('pudo'), step, t).length).toBeGreaterThan(0);
     }
   });
 });

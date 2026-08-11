@@ -1,5 +1,6 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { BottomNav, Button, Checklist, FeedbackFlash, Icon, Pill, TopBar, type NavItem } from '../../shared/ui';
+import { useT } from '../../shared/i18n';
 import { unsortedAt } from './logic';
 import { DropScreen } from './screens/DropScreen';
 import { HomeScreen } from './screens/HomeScreen';
@@ -15,6 +16,7 @@ import './mdp.css';
 type Tab = 'home' | 'sort' | 'load';
 
 export function App() {
+  const t = useT();
   const { state, actions } = useMdpApp();
   const sw = useRegisterSW();
   const [needRefresh] = sw.needRefresh;
@@ -25,7 +27,7 @@ export function App() {
   if (state.phase === 'signin') {
     return (
       <div class="app">
-        <TopBar title="SeeBuyGet Hub" subtitle="Sign in" />
+        <TopBar title={t('mdp.appTitle')} subtitle={t('mdp.appSubtitleSignin')} />
         <main class="app__scroll app__scroll--nonav">
           <SignInScreen actions={actions} error={state.error} busy={state.busy === 'signin'} />
         </main>
@@ -38,18 +40,18 @@ export function App() {
   const tab: Tab = state.screen === 'sort' || state.screen === 'drop' ? 'sort' : state.screen === 'load' || state.screen === 'newtote' ? 'load' : 'home';
 
   const tabs: NavItem<Tab>[] = [
-    { key: 'home', label: 'My hub', icon: 'grid' },
-    { key: 'sort', label: 'Sort', icon: 'scan', badge: unsorted || undefined },
-    { key: 'load', label: 'Bags', icon: 'bag' },
+    { key: 'home', label: t('mdp.nav.home'), icon: 'grid' },
+    { key: 'sort', label: t('mdp.nav.sort'), icon: 'scan', badge: unsorted || undefined },
+    { key: 'load', label: t('mdp.nav.bags'), icon: 'bag' },
   ];
 
   return (
     <div class="app">
       <TopBar
-        title="SeeBuyGet Hub"
+        title={t('mdp.appTitle')}
         subtitle={state.hub?.name}
         onBack={state.screen === 'home' ? undefined : () => actions.go('home')}
-        backLabel="Back to my hub"
+        backLabel={t('mdp.backToHub')}
         end={
           <>
             {needRefresh ? (
@@ -57,14 +59,14 @@ export function App() {
                 type="button"
                 class="topbar__lead"
                 onClick={() => void sw.updateServiceWorker(true)}
-                aria-label="A new version is ready — update now"
-                title="Update the app"
+                aria-label={t('mdp.update.aria')}
+                title={t('mdp.update.title')}
               >
                 <Icon name="refresh" size={24} />
               </button>
             ) : null}
             <Pill tone="ok" dot>
-              {state.hub ? `${state.hub.zones.length} zone${state.hub.zones.length === 1 ? '' : 's'}` : '…'}
+              {state.hub ? (state.hub.zones.length === 1 ? t('mdp.zoneOne', { count: state.hub.zones.length }) : t('mdp.zoneMany', { count: state.hub.zones.length })) : '…'}
             </Pill>
           </>
         }
@@ -74,7 +76,7 @@ export function App() {
         {state.stale ? (
           <p class="stale">
             <Icon name="offline" size={20} />
-            <span>No signal — showing what we last knew.</span>
+            <span>{t('mdp.stale')}</span>
           </p>
         ) : null}
         <ScreenRouter screen={state.screen} state={state} actions={actions} />
@@ -123,22 +125,24 @@ function Toasts({ state, actions, noNav }: { state: MdpState; actions: MdpAction
 }
 
 function Boot() {
+  const t = useT();
   return (
     <div class="boot">
       <span class="boot__spin" aria-hidden="true" />
-      <p>Opening the sort floor…</p>
+      <p>{t('mdp.boot')}</p>
     </div>
   );
 }
 
 function UpdateGate() {
+  const t = useT();
   return (
     <div class="gate">
       <Icon name="arrowUp" size={46} class="gate__glyph" />
-      <h1 class="scr__title">This app needs updating</h1>
-      <p class="scr__lede">A newer version is required before you can carry on working.</p>
-      <Checklist items={['Nothing on the floor is lost', 'Updating takes a few seconds']} />
-      <Button onClick={() => location.reload()}>Update now</Button>
+      <h1 class="scr__title">{t('mdp.gate.title')}</h1>
+      <p class="scr__lede">{t('mdp.gate.lede')}</p>
+      <Checklist items={[t('mdp.gate.item1'), t('mdp.gate.item2')]} />
+      <Button onClick={() => location.reload()}>{t('mdp.gate.cta')}</Button>
     </div>
   );
 }

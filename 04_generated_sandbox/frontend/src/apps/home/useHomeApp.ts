@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
+import { t } from '../../shared/i18n';
 import type { SbgError } from '../../lib/sbg';
 import {
   deviceMarker,
@@ -123,7 +124,7 @@ export function useHomeApp() {
   /** Step 1 → 2: ask the backend to send (and, in the sandbox, echo) the code. */
   const sendCode = useCallback(async () => {
     const { role, form } = stateRef.current;
-    if (!role || stepBlocker(role, 'phone', form)) return;
+    if (!role || stepBlocker(role, 'phone', form, t)) return;
     await run('code', async () => {
       const r = await requestCode(normalizePhone(form.phone));
       if (r.error) {
@@ -138,7 +139,7 @@ export function useHomeApp() {
   /** Step 2 → 3: the backend marks the number verified, which signup then requires. */
   const confirmCode = useCallback(async () => {
     const { role, form } = stateRef.current;
-    if (!role || stepBlocker(role, 'code', form)) return;
+    if (!role || stepBlocker(role, 'code', form, t)) return;
     await run('verify', async () => {
       const r = await verifyCode(normalizePhone(form.phone), form.code.trim());
       if (r.error) {
@@ -153,7 +154,7 @@ export function useHomeApp() {
   const advance = useCallback(() => {
     setState((s) => {
       if (!s.role) return s;
-      const blocker = stepBlocker(s.role, s.step, s.form);
+      const blocker = stepBlocker(s.role, s.step, s.form, t);
       if (blocker) return s;
       return { ...s, step: nextStep(s.role.kind, s.step), error: null };
     });
@@ -165,7 +166,7 @@ export function useHomeApp() {
     if (!role) return;
 
     if (role.kind === 'vendor') {
-      if (stepBlocker(role, 'about', form)) return;
+      if (stepBlocker(role, 'about', form, t)) return;
       await run('submit', async () => {
         const r = await registerStore({ name: form.displayName.trim(), country: form.vendorCountry.trim() || undefined });
         if (r.error) {
@@ -177,7 +178,7 @@ export function useHomeApp() {
       return;
     }
 
-    if (stepBlocker(role, 'login', form)) return;
+    if (stepBlocker(role, 'login', form, t)) return;
     await run('submit', async () => {
       const r = await signup(signupBody(role, form, deviceMarker()));
       if (r.error) {

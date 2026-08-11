@@ -1,5 +1,6 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { BottomNav, Button, Checklist, FeedbackFlash, Icon, NotificationBell, Pill, TopBar, type NavItem } from '../../shared/ui';
+import { useT } from '../../shared/i18n';
 import { AcceptScreen } from './screens/AcceptScreen';
 import { CollectScreen } from './screens/CollectScreen';
 import { ConsignmentsScreen } from './screens/ConsignmentsScreen';
@@ -19,6 +20,7 @@ import './agent.css';
 type Tab = 'home' | 'accept' | 'release' | 'records';
 
 export function App() {
+  const t = useT();
   const { state, actions, notifications } = useAgentApp();
   const sw = useRegisterSW();
   const [needRefresh] = sw.needRefresh;
@@ -29,7 +31,7 @@ export function App() {
   if (state.phase === 'signin') {
     return (
       <div class="app">
-        <TopBar title="SeeBuyGet Agent" subtitle="Sign in" />
+        <TopBar title={t('agent.appTitle')} subtitle={t('agent.signInSubtitle')} />
         <main class="app__scroll app__scroll--nonav">
           <SignInScreen actions={actions} error={state.error} busy={state.busy === 'signin'} />
         </main>
@@ -42,19 +44,19 @@ export function App() {
   const tab: Tab = state.screen === 'accept' ? 'accept' : state.screen === 'release' ? 'release' : state.screen === 'records' ? 'records' : 'home';
 
   const tabs: NavItem<Tab>[] = [
-    { key: 'home', label: 'My shop', icon: 'home' },
-    { key: 'accept', label: 'Take in', icon: 'box' },
-    { key: 'release', label: 'Hand out', icon: 'person' },
-    { key: 'records', label: 'Records', icon: 'grid' },
+    { key: 'home', label: t('agent.nav.home'), icon: 'home' },
+    { key: 'accept', label: t('agent.nav.accept'), icon: 'box' },
+    { key: 'release', label: t('agent.nav.release'), icon: 'person' },
+    { key: 'records', label: t('agent.nav.records'), icon: 'grid' },
   ];
 
   return (
     <div class="app">
       <TopBar
-        title="SeeBuyGet Agent"
+        title={t('agent.appTitle')}
         subtitle={state.agent?.shopName}
         onBack={state.screen === 'home' ? undefined : () => actions.go('home')}
-        backLabel="Back to my shop"
+        backLabel={t('agent.backToShop')}
         end={
           <>
             <NotificationBell api={notifications} />
@@ -63,14 +65,14 @@ export function App() {
                 type="button"
                 class="topbar__lead"
                 onClick={() => void sw.updateServiceWorker(true)}
-                aria-label="A new version is ready — update now"
-                title="Update the app"
+                aria-label={t('agent.update.aria')}
+                title={t('agent.update.title')}
               >
                 <Icon name="refresh" size={24} />
               </button>
             ) : null}
             <Pill tone={open ? 'ok' : 'idle'} dot>
-              {open ? 'Open' : 'Closed'}
+              {open ? t('agent.open') : t('agent.closed')}
             </Pill>
           </>
         }
@@ -80,7 +82,7 @@ export function App() {
         {state.stale ? (
           <p class="stale">
             <Icon name="offline" size={20} />
-            <span>No signal — showing what we last knew.</span>
+            <span>{t('agent.stale')}</span>
           </p>
         ) : null}
         <ScreenRouter screen={state.screen} state={state} actions={actions} />
@@ -140,22 +142,24 @@ function Toasts({ state, actions, noNav }: { state: AgentState; actions: AgentAc
 }
 
 function Boot() {
+  const t = useT();
   return (
     <div class="boot">
       <span class="boot__spin" aria-hidden="true" />
-      <p>Opening your shop…</p>
+      <p>{t('agent.boot')}</p>
     </div>
   );
 }
 
 function UpdateGate() {
+  const t = useT();
   return (
     <div class="gate">
       <Icon name="arrowUp" size={46} class="gate__glyph" />
-      <h1 class="scr__title">This app needs updating</h1>
-      <p class="scr__lede">A newer version is required before you can carry on working.</p>
-      <Checklist items={['Your wallet and parcels are safe', 'Updating takes a few seconds']} />
-      <Button onClick={() => location.reload()}>Update now</Button>
+      <h1 class="scr__title">{t('agent.update.gateTitle')}</h1>
+      <p class="scr__lede">{t('agent.update.gateBody')}</p>
+      <Checklist items={[t('agent.update.safe'), t('agent.update.seconds')]} />
+      <Button onClick={() => location.reload()}>{t('agent.update.cta')}</Button>
     </div>
   );
 }

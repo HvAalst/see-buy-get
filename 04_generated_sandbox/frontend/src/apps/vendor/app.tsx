@@ -1,5 +1,6 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { BottomNav, Button, Checklist, Icon, Pill, TopBar, type NavItem } from '../../shared/ui';
+import { useT } from '../../shared/i18n';
 import { money } from './logic';
 import { BooksScreen } from './screens/BooksScreen';
 import { MintScreen } from './screens/MintScreen';
@@ -11,6 +12,7 @@ import '../../shared/screens.css';
 import './vendor.css';
 
 export function App() {
+  const t = useT();
   const { state, actions } = useVendorApp();
   const sw = useRegisterSW();
   const [needRefresh] = sw.needRefresh;
@@ -21,7 +23,7 @@ export function App() {
   if (state.phase === 'signin') {
     return (
       <div class="app">
-        <TopBar title="SeeBuyGet Vendor" subtitle="Sign in" />
+        <TopBar title={t('vendor.appTitle')} subtitle={t('vendor.signInSubtitle')} />
         <main class="app__scroll app__scroll--nonav">
           <SignInScreen state={state} actions={actions} error={state.error} />
         </main>
@@ -31,19 +33,19 @@ export function App() {
   }
 
   const tabs: NavItem<Screen>[] = [
-    { key: 'orders', label: 'Orders', icon: 'box', badge: state.checkouts.length || undefined },
-    { key: 'mint', label: 'Ship', icon: 'send' },
-    { key: 'books', label: 'Books', icon: 'wallet' },
-    { key: 'store', label: 'My store', icon: 'home' },
+    { key: 'orders', label: t('vendor.nav.orders'), icon: 'box', badge: state.checkouts.length || undefined },
+    { key: 'mint', label: t('vendor.nav.ship'), icon: 'send' },
+    { key: 'books', label: t('vendor.nav.books'), icon: 'wallet' },
+    { key: 'store', label: t('vendor.nav.store'), icon: 'home' },
   ];
 
   return (
     <div class="app">
       <TopBar
-        title="SeeBuyGet Vendor"
+        title={t('vendor.appTitle')}
         subtitle={state.vendor?.name}
         onBack={state.screen === 'orders' ? undefined : () => actions.go('orders')}
-        backLabel="Back to my orders"
+        backLabel={t('vendor.backToOrders')}
         end={
           <>
             {needRefresh ? (
@@ -51,8 +53,8 @@ export function App() {
                 type="button"
                 class="topbar__lead"
                 onClick={() => void sw.updateServiceWorker(true)}
-                aria-label="A new version is ready — update now"
-                title="Update the app"
+                aria-label={t('vendor.update.aria')}
+                title={t('vendor.update.title')}
               >
                 <Icon name="refresh" size={24} />
               </button>
@@ -68,7 +70,7 @@ export function App() {
         {state.stale ? (
           <p class="stale">
             <Icon name="offline" size={20} />
-            <span>No signal — showing what we last knew.</span>
+            <span>{t('vendor.offlineBanner')}</span>
           </p>
         ) : null}
         <ScreenRouter screen={state.screen} state={state} actions={actions} />
@@ -112,22 +114,24 @@ function Toasts({ state, actions, noNav }: { state: VendorState; actions: Vendor
 }
 
 function Boot() {
+  const t = useT();
   return (
     <div class="boot">
       <span class="boot__spin" aria-hidden="true" />
-      <p>Opening your store…</p>
+      <p>{t('vendor.boot')}</p>
     </div>
   );
 }
 
 function UpdateGate() {
+  const t = useT();
   return (
     <div class="gate">
       <Icon name="arrowUp" size={46} class="gate__glyph" />
-      <h1 class="scr__title">This app needs updating</h1>
-      <p class="scr__lede">A newer version is required before you can carry on working.</p>
-      <Checklist items={['Your balance and orders are safe', 'Updating takes a few seconds']} />
-      <Button onClick={() => location.reload()}>Update now</Button>
+      <h1 class="scr__title">{t('vendor.updateGate.title')}</h1>
+      <p class="scr__lede">{t('vendor.updateGate.body')}</p>
+      <Checklist items={[t('vendor.updateGate.safe'), t('vendor.updateGate.seconds')]} />
+      <Button onClick={() => location.reload()}>{t('vendor.updateGate.cta')}</Button>
     </div>
   );
 }

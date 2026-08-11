@@ -4,8 +4,26 @@
  *
  * Keys are namespaced dotted paths (`common.retry`). Interpolate with `{name}` placeholders — `t('x', {name})`.
  * Not `as const`: the values must be typed `string` so a translation may differ from the English literal.
+ *
+ * Per-app slices live in their own files (en.<app>.ts) so each app owns its <app>.* namespace and the six
+ * apps can be extracted independently without contending over this file. They are spread in below.
  */
+import { enAgent } from './en.agent';
+import { enDriver } from './en.driver';
+import { enFleet } from './en.fleet';
+import { enMdp } from './en.mdp';
+import { enVendor } from './en.vendor';
+import { enHome } from './en.home';
+
 export const en = {
+  // Per-app slices (each app owns its own <app>.* namespace; filled in its own en.<app>.ts file).
+  ...enAgent,
+  ...enDriver,
+  ...enFleet,
+  ...enMdp,
+  ...enVendor,
+  ...enHome,
+
   // Shared controls the whole network reuses.
   'common.readAloud': 'Read this screen aloud',
   'common.stop': 'Stop',

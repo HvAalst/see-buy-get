@@ -4,6 +4,7 @@
  * the legacy fleet.js so console and PWA can never disagree about who may drive what.
  */
 
+import type { MessageKey, Translate } from '../../shared/i18n';
 import {
   HEAVY_CLASSES,
   type AssignmentRow,
@@ -48,15 +49,20 @@ export interface VehicleForm {
 /** Load/unload equipment a fleet manager can declare (S32). Mirrors the backend EQUIPMENT tuple; plain
  *  labels for the console. 'MAN' is implicit (every vehicle can do manual handling) so it is not listed. */
 export type Equipment = 'HTR' | 'PLT' | 'FLT' | 'TLT' | 'CRN' | 'RMP' | 'STR';
-export const EQUIPMENT_OPTIONS: Array<{ key: Equipment; label: string }> = [
-  { key: 'HTR', label: 'Hand truck / sack barrow' },
-  { key: 'PLT', label: 'Pallet jack' },
-  { key: 'TLT', label: 'Tail-lift (hydraulic)' },
-  { key: 'FLT', label: 'Forklift' },
-  { key: 'CRN', label: 'Crane / Hiab' },
-  { key: 'RMP', label: 'Loading ramp' },
-  { key: 'STR', label: 'Slings / straps' },
+const EQUIPMENT_KEYS: Array<{ key: Equipment; labelKey: MessageKey }> = [
+  { key: 'HTR', labelKey: 'fleet.equipment.htr' },
+  { key: 'PLT', labelKey: 'fleet.equipment.plt' },
+  { key: 'TLT', labelKey: 'fleet.equipment.tlt' },
+  { key: 'FLT', labelKey: 'fleet.equipment.flt' },
+  { key: 'CRN', labelKey: 'fleet.equipment.crn' },
+  { key: 'RMP', labelKey: 'fleet.equipment.rmp' },
+  { key: 'STR', labelKey: 'fleet.equipment.str' },
 ];
+
+/** The declarable equipment options with their plain-words labels resolved in the active locale. */
+export function equipmentOptions(t: Translate): Array<{ key: Equipment; label: string }> {
+  return EQUIPMENT_KEYS.map((e) => ({ key: e.key, label: t(e.labelKey) }));
+}
 
 export const EMPTY_VEHICLE: VehicleForm = {
   plate: '',
@@ -77,18 +83,18 @@ export const EMPTY_VEHICLE: VehicleForm = {
 };
 
 /** The next thing the vehicle form needs, or null when it can submit. */
-export function vehicleMissing(f: VehicleForm): string | null {
-  if (!f.plate.trim()) return 'Type the number plate.';
-  if (!f.ownerName.trim()) return 'Name the owner.';
-  if (f.vehicleClass === 'truck' && !f.truckSubtype) return 'Pick the truck body.';
+export function vehicleMissing(f: VehicleForm, t: Translate): string | null {
+  if (!f.plate.trim()) return t('fleet.logic.vMissingPlate');
+  if (!f.ownerName.trim()) return t('fleet.logic.vMissingOwner');
+  if (f.vehicleClass === 'truck' && !f.truckSubtype) return t('fleet.logic.vMissingBody');
   // S34 — the price corridor is set as a PAIR or not at all. A lone bound would be silently paired with the
   // other class default (a typed ceiling of 0.5 gets raised to the 0.8 floor), contradicting the on-screen
   // promise that the operator owns BOTH the floor and the ceiling — so require both, or neither.
   const min = f.minMultiplier.trim() ? Number(f.minMultiplier) : null;
   const max = f.maxMultiplier.trim() ? Number(f.maxMultiplier) : null;
-  if ((min === null) !== (max === null)) return 'Set both the lowest and highest price multiplier, or leave both blank.';
+  if ((min === null) !== (max === null)) return t('fleet.logic.vMissingBothMult');
   if (min !== null && max !== null && Number.isFinite(min) && Number.isFinite(max) && min > max) {
-    return 'The lowest price multiplier cannot be above the highest.';
+    return t('fleet.logic.vMissingMultInverted');
   }
   return null;
 }
@@ -115,13 +121,13 @@ export const EMPTY_DRIVER: DriverForm = {
   criminalRecordClear: false,
 };
 
-export function driverMissing(f: DriverForm): string | null {
-  if (!f.displayName.trim()) return 'Give the driver a display name.';
-  if (!f.fullName.trim()) return 'Type their full legal name.';
-  if (!f.nationalId.trim()) return 'Type their national ID.';
-  if (!f.mobile.trim()) return 'Type their mobile number.';
-  if (f.classes.length === 0) return 'Pick at least one vehicle class.';
-  if (isHeavySelection(f.classes) && !f.licenceNumber.trim()) return 'Heavy classes need the licence number.';
+export function driverMissing(f: DriverForm, t: Translate): string | null {
+  if (!f.displayName.trim()) return t('fleet.logic.dMissingDisplay');
+  if (!f.fullName.trim()) return t('fleet.logic.dMissingFull');
+  if (!f.nationalId.trim()) return t('fleet.logic.dMissingId');
+  if (!f.mobile.trim()) return t('fleet.logic.dMissingMobile');
+  if (f.classes.length === 0) return t('fleet.logic.dMissingClass');
+  if (isHeavySelection(f.classes) && !f.licenceNumber.trim()) return t('fleet.logic.dMissingLicence');
   return null;
 }
 
@@ -207,22 +213,28 @@ export function driverAction(d: Pick<DriverRow, 'status' | 'registry'>): DriverA
   return 'none';
 }
 
-export function subtypeLine(sub: SubtypeRow | undefined): string | null {
+export function subtypeLine(sub: SubtypeRow | undefined, t: Translate): string | null {
   if (!sub) return null;
   const caps = [
-    sub.coldChain && 'cold-chain',
-    sub.bulk && 'dry-bulk',
-    sub.liquid && 'liquid',
-    sub.hazmat && 'hazmat',
-    sub.oversized && 'oversized',
+    sub.coldChain && t('fleet.logic.capColdChain'),
+    sub.bulk && t('fleet.logic.capDryBulk'),
+    sub.liquid && t('fleet.logic.capLiquid'),
+    sub.hazmat && t('fleet.logic.capHazmat'),
+    sub.oversized && t('fleet.logic.capOversized'),
   ].filter(Boolean);
-  return `${sub.label}: about ${sub.capacityKg} kg${caps.length ? ` · ${caps.join(', ')}` : ''}`;
+  const base = t('fleet.logic.subtypeBase', { label: sub.label, kg: sub.capacityKg });
+  return caps.length ? `${base} · ${caps.join(', ')}` : base;
 }
 
 export function hoursLabel(h: number | undefined): string {
   return `${h ?? 0}h`;
 }
 
-export function dashboardSummary(d: { drivers: { onShift?: number; total?: number }; cargo: { count?: number; totalKg?: number } }): string {
-  return `${d.drivers.onShift ?? 0} of ${d.drivers.total ?? 0} drivers on shift. ${d.cargo.count ?? 0} loads moving, ${d.cargo.totalKg ?? 0} kilograms in total.`;
+export function dashboardSummary(d: { drivers: { onShift?: number; total?: number }; cargo: { count?: number; totalKg?: number } }, t: Translate): string {
+  return t('fleet.logic.dashboardSummary', {
+    onShift: d.drivers.onShift ?? 0,
+    total: d.drivers.total ?? 0,
+    loads: d.cargo.count ?? 0,
+    kg: d.cargo.totalKg ?? 0,
+  });
 }

@@ -7,6 +7,7 @@
  */
 
 import type { IconName } from '../../shared/ui/Icon';
+import type { MessageKey, Translate } from '../../shared/i18n';
 
 /* ------------------------------------------------------------------ roles -- */
 
@@ -21,11 +22,6 @@ export type JoinKind =
 
 export interface RoleSpec {
   id: 'pudo' | 'driver' | 'mdp' | 'vendor' | 'fleet';
-  /** What this person calls themselves, not what the schema calls them. */
-  label: string;
-  blurb: string;
-  /** What they earn or get — the reason to tap. */
-  promise: string;
   icon: IconName;
   /** Where their app lives, origin-relative. */
   app: string;
@@ -34,58 +30,48 @@ export interface RoleSpec {
 
 /**
  * The five ways to work with the network. Order is deliberate: the two roles the
- * franchise formula recruits hardest (shop, then driver) lead.
+ * franchise formula recruits hardest (shop, then driver) lead. The prose (what each
+ * person calls themselves, their blurb and their promise) is resolved from the catalog
+ * via roleMeta() — see ROLE_KEYS below.
  */
 export const ROLES: RoleSpec[] = [
-  {
-    id: 'pudo',
-    label: 'A shop',
-    blurb: 'Take in and hand out parcels from your counter.',
-    promise: 'Earn on every parcel. Connect your community.',
-    icon: 'home',
-    app: '/agent/',
-    kind: 'signup',
-  },
-  {
-    id: 'driver',
-    label: 'A driver',
-    blurb: 'Carry parcels on the road you already drive.',
-    promise: 'Fill your empty space. Get paid per load.',
-    icon: 'truck',
-    app: '/driver/',
-    kind: 'signup',
-  },
-  {
-    id: 'mdp',
-    label: 'A sort hub',
-    blurb: 'Sort parcels between routes for the network.',
-    promise: 'Earn a fee on every parcel you sort.',
-    icon: 'grid',
-    app: '/mdp/',
-    kind: 'signup',
-  },
-  {
-    id: 'vendor',
-    label: 'An online store',
-    blurb: 'Ship your orders to a shop the buyer picks.',
-    promise: 'Click-and-collect without your own couriers.',
-    icon: 'send',
-    app: '/vendor/',
-    kind: 'vendor',
-  },
-  {
-    id: 'fleet',
-    label: 'A fleet office',
-    blurb: 'Run vehicles and drivers on the network.',
-    promise: 'Dispatch, shifts and cargo in one console.',
-    icon: 'badge',
-    app: '/fleet/',
-    kind: 'invite',
-  },
+  { id: 'pudo', icon: 'home', app: '/agent/', kind: 'signup' },
+  { id: 'driver', icon: 'truck', app: '/driver/', kind: 'signup' },
+  { id: 'mdp', icon: 'grid', app: '/mdp/', kind: 'signup' },
+  { id: 'vendor', icon: 'send', app: '/vendor/', kind: 'vendor' },
+  { id: 'fleet', icon: 'badge', app: '/fleet/', kind: 'invite' },
 ];
 
 export function roleById(id: string): RoleSpec | undefined {
   return ROLES.find((r) => r.id === id);
+}
+
+/** The plain-words presentation of a role — the same words, in several forms the screens need. */
+export interface RoleMeta {
+  /** What this person calls themselves — the full label, "A shop". */
+  label: string;
+  /** The lowercased label — "a shop" — for "Join as …" and the shell subtitle. */
+  labelLower: string;
+  /** The article-stripped name — "shop" — for the sign-in list. */
+  name: string;
+  /** The short app noun — "Open the shop app". */
+  appNoun: string;
+  blurb: string;
+  /** What they earn or get — the reason to tap. */
+  promise: string;
+}
+
+const ROLE_KEYS: Record<RoleSpec['id'], { label: MessageKey; labelLower: MessageKey; name: MessageKey; appNoun: MessageKey; blurb: MessageKey; promise: MessageKey }> = {
+  pudo: { label: 'home.role.pudo.label', labelLower: 'home.role.pudo.labelLower', name: 'home.role.pudo.name', appNoun: 'home.role.pudo.appNoun', blurb: 'home.role.pudo.blurb', promise: 'home.role.pudo.promise' },
+  driver: { label: 'home.role.driver.label', labelLower: 'home.role.driver.labelLower', name: 'home.role.driver.name', appNoun: 'home.role.driver.appNoun', blurb: 'home.role.driver.blurb', promise: 'home.role.driver.promise' },
+  mdp: { label: 'home.role.mdp.label', labelLower: 'home.role.mdp.labelLower', name: 'home.role.mdp.name', appNoun: 'home.role.mdp.appNoun', blurb: 'home.role.mdp.blurb', promise: 'home.role.mdp.promise' },
+  vendor: { label: 'home.role.vendor.label', labelLower: 'home.role.vendor.labelLower', name: 'home.role.vendor.name', appNoun: 'home.role.vendor.appNoun', blurb: 'home.role.vendor.blurb', promise: 'home.role.vendor.promise' },
+  fleet: { label: 'home.role.fleet.label', labelLower: 'home.role.fleet.labelLower', name: 'home.role.fleet.name', appNoun: 'home.role.fleet.appNoun', blurb: 'home.role.fleet.blurb', promise: 'home.role.fleet.promise' },
+};
+
+export function roleMeta(role: RoleSpec, t: Translate): RoleMeta {
+  const k = ROLE_KEYS[role.id];
+  return { label: t(k.label), labelLower: t(k.labelLower), name: t(k.name), appNoun: t(k.appNoun), blurb: t(k.blurb), promise: t(k.promise) };
 }
 
 /**
@@ -174,26 +160,26 @@ export function prevStep(kind: JoinKind, step: JoinStep): JoinStep {
  * What still blocks THIS step. Returning the blocker (not a boolean) lets the CTA say the
  * next thing to do — the pattern every wizard in this product uses.
  */
-export function stepBlocker(role: RoleSpec, step: JoinStep, f: JoinForm): string | null {
+export function stepBlocker(role: RoleSpec, step: JoinStep, f: JoinForm, t: Translate): string | null {
   switch (step) {
     case 'phone':
-      return phoneLooksValid(f.phone) ? null : 'Type the phone number you use every day.';
+      return phoneLooksValid(f.phone) ? null : t('home.block.phone');
     case 'code':
-      return codeLooksValid(f.code) ? null : 'Type the code we sent you.';
+      return codeLooksValid(f.code) ? null : t('home.block.code');
     case 'about':
-      if (role.kind === 'vendor') return f.displayName.trim() ? null : 'Name your store.';
-      if (!f.displayName.trim()) return role.id === 'pudo' ? 'Name your shop.' : role.id === 'mdp' ? 'Name your hub.' : 'Type the name people will see.';
-      if (role.id !== 'mdp' && !f.fullName.trim()) return 'Type your full name.';
-      if (role.id !== 'mdp' && !f.nationalId.trim()) return 'Type your ID number.';
-      if (role.id === 'driver' && f.licenceClasses.length === 0) return 'Pick what you drive.';
+      if (role.kind === 'vendor') return f.displayName.trim() ? null : t('home.block.nameStore');
+      if (!f.displayName.trim()) return role.id === 'pudo' ? t('home.block.nameShop') : role.id === 'mdp' ? t('home.block.nameHub') : t('home.block.nameGeneric');
+      if (role.id !== 'mdp' && !f.fullName.trim()) return t('home.block.fullName');
+      if (role.id !== 'mdp' && !f.nationalId.trim()) return t('home.block.idNumber');
+      if (role.id === 'driver' && f.licenceClasses.length === 0) return t('home.block.drive');
       return null;
     case 'where':
-      if (!f.location) return 'Tap the map to drop a pin where you are.';
-      if (!f.zone.trim()) return 'Pick the area you serve.';
+      if (!f.location) return t('home.block.location');
+      if (!f.zone.trim()) return t('home.block.zone');
       return null;
     case 'login':
-      if (!f.email.includes('@')) return 'Type an email you can open.';
-      if (f.password.length < 6) return 'Use at least 6 characters.';
+      if (!f.email.includes('@')) return t('home.block.email');
+      if (f.password.length < 6) return t('home.block.password');
       return null;
     default:
       return null;
@@ -278,23 +264,23 @@ export function signupBody(role: RoleSpec, f: JoinForm, deviceMarker: string): R
 
 /* --------------------------------------------------------------- speaking -- */
 
-export function welcomeSpoken(): string {
-  return 'Welcome to SeeBuyGet. Send a parcel, track one, or join the network as a shop, a driver, a hub or a store.';
+export function welcomeSpoken(t: Translate): string {
+  return t('home.welcome.spoken');
 }
 
-export function joinSpoken(role: RoleSpec, step: JoinStep): string {
+export function joinSpoken(role: RoleSpec, step: JoinStep, t: Translate): string {
   switch (step) {
     case 'phone':
-      return `Joining as ${role.label}. Type the phone number you use every day — we send a code to it.`;
+      return t('home.join.spoken.phone', { role: roleMeta(role, t).label });
     case 'code':
-      return 'Type the code we just sent to your phone.';
+      return t('home.join.spoken.code');
     case 'about':
-      return `Tell us about ${role.id === 'driver' ? 'yourself' : 'your place'}.`;
+      return role.id === 'driver' ? t('home.join.spoken.aboutDriver') : t('home.join.spoken.aboutPlace');
     case 'where':
-      return 'Tap the map to show where you are. No street address needed.';
+      return t('home.join.spoken.where');
     case 'login':
-      return 'Last step. Pick an email and a password to sign in with.';
+      return t('home.join.spoken.login');
     default:
-      return 'You are in.';
+      return t('home.join.spoken.done');
   }
 }

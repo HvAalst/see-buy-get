@@ -4,9 +4,14 @@
  *
  * The gate messaging and the price-vs-market maths are harvested from the legacy agent.js
  * so the PWA and the old page can never disagree about what "locked" or "12% above" means.
+ *
+ * Prose is threaded through `t` (the translate function from useT()/the plain t) so this module
+ * stays pure and testable — English is the base catalog, so a test passing the real `t` sees the
+ * English literals. Enumerated presentation (status/size/nature/…) resolves catalog keys via `t`.
  */
 
 import { distanceLabel, haversineKm, type GeoPoint } from '../../shared/geo';
+import type { MessageKey, Translate } from '../../shared/i18n';
 import type { AgentStatus, AgentView, Benchmark, CorridorRow, GateView, NetworkPoint, ParcelSize, ParcelStatus, ParcelView } from './types';
 
 /* ------------------------------------------------------------------- gate -- */
@@ -22,22 +27,22 @@ export interface GateNotice {
  * sentence for both cases; the S4 error contract gives us the machine code, so a locked
  * account and a thin wallet get their own words (and their own icons upstream).
  */
-export function gateNotice(agent: Pick<AgentView, 'status'> | null, gate: GateView | null): GateNotice | null {
+export function gateNotice(agent: Pick<AgentView, 'status'> | null, gate: GateView | null, t: Translate): GateNotice | null {
   if (!agent || !gate || gate.ok) return null;
   if (agent.status === 'LOCKED' || gate.code === 'AGENT_LOCKED') {
     return {
       tone: 'danger',
-      title: 'Account locked',
-      detail: 'Top up your wallet to start accepting parcels again.',
+      title: t('agent.logic.gateLockedTitle'),
+      detail: t('agent.logic.gateLockedDetail'),
     };
   }
   return {
     tone: 'warn',
-    title: 'Wallet is low',
+    title: t('agent.logic.gateLowTitle'),
     detail:
       gate.shortfall && gate.shortfall > 0
-        ? `Top up at least ${money(gate.shortfall)} to keep accepting parcels.`
-        : 'Top up to keep accepting parcels.',
+        ? t('agent.logic.gateLowShortfall', { amount: money(gate.shortfall) })
+        : t('agent.logic.gateLowDetail'),
   };
 }
 
@@ -47,9 +52,9 @@ export function canAccept(gate: GateView | null): boolean {
 }
 
 /** The shop must be through onboarding before the counter flows make sense. */
-export function statusNotice(status: AgentStatus | undefined): string | null {
+export function statusNotice(status: AgentStatus | undefined, t: Translate): string | null {
   if (!status || status === 'ACTIVE' || status === 'LOCKED') return null;
-  return `Your shop is ${status.replace(/_/g, ' ').toLowerCase()}. SeeBuyGet must activate it before you can take parcels.`;
+  return t('agent.logic.statusNotice', { status: status.replace(/_/g, ' ').toLowerCase() });
 }
 
 /* ------------------------------------------------------------------ money -- */
@@ -69,28 +74,35 @@ export function destinationZones(corridors: CorridorRow[] | null, myZone: string
 
 /* ----------------------------------------------------------------- accept -- */
 
-export const SIZES: Array<{ key: ParcelSize; label: string; hint: string }> = [
-  { key: 'S', label: 'Small', hint: 'Fits in one hand' },
-  { key: 'M', label: 'Medium', hint: 'Shoebox' },
-  { key: 'L', label: 'Large', hint: 'Needs both arms' },
-  { key: 'HEAVY', label: 'Heavy', hint: 'Over 20 kg' },
-];
+/** Plain-language size tiers for a low-literacy counter, resolved through `t`. */
+const SIZE_KEYS: Record<ParcelSize, { labelKey: MessageKey; hintKey: MessageKey }> = {
+  S: { labelKey: 'agent.size.s.label', hintKey: 'agent.size.s.hint' },
+  M: { labelKey: 'agent.size.m.label', hintKey: 'agent.size.m.hint' },
+  L: { labelKey: 'agent.size.l.label', hintKey: 'agent.size.l.hint' },
+  HEAVY: { labelKey: 'agent.size.heavy.label', hintKey: 'agent.size.heavy.hint' },
+};
 
 /** The commodity's primary cargo nature (S30). Plain-language labels for a low-literacy counter; the code
  *  drives the backend compatibility matrix (e.g. cement powder never rides with fresh food). GEN is default. */
 export type CargoNature = 'GEN' | 'FOD' | 'FOP' | 'HAZ-CHEM' | 'HAZ-DUST' | 'HAZ-BIO' | 'HAZ-FLAM' | 'FRG' | 'ODR' | 'HUM';
-export const NATURES: Array<{ key: CargoNature; label: string }> = [
-  { key: 'GEN', label: 'General goods' },
-  { key: 'FOD', label: 'Dry food — rice, tins' },
-  { key: 'FOP', label: 'Fresh or frozen food' },
-  { key: 'FRG', label: 'Fragile — glass, electronics' },
-  { key: 'ODR', label: 'Strong smell — perfume, fish' },
-  { key: 'HUM', label: 'Medicine or aid' },
-  { key: 'HAZ-CHEM', label: 'Chemicals — paint, bleach' },
-  { key: 'HAZ-DUST', label: 'Cement or powder' },
-  { key: 'HAZ-BIO', label: 'Medical or biological' },
-  { key: 'HAZ-FLAM', label: 'Gas, fuel or flammable' },
+export const NATURES: Array<{ key: CargoNature; labelKey: MessageKey }> = [
+  { key: 'GEN', labelKey: 'agent.nature.gen' },
+  { key: 'FOD', labelKey: 'agent.nature.fod' },
+  { key: 'FOP', labelKey: 'agent.nature.fop' },
+  { key: 'FRG', labelKey: 'agent.nature.frg' },
+  { key: 'ODR', labelKey: 'agent.nature.odr' },
+  { key: 'HUM', labelKey: 'agent.nature.hum' },
+  { key: 'HAZ-CHEM', labelKey: 'agent.nature.hazChem' },
+  { key: 'HAZ-DUST', labelKey: 'agent.nature.hazDust' },
+  { key: 'HAZ-BIO', labelKey: 'agent.nature.hazBio' },
+  { key: 'HAZ-FLAM', labelKey: 'agent.nature.hazFlam' },
 ];
+
+/** Plain words for a cargo nature code (falls back to the raw code for an unknown one). */
+export function natureLabel(code: string, t: Translate): string {
+  const n = NATURES.find((x) => x.key === code);
+  return n ? t(n.labelKey) : code;
+}
 
 /** F3 — the durable dry commodities a consolidation lot may hold (grain/dry food, general goods, cement/
  *  powder). Perishables are excluded — they book freight directly; the backend enforces the same via tempBand,
@@ -105,13 +117,13 @@ export function consignmentProgress(lot: { weightKg: number; targetKg: number })
 
 /** REP2 — the driver failings an agent can flag alongside the star rating, in plain words (the movement
  *  leg the shop actually witnesses). Keys mirror the backend DRIVER_ISSUES. */
-export const DRIVER_ISSUE_LABELS: Array<{ key: string; label: string }> = [
-  { key: 'LATE_PICKUP', label: 'Late to pick up' },
-  { key: 'LATE_ARRIVAL', label: 'Arrived late' },
-  { key: 'KEPT_OVERNIGHT', label: 'Kept parcels overnight' },
-  { key: 'AFTER_HOURS', label: 'Came after opening hours' },
-  { key: 'EQUIPMENT_FAILURE', label: 'Vehicle or equipment problem' },
-  { key: 'ROUGH_HANDLING', label: 'Rough handling' },
+export const DRIVER_ISSUE_LABELS: Array<{ key: string; labelKey: MessageKey }> = [
+  { key: 'LATE_PICKUP', labelKey: 'agent.driverIssue.latePickup' },
+  { key: 'LATE_ARRIVAL', labelKey: 'agent.driverIssue.lateArrival' },
+  { key: 'KEPT_OVERNIGHT', labelKey: 'agent.driverIssue.keptOvernight' },
+  { key: 'AFTER_HOURS', labelKey: 'agent.driverIssue.afterHours' },
+  { key: 'EQUIPMENT_FAILURE', labelKey: 'agent.driverIssue.equipment' },
+  { key: 'ROUGH_HANDLING', labelKey: 'agent.driverIssue.roughHandling' },
 ];
 
 /** The measure-your-parcel fields (free-typed strings until they parse). */
@@ -191,8 +203,9 @@ export function parseDims(d: DimsForm): { l: number; w: number; h: number; kg: n
 }
 
 /** The plain-words presentation of a DERIVED tier. */
-export function sizeMeta(size: ParcelSize): { label: string; hint: string } {
-  return SIZES.find((s) => s.key === size) ?? { key: size, label: size, hint: '' };
+export function sizeMeta(size: ParcelSize, t: Translate): { label: string; hint: string } {
+  const k = SIZE_KEYS[size];
+  return k ? { label: t(k.labelKey), hint: t(k.hintKey) } : { label: size, hint: '' };
 }
 
 /**
@@ -223,11 +236,11 @@ export function pointDistance(p: NetworkPoint, near: GeoPoint | null | undefined
  * What still blocks the accept. Ordered by the physical flow at the counter, so the first
  * missing thing is the next thing to do — the CTA subtitle reads it out.
  */
-export function acceptMissing(f: AcceptForm): string | null {
-  if (!f.parcelId.trim()) return 'Scan the parcel sticker first.';
-  if (!parseDims(f.dims)) return 'Measure the parcel: length, width, height and weight.';
-  if (!f.destPudoDid) return 'Pick where it is going.';
-  if (!f.photoRef) return 'Take the proof photo.';
+export function acceptMissing(f: AcceptForm, t: Translate): string | null {
+  if (!f.parcelId.trim()) return t('agent.logic.acceptScanFirst');
+  if (!parseDims(f.dims)) return t('agent.logic.acceptMeasure');
+  if (!f.destPudoDid) return t('agent.logic.acceptPickDest');
+  if (!f.photoRef) return t('agent.logic.acceptPhoto');
   return null;
 }
 
@@ -255,14 +268,14 @@ export function plannedPickupIso(f: Pick<AcceptForm, 'freightWhen' | 'freightDat
  * first missing thing is the next thing to do. No sticker and no proof photo — freight isn't scanned onto a
  * shelf; the tracking code IS the artefact. `now` is injected so this stays pure and testable.
  */
-export function bookFreightMissing(f: AcceptForm, now: number): string | null {
-  if (!parseDims(f.dims)) return 'Measure the load: length, width, height and weight.';
-  if (!f.destPudoDid) return 'Pick where it is going.';
-  if (parseBudget(f.budgetCap) == null) return 'Set the cash budget — the most the customer will pay.';
+export function bookFreightMissing(f: AcceptForm, now: number, t: Translate): string | null {
+  if (!parseDims(f.dims)) return t('agent.logic.freightMeasure');
+  if (!f.destPudoDid) return t('agent.logic.acceptPickDest');
+  if (parseBudget(f.budgetCap) == null) return t('agent.logic.freightBudget');
   if (f.freightWhen === 'planned') {
-    const t = Date.parse(f.freightDate);
-    if (!f.freightDate || Number.isNaN(t)) return 'Choose the planned pickup date.';
-    if (t <= now) return 'The planned pickup date must be in the future.';
+    const at = Date.parse(f.freightDate);
+    if (!f.freightDate || Number.isNaN(at)) return t('agent.logic.freightPlannedDate');
+    if (at <= now) return t('agent.logic.freightFutureDate');
   }
   return null;
 }
@@ -282,8 +295,8 @@ export function releaseStage(status: ParcelStatus): ReleaseStage {
   return 'blocked';
 }
 
-export function releaseBlockedDetail(status: ParcelStatus): string {
-  return `This parcel is ${status.replace(/_/g, ' ').toLowerCase()} — nothing to hand over here.`;
+export function releaseBlockedDetail(status: ParcelStatus, t: Translate): string {
+  return t('agent.logic.releaseBlocked', { status: status.replace(/_/g, ' ').toLowerCase() });
 }
 
 /** The pickup code: exactly four digits, as the backend issues them. */
@@ -312,7 +325,7 @@ export function roundMoney(v: number): number {
  * per-km band, but 2-decimal money and "shops" wording. Null without a usable benchmark —
  * a median of one shop would talk an agent into repricing against themselves.
  */
-export function priceBand(pricePerParcel: number | null | undefined, benchmark: Benchmark | null | undefined): PriceBand | null {
+export function priceBand(pricePerParcel: number | null | undefined, benchmark: Benchmark | null | undefined, t: Translate): PriceBand | null {
   if (!benchmark || !benchmark.count) return null;
 
   const mine = Number(pricePerParcel ?? 0);
@@ -320,14 +333,18 @@ export function priceBand(pricePerParcel: number | null | undefined, benchmark: 
 
   const headline =
     pct > 1
-      ? `You charge ${pct}% more than nearby shops.`
+      ? t('agent.logic.priceMore', { pct })
       : pct < -1
-        ? `You charge ${-pct}% less than nearby shops.`
-        : 'You charge about the same as nearby shops.';
+        ? t('agent.logic.priceLess', { pct: -pct })
+        : t('agent.logic.priceSame');
 
-  const detail =
-    `Your price ${money(mine)} per parcel. Nearby shops charge ${money(benchmark.median)} ` +
-    `(${money(benchmark.min)}–${money(benchmark.max)} across ${benchmark.count} shops).`;
+  const detail = t('agent.logic.priceDetail', {
+    mine: money(mine),
+    median: money(benchmark.median),
+    min: money(benchmark.min),
+    max: money(benchmark.max),
+    count: benchmark.count,
+  });
 
   return {
     pct,
@@ -335,28 +352,27 @@ export function priceBand(pricePerParcel: number | null | undefined, benchmark: 
     detail,
     showMatch: Math.abs(pct) > 1,
     matchPrice: roundMoney(benchmark.median),
-    matchLabel: `Match ${money(benchmark.median)}`,
+    matchLabel: t('agent.logic.priceMatch', { price: money(benchmark.median) }),
   };
 }
 
 /* --------------------------------------------------------------- speaking -- */
 
-export function homeSummary(agent: AgentView | null, gate: GateView | null): string {
-  if (!agent) return 'Connecting to your shop.';
+export function homeSummary(agent: AgentView | null, gate: GateView | null, t: Translate): string {
+  if (!agent) return t('agent.logic.homeConnecting');
   const canScan = Boolean(gate?.ok);
-  return (
-    `Wallet balance ${money(agent.balance)}. ` +
-    (canScan ? 'You can accept parcels.' : 'Top up to accept parcels.') +
-    (agent.openState === 'closed' ? ' Your shop is marked closed.' : '')
-  );
+  const bits = [t('agent.logic.homeWallet', { balance: money(agent.balance) })];
+  bits.push(canScan ? t('agent.logic.homeCanAccept') : t('agent.logic.homeTopUp'));
+  if (agent.openState === 'closed') bits.push(t('agent.logic.homeClosed'));
+  return bits.join(' ');
 }
 
-export function handoverSummary(count: number, selected: number, missed = 0): string {
-  if (count === 0) return 'No parcels are waiting for the bus.';
-  const base = `${count} parcels waiting. ${selected} selected.`;
+export function handoverSummary(count: number, selected: number, missed: number, t: Translate): string {
+  if (count === 0) return t('agent.logic.handoverNone');
+  const base = t('agent.logic.handoverBase', { count, selected });
   // S25: after the gate refuses a short load, speak the number still owed to this bus.
-  if (missed > 0) return `${base} ${missed} for this bus are still waiting. Load them, or leave them behind.`;
-  return `${base} Scan the driver badge, then finish the handover.`;
+  if (missed > 0) return `${base} ${t('agent.logic.handoverMissed', { missed })}`;
+  return `${base} ${t('agent.logic.handoverScan')}`;
 }
 
 /* -------------------------------------------------------------------- void -- */
@@ -389,55 +405,55 @@ export function voidableParcels(parcels: ParcelView[] | null, now: number): Parc
 }
 
 /** "3 min left to undo" / "45 sec left to undo" — never a bare number. */
-export function voidCountdownLabel(ms: number): string {
-  if (ms <= 0) return 'Window closed';
+export function voidCountdownLabel(ms: number, t: Translate): string {
+  if (ms <= 0) return t('agent.logic.voidWindowClosed');
   const seconds = Math.ceil(ms / 1000);
-  if (seconds < 60) return `${seconds} sec left to undo`;
-  return `${Math.ceil(seconds / 60)} min left to undo`;
+  if (seconds < 60) return t('agent.logic.voidSecLeft', { seconds });
+  return t('agent.logic.voidMinLeft', { minutes: Math.ceil(seconds / 60) });
 }
 
 /* --------------------------------------------------------------- registers (R4) -- */
 
 /** The word the SHOP reads for a parcel's status in its history register. */
-export function parcelStatusWord(status: ParcelStatus): string {
+export function parcelStatusWord(status: ParcelStatus, t: Translate): string {
   switch (status) {
     case 'Created':
-      return 'Label made';
+      return t('agent.status.created');
     case 'At_PUDO':
-      return 'At a shop';
+      return t('agent.status.atPudo');
     case 'On_Bus':
-      return 'On the bus';
+      return t('agent.status.onBus');
     case 'At_MDP':
-      return 'At the sort hub';
+      return t('agent.status.atMdp');
     case 'Ready_For_Pickup':
-      return 'Ready for pickup';
+      return t('agent.status.ready');
     case 'Delivered':
-      return 'Collected';
+      return t('agent.status.delivered');
     case 'Disputed':
-      return 'Problem reported';
+      return t('agent.status.disputed');
     case 'Voided':
-      return 'Cancelled';
+      return t('agent.status.voided');
   }
 }
 
 /** The shop's role in a parcel's journey — it took the parcel IN, or handed it OUT. */
-export function parcelRoleWord(role: 'origin' | 'dest'): string {
-  return role === 'origin' ? 'Took in' : 'Handed out';
+export function parcelRoleWord(role: 'origin' | 'dest', t: Translate): string {
+  return role === 'origin' ? t('agent.logic.roleOrigin') : t('agent.logic.roleDest');
 }
 
 /** The shop's word for an earnings-ledger entry type. */
-export function agentLedgerTypeWord(type: string): string {
+export function agentLedgerTypeWord(type: string, t: Translate): string {
   switch (type) {
     case 'TOP_UP':
-      return 'Top-up';
+      return t('agent.logic.ledgerTopUp');
     case 'FEE':
-      return 'Shipping fee';
+      return t('agent.logic.ledgerFee');
     case 'LABOR_PAYOUT':
-      return 'Handling pay';
+      return t('agent.logic.ledgerPayout');
     case 'REFUND':
-      return 'Refund';
+      return t('agent.logic.ledgerRefund');
     case 'OVERDRAFT':
-      return 'Credit';
+      return t('agent.logic.ledgerOverdraft');
     default:
       return type;
   }

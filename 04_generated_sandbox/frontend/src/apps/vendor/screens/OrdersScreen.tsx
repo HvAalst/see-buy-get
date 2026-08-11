@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, Checkbox, Chip, CodeCard, ErrorNote, GlanceNumber, Icon, Pager, Pill, ReadAloud, SearchInput, SelectionBar, Sheet } from '../../../shared/ui';
+import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
 import { triggerDownload } from '../../../shared/download';
 import { toggleAll, toggleId } from '../../../shared/register';
 import { useDebounced } from '../../../shared/useDebounced';
@@ -18,14 +19,15 @@ export interface OrdersScreenProps {
  * in merchant words. Tapping an order opens the drill-down sheet.
  */
 const STATUS_OPTIONS: string[] = ['Created', 'At_PUDO', 'On_Bus', 'At_MDP', 'Ready_For_Pickup', 'Delivered', 'Disputed', 'Voided'];
-const SORT_OPTIONS: Array<{ value: OrderQuery['sort']; label: string }> = [
-  { value: 'newest', label: 'Newest first' },
-  { value: 'oldest', label: 'Oldest first' },
-  { value: 'cost_desc', label: 'Cost: high → low' },
-  { value: 'cost_asc', label: 'Cost: low → high' },
+const SORT_OPTIONS: Array<{ value: OrderQuery['sort']; labelKey: MessageKey }> = [
+  { value: 'newest', labelKey: 'vendor.sort.newest' },
+  { value: 'oldest', labelKey: 'vendor.sort.oldest' },
+  { value: 'cost_desc', labelKey: 'vendor.sort.costDesc' },
+  { value: 'cost_asc', labelKey: 'vendor.sort.costAsc' },
 ];
 
 export function OrdersScreen({ state, actions }: OrdersScreenProps) {
+  const t = useT();
   const [topupOpen, setTopupOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [searchText, setSearchText] = useState(state.orderQuery.q);
@@ -51,7 +53,7 @@ export function OrdersScreen({ state, actions }: OrdersScreenProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debounced]);
 
-  const chips = activeFilterChips(q, state.points);
+  const chips = activeFilterChips(q, state.points, t);
   const filtered = q.q !== '' || chips.length > 0;
 
   // A full reset — search box AND every filter/sort. Shared by the empty-state and the sheet's "clear all"
@@ -79,7 +81,7 @@ export function OrdersScreen({ state, actions }: OrdersScreenProps) {
   const exportSelected = () => {
     if (selectedRows.length === 0) return;
     triggerDownload('shipments-selected.csv', orderRowsToCsv(selectedRows));
-    actions.pushToast({ tone: 'ok', icon: 'check', title: `${selectedRows.length} exported`, detail: 'Saved shipments-selected.csv to your device.' });
+    actions.pushToast({ tone: 'ok', icon: 'check', title: t('vendor.toast.selectedExported', { count: selectedRows.length }), detail: t('vendor.toast.savedShipmentsSelected') });
     setSelected(new Set());
   };
 
@@ -87,39 +89,39 @@ export function OrdersScreen({ state, actions }: OrdersScreenProps) {
   // when the pager is hidden (a filtered set that fits one page announces nothing otherwise).
   const liveStatus =
     state.ordersState === 'loading'
-      ? 'Loading shipments…'
+      ? t('vendor.orders.liveLoading')
       : state.ordersState === 'error'
-        ? 'Could not load shipments.'
+        ? t('vendor.orders.liveError')
         : state.ordersTotal === 0
           ? filtered
-            ? 'No shipments match your filters.'
-            : 'No shipments yet.'
-          : `${state.ordersTotal} shipment${state.ordersTotal === 1 ? '' : 's'} found.`;
+            ? t('vendor.orders.liveNoneFiltered')
+            : t('vendor.orders.liveNone')
+          : t(state.ordersTotal === 1 ? 'vendor.orders.liveFoundOne' : 'vendor.orders.liveFoundMany', { count: state.ordersTotal });
 
   return (
     <div class="scr">
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
 
       <GlanceNumber
-        label="Prepaid balance"
+        label={t('vendor.balanceLabel')}
         value={money(state.vendor?.balance)}
         sub={
           !statsKnown
-            ? 'Your prepaid balance pays for each label.'
+            ? t('vendor.orders.balanceSubUnknown')
             : unpaid
-              ? `${unpaid} order${unpaid === 1 ? '' : 's'} unpaid — top up to release ${unpaid === 1 ? 'its label' : 'their labels'}.`
-              : 'Every label is paid from this balance.'
+              ? t(unpaid === 1 ? 'vendor.orders.balanceSubUnpaidOne' : 'vendor.orders.balanceSubUnpaidMany', { count: unpaid })
+              : t('vendor.orders.balanceSubPaid')
         }
         aside={
           <Button variant="link" full={false} onClick={() => setTopupOpen(true)}>
-            Top up
+            {t('vendor.orders.topUp')}
           </Button>
         }
       />
 
       {state.checkouts.length ? (
-        <Card title="Waiting to ship" aside={<span class="row__count">{state.checkouts.length}</span>}>
-          <p class="card__note">Buyers picked their collection shop at your checkout — each one is a tap from a label.</p>
+        <Card title={t('vendor.waitingToShip')} aside={<span class="row__count">{state.checkouts.length}</span>}>
+          <p class="card__note">{t('vendor.orders.waitingNote')}</p>
           <div class="rows" role="list" style="margin-top:12px">
             {state.checkouts.map((c) => (
               <button key={c.id} type="button" class="row" onClick={() => actions.startMint(c)}>
@@ -127,8 +129,8 @@ export function OrdersScreen({ state, actions }: OrdersScreenProps) {
                   <Icon name="send" size={24} />
                 </span>
                 <span class="row__body">
-                  <span class="row__t">{handoffLine(c)}</span>
-                  <span class="row__s">{c.subtotal != null ? `Order value ${money(c.subtotal)}` : 'Tap to make the label'}</span>
+                  <span class="row__t">{handoffLine(c, t)}</span>
+                  <span class="row__s">{c.subtotal != null ? t('vendor.orders.orderValue', { value: money(c.subtotal) }) : t('vendor.orders.tapToMake')}</span>
                 </span>
                 <span class="row__end">
                   <Icon name="chevronRight" size={22} />
@@ -139,12 +141,12 @@ export function OrdersScreen({ state, actions }: OrdersScreenProps) {
         </Card>
       ) : null}
 
-      <Card title="Shipments" aside={<span class="row__count">{state.ordersTotal}</span>}>
+      <Card title={t('vendor.orders.shipmentsTitle')} aside={<span class="row__count">{state.ordersTotal}</span>}>
         <div class="reg__controls">
-          <SearchInput value={searchText} onInput={setSearchText} placeholder="Search buyer, order, DID, product…" label="Search shipments" />
+          <SearchInput value={searchText} onInput={setSearchText} placeholder={t('vendor.orders.searchPh')} label={t('vendor.orders.searchLabel')} />
           <button type="button" class={`reg__filter${chips.length ? ' reg__filter--on' : ''}`} onClick={() => setFilterOpen(true)}>
             <Icon name="filter" size={20} />
-            <span>{chips.length ? `Filters · ${chips.length}` : 'Filters'}</span>
+            <span>{chips.length ? t('vendor.filters.withCount', { count: chips.length }) : t('vendor.filters.label')}</span>
           </button>
         </div>
 
@@ -161,19 +163,19 @@ export function OrdersScreen({ state, actions }: OrdersScreenProps) {
         <div class="reg__list" aria-busy={state.ordersState === 'loading'}>
           {state.orders.length === 0 ? (
             state.ordersState === 'loading' ? (
-              <p class="hint">Loading…</p>
+              <p class="hint">{t('vendor.loading')}</p>
             ) : state.ordersState === 'error' ? (
-              <p class="hint">Couldn’t load your shipments. <button type="button" class="linkbtn" onClick={() => actions.queryOrders({ offset: q.offset })}>Try again</button></p>
+              <p class="hint">{t('vendor.orders.loadError')} <button type="button" class="linkbtn" onClick={() => actions.queryOrders({ offset: q.offset })}>{t('vendor.tryAgain')}</button></p>
             ) : filtered ? (
-              <p class="hint">No shipments match. <button type="button" class="linkbtn" onClick={resetAll}>Clear filters</button></p>
+              <p class="hint">{t('vendor.orders.noMatch')} <button type="button" class="linkbtn" onClick={resetAll}>{t('vendor.clearFilters')}</button></p>
             ) : (
-              <p class="hint">No orders yet. Mint your first label from the Ship tab.</p>
+              <p class="hint">{t('vendor.orders.noOrders')}</p>
             )
           ) : (
             <>
               <div class="reg__selall">
-                <Checkbox checked={allChecked} indeterminate={someChecked && !allChecked} onChange={() => setSelected(toggleAll(selected, pageIds))} label="Select all shipments on this page" />
-                <span class="reg__selall-txt">{allChecked ? 'All on this page selected' : 'Select all on this page'}</span>
+                <Checkbox checked={allChecked} indeterminate={someChecked && !allChecked} onChange={() => setSelected(toggleAll(selected, pageIds))} label={t('vendor.orders.selectAllLabel')} />
+                <span class="reg__selall-txt">{allChecked ? t('vendor.selectedAllOnPage') : t('vendor.selectAllOnPage')}</span>
               </div>
               <div class={`rows${state.ordersState === 'loading' ? ' rows--loading' : ''}`} role="list">
                 {state.orders.map((o) => (
@@ -195,19 +197,19 @@ export function OrdersScreen({ state, actions }: OrdersScreenProps) {
         {state.ordersTotal > 0 ? (
           <div class="reg__export">
             <Button variant="link" full={false} busy={state.busy === 'export'} onClick={() => void actions.exportOrders()}>
-              Export all {state.ordersTotal} as CSV
+              {t('vendor.exportAll', { count: state.ordersTotal })}
             </Button>
           </div>
         ) : null}
       </Card>
 
       <div class="scr__foot">
-        <ReadAloud text={() => (statsKnown ? ordersSummary(state.vendor?.balance ?? 0, moving, unpaid) : `Balance ${money(state.vendor?.balance ?? 0)}. Shipment counts are updating.`)} label="Read this aloud" />
+        <ReadAloud text={() => (statsKnown ? ordersSummary(state.vendor?.balance ?? 0, moving, unpaid, t) : t('vendor.orders.countsUpdating', { balance: money(state.vendor?.balance ?? 0) }))} label={t('vendor.readAloud')} />
       </div>
 
       <SelectionBar count={selectedRows.length} onClear={() => setSelected(new Set())}>
         <Button variant="outline" full={false} onClick={exportSelected}>
-          Export
+          {t('vendor.export')}
         </Button>
       </SelectionBar>
 
@@ -222,13 +224,14 @@ export function OrdersScreen({ state, actions }: OrdersScreenProps) {
  *  order ref, then who + what, then status · zone · cost. The DID is searchable but not shown (the point of
  *  the register is not to scroll DID numbers). */
 function OrderRowItem({ o, selected, onToggle, onOpen }: { o: OrderRow; selected: boolean; onToggle: () => void; onOpen: () => void }) {
-  const st = orderStatus(o.status);
-  const paid = paidWord(o.paidStatus);
+  const t = useT();
+  const st = orderStatus(o.status, t);
+  const paid = paidWord(o.paidStatus, t);
   const who = [o.buyer, o.products].filter(Boolean).join(' · ');
   const label = o.externalOrderId ?? o.parcelId;
   return (
     <div class={`orow${selected ? ' orow--on' : ''}`}>
-      <Checkbox checked={selected} onChange={() => onToggle()} label={`Select order ${label}`} />
+      <Checkbox checked={selected} onChange={() => onToggle()} label={t('vendor.orders.selectOrder', { label })} />
       <button type="button" class="row orow__row" onClick={onOpen}>
         <span class="row__ic">
           <Icon name={st.icon} size={24} />
@@ -249,24 +252,25 @@ function OrderRowItem({ o, selected, onToggle, onOpen }: { o: OrderRow; selected
 }
 
 /** Human name for a destination PUDO did (from the directory), falling back to a short id. */
-function pudoName(did: string, points: NetworkPoint[]): string {
-  return points.find((p) => p.did === did)?.shopName ?? `PUDO ${did.slice(-6)}`;
+function pudoName(did: string, points: NetworkPoint[], t: Translate): string {
+  return points.find((p) => p.did === did)?.shopName ?? t('vendor.orders.pudoFallback', { id: did.slice(-6) });
 }
 
 /** The applied filters as removable chips (each carries the query patch that clears it). */
-function activeFilterChips(q: OrderQuery, points: NetworkPoint[]): Array<{ key: string; label: string; clear: Partial<OrderQuery> }> {
+function activeFilterChips(q: OrderQuery, points: NetworkPoint[], t: Translate): Array<{ key: string; label: string; clear: Partial<OrderQuery> }> {
   const out: Array<{ key: string; label: string; clear: Partial<OrderQuery> }> = [];
-  if (q.status) out.push({ key: 'status', label: orderStatus(q.status as OrderRow['status']).word, clear: { status: '' } });
-  if (q.pudo) out.push({ key: 'pudo', label: pudoName(q.pudo, points), clear: { pudo: '' } });
-  if (q.paid) out.push({ key: 'paid', label: q.paid === 'paid' ? 'Paid' : 'Unpaid', clear: { paid: '' } });
+  if (q.status) out.push({ key: 'status', label: orderStatus(q.status as OrderRow['status'], t).word, clear: { status: '' } });
+  if (q.pudo) out.push({ key: 'pudo', label: pudoName(q.pudo, points, t), clear: { pudo: '' } });
+  if (q.paid) out.push({ key: 'paid', label: q.paid === 'paid' ? t('vendor.paid.paid') : t('vendor.paid.unpaid'), clear: { paid: '' } });
   if (q.from || q.to) out.push({ key: 'date', label: `${q.from || '…'} → ${q.to || '…'}`, clear: { from: '', to: '' } });
-  if (q.sort !== 'newest') out.push({ key: 'sort', label: SORT_OPTIONS.find((s) => s.value === q.sort)?.label ?? q.sort, clear: { sort: 'newest' } });
+  if (q.sort !== 'newest') { const so = SORT_OPTIONS.find((s) => s.value === q.sort); out.push({ key: 'sort', label: so ? t(so.labelKey) : q.sort, clear: { sort: 'newest' } }); }
   return out;
 }
 
 /** The filter sheet — a local draft applied all at once, so the list updates only when you tap Apply.
  *  "Clear all filters" resets the search box too (via onClearAll), matching the empty-state affordance. */
 function FilterSheet({ open, onClose, query, points, onApply, onClearAll }: { open: boolean; onClose: () => void; query: OrderQuery; points: NetworkPoint[]; onApply: (patch: Partial<OrderQuery>) => void; onClearAll: () => void }) {
+  const t = useT();
   const [draft, setDraft] = useState<OrderQuery>(query);
   // Re-sync the draft to the live query each time the sheet opens.
   useEffect(() => {
@@ -277,21 +281,21 @@ function FilterSheet({ open, onClose, query, points, onApply, onClearAll }: { op
   const destPudos = points.filter((p) => p.did);
 
   return (
-    <Sheet open={open} onClose={onClose} title="Filter shipments">
+    <Sheet open={open} onClose={onClose} title={t('vendor.orders.filterTitle')}>
       <div class="field">
-        <label class="field__label" for="f-status">Status</label>
+        <label class="field__label" for="f-status">{t('vendor.orders.fStatus')}</label>
         <select id="f-status" class="select" value={draft.status} onChange={(e) => set({ status: e.currentTarget.value })}>
-          <option value="">Any status</option>
+          <option value="">{t('vendor.orders.anyStatus')}</option>
           {STATUS_OPTIONS.map((s) => (
-            <option key={s} value={s}>{orderStatus(s as OrderRow['status']).word}</option>
+            <option key={s} value={s}>{orderStatus(s as OrderRow['status'], t).word}</option>
           ))}
         </select>
       </div>
 
       <div class="field">
-        <label class="field__label" for="f-pudo">Collection PUDO</label>
+        <label class="field__label" for="f-pudo">{t('vendor.orders.fPudo')}</label>
         <select id="f-pudo" class="select" value={draft.pudo} onChange={(e) => set({ pudo: e.currentTarget.value })}>
-          <option value="">Any PUDO</option>
+          <option value="">{t('vendor.orders.anyPudo')}</option>
           {destPudos.map((p) => (
             <option key={p.did} value={p.did}>{p.shopName}</option>
           ))}
@@ -299,53 +303,54 @@ function FilterSheet({ open, onClose, query, points, onApply, onClearAll }: { op
       </div>
 
       <div class="field">
-        <label class="field__label" for="f-paid">Payment</label>
+        <label class="field__label" for="f-paid">{t('vendor.orders.fPayment')}</label>
         <select id="f-paid" class="select" value={draft.paid} onChange={(e) => set({ paid: e.currentTarget.value as OrderQuery['paid'] })}>
-          <option value="">Paid or unpaid</option>
-          <option value="paid">Paid</option>
-          <option value="unpaid">Unpaid</option>
+          <option value="">{t('vendor.orders.anyPayment')}</option>
+          <option value="paid">{t('vendor.paid.paid')}</option>
+          <option value="unpaid">{t('vendor.paid.unpaid')}</option>
         </select>
       </div>
 
       <div class="reg__dates">
         <div class="field">
-          <label class="field__label" for="f-from">From</label>
+          <label class="field__label" for="f-from">{t('vendor.from')}</label>
           <input id="f-from" class="input" type="date" value={draft.from} onInput={(e) => set({ from: e.currentTarget.value })} />
         </div>
         <div class="field">
-          <label class="field__label" for="f-to">To</label>
+          <label class="field__label" for="f-to">{t('vendor.to')}</label>
           <input id="f-to" class="input" type="date" value={draft.to} onInput={(e) => set({ to: e.currentTarget.value })} />
         </div>
       </div>
 
       <div class="field">
-        <label class="field__label" for="f-sort">Sort</label>
+        <label class="field__label" for="f-sort">{t('vendor.sortLabel')}</label>
         <select id="f-sort" class="select" value={draft.sort} onChange={(e) => set({ sort: e.currentTarget.value as OrderQuery['sort'] })}>
           {SORT_OPTIONS.map((s) => (
-            <option key={s.value} value={s.value}>{s.label}</option>
+            <option key={s.value} value={s.value}>{t(s.labelKey)}</option>
           ))}
         </select>
       </div>
 
       <Button chevron={false} onClick={() => onApply({ status: draft.status, pudo: draft.pudo, paid: draft.paid, from: draft.from, to: draft.to, sort: draft.sort })}>
-        Show shipments
+        {t('vendor.orders.showShipments')}
       </Button>
       <Button variant="link" onClick={onClearAll}>
-        Clear all filters
+        {t('vendor.clearAllFilters')}
       </Button>
     </Sheet>
   );
 }
 
 function TopUpSheet({ open, onClose, state, actions }: { open: boolean; onClose: () => void; state: VendorState; actions: VendorActions }) {
+  const t = useT();
   const [amount, setAmount] = useState('100');
   const value = Number(amount);
   return (
-    <Sheet open={open} onClose={onClose} title="Top up your balance">
-      <p class="t-body">You prepay the shipping; the buyer's share is collected at your checkout and stays your income.</p>
+    <Sheet open={open} onClose={onClose} title={t('vendor.topup.title')}>
+      <p class="t-body">{t('vendor.topup.body')}</p>
       <div class="field">
         <label class="field__label" for="vtopup">
-          Amount
+          {t('vendor.topup.amount')}
         </label>
         <input id="vtopup" class="input" type="number" inputMode="decimal" min="1" step="1" value={amount} onInput={(e) => setAmount(e.currentTarget.value)} />
       </div>
@@ -358,54 +363,55 @@ function TopUpSheet({ open, onClose, state, actions }: { open: boolean; onClose:
           void actions.topUp(value);
         }}
       >
-        {value > 0 ? `Add ${value.toFixed(2)}` : 'Add money'}
+        {value > 0 ? t('vendor.topup.add', { amount: value.toFixed(2) }) : t('vendor.topup.addMoney')}
       </Button>
       <Button variant="link" onClick={onClose}>
-        Not now
+        {t('vendor.topup.notNow')}
       </Button>
     </Sheet>
   );
 }
 
 function OrderSheet({ state, actions }: { state: VendorState; actions: VendorActions }) {
+  const t = useT();
   const d = state.detail;
-  const st = d ? orderStatus(d.status) : null;
+  const st = d ? orderStatus(d.status, t) : null;
   return (
     <Sheet open={Boolean(d)} onClose={actions.closeOrder} title={d ? (d.externalOrderId ?? d.parcelId) : ''}>
       {d && st ? (
         <>
           <div class="kv">
-            <span>Status</span>
+            <span>{t('vendor.order.status')}</span>
             <b>{st.word}</b>
           </div>
           <div class="kv">
-            <span>Size · zone</span>
+            <span>{t('vendor.order.sizeZone')}</span>
             <b>{`${d.size} → ${d.destZone}`}</b>
           </div>
           {d.shipmentCost != null ? (
             <div class="kv">
-              <span>Shipping cost</span>
+              <span>{t('vendor.order.shippingCost')}</span>
               <b>{money(d.shipmentCost)}</b>
             </div>
           ) : null}
           {d.buyerCharge != null ? (
             <div class="kv">
-              <span>Buyer paid at checkout</span>
+              <span>{t('vendor.order.buyerPaid')}</span>
               <b>{money(d.buyerCharge)}</b>
             </div>
           ) : null}
           {d.trackingKey ? (
             <div class="kv">
-              <span>Tracking key</span>
+              <span>{t('vendor.trackingKey')}</span>
               <b class="mono-t">{d.trackingKey}</b>
             </div>
           ) : null}
           {d.paidStatus !== 'ParcelPaid' ? (
             <Button chevron={false} busy={state.busy === `settle:${d.parcelId}`} onClick={() => void actions.settleOrder(d.parcelId)}>
-              Pay now from the balance
+              {t('vendor.payNow')}
             </Button>
           ) : null}
-          {d.collectionCode ? <CodeCard label="Buyer's collection code" code={d.collectionCode} scanAs="collect" /> : null}
+          {d.collectionCode ? <CodeCard label={t('vendor.buyerCollectionCode')} code={d.collectionCode} scanAs="collect" /> : null}
           {d.scans?.length ? (
             <div>
               {d.scans.map((s) => (
@@ -417,7 +423,7 @@ function OrderSheet({ state, actions }: { state: VendorState; actions: VendorAct
             </div>
           ) : null}
           <Button variant="link" onClick={actions.closeOrder}>
-            Close
+            {t('vendor.close')}
           </Button>
         </>
       ) : null}

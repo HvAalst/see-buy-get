@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { isUnknownIdentity, narrow, type SbgError } from '../../lib/sbg';
 import type { MediaKind } from '../../lib/sbg/personas/media';
+import { t } from '../../shared/i18n';
 import { downscaleImage } from '../../shared/media';
 import type { IconName } from '../../shared/ui/Icon';
 import { clearManager, createFleetClient, managerLogin, purgeFleetTokens, readManager, saveManager } from './api';
@@ -83,9 +84,9 @@ export function useFleetApp() {
 
   /* ---------------------------------------------------------------- toasts */
 
-  const pushToast = useCallback((t: Omit<Toast, 'id'>) => {
+  const pushToast = useCallback((toast: Omit<Toast, 'id'>) => {
     const id = ++toastSeq.current;
-    setState((s) => ({ ...s, toasts: [...s.toasts, { ...t, id }] }));
+    setState((s) => ({ ...s, toasts: [...s.toasts, { ...toast, id }] }));
     const handle = window.setTimeout(() => {
       toastTimers.current.delete(handle);
       setState((s) => ({ ...s, toasts: s.toasts.filter((x) => x.id !== id) }));
@@ -261,12 +262,12 @@ export function useFleetApp() {
         const { dataUrl, thumbDataUrl } = await downscaleImage(file);
         const r = await client.api.uploadMedia(kind, dataUrl, thumbDataUrl);
         if (r.error) {
-          pushToast({ tone: 'danger', icon: 'camera', title: 'Photo upload failed', detail: 'Try taking it again.' });
+          pushToast({ tone: 'danger', icon: 'camera', title: t('fleet.toast.photoUploadFailed'), detail: t('fleet.toast.photoUploadFailedDetail') });
           return null;
         }
         return narrow<{ mediaId: string }>(r.data)?.mediaId ?? null;
       } catch {
-        pushToast({ tone: 'danger', icon: 'camera', title: 'Could not read that photo' });
+        pushToast({ tone: 'danger', icon: 'camera', title: t('fleet.toast.photoUnreadable') });
         return null;
       }
     },
@@ -342,8 +343,8 @@ export function useFleetApp() {
       pushToast({
         tone: 'ok',
         icon: 'truck',
-        title: `${v?.plate ?? f.plate} registered`,
-        detail: v ? `Dashboard QR ${v.qr} · ${v.capacityKg} kg${v.verified ? ' · verified' : ''}.` : undefined,
+        title: t('fleet.toast.vehicleRegistered', { plate: v?.plate ?? f.plate }),
+        detail: v ? t('fleet.toast.vehicleRegisteredDetail', { qr: v.qr, kg: v.capacityKg, verified: v.verified ? t('fleet.toast.verifiedSuffix') : '' }) : undefined,
       });
       await refresh();
     });
@@ -375,8 +376,8 @@ export function useFleetApp() {
       pushToast({
         tone: 'ok',
         icon: 'person',
-        title: `${d?.displayName ?? f.displayName} onboarded`,
-        detail: d?.status === 'ACTIVE' ? `Badge ${d.badgeId} — ready to drive.` : 'Heavy registry — submit the KYC papers next.',
+        title: t('fleet.toast.driverOnboarded', { name: d?.displayName ?? f.displayName }),
+        detail: d?.status === 'ACTIVE' ? t('fleet.toast.driverActiveDetail', { badge: d.badgeId ?? '' }) : t('fleet.toast.driverHeavyDetail'),
       });
       await refresh();
     });
@@ -390,7 +391,7 @@ export function useFleetApp() {
         // exactly as the legacy console recorded them.
         const r = await client.api.submitDriverKyc(did, 'id.jpg', 'licence.jpg');
         if (r.error) return fail(r.error);
-        pushToast({ tone: 'ok', icon: 'badge', title: 'KYC papers submitted', detail: 'SeeBuyGet checks them and issues the badge.' });
+        pushToast({ tone: 'ok', icon: 'badge', title: t('fleet.toast.kycSubmitted'), detail: t('fleet.toast.kycSubmittedDetail') });
         await refresh();
       });
     },
@@ -403,7 +404,7 @@ export function useFleetApp() {
       await run(`price:${vehicleId}`, async () => {
         const r = await client.api.setVehiclePrice(vehicleId, price);
         if (r.error) return fail(r.error);
-        pushToast({ tone: 'ok', icon: 'wallet', title: 'Rate updated', detail: `Now ${price.toFixed(3)} per km — public to shippers.` });
+        pushToast({ tone: 'ok', icon: 'wallet', title: t('fleet.toast.rateUpdated'), detail: t('fleet.toast.rateUpdatedDetail', { price: price.toFixed(3) }) });
         await refresh();
       });
     },
@@ -418,7 +419,7 @@ export function useFleetApp() {
       const r = await client.api.couple(f.driverDid, f.vehicleId, f.corridorId || undefined);
       if (r.error) return fail(r.error);
       setState((s) => ({ ...s, cForm: { ...EMPTY_COUPLE } }));
-      pushToast({ tone: 'ok', icon: 'route', title: 'Coupled', detail: 'The driver is on shift with this vehicle.' });
+      pushToast({ tone: 'ok', icon: 'route', title: t('fleet.toast.coupled'), detail: t('fleet.toast.coupledDetail') });
       await refresh();
     });
   }, [client, run, fail, pushToast, refresh]);
@@ -429,7 +430,7 @@ export function useFleetApp() {
       await run(`uncouple:${driverDid}`, async () => {
         const r = await client.api.uncouple(driverDid);
         if (r.error) return fail(r.error);
-        pushToast({ tone: 'ok', icon: 'check', title: 'Session ended', detail: 'The vehicle is free again.' });
+        pushToast({ tone: 'ok', icon: 'check', title: t('fleet.toast.sessionEnded'), detail: t('fleet.toast.sessionEndedDetail') });
         await refresh();
       });
     },

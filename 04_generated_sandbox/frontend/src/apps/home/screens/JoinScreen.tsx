@@ -1,8 +1,9 @@
 import { useState } from 'preact/hooks';
 import { Button, Card, Checklist, CodeBoxes, ErrorNote, Icon, Note, PlaceMap, ReadAloud, ShopDetailSheet } from '../../../shared/ui';
 import { toPlaceWords } from '../../../shared/placewords';
+import { useT } from '../../../shared/i18n';
 
-import { DRIVER_CLASSES, joinSpoken, stepBlocker, stepsFor } from '../logic';
+import { DRIVER_CLASSES, joinSpoken, roleMeta, stepBlocker, stepsFor } from '../logic';
 import type { HomeActions, HomeState } from '../useHomeApp';
 
 export interface JoinScreenProps {
@@ -17,6 +18,7 @@ export interface JoinScreenProps {
  * so instead of dead-ending.
  */
 export function JoinScreen({ state, actions }: JoinScreenProps) {
+  const t = useT();
   const role = state.role;
   if (!role) return null;
 
@@ -24,12 +26,12 @@ export function JoinScreen({ state, actions }: JoinScreenProps) {
 
   const steps = stepsFor(role.kind);
   const at = steps.indexOf(state.step) + 1;
-  const blocker = stepBlocker(role, state.step, state.form);
+  const blocker = stepBlocker(role, state.step, state.form, t);
 
   return (
     <div class="scr">
       {state.step !== 'done' ? (
-        <div class="dots" role="img" aria-label={`Step ${at} of ${steps.length - 1}`}>
+        <div class="dots" role="img" aria-label={t('home.join.step', { at, total: steps.length - 1 })}>
           {steps.slice(0, -1).map((s, i) => (
             <span key={s} class={`dots__dot${i === at - 1 ? ' dots__dot--on' : i < at - 1 ? ' dots__dot--done' : ''}`} />
           ))}
@@ -48,9 +50,9 @@ export function JoinScreen({ state, actions }: JoinScreenProps) {
       {state.step !== 'done' ? (
         <div class="scr__foot">
           <Button variant="link" full={false} onClick={actions.back}>
-            Go back
+            {t('home.goBack')}
           </Button>
-          <ReadAloud text={() => `${joinSpoken(role, state.step)} ${blocker ?? ''}`} label="Read this aloud" />
+          <ReadAloud text={() => `${joinSpoken(role, state.step, t)} ${blocker ?? ''}`} label={t('home.readAloud')} />
         </div>
       ) : null}
     </div>
@@ -60,17 +62,18 @@ export function JoinScreen({ state, actions }: JoinScreenProps) {
 /* ------------------------------------------------------------------ phone -- */
 
 function PhoneStep({ state, actions }: JoinScreenProps) {
+  const t = useT();
   const role = state.role!;
-  const blocker = stepBlocker(role, 'phone', state.form);
+  const blocker = stepBlocker(role, 'phone', state.form, t);
   return (
     <>
-      <h1 class="scr__title">{`Join as ${role.label.toLowerCase()}`}</h1>
-      <p class="scr__lede">Your phone number is your key to the network. We send a code to check it works.</p>
+      <h1 class="scr__title">{t('home.join.joinAs', { role: roleMeta(role, t).labelLower })}</h1>
+      <p class="scr__lede">{t('home.join.phone.lede')}</p>
 
       <Card>
         <div class="field">
           <label class="field__label" for="phone">
-            Phone number
+            {t('home.join.phone.label')}
           </label>
           <input
             id="phone"
@@ -88,7 +91,7 @@ function PhoneStep({ state, actions }: JoinScreenProps) {
 
       <div class="scr__cta">
         <Button onClick={() => void actions.sendCode()} disabled={Boolean(blocker)} busy={state.busy === 'code'}>
-          Send me the code
+          {t('home.join.phone.cta')}
         </Button>
         {blocker ? <p class="hint" style="margin-top:8px">{blocker}</p> : null}
       </div>
@@ -99,30 +102,31 @@ function PhoneStep({ state, actions }: JoinScreenProps) {
 /* ------------------------------------------------------------------- code -- */
 
 function CodeStep({ state, actions }: JoinScreenProps) {
+  const t = useT();
   const role = state.role!;
-  const blocker = stepBlocker(role, 'code', state.form);
+  const blocker = stepBlocker(role, 'code', state.form, t);
   return (
     <>
-      <h1 class="scr__title">Type the code</h1>
-      <p class="scr__lede">{`We sent it to ${state.form.phone}.`}</p>
+      <h1 class="scr__title">{t('home.join.code.title')}</h1>
+      <p class="scr__lede">{t('home.join.code.lede', { phone: state.form.phone })}</p>
 
       <Card>
         <div class="field">
-          <span class="field__label">Your code</span>
+          <span class="field__label">{t('home.join.code.label')}</span>
           <CodeBoxes
             id="otp"
-            label="The code sent to your phone"
+            label={t('home.join.code.boxLabel')}
             length={state.form.code.length > 4 ? 6 : 4}
             value={state.form.code}
             onInput={(code) => actions.setForm({ code })}
           />
         </div>
-        {state.issuedCode ? <p class="hint" style="margin-top:10px">{`Sandbox: your code is ${state.issuedCode}`}</p> : null}
+        {state.issuedCode ? <p class="hint" style="margin-top:10px">{t('home.join.code.sandbox', { code: state.issuedCode })}</p> : null}
       </Card>
 
       <div class="scr__cta">
         <Button onClick={() => void actions.confirmCode()} disabled={Boolean(blocker)} busy={state.busy === 'verify'}>
-          Check the code
+          {t('home.join.code.cta')}
         </Button>
       </div>
     </>
@@ -132,15 +136,17 @@ function CodeStep({ state, actions }: JoinScreenProps) {
 /* ------------------------------------------------------------------ about -- */
 
 function AboutStep({ state, actions }: JoinScreenProps) {
+  const t = useT();
   const role = state.role!;
   const f = state.form;
-  const blocker = stepBlocker(role, 'about', f);
-  const nameLabel = role.id === 'pudo' ? 'Shop name' : role.id === 'mdp' ? 'Hub name' : role.id === 'vendor' ? 'Store name' : 'Your name as drivers see it';
+  const blocker = stepBlocker(role, 'about', f, t);
+  const nameLabel =
+    role.id === 'pudo' ? t('home.join.about.nameShop') : role.id === 'mdp' ? t('home.join.about.nameHub') : role.id === 'vendor' ? t('home.join.about.nameStore') : t('home.join.about.nameDriver');
 
   return (
     <>
-      <h1 class="scr__title">{role.id === 'driver' ? 'About you' : 'About your place'}</h1>
-      <p class="scr__lede">{role.promise}</p>
+      <h1 class="scr__title">{role.id === 'driver' ? t('home.join.about.titleDriver') : t('home.join.about.titlePlace')}</h1>
+      <p class="scr__lede">{roleMeta(role, t).promise}</p>
 
       <Card>
         <div class="field">
@@ -152,14 +158,14 @@ function AboutStep({ state, actions }: JoinScreenProps) {
             class="input"
             value={f.displayName}
             onInput={(e) => actions.setForm({ displayName: e.currentTarget.value })}
-            placeholder={role.id === 'pudo' ? 'Mama Sarah Shop' : role.id === 'driver' ? 'Amos K.' : role.id === 'mdp' ? 'Central Sort' : 'Nairobi Threads'}
+            placeholder={role.id === 'pudo' ? t('home.join.about.phShop') : role.id === 'driver' ? t('home.join.about.phDriver') : role.id === 'mdp' ? t('home.join.about.phHub') : t('home.join.about.phStore')}
           />
         </div>
 
         {role.id === 'vendor' ? (
           <div class="field" style="margin-top:12px">
             <label class="field__label" for="country">
-              Country
+              {t('home.join.about.country')}
             </label>
             <input
               id="country"
@@ -176,23 +182,23 @@ function AboutStep({ state, actions }: JoinScreenProps) {
           <>
             <div class="field" style="margin-top:12px">
               <label class="field__label" for="fname">
-                Your full name
+                {t('home.join.about.fullName')}
               </label>
-              <input id="fname" class="input" value={f.fullName} onInput={(e) => actions.setForm({ fullName: e.currentTarget.value })} placeholder="As on your ID" />
+              <input id="fname" class="input" value={f.fullName} onInput={(e) => actions.setForm({ fullName: e.currentTarget.value })} placeholder={t('home.join.about.fullNamePh')} />
             </div>
             <div class="field" style="margin-top:12px">
               <label class="field__label" for="nid">
-                ID number
+                {t('home.join.about.idNumber')}
               </label>
               <input id="nid" class="input" value={f.nationalId} onInput={(e) => actions.setForm({ nationalId: e.currentTarget.value })} spellcheck={false} />
             </div>
-            <p class="card__note">Your name and ID are kept private — they never show on the network.</p>
+            <p class="card__note">{t('home.join.about.privacyNote')}</p>
           </>
         ) : null}
       </Card>
 
       {role.id === 'driver' ? (
-        <Card label="What do you drive?">
+        <Card label={t('home.join.about.driveTitle')}>
           <div class="chips">
             {DRIVER_CLASSES.map((c) => {
               const on = f.licenceClasses.includes(c);
@@ -209,7 +215,7 @@ function AboutStep({ state, actions }: JoinScreenProps) {
               );
             })}
           </div>
-          <p class="card__note">A bike or motorcycle starts today. Anything heavier needs a licence check first.</p>
+          <p class="card__note">{t('home.join.about.driveNote')}</p>
         </Card>
       ) : null}
 
@@ -219,7 +225,7 @@ function AboutStep({ state, actions }: JoinScreenProps) {
           disabled={Boolean(blocker)}
           busy={state.busy === 'submit'}
         >
-          {role.kind === 'vendor' ? 'Create my store' : 'Continue'}
+          {role.kind === 'vendor' ? t('home.join.about.ctaVendor') : t('home.continue')}
         </Button>
         {blocker ? <p class="hint" style="margin-top:8px">{blocker}</p> : null}
       </div>
@@ -230,20 +236,21 @@ function AboutStep({ state, actions }: JoinScreenProps) {
 /* ------------------------------------------------------------------ where -- */
 
 function WhereStep({ state, actions }: JoinScreenProps) {
+  const t = useT();
   const role = state.role!;
   const f = state.form;
-  const blocker = stepBlocker(role, 'where', f);
+  const blocker = stepBlocker(role, 'where', f, t);
   const zones = [...new Set(state.points.map((p) => p.zone).filter(Boolean))].sort();
   const [openShop, setOpenShop] = useState<string | null>(null);
   const preview = openShop ? state.points.find((p) => p.did === openShop) ?? null : null;
 
   return (
     <>
-      <h1 class="scr__title">{role.id === 'driver' ? 'Where do you start?' : 'Where are you?'}</h1>
-      <p class="scr__lede">Tap the map to drop your pin — or tap a shop to see it. No street address needed.</p>
+      <h1 class="scr__title">{role.id === 'driver' ? t('home.join.where.titleDriver') : t('home.join.where.title')}</h1>
+      <p class="scr__lede">{t('home.join.where.lede')}</p>
 
       <PlaceMap
-        label="Tap the map to drop your pin"
+        label={t('home.join.where.mapLabel')}
         pins={state.points.filter((p) => p.location).map((p) => ({ id: p.did, label: p.shopName, point: p.location! }))}
         selectedId={openShop}
         onPick={setOpenShop}
@@ -252,19 +259,19 @@ function WhereStep({ state, actions }: JoinScreenProps) {
       />
 
       {f.location ? (
-        <Card label="Your three words">
+        <Card label={t('home.join.where.wordsTitle')}>
           <p class="words">{toPlaceWords(f.location)}</p>
-          <p class="card__note">Say these three words and anyone can find you. Put them on your sign.</p>
-          <ReadAloud text={() => `Your three words are: ${toPlaceWords(f.location!).split(' ').join(', ')}.`} label="Say them aloud" />
+          <p class="card__note">{t('home.join.where.wordsNote')}</p>
+          <ReadAloud text={() => t('home.join.where.wordsAloud', { words: toPlaceWords(f.location!).split(' ').join(', ') })} label={t('home.join.where.wordsAloudLabel')} />
         </Card>
       ) : (
-        <Note tone="info" icon="pin" title="Tap the map above to drop your pin" />
+        <Note tone="info" icon="pin" title={t('home.join.where.noPin')} />
       )}
 
-      <Card label="Which area do you serve?">
+      <Card label={t('home.join.where.areaTitle')}>
         {zones.length ? (
           <select class="select" value={f.zone} onChange={(e) => actions.setForm({ zone: e.currentTarget.value })}>
-            <option value="">Pick your area</option>
+            <option value="">{t('home.join.where.areaPlaceholder')}</option>
             {zones.map((z) => (
               <option key={z} value={z}>
                 {z}
@@ -277,16 +284,16 @@ function WhereStep({ state, actions }: JoinScreenProps) {
         {role.id !== 'driver' ? (
           <div class="field" style="margin-top:12px">
             <label class="field__label" for="landmark">
-              Nearest landmark (optional)
+              {t('home.join.where.landmarkLabel')}
             </label>
-            <input id="landmark" class="input" value={f.landmark} onInput={(e) => actions.setForm({ landmark: e.currentTarget.value })} placeholder="Blue gate, next to the market" />
+            <input id="landmark" class="input" value={f.landmark} onInput={(e) => actions.setForm({ landmark: e.currentTarget.value })} placeholder={t('home.join.where.landmarkPh')} />
           </div>
         ) : null}
       </Card>
 
       <div class="scr__cta">
         <Button onClick={actions.advance} disabled={Boolean(blocker)}>
-          Continue
+          {t('home.continue')}
         </Button>
         {blocker ? <p class="hint" style="margin-top:8px">{blocker}</p> : null}
       </div>
@@ -294,9 +301,9 @@ function WhereStep({ state, actions }: JoinScreenProps) {
       {/* G4b — the bearings pins are tappable: an info-only preview, so no pin is a dead tap. */}
       <ShopDetailSheet
         open={!!preview}
-        title={preview?.shopName ?? 'Shop'}
-        subtitle={preview ? `Zone ${preview.zone}` : undefined}
-        lines={preview ? [preview.openState === 'open' ? 'Open now' : 'Closed right now'] : []}
+        title={preview?.shopName ?? t('home.join.where.shopFallback')}
+        subtitle={preview ? t('home.zone', { zone: preview.zone }) : undefined}
+        lines={preview ? [preview.openState === 'open' ? t('home.openNow') : t('home.closedNow')] : []}
         location={preview?.location ?? null}
         onClose={() => setOpenShop(null)}
       />
@@ -307,18 +314,19 @@ function WhereStep({ state, actions }: JoinScreenProps) {
 /* ------------------------------------------------------------------ login -- */
 
 function LoginStep({ state, actions }: JoinScreenProps) {
+  const t = useT();
   const role = state.role!;
   const f = state.form;
-  const blocker = stepBlocker(role, 'login', f);
+  const blocker = stepBlocker(role, 'login', f, t);
   return (
     <>
-      <h1 class="scr__title">How you sign in</h1>
-      <p class="scr__lede">This is what opens your app from now on.</p>
+      <h1 class="scr__title">{t('home.join.login.title')}</h1>
+      <p class="scr__lede">{t('home.join.login.lede')}</p>
 
       <Card>
         <div class="field">
           <label class="field__label" for="email">
-            Email
+            {t('home.join.login.email')}
           </label>
           <input
             id="email"
@@ -334,7 +342,7 @@ function LoginStep({ state, actions }: JoinScreenProps) {
         </div>
         <div class="field" style="margin-top:12px">
           <label class="field__label" for="pass">
-            Password
+            {t('home.join.login.password')}
           </label>
           <input
             id="pass"
@@ -343,14 +351,14 @@ function LoginStep({ state, actions }: JoinScreenProps) {
             value={f.password}
             onInput={(e) => actions.setForm({ password: e.currentTarget.value })}
             autocomplete="new-password"
-            placeholder="At least 6 characters"
+            placeholder={t('home.join.login.passwordPh')}
           />
         </div>
       </Card>
 
       <div class="scr__cta">
         <Button onClick={() => void actions.submit()} disabled={Boolean(blocker)} busy={state.busy === 'submit'}>
-          {`Join as ${role.label.toLowerCase()}`}
+          {t('home.join.joinAs', { role: roleMeta(role, t).labelLower })}
         </Button>
         {blocker ? <p class="hint" style="margin-top:8px">{blocker}</p> : null}
       </div>
@@ -361,40 +369,37 @@ function LoginStep({ state, actions }: JoinScreenProps) {
 /* ------------------------------------------------------------------- done -- */
 
 function DoneStep({ state, actions }: JoinScreenProps) {
+  const t = useT();
   const role = state.role!;
   const acc = state.account;
   const store = state.store;
 
   return (
     <>
-      <h1 class="scr__title">You are in</h1>
-      <p class="scr__lede">{role.id === 'vendor' ? 'Your store is registered.' : `Welcome to SeeBuyGet, ${state.form.displayName}.`}</p>
+      <h1 class="scr__title">{t('home.join.done.title')}</h1>
+      <p class="scr__lede">{role.id === 'vendor' ? t('home.join.done.ledeVendor') : t('home.join.done.ledeWelcome', { name: state.form.displayName })}</p>
 
       {store ? (
         <>
-          <Card label="Store ID">
+          <Card label={t('home.join.done.storeId')}>
             <p class="cred">{store.vendorId}</p>
           </Card>
-          <Card label="Store secret — shown once">
+          <Card label={t('home.join.done.storeSecret')}>
             <p class="cred">{store.secret}</p>
           </Card>
-          <Card title="Write these down now" tone="soft">
-            <Checklist items={['The secret opens your store app', 'It also signs your order callbacks', 'SeeBuyGet cannot show it again']} />
+          <Card title={t('home.join.done.writeDown')} tone="soft">
+            <Checklist items={[t('home.join.done.secret1'), t('home.join.done.secret2'), t('home.join.done.secret3')]} />
           </Card>
         </>
       ) : null}
 
       {acc ? (
-        <Card title="What happens next" tone="soft">
+        <Card title={t('home.join.done.whatNext')} tone="soft">
           <Checklist
             items={
               acc.entityStatus === 'ACTIVE'
-                ? ['Your app is ready to open', 'Sign in with your email and password', 'Your phone number stays your key']
-                : [
-                    'SeeBuyGet checks your details — usually same day',
-                    'You can open your app and look around now',
-                    'You start working the moment you are approved',
-                  ]
+                ? [t('home.join.done.active1'), t('home.join.done.active2'), t('home.join.done.active3')]
+                : [t('home.join.done.pending1'), t('home.join.done.pending2'), t('home.join.done.pending3')]
             }
           />
         </Card>
@@ -402,13 +407,13 @@ function DoneStep({ state, actions }: JoinScreenProps) {
 
       <div class="scr__cta">
         <a class="btn btn--primary btn--full" href={role.app}>
-          {`Open the ${role.id === 'pudo' ? 'shop' : role.id === 'mdp' ? 'hub' : role.id === 'vendor' ? 'store' : role.label.replace('A ', '')} app`}
+          {t('home.join.done.openApp', { name: roleMeta(role, t).appNoun })}
           <Icon name="chevronRight" size={20} class="btn__chev" />
         </a>
       </div>
 
       <Button variant="link" onClick={actions.restart}>
-        Back to the start
+        {t('home.join.done.restart')}
       </Button>
     </>
   );
@@ -417,28 +422,26 @@ function DoneStep({ state, actions }: JoinScreenProps) {
 /* ----------------------------------------------------------- invite-only -- */
 
 function InviteOnly({ state, actions }: JoinScreenProps) {
+  const t = useT();
   const role = state.role!;
   return (
     <div>
-      <h1 class="scr__title">{`${role.label} joins by invite`}</h1>
-      <p class="scr__lede">
-        A fleet office is set up by SeeBuyGet operations — vehicles, drivers and the operating bond are checked before the console
-        opens. You will be given a sign-in code.
-      </p>
+      <h1 class="scr__title">{t('home.join.invite.title', { role: roleMeta(role, t).label })}</h1>
+      <p class="scr__lede">{t('home.join.invite.lede')}</p>
 
-      <Card title="What you get" tone="soft">
-        <Checklist items={['A live map of your vehicles and drivers', 'Shift and cargo tracking', 'Your own vehicle and driver registry']} />
+      <Card title={t('home.join.invite.whatYouGet')} tone="soft">
+        <Checklist items={[t('home.join.invite.get1'), t('home.join.invite.get2'), t('home.join.invite.get3')]} />
       </Card>
 
       <div class="scr__cta">
         <a class="btn btn--primary btn--full" href={role.app}>
-          I have a code — open the fleet app
+          {t('home.join.invite.haveCode')}
           <Icon name="chevronRight" size={20} class="btn__chev" />
         </a>
       </div>
 
       <Button variant="link" onClick={() => actions.go('roles')}>
-        Pick something else
+        {t('home.join.invite.pickElse')}
       </Button>
     </div>
   );

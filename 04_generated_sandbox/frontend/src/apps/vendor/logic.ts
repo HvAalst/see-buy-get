@@ -5,6 +5,7 @@
  */
 
 import { toCsv } from '../../shared/csv';
+import type { Translate } from '../../shared/i18n';
 import type { IconName } from '../../shared/ui/Icon';
 import type { CheckoutRow, NetworkPoint, OrderRow, OriginOption, ParcelStatus, QuoteView, SettlementRow, ShippingPolicy } from './types';
 
@@ -17,9 +18,9 @@ export function money(v: number | null | undefined): string {
 /* ----------------------------------------------------------------- policy -- */
 
 /** The split policy in plain words — what the BUYER pays at checkout. */
-export function policyLine(p: ShippingPolicy): string {
-  if (p.mode === 'full') return 'The buyer pays the whole shipping price at checkout.';
-  return `The buyer pays at most ${money(p.buyerContributionCap)} — free for them on orders over ${money(p.freeOverSubtotal)}. Your store absorbs the rest.`;
+export function policyLine(p: ShippingPolicy, t: Translate): string {
+  if (p.mode === 'full') return t('vendor.logic.policyFull');
+  return t('vendor.logic.policyCapped', { cap: money(p.buyerContributionCap), free: money(p.freeOverSubtotal) });
 }
 
 /* ----------------------------------------------------------------- status -- */
@@ -31,29 +32,29 @@ export interface StatusPresentation {
 }
 
 /** The order ladder as the MERCHANT reads it. */
-export function orderStatus(status: ParcelStatus): StatusPresentation {
+export function orderStatus(status: ParcelStatus, t: Translate): StatusPresentation {
   switch (status) {
     case 'Created':
-      return { word: 'Label made — drop it off', icon: 'edit', tone: 'warn' };
+      return { word: t('vendor.status.created'), icon: 'edit', tone: 'warn' };
     case 'At_PUDO':
-      return { word: 'At the drop-off shop', icon: 'home', tone: 'info' };
+      return { word: t('vendor.status.atPudo'), icon: 'home', tone: 'info' };
     case 'On_Bus':
-      return { word: 'On the bus', icon: 'truck', tone: 'info' };
+      return { word: t('vendor.status.onBus'), icon: 'truck', tone: 'info' };
     case 'At_MDP':
-      return { word: 'At the sort hub', icon: 'grid', tone: 'info' };
+      return { word: t('vendor.status.atMdp'), icon: 'grid', tone: 'info' };
     case 'Ready_For_Pickup':
-      return { word: 'Ready for the buyer', icon: 'box', tone: 'ok' };
+      return { word: t('vendor.status.ready'), icon: 'box', tone: 'ok' };
     case 'Delivered':
-      return { word: 'Collected', icon: 'check', tone: 'ok' };
+      return { word: t('vendor.status.delivered'), icon: 'check', tone: 'ok' };
     case 'Disputed':
-      return { word: 'Problem reported', icon: 'warning', tone: 'danger' };
+      return { word: t('vendor.status.disputed'), icon: 'warning', tone: 'danger' };
     case 'Voided':
-      return { word: 'Cancelled', icon: 'block', tone: 'danger' };
+      return { word: t('vendor.status.voided'), icon: 'block', tone: 'danger' };
   }
 }
 
-export function paidWord(paidStatus: string): { word: string; tone: 'ok' | 'warn' } {
-  return paidStatus === 'ParcelPaid' ? { word: 'Paid', tone: 'ok' } : { word: 'Unpaid', tone: 'warn' };
+export function paidWord(paidStatus: string, t: Translate): { word: string; tone: 'ok' | 'warn' } {
+  return paidStatus === 'ParcelPaid' ? { word: t('vendor.paid.paid'), tone: 'ok' } : { word: t('vendor.paid.unpaid'), tone: 'warn' };
 }
 
 /* ------------------------------------------------------------------- mint -- */
@@ -100,11 +101,11 @@ export function dimsComplete(f: Pick<MintForm, 'l' | 'w' | 'h' | 'kg'>): boolean
 }
 
 /** What still blocks the mint, in wizard order — the CTA subtitle reads it out. */
-export function mintMissing(f: MintForm): string | null {
-  if (!dimsComplete(f)) return 'Measure the parcel — length, width, height and weight.';
-  if (!f.photoRef) return 'Take the contents photo.';
-  if (!f.destDid) return 'Pick where the buyer collects.';
-  if (!f.originDid) return 'Pick your drop-off shop.';
+export function mintMissing(f: MintForm, t: Translate): string | null {
+  if (!dimsComplete(f)) return t('vendor.mint.missDims');
+  if (!f.photoRef) return t('vendor.mint.missPhoto');
+  if (!f.destDid) return t('vendor.mint.missDest');
+  if (!f.originDid) return t('vendor.mint.missOrigin');
   return null;
 }
 
@@ -120,8 +121,15 @@ export function fromHandoff(f: MintForm, c: CheckoutRow): MintForm {
   };
 }
 
-export function handoffLine(c: CheckoutRow): string {
-  const items = c.items?.length ? `${c.items.reduce((n, i) => n + i.qty, 0)} item${c.items.length === 1 && c.items[0].qty === 1 ? '' : 's'}` : 'order';
+export function handoffLine(c: CheckoutRow, t: Translate): string {
+  let items: string;
+  if (c.items?.length) {
+    const count = c.items.reduce((n, i) => n + i.qty, 0);
+    const one = c.items.length === 1 && c.items[0].qty === 1;
+    items = t(one ? 'vendor.logic.handoffItemOne' : 'vendor.logic.handoffItemMany', { count });
+  } else {
+    items = t('vendor.logic.handoffOrder');
+  }
   const ref = c.externalOrderId ? ` · ${c.externalOrderId}` : '';
   return `${items}${ref} · ${c.buyerEmail}`;
 }
@@ -159,20 +167,19 @@ export interface PriceCard {
   total: number;
 }
 
-export function priceCards(q: QuoteView): PriceCard[] {
+export function priceCards(q: QuoteView, t: Translate): PriceCard[] {
   return [
-    { key: 'locked', title: 'Cheapest', sub: 'Waits for the lowest-price bus', total: q.locked.total },
-    { key: 'flexible', title: 'Fastest', sub: 'Any bus can take it — unused ceiling comes back', total: q.flexible.total },
+    { key: 'locked', title: t('vendor.price.cheapest'), sub: t('vendor.price.cheapestSub'), total: q.locked.total },
+    { key: 'flexible', title: t('vendor.price.fastest'), sub: t('vendor.price.fastestSub'), total: q.flexible.total },
   ];
 }
 
 /* --------------------------------------------------------------- speaking -- */
 
-export function ordersSummary(balance: number, open: number, unpaid: number): string {
-  return (
-    `Balance ${money(balance)}. ${open} order${open === 1 ? '' : 's'} on the move.` +
-    (unpaid ? ` ${unpaid} unpaid — top up to release ${unpaid === 1 ? 'it' : 'them'}.` : '')
-  );
+export function ordersSummary(balance: number, open: number, unpaid: number, t: Translate): string {
+  const base = t(open === 1 ? 'vendor.logic.ordersSummaryOne' : 'vendor.logic.ordersSummaryMany', { balance: money(balance), open });
+  const tail = unpaid ? ' ' + t(unpaid === 1 ? 'vendor.logic.ordersUnpaidOne' : 'vendor.logic.ordersUnpaidMany', { count: unpaid }) : '';
+  return base + tail;
 }
 
 /* -------------------------------------------------------------------- export -- */
@@ -192,9 +199,10 @@ export function orderRowsToCsv(rows: OrderRow[]): string {
 
 /* --------------------------------------------------------------- bookkeeping -- */
 
-/** The merchant's word for a ledger entry type — the shipment billing reads as "Shipment". */
-export function ledgerTypeWord(type: SettlementRow['type']): string {
-  return type === 'TOP_UP' ? 'Top-up' : type === 'BILLING' ? 'Shipment' : 'Rebate';
+/** The merchant's word for a ledger entry type — the shipment billing reads as "Shipment". For ON-SCREEN
+ *  display (translated); the CSV export deliberately keeps English (see ledgerRowsToCsv). */
+export function ledgerTypeWord(type: SettlementRow['type'], t: Translate): string {
+  return type === 'TOP_UP' ? t('vendor.ledger.typeTopUp') : type === 'BILLING' ? t('vendor.ledger.typeShipment') : t('vendor.ledger.typeRebate');
 }
 
 /** The bookkeeping export columns — SAME set + order as the server's ledger export (vendorLedgerToCsv), so a
@@ -202,8 +210,11 @@ export function ledgerTypeWord(type: SettlementRow['type']): string {
 export const LEDGER_CSV_HEADERS = ['Date', 'Type', 'Direction', 'Amount', 'Parcel', 'Note'];
 
 export function ledgerRowsToCsv(rows: SettlementRow[]): string {
+  // The Type column mirrors the SERVER's English export byte-for-byte (NOT locale-translated) so a client
+  // "export selected" equals a server "export all"; the on-screen word translates via ledgerTypeWord(t).
+  const csvType = (type: SettlementRow['type']) => (type === 'TOP_UP' ? 'Top-up' : type === 'BILLING' ? 'Shipment' : 'Rebate');
   return toCsv(
     LEDGER_CSV_HEADERS,
-    rows.map((s) => [s.at, ledgerTypeWord(s.type), s.sign === '+' ? 'in' : 'out', s.sign === '+' ? s.amount : -s.amount, s.parcelId ?? '', s.note ?? '']),
+    rows.map((s) => [s.at, csvType(s.type), s.sign === '+' ? 'in' : 'out', s.sign === '+' ? s.amount : -s.amount, s.parcelId ?? '', s.note ?? '']),
   );
 }

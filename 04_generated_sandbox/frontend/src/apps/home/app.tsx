@@ -1,9 +1,11 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { Icon, TopBar } from '../../shared/ui';
+import { useT } from '../../shared/i18n';
 import { JoinScreen } from './screens/JoinScreen';
 import { RolesScreen } from './screens/RolesScreen';
 import { SignInScreen } from './screens/SignInScreen';
 import { WelcomeScreen } from './screens/WelcomeScreen';
+import { roleMeta } from './logic';
 import { useHomeApp } from './useHomeApp';
 import '../../shared/screens.css';
 import './home.css';
@@ -13,34 +15,35 @@ import './home.css';
  * either sends you onward to a role's app or moves you one step through joining.
  */
 export function App() {
+  const t = useT();
   const { state, actions } = useHomeApp();
   const sw = useRegisterSW();
   const [needRefresh] = sw.needRefresh;
 
   const subtitle =
     state.screen === 'join' && state.role
-      ? `Joining as ${state.role.label.toLowerCase()}`
+      ? t('home.subtitle.joining', { role: roleMeta(state.role, t).labelLower })
       : state.screen === 'roles'
-        ? 'Join the network'
+        ? t('home.subtitle.roles')
         : state.screen === 'signin'
-          ? 'Sign in'
-          : 'Send · collect · earn';
+          ? t('home.subtitle.signin')
+          : t('home.subtitle.welcome');
 
   return (
     <div class="app">
       <TopBar
-        title="SeeBuyGet"
+        title={t('home.appTitle')}
         subtitle={subtitle}
         onBack={state.screen === 'welcome' ? undefined : () => (state.screen === 'join' ? actions.back() : actions.go('welcome'))}
-        backLabel="Back"
+        backLabel={t('home.back')}
         end={
           needRefresh ? (
             <button
               type="button"
               class="topbar__lead"
               onClick={() => void sw.updateServiceWorker(true)}
-              aria-label="A new version is ready — update now"
-              title="Update the app"
+              aria-label={t('home.update.aria')}
+              title={t('home.update.title')}
             >
               <Icon name="refresh" size={24} />
             </button>
