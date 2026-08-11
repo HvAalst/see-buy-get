@@ -563,6 +563,9 @@ export function useDriverApp() {
         const v = narrow<SuggestView>(r.data);
         setState((s) => ({
           ...s,
+          // REP4 — keep the freight-pause flag in lock-step with THESE offers (suggest returns the live verdict),
+          // so the "freight is paused" note never lags the marketplace it explains.
+          driver: s.driver && v?.freightPaused != null ? { ...s.driver, freightPaused: v.freightPaused } : s.driver,
           remaining: v?.remainingCapacityKg ?? s.remaining,
           offers: v?.offers ?? [],
           offerIndex: 0,

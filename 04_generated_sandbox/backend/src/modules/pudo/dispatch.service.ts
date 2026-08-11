@@ -11,6 +11,7 @@ import { FleetService } from './fleet.service';
 import { CargoService } from './cargo.service';
 import { CargoNature, Equipment, VehicleCapability } from './cargo.types';
 import { VendorService } from './vendor.service';
+import { RatingService, belowFloor } from './rating.service';
 import { WalletGateService } from './wallet-gate.service';
 import { clampMultiplier, computeFreightPrice, freightMultiplier, shipperCharge } from './pricing';
 import { isTempBreach, loadSafetyItems, missingKeys, requiredLoadKeys, requiredUnloadKeys, tempBand, unloadSafetyItems } from './heavy-cargo';
@@ -144,6 +145,7 @@ export class DispatchService {
     private readonly gate: WalletGateService,
     private readonly market: MarketPulseStore,
     private readonly media: MediaService,
+    private readonly ratings: RatingService,
     @Inject(ROUTER) private readonly router: Router,
   ) {
     this.freightSeq = [...this.freights.values()].length; // continue the human FRT-NNN sequence after a restart
@@ -346,7 +348,14 @@ export class DispatchService {
     const profile = this.pricingProfile(vehicle); // S34 — fixed for this driver+vehicle across all offers here
     const floor = minEarn != null && Number.isFinite(minEarn) && minEarn > 0 ? minEarn : undefined;
 
+    // REP4 — the ENFORCING guard: a driver whose reliable rating has fallen below the network floor is barred
+    // from the FREIGHT marketplace (the premium, high-value loads). They keep their tote/parcel line-haul work
+    // — which is what earns them ratings — so the bar is RECOVERABLE: as fresh good ratings pull their average
+    // back above the floor, freight returns. Cold-start safe (belowFloor never fires for a new/thinly-rated driver).
+    const freightBarred = belowFloor(this.ratings.driverRating(driverDid));
+
     const matches = this.availableLoads()
+      .filter((load) => !(freightBarred && load.kind === 'freight'))
       .map((load) => ({ load, detour: this.router.detourKm(route.from, load.pickupLocation, route.to), minutesAway: this.minutes(route.from, load.pickupLocation) }))
       .filter(({ load, detour, minutesAway }) => detour <= DISPATCH_MAX_DETOUR_KM && minutesAway <= DISPATCH_MAX_PICKUP_MIN && this.vehicleCanCarry(vehicle, load, remaining))
       .sort((a, b) => a.detour - b.detour || a.minutesAway - b.minutesAway);
@@ -427,6 +436,9 @@ export class DispatchService {
       const f = this.requireFreight(offer.ref);
       // Claimable when live ('available') OR when it's a scheduled load the shipper opened to early reservation.
       if (!(f.status === 'available' || (f.status === 'scheduled' && f.allowEarlyClaim))) throw new GlosError('INVALID_STATE', `Freight is ${f.status}`);
+      // REP4 — bar a below-floor driver from CLAIMING freight (defence-in-depth behind suggest's withholding, and
+      // it also catches a stale offer claimed after the driver dropped below the floor). Recoverable; cold-start safe.
+      if (belowFloor(this.ratings.driverRating(offer.driverDid))) throw new GlosError('REPUTATION_BELOW_FLOOR', 'Your rating is below the network minimum — freight is paused until it recovers. Keep delivering to bring it back up.');
       // S34 — compute the price to LOCK. The market can surge afterwards and the driver can edit their profile,
       // but what is agreed at this instant never changes. Recompute against THIS vehicle's current profile
       // (defaults resolved for a legacy vehicle) and the multiplier now, over the distance the offer was priced

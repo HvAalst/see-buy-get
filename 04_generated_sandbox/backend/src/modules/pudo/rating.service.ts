@@ -13,6 +13,17 @@ import { hashPhone } from '../../foundation/identity/phone';
  *  priceBand "never benchmark against a median of one" lesson. */
 export const MIN_PUBLIC_RATINGS = 3;
 
+/** REP4 — the ENFORCING floor: a provider whose RELIABLE rating (enough ratings, not cold-start) falls below
+ *  this faces a consequence (a poorly-rated driver loses the freight marketplace; low-rated providers surface
+ *  for operator review). Set below the midpoint so only genuinely bad service bites. */
+export const RATING_FLOOR = 2.5;
+
+/** REP4 — is this rating below the enforcing floor? COLD-START SAFE: a provider without enough ratings (isNew)
+ *  is NEVER enforced against, so a lone bad review can't bar anyone and a newcomer is never penalised. */
+export function belowFloor(rating: { average: number; isNew: boolean }): boolean {
+  return !rating.isNew && rating.average < RATING_FLOOR;
+}
+
 export interface RatingRecord {
   id: string;
   parcelId: string;

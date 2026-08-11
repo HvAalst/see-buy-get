@@ -12,7 +12,7 @@ import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
 import { operationalParcelView, ParcelService } from './parcel.service';
 import { MonitorService } from './monitor.service';
-import { RatingService } from './rating.service';
+import { RatingService, belowFloor } from './rating.service';
 import { VendorService } from './vendor.service';
 import { ShelfService } from './shelf.service';
 import { RoutingService } from './routing.service';
@@ -1001,6 +1001,26 @@ export class SbgController {
    * leaves here, and the agent's did + shop name + zone + pin are already public there. Agents only for now;
    * drivers/fleet/MDP get profiles in later reputation slices (this 404s a non-agent did until then).
    */
+  /**
+   * REP4 — the operator's reputation-review queue: every provider whose RELIABLE rating has fallen below the
+   * enforcing floor (a driver is already barred from freight; an agent has no auto-consequence yet, so the
+   * operator acts). Declared BEFORE reputation/:did so the static path wins over the :did param. Operator-only —
+   * it names underperformers, which the public profiles never rank.
+   */
+  @Roles('operator')
+  @Get('reputation/review')
+  reputationReview() {
+    const drivers = this.drivers
+      .list({})
+      .map((d) => ({ did: d.did, kind: 'driver' as const, name: d.displayName, rating: this.ratings.driverRating(d.did) }))
+      .filter((x) => belowFloor(x.rating));
+    const agents = this.agents
+      .list()
+      .map((a) => ({ did: a.did, kind: 'agent' as const, name: a.shopName, rating: this.ratings.agentRating(a.did) }))
+      .filter((x) => belowFloor(x.rating));
+    return { belowFloor: [...drivers, ...agents] };
+  }
+
   @Public()
   @Get('reputation/:did')
   reputationProfile(@Param('did') did: string) {
@@ -1297,7 +1317,11 @@ export class SbgController {
 
   @Get('fleet/drivers/:did')
   getFleetDriver(@Param('did') did: string) {
-    return this.drivers.get(did);
+    const driver = this.drivers.get(did);
+    // REP4 — the driver's own rating + whether it has fallen below the enforcing floor, so the app can explain
+    // WHY freight vanished (rather than the driver seeing an empty marketplace with no reason).
+    const rating = this.ratings.driverRating(did);
+    return { ...driver, rating, freightPaused: belowFloor(rating) };
   }
 
   /** Heavy registry: upload ID + licence copy → KYC_PENDING. */
@@ -1471,7 +1495,10 @@ export class SbgController {
   suggestWork(@Param('did') did: string, @Body() dto: SuggestRouteDto) {
     const offers = this.dispatch.suggest(did, dto, Date.now(), dto.minEarn); // S34c — the driver's min-earning filter
     this.fleet.reportLocation(did, dto.from); // the driver is at the route start → live map
-    return { remainingCapacityKg: this.dispatch.remainingCapacity(did), offers };
+    // REP4 — return the LIVE freight-bar verdict alongside the offers, so the app's "freight is paused" note
+    // comes from the SAME read as the loads it sits next to (never stale: missing when a pause just began, or
+    // contradicting freight cards after it lifted).
+    return { remainingCapacityKg: this.dispatch.remainingCapacity(did), offers, freightPaused: belowFloor(this.ratings.driverRating(did)) };
   }
 
   /** Driver GPS heartbeat — updates the vehicle's position on the live fleet map. */

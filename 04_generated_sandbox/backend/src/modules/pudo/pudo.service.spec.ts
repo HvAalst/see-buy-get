@@ -2945,6 +2945,38 @@ describe('PUDO Light', () => {
     expect(profile.scorecard.onTimeRate).toBe(1);
   });
 
+  // --- REP4: the ENFORCING guard — a below-floor driver loses the freight marketplace (recoverably) ---
+
+  it('REP4: a below-floor driver is barred from freight (suggest withholds, claim refuses); cold-start exempt; recoverable', () => {
+    const pickup = { lat: -1.2, lng: 36.8 };
+    const dest = { lat: -1.25, lng: 36.85 };
+    const d = coupleTipper('R4', { min: 0.8, max: 1.5 });
+    const f = dispatch.registerFreight({ description: 'Cement', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: dest, weightKg: 100, bulk: true });
+
+    // Cold-start: one bad rating does NOT bar — the driver still sees + can grab freight.
+    rating.rateDriver({ driverDid: d.did, byAgentDid: 'a1', stars: 1 });
+    const [coldOffer] = dispatch.suggest(d.did, { from: pickup, to: dest }).filter((o) => o.ref === f.freightId);
+    expect(coldOffer).toBeDefined();
+
+    // Push the RELIABLE rating below the floor (3 × 1★ → avg 1.0, count 3, no longer cold-start).
+    rating.rateDriver({ driverDid: d.did, byAgentDid: 'a2', stars: 1 });
+    rating.rateDriver({ driverDid: d.did, byAgentDid: 'a3', stars: 1 });
+    expect(dispatch.suggest(d.did, { from: pickup, to: dest }).some((o) => o.ref === f.freightId)).toBe(false); // freight withheld
+    expect((controller.suggestWork(d.did, { from: pickup, to: dest } as never) as { freightPaused: boolean }).freightPaused).toBe(true); // live verdict for the app's note
+    expect(() => dispatch.claim(coldOffer.offerId)).toThrow(/network minimum|paused/i); // stale offer refused too
+
+    // Recoverable: enough good ratings pull the average back over the floor → freight returns.
+    for (const a of ['a4', 'a5', 'a6', 'a7']) rating.rateDriver({ driverDid: d.did, byAgentDid: a, stars: 5 }); // (3 + 20)/7 ≈ 3.29 ≥ 2.5
+    expect(dispatch.suggest(d.did, { from: pickup, to: dest }).some((o) => o.ref === f.freightId)).toBe(true);
+  });
+
+  it('REP4: the operator reputation-review queue lists providers below the floor', () => {
+    const d = coupleTipper('R4B', { min: 0.8, max: 1.5 });
+    for (const a of ['a1', 'a2', 'a3']) rating.rateDriver({ driverDid: d.did, byAgentDid: a, stars: 1 }); // avg 1, count 3
+    const review = controller.reputationReview() as { belowFloor: Array<{ did: string; kind: string }> };
+    expect(review.belowFloor.some((x) => x.did === d.did && x.kind === 'driver')).toBe(true);
+  });
+
   it('S32: claim() re-checks bulk — a re-coupled non-bulk vehicle cannot reserve a bulk freight', () => {
     const d = drivers.register({ displayName: 'BLK', fullName: 'B', nationalId: 'ID-BLK', mobile: '+254900101', licenceClasses: ['truck', 'van'], licenceNumber: 'L-BLK', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
     drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });

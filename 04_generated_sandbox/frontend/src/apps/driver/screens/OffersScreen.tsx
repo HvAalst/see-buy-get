@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, Checklist, ErrorNote, Icon, OpenInMaps, Pill, ReadAloud, Sheet, SwipeDeck } from '../../../shared/ui';
+import { Button, Card, Checklist, ErrorNote, Icon, Note, OpenInMaps, Pill, ReadAloud, Sheet, SwipeDeck } from '../../../shared/ui';
 import { countdownLabel, money, offerSpoken, offersSummary, priceBreakdownLines, secondsLeft } from '../logic';
 import type { OfferView } from '../types';
 import type { DriverActions, DriverState } from '../useDriverApp';
@@ -28,6 +28,12 @@ export function OffersScreen({ state, actions }: OffersScreenProps) {
   const claimKey = active ? `claim:${active.offerId}` : '';
   const ignoreKey = active ? `ignore:${active.offerId}` : '';
 
+  // REP4 — if the driver's rating has fallen below the network floor, freight is withheld. Say so plainly (and
+  // recoverably) so an empty/thin marketplace isn't a mystery.
+  const pausedNote = state.driver?.freightPaused ? (
+    <Note tone="warn" icon="star" title="Freight is paused" detail="Your rating is below the network minimum, so freight loads are held back. Keep your parcel runs on time — as your rating recovers, freight comes back." />
+  ) : null;
+
   if (offers.length === 0) {
     return (
       <div class="scr">
@@ -35,6 +41,7 @@ export function OffersScreen({ state, actions }: OffersScreenProps) {
         <p class="scr__lede">No shipments are waiting between those two places right now.</p>
 
         {state.error ? <ErrorNote error={state.error} /> : null}
+        {pausedNote}
 
         <Card title="Why you might see nothing" tone="soft">
           {/* Say WHY, not just "none" — the three server filters, in plain words. */}
@@ -68,6 +75,7 @@ export function OffersScreen({ state, actions }: OffersScreenProps) {
       <p class="scr__lede">{offersSummary(offers.length)}</p>
 
       {state.error ? <ErrorNote error={state.error} /> : null}
+      {pausedNote}
 
       <SwipeDeck
         index={Math.min(state.offerIndex, offers.length - 1)}

@@ -21,6 +21,10 @@ export interface DriverRecord {
   assignedVehicleId?: string;
   homeZone?: string;
   licence?: { classes?: string[]; number?: string; expiresAt?: string };
+  // REP4 — the driver's own rating + whether it has fallen below the network floor (freight is then paused
+  // until it recovers). So the app can explain WHY the freight marketplace went quiet.
+  rating?: { average: number; count: number; isNew?: boolean } | null;
+  freightPaused?: boolean;
 }
 
 /** R5 — one row of the driver jobs + earnings register (a claimed freight haul). No buyer identity. */
@@ -158,6 +162,8 @@ export interface OfferView {
 export interface SuggestView {
   remainingCapacityKg: number;
   offers: OfferView[];
+  /** REP4 — the live freight-bar verdict for this driver, so the pause note stays in sync with the offers. */
+  freightPaused?: boolean;
 }
 
 export interface LoadBagView {
