@@ -269,18 +269,25 @@ function WhereStep({ state, actions }: JoinScreenProps) {
       )}
 
       <Card label={t('home.join.where.areaTitle')}>
+        {/* Type-or-pick: existing network zones are SUGGESTIONS (datalist), but a shop opening in a brand-new
+            area must be able to type it — a plain dropdown of existing zones would trap them (they cannot add
+            an area that isn't already on the map). */}
+        <input
+          class="input"
+          list="join-zones"
+          value={f.zone}
+          onInput={(e) => actions.setForm({ zone: e.currentTarget.value })}
+          placeholder="Z-A"
+          autocapitalize="characters"
+        />
         {zones.length ? (
-          <select class="select" value={f.zone} onChange={(e) => actions.setForm({ zone: e.currentTarget.value })}>
-            <option value="">{t('home.join.where.areaPlaceholder')}</option>
+          <datalist id="join-zones">
             {zones.map((z) => (
-              <option key={z} value={z}>
-                {z}
-              </option>
+              <option key={z} value={z} />
             ))}
-          </select>
-        ) : (
-          <input class="input" value={f.zone} onInput={(e) => actions.setForm({ zone: e.currentTarget.value })} placeholder="Z-A" autocapitalize="characters" />
-        )}
+          </datalist>
+        ) : null}
+        <p class="card__note">{t('home.join.where.areaHint')}</p>
         {role.id !== 'driver' ? (
           <div class="field" style="margin-top:12px">
             <label class="field__label" for="landmark">

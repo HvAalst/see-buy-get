@@ -164,6 +164,7 @@ export const enHome = {
   'home.join.where.noPin': 'Tap the map above to drop your pin',
   'home.join.where.areaTitle': 'Which area do you serve?',
   'home.join.where.areaPlaceholder': 'Pick your area',
+  'home.join.where.areaHint': 'Pick your area from the list, or type a new one.',
   'home.join.where.landmarkLabel': 'Nearest landmark (optional)',
   'home.join.where.landmarkPh': 'Blue gate, next to the market',
   'home.join.where.shopFallback': 'Shop',
