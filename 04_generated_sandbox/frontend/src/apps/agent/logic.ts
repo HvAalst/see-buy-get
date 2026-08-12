@@ -64,6 +64,21 @@ export function money(v: number | null | undefined): string {
   return (Number(v) || 0).toFixed(2);
 }
 
+/* ------------------------------------------------------------------ shelf -- */
+
+/** Mirror of the backend SHELF_COLORS (pudo.config.ts) — the colour a column gets, so the client draws the
+ *  same "Green-3" grid the server labels. Presentation only; the server stays authoritative on real slots. */
+export const SHELF_COLORS = ['Red', 'Orange', 'Amber', 'Green', 'Teal', 'Blue', 'Indigo', 'Violet', 'Pink', 'Brown'];
+
+/** A shelf must hold at least this many slots (mirrors the backend MIN_SLOTS). */
+export const MIN_SHELF_SLOTS = 6;
+
+/** The current grid's dimensions, read back from its slots (max row/col), or null for an empty grid. */
+export function gridDims(slots: ReadonlyArray<{ row: number; col: number }> | undefined): { rows: number; cols: number } | null {
+  if (!slots || !slots.length) return null;
+  return { rows: Math.max(...slots.map((s) => s.row)), cols: Math.max(...slots.map((s) => s.col)) };
+}
+
 /* ------------------------------------------------------------------ zones -- */
 
 /** Destinations this shop can send toward: active corridors leaving the shop's zone. */

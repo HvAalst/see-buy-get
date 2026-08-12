@@ -287,3 +287,125 @@
   height: 22px;
   accent-color: var(--blue);
 }
+
+/* ------------------------------------------------------- shelf setup (grid) -- */
+
+.stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+}
+.stepper + .stepper {
+  border-top: 1px solid var(--bd-soft);
+}
+.stepper__label {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--tx);
+}
+.stepper__ctrl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.stepper__btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid var(--bd);
+  background: var(--card);
+  color: var(--navy);
+  font-size: 22px;
+  line-height: 1;
+}
+.stepper__btn:disabled {
+  opacity: 0.4;
+}
+.stepper__val {
+  min-width: 2ch;
+  text-align: center;
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--navy);
+}
+
+.shelfgrid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 14px;
+}
+.shelfgrid__row {
+  display: flex;
+  gap: 6px;
+}
+.shelfcell {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  aspect-ratio: 1 / 1;
+  max-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--navy);
+}
+/* A parcel is on this slot — a filled dot, independent of the column colour. */
+.shelfcell--taken {
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.14);
+}
+.shelfcell--taken::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--navy);
+}
+
+/* The ten column colours (mirror of backend SHELF_COLORS) as light, readable tints. */
+.shelfcell--red { background: #fde2e1; }
+.shelfcell--orange { background: #fde6d2; }
+.shelfcell--amber { background: #fdf1cc; }
+.shelfcell--green { background: #d9f2e0; }
+.shelfcell--teal { background: #d2f0ee; }
+.shelfcell--blue { background: #dbe8fd; }
+.shelfcell--indigo { background: #e4e2fb; }
+.shelfcell--violet { background: #eddcfb; }
+.shelfcell--pink { background: #fbdcec; }
+.shelfcell--brown { background: #ece0d6; }
+
+.shelflegend {
+  display: flex;
+  gap: 18px;
+  margin-top: 10px;
+  font-size: 14px;
+  color: var(--tx2);
+}
+.shelflegend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.shelflegend .shelfcell {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  aspect-ratio: auto;
+  max-height: none;
+}
+.shelfcell--legendfree {
+  background: var(--bd-soft);
+}
+.shelflegend .shelfcell--taken {
+  background: var(--bd-soft);
+}

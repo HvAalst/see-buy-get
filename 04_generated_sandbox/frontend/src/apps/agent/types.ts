@@ -35,6 +35,22 @@ export interface AgentView {
   rating?: { count: number; average: number; isNew?: boolean } | null;
 }
 
+/** One pickup-shelf slot: a colour column + numbered row (e.g. "Green-3"), occupied when a parcel sits on it. */
+export interface ShelfSlotView {
+  label: string;
+  color: string;
+  row: number;
+  col: number;
+  occupiedBy?: string;
+}
+
+/** GET /agents/{did}/shelf — the whole slot grid + capacity + the live free-slot count. */
+export interface ShelfGrid {
+  grid: ShelfSlotView[];
+  capacity: number;
+  available: number;
+}
+
 /** GET /agents/{did}/can-transact — the 'no money, no scan' gate as readable state. */
 export interface GateView {
   ok: boolean;

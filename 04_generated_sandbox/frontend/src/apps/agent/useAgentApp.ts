@@ -36,9 +36,10 @@ import type {
   RatesView,
   ReceiveBagView,
   ReputationProfileView,
+  ShelfGrid,
 } from './types';
 
-export type Screen = 'home' | 'accept' | 'handover' | 'release' | 'collect' | 'receivebag' | 'rates' | 'void' | 'records' | 'consignments';
+export type Screen = 'home' | 'accept' | 'handover' | 'release' | 'collect' | 'receivebag' | 'rates' | 'void' | 'records' | 'consignments' | 'shelf';
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
 
 /* --- R4 registers: the shop's parcel history + earnings, server-side searched / filtered / paged --- */
@@ -94,6 +95,9 @@ export interface AgentState {
   /** F3 — the shop's consolidation lots (loaded when the Consignments screen opens). */
   consignments: ConsignmentView[];
   consignmentsState: 'idle' | 'loading' | 'ready' | 'error';
+  /** The pickup-shelf grid + free-slot count (loaded when the Shelf screen opens). */
+  shelf: ShelfGrid | null;
+  shelfState: 'idle' | 'loading' | 'ready' | 'error';
   /** R4 — the shop's parcel-history register (a filtered/paged page). */
   parcelHist: AgentParcelRow[];
   parcelHistTotal: number;
@@ -171,6 +175,8 @@ const INITIAL: AgentState = {
   ratesState: 'idle',
   consignments: [],
   consignmentsState: 'idle',
+  shelf: null,
+  shelfState: 'idle',
   parcelHist: [],
   parcelHistTotal: 0,
   parcelHistState: 'idle',
@@ -598,6 +604,19 @@ export function useAgentApp() {
     void fetchLedgerWith(stateRef.current.ledgerQuery);
   }, [fetchLedgerWith]);
 
+  /** Read the pickup-shelf grid (slots + occupancy + the live free count) for the Shelf screen. */
+  const loadShelf = useCallback(async () => {
+    if (!client || !did) return;
+    setState((s) => ({ ...s, shelfState: 'loading' }));
+    const r = await client.api.getShelf(did);
+    if (r.error) {
+      setState((s) => ({ ...s, shelf: null, shelfState: 'error' }));
+      fail(r.error);
+      return;
+    }
+    setState((s) => ({ ...s, shelf: narrow<ShelfGrid>(r.data), shelfState: 'ready' }));
+  }, [client, did, fail]);
+
   const go = useCallback(
     (screen: Screen) => {
       setState((s) => ({
@@ -612,8 +631,9 @@ export function useAgentApp() {
       if (screen === 'rates') void loadRates();
       if (screen === 'accept') void loadAcceptPoints();
       if (screen === 'consignments') void loadConsignments();
+      if (screen === 'shelf') void loadShelf();
     },
-    [loadShopParcels, loadRates, loadAcceptPoints, loadConsignments],
+    [loadShopParcels, loadRates, loadAcceptPoints, loadConsignments, loadShelf],
   );
 
   /* ---------------------------------------------------------------- forms */
@@ -746,6 +766,23 @@ export function useAgentApp() {
       pushToast({ tone: 'ok', icon: 'check', title: t('agent.toast.earningsExported'), detail: t('agent.toast.earningsExportedDetail') });
     });
   }, [client, did, run, fail, pushToast]);
+
+  /** Reconfigure the pickup shelf (rows × colour columns) → refresh the agent record + re-read the grid. */
+  const saveShelf = useCallback(
+    async (rows: number, cols: number) => {
+      if (!client || !did) return;
+      await run('shelf', async () => {
+        const r = await client.api.setShelf(did, rows, cols);
+        if (r.error) return fail(r.error);
+        pushToast({ tone: 'ok', icon: 'check', title: t('agent.toast.shelfSaved'), detail: t('agent.toast.shelfSavedDetail', { total: rows * cols }) });
+        // Re-fetch the MERGED agent (balance + rating) — the raw setShelf response body carries neither, so
+        // trusting it would blank the wallet hero until the next background refresh. Siblings do the same.
+        await refresh();
+        await loadShelf();
+      });
+    },
+    [client, did, run, fail, pushToast, refresh, loadShelf],
+  );
 
   const topUp = useCallback(
     async (amount: number) => {
@@ -1244,6 +1281,8 @@ export function useAgentApp() {
       topUp,
       setOpen,
       setPrice,
+      loadShelf,
+      saveShelf,
       submitAccept,
       dismissAcceptedLabel,
       submitBookFreight,

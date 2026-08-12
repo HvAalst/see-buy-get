@@ -11,6 +11,7 @@ import {
   DRIVER_ISSUE_LABELS,
   DURABLE_NATURES,
   gateNotice,
+  gridDims,
   parseBudget,
   plannedPickupIso,
   handoverSummary,
@@ -314,5 +315,18 @@ describe('void / reverse logistics', () => {
     expect(voidCountdownLabel(VOID_WINDOW_MS, t)).toBe('5 min left to undo');
     expect(voidCountdownLabel(45_000, t)).toBe('45 sec left to undo');
     expect(voidCountdownLabel(0, t)).toBe('Window closed');
+  });
+});
+
+describe('shelf', () => {
+  it('reads the grid dimensions back from its slots (max row/col), null when empty', () => {
+    const slots = [
+      { row: 1, col: 1 },
+      { row: 3, col: 2 },
+      { row: 2, col: 5 },
+    ];
+    expect(gridDims(slots)).toEqual({ rows: 3, cols: 5 });
+    expect(gridDims([])).toBeNull();
+    expect(gridDims(undefined)).toBeNull();
   });
 });

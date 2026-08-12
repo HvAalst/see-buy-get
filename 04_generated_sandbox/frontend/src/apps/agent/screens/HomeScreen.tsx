@@ -81,6 +81,9 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
           <Button variant="link" full={false} onClick={() => setSheet('price')}>
             {t('agent.home.changePrice')}
           </Button>
+          <Button variant="link" full={false} onClick={() => actions.go('shelf')}>
+            {t('agent.home.shelfLink')}
+          </Button>
         </div>
         {agent?.location ? (
           <>

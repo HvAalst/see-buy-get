@@ -11,6 +11,7 @@ import { RatesScreen } from './screens/RatesScreen';
 import { RecordsScreen } from './screens/RecordsScreen';
 import { ReceiveBagScreen } from './screens/ReceiveBagScreen';
 import { ReleaseScreen } from './screens/ReleaseScreen';
+import { ShelfScreen } from './screens/ShelfScreen';
 import { SignInScreen } from './screens/SignInScreen';
 import { VoidScreen } from './screens/VoidScreen';
 import { useAgentApp, type AgentActions, type AgentState, type Screen } from './useAgentApp';
@@ -119,6 +120,8 @@ function ScreenRouter({ screen, state, actions }: { screen: Screen; state: Agent
       return <ConsignmentsScreen state={state} actions={actions} />;
     case 'records':
       return <RecordsScreen state={state} actions={actions} />;
+    case 'shelf':
+      return <ShelfScreen state={state} actions={actions} />;
     default:
       return <HomeScreen state={state} actions={actions} />;
   }
