@@ -47,13 +47,17 @@ export type WeeklyHours = Partial<Record<Weekday, DayHours | null>>;
 export class ShelfConfig {
   rows: number;
   cols: number;
+  consolidationSlots?: string[]; // labels the agent pooled for multiple small (S) parcels — letters/envelopes
 }
 export class ShelfSlot {
   label: string; // e.g. "Green-3"
   color: string; // column colour
   row: number;
   col: number;
-  occupiedBy?: string; // parcelId
+  occupiedBy?: string; // a normal slot's single parcelId
+  consolidation?: boolean; // a bundle slot: pools multiple small parcels
+  items?: string[]; // a bundle slot's pooled parcelIds
+  maxItems?: number; // a bundle slot's capacity
 }
 
 /** KYC documents collected to move DRAFT → KYC_PENDING (Compendium 18.5). */

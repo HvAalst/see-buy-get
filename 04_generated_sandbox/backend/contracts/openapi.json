@@ -11313,6 +11313,13 @@
           "cols": {
             "type": "number",
             "minimum": 1
+          },
+          "consolidationSlots": {
+            "description": "Labels (e.g. \"Green-3\") the agent designates as consolidation/bundle slots for small parcels.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -11436,6 +11443,12 @@
           },
           "cols": {
             "type": "number"
+          },
+          "consolidationSlots": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [

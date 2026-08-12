@@ -95,6 +95,9 @@ export const EQUIPMENT_DEPOSIT_USD = 50; // refundable starter-kit deposit
 
 // Shelf grid: columns are colour-coded, rows numbered. Supports up to 10 columns.
 export const SHELF_COLORS = ['Red', 'Orange', 'Amber', 'Green', 'Teal', 'Blue', 'Indigo', 'Violet', 'Pink', 'Brown'];
+// How many small (S) parcels a consolidation ("bundle") slot may pool — letters/envelopes share one slot
+// instead of each burning a whole one.
+export const CONSOLIDATION_MAX_ITEMS = 12;
 
 // Routing / leg ETA.
 export const VEHICLE_SPEED_KMH: Record<'bus' | 'truck', number> = { bus: 40, truck: 55 };

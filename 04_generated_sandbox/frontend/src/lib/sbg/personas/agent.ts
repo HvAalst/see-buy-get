@@ -60,9 +60,9 @@ export function createAgentApi(sbg: SbgClient) {
     /** The shop's pickup-shelf grid + live free-slot count (colour/number slots, occupancy). */
     getShelf: (did: string) => sbg.request((c) => c.GET('/v1/sbg/agents/{did}/shelf', { params: { path: { did } } })),
 
-    /** Reconfigure the shelf grid (rows × colour columns) — returns the updated agent record. */
-    setShelf: (did: string, rows: number, cols: number) =>
-      sbg.request((c) => c.POST('/v1/sbg/agents/{did}/shelf', { params: { path: { did } }, body: { rows, cols } })),
+    /** Reconfigure the shelf grid (rows × colour columns + which slots pool small parcels) — returns the updated agent record. */
+    setShelf: (did: string, rows: number, cols: number, consolidationSlots: string[] = []) =>
+      sbg.request((c) => c.POST('/v1/sbg/agents/{did}/shelf', { params: { path: { did } }, body: { rows, cols, consolidationSlots } })),
 
     /** Nearby shops' handling fees — the benchmark this shop prices against. */
     ratesNear: (at?: { lat: number; lng: number }) =>

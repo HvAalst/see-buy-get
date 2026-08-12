@@ -678,7 +678,7 @@ export class ParcelService implements OnApplicationBootstrap {
     parcel.otp = otp;
     parcel.otpAttempts = 0;
     parcel.otpLockedAt = undefined;
-    parcel.binSlot = this.shelf.assign(destAgentDid, parcelId); // commit to a shelf slot for pickup
+    parcel.binSlot = this.shelf.assign(destAgentDid, parcelId, parcel.size); // commit to a shelf slot for pickup (small parcels may bundle)
     this.scan(parcel, 'Ready_For_Pickup', destAgentDid, `OTP issued · shelf ${parcel.binSlot}`);
     void this.events.publish(GlosEvent.Pudo.ParcelReadyForPickup, { parcelId, destAgentDid, binSlot: parcel.binSlot }, { source: 'pudo' }).catch(() => undefined);
     // The destination agent reads the OTP aloud to the customer — no SMS, no per-parcel cost.
@@ -1038,7 +1038,7 @@ export class ParcelService implements OnApplicationBootstrap {
     if (parcel.status !== 'On_Bus') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected On_Bus`);
     if (parcel.destAgentDid && parcel.destAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Shelve only at the buyer-selected destination PUDO');
     parcel.destAgentDid = agentDid;
-    parcel.binSlot = this.shelf.assign(agentDid, parcelId); // chaos-shelf slot from the grid (binId hint ignored)
+    parcel.binSlot = this.shelf.assign(agentDid, parcelId, parcel.size); // chaos-shelf slot from the grid (binId hint ignored; small parcels may bundle)
     void binId;
     parcel.status = 'Ready_For_Pickup';
     this.scan(parcel, 'Ready_For_Pickup', agentDid, `shelved · bin ${parcel.binSlot}`);

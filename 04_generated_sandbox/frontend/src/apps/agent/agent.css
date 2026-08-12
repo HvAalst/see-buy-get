@@ -356,11 +356,20 @@
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--navy);
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.shelfcell:disabled {
+  cursor: default;
+}
+/* A designated BUNDLE slot — a strong navy ring, independent of the column colour. */
+.shelfcell--bundle {
+  box-shadow: inset 0 0 0 2px var(--navy);
 }
 /* A parcel is on this slot — a filled dot, independent of the column colour. */
-.shelfcell--taken {
-  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.14);
-}
 .shelfcell--taken::after {
   content: '';
   position: absolute;

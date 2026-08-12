@@ -28,6 +28,8 @@ class RequirementsDto {
 export class ShelfDto {
   @IsNumber() @Min(1) rows!: number;
   @IsNumber() @Min(1) cols!: number;
+  /** Labels (e.g. "Green-3") the agent designates as consolidation/bundle slots for small parcels. */
+  @IsOptional() @IsArray() @IsString({ each: true }) consolidationSlots?: string[];
 }
 
 export class RegisterAgentDto {

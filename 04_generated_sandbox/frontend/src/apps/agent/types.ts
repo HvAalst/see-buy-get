@@ -35,13 +35,17 @@ export interface AgentView {
   rating?: { count: number; average: number; isNew?: boolean } | null;
 }
 
-/** One pickup-shelf slot: a colour column + numbered row (e.g. "Green-3"), occupied when a parcel sits on it. */
+/** One pickup-shelf slot: a colour column + numbered row (e.g. "Green-3"). A normal slot holds one parcel; a
+ *  consolidation ("bundle") slot pools multiple small ones. */
 export interface ShelfSlotView {
   label: string;
   color: string;
   row: number;
   col: number;
-  occupiedBy?: string;
+  occupiedBy?: string; // a normal slot's single parcel
+  consolidation?: boolean; // a bundle slot
+  items?: string[]; // a bundle slot's pooled parcels
+  maxItems?: number; // a bundle slot's capacity
 }
 
 /** GET /agents/{did}/shelf — the whole slot grid + capacity + the live free-slot count. */

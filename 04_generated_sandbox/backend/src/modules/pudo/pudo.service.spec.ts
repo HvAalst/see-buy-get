@@ -186,6 +186,28 @@ describe('PUDO Light', () => {
     expect(() => agents.register({ ...a, nationalId: 'ID-X', mobile: '+254X' })).toThrow(/device/);
   });
 
+  it('bundles small parcels into a consolidation slot, keeps larger ones on their own (shelf)', () => {
+    const a = onboardAgent('Bundler', 'BundleTown', 50);
+    agents.setShelf(a.did, { rows: 3, cols: 2, consolidationSlots: ['Red-1'] }); // 6 slots; Red-1 is a bundle slot
+
+    // Two small parcels pool into the one bundle slot — it does not burn two slots.
+    expect(shelfSvc.assign(a.did, 'p-s1', 'S')).toBe('Red-1');
+    expect(shelfSvc.assign(a.did, 'p-s2', 'S')).toBe('Red-1');
+    // A large parcel skips the bundle slot and takes a normal one.
+    const big = shelfSvc.assign(a.did, 'p-l1', 'L');
+    expect(big).not.toBe('Red-1');
+
+    const grid = shelfSvc.grid(a.did);
+    const bundle = grid.find((s) => s.label === 'Red-1')!;
+    expect(bundle.consolidation).toBe(true);
+    expect(bundle.items).toEqual(['p-s1', 'p-s2']);
+    expect(grid.find((s) => s.label === big)!.occupiedBy).toBe('p-l1');
+
+    // Release frees just that one parcel from the bundle; the other stays put.
+    shelfSvc.release(a.did, 'p-s1');
+    expect(shelfSvc.grid(a.did).find((s) => s.label === 'Red-1')!.items).toEqual(['p-s2']);
+  });
+
   it('requires KYC documents to move to KYC_PENDING (Ch 18.5)', () => {
     const a = agents.register({ shopName: 'K', zone: 'NorthTown', location: { lat: -1, lng: 36 }, landmark: 'x', openingHours: uniformHours(), shelf: defaultShelf, fullName: 'A', nationalId: 'ID-KYC', mobile: '+254KYC', deviceImei: 'IMEI-KYC', requirements: eligibleReqs() });
     expect(() => agents.submitKyc(a.did, { idCopyRef: '', tradingLicenceRef: 'l', shopPhotoRefs: [] })).toThrow(/KYC/);

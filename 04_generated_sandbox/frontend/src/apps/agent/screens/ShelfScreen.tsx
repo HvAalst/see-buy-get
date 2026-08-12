@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useMemo, useState } from 'preact/hooks';
 import { Button, Card, ErrorNote, Note, ReadAloud } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { MIN_SHELF_SLOTS, SHELF_COLORS, gridDims } from '../logic';
@@ -13,10 +13,11 @@ const MAX_ROWS = 30;
 const MAX_COLS = SHELF_COLORS.length; // one distinct colour per column — beyond this they repeat
 
 /**
- * The pickup shelf, set up by the shop itself. The backend already models the grid (rows × colour columns →
- * "Green-3" slots) and hands parcels to the first free slot; this screen is the missing agent-facing half:
- * see the current shelf with what's on it, change the number of rows/columns, and save. Shrinking is blocked
- * while it would strand a parcel on a slot being removed — the server has no such guard, so the client holds it.
+ * The pickup shelf, set up by the shop itself. The backend models the grid (rows × colour columns →
+ * "Green-3" slots) and hands parcels to the first free slot; this screen is the agent-facing half: see the
+ * current shelf with what's on it, size it, and mark BUNDLE slots — slots that pool small parcels (letters,
+ * envelopes) instead of each burning a whole slot. Shrinking is blocked while it would strand a parcel;
+ * a slot's type can only change while it is empty (so pooled parcels are never orphaned).
  */
 export function ShelfScreen({ state, actions }: ShelfScreenProps) {
   const t = useT();
@@ -27,15 +28,19 @@ export function ShelfScreen({ state, actions }: ShelfScreenProps) {
   }, [state.shelfState, actions]);
 
   const cur = gridDims(grid?.grid);
+  const loadedBundles = useMemo(() => (grid?.grid ?? []).filter((s) => s.consolidation).map((s) => s.label), [grid]);
+
   const [rows, setRows] = useState<number | null>(null);
   const [cols, setCols] = useState<number | null>(null);
-  // Adopt the server's current dimensions once the grid lands (and only then — never clobber a live edit).
+  const [bundles, setBundles] = useState<Set<string>>(new Set());
+  // Adopt the server's current dimensions + bundle slots once the grid lands (never clobber a live edit).
   useEffect(() => {
     if (cur && rows === null) {
       setRows(cur.rows);
       setCols(cur.cols);
+      setBundles(new Set(loadedBundles));
     }
-  }, [cur, rows]);
+  }, [cur, rows, loadedBundles]);
 
   if (!grid && state.shelfState === 'loading') return <div class="scr"><p class="hint">{t('agent.shelf.loading')}</p></div>;
   if (!grid && state.shelfState === 'error' && state.error) return <div class="scr"><ErrorNote error={state.error} onRetry={() => void actions.loadShelf()} /></div>;
@@ -43,13 +48,37 @@ export function ShelfScreen({ state, actions }: ShelfScreenProps) {
 
   const r = rows ?? cur?.rows ?? 4;
   const c = cols ?? cur?.cols ?? 5;
-  const occupied = grid.grid.filter((s) => s.occupiedBy);
-  const orphan = occupied.filter((s) => s.row > r || s.col > c); // slots that would be removed while still holding a parcel
+
+  // Occupancy from the server grid: a normal slot's occupiedBy, or a bundle slot's pooled items.
+  const occAt = (row: number, col: number) => grid.grid.find((s) => s.row === row && s.col === col);
+  const itemCount = (s?: { occupiedBy?: string; items?: string[] }) => (s?.items ? s.items.length : s?.occupiedBy ? 1 : 0);
+  const occupied = grid.grid.filter((s) => itemCount(s) > 0);
+  const orphan = occupied.filter((s) => s.row > r || s.col > c); // occupied slots the new dimensions would remove
   const total = r * c;
-  const free = total - (occupied.length - orphan.length);
+  const free = total - occupied.filter((s) => s.row <= r && s.col <= c).length;
+
+  // The bundle labels inside the current dimensions — the save payload + the "changed" comparison.
+  const bundlePayload: string[] = [];
+  for (let ci = 0; ci < c; ci += 1) {
+    const color = SHELF_COLORS[ci % SHELF_COLORS.length];
+    for (let ri = 1; ri <= r; ri += 1) {
+      const label = `${color}-${ri}`;
+      if (bundles.has(label)) bundlePayload.push(label);
+    }
+  }
+
   const belowMin = total < MIN_SHELF_SLOTS;
-  const changed = !cur || r !== cur.rows || c !== cur.cols;
-  const canSave = changed && !belowMin && orphan.length === 0;
+  const dimsChanged = !cur || r !== cur.rows || c !== cur.cols;
+  const bundlesChanged = bundlePayload.length !== loadedBundles.length || bundlePayload.some((l) => !loadedBundles.includes(l));
+  const canSave = (dimsChanged || bundlesChanged) && !belowMin && orphan.length === 0;
+
+  const toggleBundle = (label: string) =>
+    setBundles((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
 
   return (
     <div class="scr">
@@ -70,24 +99,38 @@ export function ShelfScreen({ state, actions }: ShelfScreenProps) {
             {Array.from({ length: c }, (_, ci) => {
               const color = SHELF_COLORS[ci % SHELF_COLORS.length];
               const label = `${color}-${ri + 1}`;
-              const taken = occupied.some((s) => s.row === ri + 1 && s.col === ci + 1);
+              const isBundle = bundles.has(label);
+              const n = itemCount(occAt(ri + 1, ci + 1));
+              const locked = n > 0; // a slot's type can only change while it is empty
+              const aria = isBundle
+                ? (n === 1 ? t('agent.shelf.slotBundleAriaOne', { label }) : t('agent.shelf.slotBundleAriaMany', { label, count: n }))
+                : n > 0
+                  ? t('agent.shelf.slotTakenAria', { label })
+                  : t('agent.shelf.slotFreeAria', { label });
               return (
-                <span
+                <button
                   key={ci}
-                  class={`shelfcell shelfcell--${color.toLowerCase()}${taken ? ' shelfcell--taken' : ''}`}
-                  aria-label={taken ? t('agent.shelf.slotTakenAria', { label }) : t('agent.shelf.slotFreeAria', { label })}
+                  type="button"
+                  class={`shelfcell shelfcell--${color.toLowerCase()}${isBundle ? ' shelfcell--bundle' : ''}${n > 0 ? ' shelfcell--taken' : ''}`}
+                  aria-pressed={isBundle}
+                  disabled={locked}
+                  aria-label={aria}
+                  onClick={() => toggleBundle(label)}
                 >
                   {ri + 1}
-                </span>
+                </button>
               );
             })}
           </div>
         ))}
       </div>
 
+      <p class="card__note" style="margin-top:8px">{t('agent.shelf.bundleHint')}</p>
+
       <div class="shelflegend" aria-hidden="true">
         <span class="shelflegend__item"><span class="shelfcell shelfcell--legendfree" /> {t('agent.shelf.legendFree')}</span>
-        <span class="shelflegend__item"><span class="shelfcell shelfcell--taken" /> {t('agent.shelf.legendTaken')}</span>
+        <span class="shelflegend__item"><span class="shelfcell shelfcell--legendfree shelfcell--taken" /> {t('agent.shelf.legendTaken')}</span>
+        <span class="shelflegend__item"><span class="shelfcell shelfcell--legendfree shelfcell--bundle" /> {t('agent.shelf.legendBundle')}</span>
       </div>
 
       {belowMin ? <Note tone="warn" icon="warning" title={t('agent.shelf.minSlots', { min: MIN_SHELF_SLOTS })} /> : null}
@@ -96,7 +139,7 @@ export function ShelfScreen({ state, actions }: ShelfScreenProps) {
       ) : null}
 
       <div class="scr__cta">
-        <Button busy={state.busy === 'shelf'} disabled={!canSave} onClick={() => void actions.saveShelf(r, c)}>
+        <Button busy={state.busy === 'shelf'} disabled={!canSave} onClick={() => void actions.saveShelf(r, c, bundlePayload)}>
           {t('agent.shelf.save')}
         </Button>
       </div>

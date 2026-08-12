@@ -767,12 +767,12 @@ export function useAgentApp() {
     });
   }, [client, did, run, fail, pushToast]);
 
-  /** Reconfigure the pickup shelf (rows × colour columns) → refresh the agent record + re-read the grid. */
+  /** Reconfigure the pickup shelf (rows × colour columns + bundle slots) → refresh the agent record + re-read the grid. */
   const saveShelf = useCallback(
-    async (rows: number, cols: number) => {
+    async (rows: number, cols: number, consolidationSlots: string[]) => {
       if (!client || !did) return;
       await run('shelf', async () => {
-        const r = await client.api.setShelf(did, rows, cols);
+        const r = await client.api.setShelf(did, rows, cols, consolidationSlots);
         if (r.error) return fail(r.error);
         pushToast({ tone: 'ok', icon: 'check', title: t('agent.toast.shelfSaved'), detail: t('agent.toast.shelfSavedDetail', { total: rows * cols }) });
         // Re-fetch the MERGED agent (balance + rating) — the raw setShelf response body carries neither, so
