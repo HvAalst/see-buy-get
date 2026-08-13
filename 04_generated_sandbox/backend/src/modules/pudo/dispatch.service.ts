@@ -19,7 +19,7 @@ import { MediaService } from './media.service';
 import { MarketPulseStore } from './market-pulse.store';
 import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, VEHICLE_SPEC } from './fleet.config';
 import { Router, ROUTER } from './router';
-import { DEFAULT_PRICE_PER_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, OFFER_TTL_MIN, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
+import { DEFAULT_PRICE_PER_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, NETWORK_CURRENCY, OFFER_TTL_MIN, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
 import { Claimable, ClaimableKind, Freight, FreightShipmentView, FreightStatus, Offer, RoutePlan } from './dispatch.types';
@@ -113,8 +113,8 @@ export function filterDriverJobs(rows: Freight[], driverDid: string, q: DriverJo
 
 export function driverJobsToCsv(rows: Freight[]): string {
   return toCsv(
-    ['Job', 'Description', 'Destination', 'Status', 'Class', 'Weight kg', 'Earning', 'Paid', 'Claimed', 'Delivered'],
-    rows.map((f) => [f.code, f.description, f.destLabel, f.status, f.cargoClass, f.weightKg, f.lockedPrice ?? '', f.driverPaid ? 'yes' : 'no', f.claimedAt ?? '', f.deliveredAt ?? '']),
+    ['Job', 'Description', 'Destination', 'Status', 'Class', 'Weight kg', 'Earning', 'Currency', 'Paid', 'Claimed', 'Delivered'],
+    rows.map((f) => [f.code, f.description, f.destLabel, f.status, f.cargoClass, f.weightKg, f.lockedPrice ?? '', f.lockedPrice == null ? '' : NETWORK_CURRENCY, f.driverPaid ? 'yes' : 'no', f.claimedAt ?? '', f.deliveredAt ?? '']),
   );
 }
 

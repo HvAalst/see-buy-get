@@ -31,7 +31,7 @@ import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
 import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, CoupleDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, OverdraftDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetLocationDto, SetPriceDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
-import { classifySize, SIZE_WEIGHT_KG } from './pudo.config';
+import { classifySize, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
 import { haversineKm } from './geo';
 import { GEOCODER, Geocoder } from './geocoder';
 
@@ -203,15 +203,17 @@ export class SbgController {
     return { grid: this.shelf.grid(did), capacity: this.shelf.capacity(did), available: this.shelf.available(did) };
   }
 
+  // `currency` travels with every balance that leaves the system: a bare number is ambiguous the moment
+  // a second currency exists anywhere in the network, and that is a change nobody remembers to audit for.
   @Get('agents')
   listAgents() {
-    return this.agents.list().map((a) => ({ ...a, balance: this.agents.balance(a.did), rating: this.ratings.agentRating(a.did), freeSlots: this.shelf.available(a.did), capacity: this.shelf.capacity(a.did) }));
+    return this.agents.list().map((a) => ({ ...a, balance: this.agents.balance(a.did), currency: NETWORK_CURRENCY, rating: this.ratings.agentRating(a.did), freeSlots: this.shelf.available(a.did), capacity: this.shelf.capacity(a.did) }));
   }
 
   @Get('agents/:did')
   getAgent(@Param('did') did: string) {
     const a = this.agents.get(did);
-    return { ...a, balance: this.agents.balance(did), rating: this.ratings.agentRating(did) };
+    return { ...a, balance: this.agents.balance(did), currency: NETWORK_CURRENCY, rating: this.ratings.agentRating(did) };
   }
 
   // --- pre-paid wallet (Light SSE) ---

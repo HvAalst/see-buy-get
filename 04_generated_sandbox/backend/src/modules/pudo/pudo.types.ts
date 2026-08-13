@@ -397,6 +397,9 @@ export class PudoLedgerEntry {
   type: LedgerType;
   sign: '+' | '-';
   amount: number;
+  /** What the amount IS. Optional only because rows written before this field existed have none — read
+   *  it through agentLedgerCurrencyOf(), which defaults them, never straight off the record. */
+  currency?: string;
   did?: string; // agent (or driver) the entry applies to
   reference: string; // parcel id / manifest id / driver id / admin id / bank txn / mdp id / vendor id
   refType: 'parcel' | 'manifest' | 'driver' | 'admin' | 'bank' | 'mdp' | 'vendor';

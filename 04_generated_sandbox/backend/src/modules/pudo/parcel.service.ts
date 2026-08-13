@@ -12,7 +12,7 @@ import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
 import { ShelfService } from './shelf.service';
 import { FleetService } from './fleet.service';
-import { HANDOVER_FEE, LABEL_TZ_OFFSET_MIN, LABOUR_FEE, OTP_MAX_ATTEMPTS, PICKUP_FEE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, VOID_WINDOW_MS, WHOLESALE, classifySize, withPlatformFee } from './pudo.config';
+import { HANDOVER_FEE, LABEL_TZ_OFFSET_MIN, LABOUR_FEE, NETWORK_CURRENCY, OTP_MAX_ATTEMPTS, PICKUP_FEE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, VOID_WINDOW_MS, WHOLESALE, classifySize, withPlatformFee } from './pudo.config';
 import { ConsumerParcelView, Parcel, ParcelDirection, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy } from './pudo.types';
 import { VendorService } from './vendor.service';
 import { VehicleService } from './vehicle.service';
@@ -171,8 +171,8 @@ export function vendorOrderRowOf(p: Parcel): VendorOrderRow {
 /** Render matched parcels as the vendor's shipment CSV export. */
 export function vendorOrdersToCsv(rows: Parcel[]): string {
   return toCsv(
-    ['Order', 'Shipment DID', 'Buyer', 'Products', 'Status', 'Paid', 'Destination', 'Shipping cost', 'Buyer charge', 'Created'],
-    rows.map((p) => [p.externalOrderId ?? p.parcelId, p.did ?? '', p.receiverMobile, vendorProducts(p), p.status, p.paidStatus ?? '', p.destZone, p.shipmentCost ?? '', p.buyerCharge ?? '', p.acceptedAt]),
+    ['Order', 'Shipment DID', 'Buyer', 'Products', 'Status', 'Paid', 'Destination', 'Shipping cost', 'Buyer charge', 'Currency', 'Created'],
+    rows.map((p) => [p.externalOrderId ?? p.parcelId, p.did ?? '', p.receiverMobile, vendorProducts(p), p.status, p.paidStatus ?? '', p.destZone, p.shipmentCost ?? '', p.buyerCharge ?? '', NETWORK_CURRENCY, p.acceptedAt]),
   );
 }
 

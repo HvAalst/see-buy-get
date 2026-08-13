@@ -62,7 +62,7 @@ describe('vendor shipment register (R0)', () => {
     it('exports a header + one row per matched parcel', () => {
       const csv = vendorOrdersToCsv(filterVendorParcels(rows, { status: 'At_PUDO', sort: 'oldest' }));
       const lines = csv.split('\r\n');
-      expect(lines[0]).toBe('Order,Shipment DID,Buyer,Products,Status,Paid,Destination,Shipping cost,Buyer charge,Created');
+      expect(lines[0]).toBe('Order,Shipment DID,Buyer,Products,Status,Paid,Destination,Shipping cost,Buyer charge,Currency,Created');
       expect(lines).toHaveLength(3); // header + A + C
       expect(lines[1]).toContain('SO-1');
       expect(lines[1]).toContain('Ankara shirt');

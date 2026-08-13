@@ -2,6 +2,7 @@
 // placeholder for the admin-editable config service the playbook mandates (Risk #55).
 
 import { ParcelSize } from './pudo.types';
+import { currencyForJurisdiction } from '../../foundation/money/currency';
 
 export const WHOLESALE = 1.6; // credit the platform consumes per shipped parcel
 export const RETAIL = 2.0; // what the agent charges a cash customer (keeps the spread)
@@ -60,6 +61,11 @@ export const DEFAULT_MDP_PRICE_PER_PARCEL = 0.3; // an MDP hub's default sort fe
 export const DEFAULT_PRICE_PER_KM = 0.08; // a vehicle's default transport rate per km
 export const PLATFORM_FEE_PCT = 0.02; // 2% daughter-co margin on top of provider costs
 export const DEFAULT_VENDOR_COUNTRY = 'KE'; // which country daughter company settles a vendor
+// The currency this network's money is denominated in, resolved from the country above rather than
+// written twice. Every amount that leaves the system is stamped with it, so a figure is never just a
+// number. When the per-jurisdiction sister companies become real entities, this constant is what they
+// replace: the currency will come from the entity that owns the account, not from a deployment default.
+export const NETWORK_CURRENCY = currencyForJurisdiction(DEFAULT_VENDOR_COUNTRY);
 export const round2cfg = round2;
 
 /** Apply the platform margin to a base provider cost. */

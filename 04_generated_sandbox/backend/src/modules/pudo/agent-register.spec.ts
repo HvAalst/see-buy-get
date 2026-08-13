@@ -66,17 +66,20 @@ describe('agent earnings-ledger register (R4)', () => {
     expect(filterAgentLedger(ledger, { from: '2026-08-04' }).map((e) => e.id)).toEqual(['E3', 'E4']);
   });
 
-  it('summarises money in (top-ups/pay/refunds), out (fees), and the net', () => {
-    expect(agentLedgerSummaryOf(ledger)).toEqual({ in: 68, out: 12, net: 56, count: 4 });
-    expect(agentLedgerSummaryOf(filterAgentLedger(ledger, { direction: 'out' }))).toEqual({ in: 0, out: 12, net: -12, count: 1 });
-    expect(agentLedgerSummaryOf([])).toEqual({ in: 0, out: 0, net: 0, count: 0 });
+  it('summarises money in (top-ups/pay/refunds), out (fees), and the net — and says what in', () => {
+    expect(agentLedgerSummaryOf(ledger)).toEqual({ in: 68, out: 12, net: 56, count: 4, currency: 'KES' });
+    expect(agentLedgerSummaryOf(filterAgentLedger(ledger, { direction: 'out' }))).toEqual({ in: 0, out: 12, net: -12, count: 1, currency: 'KES' });
+    expect(agentLedgerSummaryOf([])).toEqual({ in: 0, out: 0, net: 0, count: 0, currency: 'KES' });
   });
 
-  it('exports a signed numeric amount + direction, and drops the internal did', () => {
-    expect(agentLedgerRowOf(ledger[2])).toEqual({ id: 'E3', type: 'FEE', sign: '-', amount: 12, reference: 'P2', refType: 'parcel', at: '2026-08-05T10:00:00Z' });
+  it('exports a signed numeric amount + direction + currency, and drops the internal did', () => {
+    // The fixture rows carry no `currency`, exactly like every row already on disk — they read as the
+    // network's, which is what they always were.
+    expect(ledger[2].currency).toBeUndefined();
+    expect(agentLedgerRowOf(ledger[2])).toEqual({ id: 'E3', type: 'FEE', sign: '-', amount: 12, currency: 'KES', reference: 'P2', refType: 'parcel', at: '2026-08-05T10:00:00Z' });
     const csv = agentLedgerToCsv(filterAgentLedger(ledger, { type: 'FEE' }));
     const lines = csv.split('\r\n');
-    expect(lines[0]).toBe('Date,Type,Direction,Amount,Reference');
-    expect(lines[1]).toBe('2026-08-05T10:00:00Z,Shipping fee,out,-12,P2');
+    expect(lines[0]).toBe('Date,Type,Direction,Amount,Currency,Reference');
+    expect(lines[1]).toBe('2026-08-05T10:00:00Z,Shipping fee,out,-12,KES,P2');
   });
 });

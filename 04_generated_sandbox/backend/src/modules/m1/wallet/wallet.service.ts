@@ -6,14 +6,9 @@ import { GlosEvent } from '../../../foundation/events/glos-events';
 import { BankLinkChallenge, CurrencyCode, PayoutRecord, SettlementTrigger, Wallet, WalletSummary } from './wallet.types';
 import { validateSettlementTrigger } from './settlement-trigger';
 
-const CURRENCY_BY_JURISDICTION: Record<string, CurrencyCode> = {
-  NL: 'EUR', DE: 'EUR', FR: 'EUR', BE: 'EUR', ES: 'EUR', IT: 'EUR', IE: 'EUR', PT: 'EUR', AT: 'EUR',
-  GB: 'GBP', US: 'USD', SG: 'SGD', CN: 'CNY',
-};
-
-function currencyFor(jurisdiction?: string): CurrencyCode {
-  return (jurisdiction && CURRENCY_BY_JURISDICTION[jurisdiction.toUpperCase()]) || 'USD';
-}
+// The jurisdiction→currency map lives in foundation/money: the wallet is not the only thing that has to
+// answer "which currency is this?", and two copies of that answer is how a KES balance becomes a USD one.
+import { currencyForJurisdiction } from '../../../foundation/money/currency';
 
 /**
  * WalletService — embedded multi-currency wallet (UDIW-040/043/044).
@@ -45,7 +40,7 @@ export class WalletService {
       walletId: `wal_${randomBytes(12).toString('hex')}`,
       did,
       balances: {},
-      settlementCurrency: currencyFor(options.jurisdiction),
+      settlementCurrency: currencyForJurisdiction(options.jurisdiction),
       settlementTrigger: { type: 'instant' },
       corporate: Boolean(options.corporate),
       bankLinked: false,

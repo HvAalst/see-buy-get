@@ -11823,6 +11823,10 @@
           "amount": {
             "type": "number"
           },
+          "currency": {
+            "type": "string",
+            "description": "What the amount IS. Optional only because rows written before this field existed have none — read\n it through agentLedgerCurrencyOf(), which defaults them, never straight off the record."
+          },
           "did": {
             "type": "string"
           },

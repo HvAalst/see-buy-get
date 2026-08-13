@@ -60,7 +60,7 @@ describe('driver jobs + earnings register (R5)', () => {
     expect(driverJobRowOf(jobs[0])).toMatchObject({ freightId: 'A', code: 'FRT-001', status: 'delivered', earning: 120, paid: true, destLabel: 'Karen' });
     const csv = driverJobsToCsv(filterDriverJobs(jobs, D, { status: 'delivered', sort: 'oldest' }));
     const lines = csv.split('\r\n');
-    expect(lines[0]).toBe('Job,Description,Destination,Status,Class,Weight kg,Earning,Paid,Claimed,Delivered');
+    expect(lines[0]).toBe('Job,Description,Destination,Status,Class,Weight kg,Earning,Currency,Paid,Claimed,Delivered');
     expect(lines[1]).toContain('FRT-004'); // E, the oldest delivered
     expect(lines).toHaveLength(3); // header + E + A
     expect(csv).not.toContain('buyerPhoneHash');

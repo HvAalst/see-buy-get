@@ -5,7 +5,8 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
 import { DidService } from '../../foundation/did/did.service';
 import { OperationalStore } from '../../foundation/data-firewall/operational-store.service';
 import { CheckoutHandoff, ShippingPolicy, Vendor } from './pudo.types';
-import { DEFAULT_VENDOR_COUNTRY } from './pudo.config';
+import { DEFAULT_VENDOR_COUNTRY, NETWORK_CURRENCY } from './pudo.config';
+import { currencyForJurisdiction } from '../../foundation/money/currency';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
 
 /** One entry in a vendor's prepaid book with the per-country daughter company (GLOS reports, never escrows). */
@@ -16,6 +17,9 @@ export interface VendorSettlement {
   type: 'TOP_UP' | 'BILLING' | 'REBATE';
   sign: '+' | '-';
   amount: number;
+  /** What the amount IS. Absent on rows written before the field existed — read it through
+   *  settlementCurrencyOf(), which resolves those from the row's country. */
+  currency?: string;
   parcelId?: string;
   note?: string;
   at: string;
@@ -58,13 +62,22 @@ export interface VendorLedgerRow {
   type: VendorSettlement['type'];
   sign: '+' | '-';
   amount: number;
+  currency: string;
   parcelId?: string;
   note?: string;
   at: string;
 }
 
+/**
+ * The currency of a settlement row. Rows written before the field existed carry none, so they resolve
+ * from the country the row already recorded — the answer was always derivable, it was just never stated.
+ */
+export function settlementCurrencyOf(s: VendorSettlement): string {
+  return s.currency ?? currencyForJurisdiction(s.country);
+}
+
 export function ledgerRowOf(s: VendorSettlement): VendorLedgerRow {
-  return { id: s.id, type: s.type, sign: s.sign, amount: s.amount, parcelId: s.parcelId, note: s.note, at: s.at };
+  return { id: s.id, type: s.type, sign: s.sign, amount: s.amount, currency: settlementCurrencyOf(s), parcelId: s.parcelId, note: s.note, at: s.at };
 }
 
 /** Running totals over a set of entries: money IN (top-ups + rebates), money OUT (shipments), and the net.
@@ -74,6 +87,8 @@ export interface VendorLedgerSummary {
   out: number;
   net: number;
   count: number;
+  /** What the totals are denominated in — taken from the rows, which all belong to one vendor. */
+  currency: string;
 }
 
 export function vendorLedgerSummaryOf(rows: VendorSettlement[]): VendorLedgerSummary {
@@ -85,7 +100,10 @@ export function vendorLedgerSummaryOf(rows: VendorSettlement[]): VendorLedgerSum
   }
   inSum = Math.round(inSum * 100) / 100;
   outSum = Math.round(outSum * 100) / 100;
-  return { in: inSum, out: outSum, net: Math.round((inSum - outSum) * 100) / 100, count: rows.length };
+  // A vendor settles with exactly one daughter company, so its rows share a currency; an empty filtered
+  // set has no row to read it from and falls back to the network's.
+  const currency = rows.length ? settlementCurrencyOf(rows[0]) : NETWORK_CURRENCY;
+  return { in: inSum, out: outSum, net: Math.round((inSum - outSum) * 100) / 100, count: rows.length, currency };
 }
 
 function ledgerSort(sort?: VendorLedgerQuery['sort']): (a: VendorSettlement, b: VendorSettlement) => number {
@@ -116,8 +134,8 @@ export function filterVendorLedger(rows: VendorSettlement[], q: VendorLedgerQuer
  *  money out) so a spreadsheet reads it as a value, not a formula — and a Direction column spells it out. */
 export function vendorLedgerToCsv(rows: VendorSettlement[]): string {
   return toCsv(
-    ['Date', 'Type', 'Direction', 'Amount', 'Parcel', 'Note'],
-    rows.map((s) => [s.at, ledgerTypeWord(s.type), s.sign === '+' ? 'in' : 'out', s.sign === '+' ? s.amount : -s.amount, s.parcelId ?? '', s.note ?? '']),
+    ['Date', 'Type', 'Direction', 'Amount', 'Currency', 'Parcel', 'Note'],
+    rows.map((s) => [s.at, ledgerTypeWord(s.type), s.sign === '+' ? 'in' : 'out', s.sign === '+' ? s.amount : -s.amount, settlementCurrencyOf(s), s.parcelId ?? '', s.note ?? '']),
   );
 }
 
@@ -192,7 +210,7 @@ export class VendorService {
   // --- prepaid settlement with the per-country daughter company (GLOS reports; holds no fiat) ---
 
   private book(vendor: Vendor, type: VendorSettlement['type'], sign: '+' | '-', amount: number, parcelId?: string, note?: string): VendorSettlement {
-    const entry: VendorSettlement = { id: `vs_${randomBytes(6).toString('hex')}`, vendorId: vendor.vendorId, country: vendor.country, type, sign, amount: Math.round(amount * 100) / 100, parcelId, note, at: new Date().toISOString() };
+    const entry: VendorSettlement = { id: `vs_${randomBytes(6).toString('hex')}`, vendorId: vendor.vendorId, country: vendor.country, type, sign, amount: Math.round(amount * 100) / 100, currency: currencyForJurisdiction(vendor.country), parcelId, note, at: new Date().toISOString() };
     this.settlements.set(entry.id, entry); // durable bookkeeping
     return entry;
   }

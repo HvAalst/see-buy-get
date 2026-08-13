@@ -36,16 +36,17 @@ describe('vendor bookkeeping register (R3)', () => {
   });
 
   describe('vendorLedgerSummaryOf', () => {
-    it('sums money in (top-ups + rebates), out (shipments) and the net', () => {
-      expect(vendorLedgerSummaryOf(rows)).toEqual({ in: 105, out: 32, net: 73, count: 4 });
+    it('sums money in (top-ups + rebates), out (shipments) and the net — and says what in', () => {
+      // A total with no currency is not a figure. These rows are a Kenyan vendor's, hence KES.
+      expect(vendorLedgerSummaryOf(rows)).toEqual({ in: 105, out: 32, net: 73, count: 4, currency: 'KES' });
     });
 
     it('reflects the FILTERED view (out only → net is negative)', () => {
-      expect(vendorLedgerSummaryOf(filterVendorLedger(rows, { direction: 'out' }))).toEqual({ in: 0, out: 32, net: -32, count: 2 });
+      expect(vendorLedgerSummaryOf(filterVendorLedger(rows, { direction: 'out' }))).toEqual({ in: 0, out: 32, net: -32, count: 2, currency: 'KES' });
     });
 
-    it('is all-zero for an empty book', () => {
-      expect(vendorLedgerSummaryOf([])).toEqual({ in: 0, out: 0, net: 0, count: 0 });
+    it('is all-zero for an empty book, and still names a currency', () => {
+      expect(vendorLedgerSummaryOf([])).toEqual({ in: 0, out: 0, net: 0, count: 0, currency: 'KES' });
     });
   });
 
@@ -53,16 +54,24 @@ describe('vendor bookkeeping register (R3)', () => {
     it('exports a SIGNED numeric amount (a real negative for money out) + a direction column', () => {
       const csv = vendorLedgerToCsv(filterVendorLedger(rows, { type: 'BILLING', sort: 'oldest' }));
       const lines = csv.split('\r\n');
-      expect(lines[0]).toBe('Date,Type,Direction,Amount,Parcel,Note');
-      expect(lines[1]).toBe('2026-08-03T10:00:00Z,Shipment,out,-12,PUD-1,shipment');
-      expect(lines[2]).toContain(',out,-20,PUD-2,');
+      expect(lines[0]).toBe('Date,Type,Direction,Amount,Currency,Parcel,Note');
+      expect(lines[1]).toBe('2026-08-03T10:00:00Z,Shipment,out,-12,KES,PUD-1,shipment');
+      expect(lines[2]).toContain(',out,-20,KES,PUD-2,');
       expect(lines).toHaveLength(3); // header + B + C
     });
   });
 
   describe('ledgerRowOf', () => {
     it('drops the internal vendorId/country, keeping the register fields', () => {
-      expect(ledgerRowOf(rows[1])).toEqual({ id: 'B', type: 'BILLING', sign: '-', amount: 12, parcelId: 'PUD-1', note: 'shipment', at: '2026-08-03T10:00:00Z' });
+      expect(ledgerRowOf(rows[1])).toEqual({ id: 'B', type: 'BILLING', sign: '-', amount: 12, currency: 'KES', parcelId: 'PUD-1', note: 'shipment', at: '2026-08-03T10:00:00Z' });
+    });
+
+    it('resolves the currency of a row written before the field existed, from its country', () => {
+      // These fixtures carry no `currency` — exactly like every row already on disk. The country was
+      // always there, so the answer is derivable; it was simply never stated.
+      expect(rows[1].currency).toBeUndefined();
+      expect(ledgerRowOf(rows[1]).currency).toBe('KES');
+      expect(ledgerRowOf({ ...rows[1], country: 'NL' }).currency).toBe('EUR');
     });
   });
 });

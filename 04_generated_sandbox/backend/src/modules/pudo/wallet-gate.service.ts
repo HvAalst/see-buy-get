@@ -6,7 +6,7 @@ import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { WalletService } from '../m1/wallet/wallet.service';
 import { AgentService } from './agent.service';
-import { LOCK_THRESHOLD } from './pudo.config';
+import { LOCK_THRESHOLD, NETWORK_CURRENCY } from './pudo.config';
 import { LedgerType, PudoLedgerEntry } from './pudo.types';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
 
@@ -47,13 +47,22 @@ export interface AgentLedgerRow {
   type: LedgerType;
   sign: '+' | '-';
   amount: number;
+  currency: string;
   reference: string;
   refType: PudoLedgerEntry['refType'];
   at: string;
 }
 
+/**
+ * The currency of a ledger row. Rows written before the field existed carry none, so they are read as
+ * the network currency — which is what they were, they simply never said so.
+ */
+export function agentLedgerCurrencyOf(e: PudoLedgerEntry): string {
+  return e.currency ?? NETWORK_CURRENCY;
+}
+
 export function agentLedgerRowOf(e: PudoLedgerEntry): AgentLedgerRow {
-  return { id: e.id, type: e.type, sign: e.sign, amount: e.amount, reference: e.reference, refType: e.refType, at: e.at };
+  return { id: e.id, type: e.type, sign: e.sign, amount: e.amount, currency: agentLedgerCurrencyOf(e), reference: e.reference, refType: e.refType, at: e.at };
 }
 
 export interface AgentLedgerSummary {
@@ -61,6 +70,8 @@ export interface AgentLedgerSummary {
   out: number;
   net: number;
   count: number;
+  /** What the three totals above are denominated in — a total without one is not a figure, it is a rumour. */
+  currency: string;
 }
 
 export function agentLedgerSummaryOf(rows: PudoLedgerEntry[]): AgentLedgerSummary {
@@ -72,7 +83,9 @@ export function agentLedgerSummaryOf(rows: PudoLedgerEntry[]): AgentLedgerSummar
   }
   inSum = Math.round(inSum * 100) / 100;
   outSum = Math.round(outSum * 100) / 100;
-  return { in: inSum, out: outSum, net: Math.round((inSum - outSum) * 100) / 100, count: rows.length };
+  // Single-currency by construction today (one network, one currency). When sisters own their own
+  // accounts this must become the entity's currency, and a mixed set must refuse to total at all.
+  return { in: inSum, out: outSum, net: Math.round((inSum - outSum) * 100) / 100, count: rows.length, currency: NETWORK_CURRENCY };
 }
 
 function agentLedgerSort(sort?: AgentLedgerQuery['sort']): (a: PudoLedgerEntry, b: PudoLedgerEntry) => number {
@@ -102,8 +115,8 @@ export function filterAgentLedger(rows: PudoLedgerEntry[], q: AgentLedgerQuery):
 /** Render matched entries as the shop's earnings CSV. Amount is a SIGNED number (out negative). */
 export function agentLedgerToCsv(rows: PudoLedgerEntry[]): string {
   return toCsv(
-    ['Date', 'Type', 'Direction', 'Amount', 'Reference'],
-    rows.map((e) => [e.at, agentLedgerTypeWord(e.type), e.sign === '+' ? 'in' : 'out', e.sign === '+' ? e.amount : -e.amount, e.reference]),
+    ['Date', 'Type', 'Direction', 'Amount', 'Currency', 'Reference'],
+    rows.map((e) => [e.at, agentLedgerTypeWord(e.type), e.sign === '+' ? 'in' : 'out', e.sign === '+' ? e.amount : -e.amount, agentLedgerCurrencyOf(e), e.reference]),
   );
 }
 
@@ -244,7 +257,7 @@ export class WalletGateService {
   }
 
   private record(type: LedgerType, sign: '+' | '-', amount: number, did: string | undefined, reference: string, refType: PudoLedgerEntry['refType']): PudoLedgerEntry {
-    const entry: PudoLedgerEntry = { id: `led_${randomBytes(8).toString('hex')}`, type, sign, amount: Math.round(amount * 100) / 100, did, reference, refType, at: new Date().toISOString() };
+    const entry: PudoLedgerEntry = { id: `led_${randomBytes(8).toString('hex')}`, type, sign, amount: Math.round(amount * 100) / 100, currency: NETWORK_CURRENCY, did, reference, refType, at: new Date().toISOString() };
     this.ledger.set(entry.id, entry);
     return entry;
   }
