@@ -20,6 +20,14 @@ export type ParcelStatus =
   | 'Disputed'
   | 'Voided';
 
+export type Weekday = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
+export interface DayHours {
+  open: string; // "HH:MM"
+  close: string; // "HH:MM"
+}
+/** Weekly opening schedule. A missing/null day means closed that day. */
+export type WeeklyHours = Partial<Record<Weekday, DayHours | null>>;
+
 export interface AgentView {
   agentId: string;
   did: string;
@@ -30,6 +38,8 @@ export interface AgentView {
   openState: OpenState;
   pricePerParcel: number;
   status: AgentStatus;
+  openingHours?: WeeklyHours;
+  shopfrontMediaId?: string; // the shop-front photo (owner-gated media)
   /** Merged in by the controller alongside the record. */
   balance: number;
   rating?: { count: number; average: number; isNew?: boolean } | null;

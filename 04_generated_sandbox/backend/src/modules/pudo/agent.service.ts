@@ -10,6 +10,7 @@ import { GlosEvent } from '../../foundation/events/glos-events';
 import { WalletService } from '../m1/wallet/wallet.service';
 import { DEFAULT_PUDO_PRICE_PER_PARCEL, LOCK_THRESHOLD, MIN_ANDROID_VERSION, MIN_OPEN_HOURS, MIN_SLOTS } from './pudo.config';
 import { Geocoder, GEOCODER } from './geocoder';
+import { MediaService } from './media.service';
 import { averageOpenHours } from './hours';
 import { Agent, AgentRequirements, AgentStatus, KycDocuments, ShelfConfig, WeeklyHours } from './pudo.types';
 import { Equipment } from './cargo.types';
@@ -54,6 +55,7 @@ export class AgentService {
     private readonly core: OperationalStore,
     private readonly wallet: WalletService,
     private readonly events: EventBus,
+    private readonly media: MediaService,
     @Inject(GEOCODER) private readonly geocoder: Geocoder,
   ) {}
 
@@ -200,6 +202,35 @@ export class AgentService {
     const agent = this.require(did);
     if (shelf.rows < 1 || shelf.cols < 1) throw new GlosError('INVALID_INPUT', 'Shelf needs at least one row and column');
     agent.shelf = shelf;
+    return agent;
+  }
+
+  /** Move the shop's map pin (the agent drags it on the My-shop map). */
+  setLocation(did: string, location: { lat: number; lng: number }): Agent {
+    const agent = this.require(did);
+    agent.location = location;
+    return agent;
+  }
+
+  /**
+   * Point the shop-front photo at an uploaded media (or clear it with an empty string). Mirrors the person
+   * avatar (person.service): the shop must OWN the media and it must have been uploaded AS an avatar, then it
+   * is LINKED to the agent so the retention sweep keeps it (unlinked 'avatar' media is orphan-reaped ~48h
+   * after upload). The superseded photo's bytes are dropped — one shop photo per shop.
+   */
+  setShopfront(did: string, mediaId: string | undefined): Agent {
+    const agent = this.require(did);
+    const next = (mediaId ?? '').trim() || undefined;
+    if (next) {
+      const ref = this.media.get(next);
+      if (!ref || ref.ownerDid !== did) throw new GlosError('FORBIDDEN', 'That image is not yours to use');
+      if (ref.kind !== 'avatar') throw new GlosError('INVALID_INPUT', 'That image was not uploaded as a shop photo');
+      this.media.link(next, { type: 'agent', id: did }, 'avatar');
+    }
+    if (agent.shopfrontMediaId && agent.shopfrontMediaId !== next) {
+      this.media.purgeByOwner(agent.shopfrontMediaId, did); // one shop photo — drop the old bytes
+    }
+    agent.shopfrontMediaId = next;
     return agent;
   }
 

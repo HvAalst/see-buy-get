@@ -32,6 +32,17 @@ export class ShelfDto {
   @IsOptional() @IsArray() @IsString({ each: true }) consolidationSlots?: string[];
 }
 
+/** Move the shop's map pin (My-shop). */
+export class SetLocationDto {
+  @IsNumber() lat!: number;
+  @IsNumber() lng!: number;
+}
+
+/** Point the shop-front photo at an uploaded media, or clear it with an empty string. */
+export class ShopfrontDto {
+  @IsString() mediaId!: string;
+}
+
 export class RegisterAgentDto {
   @IsString() shopName!: string;
   @IsString() zone!: string;

@@ -208,6 +208,50 @@ describe('PUDO Light', () => {
     expect(shelfSvc.grid(a.did).find((s) => s.label === 'Red-1')!.items).toEqual(['p-s2']);
   });
 
+  describe('My-shop editors: the pin and the shop-front photo', () => {
+    // A minimal valid 1×1 PNG (real magic bytes, so it passes the MediaService signature check).
+    const PNG =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+    const shopPhotoFor = (ownerDid: string) => media.upload({ ownerDid, kind: 'avatar', dataUrl: PNG }).mediaId;
+
+    it('moves the shop pin', () => {
+      const a = onboardAgent('Pin Shop', 'PinTown', 50);
+      agents.setLocation(a.did, { lat: -1.29, lng: 36.82 });
+      expect(agents.get(a.did).location).toEqual({ lat: -1.29, lng: 36.82 });
+    });
+
+    it('links an OWNED shop photo and purges the previous one on replace', () => {
+      const a = onboardAgent('Photo Shop', 'PhotoTown', 50);
+      const first = shopPhotoFor(a.did);
+      agents.setShopfront(a.did, first);
+      expect(agents.get(a.did).shopfrontMediaId).toBe(first);
+      expect(media.get(first)!.link).toEqual({ type: 'agent', id: a.did });
+
+      const second = shopPhotoFor(a.did);
+      agents.setShopfront(a.did, second);
+      expect(agents.get(a.did).shopfrontMediaId).toBe(second);
+      expect(media.get(first)).toBeUndefined(); // one shop photo — the old bytes + ref are gone
+
+      agents.setShopfront(a.did, ''); // clearing drops the bytes too
+      expect(agents.get(a.did).shopfrontMediaId).toBeUndefined();
+      expect(media.get(second)).toBeUndefined();
+    });
+
+    it('refuses a photo the shop does not own, or one not uploaded AS a shop photo', () => {
+      const a = onboardAgent('Guard Shop', 'GuardTown', 50);
+      const notMine = shopPhotoFor(dids.generate('pudo-agent:stranger').id);
+      expect(() => agents.setShopfront(a.did, notMine)).toThrow(/not yours/);
+
+      // A dropoff/PoD photo the shop owns sits in a LOCKED evidence bin: re-kinding it as the shop front
+      // would strip it out of that bin AND a later replace would hard-delete it mid-case (S29). Refuse.
+      const podId = media.upload({ ownerDid: a.did, kind: 'pod', dataUrl: PNG }).mediaId;
+      expect(() => agents.setShopfront(a.did, podId)).toThrow(/shop photo/i);
+      expect(media.get(podId)!.kind).toBe('pod'); // untouched: not re-kinded
+      expect(media.get(podId)!.link).toBeUndefined(); // untouched: not re-linked to the shop
+      expect(agents.get(a.did).shopfrontMediaId).toBeUndefined();
+    });
+  });
+
   it('requires KYC documents to move to KYC_PENDING (Ch 18.5)', () => {
     const a = agents.register({ shopName: 'K', zone: 'NorthTown', location: { lat: -1, lng: 36 }, landmark: 'x', openingHours: uniformHours(), shelf: defaultShelf, fullName: 'A', nationalId: 'ID-KYC', mobile: '+254KYC', deviceImei: 'IMEI-KYC', requirements: eligibleReqs() });
     expect(() => agents.submitKyc(a.did, { idCopyRef: '', tradingLicenceRef: 'l', shopPhotoRefs: [] })).toThrow(/KYC/);

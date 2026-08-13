@@ -95,9 +95,12 @@ export interface AgentState {
   /** F3 — the shop's consolidation lots (loaded when the Consignments screen opens). */
   consignments: ConsignmentView[];
   consignmentsState: 'idle' | 'loading' | 'ready' | 'error';
-  /** The pickup-shelf grid + free-slot count (loaded when the Shelf screen opens). */
+  /** The pickup-shelf grid + free-slot count (loaded on the Shelf screen AND the Home occupancy strip). */
   shelf: ShelfGrid | null;
   shelfState: 'idle' | 'loading' | 'ready' | 'error';
+  /** A shelf-load failure, kept SEPARATE from the screen-level error so a secondary occupancy fetch on Home
+   *  never raises the cockpit's error banner. */
+  shelfError: SbgError | null;
   /** R4 — the shop's parcel-history register (a filtered/paged page). */
   parcelHist: AgentParcelRow[];
   parcelHistTotal: number;
@@ -177,6 +180,7 @@ const INITIAL: AgentState = {
   consignmentsState: 'idle',
   shelf: null,
   shelfState: 'idle',
+  shelfError: null,
   parcelHist: [],
   parcelHistTotal: 0,
   parcelHistState: 'idle',
@@ -610,12 +614,13 @@ export function useAgentApp() {
     setState((s) => ({ ...s, shelfState: 'loading' }));
     const r = await client.api.getShelf(did);
     if (r.error) {
-      setState((s) => ({ ...s, shelf: null, shelfState: 'error' }));
-      fail(r.error);
+      // Keep this OFF the screen-level error: on Home it is only the occupancy widget, and the whole cockpit
+      // must not fall over because a secondary metric failed to load.
+      setState((s) => ({ ...s, shelf: null, shelfState: 'error', shelfError: r.error }));
       return;
     }
-    setState((s) => ({ ...s, shelf: narrow<ShelfGrid>(r.data), shelfState: 'ready' }));
-  }, [client, did, fail]);
+    setState((s) => ({ ...s, shelf: narrow<ShelfGrid>(r.data), shelfState: 'ready', shelfError: null }));
+  }, [client, did]);
 
   const go = useCallback(
     (screen: Screen) => {
@@ -782,6 +787,61 @@ export function useAgentApp() {
       });
     },
     [client, did, run, fail, pushToast, refresh, loadShelf],
+  );
+
+  /* -------------------------------------------------- My-shop editors (location / hours / photo) */
+
+  /** Authenticated byte loader for <AuthImage> (media is owner-gated — no plain <img src>). */
+  const loadMedia = useCallback(
+    (mediaId: string) => (client ? client.api.mediaBlob(mediaId) : Promise.resolve({ data: null, error: {} as unknown })),
+    [client],
+  );
+
+  /** Move the shop's map pin → refresh the record so the dashboard shows the new spot + three words. */
+  const setLocationPin = useCallback(
+    async (lat: number, lng: number) => {
+      if (!client || !did) return;
+      await run('location', async () => {
+        const r = await client.api.setLocation(did, lat, lng);
+        if (r.error) return fail(r.error);
+        await refresh();
+        pushToast({ tone: 'ok', icon: 'check', title: t('agent.toast.locationSaved') });
+      });
+    },
+    [client, did, run, fail, pushToast, refresh],
+  );
+
+  /** Save the weekly opening schedule. */
+  const saveHours = useCallback(
+    async (openingHours: Record<string, { open: string; close: string } | null>) => {
+      if (!client || !did) return;
+      await run('hours', async () => {
+        const r = await client.api.setHours(did, openingHours);
+        if (r.error) return fail(r.error);
+        await refresh();
+        pushToast({ tone: 'ok', icon: 'check', title: t('agent.toast.hoursSaved') });
+      });
+    },
+    [client, did, run, fail, pushToast, refresh],
+  );
+
+  /** Capture + upload a shop-front photo → point the shop at it → refresh. */
+  const saveShopfront = useCallback(
+    async (file: File) => {
+      if (!client || !did) return;
+      await run('shopfront', async () => {
+        const mediaId = await uploadPhoto('avatar', file);
+        if (!mediaId) {
+          pushToast({ tone: 'danger', icon: 'warning', title: t('agent.toast.photoUploadFail') });
+          return;
+        }
+        const r = await client.api.setShopfront(did, mediaId);
+        if (r.error) return fail(r.error);
+        await refresh();
+        pushToast({ tone: 'ok', icon: 'check', title: t('agent.toast.shopPhotoSaved') });
+      });
+    },
+    [client, did, run, uploadPhoto, fail, pushToast, refresh],
   );
 
   const topUp = useCallback(
@@ -1283,6 +1343,10 @@ export function useAgentApp() {
       setPrice,
       loadShelf,
       saveShelf,
+      loadMedia,
+      setLocationPin,
+      saveHours,
+      saveShopfront,
       submitAccept,
       dismissAcceptedLabel,
       submitBookFreight,

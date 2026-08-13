@@ -3987,6 +3987,84 @@
         }
       }
     },
+    "/v1/sbg/agents/{did}/location": {
+      "post": {
+        "operationId": "Sbg.setLocation",
+        "summary": "",
+        "description": "Move the shop's map pin (My-shop location editor).",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetLocationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Agent"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/agents/{did}/shopfront": {
+      "post": {
+        "operationId": "Sbg.setShopfront",
+        "summary": "",
+        "description": "Set (or clear) the shop-front photo shown on the My-shop dashboard.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShopfrontDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Agent"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/agents/{did}": {
       "get": {
         "operationId": "Sbg.getAgent",
@@ -11544,6 +11622,9 @@
           "shelf": {
             "$ref": "#/components/schemas/ShelfConfig"
           },
+          "shopfrontMediaId": {
+            "type": "string"
+          },
           "pricePerParcel": {
             "type": "number"
           },
@@ -11652,6 +11733,32 @@
         },
         "required": [
           "openingHours"
+        ]
+      },
+      "SetLocationDto": {
+        "type": "object",
+        "properties": {
+          "lat": {
+            "type": "number"
+          },
+          "lng": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "lat",
+          "lng"
+        ]
+      },
+      "ShopfrontDto": {
+        "type": "object",
+        "properties": {
+          "mediaId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "mediaId"
         ]
       },
       "TopUpDto": {

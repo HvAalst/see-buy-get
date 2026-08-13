@@ -80,6 +80,7 @@ export class Agent {
   openState: OpenState; // agent-controlled open / temporarily-closed
   openingHours: WeeklyHours; // per-day schedule (pickup window + ETA constraint)
   shelf: ShelfConfig; // rows × cols → colour/number slot grid (replaces the m² cap)
+  shopfrontMediaId?: string; // the shop-front photo shown on the My-shop dashboard (owner-gated media)
   pricePerParcel: number; // open-data handling fee the agent advertises (public — competition pressure)
   // S32c — load/unload equipment on hand at this site (MAN baseline + declared). A heavy dedicated-freight
   // job checks whether its origin/dest PUDOs can HANDLE the cargo (a pallet needs a forklift/pallet-jack);

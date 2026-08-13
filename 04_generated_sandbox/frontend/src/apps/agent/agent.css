@@ -418,3 +418,171 @@
 .shelflegend .shelfcell--taken {
   background: var(--bd-soft);
 }
+
+/* -------------------------------------------------------------- My shop (cockpit) -- */
+
+.shophead {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+.shophead__photo {
+  flex: none;
+  width: 92px;
+  height: 70px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--bd-soft);
+  background: var(--bd-soft);
+  padding: 0;
+  cursor: pointer;
+}
+.shophead__photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.shophead__placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: var(--tx3);
+  font-size: 12px; /* the eyebrow floor — nothing in the kit goes below it */
+  text-align: center;
+}
+.shophead__body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+.shophead__name {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--navy);
+  margin: 0;
+}
+.shophead__meta {
+  font-size: 14px;
+  color: var(--tx2);
+  margin: 0;
+}
+
+.healthstrip {
+  display: flex;
+  gap: 10px;
+}
+.health {
+  flex: 1 1 0;
+  min-width: 0;
+  background: var(--card);
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-card);
+  box-shadow: var(--sh-sm);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.health__label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tx3);
+}
+.health__sub {
+  font-size: 14px;
+  color: var(--tx2);
+}
+.health__big {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--navy);
+  font-variant-numeric: tabular-nums;
+}
+.occbar {
+  height: 10px;
+  border-radius: 6px;
+  background: var(--bd-soft);
+  overflow: hidden;
+}
+.occbar__fill {
+  display: block;
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.3s ease;
+}
+/* Orange is the tick and the active indicator only, so a filling shelf escalates the way the pill ladder
+   does: green → navy → red. (There is no --warn token; navy IS the warn step.) */
+.occbar__fill--ok { background: var(--ok); }
+.occbar__fill--warn { background: var(--navy); }
+.occbar__fill--danger { background: var(--dang); }
+
+.shopphoto {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bd-soft);
+  margin-bottom: 12px;
+}
+.shopphoto img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.shopphoto__empty {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--tx3);
+}
+
+.hours {
+  display: flex;
+  flex-direction: column;
+}
+.hoursrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 0;
+}
+.hoursrow + .hoursrow {
+  border-top: 1px solid var(--bd-soft);
+}
+.hoursrow__day {
+  flex: 1 1 40%;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--tx);
+}
+.hoursrow__toggle {
+  margin: 0;
+}
+.hoursrow__times {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 100%;
+}
+.hoursrow__dash {
+  color: var(--tx3);
+}
+.input--time {
+  width: auto;
+  flex: 1 1 0;
+  min-width: 0;
+}

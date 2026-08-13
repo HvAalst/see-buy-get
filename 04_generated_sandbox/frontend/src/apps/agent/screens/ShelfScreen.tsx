@@ -43,7 +43,7 @@ export function ShelfScreen({ state, actions }: ShelfScreenProps) {
   }, [cur, rows, loadedBundles]);
 
   if (!grid && state.shelfState === 'loading') return <div class="scr"><p class="hint">{t('agent.shelf.loading')}</p></div>;
-  if (!grid && state.shelfState === 'error' && state.error) return <div class="scr"><ErrorNote error={state.error} onRetry={() => void actions.loadShelf()} /></div>;
+  if (!grid && state.shelfState === 'error' && state.shelfError) return <div class="scr"><ErrorNote error={state.shelfError} onRetry={() => void actions.loadShelf()} /></div>;
   if (!grid) return <div class="scr" />;
 
   const r = rows ?? cur?.rows ?? 4;

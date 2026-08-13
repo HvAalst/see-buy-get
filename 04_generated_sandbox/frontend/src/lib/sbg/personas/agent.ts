@@ -64,6 +64,19 @@ export function createAgentApi(sbg: SbgClient) {
     setShelf: (did: string, rows: number, cols: number, consolidationSlots: string[] = []) =>
       sbg.request((c) => c.POST('/v1/sbg/agents/{did}/shelf', { params: { path: { did } }, body: { rows, cols, consolidationSlots } })),
 
+    /** Move the shop's map pin (My-shop location editor). */
+    setLocation: (did: string, lat: number, lng: number) =>
+      sbg.request((c) => c.POST('/v1/sbg/agents/{did}/location', { params: { path: { did } }, body: { lat, lng } })),
+
+    /** Set the weekly opening schedule (a per-day open/close, or null for a closed day). The contract types the
+     *  body's value as an opaque object (the plugin can't express the day→hours|null union), so cast the field. */
+    setHours: (did: string, openingHours: Record<string, { open: string; close: string } | null>) =>
+      sbg.request((c) => c.POST('/v1/sbg/agents/{did}/hours', { params: { path: { did } }, body: { openingHours: openingHours as never } })),
+
+    /** Point the shop-front photo at an uploaded media, or clear it with an empty string. */
+    setShopfront: (did: string, mediaId: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/agents/{did}/shopfront', { params: { path: { did } }, body: { mediaId } })),
+
     /** Nearby shops' handling fees — the benchmark this shop prices against. */
     ratesNear: (at?: { lat: number; lng: number }) =>
       sbg.request((c) =>
