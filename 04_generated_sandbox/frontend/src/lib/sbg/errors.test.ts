@@ -29,6 +29,9 @@ describe('errors', () => {
     expect(presentationFor('WALLET_INSUFFICIENT').icon).toBe('wallet');
     expect(presentationFor('OTP_INVALID').icon).toBe('keypad');
     expect(presentationFor('OTP_LOCKED').icon).toBe('lock');
+    // Both release secrets fail the same way, so they must READ the same way at the counter.
+    expect(presentationFor('CODE_LOCKED').icon).toBe('lock');
+    expect(presentationFor('CODE_LOCKED').say).toBe(presentationFor('OTP_LOCKED').say);
     expect(presentationFor('NETWORK').icon).toBe('offline');
     // Unknown codes degrade gracefully, never throw.
     expect(presentationFor('SOMETHING_NEW').say).toBe('error.generic');
@@ -40,7 +43,7 @@ describe('errors', () => {
     // here would render as tofu on the cheap Androids this app is built for.
     const codes: SbgErrorCode[] = [
       'WALLET_INSUFFICIENT', 'PAYMENT_REQUIRED', 'AGENT_LOCKED', 'SHIPMENT_NOT_PAID', 'OTP_INVALID',
-      'CODE_MISMATCH', 'OTP_LOCKED', 'PHOTO_REQUIRED', 'NOT_FOUND', 'WRONG_PUDO', 'INVALID_STATE',
+      'CODE_MISMATCH', 'OTP_LOCKED', 'CODE_LOCKED', 'PHOTO_REQUIRED', 'NOT_FOUND', 'WRONG_PUDO', 'INVALID_STATE',
       'WINDOW_EXPIRED', 'CAPACITY_EXCEEDED', 'FRAGILE_NOT_ALLOWED', 'BAG_FULL', 'SHELF_FULL',
       'RATE_LIMITED', 'UNAUTHORIZED', 'FORBIDDEN', 'VALIDATION_FAILED', 'NETWORK', 'TIMEOUT',
       'CLIENT_OUTDATED', 'INTERNAL',

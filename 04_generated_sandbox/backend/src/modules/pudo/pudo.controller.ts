@@ -30,7 +30,7 @@ import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
-import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, CoupleDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, OverdraftDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetLocationDto, SetPriceDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
+import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, CoupleDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, OverdraftDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetLocationDto, SetPriceDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
 import { classifySize, SIZE_WEIGHT_KG } from './pudo.config';
 import { haversineKm } from './geo';
 import { GEOCODER, Geocoder } from './geocoder';
@@ -424,9 +424,9 @@ export class SbgController {
     return { planned: true, ...this.routing.planJourney({ originAgentDid: parcel.committedNodeDid ?? parcel.originAgentDid, destAgentDid: parcel.destAgentDid }) };
   }
 
-  /** DT — the printable label for a parcel (reprint). Operator-only: the inbound label carries the buyer's
-   *  collection code (a handover secret), so this is not a public surface — the creator got it in the mint /
-   *  accept response, and the vendor sees it on their order detail. */
+  /** DT — the printable label for a parcel (reprint). The label no longer carries any release secret (it
+   *  prints the public tracking key and the creation date), but reprinting someone's parcel label is still
+   *  a support action rather than a public one, so it stays operator-only. */
   @Roles('operator')
   @Get('parcels/:id/label')
   parcelLabel(@Param('id') id: string) {
@@ -962,6 +962,17 @@ export class SbgController {
   @Post('parcels/:id/collect-confirm')
   collectConfirm(@Param('id') id: string, @Body() dto: CollectDto, @Actor() actor: IntrospectionResult) {
     return this.parcels.collectConfirm(id, actingDid(actor, dto.agentDid), dto.collectionCode);
+  }
+
+  /**
+   * Control tower: rotate a parcel's burned release secret so a locked-out customer can still collect.
+   * Operator-only — this is the recovery authority behind every "ask the control tower to reissue".
+   * The new inbound collection code is never returned here; it reaches the buyer's app + the vendor.
+   */
+  @Roles('operator')
+  @Post('parcels/:id/reissue-release')
+  reissueRelease(@Param('id') id: string, @Body() dto: ReissueReleaseDto, @Actor() actor: IntrospectionResult) {
+    return this.parcels.reissueRelease(id, auditActor(actor, dto.by));
   }
 
   /** Buyer reports a discrepancy at collection → Disputed, with mandatory photo proof. */

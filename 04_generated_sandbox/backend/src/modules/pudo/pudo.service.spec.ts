@@ -4,7 +4,8 @@ import { GazetteerGeocoder, GEOCODER } from './geocoder';
 import { HeuristicRouter, ROUTER } from './router';
 import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
-import { ParcelService } from './parcel.service';
+import { ParcelService, labelDate } from './parcel.service';
+import { OTP_MAX_ATTEMPTS } from './pudo.config';
 import { CargoService } from './cargo.service';
 import { SbgController } from './pudo.controller';
 import { IdentityController } from './identity.controller';
@@ -958,6 +959,111 @@ describe('PUDO Light', () => {
     const cbs = vendors.outboxFor(vendor.vendorId);
     expect(cbs.map((c) => c.event)).toEqual(expect.arrayContaining(['ready_for_pickup', 'collected']));
     expect(createHmac('sha256', 'whsec').update(cbs[0].body).digest('hex')).toBe(cbs[0].signature);
+  });
+
+  describe('the release secret never rides on the parcel', () => {
+    /** Mint a paid inbound order and walk it to the destination shelf, ready to collect. */
+    function readyInbound(tag: string) {
+      const origin = onboardAgent(`Origin ${tag}`, 'NorthTown', 50);
+      const dest = onboardAgent(`Dest ${tag}`, 'SouthTown', 50);
+      const corridor = corridors.addCorridor({ name: `N-S ${tag}`, originZone: 'NorthTown', destZone: 'SouthTown' });
+      const driver = corridors.addDriver({ driverDid: `did:glos:d${tag}`, name: 'D', corridorId: corridor.corridorId });
+      const vendor = vendors.register({ name: `Store ${tag}`, callbackUrl: `https://store-${tag}.example/hook`, secret: 'whsec' });
+      vendors.topUp(vendor.vendorId, 50);
+      const quote = routing.quoteShipment(origin.did, dest.did, 'M');
+      const { parcel, label } = parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: `ORD-${tag}`, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: 'content.jpg', shippingPolicy: vendor.shippingPolicy, quote });
+      parcels.intakeInbound(parcel.parcelId, origin.did);
+      parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: [parcel.parcelId] });
+      parcels.shelve(parcel.parcelId, dest.did);
+      return { parcel, label, origin, dest, vendor };
+    }
+
+    it('prints the creation DATE and the public tracking key — never the collection code', () => {
+      const { parcel, label } = readyInbound('LBL');
+      const printed = parcels.labelFor(parcel.parcelId).svg;
+
+      // The code that opens the parcel is not written on the parcel.
+      expect(label!.svg).not.toContain(parcel.collectionCode);
+      expect(printed).not.toContain(parcel.collectionCode);
+      expect(printed).not.toContain('Collect at the shop with this code');
+      // What it does carry: the public key (safe to print) and the day it was born.
+      expect(printed).toContain(parcel.trackingKey);
+      expect(printed).toContain(`Created ${labelDate(parcel.acceptedAt)}`);
+      expect(labelDate(parcel.acceptedAt)).toMatch(/^\d{1,2} [A-Z][a-z]{2} \d{4}$/);
+      // An unparseable stamp prints nothing rather than the word "Invalid" on a customer's parcel.
+      expect(labelDate(undefined)).toBe('');
+      expect(labelDate('not-a-date')).toBe('');
+    });
+
+    it('burns the collection code after repeated wrong tries, and a burned code opens nothing', () => {
+      const { parcel, dest } = readyInbound('LOCK');
+      const right = parcel.collectionCode!;
+
+      for (let i = 1; i < OTP_MAX_ATTEMPTS; i++) {
+        expect(() => parcels.collectConfirm(parcel.parcelId, dest.did, 'COL-WRONG')).toThrow(/does not match/);
+      }
+      expect(() => parcels.collectConfirm(parcel.parcelId, dest.did, 'COL-WRONG')).toThrow(/Too many wrong codes/);
+
+      // Burned: even the right code is refused, at the lookup as well as the confirm — the counter is
+      // told to call the control tower instead of being walked to a step that cannot succeed.
+      expect(() => parcels.collect(right, dest.did)).toThrow(/Too many wrong codes/);
+      expect(() => parcels.collectConfirm(parcel.parcelId, dest.did, right)).toThrow(/Too many wrong codes/);
+      expect(parcels.get(parcel.parcelId).status).toBe('Ready_For_Pickup'); // still on the shelf, not lost
+    });
+
+    it('an operator reissue ROTATES the code, unlocks the parcel, and leaves the old code dead', async () => {
+      const flush = () => new Promise((r) => setImmediate(r));
+      vendorCallback.onModuleInit();
+      const { parcel, dest, vendor } = readyInbound('REISS');
+      const old = parcel.collectionCode!;
+      for (let i = 0; i < OTP_MAX_ATTEMPTS; i++) {
+        try { parcels.collectConfirm(parcel.parcelId, dest.did, 'COL-WRONG'); } catch { /* burning it */ }
+      }
+
+      const out = parcels.reissueRelease(parcel.parcelId, 'operator:ops-1');
+      expect(out.kind).toBe('collection');
+      expect(out.otp).toBeUndefined(); // the new code is NOT handed to the operator
+      const fresh = parcels.get(parcel.parcelId).collectionCode!;
+      expect(fresh).toMatch(/^COL-/);
+      expect(fresh).not.toBe(old); // rotated, not merely unlocked — the burner's code must not come back
+
+      // The old code is dead; the new one releases.
+      expect(() => parcels.collect(old, dest.did)).toThrow(/No parcel awaiting collection/);
+      expect(parcels.collect(fresh, dest.did).parcel.parcelId).toBe(parcel.parcelId);
+      expect(parcels.collectConfirm(parcel.parcelId, dest.did, fresh).status).toBe('Delivered');
+
+      // The store is re-told, with the ROTATED code, so it can reach a buyer who has no app.
+      await flush();
+      const ready = vendors.outboxFor(vendor.vendorId).filter((c) => c.event === 'ready_for_pickup');
+      expect(ready.length).toBeGreaterThanOrEqual(2); // the arrival, then the reissue
+      // The store must have been handed the ROTATED code (asserted by content, not by outbox order —
+      // the two callbacks can land in the same millisecond). The old code appears once: the arrival
+      // callback, correct when it was sent.
+      expect(ready.filter((c) => c.body.includes(fresh))).toHaveLength(1);
+      expect(ready.filter((c) => c.body.includes(old))).toHaveLength(1);
+    });
+
+    it('reissues a peer-send OTP the same way (one recovery path for both release paths)', () => {
+      const origin = onboardAgent('OTP Origin', 'NorthTown', 50);
+      const dest = onboardAgent('OTP Dest', 'SouthTown', 50);
+      const corridor = corridors.addCorridor({ name: 'N-S otp', originZone: 'NorthTown', destZone: 'SouthTown' });
+      const driver = corridors.addDriver({ driverDid: 'did:glos:dotp', name: 'D', corridorId: corridor.corridorId });
+      parcels.accept({ agentDid: origin.did, parcelId: 'QR-REISS', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+      parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['QR-REISS'] });
+      const arrival = parcels.arrive('QR-REISS', dest.did);
+
+      for (let i = 0; i < OTP_MAX_ATTEMPTS; i++) {
+        try { parcels.pickup('QR-REISS', dest.did, '0000'); } catch { /* burning it */ }
+      }
+      expect(() => parcels.pickup('QR-REISS', dest.did, arrival.otp)).toThrow(/Too many wrong codes/);
+
+      const out = parcels.reissueRelease('QR-REISS', 'operator:ops-1');
+      expect(out.kind).toBe('otp');
+      expect(out.otp).toMatch(/^\d{4}$/); // returned here: the destination agent reads it aloud
+      expect(out.otp).not.toBe(arrival.otp);
+      expect(() => parcels.pickup('QR-REISS', dest.did, arrival.otp)).toThrow(/Incorrect OTP/); // the old one is dead
+      expect(parcels.pickup('QR-REISS', dest.did, out.otp!, 'delivered.jpg').status).toBe('Delivered');
+    });
   });
 
   it('quotes from open-data rates, gates on prepaid, derives size, then rebates the flexible over-hold on delivery', () => {

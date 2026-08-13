@@ -10,9 +10,17 @@ export const HANDOVER_FEE = 0.5; // paid to the agent for handing a batch to the
 export const PICKUP_FEE = 0.3; // paid to the destination agent for releasing a parcel to the customer
 export const LOCK_THRESHOLD = 1.6; // wallet below this → 'no money, no scan' lockout
 export const VOID_WINDOW_MS = 5 * 60 * 1000; // 5-minute reverse-logistics window
-// The release OTP is read aloud by the destination agent (never SMS'd) and is the only check between
-// a stranger and someone else's parcel — so wrong attempts are counted and the code is burned.
+// A parcel's RELEASE SECRET — the peer-send OTP read aloud by the destination agent, or the inbound
+// buyer's collection code held in their app — is the only check between a stranger and someone else's
+// parcel, so wrong attempts are counted per parcel and the secret is burned. Recover with an operator
+// reissue (parcels/:id/reissue-release), which rotates the secret rather than merely unlocking it.
 export const OTP_MAX_ATTEMPTS = 5;
+
+// The printed label carries the parcel's creation DATE so a shopkeeper can see at a glance that a box
+// has been sitting there a week. The server clock is UTC and the label has no locale, so the date is
+// rendered at the network's operating offset — a parcel minted at 01:00 in Nairobi must not print
+// yesterday. Swap this for a per-zone timezone when the network leaves East Africa.
+export const LABEL_TZ_OFFSET_MIN = 180; // EAT (UTC+3)
 
 // Bus-vs-truck heuristic + size→weight tiers (Heavy > 20 kg).
 export const BUS_MAX_KG = 500;

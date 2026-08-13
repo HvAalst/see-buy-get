@@ -52,6 +52,13 @@ export class NotificationDispatcher implements OnModuleInit {
     this.events.subscribe<{ parcelId: string }>(GlosEvent.Pudo.ParcelReadyForPickup, (e) =>
       this.onParcelReadyForPickup(e.payload.parcelId),
     );
+    // Rule 1b (buyer) — the release secret was burned and an operator rotated it. The buyer is very
+    // likely standing at the counter right now, so this is urgent and must NOT collapse onto the
+    // parcel-ready notification (a fresh tag), or the one message telling them their code changed
+    // would be swallowed by the one they already read.
+    this.events.subscribe<{ parcelId: string }>(GlosEvent.Pudo.ParcelReleaseCodeReissued, (e) =>
+      this.onReleaseCodeReissued(e.payload.parcelId),
+    );
     // Rule 2 (driver) — a tote was published to the claim marketplace; ping active drivers near its pickup.
     this.events.subscribe<{ code: string; weightKg?: number; destination?: string }>(GlosEvent.Pudo.ToteAvailable, (e) =>
       this.onToteAvailable(e.payload),
@@ -97,6 +104,33 @@ export class NotificationDispatcher implements OnModuleInit {
       });
     } catch (err) {
       this.logger.warn(`parcel-ready notify failed for ${parcelId}: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * The reissue scenario: the parcel's release secret was rotated, so the code the receiver is holding
+   * no longer works. Push them the new one's existence — the code itself lives in their twin, never in a
+   * notification body (a lock-screen preview is readable by anyone holding the phone).
+   */
+  private async onReleaseCodeReissued(parcelId: string): Promise<void> {
+    try {
+      const parcel = this.parcels.get(parcelId);
+      const hash = parcel.receiverPhoneHash;
+      if (!hash) return;
+      const person = this.persons.findByHash(hash);
+      if (!person) return;
+
+      const where = this.shopName(parcel.destAgentDid) ?? parcel.destZone ?? 'your pickup point';
+      await this.notifications.notify(person.personDid, {
+        kind: 'parcel_ready',
+        title: 'Your collection code has changed',
+        body: `Open the app for the new code, then collect at ${where}.`,
+        link: '/',
+        tag: `parcel-code-reissued:${parcelId}`,
+        data: { parcelId },
+      });
+    } catch (err) {
+      this.logger.warn(`code-reissued notify failed for ${parcelId}: ${(err as Error).message}`);
     }
   }
 

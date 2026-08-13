@@ -60,6 +60,10 @@ export const GlosEvent = {
     ParcelHandedToBus: 'pudo.parcel_handed_to_bus',
     ParcelShortShipped: 'pudo.parcel_short_shipped', // a waiting parcel knowingly left behind at handover (short-ship)
     ParcelReadyForPickup: 'pudo.parcel_ready_for_pickup',
+    // The parcel's release secret was burned by wrong guesses and an operator rotated it. Deliberately
+    // NOT a re-published ParcelReadyForPickup: the parcel did not arrive twice, and the twin's journey
+    // must not grow a second out-for-delivery scan just because a code changed.
+    ParcelReleaseCodeReissued: 'pudo.parcel_release_code_reissued',
     ParcelDelivered: 'pudo.parcel_delivered',
     ParcelDisputed: 'pudo.parcel_disputed',
     ParcelVoided: 'pudo.parcel_voided',

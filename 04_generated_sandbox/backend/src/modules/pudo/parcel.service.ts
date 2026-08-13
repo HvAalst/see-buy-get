@@ -12,7 +12,7 @@ import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
 import { ShelfService } from './shelf.service';
 import { FleetService } from './fleet.service';
-import { HANDOVER_FEE, LABOUR_FEE, OTP_MAX_ATTEMPTS, PICKUP_FEE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, VOID_WINDOW_MS, WHOLESALE, classifySize, withPlatformFee } from './pudo.config';
+import { HANDOVER_FEE, LABEL_TZ_OFFSET_MIN, LABOUR_FEE, OTP_MAX_ATTEMPTS, PICKUP_FEE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, VOID_WINDOW_MS, WHOLESALE, classifySize, withPlatformFee } from './pudo.config';
 import { ConsumerParcelView, Parcel, ParcelDirection, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy } from './pudo.types';
 import { VendorService } from './vendor.service';
 import { VehicleService } from './vehicle.service';
@@ -21,6 +21,21 @@ import { CargoService } from './cargo.service';
 import { CargoNature } from './cargo.types';
 import type { ShipmentQuote } from './routing.service';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
+
+const LABEL_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * The creation date as printed on a label — "13 Aug 2026", shifted to the network's operating offset so
+ * a parcel minted just after midnight locally does not print yesterday's date. Date only: the point is
+ * "how long has this box been here", which a time would only clutter. An unparseable/missing stamp
+ * prints nothing rather than the word "Invalid" on a customer's parcel.
+ */
+export function labelDate(iso?: string): string {
+  const t = iso ? new Date(iso).getTime() : NaN;
+  if (!Number.isFinite(t)) return '';
+  const d = new Date(t + LABEL_TZ_OFFSET_MIN * 60_000);
+  return `${d.getUTCDate()} ${LABEL_MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+}
 
 /** The vendor shipment-register query (R0) — mirrors VendorOrdersQueryDto, all optional. */
 export interface VendorOrdersQuery {
@@ -1041,24 +1056,51 @@ export class ParcelService implements OnApplicationBootstrap {
     parcel.binSlot = this.shelf.assign(agentDid, parcelId, parcel.size); // chaos-shelf slot from the grid (binId hint ignored; small parcels may bundle)
     void binId;
     parcel.status = 'Ready_For_Pickup';
+    // The collection code becomes live at this moment — start its attempt budget clean, exactly as
+    // arrive() does for the peer-send OTP (a counter carried over from an earlier leg would burn a
+    // parcel that nobody has yet tried to collect).
+    parcel.otpAttempts = 0;
+    parcel.otpLockedAt = undefined;
     this.scan(parcel, 'Ready_For_Pickup', agentDid, `shelved · bin ${parcel.binSlot}`);
     void this.events.publish(GlosEvent.Pudo.ParcelReadyForPickup, { parcelId, destAgentDid: agentDid, collectionCode: parcel.collectionCode, binSlot: parcel.binSlot, vendorId: parcel.vendorId, externalOrderId: parcel.externalOrderId }, { source: 'pudo' }).catch(() => undefined);
     return { parcelId, binSlot: parcel.binSlot, status: parcel.status };
   }
 
-  /** Buyer presents the collection QR → resolve the parcel + shelf slot, opening the handover screen. */
+  /**
+   * Buyer presents the collection QR → resolve the parcel + shelf slot, opening the handover screen.
+   * A burned code opens nothing: the counter learns at the lookup that this parcel needs a reissue,
+   * rather than being walked to the confirm step only to be refused there.
+   */
   collect(collectionCode: string, agentDid: string): { parcel: Parcel; binSlot?: string } {
     const parcel = [...this.parcels.values()].find((p) => p.collectionCode === collectionCode && p.destAgentDid === agentDid && p.status === 'Ready_For_Pickup');
     if (!parcel) throw new GlosError('NOT_FOUND', 'No parcel awaiting collection for that code at this PUDO');
+    if (parcel.otpLockedAt) throw new GlosError('CODE_LOCKED', 'Too many wrong codes — ask the control tower to reissue');
     return { parcel, binSlot: parcel.binSlot };
   }
 
-  /** Buyer confirms the parcel is correct → Delivered, transaction closed. Pays the pickup labour fee. */
+  /**
+   * Buyer confirms the parcel is correct → Delivered, transaction closed. Pays the pickup labour fee.
+   *
+   * The collection code is the whole custody check on an inbound parcel, so it is counted and burned
+   * exactly like the peer-send OTP in pickup() — the two release paths now fail the same way. Before
+   * this, a wrong code could be retried forever; the code is no longer printed on the parcel, so
+   * getting it wrong repeatedly is someone guessing.
+   */
   collectConfirm(parcelId: string, agentDid: string, collectionCode: string): Parcel {
     const parcel = this.require(parcelId);
     if (parcel.status !== 'Ready_For_Pickup') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
     if (parcel.destAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Release only at the destination PUDO');
-    if (parcel.collectionCode !== collectionCode) throw new GlosError('CODE_MISMATCH', 'Collection code does not match');
+    if (parcel.otpLockedAt) throw new GlosError('CODE_LOCKED', 'Too many wrong codes — ask the control tower to reissue');
+    if (parcel.collectionCode !== (collectionCode || '').trim()) {
+      parcel.otpAttempts = (parcel.otpAttempts ?? 0) + 1;
+      if (parcel.otpAttempts >= OTP_MAX_ATTEMPTS) {
+        parcel.otpLockedAt = new Date().toISOString();
+        this.scan(parcel, 'Ready_For_Pickup', agentDid, 'collection code locked after repeated wrong codes');
+        throw new GlosError('CODE_LOCKED', 'Too many wrong codes — ask the control tower to reissue');
+      }
+      this.persist(parcel); // keep the attempt counter durable so a restart can't reset the lockout
+      throw new GlosError('CODE_MISMATCH', 'Collection code does not match');
+    }
     parcel.status = 'Delivered';
     parcel.deliveredAt = new Date().toISOString();
     this.media.anchorParcelTerminal(parcelId); // S26: shipment-proof retention starts at collection
@@ -1068,6 +1110,46 @@ export class ParcelService implements OnApplicationBootstrap {
     this.rebateFlexible(parcel); // a flexible parcel taken by a cheaper carrier → refund the over-hold
     void this.events.publish(GlosEvent.Pudo.ParcelDelivered, { parcelId, agentDid, vendorId: parcel.vendorId, externalOrderId: parcel.externalOrderId }, { source: 'pudo' }).catch(() => undefined);
     return parcel;
+  }
+
+  /**
+   * Operator recovery for a burned release secret — the other half of the lockout.
+   *
+   * A lockout with no way out is a bricked parcel: the goods are on the shelf, the customer is at the
+   * counter, and nothing can hand it over. So the control tower can reissue, and reissue ROTATES rather
+   * than merely unlocks — an attacker who burned the code through five guesses must not have the old
+   * code handed back to them, and the legitimate owner needs a code that works. Whichever secret the
+   * parcel releases on is replaced:
+   *   - peer-send (OTP): a fresh 4-digit code, returned here because the destination agent reads it aloud.
+   *   - inbound (collection code): a fresh COL- code, NOT returned to the caller — it goes to the buyer's
+   *     authenticated twin and to the vendor's ready-for-pickup callback, the same two channels the
+   *     original travelled. The operator performing the reissue never needs to see it.
+   */
+  reissueRelease(parcelId: string, byDid: string): { parcelId: string; kind: 'otp' | 'collection'; otp?: string } {
+    const parcel = this.require(parcelId);
+    if (parcel.status !== 'Ready_For_Pickup') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
+    parcel.otpAttempts = 0;
+    parcel.otpLockedAt = undefined;
+
+    // Which secret does this parcel release on? An inbound parcel carries a collection code from mint;
+    // a peer-send gets its OTP at arrival. Rotate the one that is actually in play.
+    const kind: 'otp' | 'collection' = parcel.collectionCode ? 'collection' : 'otp';
+    if (kind === 'collection') {
+      parcel.collectionCode = `COL-${randomBytes(4).toString('hex').toUpperCase()}`;
+      this.scan(parcel, 'Ready_For_Pickup', byDid, 'collection code reissued');
+      void this.events
+        .publish(GlosEvent.Pudo.ParcelReleaseCodeReissued, { parcelId, destAgentDid: parcel.destAgentDid, vendorId: parcel.vendorId, externalOrderId: parcel.externalOrderId }, { source: 'pudo' })
+        .catch(() => undefined);
+      return { parcelId, kind };
+    }
+
+    const otp = String(Math.floor((parseInt(randomBytes(2).toString('hex'), 16) / 65536) * 9000 + 1000));
+    parcel.otp = otp;
+    this.scan(parcel, 'Ready_For_Pickup', byDid, 'release OTP reissued');
+    void this.events
+      .publish(GlosEvent.Pudo.ParcelReleaseCodeReissued, { parcelId, destAgentDid: parcel.destAgentDid }, { source: 'pudo' })
+      .catch(() => undefined);
+    return { parcelId, kind, otp };
   }
 
   /**
@@ -1138,17 +1220,18 @@ export class ParcelService implements OnApplicationBootstrap {
    *
    * XML-escaped: a shop name is operator-entered text and would otherwise break the SVG
    * (or inject into it) the first time someone typed an ampersand.
+   *
+   * What the label may NOT carry: the release secret. It used to print the inbound buyer's collection
+   * code in bold — the very code collectConfirm() releases the parcel on — which handed the key to
+   * everyone who touched the box: the origin agent, the driver, the hub sorter, anyone glancing at the
+   * shelf. A parcel must not carry its own key. The code reaches the buyer through the two channels
+   * built for it (their authenticated twin since S22, and the vendor's own order notification via the
+   * ready-for-pickup callback); the label carries only the PUBLIC tracking key, which is safe to print,
+   * safe to read aloud, and is what someone should quote when they ask after a parcel.
    */
   private label(parcel: Parcel, destShop?: string): PhygitalLabel {
     const qrPayload = `sbg:parcel:${parcel.parcelId}`;
     const esc = (s: string) => s.replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[c] as string);
-    // DT — direction-aware so OUTBOUND / peer-send parcels get a label too (they have no destShop and no
-    // collection code). An inbound label shows the buyer's collection code; any other shows the PUBLIC tracking
-    // key (safe to print — no PII), so the physical parcel always carries a scannable, trackable identity.
-    const hasCode = parcel.direction === 'inbound' && Boolean(parcel.collectionCode);
-    const bottom = hasCode
-      ? [`<text x="12" y="130" font-family="Arial" font-size="10" fill="#4A5261">Collect at the shop with this code:</text>`, `<text x="12" y="152" font-family="monospace" font-size="16" font-weight="bold" fill="#0B1F5C">${esc(parcel.collectionCode ?? '')}</text>`]
-      : [`<text x="12" y="130" font-family="Arial" font-size="10" fill="#4A5261">Track this parcel:</text>`, `<text x="12" y="152" font-family="monospace" font-size="15" font-weight="bold" fill="#0B1F5C">${esc(parcel.trackingKey ?? '')}</text>`];
     const svg = [
       `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180">`,
       `<rect width="320" height="180" fill="#fff" stroke="#0B1F5C"/>`,
@@ -1157,7 +1240,11 @@ export class ParcelService implements OnApplicationBootstrap {
       `<text x="120" y="52" font-family="monospace" font-size="11">${esc(parcel.parcelId)}</text>`,
       `<text x="120" y="72" font-family="Arial" font-size="10">To: ${esc(destShop ?? parcel.destZone)}</text>`,
       `<text x="120" y="92" font-family="Arial" font-size="9" fill="#4A5261">${esc(parcel.destZone)}</text>`,
-      ...bottom,
+      // The age of the parcel, readable in a blink: a box dated a week ago and still on the shelf is a
+      // question the shopkeeper can ask without scanning anything.
+      `<text x="120" y="110" font-family="Arial" font-size="9" fill="#6E7684">Created ${labelDate(parcel.acceptedAt)}</text>`,
+      `<text x="12" y="130" font-family="Arial" font-size="10" fill="#4A5261">Track this parcel:</text>`,
+      `<text x="12" y="152" font-family="monospace" font-size="15" font-weight="bold" fill="#0B1F5C">${esc(parcel.trackingKey ?? '')}</text>`,
       `<text x="12" y="171" font-family="Arial" font-size="8" fill="#6E7684">${parcel.direction === 'inbound' ? 'Pre-paid · ' : ''}${esc(qrPayload)}</text>`,
       `</svg>`,
     ].join('');

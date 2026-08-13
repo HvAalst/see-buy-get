@@ -396,6 +396,11 @@ export class CollectDto {
   @IsString() collectionCode!: string;
 }
 
+/** Control-tower reissue of a burned release secret; `by` names the human behind the operator token. */
+export class ReissueReleaseDto {
+  @IsOptional() @IsString() by?: string;
+}
+
 export class DisputeDto {
   @IsOptional() @IsString() agentDid?: string; // operator-override only; normal actors are pinned to their token
   @IsString() reason!: string;

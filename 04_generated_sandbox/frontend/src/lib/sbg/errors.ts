@@ -15,7 +15,7 @@ export type SbgErrorCode =
   | 'ADDRESS_REQUIRED' | 'FIELD_REQUIRED' | 'INVALID_RATING' | 'ZONES_REQUIRED' | 'LICENCE_REQUIRED'
   | 'LICENCE_EXPIRED' | 'INVALID_VEHICLE_CLASS' | 'INVALID_TRUCK_SUBTYPE' | 'UNKNOWN_ROLE' | 'DISPUTE_INCOMPLETE'
   | 'REQUIREMENTS_NOT_MET' | 'KYC_INCOMPLETE' | 'APPROVAL_BLOCKED' | 'INVALID_STATE' | 'WINDOW_EXPIRED'
-  | 'NOT_INBOUND' | 'PARCEL_EXISTS' | 'SHIPMENT_NOT_PAID' | 'CODE_MISMATCH' | 'NOT_COUPLED' | 'ALREADY_COUPLED'
+  | 'NOT_INBOUND' | 'PARCEL_EXISTS' | 'SHIPMENT_NOT_PAID' | 'CODE_MISMATCH' | 'CODE_LOCKED' | 'NOT_COUPLED' | 'ALREADY_COUPLED'
   | 'CANNOT_COUPLE' | 'CAPACITY_EXCEEDED' | 'FRAGILE_NOT_ALLOWED' | 'BAG_FULL' | 'BAG_EMPTY' | 'BAG_RESERVED'
   | 'BAG_MISADDRESSED' | 'SHELF_FULL' | 'NO_CAPACITY_AVAILABLE' | 'OTP_INVALID' | 'OTP_LOCKED' | 'PIN_INVALID' | 'UNAUTHORIZED'
   | 'AUTH_FAILED' | 'AUTH_CODE_INVALID' | 'AUTH_NOT_ACTIVE' | 'PAYMENT_REQUIRED' | 'WALLET_INSUFFICIENT'
@@ -80,6 +80,8 @@ const PRESENTATION: Partial<Record<SbgErrorCode, ErrorPresentation>> = {
   OTP_INVALID: { icon: 'keypad', tone: 'warn', say: 'error.wrong_code' },
   CODE_MISMATCH: { icon: 'keypad', tone: 'warn', say: 'error.wrong_code' },
   OTP_LOCKED: { icon: 'lock', tone: 'danger', say: 'error.code_locked' },
+  // The collection code's own lockout — the inbound half of the same custody check.
+  CODE_LOCKED: { icon: 'lock', tone: 'danger', say: 'error.code_locked' },
   // Identity (S20/S21): a phone-first consumer signs in with a 4-digit PIN over their verified phone.
   AUTH_FAILED: { icon: 'keypad', tone: 'warn', say: 'error.wrong_pin' },
   PIN_INVALID: { icon: 'keypad', tone: 'warn', say: 'error.pin_digits' },

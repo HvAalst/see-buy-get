@@ -239,6 +239,29 @@ function supportPanel() {
   if (state.lookup) {
     const p = state.lookup;
     children.push(el('div', { style: { marginBottom: '10px' } }, [el('span', { className: 'pt__chip pt__chip--info', text: p.status.replace(/_/g, ' ') }), el('span', { style: { marginLeft: '10px', color: 'var(--muted)' }, text: `${p.size} · ${p.origin} → ${p.destination}` })]));
+    // The recovery half of the release lockout: a customer is at the counter, the code was burned by
+    // wrong guesses, and only the control tower can rotate it. The new code is never shown here — it
+    // goes to the buyer's app and the store; a peer-send OTP comes back for the agent to read aloud.
+    if (p.status === 'Ready_For_Pickup') {
+      const locked = Boolean(p.releaseLockedAt);
+      children.push(el('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', margin: '0 0 12px' } }, [
+        locked ? el('span', { className: 'pt__chip pt__chip--warn', text: 'release code locked' }) : el('span', { style: { color: 'var(--muted)' }, text: 'Release code is live.' }),
+        el('button', {
+          className: 'pt__btn',
+          text: 'Reissue release code',
+          onClick: async () => {
+            try {
+              const out = await post(`/parcels/${encodeURIComponent(p.parcelId)}/reissue-release`, { by: 'control-tower' });
+              state.lookup = await api(`/parcels/${encodeURIComponent(p.parcelId)}`);
+              state.msg = { type: 'ok', text: out.kind === 'otp' ? `New pickup OTP: ${out.otp} — read it to the customer.` : 'New collection code sent to the buyer’s app and the store.' };
+            } catch (e) {
+              state.msg = { type: 'err', text: String(e.message || e) };
+            }
+            render();
+          },
+        }),
+      ]));
+    }
     children.push(el('div', {}, (p.scans || []).map((s) => el('div', { className: 'pt__scan' }, [
       el('span', { className: 'pt__chip pt__chip--info', text: String(s.status).replace(/_/g, ' ') }),
       el('span', { className: 'pt__flag-d', text: s.note || '' }),
@@ -251,7 +274,11 @@ function supportPanel() {
 
 function render() {
   const parts = [topBar()];
-  if (state.msg) parts.push(el('div', { className: 'pt__panel', style: { borderColor: 'var(--danger)', color: 'var(--danger)' }, text: state.msg.text }));
+  // Tone-aware: a successful reissue must not be shouted in the same red as a failure.
+  if (state.msg) {
+    const tone = state.msg.type === 'ok' ? 'var(--ok, #2e7d32)' : 'var(--danger)';
+    parts.push(el('div', { className: 'pt__panel', style: { borderColor: tone, color: tone }, text: state.msg.text }));
+  }
   if (state.loading) { parts.push(el('div', { className: 'pt__empty', text: 'Loading control tower…' })); mount(root, parts); return; }
   parts.push(kpis());
   parts.push(el('div', { className: 'pt__grid' }, [

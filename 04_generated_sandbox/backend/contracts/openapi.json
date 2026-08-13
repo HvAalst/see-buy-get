@@ -6702,6 +6702,38 @@
         }
       }
     },
+    "/v1/sbg/parcels/{id}/reissue-release": {
+      "post": {
+        "operationId": "Sbg.reissueRelease",
+        "summary": "",
+        "description": "Control tower: rotate a parcel's burned release secret so a locked-out customer can still collect.\nOperator-only — this is the recovery authority behind every \"ask the control tower to reissue\".\nThe new inbound collection code is never returned here; it reaches the buyer's app + the vendor.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReissueReleaseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/parcels/{id}/dispute": {
       "post": {
         "operationId": "Sbg.dispute",
@@ -12249,11 +12281,12 @@
             "description": "Release secret. The destination agent reads it aloud from their screen and the customer repeats\nit back — it is never SMS'd, so it costs nothing and works with no signal. Because it is the\nsole custody check, wrong attempts are counted and the code is burned at OTP_MAX_ATTEMPTS."
           },
           "otpAttempts": {
-            "type": "number"
+            "type": "number",
+            "description": "Wrong-attempt counter for whichever release secret this parcel uses — the OTP above on a peer-send,\nthe collectionCode below on an inbound order. A parcel has exactly one live secret, so one budget\nguards both paths; it is reset when the secret becomes live (arrive() / shelve()) and by a reissue."
           },
           "otpLockedAt": {
             "type": "string",
-            "description": "Set when the OTP was burned by repeated wrong attempts; release needs an operator reissue."
+            "description": "Set when the release secret was burned by repeated wrong attempts; release needs an operator reissue."
           },
           "vendorId": {
             "type": "string"
@@ -13135,6 +13168,14 @@
         "required": [
           "collectionCode"
         ]
+      },
+      "ReissueReleaseDto": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string"
+          }
+        }
       },
       "RateDto": {
         "type": "object",

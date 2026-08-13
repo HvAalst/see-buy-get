@@ -135,6 +135,8 @@ export class MonitorService {
   /** User/Support — the parcel audit timeline ('where is my package', 'it was damaged'). */
   parcelTimeline(parcelId: string) {
     const p = this.parcels.get(parcelId);
-    return { parcelId: p.parcelId, status: p.status, size: p.size, origin: p.originZone, destination: p.destZone, dropoffPhotoRef: p.dropoffPhotoRef, deliveredPhotoRef: p.deliveredPhotoRef, scans: p.scans };
+    // `releaseLockedAt` (never the secret itself) so the support desk can SEE why a customer at the
+    // counter cannot collect, and reissue — the whole point of a lockout that a human can recover from.
+    return { parcelId: p.parcelId, status: p.status, size: p.size, origin: p.originZone, destination: p.destZone, dropoffPhotoRef: p.dropoffPhotoRef, deliveredPhotoRef: p.deliveredPhotoRef, releaseLockedAt: p.otpLockedAt, scans: p.scans };
   }
 }

@@ -7,6 +7,10 @@ import { VendorService } from './vendor.service';
 const EVENT_STATUS: Record<string, string> = {
   [GlosEvent.Pudo.ParcelPaid]: 'parcel_paid', // vendor prepaid → drop-off PUDO confirmation, label unblocked
   [GlosEvent.Pudo.ParcelReadyForPickup]: 'ready_for_pickup',
+  // A reissued code is still a "ready for pickup" as far as the store is concerned — same status, new
+  // code. relay() reads the parcel fresh, so the callback carries the ROTATED code, which is exactly
+  // what the store needs to re-tell a buyer who is standing at the counter unable to collect.
+  [GlosEvent.Pudo.ParcelReleaseCodeReissued]: 'ready_for_pickup',
   [GlosEvent.Pudo.ParcelDelivered]: 'collected',
   [GlosEvent.Pudo.ParcelDisputed]: 'disputed',
 };

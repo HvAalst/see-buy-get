@@ -335,15 +335,23 @@ export class Parcel {
    * sole custody check, wrong attempts are counted and the code is burned at OTP_MAX_ATTEMPTS.
    */
   otp?: string;
+  /**
+   * Wrong-attempt counter for whichever release secret this parcel uses — the OTP above on a peer-send,
+   * the collectionCode below on an inbound order. A parcel has exactly one live secret, so one budget
+   * guards both paths; it is reset when the secret becomes live (arrive() / shelve()) and by a reissue.
+   */
   otpAttempts?: number;
-  /** Set when the OTP was burned by repeated wrong attempts; release needs an operator reissue. */
+  /** Set when the release secret was burned by repeated wrong attempts; release needs an operator reissue. */
   otpLockedAt?: string;
   // --- inbound (e-commerce pickup-at-PUDO) ---
   vendorId?: string;
   externalOrderId?: string;
   buyerEmail?: string; // legacy order-notification channel; since S22 the collection token is delivered IN-APP
   // to the receiver's authenticated twin (never SMS'd/emailed as the secret) — see ConsumerParcelView.collectToken.
-  collectionCode?: string; // the buyer's QR collection token (shown in their app, scanned at the destination PUDO — the handover secret)
+  // The buyer's QR collection token: shown in their app, scanned at the destination PUDO — the handover
+  // secret, and the ONLY check standing between a stranger and this parcel. Never printed on the label
+  // (it rode on the box until the parcel itself was handing out its own key), never in a public view.
+  collectionCode?: string;
   trackingKey?: string; // PUBLIC track-and-trace token (safe to share — no PII, drives "track my parcel")
   binSlot?: string; // chaos-shelf slot at the destination PUDO
   items?: LineItem[];
