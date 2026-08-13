@@ -300,12 +300,16 @@ const run = async () => {
     await req('POST', '/v1/sbg/parcels/handover', { token: tokA1, body: { agentDid: a1.did, driverBadgeId: amos.badgeId, parcelIds: [p6.parcelId] } }),
     'handover p6',
   );
-  const arrived = need(
+  need(
     await req('POST', `/v1/sbg/parcels/${encodeURIComponent(p6.parcelId)}/arrive`, { token: tokA2, body: { destAgentDid: a2.did } }),
     'arrive p6',
   );
   const p6Now = need(await req('GET', `/v1/sbg/parcels/${encodeURIComponent(p6.parcelId)}`, { token: tokA2 }), 'read p6');
-  say(`parcel ready to collect at Riverside: ${p6.parcelId} — pickup code ${arrived.otp}${p6Now.binSlot ? ` · shelf ${p6Now.binSlot}` : ''}`);
+  // The pickup code comes from the ACCEPT response — it is minted with the parcel and given to the sender.
+  // Arrival no longer returns it (the shop that hands the parcel over must not know it), so this sheet is
+  // standing in for the sender, who would have passed it to whoever is collecting.
+  const p6Code = p6.otp;
+  say(`parcel ready to collect at Riverside: ${p6.parcelId} — pickup code ${p6Code}${p6Now.binSlot ? ` · shelf ${p6Now.binSlot}` : ''}`);
 
   // Now the two parcels that sit waiting at the shop — accepted AFTER the handovers so the gate is happy.
   const p1 = await accept(1);
@@ -494,7 +498,7 @@ const run = async () => {
   out.push('-'.repeat(64));
   out.push(`  Handover demo   ${p1.parcelId}, ${p2.parcelId} wait for badge ${amos.badgeId}`);
   out.push(`  Release demo    ${p3.parcelId} is On_Bus at Riverside (mark arrived)`);
-  out.push(`  Pickup demo     ${p6.parcelId} — code ${arrived.otp}${p6Now.binSlot ? ` · shelf ${p6Now.binSlot}` : ''}`);
+  out.push(`  Pickup demo     ${p6.parcelId} — code ${p6Code}${p6Now.binSlot ? ` · shelf ${p6Now.binSlot}` : ''}`);
   out.push(`  Track demo      ${p6.trackingKey} (ready) · ${p3.trackingKey} (on the bus)`);
   out.push(`  Hub sort demo   ${p4.parcelId} queued · bag ${sorted.toteCode} ready to load`);
   out.push(`  Vendor demo     ${minted.parcel.parcelId} minted · collection ${minted.parcel.collectionCode ?? '—'} · track ${minted.parcel.trackingKey ?? '—'}`);

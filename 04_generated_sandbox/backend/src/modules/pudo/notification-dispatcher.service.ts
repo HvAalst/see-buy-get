@@ -115,20 +115,27 @@ export class NotificationDispatcher implements OnModuleInit {
   private async onReleaseCodeReissued(parcelId: string): Promise<void> {
     try {
       const parcel = this.parcels.get(parcelId);
-      const hash = parcel.receiverPhoneHash;
-      if (!hash) return;
-      const person = this.persons.findByHash(hash);
-      if (!person) return;
-
       const where = this.shopName(parcel.destAgentDid) ?? parcel.destZone ?? 'your pickup point';
-      await this.notifications.notify(person.personDid, {
-        kind: 'parcel_ready',
-        title: 'Your collection code has changed',
-        body: `Open the app for the new code, then collect at ${where}.`,
-        link: '/',
-        tag: `parcel-code-reissued:${parcelId}`,
-        data: { parcelId },
-      });
+      // On a PEER SEND the sender is told as well: they are the relay to a receiver with no app (the same
+      // role the store plays on a vendor order), so a rotated code that reached only the receiver would
+      // strand exactly the person the relay exists for. A vendor order tells the buyer only — its store
+      // gets the new code over the callback instead.
+      const targets = parcel.vendorId ? [parcel.receiverPhoneHash] : [parcel.receiverPhoneHash, parcel.senderPhoneHash];
+      const seen = new Set<string>();
+      for (const hash of targets) {
+        if (!hash) continue;
+        const person = this.persons.findByHash(hash);
+        if (!person || seen.has(person.personDid)) continue; // a person sending to themselves is told once
+        seen.add(person.personDid);
+        await this.notifications.notify(person.personDid, {
+          kind: 'parcel_ready',
+          title: 'The pickup code has changed',
+          body: `Open the app for the new code — the parcel is at ${where}.`,
+          link: '/',
+          tag: `parcel-code-reissued:${parcelId}`,
+          data: { parcelId },
+        });
+      }
     } catch (err) {
       this.logger.warn(`code-reissued notify failed for ${parcelId}: ${(err as Error).message}`);
     }

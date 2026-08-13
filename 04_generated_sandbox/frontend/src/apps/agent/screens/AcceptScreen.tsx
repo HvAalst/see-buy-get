@@ -1,4 +1,4 @@
-import { Button, Card, ErrorNote, GlanceNumber, Icon, Note, PlaceMap, Pill, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
+import { Button, Card, CodeCard, ErrorNote, GlanceNumber, Icon, Note, PlaceMap, Pill, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
 import { useT, type Translate } from '../../../shared/i18n';
 import { NATURES, acceptMissing, bookFreightMissing, parcelStatusWord, pointDistance, selectablePoints, sizeMeta } from '../logic';
 import type { NetworkPoint } from '../types';
@@ -290,6 +290,19 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
               </>
             ) : null}
             {state.acceptedLabel.trackingKey ? <p class="hint" style="margin-top:8px">{t('agent.accept.trackingKey', { key: state.acceptedLabel.trackingKey })}</p> : null}
+            {/* The pickup code, given to the SENDER who is standing right here — they pass it to the person
+                collecting. It is deliberately not printed on the parcel and the receiving shop never sees
+                it, so this is the moment it has to be handed over. */}
+            {state.acceptedLabel.releaseCode ? (
+              <>
+                <CodeCard label={t('agent.accept.pickupCodeLabel')} code={state.acceptedLabel.releaseCode} />
+                <p class="hint">{t('agent.accept.pickupCodeHint')}</p>
+                <ReadAloud
+                  text={() => t('agent.accept.pickupCodeAloud', { digits: state.acceptedLabel!.releaseCode!.split('').join(', ') })}
+                  label={t('agent.accept.pickupCodeSay')}
+                />
+              </>
+            ) : null}
             <Button variant="link" onClick={actions.dismissAcceptedLabel}>
               {t('agent.accept.doneAnother')}
             </Button>

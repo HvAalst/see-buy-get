@@ -30,6 +30,18 @@ const LABEL_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'S
  * "how long has this box been here", which a time would only clutter. An unparseable/missing stamp
  * prints nothing rather than the word "Invalid" on a customer's parcel.
  */
+/** Once a parcel reaches one of these it can never be released again, so its code stops being shown. */
+const TERMINAL_STATUSES = new Set<ParcelStatus>(['Delivered', 'Disputed', 'Voided']);
+
+/**
+ * A peer-send release code: 4 digits, because it is read over a phone call and typed at a counter by
+ * people who may not read well. Short is only safe because the attempt budget burns it after
+ * OTP_MAX_ATTEMPTS — guessing, not brute force, is the threat it has to survive.
+ */
+export function releaseOtp(): string {
+  return String(Math.floor((parseInt(randomBytes(2).toString('hex'), 16) / 65536) * 9000 + 1000));
+}
+
 export function labelDate(iso?: string): string {
   const t = iso ? new Date(iso).getTime() : NaN;
   if (!Number.isFinite(t)) return '';
@@ -461,11 +473,26 @@ export class ParcelService implements OnApplicationBootstrap {
       disputePhotoRef: relation === 'received' ? p.buyerDisputePhotoRef : undefined,
       disputeReason: relation === 'received' && p.status === 'Disputed' ? (p.buyerDisputeReason ?? p.disputeReason) : undefined,
     };
-    // S22: the receiver's in-app collection token — QR (scanned) + the COL code (typed fallback). Only on
-    // the detail view, only for the receiver, only while collectable — the handover secret leaves the
-    // vault of the twin no wider than it must.
-    if (withToken && relation === 'received' && p.status === 'Ready_For_Pickup' && p.collectionCode) {
-      view.collectToken = { code: p.collectionCode, qrPayload: `sbg:collect:${p.collectionCode}` };
+    // The in-app release token — QR (scanned) + the code (typed/spoken fallback). Detail view only, so the
+    // secret leaves the vault of the twin no wider than it must. Who may see it, and when, differs by how
+    // the parcel was born:
+    //
+    //  - VENDOR ORDER (S22, unchanged): the RECEIVER only, and only once it is collectable. The store is
+    //    the buyer's relay, so nobody else needs it from us.
+    //  - PEER SEND: the SENDER as well, from the moment they hand the parcel over — they are the source of
+    //    the code in the physical world and the only free channel to a receiver with no smartphone ("your
+    //    code is 4821", over the call they were making anyway). Withholding it from the sender is what
+    //    forced the destination shop to read the code aloud, which is no check at all. The receiver sees it
+    //    from mint too: there is nothing to collect early, and a code you can look up before you travel is
+    //    the difference between a wasted trip and a collected parcel.
+    if (withToken) {
+      const isPeerSend = !p.vendorId;
+      const secret = p.collectionCode ?? p.otp;
+      const audienceOk = relation === 'received' || isPeerSend; // the sender is a party only on a peer send
+      const stageOk = isPeerSend ? !TERMINAL_STATUSES.has(p.status) : p.status === 'Ready_For_Pickup';
+      if (secret && audienceOk && stageOk) {
+        view.collectToken = { code: secret, qrPayload: `sbg:collect:${secret}` };
+      }
     }
     return view;
   }
@@ -525,6 +552,14 @@ export class ParcelService implements OnApplicationBootstrap {
       paymentMode: mode,
       status: 'At_PUDO',
       acceptedAt: now,
+      // The release code is born HERE, with the sender standing at the counter — not at the far end when
+      // the parcel arrives. It used to be minted by arrive() and handed to the destination agent, which
+      // meant the only party who could hand the goods over was also the only party who knew the secret:
+      // they read it aloud and the customer repeated it back, so the check proved nothing. Now the sender
+      // leaves with it (drop-off slip / their twin) and passes it to the receiver over the channel they
+      // already use, exactly as a store tells its buyer. The releasing shop never sees it.
+      otp: releaseOtp(),
+      otpAttempts: 0,
       // Walk-up parcels track too (S14): the sender SMS carries this key, exactly as the
       // vendor flow's does. Public surface, no PII — inbound parcels had it since day one
       // and the counter flow simply never minted one.
@@ -683,24 +718,31 @@ export class ParcelService implements OnApplicationBootstrap {
     return { manifestId, driverBadgeId: badgeId, driverDid: fleet ? fleet.driverDid : undefined, corridorId, vehicle: fleet ? vehicleType : this.corridors.chooseVehicle(loadKg), handed, rejected, expected, missed, shortShipped: missed.length > 0 };
   }
 
-  /** Arrival at the destination PUDO → Ready_For_Pickup; OTP issued to the receiver. */
-  arrive(parcelId: string, destAgentDid: string): { parcelId: string; otp: string; status: string; binSlot: string } {
+  /**
+   * Arrival at the destination PUDO → Ready_For_Pickup, shelved and waiting.
+   *
+   * It no longer issues (or returns) the release code. The code was minted with the parcel and is held by
+   * the sender and receiver; the shop that is about to hand the goods over must not be the shop that
+   * knows the secret, or "the customer tells you the code" degrades into "you tell the customer the code".
+   * A pre-slice parcel that arrives without one is given a code here as a fallback — that record's secret
+   * genuinely does not exist yet, and refusing the arrival would strand real goods on a real shelf.
+   */
+  arrive(parcelId: string, destAgentDid: string): { parcelId: string; status: string; binSlot: string } {
     const parcel = this.require(parcelId);
     if (parcel.status !== 'On_Bus') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected On_Bus`);
-    const otp = String(Math.floor(parseInt(randomBytes(2).toString('hex'), 16) / 65536 * 9000 + 1000));
     parcel.status = 'Ready_For_Pickup';
     parcel.destAgentDid = destAgentDid;
-    parcel.otp = otp;
+    if (!parcel.otp && !parcel.collectionCode) parcel.otp = releaseOtp(); // legacy record, minted before the code moved to genesis
     parcel.otpAttempts = 0;
     parcel.otpLockedAt = undefined;
     parcel.binSlot = this.shelf.assign(destAgentDid, parcelId, parcel.size); // commit to a shelf slot for pickup (small parcels may bundle)
-    this.scan(parcel, 'Ready_For_Pickup', destAgentDid, `OTP issued · shelf ${parcel.binSlot}`);
+    this.scan(parcel, 'Ready_For_Pickup', destAgentDid, `arrived · shelf ${parcel.binSlot}`);
     void this.events.publish(GlosEvent.Pudo.ParcelReadyForPickup, { parcelId, destAgentDid, binSlot: parcel.binSlot }, { source: 'pudo' }).catch(() => undefined);
-    // The destination agent reads the OTP aloud to the customer — no SMS, no per-parcel cost.
-    return { parcelId, otp, status: parcel.status, binSlot: parcel.binSlot };
+    // No secret in this response: the customer brings the code, the shop checks it.
+    return { parcelId, status: parcel.status, binSlot: parcel.binSlot };
   }
 
-  /** Screen 3 — Customer Pickup (release) with OTP. */
+  /** Screen 3 — Customer Pickup (release) with the code the CUSTOMER brings. */
   pickup(parcelId: string, agentDid: string, otp: string, deliveredPhotoRef?: string): Parcel {
     const parcel = this.require(parcelId);
     if (parcel.status !== 'Ready_For_Pickup') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
@@ -938,6 +980,10 @@ export class ParcelService implements OnApplicationBootstrap {
       ceilingCost: quote.flexible.total,
       paidStatus: 'unpaid',
       acceptedAt: now,
+      // Minted with the parcel (see accept()): the sender holds the release code in their own twin from
+      // this moment and relays it to the receiver. Nothing about the handover secret waits for arrival.
+      otp: releaseOtp(),
+      otpAttempts: 0,
       scans: [{ at: now, status: 'CREATED', by: input.senderPersonDid, note: `peer send · drop off at ${origin.shopName}`, anchorTxId }],
     };
     parcel.label = this.label(parcel, dest.shopName); // outbound branch: tracking key, no handover secret
@@ -1120,7 +1166,10 @@ export class ParcelService implements OnApplicationBootstrap {
    * than merely unlocks — an attacker who burned the code through five guesses must not have the old
    * code handed back to them, and the legitimate owner needs a code that works. Whichever secret the
    * parcel releases on is replaced:
-   *   - peer-send (OTP): a fresh 4-digit code, returned here because the destination agent reads it aloud.
+   *   - peer-send (OTP): a fresh 4-digit code. It lands in the sender's and receiver's twins, and is also
+   *     returned HERE — to the control tower, which can phone the sender when neither party has an app.
+   *     The tower is a recovery authority, not the party holding the goods; what must never happen is the
+   *     code reaching the destination shop, which is why it is not in the arrive() response any more.
    *   - inbound (collection code): a fresh COL- code, NOT returned to the caller — it goes to the buyer's
    *     authenticated twin and to the vendor's ready-for-pickup callback, the same two channels the
    *     original travelled. The operator performing the reissue never needs to see it.
@@ -1143,9 +1192,9 @@ export class ParcelService implements OnApplicationBootstrap {
       return { parcelId, kind };
     }
 
-    const otp = String(Math.floor((parseInt(randomBytes(2).toString('hex'), 16) / 65536) * 9000 + 1000));
+    const otp = releaseOtp();
     parcel.otp = otp;
-    this.scan(parcel, 'Ready_For_Pickup', byDid, 'release OTP reissued');
+    this.scan(parcel, 'Ready_For_Pickup', byDid, 'release code reissued');
     void this.events
       .publish(GlosEvent.Pudo.ParcelReleaseCodeReissued, { parcelId, destAgentDid: parcel.destAgentDid }, { source: 'pudo' })
       .catch(() => undefined);

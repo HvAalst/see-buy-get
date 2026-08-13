@@ -148,6 +148,9 @@ describe('PUDO Light', () => {
   const defaultShelf = { rows: 3, cols: 3 }; // 9 slots
   const kycDocs = { idCopyRef: 'id.jpg', tradingLicenceRef: 'licence.pdf', shopPhotoRefs: ['shop-1.jpg'] };
 
+  /** The release code the SENDER/RECEIVER hold. Minted with the parcel now, never handed out at arrival. */
+  const releaseCodeOf = (parcelId: string) => parcels.get(parcelId).otp!;
+
   function onboardAgent(shopName: string, zone: string, topUp = 0) {
     agentSeq += 1;
     const a = agents.register({ shopName, zone, location: { lat: -1.2, lng: 36.8 }, landmark: 'next to the market', openingHours: uniformHours(), shelf: defaultShelf, fullName: `${shopName} owner`, nationalId: `ID-${agentSeq}`, mobile: `+25470${agentSeq}`, deviceImei: `IMEI-${agentSeq}`, requirements: eligibleReqs() });
@@ -299,7 +302,7 @@ describe('PUDO Light', () => {
     const arr = parcels.arrive('QR-S1', dest.did);
     expect(arr.binSlot).toMatch(/^(Red|Orange|Amber|Green|Teal|Blue|Indigo|Violet|Pink|Brown)-[1-3]$/); // colour-column + row-number
     expect(shelfSvc.available(dest.did)).toBe(8); // slot committed for pickup
-    parcels.pickup('QR-S1', dest.did, arr.otp);
+    parcels.pickup('QR-S1', dest.did, releaseCodeOf('QR-S1'));
     expect(shelfSvc.available(dest.did)).toBe(9); // freed on pickup
   });
 
@@ -342,9 +345,11 @@ describe('PUDO Light', () => {
     expect(h.handed).toEqual(['QR-0001']);
     expect(parcels.get('QR-0001').status).toBe('On_Bus');
 
+    const code = releaseCodeOf('QR-0001'); // minted at accept, held by the sender + receiver
+    expect(code).toMatch(/^\d{4}$/);
     const arrival = parcels.arrive('QR-0001', dest.did);
-    expect(arrival.otp).toMatch(/^\d{4}$/);
-    const delivered = parcels.pickup('QR-0001', dest.did, arrival.otp, 'delivered.jpg');
+    expect(arrival).not.toHaveProperty('otp'); // the shop that hands it over is never told the secret
+    const delivered = parcels.pickup('QR-0001', dest.did, code, 'delivered.jpg');
     expect(delivered.status).toBe('Delivered');
     expect(delivered.scans.every((s) => s.anchorTxId)).toBe(true);
     expect(events.getLog().some((e) => e.type === GlosEvent.Pudo.ParcelDelivered)).toBe(true);
@@ -368,7 +373,8 @@ describe('PUDO Light', () => {
     const driver = corridors.addDriver({ driverDid: 'did:glos:d', name: 'D', corridorId: corridor.corridorId });
     parcels.accept({ agentDid: origin.did, parcelId: 'QR-LOCK', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
     parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['QR-LOCK'] });
-    const { otp } = parcels.arrive('QR-LOCK', origin.did);
+    parcels.arrive('QR-LOCK', origin.did);
+    const otp = releaseCodeOf('QR-LOCK');
     const wrong = otp === '0000' ? '1111' : '0000';
 
     for (let i = 0; i < 4; i++) expect(() => parcels.pickup('QR-LOCK', origin.did, wrong)).toThrow('Incorrect OTP');
@@ -418,7 +424,7 @@ describe('PUDO Light', () => {
     parcels.accept({ agentDid: origin.did, parcelId: 'QR-R', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'r.jpg' });
     parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['QR-R'] });
     const arr = parcels.arrive('QR-R', origin.did);
-    parcels.pickup('QR-R', origin.did, arr.otp);
+    parcels.pickup('QR-R', origin.did, releaseCodeOf('QR-R'));
 
     const r = rating.rate({ parcelId: 'QR-R', stars: 5, raterMobile: '+2' });
     expect(r.agentComposite).toBe(5);
@@ -434,7 +440,7 @@ describe('PUDO Light', () => {
       parcels.accept({ agentDid: origin.did, parcelId, size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'r.jpg' } as never);
       parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: [parcelId] } as never);
       const arr = parcels.arrive(parcelId, origin.did);
-      parcels.pickup(parcelId, origin.did, arr.otp);
+      parcels.pickup(parcelId, origin.did, releaseCodeOf(parcelId));
     };
 
     // Rename fix: the aggregate is `average` (what the frontend reads) — the mis-named `stars` is gone.
@@ -503,7 +509,7 @@ describe('PUDO Light', () => {
     await flush();
     const arr = parcels.arrive('QR-G', dest.did);
     await flush();
-    parcels.pickup('QR-G', dest.did, arr.otp);
+    parcels.pickup('QR-G', dest.did, releaseCodeOf('QR-G'));
     await flush();
     await flush();
 
@@ -1043,6 +1049,42 @@ describe('PUDO Light', () => {
       expect(ready.filter((c) => c.body.includes(old))).toHaveLength(1);
     });
 
+    it('gives a peer-send code to the SENDER and RECEIVER at genesis — never to the shop that releases it', () => {
+      const origin = onboardAgent('Genesis Origin', 'NorthTown', 50);
+      const dest = onboardAgent('Genesis Dest', 'SouthTown', 50);
+      const corridor = corridors.addCorridor({ name: 'N-S gen', originZone: 'NorthTown', destZone: 'SouthTown' });
+      const driver = corridors.addDriver({ driverDid: 'did:glos:dgen', name: 'D', corridorId: corridor.corridorId });
+      const senderPhone = '+254700900001';
+      const receiverPhone = '+254700900002';
+      const accepted = parcels.accept({ agentDid: origin.did, parcelId: 'QR-GEN', size: 'S', destZone: 'SouthTown', destPudoDid: dest.did, senderMobile: senderPhone, receiverMobile: receiverPhone, dropoffPhotoRef: 'p.jpg' });
+
+      // Born with the parcel, at the origin counter — not at the far end.
+      expect(accepted.otp).toMatch(/^\d{4}$/);
+      const code = accepted.otp!;
+
+      // BOTH parties can read it from their own twin, from the moment of drop-off: the sender because they
+      // are the free relay to a receiver with no smartphone, the receiver so they can travel knowing it.
+      const rx = hashPhone(receiverPhone)!;
+      const tx = hashPhone(senderPhone)!;
+      expect(parcels.consumerParcel('QR-GEN', rx).collectToken).toEqual({ code, qrPayload: `sbg:collect:${code}` });
+      expect(parcels.consumerParcel('QR-GEN', tx).collectToken).toEqual({ code, qrPayload: `sbg:collect:${code}` });
+      // ...but never on the list surface, and never to a stranger.
+      expect(parcels.forPhoneHash(rx).received.every((p) => !p.collectToken)).toBe(true);
+      expect(() => parcels.consumerParcel('QR-GEN', hashPhone('+254700900009')!)).toThrow(/No such parcel/);
+
+      // Arrival hands the destination shop a shelf slot and nothing else — no secret in the response.
+      parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['QR-GEN'] });
+      const arrival = parcels.arrive('QR-GEN', dest.did);
+      expect(arrival).not.toHaveProperty('otp');
+      expect(arrival.binSlot).toBeTruthy();
+      expect(releaseCodeOf('QR-GEN')).toBe(code); // arrival does NOT rotate what the parties already hold
+
+      // The code the sender phoned through is the one that opens the parcel.
+      expect(parcels.pickup('QR-GEN', dest.did, code, 'delivered.jpg').status).toBe('Delivered');
+      // Terminal: the twin stops handing the code out once there is nothing left to release.
+      expect(parcels.consumerParcel('QR-GEN', rx).collectToken).toBeUndefined();
+    });
+
     it('reissues a peer-send OTP the same way (one recovery path for both release paths)', () => {
       const origin = onboardAgent('OTP Origin', 'NorthTown', 50);
       const dest = onboardAgent('OTP Dest', 'SouthTown', 50);
@@ -1050,18 +1092,19 @@ describe('PUDO Light', () => {
       const driver = corridors.addDriver({ driverDid: 'did:glos:dotp', name: 'D', corridorId: corridor.corridorId });
       parcels.accept({ agentDid: origin.did, parcelId: 'QR-REISS', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
       parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['QR-REISS'] });
-      const arrival = parcels.arrive('QR-REISS', dest.did);
+      const original = releaseCodeOf('QR-REISS');
+      parcels.arrive('QR-REISS', dest.did);
 
       for (let i = 0; i < OTP_MAX_ATTEMPTS; i++) {
         try { parcels.pickup('QR-REISS', dest.did, '0000'); } catch { /* burning it */ }
       }
-      expect(() => parcels.pickup('QR-REISS', dest.did, arrival.otp)).toThrow(/Too many wrong codes/);
+      expect(() => parcels.pickup('QR-REISS', dest.did, original)).toThrow(/Too many wrong codes/);
 
       const out = parcels.reissueRelease('QR-REISS', 'operator:ops-1');
       expect(out.kind).toBe('otp');
-      expect(out.otp).toMatch(/^\d{4}$/); // returned here: the destination agent reads it aloud
-      expect(out.otp).not.toBe(arrival.otp);
-      expect(() => parcels.pickup('QR-REISS', dest.did, arrival.otp)).toThrow(/Incorrect OTP/); // the old one is dead
+      expect(out.otp).toMatch(/^\d{4}$/); // to the OPERATOR, who phones the sender — never to the shop
+      expect(out.otp).not.toBe(original);
+      expect(() => parcels.pickup('QR-REISS', dest.did, original)).toThrow(/Incorrect OTP/); // the old one is dead
       expect(parcels.pickup('QR-REISS', dest.did, out.otp!, 'delivered.jpg').status).toBe('Delivered');
     });
   });
@@ -1211,7 +1254,8 @@ describe('PUDO Light', () => {
     // Walk-up peer send: sender drops it, it rides the bus, arrives, the receiver collects with the OTP.
     parcels.accept({ agentDid: origin.did, parcelId: 'PEER-1', size: 'M', destZone: 'SouthTown', destPudoDid: dest.did, senderMobile: sender, receiverMobile: receiver, dropoffPhotoRef: 'drop.jpg', paymentMode: 'cash' });
     parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['PEER-1'] });
-    const { otp } = parcels.arrive('PEER-1', dest.did);
+    parcels.arrive('PEER-1', dest.did);
+    const otp = releaseCodeOf('PEER-1');
     parcels.pickup('PEER-1', dest.did, otp);
     expect(parcels.get('PEER-1').status).toBe('Delivered');
 
@@ -1857,7 +1901,8 @@ describe('PUDO Light', () => {
 
     // Ride the bus, arrive, collect with the OTP → Delivered anchors the 90-day retention.
     parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['MED-1'] });
-    const { otp } = parcels.arrive('MED-1', dest.did);
+    parcels.arrive('MED-1', dest.did);
+    const otp = releaseCodeOf('MED-1');
     parcels.pickup('MED-1', dest.did, otp);
     expect(parcels.get('MED-1').status).toBe('Delivered');
     expect(media.get(mediaId)!.expiresAt).toBeDefined(); // the clock is running only now
@@ -1907,7 +1952,8 @@ describe('PUDO Light', () => {
     const receiver = '+254700980002';
     parcels.accept({ agentDid: origin.did, parcelId: 'DSP-1', size: 'M', destZone: 'SouthTown', destPudoDid: dest.did, senderMobile: '+254700980001', receiverMobile: receiver, dropoffPhotoRef: 'drop.jpg' });
     parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['DSP-1'] });
-    const { otp } = parcels.arrive('DSP-1', dest.did);
+    parcels.arrive('DSP-1', dest.did);
+    const otp = releaseCodeOf('DSP-1');
     parcels.pickup('DSP-1', dest.did, otp);
 
     const rx = hashPhone(receiver);
@@ -2194,11 +2240,16 @@ describe('PUDO Light', () => {
     expect(parcels.consumerParcel('S21-1', hashPhone(receiver)).relation).toBe('received');
     expect(() => parcels.consumerParcel('S21-1', hashPhone('+254700999'))).toThrow(/No such parcel/);
 
-    // The twin carries NO PII — neither mobile appears anywhere in it — but does carry a status timeline.
+    // The twin carries NO PII — neither mobile, nor either phone HASH, appears anywhere in it — but does
+    // carry a status timeline. (Asserted on the whole values, not on a 3-digit fragment of them: the twin
+    // legitimately contains random material — a shipment DID, a release code — that will eventually
+    // collide with any short substring and fail this test for no reason.)
     const view = parcels.consumerParcel('S21-1', hashPhone(sender));
     const json = JSON.stringify(view);
-    expect(json).not.toContain('811');
-    expect(json).not.toContain('822');
+    expect(json).not.toContain(sender);
+    expect(json).not.toContain(receiver);
+    expect(json).not.toContain(hashPhone(sender));
+    expect(json).not.toContain(hashPhone(receiver));
     expect(view.timeline.length).toBeGreaterThan(0);
   });
 

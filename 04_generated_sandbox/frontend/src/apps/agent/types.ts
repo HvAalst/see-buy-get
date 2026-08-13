@@ -170,11 +170,6 @@ export interface HandoverView {
   driverDid?: string;
 }
 
-export interface ArriveView {
-  /** Sandbox: the OTP that was "sent" to the customer, surfaced for the demo. */
-  otp?: string;
-}
-
 export interface CollectView {
   parcel: ParcelView;
   binSlot?: string;

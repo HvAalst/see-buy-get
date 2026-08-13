@@ -5126,7 +5126,7 @@
       "get": {
         "operationId": "Sbg.parcelLabel",
         "summary": "",
-        "description": "DT — the printable label for a parcel (reprint). Operator-only: the inbound label carries the buyer's\n collection code (a handover secret), so this is not a public surface — the creator got it in the mint /\n accept response, and the vendor sees it on their order detail.",
+        "description": "DT — the printable label for a parcel (reprint). The label no longer carries any release secret (it\n prints the public tracking key and the creation date), but reprinting someone's parcel label is still\n a support action rather than a public one, so it stays operator-only.",
         "parameters": [
           {
             "name": "id",

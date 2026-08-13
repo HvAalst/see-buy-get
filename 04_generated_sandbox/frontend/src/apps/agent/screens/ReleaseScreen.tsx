@@ -1,4 +1,4 @@
-import { Button, Card, Checklist, CodeBoxes, CodeCard, ErrorNote, Note, ReadAloud, ScanField } from '../../../shared/ui';
+import { Button, Card, Checklist, CodeBoxes, ErrorNote, Note, ReadAloud, ScanField } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { otpValid, releaseBlockedDetail, releaseStage } from '../logic';
 import type { AgentActions, AgentState } from '../useAgentApp';
@@ -79,10 +79,6 @@ export function ReleaseScreen({ state, actions }: ReleaseScreenProps) {
             </Button>
           </div>
         </Card>
-      ) : null}
-
-      {p && stage === 'otp' && f.issuedOtp ? (
-        <CodeCard label={t('agent.release.sandboxCode')} code={f.issuedOtp} />
       ) : null}
 
       {p && stage === 'rate' ? (

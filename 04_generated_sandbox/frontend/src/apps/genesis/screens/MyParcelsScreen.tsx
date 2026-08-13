@@ -182,12 +182,22 @@ function ParcelDetail({ parcel, state, actions }: { parcel: ConsumerParcelView; 
         <ErrorNote error={state.openParcelError} onRetry={() => void actions.openParcel(parcel.parcelId)} />
       ) : null}
 
-      {/* S22: the in-app collection token — the receiver shows this QR (or reads the code) at the shop;
-          the PUDO scans it. Delivered in the app, never by SMS. Present only when it is theirs to collect. */}
+      {/* S22: the in-app release token — the receiver shows this QR (or reads the code) at the shop; the
+          PUDO scans it. Delivered in the app, never by SMS. On a parcel you SENT it is the same code seen
+          from the other side: you are the one who has to get it to the person collecting, over whatever
+          you already use to talk to them. Nobody at either shop can do that for you. */}
       {parcel.collectToken ? (
         <>
-          <CodeCard label={t('send.parcels.showToCollect')} code={parcel.collectToken.code} scanAs="collect" sayLabel={t('send.parcels.hearCode')} />
-          <p class="hint">{t('send.parcels.showCode')}</p>
+          {/* The QR is offered only for a vendor order: that is the code the shop's Collect scanner
+              resolves. A peer-send code is spoken at the counter and typed into the release screen, so
+              showing a QR nobody can scan would send the customer to a dead end. */}
+          <CodeCard
+            label={parcel.relation === 'sent' ? t('send.parcels.passToReceiver') : t('send.parcels.showToCollect')}
+            code={parcel.collectToken.code}
+            scanAs={parcel.vendorOrder ? 'collect' : undefined}
+            sayLabel={t('send.parcels.hearCode')}
+          />
+          <p class="hint">{parcel.relation === 'sent' ? t('send.parcels.passCode') : t('send.parcels.showCode')}</p>
         </>
       ) : null}
 

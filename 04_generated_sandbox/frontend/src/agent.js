@@ -240,12 +240,13 @@ function pickupScreen() {
 
   const p = f.pickParcel;
   if (p) {
-    if (p.status === 'On_Bus') body.push(el('div', { className: 'ag__card' }, [el('div', { text: 'This parcel is still on the bus.' }), el('button', { className: 'ag__primary', attrs: { type: 'button' }, text: 'Mark arrived and send code', onClick: markArrived })]));
+    if (p.status === 'On_Bus') body.push(el('div', { className: 'ag__card' }, [el('div', { text: 'This parcel is still on the bus.' }), el('button', { className: 'ag__primary', attrs: { type: 'button' }, text: 'Mark arrived and shelve', onClick: markArrived })]));
     else if (p.status === 'Ready_For_Pickup') {
       const otp = textInput('', f.otp || '', (v) => { f.otp = v; }, 'ag__input ag__otp');
       otp.setAttribute('inputmode', 'numeric'); otp.setAttribute('maxlength', '4'); otp.setAttribute('placeholder', '0000');
+      // The code comes from the CUSTOMER (their app, or the sender who passed it on). This shop is never
+      // told it — showing it here would make the check meaningless.
       const items = [step(2, 'Enter the 4-digit code from the customer', otp)];
-      if (f.issuedOtp) items.push(el('div', { className: 'ag__hint', text: `Demo: code sent to the customer is ${f.issuedOtp}` }));
       items.push(el('button', { className: 'ag__primary', attrs: { type: 'button' }, text: 'Confirm pickup', onClick: submitPickup }));
       body.push(el('div', { className: 'ag__card' }, items));
     } else if (p.status === 'Delivered') body.push(ratingCard(p));
@@ -257,13 +258,13 @@ function pickupScreen() {
 async function findParcel() {
   const f = state.form;
   if (!f.pickId) return;
-  try { f.pickParcel = (await api(`/parcels/${encodeURIComponent(f.pickId)}`)).data; f.issuedOtp = null; }
+  try { f.pickParcel = (await api(`/parcels/${encodeURIComponent(f.pickId)}`)).data; }
   catch (e) { state.msg = { type: 'err', text: String(e.message || e) }; }
   render();
 }
 async function markArrived() {
   const f = state.form;
-  try { const r = await api(`/parcels/${encodeURIComponent(f.pickId)}/arrive`, { method: 'POST', body: { destAgentDid: agentDid } }); f.issuedOtp = r.data.otp; await findParcel(); }
+  try { await api(`/parcels/${encodeURIComponent(f.pickId)}/arrive`, { method: 'POST', body: { destAgentDid: agentDid } }); await findParcel(); }
   catch (e) { state.msg = { type: 'err', text: String(e.message || e) }; render(); }
 }
 async function submitPickup() {

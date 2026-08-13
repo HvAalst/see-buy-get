@@ -22,7 +22,6 @@ import type {
   AgentLedgerRow,
   AgentParcelRow,
   AgentView,
-  ArriveView,
   ClassifyView,
   ConsignmentView,
   CollectView,
@@ -128,8 +127,10 @@ export interface AgentState {
   acceptNear: GeoPoint | null;
   acceptGeoBusy: boolean;
   acceptGeoNote: string | null;
-  /** DT — the label the last accept produced, shown to print + stick on the parcel (null once dismissed). */
-  acceptedLabel: { parcelId: string; trackingKey?: string; svg?: string } | null;
+  /** DT — the label the last accept produced, shown to print + stick on the parcel (null once dismissed).
+   *  `releaseCode` is the pickup code, handed to the SENDER at the counter: it is not on the parcel and the
+   *  collecting shop never learns it, so this sheet is where it reaches a human. */
+  acceptedLabel: { parcelId: string; trackingKey?: string; svg?: string; releaseCode?: string } | null;
   /** F2 — the freight the last counter booking produced: the FRT code + tracking key to print for the
    *  customer, plus the site-equipment advisory. Null until a booking succeeds / once dismissed. */
   bookedFreight: {
@@ -154,7 +155,7 @@ export interface AgentState {
   intakeDone: { parcelId: string; kind: IntakePreview['kind']; cashDue: number; destShopName?: string } | null;
   /** `missed` is the last server verdict of parcels for this bus still waiting (the S25 gate). */
   handover: { badge: string; selected: string[]; missed: string[] };
-  release: { stickerId: string; parcel: ParcelView | null; otp: string; issuedOtp: string | null; stars: number; photoRef: string };
+  release: { stickerId: string; parcel: ParcelView | null; otp: string; stars: number; photoRef: string };
   collect: { code: string; found: CollectView | null; disputing: boolean; reason: string; photoRef: string };
   receivebag: { code: string };
   /** The reverse-logistics window: which recent drop-off is being undone, + its torn-label photo. */
@@ -164,7 +165,7 @@ export interface AgentState {
 }
 
 const EMPTY_HANDOVER = { badge: '', selected: [] as string[], missed: [] as string[] };
-const EMPTY_RELEASE = { stickerId: '', parcel: null, otp: '', issuedOtp: null, stars: 0, photoRef: '' };
+const EMPTY_RELEASE = { stickerId: '', parcel: null, otp: '', stars: 0, photoRef: '' };
 const EMPTY_COLLECT = { code: '', found: null, disputing: false, reason: '', photoRef: '' };
 
 const INITIAL: AgentState = {
@@ -918,8 +919,8 @@ export function useAgentApp() {
       buzz();
       // DT — capture the label the parcel was born with so the agent can print it and stick it on the parcel
       // (peer-send parcels never had one). Clearing the form but staying on the accept screen; a Sheet shows it.
-      const p = narrow<{ parcelId: string; trackingKey?: string; label?: { svg?: string } }>(r.data);
-      setState((s) => ({ ...s, accept: { ...EMPTY_ACCEPT }, acceptDerived: null, acceptNear: null, acceptGeoNote: null, acceptedLabel: p ? { parcelId: p.parcelId, trackingKey: p.trackingKey, svg: p.label?.svg } : null }));
+      const p = narrow<{ parcelId: string; trackingKey?: string; otp?: string; label?: { svg?: string } }>(r.data);
+      setState((s) => ({ ...s, accept: { ...EMPTY_ACCEPT }, acceptDerived: null, acceptNear: null, acceptGeoNote: null, acceptedLabel: p ? { parcelId: p.parcelId, trackingKey: p.trackingKey, svg: p.label?.svg, releaseCode: p.otp } : null }));
       pushToast({ tone: 'ok', icon: 'box', title: t('agent.toast.parcelAccepted'), detail: t('agent.toast.parcelAcceptedDetail') });
       await refresh();
     });
@@ -1173,7 +1174,7 @@ export function useAgentApp() {
         setRelease({ parcel: null });
         return fail(r.error);
       }
-      setRelease({ parcel: narrow<ParcelView>(r.data), otp: '', issuedOtp: null, stars: 0 });
+      setRelease({ parcel: narrow<ParcelView>(r.data), otp: '', stars: 0 });
     });
   }, [client, run, fail, setRelease]);
 
@@ -1185,10 +1186,11 @@ export function useAgentApp() {
       const r = await client.api.arrive(f.parcel!.parcelId, did);
       if (r.error) return fail(r.error);
       buzz();
-      const otp = narrow<ArriveView>(r.data)?.otp ?? null;
+      // No code comes back: the customer's pickup code was minted with the parcel and is held by the
+      // sender + receiver, never by the shop about to hand the goods over.
       const again = await client.api.parcel(f.parcel!.parcelId);
-      setRelease({ parcel: again.error ? f.parcel : narrow<ParcelView>(again.data), issuedOtp: otp });
-      pushToast({ tone: 'ok', icon: 'keypad', title: t('agent.toast.codeSent') });
+      setRelease({ parcel: again.error ? f.parcel : narrow<ParcelView>(again.data) });
+      pushToast({ tone: 'ok', icon: 'box', title: t('agent.toast.arrived'), detail: t('agent.toast.arrivedDetail') });
     });
   }, [client, did, run, fail, pushToast, setRelease]);
 
