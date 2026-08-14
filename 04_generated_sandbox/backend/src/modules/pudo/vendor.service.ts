@@ -7,6 +7,7 @@ import { OperationalStore } from '../../foundation/data-firewall/operational-sto
 import { CheckoutHandoff, ShippingPolicy, Vendor } from './pudo.types';
 import { DEFAULT_VENDOR_COUNTRY, NETWORK_CURRENCY } from './pudo.config';
 import { currencyForJurisdiction } from '../../foundation/money/currency';
+import { EntityService } from '../../foundation/entity/entity.service';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
 
 /** One entry in a vendor's prepaid book with the per-country daughter company (GLOS reports, never escrows). */
@@ -167,7 +168,17 @@ export class VendorService {
   constructor(
     private readonly dids: DidService,
     private readonly core: OperationalStore,
+    private readonly entities: EntityService,
   ) {}
+
+  /**
+   * The sister company that settles this vendor. Records written before entities existed carry no
+   * entityId, so they resolve from the country they already recorded — the same shape as the currency
+   * backfill, and for the same reason: the answer was always implied, it was just never named.
+   */
+  entityIdOf(vendor: Vendor): string {
+    return vendor.entityId ?? this.entities.requireForJurisdiction(vendor.country).entityId;
+  }
 
   private static policy(p?: Partial<ShippingPolicy>): ShippingPolicy {
     // S34c — carry the freight-spend cap. A zero/negative/non-finite value means "no cap" (never a shipment
@@ -178,11 +189,15 @@ export class VendorService {
   }
 
   register(input: { name: string; callbackUrl?: string; secret?: string; location?: { lat: number; lng: number }; address?: string; country?: string; shippingPolicy?: Partial<ShippingPolicy> }): Vendor {
+    const country = input.country || DEFAULT_VENDOR_COUNTRY;
+    // Which sister company will settle this store — refused outright if the network has no daughter
+    // company there. Registering a vendor we cannot lawfully invoice is not a favour to anyone.
+    const entity = this.entities.requireForJurisdiction(country);
     // A real DID (S2 pattern — mdp got the same treatment): the vendorId stays the domain
     // key; the DID is what the vendors/login token binds to. No PII goes to the core.
     const did = this.dids.generate(`vendor:${input.name}`, { role: 'vendor' }).id;
-    this.core.upsert({ did, tier: 2, status: 'active', capabilities: ['vendor'], metadata: { country: input.country || DEFAULT_VENDOR_COUNTRY } });
-    const vendor: Vendor = { vendorId: `ven_${randomBytes(6).toString('hex')}`, did, name: input.name, callbackUrl: input.callbackUrl, secret: input.secret ?? `whsec_${randomBytes(12).toString('hex')}`, location: input.location, address: input.address, country: input.country || DEFAULT_VENDOR_COUNTRY, balance: 0, shippingPolicy: VendorService.policy(input.shippingPolicy), createdAt: new Date().toISOString() };
+    this.core.upsert({ did, tier: 2, status: 'active', capabilities: ['vendor'], metadata: { country } });
+    const vendor: Vendor = { vendorId: `ven_${randomBytes(6).toString('hex')}`, did, name: input.name, callbackUrl: input.callbackUrl, secret: input.secret ?? `whsec_${randomBytes(12).toString('hex')}`, location: input.location, address: input.address, country, entityId: entity.entityId, balance: 0, shippingPolicy: VendorService.policy(input.shippingPolicy), createdAt: new Date().toISOString() };
     this.vendors.set(vendor.vendorId, vendor);
     return vendor;
   }

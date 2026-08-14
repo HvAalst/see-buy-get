@@ -8,7 +8,8 @@ import { OperationalStore } from '../../foundation/data-firewall/operational-sto
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { WalletService } from '../m1/wallet/wallet.service';
-import { DEFAULT_PUDO_PRICE_PER_PARCEL, LOCK_THRESHOLD, MIN_ANDROID_VERSION, MIN_OPEN_HOURS, MIN_SLOTS } from './pudo.config';
+import { DEFAULT_PUDO_PRICE_PER_PARCEL, LOCK_THRESHOLD, MIN_ANDROID_VERSION, MIN_OPEN_HOURS, MIN_SLOTS, NETWORK_JURISDICTION } from './pudo.config';
+import { EntityService } from '../../foundation/entity/entity.service';
 import { Geocoder, GEOCODER } from './geocoder';
 import { MediaService } from './media.service';
 import { averageOpenHours } from './hours';
@@ -56,8 +57,14 @@ export class AgentService {
     private readonly wallet: WalletService,
     private readonly events: EventBus,
     private readonly media: MediaService,
+    private readonly entities: EntityService,
     @Inject(GEOCODER) private readonly geocoder: Geocoder,
   ) {}
+
+  /** The sister that contracts this shop; pre-entity records resolve to the network's home sister. */
+  entityIdOf(agent: Agent): string {
+    return agent.entityId ?? this.entities.requireForJurisdiction(NETWORK_JURISDICTION).entityId;
+  }
 
   /** The agent-eligibility filter (18.1). Returns the list of unmet hard requirements. */
   unmetRequirements(input: { shelf: ShelfConfig; openingHours: WeeklyHours; requirements: AgentRequirements }): string[] {
@@ -101,6 +108,9 @@ export class AgentService {
       vaultRef,
       shopName: input.shopName,
       zone: input.zone,
+      // The sister that contracts this shop. One jurisdiction today, so it is the network's home
+      // sister; when a second country opens, this is where the shop's own country starts deciding it.
+      entityId: this.entities.requireForJurisdiction(NETWORK_JURISDICTION).entityId,
       location,
       physicalAddress: input.physicalAddress?.trim() || undefined,
       landmark: input.landmark,

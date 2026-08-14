@@ -18,10 +18,15 @@ export interface NodePick {
 }
 
 export interface QuoteLeg { transport: number; base: number; total: number; }
+/** A stop on the journey + its open-data fee, and the sister company that will be owed that fee. */
+export interface QuoteNode { type: 'pudo' | 'mdp'; id: string; label: string; fee: number; entityId: string; }
 export interface ShipmentQuote {
   hops: Array<{ type: 'pudo' | 'mdp'; id: string; label: string; zone: string }>;
-  nodes: Array<{ type: 'pudo' | 'mdp'; id: string; label: string; fee: number }>; // each stop + its open-data fee (the tail)
+  nodes: QuoteNode[]; // each stop + its open-data fee (the tail)
   legs: Array<{ from: string; to: string; km: number }>; // per-leg distance (the tail)
+  /** The sister companies that perform this journey. One today; on a cross-border route the second is
+   *  what one sister will owe the other, which is the whole reason a leg has to name its performer. */
+  entityIds: string[];
   totalKm: number;
   nodeFees: number;
   size: ParcelSize;
@@ -66,7 +71,21 @@ export class RoutingService {
    */
   quoteShipment(originAgentDid: string, destAgentDid: string, size: ParcelSize = 'M'): ShipmentQuote {
     const plan = this.planJourney({ originAgentDid, destAgentDid, weightKg: SIZE_WEIGHT_KG[size] });
-    const nodes = plan.hops.map((h) => ({ type: h.type, id: h.id, label: h.label, fee: Math.round((h.type === 'mdp' ? this.mdps.require(h.id).pricePerParcel : this.agents.get(h.id).pricePerParcel) * 100) / 100 }));
+    // Each stop names the sister that will be owed its fee. Today they are all the same company, so the
+    // quote reads as one entity's cost stack — but the fee is owed to a shop by a specific sister, and
+    // writing that down now is what makes a cross-border route expressible later without a re-quote.
+    const nodes: QuoteNode[] = plan.hops.map((h) => {
+      const isHub = h.type === 'mdp';
+      const site = isHub ? this.mdps.require(h.id) : this.agents.get(h.id);
+      return {
+        type: h.type,
+        id: h.id,
+        label: h.label,
+        fee: Math.round(site.pricePerParcel * 100) / 100,
+        entityId: isHub ? this.mdps.entityIdOf(this.mdps.require(h.id)) : this.agents.entityIdOf(this.agents.get(h.id)),
+      };
+    });
+    const entityIds = [...new Set(nodes.map((n) => n.entityId))];
     const legs = plan.legs.map((l) => ({ from: l.from, to: l.to, km: l.distanceKm }));
     const nodeFees = Math.round(nodes.reduce((sum, n) => sum + n.fee, 0) * 100) / 100;
     const totalKm = Math.round(legs.reduce((s, l) => s + l.km, 0) * 10) / 10;
@@ -75,7 +94,7 @@ export class RoutingService {
     const transport = (rate: number) => Math.round(totalKm * rate * factor * 100) / 100;
     const leg = (rate: number) => { const t = transport(rate); const base = Math.round((nodeFees + t) * 100) / 100; return { transport: t, base, total: withPlatformFee(base) }; };
     return {
-      hops: plan.hops, nodes, legs, totalKm, nodeFees, size, transportFactor: factor, perKm: { min, max }, platformFeePct: PLATFORM_FEE_PCT,
+      hops: plan.hops, nodes, legs, entityIds, totalKm, nodeFees, size, transportFactor: factor, perKm: { min, max }, platformFeePct: PLATFORM_FEE_PCT,
       flexible: leg(max), locked: leg(min),
     };
   }

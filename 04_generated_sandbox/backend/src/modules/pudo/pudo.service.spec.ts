@@ -44,6 +44,7 @@ import { ConnectorRegistry, MobileSdkConnector, RestCarrierConnector } from '../
 import { WalletService } from '../m1/wallet/wallet.service';
 import { AuthService } from '../../foundation/auth/auth.service';
 import { DidService } from '../../foundation/did/did.service';
+import { EntityService } from '../../foundation/entity/entity.service';
 import { IdentityVault } from '../../foundation/data-firewall/identity-vault.service';
 import { OperationalStore } from '../../foundation/data-firewall/operational-store.service';
 import { FieldEncryption } from '../../foundation/data-firewall/field-encryption.service';
@@ -87,6 +88,7 @@ describe('PUDO Light', () => {
   let tracking: TrackingService;
   let context: TrackingContextService;
   let dids: DidService;
+  let entities: EntityService;
   let vault: IdentityVault;
   let core: OperationalStore;
   let events: EventBus;
@@ -97,13 +99,17 @@ describe('PUDO Light', () => {
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
         GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, ToteService, ConsignmentService, VehicleService, DriverService, FleetService, DispatchService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
-        WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
+        WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus, EntityService,
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
         GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder },
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
       ],
       controllers: [SbgController, IdentityController],
     }).compile();
+    // compile() does not run lifecycle hooks, so the group + its sisters are seeded by hand — the same
+    // registry the app seeds at boot, and everything that names an entity needs it present.
+    entities = moduleRef.get(EntityService);
+    entities.seed();
     agents = moduleRef.get(AgentService);
     gate = moduleRef.get(WalletGateService);
     corridors = moduleRef.get(CorridorService);
@@ -965,6 +971,65 @@ describe('PUDO Light', () => {
     const cbs = vendors.outboxFor(vendor.vendorId);
     expect(cbs.map((c) => c.event)).toEqual(expect.arrayContaining(['ready_for_pickup', 'collected']));
     expect(createHmac('sha256', 'whsec').update(cbs[0].body).digest('hex')).toBe(cbs[0].signature);
+  });
+
+  describe('entities — who collects, and who performs', () => {
+    it('contracts a shop and a hub to the sister that operates their jurisdiction', () => {
+      const ke = entities.requireForJurisdiction('KE');
+      const shop = onboardAgent('Entity Shop', 'NorthTown', 50);
+      expect(agents.get(shop.did).entityId).toBe(ke.entityId);
+      expect(agents.entityIdOf(agents.get(shop.did))).toBe(ke.entityId);
+
+      const hub = mdps.register({ name: 'Entity Hub', zones: ['NorthTown'], location: { lat: -1.2, lng: 36.8 } });
+      expect(hub.entityId).toBe(ke.entityId);
+      // A record written before entities existed still resolves — to the network's home sister.
+      expect(mdps.entityIdOf({ ...hub, entityId: undefined })).toBe(ke.entityId);
+    });
+
+    it('collects a WALK-UP through the origin shop’s sister (the counter takes the cash)', () => {
+      const ke = entities.requireForJurisdiction('KE');
+      const origin = onboardAgent('Collect Origin', 'NorthTown', 50);
+      onboardAgent('Collect Dest', 'SouthTown', 50);
+      const p = parcels.accept({ agentDid: origin.did, parcelId: 'QR-ENT', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+      expect(p.collectingEntityId).toBe(ke.entityId);
+    });
+
+    it('collects a VENDOR order through the store’s sister, and refuses a store we cannot invoice', () => {
+      const ke = entities.requireForJurisdiction('KE');
+      const origin = onboardAgent('Vendor Origin', 'NorthTown', 50);
+      const dest = onboardAgent('Vendor Dest', 'SouthTown', 50);
+      corridors.addCorridor({ name: 'N-S ent', originZone: 'NorthTown', destZone: 'SouthTown' });
+      const vendor = vendors.register({ name: 'Entity Store' });
+      expect(vendor.entityId).toBe(ke.entityId);
+      vendors.topUp(vendor.vendorId, 50);
+      const quote = routing.quoteShipment(origin.did, dest.did, 'M');
+      const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: 'ORD-ENT', originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: 'c.jpg', shippingPolicy: vendor.shippingPolicy, quote });
+      expect(parcel.collectingEntityId).toBe(ke.entityId);
+
+      // No daughter company in the Netherlands → registering a Dutch store is refused outright, rather
+      // than quietly settling its parcels through Nairobi.
+      expect(() => vendors.register({ name: 'Amsterdam Store', country: 'NL' })).toThrow(/No daughter company operates in NL/);
+    });
+
+    it('names the sister owed each node fee on a quote', () => {
+      const ke = entities.requireForJurisdiction('KE');
+      const origin = onboardAgent('Quote Origin', 'NorthTown', 50);
+      const dest = onboardAgent('Quote Dest', 'SouthTown', 50);
+      corridors.addCorridor({ name: 'N-S quote', originZone: 'NorthTown', destZone: 'SouthTown' });
+      const quote = routing.quoteShipment(origin.did, dest.did, 'M');
+      expect(quote.nodes.length).toBeGreaterThan(0);
+      expect(quote.nodes.every((n) => n.entityId === ke.entityId)).toBe(true);
+      expect(quote.entityIds).toEqual([ke.entityId]); // one company performs the whole domestic journey
+    });
+
+    it('never names the mother as a collector — she is not a party to customer transactions', () => {
+      const group = entities.group();
+      const origin = onboardAgent('Mother Origin', 'NorthTown', 50);
+      onboardAgent('Mother Dest', 'SouthTown', 50);
+      const p = parcels.accept({ agentDid: origin.did, parcelId: 'QR-MUM', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+      expect(p.collectingEntityId).not.toBe(group.entityId);
+      expect(() => entities.requireTransacting(group.entityId)).toThrow(/holding company/);
+    });
   });
 
   describe('the release secret never rides on the parcel', () => {

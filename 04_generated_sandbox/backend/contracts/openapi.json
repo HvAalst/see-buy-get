@@ -3800,6 +3800,19 @@
         }
       }
     },
+    "/v1/sbg/entities": {
+      "get": {
+        "operationId": "Sbg.listEntities",
+        "summary": "",
+        "description": "The group and its sister companies — who is registered where, and which of them may transact.\nOperator-only: it is the shape of the business, not a public directory. Structural facts only;\nno balances, no accounts (those belong to the sisters' books, which do not exist yet).",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/agents/kyc-queue": {
       "get": {
         "operationId": "Sbg.kycQueue",
@@ -11636,6 +11649,10 @@
           "zone": {
             "type": "string"
           },
+          "entityId": {
+            "type": "string",
+            "description": "The sister company this shop is contracted to — it buys the shop's handling and owes it the fee.\n A shop sits in exactly one country, so this is unambiguous. Absent on pre-entity records; read it\n through AgentService.entityIdOf()."
+          },
           "location": {
             "$ref": "#/components/schemas/GeoPoint"
           },
@@ -12241,6 +12258,10 @@
           "destAgentDid": {
             "type": "string"
           },
+          "collectingEntityId": {
+            "type": "string",
+            "description": "R1 — the sister company that collects for this shipment: the one in the PAYER's jurisdiction. A\nvendor order is paid by the store, so it is the store's sister; a walk-up is paid at the counter,\nso it is the origin shop's. Never the group, which is not a party to customer transactions.\nInternal: it is an accounting fact, and appears on no consumer or public surface."
+          },
           "senderMobile": {
             "type": "string"
           },
@@ -12668,6 +12689,9 @@
           "country": {
             "type": "string"
           },
+          "entityId": {
+            "type": "string"
+          },
           "balance": {
             "type": "number"
           },
@@ -12880,6 +12904,10 @@
           },
           "name": {
             "type": "string"
+          },
+          "entityId": {
+            "type": "string",
+            "description": "The sister company this hub is contracted to — same reasoning as a shop's: a fixed site sits in\n one country. Absent on pre-entity records; read it through MdpService.entityIdOf()."
           },
           "zones": {
             "type": "array",

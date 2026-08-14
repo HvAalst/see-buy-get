@@ -13,7 +13,8 @@ import { FleetService } from './fleet.service';
 import { WalletGateService } from './wallet-gate.service';
 import { CargoService } from './cargo.service';
 import { CargoNature, VehicleCapability } from './cargo.types';
-import { DEFAULT_MDP_PRICE_PER_PARCEL, MDP_SORT_FEE, TOTE_LOAD_FEE } from './pudo.config';
+import { DEFAULT_MDP_PRICE_PER_PARCEL, MDP_SORT_FEE, NETWORK_JURISDICTION, TOTE_LOAD_FEE } from './pudo.config';
+import { EntityService } from '../../foundation/entity/entity.service';
 import { Mdp, NextHop, Tote } from './pudo.types';
 
 /**
@@ -46,7 +47,13 @@ export class MdpService {
     private readonly dids: DidService,
     private readonly core: OperationalStore,
     private readonly cargo: CargoService,
+    private readonly entities: EntityService,
   ) {}
+
+  /** The sister that contracts this hub; pre-entity records resolve to the network's home sister. */
+  entityIdOf(mdp: Mdp): string {
+    return mdp.entityId ?? this.entities.requireForJurisdiction(NETWORK_JURISDICTION).entityId;
+  }
 
   // --- cargo helpers (S31): the tote path's view of what its parcels are + need ---
 
@@ -84,6 +91,7 @@ export class MdpService {
       mdpId: `mdp_${randomBytes(5).toString('hex')}`,
       did,
       name: input.name,
+      entityId: this.entities.requireForJurisdiction(NETWORK_JURISDICTION).entityId, // the sister that contracts this hub
       zones: input.zones,
       location: input.location,
       contactPhone: input.contactPhone,

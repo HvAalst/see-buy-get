@@ -66,6 +66,10 @@ export const DEFAULT_VENDOR_COUNTRY = 'KE'; // which country daughter company se
 // number. When the per-jurisdiction sister companies become real entities, this constant is what they
 // replace: the currency will come from the entity that owns the account, not from a deployment default.
 export const NETWORK_CURRENCY = currencyForJurisdiction(DEFAULT_VENDOR_COUNTRY);
+// The jurisdiction this deployment operates in — which sister company contracts its shops and hubs.
+// Named separately from DEFAULT_VENDOR_COUNTRY because they answer different questions and will stop
+// agreeing the moment a second country opens: a Kenyan shop can serve a Dutch vendor's parcel.
+export const NETWORK_JURISDICTION = DEFAULT_VENDOR_COUNTRY;
 export const round2cfg = round2;
 
 /** Apply the platform margin to a base provider cost. */

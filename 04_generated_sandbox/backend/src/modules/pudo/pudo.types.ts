@@ -74,6 +74,10 @@ export class Agent {
   vaultRef: string; // Golden Record PII (name, national ID, mobile) in the IdentityVault
   shopName: string;
   zone: string;
+  /** The sister company this shop is contracted to — it buys the shop's handling and owes it the fee.
+   *  A shop sits in exactly one country, so this is unambiguous. Absent on pre-entity records; read it
+   *  through AgentService.entityIdOf(). */
+  entityId?: string;
   location: GeoPoint; // map pin (provided, or geocoded from the address)
   physicalAddress?: string; // typed physical address (optional if a pin is given)
   landmark: string; // no street addresses — landmark + GPS
@@ -108,6 +112,9 @@ export class Mdp {
   /** Real GLOS DID (S2). The mdpId stays the domain key; the DID is what an actor token binds to. */
   did: string;
   name: string;
+  /** The sister company this hub is contracted to — same reasoning as a shop's: a fixed site sits in
+   *  one country. Absent on pre-entity records; read it through MdpService.entityIdOf(). */
+  entityId?: string;
   zones: string[]; // the delivery zones this hub serves (last-mile reach)
   location: GeoPoint;
   contactPhone?: string; // operator contact (control-tower escalation + GPS anchor)
@@ -220,6 +227,9 @@ export class Vendor {
   location?: GeoPoint; // store map pin — origin-PUDO suggestions are ranked from here
   address?: string;
   country: string; // which per-country daughter company settles this vendor
+  /** That daughter company, by id. Absent on records written before entities existed — resolve it
+   *  through VendorService.entityIdOf(), which derives it from the country the record already has. */
+  entityId?: string;
   balance: number; // prepaid balance held with the daughter company ('no prepay, no label' gate)
   shippingPolicy: ShippingPolicy;
   createdAt: string;
@@ -313,6 +323,13 @@ export class Parcel {
   originZone: string;
   destZone: string;
   destAgentDid?: string;
+  /**
+   * R1 — the sister company that collects for this shipment: the one in the PAYER's jurisdiction. A
+   * vendor order is paid by the store, so it is the store's sister; a walk-up is paid at the counter,
+   * so it is the origin shop's. Never the group, which is not a party to customer transactions.
+   * Internal: it is an accounting fact, and appears on no consumer or public surface.
+   */
+  collectingEntityId?: string;
   senderMobile: string;
   receiverMobile: string;
   // S21: pseudonymous join keys to the person identity (peppered sha256 of the mobile, never the number).

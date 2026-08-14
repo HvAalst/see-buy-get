@@ -544,6 +544,8 @@ export class ParcelService implements OnApplicationBootstrap {
       originZone: agent.zone,
       destZone: input.destZone,
       destAgentDid: input.destPudoDid, // optional nominated destination PUDO (else set at arrive)
+      // R1 — a walk-up is paid at this counter, so the shop's own sister collects.
+      collectingEntityId: this.agents.entityIdOf(agent),
       senderMobile: input.senderMobile,
       receiverMobile: input.receiverMobile,
       senderPhoneHash: hashPhone(input.senderMobile) || undefined,
@@ -874,6 +876,8 @@ export class ParcelService implements OnApplicationBootstrap {
       originZone: origin.zone,
       destZone: dest.zone,
       destAgentDid: input.destAgentDid,
+      // R1 — a vendor order is paid by the store, so the store's sister collects (and bills its float).
+      collectingEntityId: this.vendors.entityIdOf(this.vendors.get(input.vendorId)),
       senderMobile: 'vendor',
       receiverMobile: input.buyerMobile,
       // Vendor is not a person → no sender hash; the buyer (receiver) is, so they see this in their app.
@@ -962,6 +966,8 @@ export class ParcelService implements OnApplicationBootstrap {
       originZone: origin.zone,
       destZone: dest.zone,
       destAgentDid: input.destAgentDid,
+      // R1 — a peer send is paid in cash at the drop-off counter, so the origin shop's sister collects.
+      collectingEntityId: this.agents.entityIdOf(origin),
       // The sender is an authenticated PERSON: the join key is their verified-phone HASH (S32d — never the
       // number). 'app' marks an in-app mint the way 'vendor' marks a store mint.
       senderMobile: 'app',
