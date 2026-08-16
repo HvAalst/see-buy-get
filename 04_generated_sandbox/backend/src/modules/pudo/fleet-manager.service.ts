@@ -9,9 +9,13 @@ import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { Geocoder, GEOCODER } from './geocoder';
 import { FleetManager, FleetManagerKyc, FleetManagerRequirements, FleetManagerStatus } from './fleet.types';
+import { EntityService } from '../../foundation/entity/entity.service';
+import { NETWORK_JURISDICTION } from './pudo.config';
 
 interface RegisterManagerInput {
   companyName: string;
+  /** ISO-3166-alpha-2 country of incorporation; defaults to the network's own jurisdiction. */
+  jurisdiction?: string;
   tradingName?: string;
   contactPhone: string;
   contactEmail?: string;
@@ -43,8 +47,14 @@ export class FleetManagerService {
     private readonly vault: IdentityVault,
     private readonly core: OperationalStore,
     private readonly events: EventBus,
+    private readonly entities: EntityService,
     @Inject(GEOCODER) private readonly geocoder: Geocoder,
   ) {}
+
+  /** The sister that contracts and pays this fleet; pre-entity records resolve from the jurisdiction. */
+  entityIdOf(manager: FleetManager): string {
+    return manager.entityId ?? this.entities.requireForJurisdiction(manager.jurisdiction ?? NETWORK_JURISDICTION).entityId;
+  }
 
   /** The fleet-manager eligibility filter. Returns the list of unmet hard requirements. */
   unmetRequirements(input: { requirements: FleetManagerRequirements; location?: { lat: number; lng: number }; depotAddress?: string }): string[] {
@@ -60,6 +70,10 @@ export class FleetManagerService {
   register(input: RegisterManagerInput): FleetManager {
     const unmet = this.unmetRequirements(input);
     if (unmet.length) throw new GlosError('REQUIREMENTS_NOT_MET', `Does not meet fleet-manager requirements: ${unmet.join('; ')}`);
+    // Where this company is incorporated decides which sister contracts it — and a country with no
+    // sister cannot pay anyone, so onboarding a fleet we could never invoice is refused here.
+    const jurisdiction = (input.jurisdiction || NETWORK_JURISDICTION).toUpperCase();
+    const entity = this.entities.requireForJurisdiction(jurisdiction);
     const location = input.location ?? this.geocoder.geocode(input.depotAddress!).location;
 
     // Dedup — one business registration / tax ID / operator licence across the network.
@@ -78,6 +92,8 @@ export class FleetManagerService {
       did,
       vaultRef,
       companyName: input.companyName,
+      jurisdiction,
+      entityId: entity.entityId,
       tradingName: input.tradingName,
       contactPhone: input.contactPhone,
       contactEmail: input.contactEmail,

@@ -1022,6 +1022,49 @@ describe('PUDO Light', () => {
       expect(quote.entityIds).toEqual([ke.entityId]); // one company performs the whole domestic journey
     });
 
+    it('contracts a FLEET as a supplier, in its country of incorporation', () => {
+      const ke = entities.requireForJurisdiction('KE');
+      const fleet = managers.register({ companyName: 'Entity Haulage', contactPhone: '+254800900', ownerFullName: 'O O', ownerNationalId: 'MGR-ENT', location: { lat: -1.2, lng: 36.8 }, requirements: { businessRegistrationNo: 'BRN-ENT', transportOperatorLicence: 'TOL-ENT', taxId: 'TAX-ENT' } });
+      expect(fleet.jurisdiction).toBe('KE');
+      expect(fleet.entityId).toBe(ke.entityId);
+
+      // A fleet incorporated where no sister operates cannot be paid, so it cannot be onboarded.
+      expect(() =>
+        managers.register({ companyName: 'Rotterdam Haulage', jurisdiction: 'NL', contactPhone: '+3180090', ownerFullName: 'N N', ownerNationalId: 'MGR-NL', location: { lat: 51.9, lng: 4.5 }, requirements: { businessRegistrationNo: 'BRN-NL', transportOperatorLicence: 'TOL-NL', taxId: 'TAX-NL' } }),
+      ).toThrow(/No daughter company operates in NL/);
+    });
+
+    it('pays a fleet driver through their FLEET, and never asks where they live', () => {
+      const ke = entities.requireForJurisdiction('KE');
+      const fleet = managers.register({ companyName: 'Payroll Haulage', contactPhone: '+254800901', ownerFullName: 'P P', ownerNationalId: 'MGR-PAY', location: { lat: -1.2, lng: 36.8 }, requirements: { businessRegistrationNo: 'BRN-PAY', transportOperatorLicence: 'TOL-PAY', taxId: 'TAX-PAY' } });
+      managers.submitKyc(fleet.did, { businessRegCertRef: 'r.jpg', operatorLicenceRef: 'l.jpg', ownerIdRef: 'i.jpg', proofOfAddressRef: 'a.jpg' });
+      managers.decideKyc(fleet.did, true);
+      managers.recordBond(fleet.did);
+
+      const employed = drivers.register({ displayName: 'Employed', fullName: 'E E', nationalId: 'DRV-EMP', mobile: '+254900901', licenceClasses: ['bike'], managerDid: fleet.did });
+      // We move parcels; we do not do payroll. The network pays the fleet, so it never records where
+      // the fleet's driver lives — the field is absent, not merely unused.
+      expect(employed.jurisdiction).toBeUndefined();
+      expect(employed.entityId).toBeUndefined();
+      expect(drivers.isIndependent(employed)).toBe(false);
+      expect(drivers.settlingEntityIdOf(employed)).toBe(ke.entityId); // via the fleet, as its supplier
+    });
+
+    it('pays an INDEPENDENT courier directly, settled where they legally reside', () => {
+      const ke = entities.requireForJurisdiction('KE');
+      const courier = drivers.register({ displayName: 'Solo', fullName: 'S S', nationalId: 'DRV-SOLO', mobile: '+254900902', licenceClasses: ['bike'] });
+      expect(courier.jurisdiction).toBe('KE');
+      expect(courier.entityId).toBe(ke.entityId);
+      expect(drivers.isIndependent(courier)).toBe(true);
+      expect(drivers.settlingEntityIdOf(courier)).toBe(ke.entityId);
+
+      // A courier resident where no sister operates cannot be settled, so they cannot be onboarded —
+      // which is also what makes the nomad currency rule structural rather than a policy to police.
+      expect(() =>
+        drivers.register({ displayName: 'Nomad', fullName: 'N N', nationalId: 'DRV-NOMAD', mobile: '+3190001', licenceClasses: ['bike'], jurisdiction: 'NL' }),
+      ).toThrow(/No daughter company operates in NL/);
+    });
+
     it('never names the mother as a collector — she is not a party to customer transactions', () => {
       const group = entities.group();
       const origin = onboardAgent('Mother Origin', 'NorthTown', 50);

@@ -30,6 +30,15 @@ export class FleetManager {
   did: string;
   vaultRef: string; // Golden Record PII (owner name, national ID, contact) in the vault
   companyName: string;
+  /**
+   * Country of incorporation — which sister company contracts and pays this fleet, and in what
+   * currency. A fleet is paid as a SUPPLIER, one invoice in one currency; how it then pays its own
+   * drivers, in which countries, under whose employment law, is entirely the fleet's business.
+   */
+  jurisdiction?: string;
+  /** That sister, by id. Absent on records written before entities existed — read it through
+   *  FleetManagerService.entityIdOf(), which resolves from the jurisdiction. */
+  entityId?: string;
   tradingName?: string;
   contactPhone: string;
   contactEmail?: string;
@@ -112,7 +121,17 @@ export class DriverKyc {
 export class FleetDriver {
   driverId: string;
   did: string;
-  managerDid?: string; // the fleet manager that employs this driver (undefined = unmanaged/legacy)
+  managerDid?: string; // the fleet manager that employs this driver (undefined = independent courier)
+  /**
+   * Legal residence — and ONLY for an independent courier, who the network contracts with directly.
+   * A fleet-attached driver has none, deliberately: the network pays their fleet, not them, so asking
+   * where they live would be collecting data for a payment we never make. We move parcels; we do not
+   * do payroll or employment. Read through DriverService.settlingEntityIdOf(), which sends a fleet
+   * driver's answer to their fleet.
+   */
+  jurisdiction?: string;
+  /** The sister that contracts this courier directly. Absent for a fleet-attached driver. */
+  entityId?: string;
   vaultRef: string; // Golden Record PII (name, national ID, mobile) in the vault — never in the core
   displayName: string; // non-PII shop-floor label (e.g. "Driver J.")
   badgeId?: string; // scannable handover badge — issued on activation

@@ -456,6 +456,8 @@ class FleetManagerRequirementsDto {
 
 export class RegisterFleetManagerDto {
   @IsString() companyName!: string;
+  /** Country of incorporation (ISO-3166-alpha-2) — the sister that contracts and pays this fleet. */
+  @IsOptional() @IsString() jurisdiction?: string;
   @IsOptional() @IsString() tradingName?: string;
   @IsString() contactPhone!: string;
   @IsOptional() @IsString() contactEmail?: string;
@@ -617,6 +619,9 @@ export class RegisterDriverDto {
   @IsOptional() @IsBoolean() criminalRecordClear?: boolean;
   @IsOptional() @IsString() homeZone?: string;
   @IsOptional() @IsString() managerDid?: string;
+  /** Legal residence (ISO-3166-alpha-2) — for an INDEPENDENT courier, who the network pays directly.
+   *  Ignored when managerDid is set: the fleet is paid, and its drivers are the fleet's business. */
+  @IsOptional() @IsString() jurisdiction?: string;
 }
 
 export class DriverKycDto {

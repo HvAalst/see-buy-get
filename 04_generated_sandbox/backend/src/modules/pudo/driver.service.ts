@@ -10,6 +10,8 @@ import { GlosEvent } from '../../foundation/events/glos-events';
 import { VEHICLE_SPEC, VehicleClass } from './fleet.config';
 import { DriverKyc, DriverRegistry, FleetDriver } from './fleet.types';
 import { FleetManagerService } from './fleet-manager.service';
+import { EntityService } from '../../foundation/entity/entity.service';
+import { NETWORK_JURISDICTION } from './pudo.config';
 
 interface RegisterDriverInput {
   displayName: string; // shop-floor label (non-PII)
@@ -22,6 +24,9 @@ interface RegisterDriverInput {
   criminalRecordClear?: boolean;
   homeZone?: string;
   managerDid?: string; // the fleet manager that employs this driver (must be ACTIVE)
+  /** ISO-3166-alpha-2 legal residence — for an INDEPENDENT courier only; ignored when a fleet employs
+   *  them, because the network pays the fleet. Defaults to the network's own jurisdiction. */
+  jurisdiction?: string;
 }
 
 const fp = (value: string): string => createHash('sha256').update(value.trim().toLowerCase()).digest('hex');
@@ -48,7 +53,26 @@ export class DriverService {
     private readonly core: OperationalStore,
     private readonly events: EventBus,
     private readonly managers: FleetManagerService,
+    private readonly entities: EntityService,
   ) {}
+
+  /**
+   * Who the network actually pays for this driver's work, and therefore which sister owes it.
+   *
+   * A fleet-attached driver resolves to their FLEET: the sister contracts the fleet as a supplier, pays
+   * it one invoice in one currency, and what the fleet then pays its own drivers — in which countries,
+   * under whose employment law, with what withholding — is the fleet's business and never ours. An
+   * independent courier resolves to themselves, settled by the sister where they legally reside.
+   */
+  settlingEntityIdOf(driver: FleetDriver): string {
+    if (driver.managerDid) return this.managers.entityIdOf(this.managers.get(driver.managerDid));
+    return driver.entityId ?? this.entities.requireForJurisdiction(driver.jurisdiction ?? NETWORK_JURISDICTION).entityId;
+  }
+
+  /** Whether the network contracts this driver directly (an independent courier) or through a fleet. */
+  isIndependent(driver: FleetDriver): boolean {
+    return !driver.managerDid;
+  }
 
   /** The highest registry tier across the driver's cleared classes decides the onboarding path. */
   registryFor(licenceClasses: VehicleClass[]): DriverRegistry {
@@ -79,11 +103,20 @@ export class DriverService {
     this.core.upsert({ did, vaultRef, tier: 2, status: 'pending', capabilities: ['pudo-driver'], metadata: { registry, homeZone: input.homeZone } });
     for (const p of Object.values(prints)) this.fingerprints.add(p);
 
+    // An INDEPENDENT courier is contracted by the sister where they legally reside — bicycle or truck,
+    // it makes no difference. A fleet-attached driver gets neither field: their fleet is the supplier,
+    // and the network has no business knowing where its suppliers' staff live.
+    const independent = !input.managerDid;
+    const jurisdiction = independent ? (input.jurisdiction || NETWORK_JURISDICTION).toUpperCase() : undefined;
+    const entity = jurisdiction ? this.entities.requireForJurisdiction(jurisdiction) : undefined;
+
     const now = new Date().toISOString();
     const driver: FleetDriver = {
       driverId: `drv_${randomBytes(8).toString('hex')}`,
       did,
       managerDid: input.managerDid,
+      jurisdiction,
+      entityId: entity?.entityId,
       vaultRef,
       displayName: input.displayName,
       registry,
