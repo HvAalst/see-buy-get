@@ -10,6 +10,12 @@ export const LABOUR_FEE = 0.4; // paid to the agent for handling a pre-paid drop
 export const HANDOVER_FEE = 0.5; // paid to the agent for handing a batch to the bus
 export const PICKUP_FEE = 0.3; // paid to the destination agent for releasing a parcel to the customer
 export const LOCK_THRESHOLD = 1.6; // wallet below this → 'no money, no scan' lockout
+// Trade credit for an APPROVED shop. A customer standing at the counter with cash in their hand must not
+// be turned away because the shop's float ran dry — so the shop may keep scanning on credit, bounded to
+// twenty parcels' worth, and the debt is settled out of its next top-up before anything else. Expressed
+// in PARCELS because that is the unit a shopkeeper thinks in; the money follows from the wholesale rate.
+export const TRADE_CREDIT_PARCELS = 20;
+export const TRADE_CREDIT_LIMIT = Math.round(TRADE_CREDIT_PARCELS * WHOLESALE * 100) / 100;
 export const VOID_WINDOW_MS = 5 * 60 * 1000; // 5-minute reverse-logistics window
 // A parcel's RELEASE SECRET — the peer-send OTP read aloud by the destination agent, or the inbound
 // buyer's collection code held in their app — is the only check between a stranger and someone else's

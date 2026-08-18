@@ -6,7 +6,7 @@ import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { WalletService } from '../m1/wallet/wallet.service';
 import { AgentService } from './agent.service';
-import { LOCK_THRESHOLD, NETWORK_CURRENCY } from './pudo.config';
+import { LOCK_THRESHOLD, NETWORK_CURRENCY, TRADE_CREDIT_LIMIT, TRADE_CREDIT_PARCELS } from './pudo.config';
 import { BooksService } from '../../foundation/books/books.service';
 import { ACCOUNT_CODES, type AccountCode } from '../../foundation/books/books.types';
 import { LedgerType, PudoLedgerEntry } from './pudo.types';
@@ -161,13 +161,26 @@ export class WalletGateService {
    * new field; `ok` is kept as an alias so the shipped agent app keeps working. `code` lets a
    * low-literacy UI pick the right icon (top-up vs unlock) and `shortfall` names the exact gap.
    */
-  canTransact(did: string): { ok: boolean; canTransact: boolean; code: string | null; balance: number; threshold: number; shortfall: number } {
+  canTransact(did: string): { ok: boolean; canTransact: boolean; code: string | null; balance: number; threshold: number; shortfall: number; credit: { limit: number; used: number; available: number } } {
     const balance = this.agents.balance(did);
-    const funded = balance >= LOCK_THRESHOLD;
+    // What the shop can actually spend: its own float PLUS the trade-credit line. A customer paying cash
+    // at the counter is not turned away for an empty float — the shop keeps scanning, on credit, up to a
+    // bounded number of parcels. With the limit at zero this is exactly the old 'no money, no scan' rule.
+    const spendable = Math.round((balance + TRADE_CREDIT_LIMIT) * 100) / 100;
+    const funded = spendable >= LOCK_THRESHOLD;
     const ok = this.agents.canScan(did) && funded;
     const code = ok ? null : !funded ? 'WALLET_INSUFFICIENT' : 'AGENT_LOCKED';
-    const shortfall = funded ? 0 : Math.round((LOCK_THRESHOLD - balance) * 100) / 100;
-    return { ok, canTransact: ok, code, balance, threshold: LOCK_THRESHOLD, shortfall };
+    const shortfall = funded ? 0 : Math.round((LOCK_THRESHOLD - spendable) * 100) / 100;
+    const used = this.agents.creditOwed(did);
+    return {
+      ok,
+      canTransact: ok,
+      code,
+      balance,
+      threshold: LOCK_THRESHOLD,
+      shortfall,
+      credit: { limit: TRADE_CREDIT_LIMIT, used, available: Math.round((TRADE_CREDIT_LIMIT - used) * 100) / 100 },
+    };
   }
 
   /** Real money in → the shop's DEPOSIT grows and the sister holds the cash. Nothing is earned here:
@@ -180,9 +193,14 @@ export class WalletGateService {
     if (status === 'DRAFT' || status === 'KYC_PENDING') {
       throw new GlosError('KYC_INCOMPLETE', 'This shop is not approved yet — it cannot hold a balance');
     }
+    // Trade credit is settled FIRST, out of the money coming in — a shop that scanned on credit clears
+    // its debt before it builds a float again. Only what is left over becomes spendable balance.
+    const repay = Math.min(amount, this.agents.creditOwed(did));
+    const toDeposit = Math.round((amount - repay) * 100) / 100;
     const entryId = this.postAgent(did, 'top-up', bankRef, [
       { code: ACCOUNT_CODES.CASH_CUSTODY, amount },
-      { code: ACCOUNT_CODES.DEPOSIT_AGENT, counterparty: did, amount: -amount },
+      ...(repay > 0 ? [{ code: ACCOUNT_CODES.RECEIVABLE_AGENT, counterparty: did, amount: -repay }] : []),
+      ...(toDeposit > 0 ? [{ code: ACCOUNT_CODES.DEPOSIT_AGENT, counterparty: did, amount: -toDeposit }] : []),
     ]);
     const entry = this.record('TOP_UP', '+', amount, did, bankRef, 'bank', entryId);
     this.agents.refreshLock(did);
@@ -193,9 +211,17 @@ export class WalletGateService {
   /** A parcel moves: the shop's deposit is drawn down and the sister finally EARNS it. On a cash walk-up
    *  the shop keeps the retail spread off-platform — we never see that money and never should. */
   chargeShipping(did: string, amount: number, parcelId: string): PudoLedgerEntry {
-    if (this.agents.balance(did) + 1e-9 < amount) throw new GlosError('WALLET_INSUFFICIENT', 'Insufficient balance');
+    const balance = this.agents.balance(did);
+    if (balance - amount < -TRADE_CREDIT_LIMIT - 1e-9) {
+      throw new GlosError('WALLET_INSUFFICIENT', `Trade credit is used up (${TRADE_CREDIT_PARCELS} parcels) — top up to keep scanning`);
+    }
+    // Draw the shop's own float first; whatever it cannot cover is drawn on the credit line, which is a
+    // RECEIVABLE, not a mysteriously negative deposit. The operator can see exactly what is lent out.
+    const fromDeposit = Math.min(Math.max(balance, 0), amount);
+    const onCredit = Math.round((amount - fromDeposit) * 100) / 100;
     const entryId = this.postAgent(did, 'shipping', parcelId, [
-      { code: ACCOUNT_CODES.DEPOSIT_AGENT, counterparty: did, amount },
+      ...(fromDeposit > 0 ? [{ code: ACCOUNT_CODES.DEPOSIT_AGENT, counterparty: did, amount: fromDeposit }] : []),
+      ...(onCredit > 0 ? [{ code: ACCOUNT_CODES.RECEIVABLE_AGENT, counterparty: did, amount: onCredit }] : []),
       { code: ACCOUNT_CODES.REVENUE, amount: -amount },
     ]);
     const entry = this.record('FEE', '-', amount, did, parcelId, 'parcel', entryId);

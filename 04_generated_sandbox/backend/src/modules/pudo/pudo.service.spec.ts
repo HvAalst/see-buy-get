@@ -5,7 +5,7 @@ import { HeuristicRouter, ROUTER } from './router';
 import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
 import { ParcelService, labelDate } from './parcel.service';
-import { OTP_MAX_ATTEMPTS, WHOLESALE } from './pudo.config';
+import { OTP_MAX_ATTEMPTS, TRADE_CREDIT_LIMIT, TRADE_CREDIT_PARCELS, WHOLESALE } from './pudo.config';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
 import { CargoService } from './cargo.service';
 import { SbgController } from './pudo.controller';
@@ -395,18 +395,35 @@ describe('PUDO Light', () => {
     expect(parcels.get('QR-LOCK').status).toBe('Ready_For_Pickup');
   });
 
-  it("enforces 'no money, no scan': draining the wallet locks the agent (lite NFR-SSE-01)", () => {
-    const a = onboardAgent('Broke Shop', 'NorthTown', 3.2); // exactly two cash parcels
-    parcels.accept({ agentDid: a.did, parcelId: 'QR-A', size: 'S', destZone: 'Z', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'a.jpg' });
-    expect(agents.get(a.did).status).toBe('ACTIVE'); // balance 1.60 → still scannable
-    parcels.accept({ agentDid: a.did, parcelId: 'QR-B', size: 'S', destZone: 'Z', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'b.jpg' });
-    expect(agents.get(a.did).status).toBe('LOCKED'); // balance 0 → locked
+  it("enforces 'no money, no scan' at the END of the credit line, not at an empty float (lite NFR-SSE-01)", () => {
+    const a = onboardAgent('Broke Shop', 'NorthTown', 3.2); // exactly two cash parcels of its own money
+    const scan = (id: string) => parcels.accept({ agentDid: a.did, parcelId: id, size: 'S', destZone: 'Z', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'a.jpg' });
+
+    scan('QR-A');
+    scan('QR-B');
+    // Float is empty — but a customer standing at the counter with cash is not turned away. The shop
+    // keeps scanning on trade credit, and its balance goes honestly negative.
+    expect(agents.balance(a.did)).toBe(0);
+    expect(agents.get(a.did).status).toBe('ACTIVE');
+    scan('QR-C');
+    expect(agents.balance(a.did)).toBeCloseTo(-WHOLESALE, 2);
+    expect(agents.creditOwed(a.did)).toBeCloseTo(WHOLESALE, 2);
+
+    // Spend the rest of the line — twenty parcels' worth in total — and the shutter comes down.
+    for (let i = 1; i < TRADE_CREDIT_PARCELS; i++) scan(`QR-C${i}`);
     const gateState = gate.canTransact(a.did);
+    expect(gateState.credit.available).toBe(0);
     expect(gateState.ok).toBe(false); // legacy alias
     expect(gateState.canTransact).toBe(false);
     expect(gateState.code).toBe('WALLET_INSUFFICIENT'); // a low-literacy UI maps this to the top-up icon
     expect(gateState.shortfall).toBeGreaterThan(0);
-    expect(() => parcels.accept({ agentDid: a.did, parcelId: 'QR-C', size: 'S', destZone: 'Z', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'c.jpg' })).toThrow();
+    expect(() => scan('QR-D')).toThrow();
+
+    // A top-up clears the debt FIRST, before it rebuilds any spendable float.
+    gate.topUp(a.did, TRADE_CREDIT_LIMIT + 10);
+    expect(agents.creditOwed(a.did)).toBe(0);
+    expect(agents.balance(a.did)).toBeCloseTo(10, 2);
+    expect(books.balances(entities.requireForJurisdiction('KE').entityId)).toEqual({ balanced: true, drift: 0 });
   });
 
   it('voids a parcel within the window and refunds the agent', () => {
@@ -1023,13 +1040,17 @@ describe('PUDO Light', () => {
       expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
     });
 
-    it('extends an overdraft as a receivable — credit given is not cash received', () => {
+    it('records an admin overdraft as a loan — spendable money against a matching debt', () => {
       const shop = onboardAgent('OD Shop', 'NorthTown', 0);
       gate.overdraft(shop.did, 20, 'admin-1');
 
-      expect(agents.balance(shop.did)).toBe(20);
-      expect(bal(ACCOUNT_CODES.RECEIVABLE_AGENT, shop.did)).toBe(20); // they owe it back
+      expect(bal(ACCOUNT_CODES.DEPOSIT_AGENT, shop.did)).toBe(-20); // 20 to spend
+      expect(bal(ACCOUNT_CODES.RECEIVABLE_AGENT, shop.did)).toBe(20); // and 20 owed back
       expect(bal(ACCOUNT_CODES.CASH_CUSTODY)).toBe(0); // no money came in, and the books say so
+      // Net position unchanged, which is the truth about being lent money: you hold it AND owe it.
+      // Note this makes the endpoint largely redundant now that every approved shop has a standing
+      // credit line — a per-agent limit override is the honest successor.
+      expect(agents.balance(shop.did)).toBe(0);
       expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
     });
 

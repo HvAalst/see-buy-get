@@ -8,7 +8,7 @@ import { OperationalStore } from '../../foundation/data-firewall/operational-sto
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { WalletService } from '../m1/wallet/wallet.service';
-import { DEFAULT_PUDO_PRICE_PER_PARCEL, LOCK_THRESHOLD, MIN_ANDROID_VERSION, MIN_OPEN_HOURS, MIN_SLOTS, NETWORK_JURISDICTION } from './pudo.config';
+import { DEFAULT_PUDO_PRICE_PER_PARCEL, LOCK_THRESHOLD, MIN_ANDROID_VERSION, MIN_OPEN_HOURS, MIN_SLOTS, NETWORK_JURISDICTION, TRADE_CREDIT_LIMIT } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { BooksService } from '../../foundation/books/books.service';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
@@ -174,7 +174,10 @@ export class AgentService {
   /** Recompute the lock state from the wallet balance (called after every wallet movement). */
   refreshLock(did: string): Agent {
     const agent = this.require(did);
-    const balance = this.balance(did);
+    // Lock on what the shop can actually SPEND — its float plus the trade-credit line — not on the float
+    // alone. An empty till with credit left is a shop that can still serve the customer in front of it;
+    // the shutter comes down at the end of the line, which is where 'no money, no scan' now bites.
+    const balance = this.balance(did) + TRADE_CREDIT_LIMIT;
     if ((agent.status === 'APPROVED_UNFUNDED' || agent.status === 'LOCKED') && balance >= LOCK_THRESHOLD) {
       this.transition(agent, 'ACTIVE');
       void this.events.publish(GlosEvent.Pudo.AgentActivated, { did, agentId: agent.agentId }, { source: 'pudo' }).catch(() => undefined);
@@ -247,13 +250,25 @@ export class AgentService {
     return agent;
   }
 
+  /** Trade credit outstanding — what the shop owes the sister for parcels scanned on an empty float. */
+  creditOwed(did: string): number {
+    const agent = this.agents.get(did);
+    if (!agent) return 0;
+    return this.books.balance(this.entityIdOf(agent), ACCOUNT_CODES.RECEIVABLE_AGENT, undefined, did) || 0;
+  }
+
   balance(did: string): number {
     // Derived from the books, not stored: the shop's balance IS its deposit account, and a deposit is a
     // liability of the sister (held negative), so it is flipped here at the presentation edge. One source
     // of truth — a cached figure that could disagree with the postings is the bug this whole slice removes.
     const agent = this.agents.get(did);
     if (!agent) return 0;
-    return -this.books.balance(this.entityIdOf(agent), ACCOUNT_CODES.DEPOSIT_AGENT, undefined, did) || 0;
+    // Deposit less any trade credit drawn: a shop that scanned on an empty float reads NEGATIVE, which is
+    // the truth — they are in debt to the sister, and their next top-up clears it before anything else.
+    const entityId = this.entityIdOf(agent);
+    const deposit = -this.books.balance(entityId, ACCOUNT_CODES.DEPOSIT_AGENT, undefined, did);
+    const credit = this.books.balance(entityId, ACCOUNT_CODES.RECEIVABLE_AGENT, undefined, did);
+    return Math.round((deposit - credit) * 100) / 100 || 0;
   }
 
   get(did: string): Agent {
