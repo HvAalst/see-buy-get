@@ -6,6 +6,7 @@ import { CredentialModule } from './foundation/credentials/credential.module';
 import { LedgerModule } from './foundation/ledger/ledger.module';
 import { DidModule } from './foundation/did/did.module';
 import { EntityModule } from './foundation/entity/entity.module';
+import { BooksModule } from './foundation/books/books.module';
 import { AuthModule } from './foundation/auth/auth.module';
 import { HealthModule } from './health/health.module';
 import { M1Module } from './modules/m1/m1.module';
@@ -35,6 +36,7 @@ import { SseModule } from './modules/sse/sse.module';
     LedgerModule,
     DidModule,
     EntityModule,
+    BooksModule,
     AuthModule,
     HealthModule,
     M1Module,

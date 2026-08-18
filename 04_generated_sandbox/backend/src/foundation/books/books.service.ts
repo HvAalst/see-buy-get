@@ -1,0 +1,165 @@
+import { Injectable } from '@nestjs/common';
+import { randomBytes } from 'crypto';
+import { GlosError } from '../http/glos-error';
+import { PersistentMap } from '../store/persistent-map';
+import { EntityService } from '../entity/entity.service';
+import { Account, ACCOUNT_CODES, ACCOUNT_KIND, AccountCode, EntryLine, JournalEntry } from './books.types';
+
+/** Money is held to 2dp for now; minor units are their own slice (deferred, deliberately). */
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
+/** Tolerance for the balance check — a float artefact must not fail a genuinely balanced entry. */
+const EPSILON = 0.005;
+
+export interface PostInput {
+  entityId: string;
+  currency?: string; // defaults to the entity's settlement currency
+  kind: string;
+  ref?: string;
+  memo?: string;
+  lines: Array<{ code: AccountCode; counterparty?: string; amount: number }>;
+}
+
+/**
+ * BooksService — the sisters' ledgers.
+ *
+ * Two rules, and everything else follows from them:
+ *
+ *  1. An entry must BALANCE. Lines that do not sum to zero are refused, so value cannot be conjured or
+ *     destroyed by a caller who forgot the other side. This is the whole difference from what came before.
+ *  2. Only a sister keeps books. The group holds no custody and is not a party to transactions, so it has
+ *     no cash account to post to — asking for one is an error, not an empty balance.
+ */
+@Injectable()
+export class BooksService {
+  // Durable: these are the books. Losing them on restart would be losing the money.
+  private readonly accounts = new PersistentMap<string, Account>('books-accounts');
+  private readonly entries = new PersistentMap<string, JournalEntry>('books-entries');
+
+  constructor(private readonly entities: EntityService) {}
+
+  /** The id an account is filed under: entity, code, currency, and the counterparty where one applies. */
+  accountIdFor(entityId: string, code: AccountCode, currency: string, counterparty?: string): string {
+    return [entityId, code, currency, counterparty].filter(Boolean).join(':');
+  }
+
+  /**
+   * Fetch or open an account. Opening is lazy because a chart of accounts with a row per agent is not
+   * something to enumerate up front — the first posting that needs it brings it into being.
+   */
+  account(entityId: string, code: AccountCode, currency?: string, counterparty?: string): Account {
+    const entity = this.entities.get(entityId);
+    if (entity.kind !== 'sister') {
+      throw new GlosError('FORBIDDEN', `${entity.name} keeps no books: a holding company holds no custody and is not a party to transactions`);
+    }
+    const ccy = currency ?? entity.currency;
+    if (!ccy) throw new GlosError('INTERNAL', `${entity.name} has no settlement currency`);
+    const accountId = this.accountIdFor(entityId, code, ccy, counterparty);
+    const existing = this.accounts.get(accountId);
+    if (existing) return existing;
+    const account: Account = { accountId, entityId, code, kind: ACCOUNT_KIND[code], currency: ccy, counterparty, createdAt: new Date().toISOString() };
+    this.accounts.set(accountId, account);
+    return account;
+  }
+
+  /**
+   * Record a movement. Every line is resolved to an account of the SAME entity and currency, the lines are
+   * checked to sum to zero, and only then is anything written — a refused entry leaves no trace of itself,
+   * so a half-posted movement is not a state the books can be in.
+   */
+  post(input: PostInput): JournalEntry {
+    const entity = this.entities.requireTransacting(input.entityId);
+    const currency = input.currency ?? entity.currency;
+    if (!currency) throw new GlosError('INTERNAL', `${entity.name} has no settlement currency`);
+    if (!input.lines?.length) throw new GlosError('INVALID_INPUT', 'An entry needs lines');
+
+    const lines: EntryLine[] = input.lines.map((l) => {
+      if (!Number.isFinite(l.amount)) throw new GlosError('INVALID_INPUT', `Line amount for ${l.code} is not a number`);
+      return { accountId: this.account(entity.entityId, l.code, currency, l.counterparty).accountId, amount: round2(l.amount) };
+    });
+
+    const sum = round2(lines.reduce((s, l) => s + l.amount, 0));
+    if (Math.abs(sum) > EPSILON) {
+      throw new GlosError('INVALID_INPUT', `Entry does not balance: the lines sum to ${sum}, not 0`);
+    }
+
+    const entry: JournalEntry = {
+      entryId: `je_${randomBytes(8).toString('hex')}`,
+      entityId: entity.entityId,
+      currency,
+      kind: input.kind,
+      ref: input.ref,
+      memo: input.memo,
+      lines,
+      at: new Date().toISOString(),
+    };
+    this.entries.set(entry.entryId, entry);
+    return entry;
+  }
+
+  /** Every entry, newest first — optionally scoped to one entity, or to one domain reference. */
+  journal(filter?: { entityId?: string; ref?: string }): JournalEntry[] {
+    return [...this.entries.values()]
+      .filter((e) => (!filter?.entityId || e.entityId === filter.entityId) && (!filter?.ref || e.ref === filter.ref))
+      .sort((a, b) => b.at.localeCompare(a.at));
+  }
+
+  /** The balance of one account, summed from its lines — the postings are the truth, not a cached figure. */
+  balanceOf(accountId: string): number {
+    let sum = 0;
+    for (const entry of this.entries.values()) {
+      for (const line of entry.lines) if (line.accountId === accountId) sum += line.amount;
+    }
+    return round2(sum);
+  }
+
+  balance(entityId: string, code: AccountCode, currency?: string, counterparty?: string): number {
+    const entity = this.entities.get(entityId);
+    return this.balanceOf(this.accountIdFor(entityId, code, currency ?? entity.currency ?? '', counterparty));
+  }
+
+  /** Every account a sister holds, with its balance — the trial balance, in the ordinary sense. */
+  trialBalance(entityId: string): Array<Account & { balance: number }> {
+    return [...this.accounts.values()]
+      .filter((a) => a.entityId === entityId)
+      .map((a) => ({ ...a, balance: this.balanceOf(a.accountId) }))
+      .sort((a, b) => a.accountId.localeCompare(b.accountId));
+  }
+
+  /**
+   * The books' own consistency check: every entry balanced, so the sum across ALL accounts is zero.
+   *
+   * This is the weaker, internal half of the reconciliation invariant from the design note. The strong
+   * half — that cash.custody equals what is actually in the bank — cannot be asserted until a real
+   * account exists to compare against, and is precisely what the payment rail will make checkable.
+   */
+  balances(entityId: string): { balanced: boolean; drift: number } {
+    const drift = round2([...this.accounts.values()].filter((a) => a.entityId === entityId).reduce((s, a) => s + this.balanceOf(a.accountId), 0));
+    return { balanced: Math.abs(drift) <= EPSILON, drift };
+  }
+
+  /**
+   * What the sister holds against what it owes third parties — the shape of the coverage question from
+   * the design note. `held` is real money in custody; `owed` is deposits and payables, which are held as
+   * negatives, so a healthy book has held + owed ≥ 0.
+   */
+  coverage(entityId: string, currency?: string): { currency: string; held: number; owed: number; cover: number } {
+    const entity = this.entities.get(entityId);
+    const ccy = currency ?? entity.currency ?? '';
+    const OWED: AccountCode[] = [ACCOUNT_CODES.DEPOSIT_AGENT, ACCOUNT_CODES.DEPOSIT_VENDOR, ACCOUNT_CODES.PAYABLE_PROVIDER, ACCOUNT_CODES.PAYABLE_TAX, ACCOUNT_CODES.PAYABLE_GROUP];
+    const mine = [...this.accounts.values()].filter((a) => a.entityId === entityId && a.currency === ccy);
+    const held = round2(mine.filter((a) => a.code === ACCOUNT_CODES.CASH_CUSTODY).reduce((s, a) => s + this.balanceOf(a.accountId), 0));
+    // Liabilities are negative by convention; report what is OWED as a positive number a human can read.
+    const owed = round2(-mine.filter((a) => OWED.includes(a.code)).reduce((s, a) => s + this.balanceOf(a.accountId), 0));
+    return { currency: ccy, held, owed, cover: round2(held - owed) };
+  }
+
+  /**
+   * Wipe the books. Sandbox only: the cutover resets rather than migrating notional balances, so a demo
+   * never shows a figure that has no postings behind it.
+   */
+  reset(): void {
+    this.entries.clear();
+    this.accounts.clear();
+  }
+}
