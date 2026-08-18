@@ -7,6 +7,8 @@ import { GlosEvent } from '../../foundation/events/glos-events';
 import { WalletService } from '../m1/wallet/wallet.service';
 import { AgentService } from './agent.service';
 import { LOCK_THRESHOLD, NETWORK_CURRENCY } from './pudo.config';
+import { BooksService } from '../../foundation/books/books.service';
+import { ACCOUNT_CODES, type AccountCode } from '../../foundation/books/books.types';
 import { LedgerType, PudoLedgerEntry } from './pudo.types';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
 
@@ -137,7 +139,21 @@ export class WalletGateService {
     private readonly wallet: WalletService,
     private readonly agents: AgentService,
     private readonly events: EventBus,
+    private readonly books: BooksService,
   ) {}
+
+  /**
+   * Post a movement to the sister that contracts this shop, and keep the typed ledger row that the
+   * earnings register reads. The BOOKS are the money; the PudoLedgerEntry is a projection of it for a
+   * shopkeeper's screen — it carries the entry id so the two can never be told apart by an auditor.
+   *
+   * Every method below names BOTH sides. That is the whole point: before this, payLabour credited an
+   * agent out of nowhere and chargeShipping debited into nowhere.
+   */
+  private postAgent(did: string, kind: string, ref: string, lines: Array<{ code: AccountCode; counterparty?: string; amount: number }>): string {
+    const entityId = this.agents.entityIdOf(this.agents.get(did));
+    return this.books.post({ entityId, kind, ref, lines }).entryId;
+  }
 
   /**
    * 'No money, no scan' gate. Returns 200 with a domain payload — an error status must never carry
@@ -154,70 +170,120 @@ export class WalletGateService {
     return { ok, canTransact: ok, code, balance, threshold: LOCK_THRESHOLD, shortfall };
   }
 
-  /** Real money in → credits the wallet, may activate the agent. */
+  /** Real money in → the shop's DEPOSIT grows and the sister holds the cash. Nothing is earned here:
+   *  we charge for service, not for balance, so revenue waits until a parcel actually moves. */
   topUp(did: string, amount: number, bankRef = 'cash'): PudoLedgerEntry {
     if (amount <= 0) throw new GlosError('AMOUNT_INVALID', 'Top-up amount must be positive');
-    this.wallet.require(did); // wallet must exist (agent approved)
-    this.wallet.credit(did, amount);
-    const entry = this.record('TOP_UP', '+', amount, did, bankRef, 'bank');
+    // KYC gate. This used to ride on "the m1 wallet exists", which was provisioned at approval — an
+    // implicit coupling that stopped meaning anything once the balance moved into the books. Say it.
+    const status = this.agents.get(did).status;
+    if (status === 'DRAFT' || status === 'KYC_PENDING') {
+      throw new GlosError('KYC_INCOMPLETE', 'This shop is not approved yet — it cannot hold a balance');
+    }
+    const entryId = this.postAgent(did, 'top-up', bankRef, [
+      { code: ACCOUNT_CODES.CASH_CUSTODY, amount },
+      { code: ACCOUNT_CODES.DEPOSIT_AGENT, counterparty: did, amount: -amount },
+    ]);
+    const entry = this.record('TOP_UP', '+', amount, did, bankRef, 'bank', entryId);
     this.agents.refreshLock(did);
     void this.events.publish(GlosEvent.Pudo.WalletToppedUp, { did, amount, bankRef }, { source: 'pudo' }).catch(() => undefined);
     return entry;
   }
 
-  /** Cash-customer parcel: the platform credit is consumed; the agent keeps the retail spread off-platform. */
+  /** A parcel moves: the shop's deposit is drawn down and the sister finally EARNS it. On a cash walk-up
+   *  the shop keeps the retail spread off-platform — we never see that money and never should. */
   chargeShipping(did: string, amount: number, parcelId: string): PudoLedgerEntry {
-    this.wallet.debit(did, amount); // throws on insufficient — the gate should have caught it first
-    const entry = this.record('FEE', '-', amount, did, parcelId, 'parcel');
+    if (this.agents.balance(did) + 1e-9 < amount) throw new GlosError('WALLET_INSUFFICIENT', 'Insufficient balance');
+    const entryId = this.postAgent(did, 'shipping', parcelId, [
+      { code: ACCOUNT_CODES.DEPOSIT_AGENT, counterparty: did, amount },
+      { code: ACCOUNT_CODES.REVENUE, amount: -amount },
+    ]);
+    const entry = this.record('FEE', '-', amount, did, parcelId, 'parcel', entryId);
     this.agents.refreshLock(did);
     return entry;
   }
 
-  /** Pay the agent a labour/handover fee (pre-paid drop, or handover to bus). */
+  /** Pay the agent a labour/handover fee. It lands in their float (spendable credit, as it always has),
+   *  and the sister books the cost — a fee that increased a balance out of nowhere is what we just fixed. */
   payLabour(did: string, amount: number, reference: string, refType: PudoLedgerEntry['refType']): PudoLedgerEntry {
-    this.wallet.credit(did, amount);
-    const entry = this.record('LABOR_PAYOUT', '+', amount, did, reference, refType);
+    const entryId = this.postAgent(did, 'labour', reference, [
+      { code: ACCOUNT_CODES.EXPENSE_PROVIDER_FEES, amount },
+      { code: ACCOUNT_CODES.DEPOSIT_AGENT, counterparty: did, amount: -amount },
+    ]);
+    const entry = this.record('LABOR_PAYOUT', '+', amount, did, reference, refType, entryId);
     this.agents.refreshLock(did);
     return entry;
   }
 
   /** Reverse a shipping charge within the void window. A 0 refund is a no-op (a zero-priced parcel was
-   *  never charged) — never trip the wallet's positive-amount assertion on a reversal. */
+   *  never charged) — never trip the positive-amount assertion on a reversal. */
   refund(did: string, amount: number, parcelId: string): PudoLedgerEntry | null {
     if (amount <= 0) return null;
-    this.wallet.credit(did, amount);
-    const entry = this.record('REFUND', '+', amount, did, parcelId, 'parcel');
+    const entryId = this.postAgent(did, 'refund', parcelId, [
+      { code: ACCOUNT_CODES.REVENUE, amount },
+      { code: ACCOUNT_CODES.DEPOSIT_AGENT, counterparty: did, amount: -amount },
+    ]);
+    const entry = this.record('REFUND', '+', amount, did, parcelId, 'parcel', entryId);
     this.agents.refreshLock(did);
     return entry;
   }
 
-  /** Reverse a labour payout when a paid intake is undone (void / cancel of a peer-send). A negative
-   *  LABOR_PAYOUT — the same signed-labour convention sortLabour uses — so the reversal is a truthful
-   *  ledger row, not a mislabelled charge. Balances the +LABOUR_FEE credited at intake back to zero. */
+  /** Reverse a labour fee when a paid intake is undone (void / cancel of a peer-send) — the exact mirror
+   *  of payLabour, so the pair nets to zero in both the float and the cost. */
   clawbackLabour(did: string, amount: number, parcelId: string): PudoLedgerEntry | null {
     if (amount <= 0) return null;
-    this.wallet.debit(did, amount);
-    const entry = this.record('LABOR_PAYOUT', '-', amount, did, parcelId, 'parcel');
+    const entryId = this.postAgent(did, 'labour-clawback', parcelId, [
+      { code: ACCOUNT_CODES.DEPOSIT_AGENT, counterparty: did, amount },
+      { code: ACCOUNT_CODES.EXPENSE_PROVIDER_FEES, amount: -amount },
+    ]);
+    const entry = this.record('LABOR_PAYOUT', '-', amount, did, parcelId, 'parcel', entryId);
     this.agents.refreshLock(did);
     return entry;
   }
 
-  /** Admin emergency credit (does not require the wallet to be funded). */
+  /** Admin emergency credit: the sister EXTENDS credit rather than receiving money, so the shop's float
+   *  grows against a receivable. No cash came in, and the books say so instead of pretending otherwise. */
   overdraft(did: string, amount: number, adminId: string): PudoLedgerEntry {
-    this.wallet.credit(did, amount);
-    const entry = this.record('OVERDRAFT', '+', amount, did, adminId, 'admin');
+    const entryId = this.postAgent(did, 'overdraft', adminId, [
+      { code: ACCOUNT_CODES.RECEIVABLE_AGENT, counterparty: did, amount },
+      { code: ACCOUNT_CODES.DEPOSIT_AGENT, counterparty: did, amount: -amount },
+    ]);
+    const entry = this.record('OVERDRAFT', '+', amount, did, adminId, 'admin', entryId);
     this.agents.refreshLock(did);
     return entry;
   }
 
-  /** Weekly driver settlement — a system-level outflow (not an agent wallet entry). */
-  driverPayout(driverId: string, amount: number): PudoLedgerEntry {
-    return this.record('DRIVER_PAYOUT', '-', amount, undefined, driverId, 'driver');
+  /** Driver settlement — accrues what the sister owes the party it CONTRACTS with (a fleet, or an
+   *  independent courier). Never a payroll entry: see the settling-entity rule. */
+  driverPayout(driverId: string, amount: number, entityId?: string): PudoLedgerEntry {
+    const entryId = entityId
+      ? this.books.post({
+          entityId,
+          kind: 'driver-payout',
+          ref: driverId,
+          lines: [
+            { code: ACCOUNT_CODES.EXPENSE_PROVIDER_FEES, amount },
+            { code: ACCOUNT_CODES.PAYABLE_PROVIDER, counterparty: driverId, amount: -amount },
+          ],
+        }).entryId
+      : undefined;
+    return this.record('DRIVER_PAYOUT', '-', amount, undefined, driverId, 'driver', entryId);
   }
 
-  /** MDP sort labour — a system-level outflow keyed to the hub (no agent wallet). */
-  sortLabour(mdpId: string, amount: number, reference: string): PudoLedgerEntry {
-    return this.record('LABOR_PAYOUT', '-', amount, undefined, reference || mdpId, 'mdp');
+  /** MDP sort labour — the hub is a provider like any other, so the sister accrues what it owes. */
+  sortLabour(mdpId: string, amount: number, reference: string, entityId?: string): PudoLedgerEntry {
+    const entryId = entityId
+      ? this.books.post({
+          entityId,
+          kind: 'sort-labour',
+          ref: reference || mdpId,
+          lines: [
+            { code: ACCOUNT_CODES.EXPENSE_PROVIDER_FEES, amount },
+            { code: ACCOUNT_CODES.PAYABLE_PROVIDER, counterparty: mdpId, amount: -amount },
+          ],
+        }).entryId
+      : undefined;
+    return this.record('LABOR_PAYOUT', '-', amount, undefined, reference || mdpId, 'mdp', entryId);
   }
 
   /**
@@ -256,8 +322,8 @@ export class WalletGateService {
     return Math.round(this.agents.list().reduce((sum, a) => sum + this.agents.balance(a.did), 0) * 100) / 100;
   }
 
-  private record(type: LedgerType, sign: '+' | '-', amount: number, did: string | undefined, reference: string, refType: PudoLedgerEntry['refType']): PudoLedgerEntry {
-    const entry: PudoLedgerEntry = { id: `led_${randomBytes(8).toString('hex')}`, type, sign, amount: Math.round(amount * 100) / 100, currency: NETWORK_CURRENCY, did, reference, refType, at: new Date().toISOString() };
+  private record(type: LedgerType, sign: '+' | '-', amount: number, did: string | undefined, reference: string, refType: PudoLedgerEntry['refType'], entryId?: string): PudoLedgerEntry {
+    const entry: PudoLedgerEntry = { id: `led_${randomBytes(8).toString('hex')}`, type, sign, amount: Math.round(amount * 100) / 100, currency: NETWORK_CURRENCY, did, reference, refType, entryId, at: new Date().toISOString() };
     this.ledger.set(entry.id, entry);
     return entry;
   }

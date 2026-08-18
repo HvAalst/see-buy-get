@@ -35,8 +35,13 @@ export const ACCOUNT_CODES = {
   DEPOSIT_AGENT: 'deposit.agent',
   /** A store's prepaid balance. Same nature as an agent's deposit. Per vendor. */
   DEPOSIT_VENDOR: 'deposit.vendor',
-  /** Owed to a provider for work performed — an agent's handling fee, a fleet's haul, a courier's leg. */
+  /** Owed to a provider for work performed — a fleet's haul, a courier's leg, a hub's sort. */
   PAYABLE_PROVIDER: 'payable.provider',
+  /** What that work COST the sister. The other side of a provider fee, whether it is paid out or
+   *  credited to the shop's float. Without it, paying a fee would conjure the money it pays with. */
+  EXPENSE_PROVIDER_FEES: 'expense.provider_fees',
+  /** Credit extended to a shop that has not funded it — an operator overdraft. They owe it back. */
+  RECEIVABLE_AGENT: 'receivable.agent',
   /** Tax collected on behalf of an authority. Never revenue, not for a moment. */
   PAYABLE_TAX: 'payable.tax',
   /** The mother's periodic licence fee, owed by a sister. */
@@ -59,6 +64,8 @@ export const ACCOUNT_KIND: Record<AccountCode, AccountKind> = {
   [ACCOUNT_CODES.DEPOSIT_AGENT]: 'liability',
   [ACCOUNT_CODES.DEPOSIT_VENDOR]: 'liability',
   [ACCOUNT_CODES.PAYABLE_PROVIDER]: 'liability',
+  [ACCOUNT_CODES.EXPENSE_PROVIDER_FEES]: 'expense',
+  [ACCOUNT_CODES.RECEIVABLE_AGENT]: 'asset',
   [ACCOUNT_CODES.PAYABLE_TAX]: 'liability',
   [ACCOUNT_CODES.PAYABLE_GROUP]: 'liability',
   [ACCOUNT_CODES.INTERCOMPANY]: 'asset', // a receivable when positive, a payable when negative

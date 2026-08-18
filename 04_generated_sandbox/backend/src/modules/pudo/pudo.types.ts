@@ -417,6 +417,9 @@ export class PudoLedgerEntry {
   /** What the amount IS. Optional only because rows written before this field existed have none — read
    *  it through agentLedgerCurrencyOf(), which defaults them, never straight off the record. */
   currency?: string;
+  /** The journal entry this row projects. The BOOKS are the money; this row is how a shopkeeper reads
+   *  it. Absent on rows written before the books existed, and on records that move no money of ours. */
+  entryId?: string;
   did?: string; // agent (or driver) the entry applies to
   reference: string; // parcel id / manifest id / driver id / admin id / bank txn / mdp id / vendor id
   refType: 'parcel' | 'manifest' | 'driver' | 'admin' | 'bank' | 'mdp' | 'vendor';

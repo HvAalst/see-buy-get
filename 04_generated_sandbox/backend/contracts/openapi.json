@@ -11844,6 +11844,10 @@
             "type": "string",
             "description": "What the amount IS. Optional only because rows written before this field existed have none — read\n it through agentLedgerCurrencyOf(), which defaults them, never straight off the record."
           },
+          "entryId": {
+            "type": "string",
+            "description": "The journal entry this row projects. The BOOKS are the money; this row is how a shopkeeper reads\n it. Absent on rows written before the books existed, and on records that move no money of ours."
+          },
           "did": {
             "type": "string"
           },

@@ -10,6 +10,8 @@ import { GlosEvent } from '../../foundation/events/glos-events';
 import { WalletService } from '../m1/wallet/wallet.service';
 import { DEFAULT_PUDO_PRICE_PER_PARCEL, LOCK_THRESHOLD, MIN_ANDROID_VERSION, MIN_OPEN_HOURS, MIN_SLOTS, NETWORK_JURISDICTION } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
+import { BooksService } from '../../foundation/books/books.service';
+import { ACCOUNT_CODES } from '../../foundation/books/books.types';
 import { Geocoder, GEOCODER } from './geocoder';
 import { MediaService } from './media.service';
 import { averageOpenHours } from './hours';
@@ -58,6 +60,7 @@ export class AgentService {
     private readonly events: EventBus,
     private readonly media: MediaService,
     private readonly entities: EntityService,
+    private readonly books: BooksService,
     @Inject(GEOCODER) private readonly geocoder: Geocoder,
   ) {}
 
@@ -245,7 +248,12 @@ export class AgentService {
   }
 
   balance(did: string): number {
-    return this.wallet.get(did) ? this.wallet.balanceOf(did) : 0;
+    // Derived from the books, not stored: the shop's balance IS its deposit account, and a deposit is a
+    // liability of the sister (held negative), so it is flipped here at the presentation edge. One source
+    // of truth — a cached figure that could disagree with the postings is the bug this whole slice removes.
+    const agent = this.agents.get(did);
+    if (!agent) return 0;
+    return -this.books.balance(this.entityIdOf(agent), ACCOUNT_CODES.DEPOSIT_AGENT, undefined, did) || 0;
   }
 
   get(did: string): Agent {

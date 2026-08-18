@@ -5,8 +5,12 @@ import { PersistentMap } from '../store/persistent-map';
 import { EntityService } from '../entity/entity.service';
 import { Account, ACCOUNT_CODES, ACCOUNT_KIND, AccountCode, EntryLine, JournalEntry } from './books.types';
 
-/** Money is held to 2dp for now; minor units are their own slice (deferred, deliberately). */
-const round2 = (n: number): number => Math.round(n * 100) / 100;
+/**
+ * Money is held to 2dp for now; minor units are their own slice (deferred, deliberately). `|| 0`
+ * normalises negative zero: an empty account is 0, never −0, which is a different value to Object.is and
+ * would make a caller's `=== 0` quietly wrong.
+ */
+const round2 = (n: number): number => Math.round(n * 100) / 100 || 0;
 
 /** Tolerance for the balance check — a float artefact must not fail a genuinely balanced entry. */
 const EPSILON = 0.005;

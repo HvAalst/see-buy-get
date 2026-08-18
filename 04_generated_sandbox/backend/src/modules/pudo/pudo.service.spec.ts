@@ -5,7 +5,8 @@ import { HeuristicRouter, ROUTER } from './router';
 import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
 import { ParcelService, labelDate } from './parcel.service';
-import { OTP_MAX_ATTEMPTS } from './pudo.config';
+import { OTP_MAX_ATTEMPTS, WHOLESALE } from './pudo.config';
+import { ACCOUNT_CODES } from '../../foundation/books/books.types';
 import { CargoService } from './cargo.service';
 import { SbgController } from './pudo.controller';
 import { IdentityController } from './identity.controller';
@@ -45,6 +46,7 @@ import { WalletService } from '../m1/wallet/wallet.service';
 import { AuthService } from '../../foundation/auth/auth.service';
 import { DidService } from '../../foundation/did/did.service';
 import { EntityService } from '../../foundation/entity/entity.service';
+import { BooksService } from '../../foundation/books/books.service';
 import { IdentityVault } from '../../foundation/data-firewall/identity-vault.service';
 import { OperationalStore } from '../../foundation/data-firewall/operational-store.service';
 import { FieldEncryption } from '../../foundation/data-firewall/field-encryption.service';
@@ -89,6 +91,7 @@ describe('PUDO Light', () => {
   let context: TrackingContextService;
   let dids: DidService;
   let entities: EntityService;
+  let books: BooksService;
   let vault: IdentityVault;
   let core: OperationalStore;
   let events: EventBus;
@@ -99,7 +102,7 @@ describe('PUDO Light', () => {
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
         GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, ToteService, ConsignmentService, VehicleService, DriverService, FleetService, DispatchService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
-        WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus, EntityService,
+        WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus, EntityService, BooksService,
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
         GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder },
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
@@ -110,6 +113,8 @@ describe('PUDO Light', () => {
     // registry the app seeds at boot, and everything that names an entity needs it present.
     entities = moduleRef.get(EntityService);
     entities.seed();
+    books = moduleRef.get(BooksService);
+    books.reset(); // each test starts on clean books — the money is derived from them now
     agents = moduleRef.get(AgentService);
     gate = moduleRef.get(WalletGateService);
     corridors = moduleRef.get(CorridorService);
@@ -971,6 +976,104 @@ describe('PUDO Light', () => {
     const cbs = vendors.outboxFor(vendor.vendorId);
     expect(cbs.map((c) => c.event)).toEqual(expect.arrayContaining(['ready_for_pickup', 'collected']));
     expect(createHmac('sha256', 'whsec').update(cbs[0].body).digest('hex')).toBe(cbs[0].signature);
+  });
+
+  describe('the books — every movement has two sides', () => {
+    const KE = () => entities.requireForJurisdiction('KE').entityId;
+    const bal = (code: (typeof ACCOUNT_CODES)[keyof typeof ACCOUNT_CODES], cp?: string) => books.balance(KE(), code, undefined, cp);
+
+    it('a top-up holds money without earning any — we charge for service, not for balance', () => {
+      const shop = onboardAgent('Books Shop', 'NorthTown', 0);
+      gate.topUp(shop.did, 100);
+
+      expect(agents.balance(shop.did)).toBe(100);
+      expect(bal(ACCOUNT_CODES.CASH_CUSTODY)).toBe(100); // the sister holds it
+      expect(bal(ACCOUNT_CODES.DEPOSIT_AGENT, shop.did)).toBe(-100); // and owes it back
+      expect(bal(ACCOUNT_CODES.REVENUE)).toBe(0); // nothing earned yet
+      expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
+    });
+
+    it('refuses a top-up for a shop that is not approved yet', () => {
+      const draft = agents.register({ shopName: 'Draft Shop', zone: 'NorthTown', location: { lat: -1.2, lng: 36.8 }, landmark: 'x', openingHours: uniformHours(), shelf: defaultShelf, fullName: 'D D', nationalId: 'ID-DRAFT-BK', mobile: '+254700DRAFTBK', deviceImei: 'IMEI-DRAFT-BK', requirements: eligibleReqs() });
+      expect(() => gate.topUp(draft.did, 50)).toThrow(/not approved yet/);
+      expect(books.journal({ entityId: KE() })).toHaveLength(0);
+    });
+
+    it('earns the wholesale unit when a walk-up parcel actually moves, and never sees the retail cash', () => {
+      const origin = onboardAgent('Books Origin', 'NorthTown', 50);
+      onboardAgent('Books Dest', 'SouthTown', 50);
+      const before = agents.balance(origin.did);
+      parcels.accept({ agentDid: origin.did, parcelId: 'QR-BOOK', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+
+      // The shop's float drops by the wholesale unit; the RETAIL 2.0 the customer paid never appears in
+      // the sister's books, because the sister never touched it. The shop is a reseller on this flow.
+      expect(agents.balance(origin.did)).toBeCloseTo(before - WHOLESALE, 2);
+      expect(bal(ACCOUNT_CODES.REVENUE)).toBeCloseTo(-WHOLESALE, 2); // revenue is credit-natured
+      expect(bal(ACCOUNT_CODES.CASH_CUSTODY)).toBe(100); // 2×50 topped up; no money moved on a shipment
+      expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
+    });
+
+    it('books a labour fee as the sister’s COST, not as money from nowhere', () => {
+      const shop = onboardAgent('Labour Shop', 'NorthTown', 50);
+      const before = agents.balance(shop.did);
+      gate.payLabour(shop.did, 0.4, 'PUD-X', 'parcel');
+
+      expect(agents.balance(shop.did)).toBeCloseTo(before + 0.4, 2);
+      expect(bal(ACCOUNT_CODES.EXPENSE_PROVIDER_FEES)).toBeCloseTo(0.4, 2);
+      expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
+    });
+
+    it('extends an overdraft as a receivable — credit given is not cash received', () => {
+      const shop = onboardAgent('OD Shop', 'NorthTown', 0);
+      gate.overdraft(shop.did, 20, 'admin-1');
+
+      expect(agents.balance(shop.did)).toBe(20);
+      expect(bal(ACCOUNT_CODES.RECEIVABLE_AGENT, shop.did)).toBe(20); // they owe it back
+      expect(bal(ACCOUNT_CODES.CASH_CUSTODY)).toBe(0); // no money came in, and the books say so
+      expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
+    });
+
+    it('keeps a vendor float as a deposit too, earned only when the shipment is billed', () => {
+      const origin = onboardAgent('V Origin', 'NorthTown', 50);
+      const dest = onboardAgent('V Dest', 'SouthTown', 50);
+      corridors.addCorridor({ name: 'N-S books', originZone: 'NorthTown', destZone: 'SouthTown' });
+      const vendor = vendors.register({ name: 'Books Store' });
+      vendors.topUp(vendor.vendorId, 50);
+
+      expect(vendors.balanceOf(vendor.vendorId)).toBe(50);
+      expect(bal(ACCOUNT_CODES.DEPOSIT_VENDOR, vendor.vendorId)).toBe(-50);
+      const revenueBefore = bal(ACCOUNT_CODES.REVENUE);
+
+      const quote = routing.quoteShipment(origin.did, dest.did, 'M');
+      const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: 'ORD-BK', originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: 'c.jpg', shippingPolicy: vendor.shippingPolicy, quote });
+
+      // Billed at the mint → the deposit is drawn down and the sister has finally earned something.
+      expect(vendors.balanceOf(vendor.vendorId)).toBeCloseTo(50 - (parcel.shipmentCost ?? 0), 2);
+      expect(bal(ACCOUNT_CODES.REVENUE)).toBeCloseTo(revenueBefore - (parcel.shipmentCost ?? 0), 2);
+      // The cached figure on the record never disagrees with the postings.
+      expect(vendors.get(vendor.vendorId).balance).toBe(vendors.balanceOf(vendor.vendorId));
+      expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
+    });
+
+    it('stays balanced across a whole parcel lifecycle, and the mother has no books at all', () => {
+      const origin = onboardAgent('Life Origin', 'NorthTown', 50);
+      const dest = onboardAgent('Life Dest', 'SouthTown', 50);
+      const corridor = corridors.addCorridor({ name: 'N-S life', originZone: 'NorthTown', destZone: 'SouthTown' });
+      const driver = corridors.addDriver({ driverDid: 'did:glos:dlife', name: 'D', corridorId: corridor.corridorId });
+      parcels.accept({ agentDid: origin.did, parcelId: 'QR-LIFE', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+      parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['QR-LIFE'] });
+      parcels.arrive('QR-LIFE', dest.did);
+      parcels.pickup('QR-LIFE', dest.did, parcels.get('QR-LIFE').otp!, 'delivered.jpg');
+
+      expect(parcels.get('QR-LIFE').status).toBe('Delivered');
+      expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
+      // Held against owed — the honest picture, in one read.
+      const cover = books.coverage(KE());
+      expect(cover.currency).toBe('KES');
+      expect(cover.held).toBe(100);
+      // The group keeps no books: not an empty set of accounts, but no accounts at all.
+      expect(books.trialBalance(entities.group().entityId)).toHaveLength(0);
+    });
   });
 
   describe('entities — who collects, and who performs', () => {

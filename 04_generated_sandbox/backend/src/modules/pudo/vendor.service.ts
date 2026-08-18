@@ -8,6 +8,8 @@ import { CheckoutHandoff, ShippingPolicy, Vendor } from './pudo.types';
 import { DEFAULT_VENDOR_COUNTRY, NETWORK_CURRENCY } from './pudo.config';
 import { currencyForJurisdiction } from '../../foundation/money/currency';
 import { EntityService } from '../../foundation/entity/entity.service';
+import { BooksService } from '../../foundation/books/books.service';
+import { ACCOUNT_CODES, type AccountCode } from '../../foundation/books/books.types';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
 
 /** One entry in a vendor's prepaid book with the per-country daughter company (GLOS reports, never escrows). */
@@ -169,6 +171,7 @@ export class VendorService {
     private readonly dids: DidService,
     private readonly core: OperationalStore,
     private readonly entities: EntityService,
+    private readonly books: BooksService,
   ) {}
 
   /**
@@ -234,34 +237,62 @@ export class VendorService {
   topUp(vendorId: string, amount: number): Vendor {
     if (amount <= 0) throw new GlosError('AMOUNT_INVALID', 'Top-up must be positive');
     const vendor = this.get(vendorId);
-    vendor.balance = Math.round((vendor.balance + amount) * 100) / 100;
+    // The store's float is a DEPOSIT: the sister holds the money and owes it back as shipping. Nothing
+    // is earned until a parcel moves — we charge for service, not for balance.
+    this.post(vendor, 'top-up', vendorId, [
+      { code: ACCOUNT_CODES.CASH_CUSTODY, amount },
+      { code: ACCOUNT_CODES.DEPOSIT_VENDOR, counterparty: vendorId, amount: -amount },
+    ]);
     this.book(vendor, 'TOP_UP', '+', amount, undefined, 'prepay');
-    this.vendors.set(vendor.vendorId, vendor); // durable money
-    return vendor;
+    return this.syncBalance(vendor);
   }
 
   /** Bill the full shipment cost. Returns whether the prepaid balance covered it (the 'ParcelPaid' gate). */
   billShipment(vendorId: string, parcelId: string, amount: number): { paid: boolean; balance: number } {
     const vendor = this.get(vendorId);
-    if (vendor.balance + 1e-9 < amount) return { paid: false, balance: vendor.balance };
-    vendor.balance = Math.round((vendor.balance - amount) * 100) / 100;
+    if (this.balanceOf(vendorId) + 1e-9 < amount) return { paid: false, balance: this.balanceOf(vendorId) };
+    // The service is delivered: the deposit is drawn down and the sister recognises the revenue HERE.
+    this.post(vendor, 'shipping', parcelId, [
+      { code: ACCOUNT_CODES.DEPOSIT_VENDOR, counterparty: vendorId, amount },
+      { code: ACCOUNT_CODES.REVENUE, amount: -amount },
+    ]);
     this.book(vendor, 'BILLING', '-', amount, parcelId, 'shipment');
-    this.vendors.set(vendor.vendorId, vendor); // durable money
-    return { paid: true, balance: vendor.balance };
+    return { paid: true, balance: this.syncBalance(vendor).balance };
   }
 
   /** Refund a flexible parcel's over-hold (ceiling − actual) back to the vendor after delivery. */
   rebate(vendorId: string, parcelId: string, amount: number, note = 'flexible-route rebate'): Vendor {
     const vendor = this.get(vendorId);
     if (amount <= 0) return vendor;
-    vendor.balance = Math.round((vendor.balance + amount) * 100) / 100;
+    // The over-hold was never earned: revenue is given back and the deposit restored.
+    this.post(vendor, 'rebate', parcelId, [
+      { code: ACCOUNT_CODES.REVENUE, amount },
+      { code: ACCOUNT_CODES.DEPOSIT_VENDOR, counterparty: vendorId, amount: -amount },
+    ]);
     this.book(vendor, 'REBATE', '+', amount, parcelId, note);
-    this.vendors.set(vendor.vendorId, vendor); // durable money
-    return vendor;
+    return this.syncBalance(vendor);
   }
 
+  /** Derived from the books — the store's float IS its deposit account, flipped for a human to read. */
   balanceOf(vendorId: string): number {
-    return this.get(vendorId).balance;
+    const vendor = this.get(vendorId);
+    return -this.books.balance(this.entityIdOf(vendor), ACCOUNT_CODES.DEPOSIT_VENDOR, undefined, vendorId) || 0;
+  }
+
+  /** Post to the sister that settles this store. */
+  private post(vendor: Vendor, kind: string, ref: string, lines: Array<{ code: AccountCode; counterparty?: string; amount: number }>): void {
+    this.books.post({ entityId: this.entityIdOf(vendor), kind, ref, lines });
+  }
+
+  /**
+   * Refresh the cached `balance` on the record from the books. The books are the money; this field is a
+   * read-model kept in step at the only points it can change, so a console reading the vendor record can
+   * never show a figure the postings disagree with.
+   */
+  private syncBalance(vendor: Vendor): Vendor {
+    vendor.balance = this.balanceOf(vendor.vendorId);
+    this.vendors.set(vendor.vendorId, vendor);
+    return vendor;
   }
 
   settlementsFor(vendorId: string): VendorSettlement[] {
