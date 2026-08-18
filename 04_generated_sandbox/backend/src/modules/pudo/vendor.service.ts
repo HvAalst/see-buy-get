@@ -275,8 +275,11 @@ export class VendorService {
 
   /** Derived from the books — the store's float IS its deposit account, flipped for a human to read. */
   balanceOf(vendorId: string): number {
-    const vendor = this.get(vendorId);
-    return -this.books.balance(this.entityIdOf(vendor), ACCOUNT_CODES.DEPOSIT_VENDOR, undefined, vendorId) || 0;
+    return this.derivedBalance(this.get(vendorId));
+  }
+
+  private derivedBalance(vendor: Vendor): number {
+    return -this.books.balance(this.entityIdOf(vendor), ACCOUNT_CODES.DEPOSIT_VENDOR, undefined, vendor.vendorId) || 0;
   }
 
   /** Post to the sister that settles this store. */
@@ -290,7 +293,7 @@ export class VendorService {
    * never show a figure the postings disagree with.
    */
   private syncBalance(vendor: Vendor): Vendor {
-    vendor.balance = this.balanceOf(vendor.vendorId);
+    vendor.balance = this.derivedBalance(vendor);
     this.vendors.set(vendor.vendorId, vendor);
     return vendor;
   }
@@ -334,6 +337,13 @@ export class VendorService {
   get(vendorId: string): Vendor {
     const vendor = this.vendors.get(vendorId);
     if (!vendor) throw new GlosError('NOT_FOUND', `Vendor not found: ${vendorId}`);
+    // Read-repair the cached figure. The books are the money; a record written before them (or by a
+    // path that somehow missed the sync) must never hand a console a number the postings disagree with.
+    const derived = this.derivedBalance(vendor);
+    if (vendor.balance !== derived) {
+      vendor.balance = derived;
+      this.vendors.set(vendorId, vendor);
+    }
     return vendor;
   }
 

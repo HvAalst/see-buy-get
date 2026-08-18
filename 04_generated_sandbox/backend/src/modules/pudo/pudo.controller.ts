@@ -33,6 +33,7 @@ import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
 import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, CoupleDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, OverdraftDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetLocationDto, SetPriceDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
 import { classifySize, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
+import { BooksService } from '../../foundation/books/books.service';
 import { haversineKm } from './geo';
 import { GEOCODER, Geocoder } from './geocoder';
 
@@ -58,6 +59,7 @@ export class SbgController {
     private readonly monitor: MonitorService,
     private readonly ratings: RatingService,
     private readonly entities: EntityService,
+    private readonly books: BooksService,
     private readonly vendors: VendorService,
     private readonly shelf: ShelfService,
     private readonly routing: RoutingService,
@@ -166,6 +168,22 @@ export class SbgController {
   @Get('entities')
   listEntities() {
     return this.entities.list().map((e) => ({ ...e, holdsCustody: this.entities.canHoldCustody(e.entityId) }));
+  }
+
+  /**
+   * A sister's books: the trial balance, whether it balances, and the coverage read — money held against
+   * money owed. Operator-only, and the closest thing the network has to an answer for "are we solvent",
+   * which could not even be ASKED before the postings existed.
+   */
+  @Roles('operator')
+  @Get('entities/:entityId/books')
+  entityBooks(@Param('entityId') entityId: string) {
+    return {
+      entityId,
+      accounts: this.books.trialBalance(entityId),
+      integrity: this.books.balances(entityId),
+      coverage: this.books.coverage(entityId),
+    };
   }
 
   /** Operator KYC review queue — agents awaiting a decision. */

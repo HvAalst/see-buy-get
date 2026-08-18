@@ -3813,6 +3813,28 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/books": {
+      "get": {
+        "operationId": "Sbg.entityBooks",
+        "summary": "",
+        "description": "A sister's books: the trial balance, whether it balances, and the coverage read — money held against\nmoney owed. Operator-only, and the closest thing the network has to an answer for \"are we solvent\",\nwhich could not even be ASKED before the postings existed.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/agents/kyc-queue": {
       "get": {
         "operationId": "Sbg.kycQueue",

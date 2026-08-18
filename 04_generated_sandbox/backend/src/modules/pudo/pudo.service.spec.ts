@@ -1055,6 +1055,14 @@ describe('PUDO Light', () => {
       expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
     });
 
+    it('read-repairs a stale cached vendor balance rather than showing a figure the postings deny', () => {
+      const vendor = vendors.register({ name: 'Stale Store' });
+      vendors.topUp(vendor.vendorId, 40);
+      // Simulate a record written before the books existed (or by a path that missed the sync).
+      vendors.get(vendor.vendorId).balance = 999;
+      expect(vendors.get(vendor.vendorId).balance).toBe(40); // repaired on read, from the postings
+    });
+
     it('stays balanced across a whole parcel lifecycle, and the mother has no books at all', () => {
       const origin = onboardAgent('Life Origin', 'NorthTown', 50);
       const dest = onboardAgent('Life Dest', 'SouthTown', 50);
