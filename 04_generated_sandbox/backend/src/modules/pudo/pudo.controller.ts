@@ -198,6 +198,18 @@ export class SbgController {
     return this.entities.setFeePct(entityId, dto.feePct);
   }
 
+  /**
+   * What a margin change actually did. Not just what each rate earned — that half is arithmetic — but
+   * what happened to the NUMBER of shipments after it, which can only be observed. Read as a timeline of
+   * spells, so a rate raised and then lowered again shows as two separate periods to compare.
+   */
+  @Roles('operator')
+  @Get('entities/:entityId/rate-impact')
+  entityRateImpact(@Param('entityId') entityId: string) {
+    const entity = this.entities.get(entityId);
+    return { entityId, currency: entity.currency, currentPct: this.entities.feePctOf(entityId), ...this.parcels.rateImpact(entityId) };
+  }
+
   /** Operator KYC review queue — agents awaiting a decision. */
   @Roles('operator')
   @Get('agents/kyc-queue')

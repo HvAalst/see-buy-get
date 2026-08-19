@@ -1,4 +1,4 @@
-import { filterVendorParcels, vendorOrderRowOf, vendorOrderStatsOf, vendorOrdersToCsv } from './parcel.service';
+import { filterVendorParcels, rateImpactOf, vendorOrderRowOf, vendorOrderStatsOf, vendorOrdersToCsv } from './parcel.service';
 import type { Parcel } from './pudo.types';
 
 /** A minimal Parcel carrying only the register-relevant fields. */
@@ -20,6 +20,51 @@ const rows: Parcel[] = [
   parcel({ parcelId: 'B', did: 'did:shipment:bbb', externalOrderId: 'SO-2', receiverMobile: '+254700222222', items: [{ name: 'Kitenge scarf', qty: 1 }], destZone: 'Karen', destAgentDid: 'did:agent:2', status: 'Delivered', paidStatus: 'unpaid', shipmentCost: 30, acceptedAt: '2026-08-01T10:00:00Z' }),
   parcel({ parcelId: 'C', did: 'did:shipment:ccc', externalOrderId: 'SO-3', receiverMobile: '+254700333333', items: [{ name: 'Denim jacket', qty: 1 }], destZone: 'Westlands', destAgentDid: 'did:agent:1', status: 'At_PUDO', paidStatus: 'ParcelPaid', shipmentCost: 20, acceptedAt: '2026-08-05T10:00:00Z' }),
 ];
+
+describe('rate impact — what a margin change did', () => {
+  const KE = 'sbg-ke';
+  const priced = (over: Partial<Parcel>): Parcel =>
+    ({ parcelId: 'P', originAgentDid: 'a', originZone: 'Z', destZone: 'Z', senderMobile: '+1', receiverMobile: '+2', size: 'M', status: 'Delivered', collectingEntityId: KE, scans: [], ...over }) as unknown as Parcel;
+
+  it('splits contiguous SPELLS so a rate raised and lowered again reads as two periods', () => {
+    const rows: Parcel[] = [
+      priced({ parcelId: 'A', acceptedAt: '2026-01-01T00:00:00Z', platformFeePct: 0.02, shipmentCost: 10, platformFee: 0.2 }),
+      priced({ parcelId: 'B', acceptedAt: '2026-01-02T00:00:00Z', platformFeePct: 0.02, shipmentCost: 10, platformFee: 0.2 }),
+      priced({ parcelId: 'C', acceptedAt: '2026-02-01T00:00:00Z', platformFeePct: 0.05, shipmentCost: 10, platformFee: 0.5 }),
+      priced({ parcelId: 'D', acceptedAt: '2026-03-01T00:00:00Z', platformFeePct: 0.02, shipmentCost: 10, platformFee: 0.2 }),
+    ];
+    const { spells, unpriced } = rateImpactOf(rows, KE, KE);
+
+    // Three spells, not two rates: merging the 2% periods would hide the very comparison this is for.
+    expect(spells.map((s) => s.feePct)).toEqual([0.02, 0.05, 0.02]);
+    expect(spells.map((s) => s.shipments)).toEqual([2, 1, 1]);
+    expect(spells[0]).toMatchObject({ gross: 20, margin: 0.4, avgMargin: 0.2, from: '2026-01-01T00:00:00Z', to: '2026-01-02T00:00:00Z' });
+    expect(spells[1].avgMargin).toBe(0.5); // more per parcel…
+    expect(spells[1].shipments).toBeLessThan(spells[0].shipments); // …and this is the half you can only observe
+    expect(unpriced).toBe(0);
+  });
+
+  it('counts walk-ups separately rather than diluting rates they were never sold at', () => {
+    const rows: Parcel[] = [
+      priced({ parcelId: 'A', acceptedAt: '2026-01-01T00:00:00Z', platformFeePct: 0.02, shipmentCost: 10, platformFee: 0.2 }),
+      priced({ parcelId: 'W', acceptedAt: '2026-01-02T00:00:00Z' }), // cash walk-up: no quote, no margin
+    ];
+    const { spells, unpriced } = rateImpactOf(rows, KE, KE);
+    expect(spells).toHaveLength(1);
+    expect(spells[0].shipments).toBe(1);
+    expect(unpriced).toBe(1); // visible, not hidden
+  });
+
+  it('scopes to one sister, and attributes a pre-entity parcel to the home sister', () => {
+    const rows: Parcel[] = [
+      priced({ parcelId: 'A', acceptedAt: '2026-01-01T00:00:00Z', platformFeePct: 0.02, shipmentCost: 10, platformFee: 0.2 }),
+      priced({ parcelId: 'N', acceptedAt: '2026-01-02T00:00:00Z', collectingEntityId: 'sbg-nl', platformFeePct: 0.02, shipmentCost: 10, platformFee: 0.2 }),
+      priced({ parcelId: 'O', acceptedAt: '2026-01-03T00:00:00Z', collectingEntityId: undefined, platformFeePct: 0.02, shipmentCost: 10, platformFee: 0.2 }),
+    ];
+    expect(rateImpactOf(rows, KE, KE).spells[0].shipments).toBe(2); // A + the pre-entity one
+    expect(rateImpactOf(rows, KE, 'sbg-nl').spells[0].shipments).toBe(1);
+  });
+});
 
 describe('vendor shipment register (R0)', () => {
   describe('filterVendorParcels', () => {

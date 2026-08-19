@@ -3874,6 +3874,28 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/rate-impact": {
+      "get": {
+        "operationId": "Sbg.entityRateImpact",
+        "summary": "",
+        "description": "What a margin change actually did. Not just what each rate earned — that half is arithmetic — but\nwhat happened to the NUMBER of shipments after it, which can only be observed. Read as a timeline of\nspells, so a rate raised and then lowered again shows as two separate periods to compare.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/agents/kyc-queue": {
       "get": {
         "operationId": "Sbg.kycQueue",

@@ -176,6 +176,50 @@ export function vendorOrdersToCsv(rows: Parcel[]): string {
   );
 }
 
+/* ------------------------------- rate impact — what a margin change actually did ---------------------- */
+
+/** One contiguous spell at a single margin rate: what it earned, and what it did to volume. */
+export interface RateSpell {
+  feePct: number;
+  shipments: number;
+  gross: number; // what customers were charged in total
+  margin: number; // the sister's cut of it
+  avgMargin: number; // per shipment — the easy half to predict
+  from: string;
+  to: string;
+}
+
+/**
+ * Group priced shipments into contiguous SPELLS at each margin rate, in time order.
+ *
+ * Spells, not totals by rate: a network that goes 2% → 5% → 2% has three of them, and merging the two
+ * 2% periods would hide exactly the comparison the view exists for. What a rate earned per parcel is
+ * arithmetic anyone can do in their head; what it did to the NUMBER of parcels is the part that can only
+ * be observed, and the part that decides whether the change was worth making.
+ *
+ * Walk-up cash parcels carry no margin (they are priced by the wholesale/retail spread, a different
+ * product), so they are counted separately rather than diluting the rates they were never sold at.
+ */
+export function rateImpactOf(rows: Parcel[], homeEntityId: string, entityId: string): { spells: RateSpell[]; unpriced: number } {
+  const mine = rows.filter((p) => (p.collectingEntityId ?? homeEntityId) === entityId);
+  const priced = mine.filter((p) => p.platformFeePct != null && p.shipmentCost != null).sort((a, b) => a.acceptedAt.localeCompare(b.acceptedAt));
+  const spells: RateSpell[] = [];
+  for (const p of priced) {
+    const pct = p.platformFeePct!;
+    const last = spells[spells.length - 1];
+    if (!last || last.feePct !== pct) {
+      spells.push({ feePct: pct, shipments: 0, gross: 0, margin: 0, avgMargin: 0, from: p.acceptedAt, to: p.acceptedAt });
+    }
+    const spell = spells[spells.length - 1];
+    spell.shipments += 1;
+    spell.gross = Math.round((spell.gross + (p.shipmentCost ?? 0)) * 100) / 100;
+    spell.margin = Math.round((spell.margin + (p.platformFee ?? 0)) * 100) / 100;
+    spell.to = p.acceptedAt;
+  }
+  for (const s of spells) s.avgMargin = Math.round((s.margin / s.shipments) * 100) / 100;
+  return { spells, unpriced: mine.length - priced.length };
+}
+
 /* ----------------------- agent parcel-history register (R4) — the parcels through a shop --------------- */
 
 /** The AGENT register is about the shop's OWN handling, not the buyer — so it carries only parcel / route /
@@ -1345,6 +1389,11 @@ export class ParcelService implements OnApplicationBootstrap {
   }
 
   // --- agent parcel-history register (R4): the shop's OWN parcels (origin or dest), owner-scoped by caller ---
+
+  /** What each margin rate did to volume and to earnings, spell by spell, for one sister's shipments. */
+  rateImpact(entityId: string): { spells: RateSpell[]; unpriced: number } {
+    return rateImpactOf(this.list({}), this.agents.homeEntityId(), entityId);
+  }
 
   agentParcelsPage(agentDid: string, q: AgentParcelsQuery): Page<AgentParcelRow> {
     const filtered = filterAgentParcels(this.list({ agentDid }), agentDid, q);

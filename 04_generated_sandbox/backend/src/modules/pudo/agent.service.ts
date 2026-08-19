@@ -64,6 +64,11 @@ export class AgentService {
     @Inject(GEOCODER) private readonly geocoder: Geocoder,
   ) {}
 
+  /** The sister this deployment's shops and hubs belong to — the fallback for pre-entity records. */
+  homeEntityId(): string {
+    return this.entities.requireForJurisdiction(NETWORK_JURISDICTION).entityId;
+  }
+
   /** The sister that contracts this shop; pre-entity records resolve to the network's home sister. */
   entityIdOf(agent: Agent): string {
     return agent.entityId ?? this.entities.requireForJurisdiction(NETWORK_JURISDICTION).entityId;
