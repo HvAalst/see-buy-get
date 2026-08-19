@@ -116,7 +116,7 @@ describe('books (double entry)', () => {
 
     // Held 985, owed 1,000 — under-covered by the fee the sister absorbed, which is exactly the honest
     // picture: gross-crediting is a real cost, and the margin has to carry it.
-    expect(books.coverage(KE)).toEqual({ currency: 'KES', held: 985, owed: 1000, cover: -15 });
+    expect(books.coverage(KE)).toEqual({ currency: 'KES', held: 985, lent: 0, owed: 1000, cover: -15 });
   });
 
   describe('the mother keeps no books', () => {

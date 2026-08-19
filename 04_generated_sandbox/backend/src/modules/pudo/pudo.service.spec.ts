@@ -1040,17 +1040,19 @@ describe('PUDO Light', () => {
       expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
     });
 
-    it('records an admin overdraft as a loan — spendable money against a matching debt', () => {
-      const shop = onboardAgent('OD Shop', 'NorthTown', 0);
-      gate.overdraft(shop.did, 20, 'admin-1');
+    it('shows credit LENT separately from cash held — cover asks what could be paid today', () => {
+      const shop = onboardAgent('Lent Shop', 'NorthTown', 50);
+      onboardAgent('Lent Dest', 'SouthTown', 50);
+      // Drain the float, then scan two more parcels on the credit line.
+      gate.chargeShipping(shop.did, 50, 'PUD-DRAIN');
+      parcels.accept({ agentDid: shop.did, parcelId: 'QR-L1', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+      parcels.accept({ agentDid: shop.did, parcelId: 'QR-L2', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
 
-      expect(bal(ACCOUNT_CODES.DEPOSIT_AGENT, shop.did)).toBe(-20); // 20 to spend
-      expect(bal(ACCOUNT_CODES.RECEIVABLE_AGENT, shop.did)).toBe(20); // and 20 owed back
-      expect(bal(ACCOUNT_CODES.CASH_CUSTODY)).toBe(0); // no money came in, and the books say so
-      // Net position unchanged, which is the truth about being lent money: you hold it AND owe it.
-      // Note this makes the endpoint largely redundant now that every approved shop has a standing
-      // credit line — a per-agent limit override is the honest successor.
-      expect(agents.balance(shop.did)).toBe(0);
+      const c = books.coverage(KE());
+      expect(c.lent).toBeCloseTo(2 * WHOLESALE, 2); // two parcels' worth is out with a shopkeeper
+      expect(agents.creditOwed(shop.did)).toBeCloseTo(2 * WHOLESALE, 2);
+      // Credit out is an asset, but it cannot pay a driver this afternoon, so cover excludes it.
+      expect(c.cover).toBeCloseTo(c.held - c.owed, 2);
       expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
     });
 

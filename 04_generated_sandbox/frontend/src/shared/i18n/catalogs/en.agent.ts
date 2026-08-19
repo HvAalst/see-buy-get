@@ -117,7 +117,6 @@ export const enAgent = {
   'agent.logic.ledgerFee': 'Shipping fee',
   'agent.logic.ledgerPayout': 'Handling pay',
   'agent.logic.ledgerRefund': 'Refund',
-  'agent.logic.ledgerOverdraft': 'Credit',
 
   // Home / My shop.
   'agent.home.walletLabel': 'Money in your wallet',

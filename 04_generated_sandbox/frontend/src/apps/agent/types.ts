@@ -232,7 +232,7 @@ export interface AgentParcelRow {
 /** One row of the shop's earnings ledger. */
 export interface AgentLedgerRow {
   id: string;
-  type: 'TOP_UP' | 'FEE' | 'LABOR_PAYOUT' | 'REFUND' | 'OVERDRAFT' | string;
+  type: 'TOP_UP' | 'FEE' | 'LABOR_PAYOUT' | 'REFUND' | string;
   sign: '+' | '-';
   amount: number;
   reference: string;

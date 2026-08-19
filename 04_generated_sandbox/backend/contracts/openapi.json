@@ -4177,45 +4177,6 @@
         }
       }
     },
-    "/v1/sbg/agents/{did}/overdraft": {
-      "post": {
-        "operationId": "Sbg.overdraft",
-        "summary": "",
-        "description": "Emergency admin credit — operator only (self-asserted adminId is no longer trusted).",
-        "parameters": [
-          {
-            "name": "did",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/OverdraftDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PudoLedgerEntry"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/v1/sbg/agents/{did}/ledger": {
       "get": {
         "operationId": "Sbg.agentLedger",
@@ -4247,8 +4208,7 @@
                 "TOP_UP",
                 "FEE",
                 "LABOR_PAYOUT",
-                "REFUND",
-                "OVERDRAFT"
+                "REFUND"
               ],
               "type": "string"
             }
@@ -4350,8 +4310,7 @@
                 "TOP_UP",
                 "FEE",
                 "LABOR_PAYOUT",
-                "REFUND",
-                "OVERDRAFT"
+                "REFUND"
               ],
               "type": "string"
             }
@@ -4453,8 +4412,7 @@
                 "TOP_UP",
                 "FEE",
                 "LABOR_PAYOUT",
-                "REFUND",
-                "OVERDRAFT"
+                "REFUND"
               ],
               "type": "string"
             }
@@ -11891,21 +11849,6 @@
           "reference",
           "refType",
           "at"
-        ]
-      },
-      "OverdraftDto": {
-        "type": "object",
-        "properties": {
-          "amount": {
-            "type": "number",
-            "minimum": 0.01
-          },
-          "adminId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "amount"
         ]
       },
       "CorridorDto": {

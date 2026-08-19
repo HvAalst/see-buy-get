@@ -203,7 +203,7 @@ function HistFilterSheet({ open, onClose, query, onApply, onClearAll }: { open: 
 
 /* ----------------------------------------------------------------- earnings -- */
 
-const TYPE_OPTIONS: Array<EarnQuery['type']> = ['TOP_UP', 'LABOR_PAYOUT', 'FEE', 'REFUND', 'OVERDRAFT'];
+const TYPE_OPTIONS: Array<EarnQuery['type']> = ['TOP_UP', 'LABOR_PAYOUT', 'FEE', 'REFUND'];
 const EARN_SORT: Array<{ value: EarnQuery['sort']; labelKey: MessageKey }> = [
   { value: 'newest', labelKey: 'agent.records.sortNewest' },
   { value: 'oldest', labelKey: 'agent.records.sortOldest' },

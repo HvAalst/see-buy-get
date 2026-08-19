@@ -407,7 +407,9 @@ export class Parcel {
   scans: ParcelScan[];
 }
 
-export type LedgerType = 'TOP_UP' | 'FEE' | 'LABOR_PAYOUT' | 'DRIVER_PAYOUT' | 'REFUND' | 'OVERDRAFT' | 'SETTLEMENT' | 'BILLING' | 'REBATE';
+// 'OVERDRAFT' was removed with the trade-credit line — there is no way to create one any more. Any row
+// on disk from before still renders (the type word falls back to the raw string), it just cannot recur.
+export type LedgerType = 'TOP_UP' | 'FEE' | 'LABOR_PAYOUT' | 'DRIVER_PAYOUT' | 'REFUND' | 'SETTLEMENT' | 'BILLING' | 'REBATE';
 
 export class PudoLedgerEntry {
   id: string;

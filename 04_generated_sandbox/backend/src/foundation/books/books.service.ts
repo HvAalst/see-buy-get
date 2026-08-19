@@ -143,11 +143,17 @@ export class BooksService {
   }
 
   /**
-   * What the sister holds against what it owes third parties — the shape of the coverage question from
-   * the design note. `held` is real money in custody; `owed` is deposits and payables, which are held as
-   * negatives, so a healthy book has held + owed ≥ 0.
+   * What the sister holds against what it owes — the coverage question from the design note.
+   *
+   *  held  real money in custody: bank, mobile-money merchant account, cash in transit.
+   *  lent  trade credit drawn by shops. An ASSET the sister expects back, but not money it has: it is
+   *        out there in twenty-parcel slices across the whole network, which is precisely the exposure
+   *        worth watching once every approved shop has a standing line.
+   *  owed  deposits and payables — other people's money, held as negatives, reported positive to read.
+   *  cover held − owed. Deliberately EXCLUDES what is lent: cover asks whether the sister could meet its
+   *        obligations today, and credit out with a shopkeeper cannot pay a driver this afternoon.
    */
-  coverage(entityId: string, currency?: string): { currency: string; held: number; owed: number; cover: number } {
+  coverage(entityId: string, currency?: string): { currency: string; held: number; lent: number; owed: number; cover: number } {
     const entity = this.entities.get(entityId);
     const ccy = currency ?? entity.currency ?? '';
     const OWED: AccountCode[] = [ACCOUNT_CODES.DEPOSIT_AGENT, ACCOUNT_CODES.DEPOSIT_VENDOR, ACCOUNT_CODES.PAYABLE_PROVIDER, ACCOUNT_CODES.PAYABLE_TAX, ACCOUNT_CODES.PAYABLE_GROUP];
@@ -155,7 +161,8 @@ export class BooksService {
     const held = round2(mine.filter((a) => a.code === ACCOUNT_CODES.CASH_CUSTODY).reduce((s, a) => s + this.balanceOf(a.accountId), 0));
     // Liabilities are negative by convention; report what is OWED as a positive number a human can read.
     const owed = round2(-mine.filter((a) => OWED.includes(a.code)).reduce((s, a) => s + this.balanceOf(a.accountId), 0));
-    return { currency: ccy, held, owed, cover: round2(held - owed) };
+    const lent = round2(mine.filter((a) => a.code === ACCOUNT_CODES.RECEIVABLE_AGENT).reduce((s, a) => s + this.balanceOf(a.accountId), 0));
+    return { currency: ccy, held, lent, owed, cover: round2(held - owed) };
   }
 
   /**

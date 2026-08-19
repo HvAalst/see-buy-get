@@ -16,7 +16,7 @@ export interface AgentParcelsQuery {
 /** The agent earnings-ledger register query (all optional). */
 export interface AgentLedgerQuery {
   q?: string;
-  type?: 'TOP_UP' | 'FEE' | 'LABOR_PAYOUT' | 'REFUND' | 'OVERDRAFT';
+  type?: 'TOP_UP' | 'FEE' | 'LABOR_PAYOUT' | 'REFUND';
   direction?: 'in' | 'out';
   from?: string;
   to?: string;

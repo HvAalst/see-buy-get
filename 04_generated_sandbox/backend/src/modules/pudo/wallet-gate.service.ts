@@ -26,9 +26,8 @@ export function agentLedgerTypeWord(type: LedgerType): string {
       return 'Handling pay';
     case 'REFUND':
       return 'Refund';
-    case 'OVERDRAFT':
-      return 'Credit';
     default:
+      // Includes historical 'OVERDRAFT' rows, which render as their raw type — the concept is gone.
       return type;
   }
 }
@@ -267,17 +266,10 @@ export class WalletGateService {
     return entry;
   }
 
-  /** Admin emergency credit: the sister EXTENDS credit rather than receiving money, so the shop's float
-   *  grows against a receivable. No cash came in, and the books say so instead of pretending otherwise. */
-  overdraft(did: string, amount: number, adminId: string): PudoLedgerEntry {
-    const entryId = this.postAgent(did, 'overdraft', adminId, [
-      { code: ACCOUNT_CODES.RECEIVABLE_AGENT, counterparty: did, amount },
-      { code: ACCOUNT_CODES.DEPOSIT_AGENT, counterparty: did, amount: -amount },
-    ]);
-    const entry = this.record('OVERDRAFT', '+', amount, did, adminId, 'admin', entryId);
-    this.agents.refreshLock(did);
-    return entry;
-  }
+  // The admin overdraft was removed with the trade-credit line. It had become inert: what gates trading
+  // is the CREDIT LIMIT, not the balance, and lending a shop money against the same limit moved nobody.
+  // Every approved shop now has the same standing line of TRADE_CREDIT_PARCELS — one rule, no override,
+  // and no staff member put under pressure to grant one.
 
   /** Driver settlement — accrues what the sister owes the party it CONTRACTS with (a fleet, or an
    *  independent courier). Never a payroll entry: see the settling-entity rule. */

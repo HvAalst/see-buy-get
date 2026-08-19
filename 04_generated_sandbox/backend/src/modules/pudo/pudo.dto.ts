@@ -96,11 +96,6 @@ export class TopUpDto {
   @IsOptional() @IsString() bankRef?: string;
 }
 
-export class OverdraftDto {
-  @IsNumber() @Min(0.01) amount!: number;
-  @IsOptional() @IsString() adminId?: string; // operator-override only; normal actors are pinned to their token
-}
-
 export class CorridorDto {
   @IsString() name!: string;
   @IsString() originZone!: string;
@@ -295,7 +290,7 @@ export class AgentParcelsQueryDto {
 /** R4 — the agent earnings-ledger register query. */
 export class AgentLedgerQueryDto {
   @IsOptional() @IsString() q?: string; // reference (parcel id / bank ref) or type word
-  @IsOptional() @IsIn(['TOP_UP', 'FEE', 'LABOR_PAYOUT', 'REFUND', 'OVERDRAFT']) type?: 'TOP_UP' | 'FEE' | 'LABOR_PAYOUT' | 'REFUND' | 'OVERDRAFT';
+  @IsOptional() @IsIn(['TOP_UP', 'FEE', 'LABOR_PAYOUT', 'REFUND']) type?: 'TOP_UP' | 'FEE' | 'LABOR_PAYOUT' | 'REFUND';
   @IsOptional() @IsIn(['in', 'out']) direction?: 'in' | 'out';
   @IsOptional() @IsString() from?: string; // ISO or YYYY-MM-DD (inclusive)
   @IsOptional() @IsString() to?: string;

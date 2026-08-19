@@ -60,7 +60,7 @@ export function histApiQuery(q: HistQuery) {
 
 export interface EarnQuery {
   q: string;
-  type: '' | 'TOP_UP' | 'FEE' | 'LABOR_PAYOUT' | 'REFUND' | 'OVERDRAFT';
+  type: '' | 'TOP_UP' | 'FEE' | 'LABOR_PAYOUT' | 'REFUND';
   direction: '' | 'in' | 'out';
   from: string;
   to: string;

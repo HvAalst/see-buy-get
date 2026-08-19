@@ -467,9 +467,9 @@ export function agentLedgerTypeWord(type: string, t: Translate): string {
       return t('agent.logic.ledgerPayout');
     case 'REFUND':
       return t('agent.logic.ledgerRefund');
-    case 'OVERDRAFT':
-      return t('agent.logic.ledgerOverdraft');
     default:
+      // Historical 'OVERDRAFT' rows land here and render as their raw type — the concept was removed
+      // with the trade-credit line, so nothing new can carry it.
       return type;
   }
 }
