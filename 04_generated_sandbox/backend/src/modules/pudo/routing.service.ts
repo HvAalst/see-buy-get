@@ -7,7 +7,8 @@ import { MdpService } from './mdp.service';
 import { VehicleService } from './vehicle.service';
 import { Router, ROUTER } from './router';
 import { isOpenAt, nextOpenAt } from './hours';
-import { DISPATCH_BUFFER_H, HANDOVER_BUFFER_H, PLATFORM_FEE_PCT, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, VEHICLE_SPEED_KMH, withPlatformFee } from './pudo.config';
+import { DISPATCH_BUFFER_H, HANDOVER_BUFFER_H, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, VEHICLE_SPEED_KMH, withPlatformFee } from './pudo.config';
+import { EntityService } from '../../foundation/entity/entity.service';
 import { ParcelSize } from './pudo.types';
 
 export interface NodePick {
@@ -60,6 +61,7 @@ export class RoutingService {
     private readonly corridors: CorridorService,
     private readonly mdps: MdpService,
     private readonly vehicles: VehicleService,
+    private readonly entities: EntityService,
     @Inject(ROUTER) private readonly router: Router,
   ) {}
 
@@ -92,9 +94,13 @@ export class RoutingService {
     const factor = SIZE_TRANSPORT_FACTOR[size];
     const { min, max } = this.vehicles.priceRange();
     const transport = (rate: number) => Math.round(totalKm * rate * factor * 100) / 100;
-    const leg = (rate: number) => { const t = transport(rate); const base = Math.round((nodeFees + t) * 100) / 100; return { transport: t, base, total: withPlatformFee(base) }; };
+    // The margin belongs to the sister selling the shipment, not to the network. Today one company
+    // performs the whole journey, so the origin node's rate is that company's; when a route crosses a
+    // border the COLLECTING sister's rate is the one that should apply, per R1 — revisit it there.
+    const feePct = this.entities.feePctOf(nodes[0]?.entityId ?? entityIds[0]);
+    const leg = (rate: number) => { const t = transport(rate); const base = Math.round((nodeFees + t) * 100) / 100; return { transport: t, base, total: withPlatformFee(base, feePct) }; };
     return {
-      hops: plan.hops, nodes, legs, entityIds, totalKm, nodeFees, size, transportFactor: factor, perKm: { min, max }, platformFeePct: PLATFORM_FEE_PCT,
+      hops: plan.hops, nodes, legs, entityIds, totalKm, nodeFees, size, transportFactor: factor, perKm: { min, max }, platformFeePct: feePct,
       flexible: leg(max), locked: leg(min),
     };
   }

@@ -26,6 +26,13 @@ export class Entity {
   /** The currency this entity settles in, derived from its jurisdiction. A group has none: it holds
    *  no custody account, so there is no balance for a currency to describe. */
   currency?: string;
+  /**
+   * The margin this sister charges on top of provider costs, as a fraction (0.02 = 2%). A knob each
+   * market turns for itself rather than a constant of the network — Nairobi and Amsterdam do not have to
+   * price alike. Absent means "the network default"; read it through EntityService.feePctOf(), never
+   * off the record, so a sister created before the knob existed still answers.
+   */
+  feePct?: number;
   /** Sisters point at the group they belong to. */
   parentEntityId?: string;
   createdAt: string;

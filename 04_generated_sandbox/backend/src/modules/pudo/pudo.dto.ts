@@ -391,6 +391,11 @@ export class CollectDto {
   @IsString() collectionCode!: string;
 }
 
+/** A sister's own margin, as a fraction (0.02 = 2%). Bounds are enforced in the service. */
+export class EntityFeeDto {
+  @IsNumber() feePct!: number;
+}
+
 /** Control-tower reissue of a burned release secret; `by` names the human behind the operator token. */
 export class ReissueReleaseDto {
   @IsOptional() @IsString() by?: string;

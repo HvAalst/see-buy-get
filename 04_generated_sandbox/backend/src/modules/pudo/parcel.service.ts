@@ -897,6 +897,7 @@ export class ParcelService implements OnApplicationBootstrap {
       nodeFees: quote.nodeFees,
       transportCost: chosen.transport,
       platformFee,
+      platformFeePct: quote.platformFeePct, // the rate quoted, locked to this parcel
       shipmentCost,
       ceilingCost: quote.flexible.total,
       buyerCharge,
@@ -982,6 +983,7 @@ export class ParcelService implements OnApplicationBootstrap {
       nodeFees: quote.nodeFees,
       transportCost: chosen.transport,
       platformFee: Math.round((chosen.total - chosen.base) * 100) / 100,
+      platformFeePct: quote.platformFeePct, // the rate quoted, locked to this parcel
       shipmentCost: chosen.total,
       ceilingCost: quote.flexible.total,
       paidStatus: 'unpaid',
@@ -1215,7 +1217,10 @@ export class ParcelService implements OnApplicationBootstrap {
     if (parcel.routeMode !== 'flexible' || !parcel.vendorId || parcel.rebate != null) return;
     if (parcel.ceilingCost == null || parcel.nodeFees == null || parcel.routeKm == null) return;
     const perKm = parcel.actualPerKm ?? this.vehicles.priceRange().min;
-    const actual = withPlatformFee(Math.round((parcel.nodeFees + parcel.routeKm * perKm * SIZE_TRANSPORT_FACTOR[parcel.size]) * 100) / 100);
+    // The rate the parcel was MINTED at, never today's. A sister may turn its margin knob while this
+    // parcel is in transit; settling against the new rate would quietly rewrite a price the customer
+    // already agreed to. A parcel from before the knob existed falls back to the network default.
+    const actual = withPlatformFee(Math.round((parcel.nodeFees + parcel.routeKm * perKm * SIZE_TRANSPORT_FACTOR[parcel.size]) * 100) / 100, parcel.platformFeePct);
     parcel.actualCost = actual;
     const rebate = Math.round(Math.max(0, parcel.ceilingCost - actual) * 100) / 100;
     parcel.rebate = rebate;

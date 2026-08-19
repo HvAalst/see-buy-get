@@ -3835,6 +3835,45 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/fee": {
+      "post": {
+        "operationId": "Sbg.setEntityFee",
+        "summary": "",
+        "description": "Turn a sister's margin knob. Operator-gated today because there is no per-sister admin role yet —\nwhen there is, this is the endpoint it owns, scoped to its own entity and nobody else's.\n\nIt reprices nothing already quoted: every parcel carries the rate it was minted at.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityFeeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Entity"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/agents/kyc-queue": {
       "get": {
         "operationId": "Sbg.kycQueue",
@@ -11742,6 +11781,60 @@
           "approve"
         ]
       },
+      "EntityFeeDto": {
+        "type": "object",
+        "properties": {
+          "feePct": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "feePct"
+        ]
+      },
+      "Entity": {
+        "type": "object",
+        "properties": {
+          "entityId": {
+            "type": "string"
+          },
+          "did": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "object"
+          },
+          "name": {
+            "type": "string"
+          },
+          "jurisdiction": {
+            "type": "string",
+            "description": "ISO-3166-alpha-2. Required for a sister (it is what makes it the merchant of record there);\n absent on the group, whose country of incorporation nothing in the system depends on."
+          },
+          "currency": {
+            "type": "string",
+            "description": "The currency this entity settles in, derived from its jurisdiction. A group has none: it holds\n no custody account, so there is no balance for a currency to describe."
+          },
+          "feePct": {
+            "type": "number",
+            "description": "The margin this sister charges on top of provider costs, as a fraction (0.02 = 2%). A knob each\nmarket turns for itself rather than a constant of the network — Nairobi and Amsterdam do not have to\nprice alike. Absent means \"the network default\"; read it through EntityService.feePctOf(), never\noff the record, so a sister created before the knob existed still answers."
+          },
+          "parentEntityId": {
+            "type": "string",
+            "description": "Sisters point at the group they belong to."
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "entityId",
+          "did",
+          "kind",
+          "name",
+          "createdAt"
+        ]
+      },
       "AvailabilityDto": {
         "type": "object",
         "properties": {
@@ -12328,6 +12421,9 @@
             "type": "number"
           },
           "platformFee": {
+            "type": "number"
+          },
+          "platformFeePct": {
             "type": "number"
           },
           "shipmentCost": {

@@ -3,6 +3,7 @@ import { GlosError } from '../http/glos-error';
 import { PersistentMap } from '../store/persistent-map';
 import { DidService } from '../did/did.service';
 import { currencyForJurisdiction } from '../money/currency';
+import { MAX_PLATFORM_FEE_PCT, MIN_PLATFORM_FEE_PCT, PLATFORM_FEE_PCT } from '../../modules/pudo/pudo.config';
 import { Entity, canHoldCustody, canTransact } from './entity.types';
 
 /**
@@ -112,6 +113,28 @@ export class EntityService implements OnApplicationBootstrap {
     if (!canTransact(entity)) {
       throw new GlosError('FORBIDDEN', `${entity.name} is a holding company: it cannot be a party to a transaction`);
     }
+    return entity;
+  }
+
+  /** The margin this sister charges, falling back to the network default for one that never set it. */
+  feePctOf(entityId: string): number {
+    return this.get(entityId).feePct ?? PLATFORM_FEE_PCT;
+  }
+
+  /**
+   * Set a sister's margin. Only a sister has one — the group earns its licence fee, not a cut of every
+   * parcel, and giving it a rate would imply it takes a slice of transactions it is not a party to.
+   *
+   * Changing the rate does NOT reprice anything already quoted: a parcel carries the rate it was minted
+   * at, so a knob turned this morning cannot rewrite what a customer was told yesterday.
+   */
+  setFeePct(entityId: string, pct: number): Entity {
+    const entity = this.requireTransacting(entityId);
+    if (!Number.isFinite(pct) || pct < MIN_PLATFORM_FEE_PCT || pct > MAX_PLATFORM_FEE_PCT) {
+      throw new GlosError('INVALID_INPUT', `A margin must be between ${MIN_PLATFORM_FEE_PCT * 100}% and ${MAX_PLATFORM_FEE_PCT * 100}%`);
+    }
+    entity.feePct = Math.round(pct * 10_000) / 10_000; // basis points is as fine as a margin needs to be
+    this.entities.set(entity.entityId, entity);
     return entity;
   }
 

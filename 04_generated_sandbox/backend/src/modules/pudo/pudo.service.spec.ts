@@ -1235,6 +1235,41 @@ describe('PUDO Light', () => {
       ).toThrow(/No daughter company operates in NL/);
     });
 
+    it('lets a sister set its OWN margin, and refuses an implausible one', () => {
+      const ke = entities.requireForJurisdiction('KE');
+      expect(entities.feePctOf(ke.entityId)).toBe(0.02); // the network default until a sister turns it
+
+      entities.setFeePct(ke.entityId, 0.05);
+      expect(entities.feePctOf(ke.entityId)).toBe(0.05);
+
+      expect(() => entities.setFeePct(ke.entityId, 0.9)).toThrow(/between 0% and 25%/);
+      expect(() => entities.setFeePct(ke.entityId, -0.01)).toThrow(/between 0% and 25%/);
+      // The mother earns a licence fee, not a slice of parcels she is not a party to.
+      expect(() => entities.setFeePct(entities.group().entityId, 0.03)).toThrow(/holding company/);
+    });
+
+    it('prices a quote at the sister’s rate, and LOCKS that rate to the parcel', () => {
+      const origin = onboardAgent('Fee Origin', 'NorthTown', 50);
+      const dest = onboardAgent('Fee Dest', 'SouthTown', 50);
+      corridors.addCorridor({ name: 'N-S fee', originZone: 'NorthTown', destZone: 'SouthTown' });
+      const ke = entities.requireForJurisdiction('KE');
+      entities.setFeePct(ke.entityId, 0.10);
+
+      const quote = routing.quoteShipment(origin.did, dest.did, 'M');
+      expect(quote.platformFeePct).toBe(0.10);
+      expect(quote.locked.total).toBeCloseTo(Math.round(quote.locked.base * 1.1 * 100) / 100, 2);
+
+      const vendor = vendors.register({ name: 'Fee Store' });
+      vendors.topUp(vendor.vendorId, 200);
+      const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: 'ORD-FEE', originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: 'c.jpg', shippingPolicy: vendor.shippingPolicy, quote });
+      expect(parcel.platformFeePct).toBe(0.10);
+
+      // The knob turns again mid-flight; the parcel keeps the rate it was quoted at.
+      entities.setFeePct(ke.entityId, 0.02);
+      expect(parcels.get(parcel.parcelId).platformFeePct).toBe(0.10);
+      expect(parcels.get(parcel.parcelId).shipmentCost).toBe(parcel.shipmentCost);
+    });
+
     it('never names the mother as a collector — she is not a party to customer transactions', () => {
       const group = entities.group();
       const origin = onboardAgent('Mother Origin', 'NorthTown', 50);

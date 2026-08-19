@@ -380,7 +380,10 @@ export class Parcel {
   routeKm?: number; // total route distance (kept for the flexible delivery rebate calc)
   nodeFees?: number; // sum of per-parcel fees at each PUDO + MDP on the route
   transportCost?: number; // per-km transport at the chosen rate (ceiling or cheapest)
-  platformFee?: number; // the 2% daughter-co margin
+  platformFee?: number; // the daughter-co margin, in money
+  /** The margin RATE this parcel was priced at, stamped at mint. The sister can turn its knob at any
+   *  time; a parcel in transit must settle on the rate its price was quoted with, not on today's. */
+  platformFeePct?: number;
   shipmentCost?: number; // what the vendor is billed prepaid (nodeFees + transport + platform fee)
   ceilingCost?: number; // the worst-case (highest-rate) total a flexible parcel reserves
   actualCost?: number; // the real total once the carrier is known (drives the flexible rebate)

@@ -79,9 +79,15 @@ export const NETWORK_JURISDICTION = DEFAULT_VENDOR_COUNTRY;
 export const round2cfg = round2;
 
 /** Apply the platform margin to a base provider cost. */
-export function withPlatformFee(base: number): number {
-  return round2(base * (1 + PLATFORM_FEE_PCT));
+export function withPlatformFee(base: number, pct: number = PLATFORM_FEE_PCT): number {
+  return round2(base * (1 + pct));
 }
+
+// The margin is a KNOB each sister sets for its own market, not a constant of the network — the rate
+// above is only the default a new sister starts on. Bounded so a mistyped rate cannot price a market out
+// of existence or hand the margin away: a fee is a decision, and an implausible one is a typo.
+export const MIN_PLATFORM_FEE_PCT = 0;
+export const MAX_PLATFORM_FEE_PCT = 0.25;
 
 // S34b — dynamic market-pulse tunables. The engine buckets the map into ~0.1° cells (a "market zone",
 // mirroring the monitor heatmap), samples supply (live vehicles) vs demand (open freight) per cell, and
