@@ -140,6 +140,59 @@ describe('books (double entry)', () => {
     expect(books.account(KE, ACCOUNT_CODES.DEPOSIT_AGENT, undefined, 'did:agent:1').accountId).toBe(a.accountId); // idempotent
   });
 
+  describe('exactness — the ledger keeps integers, not floats', () => {
+    it('stores minor units, so the classic float sum is exact', () => {
+      // 0.1 + 0.2 !== 0.3 in binary floating point. In cents it is 10 + 20 === 30, and that is the whole
+      // reason the ledger does not hold money as a float.
+      expect(0.1 + 0.2).not.toBe(0.3);
+      const entry = books.post({
+        entityId: KE,
+        kind: 'test',
+        lines: [
+          { code: ACCOUNT_CODES.CASH_CUSTODY, amount: 0.1 },
+          { code: ACCOUNT_CODES.EXPENSE_PAYMENT_FEES, amount: 0.2 },
+          { code: ACCOUNT_CODES.DEPOSIT_AGENT, counterparty: 'did:agent:1', amount: -0.3 },
+        ],
+      });
+      expect(entry.lines.map((l) => l.amount)).toEqual([10, 20, -30]); // integers on the record
+      expect(books.balance(KE, ACCOUNT_CODES.CASH_CUSTODY)).toBe(0.1);
+      expect(books.balances(KE)).toEqual({ balanced: true, drift: 0 });
+    });
+
+    it('accumulates a third of a cent without drifting', () => {
+      // A hundred postings of a value floats cannot hold exactly. In cents there is nothing to lose.
+      for (let i = 0; i < 100; i++) {
+        books.post({
+          entityId: KE,
+          kind: 'dust',
+          lines: [
+            { code: ACCOUNT_CODES.CASH_CUSTODY, amount: 0.07 },
+            { code: ACCOUNT_CODES.DEPOSIT_AGENT, counterparty: 'did:agent:1', amount: -0.07 },
+          ],
+        });
+      }
+      expect(books.balance(KE, ACCOUNT_CODES.CASH_CUSTODY)).toBe(7);
+      expect(books.balances(KE)).toEqual({ balanced: true, drift: 0 });
+    });
+
+    it('refuses an entry that only balances within a rounding tolerance', () => {
+      // There is no epsilon any more: sides that do not meet are a caller's arithmetic bug, and the
+      // books must say so rather than absorb a third of a cent on every posting for ever.
+      expect(() =>
+        books.post({
+          entityId: KE,
+          kind: 'thirds',
+          lines: [
+            { code: ACCOUNT_CODES.CASH_CUSTODY, amount: 0.333 },
+            { code: ACCOUNT_CODES.EXPENSE_PAYMENT_FEES, amount: 0.333 },
+            { code: ACCOUNT_CODES.DEPOSIT_AGENT, counterparty: 'did:agent:1', amount: -0.666 },
+          ],
+        }),
+      ).toThrow(/does not balance/);
+      expect(books.journal()).toHaveLength(0);
+    });
+  });
+
   it('refuses a line whose amount is not a number', () => {
     expect(() => books.post({ entityId: KE, kind: 'x', lines: [{ code: ACCOUNT_CODES.CASH_CUSTODY, amount: NaN }, { code: ACCOUNT_CODES.REVENUE, amount: 0 }] })).toThrow(/not a number/);
     expect(() => books.post({ entityId: KE, kind: 'x', lines: [] })).toThrow(/needs lines/);

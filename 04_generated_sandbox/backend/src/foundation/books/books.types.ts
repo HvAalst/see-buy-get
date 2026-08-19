@@ -90,10 +90,18 @@ export class Account {
   createdAt: string;
 }
 
-/** One side of a movement: an account and a signed amount, in that account's own currency. */
+/**
+ * One side of a movement: an account and a signed amount, in that account's own currency.
+ *
+ * `amount` is in the currency's MINOR UNITS — cents, not shillings — and is always an integer. Money
+ * held as a float cannot be added without losing fractions of a cent, and a ledger that loses fractions
+ * is a ledger with a tolerance. Integers have none: an entry balances exactly or it is refused.
+ *
+ * Callers still speak in major units at the service boundary; post() converts once, on the way in.
+ */
 export interface EntryLine {
   accountId: string;
-  amount: number; // debit positive, credit negative; an entry's lines sum to zero
+  amount: number; // integer minor units; debit positive, credit negative; an entry's lines sum to zero
 }
 
 /**

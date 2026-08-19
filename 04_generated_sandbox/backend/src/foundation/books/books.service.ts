@@ -6,14 +6,16 @@ import { EntityService } from '../entity/entity.service';
 import { Account, ACCOUNT_CODES, ACCOUNT_KIND, AccountCode, EntryLine, JournalEntry } from './books.types';
 
 /**
- * Money is held to 2dp for now; minor units are their own slice (deferred, deliberately). `|| 0`
- * normalises negative zero: an empty account is 0, never −0, which is a different value to Object.is and
- * would make a caller's `=== 0` quietly wrong.
+ * The ledger stores integers — minor units, cents rather than shillings — so its arithmetic is exact and
+ * an entry balances or it does not. There is no tolerance and no epsilon: those exist only to paper over
+ * float drift, and a fraction of a cent lost per posting becomes, across a network, a number nobody can
+ * explain and "floating point" does not answer for.
+ *
+ * Callers still speak in major units, so the boundary converts, once, here.
  */
-const round2 = (n: number): number => Math.round(n * 100) / 100 || 0;
-
-/** Tolerance for the balance check — a float artefact must not fail a genuinely balanced entry. */
-const EPSILON = 0.005;
+const toMinor = (major: number): number => Math.round(major * 100);
+/** Back to major units for the outside world. `|| 0` normalises −0, a different value to Object.is. */
+const toMajor = (minor: number): number => minor / 100 || 0;
 
 export interface PostInput {
   entityId: string;
@@ -79,12 +81,14 @@ export class BooksService {
 
     const lines: EntryLine[] = input.lines.map((l) => {
       if (!Number.isFinite(l.amount)) throw new GlosError('INVALID_INPUT', `Line amount for ${l.code} is not a number`);
-      return { accountId: this.account(entity.entityId, l.code, currency, l.counterparty).accountId, amount: round2(l.amount) };
+      return { accountId: this.account(entity.entityId, l.code, currency, l.counterparty).accountId, amount: toMinor(l.amount) };
     });
 
-    const sum = round2(lines.reduce((s, l) => s + l.amount, 0));
-    if (Math.abs(sum) > EPSILON) {
-      throw new GlosError('INVALID_INPUT', `Entry does not balance: the lines sum to ${sum}, not 0`);
+    // Integers, so this is exact. An entry whose lines round to a non-zero sum is refused rather than
+    // absorbed — if a caller's arithmetic cannot make its own sides meet, the books must not pretend.
+    const sum = lines.reduce((s, l) => s + l.amount, 0);
+    if (sum !== 0) {
+      throw new GlosError('INVALID_INPUT', `Entry does not balance: the lines sum to ${toMajor(sum)}, not 0`);
     }
 
     const entry: JournalEntry = {
@@ -108,13 +112,18 @@ export class BooksService {
       .sort((a, b) => b.at.localeCompare(a.at));
   }
 
-  /** The balance of one account, summed from its lines — the postings are the truth, not a cached figure. */
-  balanceOf(accountId: string): number {
+  /** The balance of one account in MINOR units, summed from its lines — exact, integer arithmetic. */
+  balanceMinorOf(accountId: string): number {
     let sum = 0;
     for (const entry of this.entries.values()) {
       for (const line of entry.lines) if (line.accountId === accountId) sum += line.amount;
     }
-    return round2(sum);
+    return sum;
+  }
+
+  /** The balance of one account — the postings are the truth, not a cached figure. */
+  balanceOf(accountId: string): number {
+    return toMajor(this.balanceMinorOf(accountId));
   }
 
   balance(entityId: string, code: AccountCode, currency?: string, counterparty?: string): number {
@@ -138,8 +147,9 @@ export class BooksService {
    * account exists to compare against, and is precisely what the payment rail will make checkable.
    */
   balances(entityId: string): { balanced: boolean; drift: number } {
-    const drift = round2([...this.accounts.values()].filter((a) => a.entityId === entityId).reduce((s, a) => s + this.balanceOf(a.accountId), 0));
-    return { balanced: Math.abs(drift) <= EPSILON, drift };
+    // Summed in minor units, so "balanced" is an exact statement rather than one within a tolerance.
+    const drift = [...this.accounts.values()].filter((a) => a.entityId === entityId).reduce((s, a) => s + this.balanceMinorOf(a.accountId), 0);
+    return { balanced: drift === 0, drift: toMajor(drift) };
   }
 
   /**
@@ -158,11 +168,17 @@ export class BooksService {
     const ccy = currency ?? entity.currency ?? '';
     const OWED: AccountCode[] = [ACCOUNT_CODES.DEPOSIT_AGENT, ACCOUNT_CODES.DEPOSIT_VENDOR, ACCOUNT_CODES.PAYABLE_PROVIDER, ACCOUNT_CODES.PAYABLE_TAX, ACCOUNT_CODES.PAYABLE_GROUP];
     const mine = [...this.accounts.values()].filter((a) => a.entityId === entityId && a.currency === ccy);
-    const held = round2(mine.filter((a) => a.code === ACCOUNT_CODES.CASH_CUSTODY).reduce((s, a) => s + this.balanceOf(a.accountId), 0));
+    const sumMinor = (pick: (code: AccountCode) => boolean) => mine.filter((a) => pick(a.code)).reduce((s, a) => s + this.balanceMinorOf(a.accountId), 0);
+    const heldMinor = sumMinor((c) => c === ACCOUNT_CODES.CASH_CUSTODY);
     // Liabilities are negative by convention; report what is OWED as a positive number a human can read.
-    const owed = round2(-mine.filter((a) => OWED.includes(a.code)).reduce((s, a) => s + this.balanceOf(a.accountId), 0));
-    const lent = round2(mine.filter((a) => a.code === ACCOUNT_CODES.RECEIVABLE_AGENT).reduce((s, a) => s + this.balanceOf(a.accountId), 0));
-    return { currency: ccy, held, lent, owed, cover: round2(held - owed) };
+    const owedMinor = -sumMinor((c) => OWED.includes(c));
+    return {
+      currency: ccy,
+      held: toMajor(heldMinor),
+      lent: toMajor(sumMinor((c) => c === ACCOUNT_CODES.RECEIVABLE_AGENT)),
+      owed: toMajor(owedMinor),
+      cover: toMajor(heldMinor - owedMinor),
+    };
   }
 
   /**
