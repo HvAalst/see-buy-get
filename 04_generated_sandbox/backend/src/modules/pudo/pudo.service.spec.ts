@@ -1040,6 +1040,42 @@ describe('PUDO Light', () => {
       expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
     });
 
+    it('keeps the shop’s REGISTER and the books in agreement — every row linked, and the net equal', () => {
+      const shop = onboardAgent('Reg Shop', 'NorthTown', 50);
+      onboardAgent('Reg Dest', 'SouthTown', 50);
+      parcels.accept({ agentDid: shop.did, parcelId: 'QR-REG', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+      gate.payLabour(shop.did, 0.4, 'PUD-REG', 'parcel');
+      gate.topUp(shop.did, 10);
+
+      const rows = gate.entries({ did: shop.did });
+      expect(rows.length).toBeGreaterThan(2);
+      // Every money row points at the journal entry that moved the money, so a row and its posting can
+      // never be told apart — the register is a VIEW of the books, not a second set of them.
+      for (const row of rows) {
+        expect(row.entryId).toBeTruthy();
+        expect(books.journal().some((e) => e.entryId === row.entryId)).toBe(true);
+      }
+      // And the stronger guarantee: the register's net EQUALS the balance the books derive. Linkage
+      // proves the rows came from somewhere; this proves they still say the same thing.
+      const summary = gate.agentLedgerSummary(shop.did, {});
+      expect(summary.net).toBeCloseTo(agents.balance(shop.did), 2);
+    });
+
+    it('keeps the STORE’s register and the books in agreement too', () => {
+      const vendor = vendors.register({ name: 'Reg Store' });
+      vendors.topUp(vendor.vendorId, 60);
+      vendors.billShipment(vendor.vendorId, 'PUD-VREG', 12);
+      vendors.rebate(vendor.vendorId, 'PUD-VREG', 2);
+
+      const rows = vendors.settlementsFor(vendor.vendorId);
+      expect(rows).toHaveLength(3);
+      for (const row of rows) {
+        expect(row.entryId).toBeTruthy();
+        expect(books.journal().some((e) => e.entryId === row.entryId)).toBe(true);
+      }
+      expect(vendors.vendorLedgerSummary(vendor.vendorId, {}).net).toBeCloseTo(vendors.balanceOf(vendor.vendorId), 2);
+    });
+
     it('shows credit LENT separately from cash held — cover asks what could be paid today', () => {
       const shop = onboardAgent('Lent Shop', 'NorthTown', 50);
       onboardAgent('Lent Dest', 'SouthTown', 50);

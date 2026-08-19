@@ -23,6 +23,8 @@ export interface VendorSettlement {
   /** What the amount IS. Absent on rows written before the field existed — read it through
    *  settlementCurrencyOf(), which resolves those from the row's country. */
   currency?: string;
+  /** The journal entry this row projects. The BOOKS are the money; this row is how a merchant reads it. */
+  entryId?: string;
   parcelId?: string;
   note?: string;
   at: string;
@@ -227,8 +229,8 @@ export class VendorService {
 
   // --- prepaid settlement with the per-country daughter company (GLOS reports; holds no fiat) ---
 
-  private book(vendor: Vendor, type: VendorSettlement['type'], sign: '+' | '-', amount: number, parcelId?: string, note?: string): VendorSettlement {
-    const entry: VendorSettlement = { id: `vs_${randomBytes(6).toString('hex')}`, vendorId: vendor.vendorId, country: vendor.country, type, sign, amount: Math.round(amount * 100) / 100, currency: currencyForJurisdiction(vendor.country), parcelId, note, at: new Date().toISOString() };
+  private book(vendor: Vendor, type: VendorSettlement['type'], sign: '+' | '-', amount: number, parcelId?: string, note?: string, entryId?: string): VendorSettlement {
+    const entry: VendorSettlement = { id: `vs_${randomBytes(6).toString('hex')}`, vendorId: vendor.vendorId, country: vendor.country, type, sign, amount: Math.round(amount * 100) / 100, currency: currencyForJurisdiction(vendor.country), entryId, parcelId, note, at: new Date().toISOString() };
     this.settlements.set(entry.id, entry); // durable bookkeeping
     return entry;
   }
@@ -239,11 +241,11 @@ export class VendorService {
     const vendor = this.get(vendorId);
     // The store's float is a DEPOSIT: the sister holds the money and owes it back as shipping. Nothing
     // is earned until a parcel moves — we charge for service, not for balance.
-    this.post(vendor, 'top-up', vendorId, [
+    const entryId = this.post(vendor, 'top-up', vendorId, [
       { code: ACCOUNT_CODES.CASH_CUSTODY, amount },
       { code: ACCOUNT_CODES.DEPOSIT_VENDOR, counterparty: vendorId, amount: -amount },
     ]);
-    this.book(vendor, 'TOP_UP', '+', amount, undefined, 'prepay');
+    this.book(vendor, 'TOP_UP', '+', amount, undefined, 'prepay', entryId);
     return this.syncBalance(vendor);
   }
 
@@ -252,11 +254,11 @@ export class VendorService {
     const vendor = this.get(vendorId);
     if (this.balanceOf(vendorId) + 1e-9 < amount) return { paid: false, balance: this.balanceOf(vendorId) };
     // The service is delivered: the deposit is drawn down and the sister recognises the revenue HERE.
-    this.post(vendor, 'shipping', parcelId, [
+    const entryId = this.post(vendor, 'shipping', parcelId, [
       { code: ACCOUNT_CODES.DEPOSIT_VENDOR, counterparty: vendorId, amount },
       { code: ACCOUNT_CODES.REVENUE, amount: -amount },
     ]);
-    this.book(vendor, 'BILLING', '-', amount, parcelId, 'shipment');
+    this.book(vendor, 'BILLING', '-', amount, parcelId, 'shipment', entryId);
     return { paid: true, balance: this.syncBalance(vendor).balance };
   }
 
@@ -265,11 +267,11 @@ export class VendorService {
     const vendor = this.get(vendorId);
     if (amount <= 0) return vendor;
     // The over-hold was never earned: revenue is given back and the deposit restored.
-    this.post(vendor, 'rebate', parcelId, [
+    const entryId = this.post(vendor, 'rebate', parcelId, [
       { code: ACCOUNT_CODES.REVENUE, amount },
       { code: ACCOUNT_CODES.DEPOSIT_VENDOR, counterparty: vendorId, amount: -amount },
     ]);
-    this.book(vendor, 'REBATE', '+', amount, parcelId, note);
+    this.book(vendor, 'REBATE', '+', amount, parcelId, note, entryId);
     return this.syncBalance(vendor);
   }
 
@@ -282,9 +284,9 @@ export class VendorService {
     return -this.books.balance(this.entityIdOf(vendor), ACCOUNT_CODES.DEPOSIT_VENDOR, undefined, vendor.vendorId) || 0;
   }
 
-  /** Post to the sister that settles this store. */
-  private post(vendor: Vendor, kind: string, ref: string, lines: Array<{ code: AccountCode; counterparty?: string; amount: number }>): void {
-    this.books.post({ entityId: this.entityIdOf(vendor), kind, ref, lines });
+  /** Post to the sister that settles this store, returning the journal entry the register row points at. */
+  private post(vendor: Vendor, kind: string, ref: string, lines: Array<{ code: AccountCode; counterparty?: string; amount: number }>): string {
+    return this.books.post({ entityId: this.entityIdOf(vendor), kind, ref, lines }).entryId;
   }
 
   /**
