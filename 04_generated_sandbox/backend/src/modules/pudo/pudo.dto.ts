@@ -727,6 +727,10 @@ export class FreightActionDto {
 export class OpenConsignmentDto {
   @IsOptional() @IsString() ownerDid?: string; // operator-override only; a normal owner is pinned to its token
   @IsOptional() @IsIn(CARGO_NATURES) natureCode?: CargoNature; // must be durable (non-perishable) — the service refuses cold-chain
+  /** Where the lot is actually collected. A cooperative aggregates where the crop is — a shed, a yard, a
+   *  farm gate — which is often nowhere near the PUDO counter that owns the lot. Omitted → the owner's site. */
+  @IsOptional() @IsString() pickupLabel?: string;
+  @IsOptional() @ValidateNested() @Type(() => GeoDto) pickupLocation?: GeoDto;
   @IsString() destLabel!: string;
   @IsOptional() @ValidateNested() @Type(() => GeoDto) destLocation?: GeoDto;
   @IsNumber() @Min(1) targetKg!: number; // the truckload target the lot fills toward

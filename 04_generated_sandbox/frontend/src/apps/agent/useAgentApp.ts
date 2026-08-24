@@ -1051,10 +1051,20 @@ export function useAgentApp() {
   /** F3 — open a consolidation lot for a durable dry commodity. `destLocation` is the pin the shop placed (or
    *  the geocoder found and they accepted): without one the eventual haul prices off a name we may not know. */
   const openConsignment = useCallback(
-    async (input: { natureCode: string; destLabel: string; destLocation?: GeoPoint; targetKg: number; maxSpend?: number }) => {
+    async (input: { natureCode: string; pickupLabel?: string; pickupLocation?: GeoPoint; destLabel: string; destLocation?: GeoPoint; targetKg: number; maxSpend?: number }) => {
       if (!client || !did || !input.destLabel.trim() || !(input.targetKg > 0)) return;
       await run('open-consignment', async () => {
-        const r = await client.api.openConsignment({ natureCode: input.natureCode as never, destLabel: input.destLabel.trim(), destLocation: input.destLocation, targetKg: input.targetKg, maxSpend: input.maxSpend });
+        const r = await client.api.openConsignment({
+          natureCode: input.natureCode as never,
+          // Both ends travel together: the truck is paid between them, and the drivers told about it are the
+          // ones near the PICKUP — which for a cooperative is a shed, not the counter that owns the lot.
+          pickupLabel: input.pickupLabel?.trim() || undefined,
+          pickupLocation: input.pickupLocation,
+          destLabel: input.destLabel.trim(),
+          destLocation: input.destLocation,
+          targetKg: input.targetKg,
+          maxSpend: input.maxSpend,
+        });
         if (r.error) return fail(r.error);
         buzz();
         pushToast({ tone: 'ok', icon: 'bag', title: t('agent.toast.lotOpened'), detail: t('agent.toast.lotOpenedDetail') });

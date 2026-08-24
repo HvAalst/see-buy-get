@@ -3621,6 +3621,35 @@ describe('PUDO Light', () => {
     expect(listed.some((l) => l.code === lot.code)).toBe(true);
   });
 
+  it('F3: a co-op lot is collected where the CROP is, not at the counter that owns it', () => {
+    const owner = onboardAgent('Coop Owner', 'NorthTown', 50);
+    const shed = { lat: 6.61, lng: 38.41 }; // the co-op store, some way out of town
+
+    // Both ends are address-less: the truck loads at the shed and delivers to a market. The pin the shop
+    // placed is what the haul is priced between — and what decides which drivers hear about it.
+    const lot: any = controller.openConsignment(
+      { natureCode: 'FOD', pickupLabel: 'Aleta Wondo co-op store', pickupLocation: shed, destLabel: 'Merkato', targetKg: 1000 } as never,
+      { role: 'pudo', did: owner.did } as never,
+    );
+    expect(lot.pickupLabel).toBe('Aleta Wondo co-op store');
+    expect(lot.pickupLocation).toEqual(shed);
+
+    // A NAMED site with no pin that the gazetteer does not recognise falls back to the shop's own pin: a
+    // best-guess centroid would send a truck further astray than the counter, which is at least a real place.
+    const unknown: any = controller.openConsignment(
+      { natureCode: 'FOD', pickupLabel: 'the third shed past the river', destLabel: 'Merkato', targetKg: 1000 } as never,
+      { role: 'pudo', did: owner.did } as never,
+    );
+    expect(unknown.pickupLabel).toBe('the third shed past the river'); // the humans still get the name
+    expect(unknown.pickupLocation).toEqual(owner.location);
+
+    // And the freight the lot becomes is picked up THERE — the coordinate the drivers are matched on.
+    consignments.deposit(lot.code, 'farmer-A', 1200); // full → auto-posts
+    const posted = consignments.requireByCode(lot.code);
+    expect(posted.status).toBe('posted');
+    expect(dispatch.listFreight().find((f) => f.freightId === posted.freightId)?.pickupLocation).toEqual(shed);
+  });
+
   // --- REP2: an AGENT rates a DRIVER on the movement leg (verified interaction, one-per-pair, driver profile) ---
 
   const mkFleetDriver = (tag: string) => {

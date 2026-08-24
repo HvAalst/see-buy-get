@@ -1558,11 +1558,19 @@ export class SbgController {
     // label when a pin isn't given — otherwise the eventual haul would price at zero trip distance (the driver
     // hauls the full route but is paid only the deadhead). A gazetteer fallback still beats no coordinate.
     const destLocation = dto.destLocation ?? (dto.destLabel.trim() ? this.geocoder.geocode(dto.destLabel).location : undefined);
+    // BOTH ends of a cooperative haul can be address-less. The lot is collected where the crop is — a shed,
+    // a yard, a farm gate — which is often nowhere near the counter that owns the lot, and that is where the
+    // truck must go. A pin wins; a NAMED site is geocoded, but only if the gazetteer actually recognised it,
+    // because a fallback guess (a national centroid) would send a truck further astray than the shop's own
+    // pin, which is at least a real place. No pickup given at all → the shop, exactly as before.
+    const named = dto.pickupLabel?.trim();
+    const geocodedPickup = named ? this.geocoder.geocode(named) : undefined;
+    const pickupLocation = dto.pickupLocation ?? (geocodedPickup && geocodedPickup.confidence !== 'fallback' ? geocodedPickup.location : undefined) ?? owner.location;
     return this.consignments.open({
       ownerDid,
       natureCode: dto.natureCode,
-      pickupLabel: owner.shopName,
-      pickupLocation: owner.location,
+      pickupLabel: named || owner.shopName,
+      pickupLocation,
       destLabel: dto.destLabel,
       destLocation,
       targetKg: dto.targetKg,

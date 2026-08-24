@@ -14632,6 +14632,12 @@
               "HUM"
             ]
           },
+          "pickupLabel": {
+            "type": "string"
+          },
+          "pickupLocation": {
+            "$ref": "#/components/schemas/GeoDto"
+          },
           "destLabel": {
             "type": "string"
           },

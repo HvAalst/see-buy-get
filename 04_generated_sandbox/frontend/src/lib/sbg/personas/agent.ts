@@ -159,6 +159,9 @@ export function createAgentApi(sbg: SbgClient) {
      *  and its site becomes the freight's pickup). A perishable commodity is refused server-side. */
     openConsignment: (body: {
       natureCode?: 'GEN' | 'FOD' | 'FOP' | 'HAZ-CHEM' | 'HAZ-DUST' | 'HAZ-BIO' | 'HAZ-FLAM' | 'FRG' | 'ODR' | 'HUM';
+      /** Where the lot is actually collected (a co-op shed, a farm gate). Omitted → the owning shop's site. */
+      pickupLabel?: string;
+      pickupLocation?: { lat: number; lng: number };
       destLabel: string;
       destLocation?: { lat: number; lng: number };
       targetKg: number;
