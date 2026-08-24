@@ -66,9 +66,12 @@ export function createDriverApi(sbg: SbgClient) {
     setVehiclePrice: (vehicleId: string, price: number) =>
       sbg.request((c) => c.PATCH('/v1/sbg/vehicles/{id}/pricing', { params: { path: { id: vehicleId } }, body: { price } })),
 
-    /** Start a shift by scanning the vehicle QR (couples driver ↔ vehicle), optionally saying where it goes. */
-    startSession: (did: string, vehicleQr: string, leg?: DeclaredLegBody) =>
-      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/start-session', { params: { path: { did } }, body: { vehicleQr, leg } })),
+    /** Start a shift: scan the vehicle QR, or name one already driven before — optionally saying where it goes. */
+    startSession: (did: string, vehicle: { vehicleQr?: string; vehicleId?: string }, leg?: DeclaredLegBody) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/start-session', { params: { path: { did } }, body: { ...vehicle, leg } })),
+
+    /** The vehicles this driver has driven before — the "which one today?" list, before they reach the yard. */
+    driverVehicles: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}/vehicles', { params: { path: { did } } })),
 
     /** Say (or re-say) the road this shift is running — what "a load near you" is matched against. */
     declareLeg: (did: string, leg: DeclaredLegBody) =>

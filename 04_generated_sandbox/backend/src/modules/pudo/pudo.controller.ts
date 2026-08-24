@@ -1467,7 +1467,17 @@ export class SbgController {
   /** Driver starts a shift by scanning the vehicle's dashboard QR → couples them for the day. */
   @Post('fleet/drivers/:did/start-session')
   startSession(@Param('did') did: string, @Body() dto: StartSessionDto) {
+    // Naming a vehicle they have driven before is the same act as scanning it — the coupling rules (licence,
+    // usable vehicle, nobody else on it) are what actually protect this, and they run either way.
+    if (dto.vehicleId?.trim()) return this.fleet.couple(did, dto.vehicleId.trim(), undefined, dto.leg);
+    if (!dto.vehicleQr?.trim()) throw new GlosError('FIELD_REQUIRED', 'Scan the vehicle QR, or pick one you have driven before');
     return this.fleet.startSession(did, dto.vehicleQr, dto.leg);
+  }
+
+  /** The vehicles this driver has driven before — the "which one today?" list, before they reach the yard. */
+  @Get('fleet/drivers/:did/vehicles')
+  driverVehicles(@Param('did') did: string) {
+    return { vehicles: this.fleet.recentVehicles(did) };
   }
 
   /**

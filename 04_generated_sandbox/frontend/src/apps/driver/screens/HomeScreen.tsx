@@ -33,6 +33,10 @@ function OffShift({ state, actions }: HomeScreenProps) {
   // starts the shift anyway and says it later, when they look for work.
   const [legIndex, setLegIndex] = useState<number | null>(null);
   const leg = legIndex != null ? state.legs[legIndex] : undefined;
+  // Which vehicle, before walking to it. A driver opens the app over a coffee; the one they drove yesterday
+  // is one tap, and the dashboard QR below stays the way a NEW vehicle joins the list.
+  const [vehicleId, setVehicleId] = useState<string | null>(null);
+  const free = state.vehicles.filter((v) => !v.busy);
 
   return (
     <div class="scr">
@@ -42,12 +46,49 @@ function OffShift({ state, actions }: HomeScreenProps) {
       {notice ? <Note tone="warn" icon="clock" title={t('driver.home.notActivated')} detail={notice} /> : null}
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
 
-      <Card>
+      {/* Your own vehicles first — the morning question is "which one today?", and it has an answer before
+          the driver has walked anywhere. One in use by someone else is shown and blocked, never hidden. */}
+      {state.vehicles.length ? (
+        <Card label={t('driver.home.whichVehicle')}>
+          <div class="rows" role="list">
+            {state.vehicles.map((v) => (
+              <button
+                key={v.vehicleId}
+                type="button"
+                class={`row${vehicleId === v.vehicleId ? ' row--on' : ''}`}
+                role="listitem"
+                aria-pressed={vehicleId === v.vehicleId}
+                disabled={v.busy}
+                onClick={() => setVehicleId(vehicleId === v.vehicleId ? null : v.vehicleId)}
+              >
+                <span class="row__ic">
+                  <Icon name={vehicleId === v.vehicleId ? 'check' : 'truck'} size={24} />
+                </span>
+                <span class="row__body">
+                  <span class="row__t">{v.plate}</span>
+                  <span class="row__s">
+                    {v.vehicleClass}
+                    {v.truckSubtype ? ` · ${v.truckSubtype.replace(/_/g, ' ')}` : ''}
+                    {t('driver.home.carriesUpTo', { kg: v.capacityKg })}
+                  </span>
+                </span>
+                {v.busy ? <Pill tone="warn" dot>{t('driver.home.vehicleBusy')}</Pill> : null}
+              </button>
+            ))}
+          </div>
+          {free.length === 0 ? <p class="card__note">{t('driver.home.allBusy')}</p> : null}
+        </Card>
+      ) : null}
+
+      <Card label={state.vehicles.length ? t('driver.home.orScan') : undefined}>
         <ScanField
           id="qr"
           label={t('driver.home.qrLabel')}
           value={state.form.vehicleQr}
-          onValue={(v) => actions.setForm({ vehicleQr: v.trim() })}
+          onValue={(v) => {
+            actions.setForm({ vehicleQr: v.trim() });
+            if (v.trim()) setVehicleId(null); // a scanned dashboard wins over a remembered plate
+          }}
           expect="vehicle"
           placeholder={t('driver.home.qrPlaceholder')}
           enterKeyHint="go"
@@ -83,7 +124,11 @@ function OffShift({ state, actions }: HomeScreenProps) {
       ) : null}
 
       <div class="scr__cta">
-        <Button onClick={() => void actions.startShift(leg && { fromLabel: leg.fromLabel, from: leg.from, toLabel: leg.toLabel, to: leg.to })} disabled={!ready} busy={state.busy === 'start'}>
+        <Button
+          onClick={() => void actions.startShift(vehicleId ?? undefined, leg && { fromLabel: leg.fromLabel, from: leg.from, toLabel: leg.toLabel, to: leg.to })}
+          disabled={!ready || (!vehicleId && !state.form.vehicleQr.trim())}
+          busy={state.busy === 'start'}
+        >
           {t('driver.home.startShift')}
         </Button>
       </div>

@@ -68,6 +68,18 @@ export interface VehicleView {
   status: string;
 }
 
+/** A vehicle this driver has driven before — the morning "which one today?" list. */
+export interface RecentVehicleView {
+  vehicleId: string;
+  plate: string;
+  vehicleClass: string;
+  truckSubtype?: string;
+  capacityKg: number;
+  verified: boolean;
+  /** Someone else is on shift with it right now. Shown and blocked, never hidden. */
+  busy: boolean;
+}
+
 /**
  * The road the driver said this shift is running. It is what "a load near you" is matched against: without
  * it the network can only see how NEAR a driver is, and pings one heading north about a bag going south.

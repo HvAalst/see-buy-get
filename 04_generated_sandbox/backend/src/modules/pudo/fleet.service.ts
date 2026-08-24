@@ -21,6 +21,20 @@ export interface LegInput {
 
 /** How many past legs a driver is offered to re-pick from. A working driver runs a handful of roads. */
 const LEG_HISTORY = 5;
+/** …and how many vehicles. A driver has one bus, or swaps between a couple; nobody scrolls their history. */
+const VEHICLE_HISTORY = 5;
+
+/** One vehicle a driver could start today on — projected for the picker, with whether it is free right now. */
+export interface RecentVehicle {
+  vehicleId: string;
+  plate: string;
+  vehicleClass: string;
+  truckSubtype?: string;
+  capacityKg: number;
+  verified: boolean;
+  /** Someone else is on shift with it — shown, not hidden, so "where is my bus?" has an answer. */
+  busy: boolean;
+}
 
 /**
  * FleetService — the flexible driver↔vehicle coupling (Compendium Ch 19). Drivers and vehicles are
@@ -40,6 +54,14 @@ export class FleetService {
    * at all — which is how the network stops knowing where anyone is going.
    */
   private readonly legHistory = new PersistentMap<string, DeclaredLeg[]>('pudo-driver-legs');
+  /**
+   * The vehicles each driver has actually driven, most recent first. Durable for the same reason the legs
+   * are: a driver opens the app at a coffee table, not at the vehicle, and the honest answer to "which one
+   * today?" is the one they drove yesterday. Scanning the dashboard QR stays the way a NEW vehicle enters
+   * this list — the list is a shortcut for vehicles already known to this driver, not a way to name any
+   * vehicle in the network.
+   */
+  private readonly vehicleHistory = new PersistentMap<string, string[]>('pudo-driver-vehicles');
 
   constructor(
     private readonly drivers: DriverService,
@@ -69,6 +91,7 @@ export class FleetService {
       startedAt: new Date().toISOString(),
     };
     this.assignments.set(assignment.assignmentId, assignment);
+    this.rememberVehicle(driverDid, vehicleId);
     if (assignment.leg) this.rememberLeg(driverDid, assignment.leg);
     this.drivers.setAssignedVehicle(driverDid, vehicleId);
     void this.events.publish(GlosEvent.Pudo.DriverCoupled, { assignmentId: assignment.assignmentId, driverDid, vehicleId, vehicleClass: vehicle.vehicleClass, corridorId }, { source: 'pudo' }).catch(() => undefined);
@@ -83,6 +106,36 @@ export class FleetService {
     const vehicle = this.vehicles.byQr(vehicleScan);
     if (!vehicle) throw new GlosError('NOT_FOUND', 'Unknown vehicle QR — scan the sticker on the dashboard');
     return this.couple(driverDid, vehicle.vehicleId, undefined, leg);
+  }
+
+  /**
+   * The vehicles this driver could start on today: the ones they have driven before, newest first.
+   *
+   * A driver opens the app over a coffee, not at the vehicle, so requiring the dashboard QR to begin the
+   * day made the first act of every morning "walk to the bus first". A vehicle someone ELSE is on shift with
+   * is listed and marked, not hidden: "where is my bus?" deserves an answer, and the coupling rule refuses
+   * it anyway. Unknown/retired ids simply fall out — a scrapped vehicle stops being offered.
+   */
+  recentVehicles(driverDid: string): RecentVehicle[] {
+    const known = this.vehicles.list();
+    return (this.vehicleHistory.get(driverDid) ?? [])
+      .map((id) => known.find((v) => v.vehicleId === id))
+      .filter((v): v is NonNullable<typeof v> => !!v && v.status !== 'RETIRED')
+      .map((v) => ({
+        vehicleId: v.vehicleId,
+        plate: v.plate,
+        vehicleClass: v.vehicleClass,
+        truckSubtype: v.truckSubtype,
+        capacityKg: v.capacityKg,
+        verified: v.verified,
+        busy: !!this.activeForVehicle(v.vehicleId),
+      }));
+  }
+
+  /** Keep the vehicle at the head of this driver's history (the same road-re-run rule as the legs). */
+  private rememberVehicle(driverDid: string, vehicleId: string): void {
+    const rest = (this.vehicleHistory.get(driverDid) ?? []).filter((id) => id !== vehicleId);
+    this.vehicleHistory.set(driverDid, [vehicleId, ...rest].slice(0, VEHICLE_HISTORY));
   }
 
   /* --- the declared leg: where this driver is actually going --- */

@@ -73,6 +73,11 @@ export const enDriver = {
   'driver.home.qrPlaceholder': 'Scan the code on the dashboard',
   'driver.home.qrNote': 'Scanning the dashboard sticker couples you to that vehicle for the day.',
   'driver.home.startShift': 'Start shift',
+  // Which vehicle today — answered before the driver walks to the yard.
+  'driver.home.whichVehicle': 'Which vehicle today?',
+  'driver.home.vehicleBusy': 'In use',
+  'driver.home.allBusy': 'All of your vehicles are out with someone else. Scan the one you are taking instead.',
+  'driver.home.orScan': 'Or scan a different vehicle',
   // The declared leg — what "a load near you" is matched against.
   'driver.home.whereToday': 'Where are you going today?',
   'driver.home.whereTodayNote': 'Pick the road you are running and we will only send you loads on it. You can also say later.',

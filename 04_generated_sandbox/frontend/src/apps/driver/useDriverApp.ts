@@ -13,6 +13,7 @@ import type {
   MdpRow,
   NodeOption,
   DeclaredLegView,
+  RecentVehicleView,
   ExpectedLoadView,
   OfferView,
   RatesView,
@@ -76,6 +77,8 @@ export interface DriverState {
   route: SavedRoute | null;
   /** The roads this driver has declared before, newest first — offered instead of naming two places daily. */
   legs: DeclaredLegView[];
+  /** The vehicles this driver has driven before — so the day can start over a coffee, not at the bus. */
+  vehicles: RecentVehicleView[];
   /** R5 — the driver jobs + earnings register (a filtered/paged page + the current view's totals). */
   jobs: DriverJobRow[];
   jobsTotal: number;
@@ -111,6 +114,7 @@ const INITIAL: DriverState = {
   offerIndex: 0,
   route: null,
   legs: [],
+  vehicles: [],
   jobs: [],
   jobsTotal: 0,
   jobsState: 'idle',
@@ -293,11 +297,15 @@ export function useDriverApp() {
         rates = rtR.error ? null : narrow<RatesView>(rtR.data);
       }
 
-      // The roads this driver has run before. Soft-fail: not knowing the history only costs them the
-      // shortcut, so it must never take down the boot that tells them whether they are on shift.
+      // The roads and the vehicles this driver has used before. Soft-fail both: not knowing the history only
+      // costs them the shortcut, so it must never take down the boot that tells them whether they are on shift.
       const legsR = await client.api.driverLegs(did);
       if (superseded()) return;
       const legs = legsR.error ? [] : narrow<{ legs: DeclaredLegView[] }>(legsR.data)?.legs ?? [];
+
+      const vehR = session.active ? null : await client.api.driverVehicles(did); // only the morning screen needs it
+      if (superseded()) return;
+      const vehicles = !vehR || vehR.error ? [] : narrow<{ vehicles: RecentVehicleView[] }>(vehR.data)?.vehicles ?? [];
 
       setState((s) => ({
         ...s,
@@ -310,6 +318,7 @@ export function useDriverApp() {
         rates,
         route: savedRoute(did),
         legs,
+        vehicles,
         error: null,
         stale: false,
         refreshing: false,
@@ -534,15 +543,16 @@ export function useDriverApp() {
    * Start the shift — and, in the same breath, say where it is going. The leg is optional here on purpose:
    * a driver who does not yet know is not blocked, and Find work declares it for them when they pick a route.
    */
-  const startShift = useCallback(async (leg?: DeclaredLegBody) => {
+  const startShift = useCallback(async (vehicleId?: string, leg?: DeclaredLegBody) => {
     if (!client || !did) return;
     const qr = state.form.vehicleQr.trim();
-    if (!qr) {
+    // One of the two: the vehicle they picked from their own history, or the QR on a dashboard in front of them.
+    if (!vehicleId && !qr) {
       pushToast({ tone: 'warn', icon: 'scan', title: t('driver.toast.scanQrFirst') });
       return;
     }
     await run('start', async () => {
-      const r = await client.api.startSession(did, qr, leg);
+      const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehicleQr: qr }, leg);
       if (r.error) return fail(r.error);
       buzz();
       setState((s) => ({ ...s, form: { ...EMPTY_FORM } }));

@@ -3723,6 +3723,31 @@ describe('PUDO Light', () => {
     expect(dispatch.headingTowards(quiet.did, arbaMinch)).toBe(true);
   });
 
+  it('offers the vehicles this driver has driven before — the day starts at a coffee table, not at the bus', () => {
+    const d = coupleTipper('picker', { min: 0.8, max: 1.5 });
+    const mine = drivers.get(d.did).assignedVehicleId!;
+    fleet.uncouple(d.did);
+
+    // Driving one is what puts it on the list; nothing else does.
+    const listed: any[] = fleet.recentVehicles(d.did);
+    expect(listed.map((v) => v.vehicleId)).toEqual([mine]);
+    expect(listed[0]).toMatchObject({ busy: false, plate: expect.any(String), capacityKg: 20_000 });
+
+    // Naming a known vehicle starts the day exactly as scanning its dashboard would.
+    const asg: any = controller.startSession(d.did, { vehicleId: mine } as never);
+    expect(asg.vehicleId).toBe(mine);
+    expect(() => controller.startSession(d.did, {} as never)).toThrow(/Scan the vehicle QR/);
+
+    // Someone else on shift with it is SHOWN and marked, not hidden — "where is my bus?" deserves an answer.
+    const other = drivers.register({ displayName: 'Other', fullName: 'O O', nationalId: 'ID-other-pick', mobile: '+2547other', licenceClasses: ['truck'], licenceNumber: 'L-o', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(other.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(other.did, true);
+    fleet.uncouple(d.did); // our driver hands it back at the end of the day…
+    fleet.couple(other.did, mine); // …and it goes out with someone else
+    expect(fleet.recentVehicles(other.did)[0]).toMatchObject({ vehicleId: mine, busy: true });
+    expect(() => controller.startSession(d.did, { vehicleId: mine } as never)).toThrow(/already coupled/i);
+  });
+
   it('refuses a leg that is off shift, or half-named', () => {
     const d = coupleTipper('legbad', { min: 0.8, max: 1.5 });
     const here = { lat: 7.06, lng: 38.47 };

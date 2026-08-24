@@ -669,9 +669,14 @@ export class AssignCorridorDto {
   @IsString() corridorId!: string;
 }
 
+/**
+ * Start the day. Either scan the dashboard QR (a NEW vehicle, or one you are standing at) or name a vehicle
+ * you have driven before — a driver opens the app over a coffee, not at the bus. One of the two is required.
+ */
 export class StartSessionDto {
-  @IsString() vehicleQr!: string;
-  /** The leg for this shift, declared in the same breath as scanning the dashboard QR. */
+  @IsOptional() @IsString() vehicleQr?: string;
+  @IsOptional() @IsString() vehicleId?: string;
+  /** The leg for this shift, declared in the same breath as picking the vehicle. */
   @IsOptional() @ValidateNested() @Type(() => DeclareLegDto) leg?: DeclareLegDto;
 }
 

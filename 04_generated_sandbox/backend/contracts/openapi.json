@@ -8372,6 +8372,28 @@
         }
       }
     },
+    "/v1/sbg/fleet/drivers/{did}/vehicles": {
+      "get": {
+        "operationId": "Sbg.driverVehicles",
+        "summary": "",
+        "description": "The vehicles this driver has driven before — the \"which one today?\" list, before they reach the yard.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/drivers/{did}/leg": {
       "post": {
         "operationId": "Sbg.declareLeg",
@@ -14483,18 +14505,18 @@
           "vehicleQr": {
             "type": "string"
           },
+          "vehicleId": {
+            "type": "string"
+          },
           "leg": {
-            "description": "The leg for this shift, declared in the same breath as scanning the dashboard QR.",
+            "description": "The leg for this shift, declared in the same breath as picking the vehicle.",
             "allOf": [
               {
                 "$ref": "#/components/schemas/DeclareLegDto"
               }
             ]
           }
-        },
-        "required": [
-          "vehicleQr"
-        ]
+        }
       },
       "AssignCorridorDto": {
         "type": "object",
