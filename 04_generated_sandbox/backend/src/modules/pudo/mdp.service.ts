@@ -145,7 +145,9 @@ export class MdpService {
     this.agents.get(agentDid); // 404 for an unknown shop
     if (!destZone?.trim()) throw new GlosError('FIELD_REQUIRED', 'A bag needs a destination');
     const tote = this.totes.register(agentDid);
-    return this.totes.assign(tote.code, destZone.trim(), destZone.trim());
+    // sealRequired: this bag leaves the shop when the SHOPKEEPER says it is closed, never when a sweep
+    // decides it looks full. A bag on a counter is open until a human shuts it.
+    return this.totes.assign(tote.code, destZone.trim(), destZone.trim(), { sealRequired: true });
   }
 
   /**
@@ -201,11 +203,22 @@ export class MdpService {
    * Everything waiting at this shop for the bag's destination goes in, or is knowingly left — and a
    * knowing omission is stamped exactly as handover stamps it, so the control tower sees the same thing
    * either way. Nothing is mutated on the refusal path.
+   *
+   * Sealing is also what TELLS the network: it publishes the bag AND pings the drivers near the shop, so
+   * the fast path (the shop says "it is ready now") reaches a driver, which is the whole point of closing
+   * it early. An ALREADY published bag can still be sealed — a bag published by the old sweep, or by a
+   * manual release, must not lock its shop out of the completeness gate — it is reconciled and stamped,
+   * but not re-announced.
    */
   sealShopBag(code: string, agentDid: string, input: { acknowledgeShortShip?: boolean; shortShipReason?: string } = {}): { tote: Tote; parcels: string[]; missed: string[]; shortShipped: boolean } {
     const bag = this.totes.requireByCode(code);
     if (bag.locationId !== agentDid) throw new GlosError('WRONG_PUDO', `Bag ${code} was not opened at this shop`);
-    if (bag.status !== 'filling') throw new GlosError('INVALID_STATE', `Bag ${code} is ${bag.status}, must be filling to seal`);
+    // Closed once. A second seal would re-run the gate against parcels dropped off AFTER the bag was shut
+    // and short-ship them for missing a bus they were never on.
+    if (bag.sealedAt) throw new GlosError('INVALID_STATE', `Bag ${code} is already closed`);
+    if (bag.status !== 'filling' && bag.status !== 'available') {
+      throw new GlosError('INVALID_STATE', `Bag ${code} is ${bag.status}, it can no longer be closed`);
+    }
 
     const inBag = new Set(bag.parcels);
     const expected = this.parcels
@@ -224,7 +237,17 @@ export class MdpService {
     if (missed.length) this.parcels.markShortShipped(missed, agentDid, `bag ${code}`, (input.shortShipReason ?? '').trim() || 'not bagged');
 
     // Sealed = published to the marketplace, so a driver can claim it and arrive knowing it is one scan.
-    return { tote: this.totes.markAvailable(code), parcels: [...bag.parcels], missed, shortShipped: missed.length > 0 };
+    const announce = bag.status === 'filling'; // an already-published bag was announced when it was published
+    const tote = announce ? this.totes.markAvailable(code) : bag;
+    this.totes.markSealed(code);
+    if (announce) {
+      // …and tell the drivers near the shop. Without this the shop's deliberate "it is ready NOW" was the
+      // only publish in the network that pinged nobody, while the passive 24 h sweep did.
+      void this.events
+        .publish(GlosEvent.Pudo.ToteAvailable, { code: tote.code, reason: 'sealed', weightKg: tote.weightKg, destination: tote.destinationLabel }, { source: 'pudo' })
+        .catch(() => undefined);
+    }
+    return { tote, parcels: [...bag.parcels], missed, shortShipped: missed.length > 0 };
   }
 
   // --- bag flow ---

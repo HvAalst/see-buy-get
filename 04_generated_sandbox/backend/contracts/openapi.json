@@ -13606,6 +13606,17 @@
           },
           "claimedBy": {
             "type": "string"
+          },
+          "sealRequired": {
+            "type": "boolean"
+          },
+          "sealPromptedFor": {
+            "type": "object",
+            "description": "Which nudge this shop has already had for this bag, so the sweep asks once per reason (full → aged)."
+          },
+          "sealedAt": {
+            "type": "string",
+            "description": "When the shop closed it. The record that the completeness gate ran, distinct from being published."
           }
         },
         "required": [

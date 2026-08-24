@@ -75,7 +75,8 @@ export const GlosEvent = {
     DriverSuspended: 'pudo.driver_suspended',
     DriverCoupled: 'pudo.driver_coupled', // driver ↔ vehicle coupling formed
     DriverUncoupled: 'pudo.driver_uncoupled',
-    ToteAvailable: 'pudo.tote_available', // a full/aged tote published to the claim marketplace
+    ToteAvailable: 'pudo.tote_available', // a full/aged/SEALED tote published to the claim marketplace
+    ToteNeedsSeal: 'pudo.tote_needs_seal', // a SHOP bag is full/aged but still open — ask the shop to close it
     FreightPosted: 'pudo.freight_posted', // a dedicated-freight load registered → ping drivers near its pickup
     LoadClaimed: 'pudo.load_claimed', // a driver claimed a tote/freight along their route
     FreightTempBreach: 'pudo.freight_temp_breach', // S33b — a cold-chain freight logged an out-of-band temperature

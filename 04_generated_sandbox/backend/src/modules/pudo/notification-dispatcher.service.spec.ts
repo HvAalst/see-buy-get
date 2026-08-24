@@ -178,6 +178,31 @@ describe('NotificationDispatcher — rule 2: driver "load near you" (N3)', () =>
     expect(onBus.notifications.inboxFor('d')).toHaveLength(0);
   });
 
+  it('asks the SHOP to close its own bag, in the words that fit the reason', async () => {
+    const shop = () => harness({ agents: { 'did:agent:shop': { shopName: 'Mama Njeri Shop' } } });
+
+    const full = shop();
+    await full.events.publish(GlosEvent.Pudo.ToteNeedsSeal, { code: 'BAG-9', agentDid: 'did:agent:shop', reason: 'full', destination: 'Kisumu' });
+    const inbox = full.notifications.inboxFor('did:agent:shop');
+    expect(inbox).toHaveLength(1);
+    expect(inbox[0]).toMatchObject({ kind: 'bag_ready_to_close', title: 'A bag is full' });
+    expect(inbox[0].body).toBe('Bag BAG-9 for Kisumu is full. Close it so a driver can take it.');
+
+    // The aged nudge is a warning, not good news — and must not be swallowed by the "it is full" one.
+    const aged = shop();
+    await aged.events.publish(GlosEvent.Pudo.ToteNeedsSeal, { code: 'BAG-9', agentDid: 'did:agent:shop', reason: 'max_wait' });
+    const agedRow = aged.notifications.inboxFor('did:agent:shop')[0];
+    expect(agedRow).toMatchObject({ title: 'A bag has been waiting' });
+    expect(agedRow.body).toContain('Close it');
+  });
+
+  it('says nothing when the bag is not sitting at a real PUDO', async () => {
+    const hub = harness({ agents: {} });
+    await hub.events.publish(GlosEvent.Pudo.ToteNeedsSeal, { code: 'BAG-9', agentDid: 'mdp-1', reason: 'full' });
+    expect(hub.notifications.inboxFor('mdp-1')).toHaveLength(0);
+    expect(hub.events.getDeadLetters()).toHaveLength(0);
+  });
+
   it('caps the fan-out to the nearest N drivers', async () => {
     const drivers = Array.from({ length: 20 }, (_, i) => D(`d${i}`, at(0, 0.001 * (i + 1))));
     const { events, notifications } = harness({

@@ -50,13 +50,15 @@ export class ToteService {
     return [...this.totes.values()].filter((t) => t.locationId === locationId).sort((a, b) => a.code.localeCompare(b.code));
   }
 
-  /** Link a free tote to a single next destination — it can now take parcels for that destination. */
-  assign(code: string, destinationNodeId: string, destinationLabel: string): Tote {
+  /** Link a free tote to a single next destination — it can now take parcels for that destination.
+   *  `sealRequired` marks a SHOP bag: only the shopkeeper's seal publishes it (see Tote.sealRequired). */
+  assign(code: string, destinationNodeId: string, destinationLabel: string, opts: { sealRequired?: boolean } = {}): Tote {
     const tote = this.requireByCode(code);
     if (tote.status !== 'free') throw new GlosError('INVALID_STATE', `Bag ${code} is ${tote.status}, must be empty/free to assign`);
     tote.status = 'filling';
     tote.destinationNodeId = destinationNodeId;
     tote.destinationLabel = destinationLabel;
+    if (opts.sealRequired) tote.sealRequired = true;
     return this.save(tote);
   }
 
@@ -93,6 +95,20 @@ export class ToteService {
     if (!tote.parcels.length) throw new GlosError('BAG_EMPTY', `Bag ${code} is empty`);
     tote.status = 'available';
     tote.availableAt = new Date().toISOString();
+    return this.save(tote);
+  }
+
+  /** Record that the shop has been asked to close this bag, so the sweep asks once per reason. */
+  noteSealPrompt(code: string, reason: 'full' | 'max_wait'): Tote {
+    const tote = this.requireByCode(code);
+    tote.sealPromptedFor = reason;
+    return this.save(tote);
+  }
+
+  /** Stamp the shop's seal — the record that the completeness gate ran, separate from being published. */
+  markSealed(code: string): Tote {
+    const tote = this.requireByCode(code);
+    tote.sealedAt = new Date().toISOString();
     return this.save(tote);
   }
 

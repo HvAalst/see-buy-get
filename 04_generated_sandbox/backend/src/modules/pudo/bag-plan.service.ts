@@ -56,7 +56,9 @@ export class BagPlanService {
       // Busiest first: the bag with the most parcels in it is the one worth packing next.
       groups: [...byKey.values()]
         .sort((a, b) => b.parcelIds.length - a.parcelIds.length || a.label.localeCompare(b.label))
-        .map((g) => ({ ...g, openBagCode: open.find((t) => t.destinationNodeId === g.key)?.code })),
+        // Only a FILLING bag is "the bag for this group": a sealed one is waiting for its driver, and
+        // pointing the shop back into it would trap them there — the next parcel needs a new bag.
+        .map((g) => ({ ...g, openBagCode: open.find((t) => t.destinationNodeId === g.key && t.status === 'filling')?.code })),
       // parcelIds, not just a count: a shop fills a bag across a working day, so re-opening one has to show
       // what is already inside it — otherwise the screen says "0 in the bag" over a bag holding three.
       bags: open.map((t) => ({ code: t.code, destinationLabel: t.destinationLabel, parcelIds: [...t.parcels], parcels: t.parcels.length, fillPct: this.totes.fillPct(t), status: t.status })),

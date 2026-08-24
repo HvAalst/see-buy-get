@@ -1152,7 +1152,96 @@ describe('PUDO Light', () => {
       mdps.fillTote(bag.code, 'QR-B1');
       mdps.fillTote(bag.code, 'QR-B2');
       mdps.sealShopBag(bag.code, origin.did);
-      expect(() => mdps.sealShopBag(bag.code, origin.did)).toThrow(/must be filling/);
+      // Closed once: a second seal would re-run the gate over parcels dropped off after the bag was shut
+      // and short-ship them for missing a bus they were never on.
+      expect(() => mdps.sealShopBag(bag.code, origin.did)).toThrow(/already closed/);
+    });
+
+    it('sealing PUBLISHES and tells the drivers — the shop saying "ready now" must reach someone', async () => {
+      const { origin } = shopWithTwoWaiting();
+      const bag = mdps.openShopBag(origin.did, 'SouthTown');
+      mdps.fillShopBag(bag.code, origin.did, 'QR-B1');
+      mdps.fillShopBag(bag.code, origin.did, 'QR-B2');
+
+      const sealed = mdps.sealShopBag(bag.code, origin.did);
+      expect(sealed.tote.status).toBe('available');
+      expect(sealed.tote.sealedAt).toBeTruthy(); // the gate ran — a record distinct from being published
+      await Promise.resolve();
+      const announced = events.getLog().filter((e) => e.type === GlosEvent.Pudo.ToteAvailable);
+      expect(announced).toHaveLength(1);
+      expect(announced[0].payload).toMatchObject({ code: bag.code, reason: 'sealed' });
+    });
+
+    it('the sweep never publishes a SHOP bag — it asks the shop to close it, once per reason', async () => {
+      const { origin } = shopWithTwoWaiting();
+      const bag = mdps.openShopBag(origin.did, 'SouthTown');
+      mdps.fillShopBag(bag.code, origin.did, 'QR-B1');
+      mdps.fillShopBag(bag.code, origin.did, 'QR-B2');
+
+      // Not full, not aged → nothing at all.
+      expect(dispatch.publishReady()).not.toContain(bag.code);
+      await Promise.resolve();
+      expect(events.getLog().filter((e) => e.type === GlosEvent.Pudo.ToteNeedsSeal)).toHaveLength(0);
+
+      // Aged past the max wait: still NOT published — a bag on a counter is open until a human shuts it,
+      // and publishing it would advertise a bag no driver can take (and lock the shop out of the gate).
+      const later = Date.now() + 25 * 3_600_000;
+      expect(dispatch.publishReady(later)).not.toContain(bag.code);
+      expect(totes.requireByCode(bag.code).status).toBe('filling');
+      await Promise.resolve();
+      const asked = events.getLog().filter((e) => e.type === GlosEvent.Pudo.ToteNeedsSeal);
+      expect(asked).toHaveLength(1);
+      expect(asked[0].payload).toMatchObject({ code: bag.code, agentDid: origin.did, reason: 'max_wait' });
+
+      // …and a sweep running every few minutes must not nag the counter every few minutes.
+      dispatch.publishReady(later + 3_600_000);
+      await Promise.resolve();
+      expect(events.getLog().filter((e) => e.type === GlosEvent.Pudo.ToteNeedsSeal)).toHaveLength(1);
+
+      // The shop closes it, and only then does it reach the marketplace.
+      expect(mdps.sealShopBag(bag.code, origin.did).tote.status).toBe('available');
+    });
+
+    it('after a seal the plan points at a NEW bag, not back into the closed one', () => {
+      const { origin } = shopWithTwoWaiting();
+      const bag = mdps.openShopBag(origin.did, 'SouthTown');
+      mdps.fillShopBag(bag.code, origin.did, 'QR-B1');
+      mdps.sealShopBag(bag.code, origin.did, { acknowledgeShortShip: true, shortShipReason: 'later bus' });
+
+      // The sealed bag is still on the floor waiting for its driver, so it stays on the bag list — but the
+      // group must not point the shop back into it, or the next parcel has nowhere to go.
+      const plan = bagPlans.forShop(origin.did);
+      expect(plan.bags.map((b) => b.code)).toContain(bag.code);
+      expect(plan.groups.find((g) => g.label === 'SouthTown')?.openBagCode).toBeUndefined();
+    });
+
+    it('refuses the manual early-release for a shop bag — closing it IS the shop’s release', () => {
+      const { origin } = shopWithTwoWaiting();
+      const bag = mdps.openShopBag(origin.did, 'SouthTown');
+      mdps.fillShopBag(bag.code, origin.did, 'QR-B1');
+      // Otherwise a bag reaches the marketplace with QR-B2 still on the shelf and no short-ship record —
+      // the exact hole the completeness gate exists to close.
+      expect(() => dispatch.release(bag.code)).toThrow(/close it at the counter/);
+      expect(totes.requireByCode(bag.code).status).toBe('filling');
+    });
+
+    it('a bag published some other way can still be closed — the shop is never locked out of the gate', async () => {
+      const { origin } = shopWithTwoWaiting();
+      // A hand-built bag (no seal step) that an operator published: the shape a legacy/auto-published bag
+      // has after a restart. Sealing must still reconcile it rather than refusing with "it is available".
+      const bag = totes.register(origin.did);
+      totes.assign(bag.code, 'SouthTown', 'SouthTown');
+      mdps.fillTote(bag.code, 'QR-B1');
+      dispatch.release(bag.code);
+      expect(totes.requireByCode(bag.code).status).toBe('available');
+
+      const sealed = mdps.sealShopBag(bag.code, origin.did, { acknowledgeShortShip: true, shortShipReason: 'went on an earlier bus' });
+      expect(sealed.missed).toEqual(['QR-B2']); // the gate ran: the one left behind is recorded
+      expect(sealed.tote.sealedAt).toBeTruthy();
+      expect(sealed.tote.status).toBe('available'); // unchanged — it was already published
+      await Promise.resolve();
+      // …and the drivers are not told twice about the same bag.
+      expect(events.getLog().filter((e) => e.type === GlosEvent.Pudo.ToteAvailable)).toHaveLength(1);
     });
   });
 

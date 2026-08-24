@@ -63,6 +63,12 @@ export class NotificationDispatcher implements OnModuleInit {
     this.events.subscribe<{ code: string; weightKg?: number; destination?: string }>(GlosEvent.Pudo.ToteAvailable, (e) =>
       this.onToteAvailable(e.payload),
     );
+    // Rule 2b (PUDO agent) — a bag the shop must CLOSE itself is ready to go. The sweep cannot publish a
+    // shop bag (it is open on a counter until a human shuts it), so the nudge is the whole mechanism that
+    // stops a full bag sitting there all afternoon.
+    this.events.subscribe<{ code: string; agentDid?: string; reason?: 'full' | 'max_wait'; destination?: string }>(GlosEvent.Pudo.ToteNeedsSeal, (e) =>
+      this.onToteNeedsSeal(e.payload),
+    );
     // Rule 3 (PUDO agent) — a bag went onto a bus bound for a PUDO; tell that shop its parcels are inbound.
     this.events.subscribe<{ destinationNodeId?: string; parcels?: number; code?: string }>(GlosEvent.Pudo.BagLoaded, (e) =>
       this.onBagLoaded(e.payload),
@@ -183,6 +189,38 @@ export class NotificationDispatcher implements OnModuleInit {
       );
     } catch (err) {
       this.logger.warn(`load-nearby notify failed for ${payload.code}: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * The shop scenario: one of this shop's own bags is ready to leave, but only the shop can close it. Two
+   * different messages, because they are two different situations at a counter: "it is full" is good news
+   * (close it and it goes), while "it has been open a day" is a warning that the parcels inside are late.
+   * Tagged per reason so the second one is not swallowed by the first.
+   */
+  private async onToteNeedsSeal(payload: { code: string; agentDid?: string; reason?: 'full' | 'max_wait'; destination?: string }): Promise<void> {
+    const agentDid = payload.agentDid;
+    if (!agentDid) return;
+    try {
+      this.agents.get(agentDid); // the bag must be sitting at a real PUDO (throws for a hub/unknown node)
+    } catch {
+      return;
+    }
+    try {
+      const where = payload.destination ? ` for ${payload.destination}` : '';
+      const full = payload.reason !== 'max_wait';
+      await this.notifications.notify(agentDid, {
+        kind: 'bag_ready_to_close',
+        title: full ? 'A bag is full' : 'A bag has been waiting',
+        body: full
+          ? `Bag ${payload.code}${where} is full. Close it so a driver can take it.`
+          : `Bag ${payload.code}${where} has been open since yesterday. Close it, or the parcels inside will keep waiting.`,
+        link: '/',
+        tag: `bag-seal:${payload.code}:${payload.reason ?? 'full'}`,
+        data: { code: payload.code },
+      });
+    } catch (err) {
+      this.logger.warn(`bag-needs-seal notify failed for ${payload.code}: ${(err as Error).message}`);
     }
   }
 

@@ -141,6 +141,12 @@ export function BagScreen({ state, actions }: BagScreenProps) {
                 )}
               </Card>
 
+              {/* A full bag only leaves when the shop closes it — the sweep will not do it behind the
+                  counter, so this is the moment to say so. */}
+              {bag.fillPct >= 100 ? (
+                <Note tone="info" icon="bag" title={t('agent.bag.fullTitle')} detail={t('agent.bag.fullBody')} />
+              ) : null}
+
               {/* The gate's refusal, explained where the shopkeeper can act on it. */}
               {bag.missed.length ? (
                 <Note tone="warn" icon="warning" title={t('agent.bag.leftTitle', { count: bag.missed.length })} detail={t('agent.bag.leftBody')} />

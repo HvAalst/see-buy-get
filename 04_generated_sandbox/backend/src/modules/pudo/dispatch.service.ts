@@ -7,6 +7,7 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
 import { AgentService } from './agent.service';
 import { MdpService } from './mdp.service';
 import { ToteService } from './tote.service';
+import { Tote } from './pudo.types';
 import { FleetService } from './fleet.service';
 import { CargoService } from './cargo.service';
 import { CargoNature, Equipment, VehicleCapability } from './cargo.types';
@@ -153,22 +154,57 @@ export class DispatchService {
 
   // --- publishing ---
 
-  /** Promote filling totes that are full or have waited ≥ 24 h to 'available' (claimable). */
+  /**
+   * Promote filling totes that are full or have waited ≥ 24 h to 'available' (claimable).
+   *
+   * A SHOP bag is never promoted here. It is a physical bag on a counter, open until a human shuts it, and
+   * publishing it behind the shopkeeper would advertise a bag a driver cannot take — and lock the shop out
+   * of the completeness gate, which only accepts a bag that is still filling. So the sweep ASKS instead:
+   * one nudge when it fills, one more when it has waited out the clock, and the parcels are never stranded
+   * quietly because someone forgot to close a bag.
+   */
   publishReady(now: number = Date.now()): string[] {
     const published: string[] = [];
     for (const t of this.totes.list({ status: 'filling' })) {
       const aged = t.filledAt ? now - new Date(t.filledAt).getTime() >= TOTE_MAX_WAIT_H * 3_600_000 : false;
-      if (t.parcels.length && (this.totes.isFull(t) || aged)) {
-        this.totes.markAvailable(t.code);
-        published.push(t.code);
-        void this.events.publish(GlosEvent.Pudo.ToteAvailable, { code: t.code, reason: this.totes.isFull(t) ? 'full' : 'max_wait', weightKg: t.weightKg, destination: t.destinationLabel }, { source: 'pudo' }).catch(() => undefined);
+      if (!t.parcels.length) continue;
+      const full = this.totes.isFull(t);
+      if (!full && !aged) continue;
+      if (t.sealRequired) {
+        this.promptSeal(t, aged ? 'max_wait' : 'full');
+        continue;
       }
+      this.totes.markAvailable(t.code);
+      published.push(t.code);
+      void this.events.publish(GlosEvent.Pudo.ToteAvailable, { code: t.code, reason: full ? 'full' : 'max_wait', weightKg: t.weightKg, destination: t.destinationLabel }, { source: 'pudo' }).catch(() => undefined);
     }
     return published;
   }
 
+  /**
+   * Ask a shop to close a bag that is ready to go. Once per reason and never backwards: a bag that filled
+   * (one nudge) and then waited out the clock earns a second, sharper one — but a sweep running every few
+   * minutes must not nag a counter every few minutes.
+   */
+  private promptSeal(tote: Tote, reason: 'full' | 'max_wait'): void {
+    if (tote.sealPromptedFor === reason || (reason === 'full' && tote.sealPromptedFor === 'max_wait')) return;
+    this.totes.noteSealPrompt(tote.code, reason);
+    void this.events
+      .publish(
+        GlosEvent.Pudo.ToteNeedsSeal,
+        { code: tote.code, agentDid: tote.locationId, reason, destination: tote.destinationLabel, parcels: tote.parcels.length },
+        { source: 'pudo' },
+      )
+      .catch(() => undefined);
+  }
+
   /** Agent manually publishes a not-yet-full tote early. */
   release(code: string): { code: string; status: string } {
+    // A shop bag has its own early-publish, and it is the seal: closing the bag runs the completeness gate
+    // and publishes in one act. Releasing it from here would put a bag on the marketplace with parcels for
+    // it still sitting on the shelf, unrecorded — the exact hole the gate exists to close.
+    const bag = this.totes.requireByCode(code);
+    if (bag.sealRequired) throw new GlosError('INVALID_STATE', `Bag ${code} is a shop bag — close it at the counter to send it`);
     const t = this.totes.markAvailable(code);
     void this.events.publish(GlosEvent.Pudo.ToteAvailable, { code: t.code, reason: 'manual', weightKg: t.weightKg, destination: t.destinationLabel }, { source: 'pudo' }).catch(() => undefined);
     return { code: t.code, status: t.status };

@@ -18,6 +18,7 @@ const KIND_ICON: Record<string, IconName> = {
   load_nearby: 'truck',
   bus_inbound: 'bag',
   intake_expected: 'box',
+  bag_ready_to_close: 'bag',
   test: 'bell',
 };
 

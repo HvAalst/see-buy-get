@@ -155,6 +155,8 @@ export const enAgent = {
   'agent.bag.inBag': '{count} in the bag',
   'agent.bag.nothingForZone': 'Nothing is waiting for this place any more.',
   'agent.bag.stillWaiting': 'Waiting',
+  'agent.bag.fullTitle': 'This bag is full',
+  'agent.bag.fullBody': 'Close it so a driver can take it, and open another one for the rest.',
   'agent.bag.seal': 'Close the bag',
   'agent.bag.leftTitle': '{count} still on the shelf',
   'agent.bag.leftBody': 'Put them in the bag, or leave them behind on purpose.',

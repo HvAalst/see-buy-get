@@ -98,7 +98,7 @@ export interface AgentState {
   /** The bag being packed right now. `missed` is the server's verdict at the last seal attempt —
    *  parcels for that destination still on the shelf. `scan` + `lastAdded` are the scanning loop: what is
    *  in the field, and what went in last (spoken back, so the counter never has to hunt the list). */
-  bag: { code: string; destKey: string; label: string; parcels: string[]; missed: string[]; sealed: boolean; scan: string; lastAdded: string | null } | null;
+  bag: { code: string; destKey: string; label: string; parcels: string[]; missed: string[]; sealed: boolean; scan: string; lastAdded: string | null; fillPct: number } | null;
   rates: RatesView | null;
   ratesState: 'idle' | 'loading' | 'ready' | 'error';
   /** F3 — the shop's consolidation lots (loaded when the Consignments screen opens). */
@@ -1172,6 +1172,7 @@ export function useAgentApp() {
             sealed: already?.status === 'available',
             scan: '',
             lastAdded: null,
+            fillPct: already?.fillPct ?? 0,
           },
         }));
         await loadBagPlan();
@@ -1206,11 +1207,21 @@ export function useAgentApp() {
           return fail(r.error);
         }
         signal('ok');
+        // The server's own fill figure: the shop learns the bag is full at the moment it fills, rather than
+        // by having the NEXT parcel refused.
+        const fillPct = narrow<{ fillPct?: number }>(r.data)?.fillPct;
         setState((s) =>
           s.bag
             ? {
                 ...s,
-                bag: { ...s.bag, parcels: [...s.bag.parcels, parcelId], missed: s.bag.missed.filter((m) => m !== parcelId), scan: '', lastAdded: parcelId },
+                bag: {
+                  ...s.bag,
+                  parcels: [...s.bag.parcels, parcelId],
+                  missed: s.bag.missed.filter((m) => m !== parcelId),
+                  scan: '',
+                  lastAdded: parcelId,
+                  fillPct: typeof fillPct === 'number' ? fillPct : s.bag.fillPct,
+                },
               }
             : s,
         );

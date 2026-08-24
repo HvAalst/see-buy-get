@@ -149,6 +149,18 @@ export class Tote {
   filledAt?: string; // when the first parcel went in (drives the 24 h max-wait publish)
   availableAt?: string; // when it was published to the claim marketplace
   claimedBy?: string; // driverDid that claimed it
+  /**
+   * A SHOP bag, published by the shopkeeper's SEAL and by nothing else. A hub bag has no seal step, so the
+   * dispatch sweep publishes it the moment it is full or aged; a shop bag that the sweep published behind
+   * the counter would advertise a bag still open on the floor — and lock the shop out of the completeness
+   * gate, which only accepts a filling bag. The sweep asks the shop to close it instead (see publishReady).
+   * Undefined on a hub bag and on every pre-slice record, which is the correct default for both.
+   */
+  sealRequired?: boolean;
+  /** Which nudge this shop has already had for this bag, so the sweep asks once per reason (full → aged). */
+  sealPromptedFor?: 'full' | 'max_wait';
+  /** When the shop closed it. The record that the completeness gate ran, distinct from being published. */
+  sealedAt?: string;
 }
 
 export type ConsignmentStatus = 'open' | 'posted';
