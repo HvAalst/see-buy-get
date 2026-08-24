@@ -1211,6 +1211,30 @@ export class ParcelService implements OnApplicationBootstrap {
   }
 
   /**
+   * Stamp parcels as knowingly left behind. Shared by the two ways a load can be short: a driver's
+   * manifest at handover, and a shop sealing a bag without everything that was waiting for it. Both
+   * record the SAME thing, so the control tower cannot tell which flow left a parcel on the shelf —
+   * only that somebody chose to, and why.
+   *
+   * The scan note stays generic: the reason lives on shortShipReason (control-tower only) and never in
+   * the timeline both consumer twins can read.
+   */
+  markShortShipped(parcelIds: string[], by: string, manifestRef: string, reason: string): string[] {
+    const at = new Date().toISOString();
+    const stamped: string[] = [];
+    for (const parcelId of parcelIds) {
+      const parcel = this.parcels.get(parcelId);
+      if (!parcel || parcel.status !== 'At_PUDO') continue;
+      parcel.shortShippedAt = at;
+      parcel.shortShipReason = reason;
+      this.scan(parcel, 'At_PUDO', by, `short-ship · left behind at ${manifestRef}`);
+      void this.events.publish(GlosEvent.Pudo.ParcelShortShipped, { parcelId, manifestId: manifestRef, reason }, { source: 'pudo' }).catch(() => undefined);
+      stamped.push(parcelId);
+    }
+    return stamped;
+  }
+
+  /**
    * Operator recovery for a burned release secret — the other half of the lockout.
    *
    * A lockout with no way out is a bricked parcel: the goods are on the shelf, the customer is at the

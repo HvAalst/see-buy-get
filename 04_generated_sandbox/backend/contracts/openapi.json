@@ -4161,6 +4161,73 @@
         }
       }
     },
+    "/v1/sbg/agents/{did}/totes": {
+      "post": {
+        "operationId": "Sbg.registerAgentTote",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Tote"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/agents/{did}/totes/{code}/seal": {
+      "post": {
+        "operationId": "Sbg.sealShopBag",
+        "summary": "",
+        "description": "Seal the bag — where the completeness gate lives for a bagged hand-over (see sealShopBag).",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SealBagDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/agents/{did}": {
       "get": {
         "operationId": "Sbg.getAgent",
@@ -8356,33 +8423,6 @@
         }
       }
     },
-    "/v1/sbg/agents/{did}/totes": {
-      "post": {
-        "operationId": "Sbg.registerAgentTote",
-        "parameters": [
-          {
-            "name": "did",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Tote"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/v1/sbg/totes/{code}/release": {
       "post": {
         "operationId": "Sbg.releaseTote",
@@ -11905,6 +11945,81 @@
           "mediaId"
         ]
       },
+      "OpenBagDto": {
+        "type": "object",
+        "properties": {
+          "destZone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "destZone"
+        ]
+      },
+      "Tote": {
+        "type": "object",
+        "properties": {
+          "toteId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "status": {
+            "type": "object"
+          },
+          "locationId": {
+            "type": "string"
+          },
+          "destinationNodeId": {
+            "type": "string"
+          },
+          "destinationLabel": {
+            "type": "string"
+          },
+          "parcels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "unitsUsed": {
+            "type": "number"
+          },
+          "weightKg": {
+            "type": "number"
+          },
+          "filledAt": {
+            "type": "string"
+          },
+          "availableAt": {
+            "type": "string"
+          },
+          "claimedBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "toteId",
+          "code",
+          "status",
+          "locationId",
+          "parcels",
+          "unitsUsed",
+          "weightKg"
+        ]
+      },
+      "SealBagDto": {
+        "type": "object",
+        "properties": {
+          "acknowledgeShortShip": {
+            "type": "boolean"
+          },
+          "shortShipReason": {
+            "type": "string"
+          }
+        }
+      },
       "TopUpDto": {
         "type": "object",
         "properties": {
@@ -13429,59 +13544,6 @@
           "name",
           "zones",
           "location"
-        ]
-      },
-      "Tote": {
-        "type": "object",
-        "properties": {
-          "toteId": {
-            "type": "string"
-          },
-          "code": {
-            "type": "string"
-          },
-          "status": {
-            "type": "object"
-          },
-          "locationId": {
-            "type": "string"
-          },
-          "destinationNodeId": {
-            "type": "string"
-          },
-          "destinationLabel": {
-            "type": "string"
-          },
-          "parcels": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "unitsUsed": {
-            "type": "number"
-          },
-          "weightKg": {
-            "type": "number"
-          },
-          "filledAt": {
-            "type": "string"
-          },
-          "availableAt": {
-            "type": "string"
-          },
-          "claimedBy": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "toteId",
-          "code",
-          "status",
-          "locationId",
-          "parcels",
-          "unitsUsed",
-          "weightKg"
         ]
       },
       "AssignToteDto": {

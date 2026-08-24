@@ -391,6 +391,17 @@ export class CollectDto {
   @IsString() collectionCode!: string;
 }
 
+/** Open a bag at a shop for one destination zone. */
+export class OpenBagDto {
+  @IsString() destZone!: string;
+}
+
+/** Seal a shop's bag. Leaving a waiting parcel out of it must be deliberate, exactly as at handover. */
+export class SealBagDto {
+  @IsOptional() @IsBoolean() acknowledgeShortShip?: boolean;
+  @IsOptional() @IsString() shortShipReason?: string;
+}
+
 /** A sister's own margin, as a fraction (0.02 = 2%). Bounds are enforced in the service. */
 export class EntityFeeDto {
   @IsNumber() feePct!: number;

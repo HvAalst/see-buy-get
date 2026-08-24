@@ -132,6 +132,60 @@ export class MdpService {
     return this.totes.register(mdpId);
   }
 
+  // --- bag flow at a SHOP (tote genesis at the origin PUDO) ---
+
+  /**
+   * A shop opens a bag for one destination zone, so its outbound parcels leave as ONE scan instead of
+   * a dozen. Bag genesis used to be MDP-only, which left the busiest hand-over in the network — a
+   * shopkeeper and a waiting driver at a counter — working parcel by parcel.
+   *
+   * The bag is homed at the shop and addressed to the zone; the corridor decides the rest.
+   */
+  openShopBag(agentDid: string, destZone: string): Tote {
+    this.agents.get(agentDid); // 404 for an unknown shop
+    if (!destZone?.trim()) throw new GlosError('FIELD_REQUIRED', 'A bag needs a destination');
+    const tote = this.totes.register(agentDid);
+    return this.totes.assign(tote.code, destZone.trim(), destZone.trim());
+  }
+
+  /**
+   * Seal the bag: the shop's commitment about what is going.
+   *
+   * This is where the S25 completeness gate moves for a bagged hand-over, and it has to move, because
+   * loadBag is ATOMIC and driver-initiated — a bag holding three of the five parcels waiting for that
+   * bus would otherwise sail through with no INCOMPLETE_MANIFEST and no short-ship record, making a bag
+   * a way to leave parcels behind quietly. The check belongs with the person who can actually fix it:
+   * the shopkeeper, before the driver arrives.
+   *
+   * Everything waiting at this shop for the bag's destination goes in, or is knowingly left — and a
+   * knowing omission is stamped exactly as handover stamps it, so the control tower sees the same thing
+   * either way. Nothing is mutated on the refusal path.
+   */
+  sealShopBag(code: string, agentDid: string, input: { acknowledgeShortShip?: boolean; shortShipReason?: string } = {}): { tote: Tote; parcels: string[]; missed: string[]; shortShipped: boolean } {
+    const bag = this.totes.requireByCode(code);
+    if (bag.locationId !== agentDid) throw new GlosError('WRONG_PUDO', `Bag ${code} was not opened at this shop`);
+    if (bag.status !== 'filling') throw new GlosError('INVALID_STATE', `Bag ${code} is ${bag.status}, must be filling to seal`);
+
+    const inBag = new Set(bag.parcels);
+    const expected = this.parcels
+      .list({ status: 'At_PUDO', agentDid })
+      .filter((p) => p.originAgentDid === agentDid && p.destZone === bag.destinationNodeId)
+      .map((p) => p.parcelId);
+    const missed = expected.filter((id) => !inBag.has(id));
+
+    if (missed.length && !input.acknowledgeShortShip) {
+      throw new GlosError(
+        'INCOMPLETE_MANIFEST',
+        `${missed.length} parcel(s) for ${bag.destinationLabel} are still on the shelf — bag them, or leave them on purpose.`,
+        { missed, expected, code },
+      );
+    }
+    if (missed.length) this.parcels.markShortShipped(missed, agentDid, `bag ${code}`, (input.shortShipReason ?? '').trim() || 'not bagged');
+
+    // Sealed = published to the marketplace, so a driver can claim it and arrive knowing it is one scan.
+    return { tote: this.totes.markAvailable(code), parcels: [...bag.parcels], missed, shortShipped: missed.length > 0 };
+  }
+
   // --- bag flow ---
 
   /** Pack a parcel into a bag bound for a destination (used at the origin PUDO and after sorting). */

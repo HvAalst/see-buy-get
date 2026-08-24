@@ -995,6 +995,77 @@ describe('PUDO Light', () => {
     expect(createHmac('sha256', 'whsec').update(cbs[0].body).digest('hex')).toBe(cbs[0].signature);
   });
 
+  describe('tote genesis at a shop — one scan, a load of parcels', () => {
+    function shopWithTwoWaiting() {
+      const origin = onboardAgent('Bag Origin', 'NorthTown', 50);
+      onboardAgent('Bag Dest', 'SouthTown', 50);
+      const corridor = corridors.addCorridor({ name: 'N-S bag', originZone: 'NorthTown', destZone: 'SouthTown' });
+      const driver = corridors.addDriver({ driverDid: 'did:glos:dbag', name: 'D', corridorId: corridor.corridorId });
+      for (const id of ['QR-B1', 'QR-B2']) {
+        parcels.accept({ agentDid: origin.did, parcelId: id, size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+      }
+      return { origin, driver };
+    }
+
+    it('opens a bag at the shop, fills it, and moves every parcel on ONE driver scan', () => {
+      const { origin, driver } = shopWithTwoWaiting();
+      const bag = mdps.openShopBag(origin.did, 'SouthTown');
+      expect(bag.code).toMatch(/^BAG-/);
+      expect(bag.status).toBe('filling');
+      expect(bag.destinationLabel).toBe('SouthTown');
+
+      mdps.fillTote(bag.code, 'QR-B1');
+      mdps.fillTote(bag.code, 'QR-B2');
+      const sealed = mdps.sealShopBag(bag.code, origin.did);
+      expect(sealed.missed).toEqual([]);
+      expect(sealed.parcels).toEqual(['QR-B1', 'QR-B2']);
+      expect(sealed.tote.status).toBe('available'); // published, so a driver can claim it
+
+      // The whole point: the driver scans the BAG once and both parcels are on the bus.
+      const moved = mdps.loadBag(bag.code, driver.badgeId);
+      expect(moved.moved.sort()).toEqual(['QR-B1', 'QR-B2']);
+      expect(parcels.get('QR-B1').status).toBe('On_Bus');
+      expect(parcels.get('QR-B2').status).toBe('On_Bus');
+    });
+
+    it('refuses to seal a bag that leaves a waiting parcel behind, unless it is deliberate', () => {
+      const { origin } = shopWithTwoWaiting();
+      const bag = mdps.openShopBag(origin.did, 'SouthTown');
+      mdps.fillTote(bag.code, 'QR-B1'); // QR-B2 is still on the shelf
+
+      // The S25 gate has to live HERE for a bagged hand-over: loadBag is atomic and driver-initiated, so
+      // a half-filled bag would otherwise sail past with no refusal and no record.
+      expect(() => mdps.sealShopBag(bag.code, origin.did)).toThrow(/still on the shelf/);
+      expect(totes.requireByCode(bag.code).status).toBe('filling'); // nothing mutated on the refusal
+      expect(parcels.get('QR-B2').shortShippedAt).toBeUndefined();
+
+      const sealed = mdps.sealShopBag(bag.code, origin.did, { acknowledgeShortShip: true, shortShipReason: 'no room' });
+      expect(sealed.missed).toEqual(['QR-B2']);
+      expect(sealed.shortShipped).toBe(true);
+      // Stamped exactly as a handover short-ship is — same marker, same reason field, same event.
+      expect(parcels.get('QR-B2').shortShippedAt).toBeTruthy();
+      expect(parcels.get('QR-B2').shortShipReason).toBe('no room');
+      expect(events.getLog().some((e) => e.type === GlosEvent.Pudo.ParcelShortShipped)).toBe(true);
+      // …and the reason never reaches the timeline both twins can read.
+      expect(JSON.stringify(parcels.get('QR-B2').scans)).not.toContain('no room');
+    });
+
+    it('will not seal another shop’s bag, an empty one, or one already sealed', () => {
+      const { origin } = shopWithTwoWaiting();
+      const other = onboardAgent('Other Shop', 'NorthTown', 50);
+      const bag = mdps.openShopBag(origin.did, 'SouthTown');
+      expect(() => mdps.sealShopBag(bag.code, other.did)).toThrow(/not opened at this shop/);
+
+      const empty = mdps.openShopBag(origin.did, 'EastTown'); // nothing waiting for EastTown
+      expect(() => mdps.sealShopBag(empty.code, origin.did)).toThrow(/empty/);
+
+      mdps.fillTote(bag.code, 'QR-B1');
+      mdps.fillTote(bag.code, 'QR-B2');
+      mdps.sealShopBag(bag.code, origin.did);
+      expect(() => mdps.sealShopBag(bag.code, origin.did)).toThrow(/must be filling/);
+    });
+  });
+
   describe('the books — every movement has two sides', () => {
     const KE = () => entities.requireForJurisdiction('KE').entityId;
     const bal = (code: (typeof ACCOUNT_CODES)[keyof typeof ACCOUNT_CODES], cp?: string) => books.balance(KE(), code, undefined, cp);
