@@ -20,6 +20,7 @@ import {
   money,
   otpValid,
   parseDims,
+  pinAfterRename,
   pointDistance,
   priceBand,
   releaseStage,
@@ -194,6 +195,15 @@ describe('consolidation lots (F3)', () => {
     expect(consignmentProgress({ weightKg: 900, targetKg: 1000 })).toEqual({ pct: 90, label: '900 / 1000 kg' });
     expect(consignmentProgress({ weightKg: 1200, targetKg: 1000 }).pct).toBe(100); // an over-full lot clamps at 100
     expect(consignmentProgress({ weightKg: 0, targetKg: 0 }).pct).toBe(0); // no divide-by-zero
+  });
+
+  it('pinAfterRename drops a LOOKED-UP destination pin but keeps a hand-dropped one', () => {
+    const pin = { lat: 7.06, lng: 38.47 };
+    // The geocoded pin IS the old name: keeping it would price the haul to a place nobody asked for.
+    expect(pinAfterRename(pin, 'name')).toBeNull();
+    // The shopkeeper's own answer about where the market is survives a corrected spelling.
+    expect(pinAfterRename(pin, 'map')).toBe(pin);
+    expect(pinAfterRename(null, null)).toBeNull();
   });
 });
 

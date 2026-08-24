@@ -1,7 +1,8 @@
 import { useState } from 'preact/hooks';
-import { Button, Card, ErrorNote, Note, Pill } from '../../../shared/ui';
+import { Button, Card, ErrorNote, Note, Pill, PlaceMap } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
-import { DURABLE_NATURES, consignmentProgress, natureLabel } from '../logic';
+import { DURABLE_NATURES, consignmentProgress, natureLabel, pinAfterRename, type PinSource } from '../logic';
+import type { GeoPoint } from '../../../shared/geo';
 import type { ConsignmentView } from '../types';
 import type { AgentActions, AgentState } from '../useAgentApp';
 
@@ -44,14 +45,90 @@ export function ConsignmentsScreen({ state, actions }: ConsignmentsScreenProps) 
   );
 }
 
+/**
+ * Where the truckload goes, as a PLACE and not just a word.
+ *
+ * The lot's destination is usually a market, not a network PUDO, so nothing on the platform can resolve it
+ * for us — and the eventual haul is priced off the distance to it. A name alone was a silent trap: a typo
+ * geocoded to somewhere else (or to nothing, and the driver hauls the whole route paid only the deadhead).
+ * So the name still names it for the humans, and the map says where it actually is: tap "Find it" to have
+ * the name looked up, or drop the pin by hand when the name is not on the map. The lot cannot open until
+ * the destination has a point — the shopkeeper can SEE what the haul will be priced against.
+ */
+function DestPicker({
+  actions,
+  label,
+  onLabel,
+  pin,
+  onPin,
+  origin,
+}: {
+  actions: AgentActions;
+  label: string;
+  pin: GeoPoint | null;
+  onLabel: (v: string) => void;
+  onPin: (p: GeoPoint, from: 'name' | 'map') => void;
+  /** The co-op's own site — the orange locator, so the map opens on the town the goods leave from. */
+  origin: GeoPoint | null;
+}) {
+  const t = useT();
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  // What a match MEANS here is money: the haul is priced to this point. So the note says how sure we are —
+  // an approximate or guessed pin is named as such, with the map right there to correct it.
+  const find = async () => {
+    setBusy(true);
+    const g = await actions.geocodePlace(label);
+    setBusy(false);
+    if (!g) {
+      setNote(t('agent.toast.geoNotFound'));
+      return;
+    }
+    const where = g.matched ?? label.trim();
+    setNote(g.confidence === 'exact' ? t('agent.consignments.geoExact', { where }) : g.confidence === 'approx' ? t('agent.consignments.geoApprox', { where }) : t('agent.consignments.geoGuess'));
+    onPin(g.location, 'name');
+  };
+
+  return (
+    <>
+      <div class="field" style="margin-top:12px">
+        <label class="field__label" for="lot-dest">
+          {t('agent.consignments.whereGo')}
+        </label>
+        <input
+          id="lot-dest"
+          class="input"
+          value={label}
+          onInput={(e) => {
+            onLabel(e.currentTarget.value);
+            setNote(null);
+          }}
+          placeholder={t('agent.consignments.destPh')}
+          autocapitalize="words"
+        />
+        <Button variant="outline" chevron={false} disabled={!label.trim()} busy={busy} onClick={() => void find()}>
+          {t('agent.consignments.findOnMap')}
+        </Button>
+      </div>
+
+      <PlaceMap label={t('agent.consignments.mapLabel')} pins={[]} reference={origin} onDrop={(p) => { onPin(p, 'map'); setNote(null); }} dropped={pin} />
+      <p class="card__note">{note ?? (pin ? t('agent.consignments.pinned') : t('agent.consignments.noPin'))}</p>
+    </>
+  );
+}
+
 function OpenLotCard({ state, actions }: ConsignmentsScreenProps) {
   const t = useT();
   const [nature, setNature] = useState<string>(DURABLE_NATURES[0]);
   const [dest, setDest] = useState('');
+  // The pin, and where it came from — which decides whether it survives an edit to the name (pinAfterRename).
+  const [pin, setPin] = useState<GeoPoint | null>(null);
+  const [pinFrom, setPinFrom] = useState<PinSource>(null);
   const [target, setTarget] = useState('');
   const [cap, setCap] = useState('');
   const targetKg = Number(target);
-  const ready = dest.trim().length > 0 && targetKg > 0;
+  const ready = dest.trim().length > 0 && targetKg > 0 && pin !== null;
   return (
     <Card label={t('agent.consignments.openLot')}>
       <div class="field">
@@ -66,12 +143,20 @@ function OpenLotCard({ state, actions }: ConsignmentsScreenProps) {
           ))}
         </select>
       </div>
-      <div class="field" style="margin-top:12px">
-        <label class="field__label" for="lot-dest">
-          {t('agent.consignments.whereGo')}
-        </label>
-        <input id="lot-dest" class="input" value={dest} onInput={(e) => setDest(e.currentTarget.value)} placeholder={t('agent.consignments.destPh')} autocapitalize="words" />
-      </div>
+      <DestPicker
+        actions={actions}
+        label={dest}
+        pin={pin}
+        origin={state.agent?.location ?? null}
+        onLabel={(v) => {
+          setDest(v);
+          setPin((p) => pinAfterRename(p, pinFrom));
+        }}
+        onPin={(p, from) => {
+          setPin(p);
+          setPinFrom(from);
+        }}
+      />
       <div class="dims" style="margin-top:12px">
         <div class="field">
           <label class="field__label" for="lot-target">
@@ -93,8 +178,10 @@ function OpenLotCard({ state, actions }: ConsignmentsScreenProps) {
           busy={state.busy === 'open-consignment'}
           onClick={() => {
             const capN = Number(cap);
-            void actions.openConsignment({ natureCode: nature, destLabel: dest, targetKg, maxSpend: cap.trim() && capN > 0 ? capN : undefined });
+            void actions.openConsignment({ natureCode: nature, destLabel: dest, destLocation: pin ?? undefined, targetKg, maxSpend: cap.trim() && capN > 0 ? capN : undefined });
             setDest('');
+            setPin(null);
+            setPinFrom(null);
             setTarget('');
             setCap('');
           }}

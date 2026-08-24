@@ -710,25 +710,40 @@ export function useAgentApp() {
     setState((s) => ({ ...s, accept: { ...s.accept, destPudoDid: point.did, destZone: point.zone, destShopName: point.shopName } }));
   }, []);
 
-  // Geocode the typed area → a point the destination list sorts nearest-first around, with a plain note on
-  // the match quality (exact / approximate / best-guess) so an approximate pin isn't mistaken for exact.
+  /**
+   * Resolve a typed place to a point + how sure we are of it. Returns the raw answer rather than a sentence:
+   * two screens ask the same question for different reasons — the counter sorts a shop list around it, a
+   * consolidation lot prices a haul to it — so each says what a match MEANS in its own words. Null = we
+   * could not place it at all.
+   */
+  const geocodePlace = useCallback(
+    async (q: string): Promise<GeocodeView | null> => {
+      const query = q.trim();
+      if (!client || !query) return null;
+      const r = await client.api.geocode(query);
+      if (r.error || !r.data) return null;
+      return narrow<GeocodeView>(r.data);
+    },
+    [client],
+  );
+
+  // The counter's Address mode: geocode the typed area → the point the destination list sorts around.
   const geocodeEpoch = useRef(0);
   const geocodeAddress = useCallback(async () => {
     const q = stateRef.current.accept.addressText.trim();
     if (!client || !q) return;
     const epoch = ++geocodeEpoch.current;
     setState((s) => ({ ...s, acceptGeoBusy: true, acceptGeoNote: null }));
-    const r = await client.api.geocode(q);
+    const g = await geocodePlace(q);
     if (epoch !== geocodeEpoch.current) return;
-    if (r.error || !r.data) {
+    if (!g) {
       setState((s) => ({ ...s, acceptGeoBusy: false, acceptGeoNote: t('agent.toast.geoNotFound') }));
       return;
     }
-    const g = narrow<GeocodeView>(r.data);
     const where = g.matched ?? q;
     const note = g.confidence === 'exact' ? t('agent.toast.geoExact', { where }) : g.confidence === 'approx' ? t('agent.toast.geoApprox', { where }) : t('agent.toast.geoGuess');
     setState((s) => ({ ...s, acceptGeoBusy: false, acceptNear: g.location, acceptGeoNote: note }));
-  }, [client]);
+  }, [client, geocodePlace]);
   const setHandover = useCallback((p: Partial<AgentState['handover']>) => {
     setState((s) => ({ ...s, handover: { ...s.handover, ...p } }));
   }, []);
@@ -1033,12 +1048,13 @@ export function useAgentApp() {
     [client, run, fail, pushToast],
   );
 
-  /** F3 — open a consolidation lot for a durable dry commodity. */
+  /** F3 — open a consolidation lot for a durable dry commodity. `destLocation` is the pin the shop placed (or
+   *  the geocoder found and they accepted): without one the eventual haul prices off a name we may not know. */
   const openConsignment = useCallback(
-    async (input: { natureCode: string; destLabel: string; targetKg: number; maxSpend?: number }) => {
+    async (input: { natureCode: string; destLabel: string; destLocation?: GeoPoint; targetKg: number; maxSpend?: number }) => {
       if (!client || !did || !input.destLabel.trim() || !(input.targetKg > 0)) return;
       await run('open-consignment', async () => {
-        const r = await client.api.openConsignment({ natureCode: input.natureCode as never, destLabel: input.destLabel.trim(), targetKg: input.targetKg, maxSpend: input.maxSpend });
+        const r = await client.api.openConsignment({ natureCode: input.natureCode as never, destLabel: input.destLabel.trim(), destLocation: input.destLocation, targetKg: input.targetKg, maxSpend: input.maxSpend });
         if (r.error) return fail(r.error);
         buzz();
         pushToast({ tone: 'ok', icon: 'bag', title: t('agent.toast.lotOpened'), detail: t('agent.toast.lotOpenedDetail') });
@@ -1511,6 +1527,7 @@ export function useAgentApp() {
       setDestMode,
       pickDest,
       geocodeAddress,
+      geocodePlace,
       setHandover,
       toggleHandover,
       setRelease,
