@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, Checklist, ErrorNote, Icon, Note, OpenInMaps, Pill, ReadAloud, Sheet, SwipeDeck } from '../../../shared/ui';
-import { useT } from '../../../shared/i18n';
+import { formatDate, useT } from '../../../shared/i18n';
 import { countdownLabel, money, offerSpoken, offersSummary, priceBreakdownLines, secondsLeft } from '../logic';
-import type { OfferView } from '../types';
+import type { ExpectedLoadView, OfferView } from '../types';
 import type { DriverActions, DriverState } from '../useDriverApp';
 
 export interface OffersScreenProps {
@@ -55,6 +55,8 @@ export function OffersScreen({ state, actions }: OffersScreenProps) {
             ]}
           />
         </Card>
+
+        <ComingSoon expected={state.expected} />
 
         <div class="scr__cta">
           <Button onClick={() => actions.go('route')}>{t('driver.offers.tryAnother')}</Button>
@@ -109,6 +111,8 @@ export function OffersScreen({ state, actions }: OffersScreenProps) {
         {t('driver.offers.notThis')}
       </Button>
 
+      <ComingSoon expected={state.expected} />
+
       <div class="scr__foot">
         <Button variant="link" full={false} onClick={() => actions.go('route')}>
           {t('driver.offers.tryAnother')}
@@ -145,6 +149,38 @@ export function OffersScreen({ state, actions }: OffersScreenProps) {
         ) : null}
       </Sheet>
     </div>
+  );
+}
+
+/**
+ * What is COMING on this road — consolidation lots still filling at a co-op.
+ *
+ * Deliberately not a card in the deck and deliberately without a button: there is nothing to claim, and a
+ * driver who tapped one expecting a job would be right to be annoyed. It sits below the offers as reading
+ * material for the return leg: how full the lot is, how far off the road, and the date it goes at the
+ * latest. When it fills it becomes an ordinary offer, on the deck above, like everything else.
+ */
+function ComingSoon({ expected }: { expected: ExpectedLoadView[] }) {
+  const t = useT();
+  if (expected.length === 0) return null;
+  return (
+    <Card title={t('driver.coming.title')} tone="soft">
+      <p class="card__note">{t('driver.coming.lede')}</p>
+      <div class="rows" role="list">
+        {expected.map((e) => (
+          <div key={e.code} class="row row--static" role="listitem">
+            <span class="row__ic">
+              <Icon name="bag" size={24} />
+            </span>
+            <span class="row__body">
+              <span class="row__t">{t('driver.coming.lotLine', { pct: e.fillPct, dest: e.destLabel })}</span>
+              <span class="row__s">{t('driver.coming.atLine', { where: e.pickupLabel, km: e.detourKm })}</span>
+              <span class="row__s">{t('driver.coming.byLine', { kg: e.weightKg, target: e.targetKg, when: formatDate(e.readyBy) })}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    </Card>
   );
 }
 

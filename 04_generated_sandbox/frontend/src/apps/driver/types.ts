@@ -159,9 +159,33 @@ export interface OfferView {
   status: string;
 }
 
+/**
+ * F3 — a load that is COMING but cannot be taken yet: a consolidation lot still filling at a co-op.
+ *
+ * Advisory only. It carries no offerId and no ref, on purpose: there is nothing to claim, and the shape
+ * says so rather than relying on the screen to remember. A driver reads it to plan a return leg.
+ */
+export interface ExpectedLoadView {
+  kind: 'consignment';
+  code: string;
+  natureCode: string;
+  pickupLabel: string;
+  pickupLocation?: { lat: number; lng: number };
+  destLabel: string;
+  weightKg: number;
+  targetKg: number;
+  fillPct: number;
+  detourKm: number;
+  minutesAway: number;
+  /** The LATEST it goes to the marketplace — sooner if it fills first. */
+  readyBy: string;
+}
+
 export interface SuggestView {
   remainingCapacityKg: number;
   offers: OfferView[];
+  /** F3 — lots filling along this route: nothing to claim, everything to plan around. */
+  expected?: ExpectedLoadView[];
   /** REP4 — the live freight-bar verdict for this driver, so the pause note stays in sync with the offers. */
   freightPaused?: boolean;
 }

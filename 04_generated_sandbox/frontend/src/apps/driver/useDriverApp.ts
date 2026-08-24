@@ -12,6 +12,7 @@ import type {
   LoadBagView,
   MdpRow,
   NodeOption,
+  ExpectedLoadView,
   OfferView,
   RatesView,
   SavedRoute,
@@ -67,6 +68,8 @@ export interface DriverState {
   nodes: NodeOption[];
   nodesState: 'idle' | 'loading' | 'ready' | 'error';
   offers: OfferView[];
+  /** F3 — lots still filling along the declared route. Advisory: nothing here can be claimed. */
+  expected: ExpectedLoadView[];
   offerIndex: number;
   route: SavedRoute | null;
   /** R5 — the driver jobs + earnings register (a filtered/paged page + the current view's totals). */
@@ -100,6 +103,7 @@ const INITIAL: DriverState = {
   nodes: [],
   nodesState: 'idle',
   offers: [],
+  expected: [],
   offerIndex: 0,
   route: null,
   jobs: [],
@@ -301,6 +305,7 @@ export function useDriverApp() {
         // exempt (a driver reviews jobs + pay OFF shift), matching the ScreenRouter guard in app.tsx.
         screen: !session.active && s.screen !== 'home' && s.screen !== 'earnings' ? 'home' : s.screen,
         offers: session.active ? s.offers : [],
+        expected: session.active ? s.expected : [],
       }));
 
       void client.api.ping(did);
@@ -569,6 +574,7 @@ export function useDriverApp() {
           driver: s.driver && v?.freightPaused != null ? { ...s.driver, freightPaused: v.freightPaused } : s.driver,
           remaining: v?.remainingCapacityKg ?? s.remaining,
           offers: v?.offers ?? [],
+          expected: v?.expected ?? [],
           offerIndex: 0,
           screen: 'offers',
         }));

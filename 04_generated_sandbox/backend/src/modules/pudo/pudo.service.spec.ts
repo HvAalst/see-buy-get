@@ -48,6 +48,7 @@ import { DidService } from '../../foundation/did/did.service';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { BooksService } from '../../foundation/books/books.service';
 import { BagPlanService } from './bag-plan.service';
+import { ForthcomingService } from './forthcoming.service';
 import { IdentityVault } from '../../foundation/data-firewall/identity-vault.service';
 import { OperationalStore } from '../../foundation/data-firewall/operational-store.service';
 import { FieldEncryption } from '../../foundation/data-firewall/field-encryption.service';
@@ -102,7 +103,7 @@ describe('PUDO Light', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
-        GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, BagPlanService, ToteService, ConsignmentService, VehicleService, DriverService, FleetService, DispatchService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
+        GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, BagPlanService, ForthcomingService, ToteService, ConsignmentService, VehicleService, DriverService, FleetService, DispatchService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus, EntityService, BooksService,
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
@@ -3648,6 +3649,37 @@ describe('PUDO Light', () => {
     const posted = consignments.requireByCode(lot.code);
     expect(posted.status).toBe('posted');
     expect(dispatch.listFreight().find((f) => f.freightId === posted.freightId)?.pickupLocation).toEqual(shed);
+  });
+
+  it('F3: a FILLING lot is advisory — a driver can plan around it, and cannot claim it', () => {
+    const owner = onboardAgent('Coop Owner', 'NorthTown', 50);
+    const shed = { lat: owner.location.lat + 0.02, lng: owner.location.lng + 0.02 };
+    const lot: any = controller.openConsignment(
+      { natureCode: 'FOD', pickupLabel: 'Co-op store', pickupLocation: shed, destLabel: 'Merkato', destLocation: { lat: owner.location.lat + 3, lng: owner.location.lng + 3 }, targetKg: 1000 } as never,
+      { role: 'pudo', did: owner.did } as never,
+    );
+    const truck = coupleTipper('fore', { min: 0.8, max: 1.5 });
+    const route = { from: owner.location, to: { lat: owner.location.lat + 3, lng: owner.location.lng + 3 } };
+
+    // An EMPTY lot is an intention, not a load — nothing to plan around.
+    expect((controller.suggestWork(truck.did, route as never) as any).expected).toEqual([]);
+
+    consignments.deposit(lot.code, 'farmer-A', 300); // 30% of a truckload, still open
+    const res: any = controller.suggestWork(truck.did, route as never);
+    expect(res.expected).toHaveLength(1);
+    expect(res.expected[0]).toMatchObject({ kind: 'consignment', code: lot.code, weightKg: 300, targetKg: 1000, fillPct: 30, pickupLabel: 'Co-op store' });
+    // Nothing claimable rides on it: no offer, no ref — a driver plans, the co-op promises nothing.
+    expect(res.expected[0].offerId).toBeUndefined();
+    expect(res.expected[0].ref).toBeUndefined();
+    expect(res.offers.some((o: any) => o.pickupLabel === 'Co-op store')).toBe(false);
+    // It names the LATEST it can go — the aged-out date the sweep will enforce, not a guess.
+    expect(new Date(res.expected[0].readyBy).getTime()).toBeGreaterThan(Date.now());
+
+    // Once it posts, it leaves the advisory list and becomes ordinary claimable freight.
+    consignments.deposit(lot.code, 'farmer-B', 800); // → full → posts
+    const after: any = controller.suggestWork(truck.did, route as never);
+    expect(after.expected).toEqual([]);
+    expect(after.offers.some((o: any) => o.pickupLabel === 'Co-op store')).toBe(true);
   });
 
   // --- REP2: an AGENT rates a DRIVER on the movement leg (verified interaction, one-per-pair, driver profile) ---

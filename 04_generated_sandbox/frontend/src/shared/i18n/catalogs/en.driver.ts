@@ -157,6 +157,12 @@ export const enDriver = {
   // Offers screen.
   'driver.offers.pausedTitle': 'Freight is paused',
   'driver.offers.pausedDetail': 'Your rating is below the network minimum, so freight loads are held back. Keep your parcel runs on time — as your rating recovers, freight comes back.',
+  // F3 — lots still filling at a co-op: advisory only, so a driver can plan a return leg around one.
+  'driver.coming.title': 'Coming soon on this road',
+  'driver.coming.lede': 'Nothing to claim yet — these are still being filled. You will be offered them when they are ready.',
+  'driver.coming.lotLine': '{pct}% full, going to {dest}',
+  'driver.coming.atLine': 'At {where} · {km} km off your road',
+  'driver.coming.byLine': '{kg} of {target} kg · goes by {when} at the latest',
   'driver.offers.emptyTitle': 'Nothing on this route',
   'driver.offers.emptyLede': 'No shipments are waiting between those two places right now.',
   'driver.offers.whyTitle': 'Why you might see nothing',

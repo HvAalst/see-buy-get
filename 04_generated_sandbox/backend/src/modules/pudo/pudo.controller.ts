@@ -35,6 +35,7 @@ import { classifySize, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { BooksService } from '../../foundation/books/books.service';
 import { BagPlanService } from './bag-plan.service';
+import { ForthcomingService } from './forthcoming.service';
 import { haversineKm } from './geo';
 import { GEOCODER, Geocoder } from './geocoder';
 
@@ -62,6 +63,7 @@ export class SbgController {
     private readonly entities: EntityService,
     private readonly books: BooksService,
     private readonly bagPlans: BagPlanService,
+    private readonly forthcoming: ForthcomingService,
     private readonly vendors: VendorService,
     private readonly shelf: ShelfService,
     private readonly routing: RoutingService,
@@ -1609,10 +1611,13 @@ export class SbgController {
   suggestWork(@Param('did') did: string, @Body() dto: SuggestRouteDto) {
     const offers = this.dispatch.suggest(did, dto, Date.now(), dto.minEarn); // S34c — the driver's min-earning filter
     this.fleet.reportLocation(did, dto.from); // the driver is at the route start → live map
+    // F3 — what is COMING but cannot be taken yet: consolidation lots still filling along this route. Advisory
+    // only (no offer, nothing to claim), so a trucker can plan a return leg around a lot that is nearly full.
+    const expected = this.forthcoming.nearRoute(did, dto);
     // REP4 — return the LIVE freight-bar verdict alongside the offers, so the app's "freight is paused" note
     // comes from the SAME read as the loads it sits next to (never stale: missing when a pause just began, or
     // contradicting freight cards after it lifted).
-    return { remainingCapacityKg: this.dispatch.remainingCapacity(did), offers, freightPaused: belowFloor(this.ratings.driverRating(did)) };
+    return { remainingCapacityKg: this.dispatch.remainingCapacity(did), offers, expected, freightPaused: belowFloor(this.ratings.driverRating(did)) };
   }
 
   /** Driver GPS heartbeat — updates the vehicle's position on the live fleet map. */
