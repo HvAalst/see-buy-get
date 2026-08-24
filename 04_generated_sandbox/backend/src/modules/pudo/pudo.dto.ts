@@ -645,9 +645,19 @@ export class DriverKycDecisionDto {
   @IsOptional() @IsString() by?: string;
 }
 
+/** The road a driver says they are running this shift — both ends named AND pinned (see DeclaredLeg). */
+export class DeclareLegDto {
+  @IsString() fromLabel!: string;
+  @ValidateNested() @Type(() => GeoDto) from!: GeoDto;
+  @IsString() toLabel!: string;
+  @ValidateNested() @Type(() => GeoDto) to!: GeoDto;
+}
+
 export class CoupleDto {
   @IsString() vehicleId!: string;
   @IsOptional() @IsString() corridorId?: string;
+  /** Where they are going. Optional: a driver may couple first and say afterwards. */
+  @IsOptional() @ValidateNested() @Type(() => DeclareLegDto) leg?: DeclareLegDto;
 }
 
 export class AssignCorridorDto {
@@ -656,6 +666,8 @@ export class AssignCorridorDto {
 
 export class StartSessionDto {
   @IsString() vehicleQr!: string;
+  /** The leg for this shift, declared in the same breath as scanning the dashboard QR. */
+  @IsOptional() @ValidateNested() @Type(() => DeclareLegDto) leg?: DeclareLegDto;
 }
 
 export class LocateDto {

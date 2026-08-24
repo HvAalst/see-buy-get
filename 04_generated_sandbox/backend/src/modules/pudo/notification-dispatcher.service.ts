@@ -240,6 +240,9 @@ export class NotificationDispatcher implements OnModuleInit {
       .filter((a) => a.location && a.lastLocatedAt && now - new Date(a.lastLocatedAt).getTime() <= staleMs)
       .map((a) => ({ driverDid: a.driverDid, km: haversineKm(a.location as GeoPoint, pickup) }))
       .filter((d) => d.km <= NotificationDispatcher.NEARBY_DRIVER_KM)
+      // …and HEADING there. Near is only half the question: a driver leaving town for the south is metres
+      // from a bag going north. A driver who declared no leg is kept — we cannot say they are not going.
+      .filter((d) => this.dispatch.headingTowards(d.driverDid, pickup))
       .sort((a, b) => a.km - b.km)
       .slice(0, NotificationDispatcher.NEARBY_DRIVER_CAP);
   }

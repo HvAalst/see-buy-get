@@ -7,7 +7,20 @@ import { CorridorService } from './corridor.service';
 import { DriverService } from './driver.service';
 import { VehicleService } from './vehicle.service';
 import { CLASS_TO_CORRIDOR_VEHICLE } from './fleet.config';
-import { Assignment, ResolvedBadge } from './fleet.types';
+import { PersistentMap } from '../../foundation/store/persistent-map';
+import { Assignment, DeclaredLeg, ResolvedBadge } from './fleet.types';
+import { GeoPoint } from './pudo.types';
+
+/** What a caller declares: the two ends, each named and pinned. */
+export interface LegInput {
+  fromLabel: string;
+  from: GeoPoint;
+  toLabel: string;
+  to: GeoPoint;
+}
+
+/** How many past legs a driver is offered to re-pick from. A working driver runs a handful of roads. */
+const LEG_HISTORY = 5;
 
 /**
  * FleetService — the flexible driver↔vehicle coupling (Compendium Ch 19). Drivers and vehicles are
@@ -20,6 +33,13 @@ import { Assignment, ResolvedBadge } from './fleet.types';
 @Injectable()
 export class FleetService {
   private readonly assignments = new Map<string, Assignment>();
+  /**
+   * The roads each driver has declared before, most recent first — durable, unlike the coupling itself.
+   * A shift ends every evening and the app may be reinstalled, but "Hawassa → Addis" is still the road this
+   * driver runs, and re-typing it every morning is exactly the friction that makes a driver skip declaring
+   * at all — which is how the network stops knowing where anyone is going.
+   */
+  private readonly legHistory = new PersistentMap<string, DeclaredLeg[]>('pudo-driver-legs');
 
   constructor(
     private readonly drivers: DriverService,
@@ -28,8 +48,8 @@ export class FleetService {
     private readonly events: EventBus,
   ) {}
 
-  /** Couple a driver to a vehicle (the flexible bond). */
-  couple(driverDid: string, vehicleId: string, corridorId?: string): Assignment {
+  /** Couple a driver to a vehicle (the flexible bond), optionally declaring the leg they are running. */
+  couple(driverDid: string, vehicleId: string, corridorId?: string, leg?: LegInput): Assignment {
     const driver = this.drivers.get(driverDid);
     const vehicle = this.vehicles.get(vehicleId);
     if (!this.drivers.canOperate(driverDid)) throw new GlosError('CANNOT_COUPLE', `Driver is ${driver.status} (or licence expired) — cannot be coupled`);
@@ -44,10 +64,12 @@ export class FleetService {
       driverDid,
       vehicleId,
       corridorId,
+      leg: leg ? this.normalizeLeg(leg) : undefined,
       status: 'active',
       startedAt: new Date().toISOString(),
     };
     this.assignments.set(assignment.assignmentId, assignment);
+    if (assignment.leg) this.rememberLeg(driverDid, assignment.leg);
     this.drivers.setAssignedVehicle(driverDid, vehicleId);
     void this.events.publish(GlosEvent.Pudo.DriverCoupled, { assignmentId: assignment.assignmentId, driverDid, vehicleId, vehicleClass: vehicle.vehicleClass, corridorId }, { source: 'pudo' }).catch(() => undefined);
     return assignment;
@@ -57,10 +79,55 @@ export class FleetService {
    * Start a work shift: the driver scans the vehicle's dashboard QR → couples to it. This is how both
    * the driver and the vehicle are "activated" for the day; closing the session decouples them.
    */
-  startSession(driverDid: string, vehicleScan: string): Assignment {
+  startSession(driverDid: string, vehicleScan: string, leg?: LegInput): Assignment {
     const vehicle = this.vehicles.byQr(vehicleScan);
     if (!vehicle) throw new GlosError('NOT_FOUND', 'Unknown vehicle QR — scan the sticker on the dashboard');
-    return this.couple(driverDid, vehicle.vehicleId);
+    return this.couple(driverDid, vehicle.vehicleId, undefined, leg);
+  }
+
+  /* --- the declared leg: where this driver is actually going --- */
+
+  /**
+   * Declare (or re-declare) the leg for the current shift. Re-declaring is the normal case, not an edit of a
+   * mistake: a driver who has reached Addis turns round, and the road they are on now is the opposite of the
+   * one they named this morning. Refused off shift — a leg belongs to a coupling, and there is nothing to
+   * feed shipments into when nobody is driving.
+   */
+  declareLeg(driverDid: string, leg: LegInput): Assignment {
+    const active = this.activeForDriver(driverDid);
+    if (!active) throw new GlosError('NOT_COUPLED', 'Start a shift before saying where you are going');
+    active.leg = this.normalizeLeg(leg);
+    this.rememberLeg(driverDid, active.leg);
+    return active;
+  }
+
+  /** The leg this driver declared for the shift they are on, if any. */
+  legFor(driverDid: string): DeclaredLeg | undefined {
+    return this.activeForDriver(driverDid)?.leg;
+  }
+
+  /** The roads this driver has run before, most recent first — what the app offers instead of re-typing. */
+  recentLegs(driverDid: string): DeclaredLeg[] {
+    return [...(this.legHistory.get(driverDid) ?? [])];
+  }
+
+  private normalizeLeg(leg: LegInput): DeclaredLeg {
+    const fromLabel = leg?.fromLabel?.trim();
+    const toLabel = leg?.toLabel?.trim();
+    if (!fromLabel || !toLabel) throw new GlosError('FIELD_REQUIRED', 'A leg needs a start and an end, both named');
+    for (const p of [leg.from, leg.to]) {
+      if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lng)) {
+        throw new GlosError('INVALID_INPUT', 'A leg needs a point for each end — name it and place it on the map');
+      }
+    }
+    return { fromLabel, from: { lat: leg.from.lat, lng: leg.from.lng }, toLabel, to: { lat: leg.to.lat, lng: leg.to.lng }, declaredAt: new Date().toISOString() };
+  }
+
+  /** Keep the leg at the head of this driver's history, deduped by its two ends (the same road, re-run). */
+  private rememberLeg(driverDid: string, leg: DeclaredLeg): void {
+    const key = (l: DeclaredLeg) => `${l.fromLabel.toLowerCase()}→${l.toLabel.toLowerCase()}`;
+    const rest = (this.legHistory.get(driverDid) ?? []).filter((l) => key(l) !== key(leg));
+    this.legHistory.set(driverDid, [leg, ...rest].slice(0, LEG_HISTORY));
   }
 
   /** End the work shift (close session) → decouple driver + vehicle. */

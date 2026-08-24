@@ -12,6 +12,7 @@ import type {
   LoadBagView,
   MdpRow,
   NodeOption,
+  DeclaredLegView,
   ExpectedLoadView,
   OfferView,
   RatesView,
@@ -25,6 +26,7 @@ import { t } from '../../shared/i18n';
 import { downscaleImage } from '../../shared/media';
 import { triggerDownload } from '../../shared/download';
 import type { MediaKind } from '../../lib/sbg/personas/media';
+import type { DeclaredLegBody } from '../../lib/sbg/personas/driver';
 
 export type Screen = 'home' | 'route' | 'offers' | 'loads' | 'earnings';
 
@@ -72,6 +74,8 @@ export interface DriverState {
   expected: ExpectedLoadView[];
   offerIndex: number;
   route: SavedRoute | null;
+  /** The roads this driver has declared before, newest first — offered instead of naming two places daily. */
+  legs: DeclaredLegView[];
   /** R5 — the driver jobs + earnings register (a filtered/paged page + the current view's totals). */
   jobs: DriverJobRow[];
   jobsTotal: number;
@@ -106,6 +110,7 @@ const INITIAL: DriverState = {
   expected: [],
   offerIndex: 0,
   route: null,
+  legs: [],
   jobs: [],
   jobsTotal: 0,
   jobsState: 'idle',
@@ -288,6 +293,12 @@ export function useDriverApp() {
         rates = rtR.error ? null : narrow<RatesView>(rtR.data);
       }
 
+      // The roads this driver has run before. Soft-fail: not knowing the history only costs them the
+      // shortcut, so it must never take down the boot that tells them whether they are on shift.
+      const legsR = await client.api.driverLegs(did);
+      if (superseded()) return;
+      const legs = legsR.error ? [] : narrow<{ legs: DeclaredLegView[] }>(legsR.data)?.legs ?? [];
+
       setState((s) => ({
         ...s,
         phase: 'ready',
@@ -298,6 +309,7 @@ export function useDriverApp() {
         claims,
         rates,
         route: savedRoute(did),
+        legs,
         error: null,
         stale: false,
         refreshing: false,
@@ -518,7 +530,11 @@ export function useDriverApp() {
     });
   }, [client, did, run, fail, pushToast]);
 
-  const startShift = useCallback(async () => {
+  /**
+   * Start the shift — and, in the same breath, say where it is going. The leg is optional here on purpose:
+   * a driver who does not yet know is not blocked, and Find work declares it for them when they pick a route.
+   */
+  const startShift = useCallback(async (leg?: DeclaredLegBody) => {
     if (!client || !did) return;
     const qr = state.form.vehicleQr.trim();
     if (!qr) {
@@ -526,7 +542,7 @@ export function useDriverApp() {
       return;
     }
     await run('start', async () => {
-      const r = await client.api.startSession(did, qr);
+      const r = await client.api.startSession(did, qr, leg);
       if (r.error) return fail(r.error);
       buzz();
       setState((s) => ({ ...s, form: { ...EMPTY_FORM } }));
@@ -599,9 +615,14 @@ export function useDriverApp() {
       };
       saveRoute(did, route);
       setState((s) => ({ ...s, route }));
+      // Naming a route to find work IS declaring where you are going — so tell the server, and the loads it
+      // pushes at this driver from now on are the ones on THIS road. Best-effort: a failure costs them the
+      // heading filter (they fall back to proximity, as before), never the work they came here to look for.
+      // Off shift there is no coupling to hang it on, which the server says plainly; the offers still stand.
+      if (client) void client.api.declareLeg(did, { fromLabel: from.label, from: { lat: from.lat, lng: from.lng }, toLabel: to.label, to: { lat: to.lat, lng: to.lng } });
     }
     await runSuggest({ lat: from.lat, lng: from.lng }, { lat: to.lat, lng: to.lng }, minEarnFilter(state.form.minEarn));
-  }, [state.nodes, state.form.fromId, state.form.toId, state.form.minEarn, did, pushToast, runSuggest]);
+  }, [state.nodes, state.form.fromId, state.form.toId, state.form.minEarn, did, client, pushToast, runSuggest]);
 
   const repeatRoute = useCallback(async () => {
     const r = did ? savedRoute(did) : null;

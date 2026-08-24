@@ -68,10 +68,23 @@ export interface VehicleView {
   status: string;
 }
 
+/**
+ * The road the driver said this shift is running. It is what "a load near you" is matched against: without
+ * it the network can only see how NEAR a driver is, and pings one heading north about a bag going south.
+ */
+export interface DeclaredLegView {
+  fromLabel: string;
+  from: { lat: number; lng: number };
+  toLabel: string;
+  to: { lat: number; lng: number };
+  declaredAt: string;
+}
+
 export interface AssignmentView {
   assignmentId: string;
   vehicleId: string;
   corridorId?: string;
+  leg?: DeclaredLegView;
   startedAt: string;
 }
 

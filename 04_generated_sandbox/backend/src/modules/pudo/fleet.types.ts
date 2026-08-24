@@ -148,12 +148,31 @@ export class FleetDriver {
 
 export type AssignmentStatus = 'active' | 'ended';
 
+/**
+ * Where this driver is actually going — the leg they declared when they started the shift.
+ *
+ * A corridor is the network's line-haul plan; this is the driver's own answer, in their own places: a bus
+ * runs a fixed route, a truck driver knows they are going to Addis and back. It is what makes "a load near
+ * you" mean something — without it the network can only match on proximity, and pings a driver heading north
+ * about a bag going south. Both ends are named AND pinned, because the places on these roads have names but
+ * no addresses.
+ */
+export class DeclaredLeg {
+  fromLabel: string;
+  from: GeoPoint;
+  toLabel: string;
+  to: GeoPoint;
+  declaredAt: string;
+}
+
 /** The flexible coupling: which driver is operating which vehicle (and on which corridor) right now. */
 export class Assignment {
   assignmentId: string;
   driverDid: string;
   vehicleId: string;
   corridorId?: string; // optional line-haul corridor this coupling serves
+  /** The leg the driver declared for this shift. Absent until they say — matching then falls back to proximity. */
+  leg?: DeclaredLeg;
   status: AssignmentStatus;
   startedAt: string;
   endedAt?: string;

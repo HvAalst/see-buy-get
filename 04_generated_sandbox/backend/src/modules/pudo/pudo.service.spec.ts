@@ -3651,6 +3651,50 @@ describe('PUDO Light', () => {
     expect(dispatch.listFreight().find((f) => f.freightId === posted.freightId)?.pickupLocation).toEqual(shed);
   });
 
+  // --- the DECLARED LEG: where the driver says this shift is going ---
+
+  it('declares the leg at coupling, remembers the road, and matches loads to the heading — not just to how near', () => {
+    const hawassa = { lat: 7.06, lng: 38.47 };
+    const addis = { lat: 9.03, lng: 38.74 };
+    const arbaMinch = { lat: 6.03, lng: 37.55 }; // the other way out of Hawassa
+    const d = coupleTipper('leg', { min: 0.8, max: 1.5 });
+    const vehicleId = drivers.get(d.did).assignedVehicleId!;
+    fleet.uncouple(d.did); // coupleTipper already coupled; re-couple declaring where we are going
+
+    const asg = fleet.couple(d.did, vehicleId, undefined, { fromLabel: 'Hawassa', from: hawassa, toLabel: 'Addis', to: addis });
+    expect(asg.leg).toMatchObject({ fromLabel: 'Hawassa', toLabel: 'Addis' });
+
+    // A pickup ON the road is worth telling them about; one down the OTHER road is not — both are equally
+    // near the driver, which is exactly why proximity alone was never the question.
+    expect(dispatch.headingTowards(d.did, { lat: 8.0, lng: 38.6 })).toBe(true);
+    expect(dispatch.headingTowards(d.did, arbaMinch)).toBe(false);
+
+    // The road is remembered for next time — a driver who must name two places every morning stops declaring.
+    expect(fleet.recentLegs(d.did)[0]).toMatchObject({ fromLabel: 'Hawassa', toLabel: 'Addis' });
+
+    // Turning round mid-shift is the normal case, not a correction.
+    fleet.declareLeg(d.did, { fromLabel: 'Addis', from: addis, toLabel: 'Hawassa', to: hawassa });
+    expect(fleet.legFor(d.did)).toMatchObject({ fromLabel: 'Addis', toLabel: 'Hawassa' });
+    expect(fleet.recentLegs(d.did).map((l) => l.toLabel)).toEqual(['Hawassa', 'Addis']); // newest first, both kept
+
+    // Re-running the SAME road moves it back to the top rather than stacking a duplicate.
+    fleet.declareLeg(d.did, { fromLabel: 'Hawassa', from: hawassa, toLabel: 'Addis', to: addis });
+    expect(fleet.recentLegs(d.did).map((l) => l.toLabel)).toEqual(['Addis', 'Hawassa']);
+
+    // A driver who has declared NOTHING is never silenced — we cannot say they are not heading there.
+    const quiet = coupleTipper('quiet', { min: 0.8, max: 1.5 });
+    expect(dispatch.headingTowards(quiet.did, arbaMinch)).toBe(true);
+  });
+
+  it('refuses a leg that is off shift, or half-named', () => {
+    const d = coupleTipper('legbad', { min: 0.8, max: 1.5 });
+    const here = { lat: 7.06, lng: 38.47 };
+    expect(() => fleet.declareLeg(d.did, { fromLabel: 'Hawassa', from: here, toLabel: '  ', to: here })).toThrow(/needs a start and an end/);
+    expect(() => fleet.declareLeg(d.did, { fromLabel: 'Hawassa', from: here, toLabel: 'Addis', to: { lat: Number.NaN, lng: 38.7 } })).toThrow(/needs a point for each end/);
+    fleet.uncouple(d.did);
+    expect(() => fleet.declareLeg(d.did, { fromLabel: 'Hawassa', from: here, toLabel: 'Addis', to: here })).toThrow(/Start a shift/);
+  });
+
   it('F3: a FILLING lot is advisory — a driver can plan around it, and cannot claim it', () => {
     const owner = onboardAgent('Coop Owner', 'NorthTown', 50);
     const shed = { lat: owner.location.lat + 0.02, lng: owner.location.lng + 0.02 };

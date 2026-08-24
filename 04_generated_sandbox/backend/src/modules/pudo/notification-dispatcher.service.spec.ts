@@ -25,6 +25,8 @@ interface HarnessOpts {
   mdps?: Record<string, { location: Geo }>;
   // rule 5 — which drivers' vehicles can carry the posted freight (default: all)
   canCarry?: (driverDid: string) => boolean;
+  // rules 2 + 5 — which drivers' DECLARED LEG runs past the pickup (default: all, as an undeclared leg does)
+  heading?: (driverDid: string) => boolean;
 }
 
 /** Build a dispatcher over a real EventBus + NotificationService, with fake domain lookups. */
@@ -60,6 +62,7 @@ function harness(opts: HarnessOpts) {
   } as unknown as MdpService;
   const dispatch = {
     freightCarryableByDriver: (_freightId: string, driverDid: string) => (opts.canCarry ? opts.canCarry(driverDid) : true),
+    headingTowards: (driverDid: string) => (opts.heading ? opts.heading(driverDid) : true),
   } as unknown as DispatchService;
 
   const dispatcher = new NotificationDispatcher(events, notifications, parcels, persons, agents, fleet, totes, mdps, dispatch);
@@ -176,6 +179,19 @@ describe('NotificationDispatcher — rule 2: driver "load near you" (N3)', () =>
     });
     await onBus.events.publish(GlosEvent.Pudo.ToteAvailable, { code: 'BAG-3' });
     expect(onBus.notifications.inboxFor('d')).toHaveLength(0);
+  });
+
+  it('leaves out a driver whose DECLARED leg runs the other way', async () => {
+    const { events, notifications } = harness({
+      totes: { 'BAG-7': { code: 'BAG-7', locationId: 'did:agent:pickup', destinationLabel: 'Addis' } },
+      agents: { 'did:agent:pickup': { location: at(0, 0) } },
+      activeDrivers: [D('d-northbound', at(0, 0.01)), D('d-southbound', at(0, 0.01))],
+      heading: (did) => did === 'd-northbound', // the other one said they are going the other way
+    });
+    await events.publish(GlosEvent.Pudo.ToteAvailable, { code: 'BAG-7' });
+    // Both are equally NEAR. Near was only ever half the question.
+    expect(notifications.inboxFor('d-northbound')).toHaveLength(1);
+    expect(notifications.inboxFor('d-southbound')).toHaveLength(0);
   });
 
   it('asks the SHOP to close its own bag, in the words that fit the reason', async () => {

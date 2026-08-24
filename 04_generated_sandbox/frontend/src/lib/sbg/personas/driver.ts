@@ -13,6 +13,14 @@ export interface DriverJobsQuery {
   offset?: string;
 }
 
+/** The road a driver declares for a shift: both ends named AND pinned (the places have no addresses). */
+export interface DeclaredLegBody {
+  fromLabel: string;
+  from: { lat: number; lng: number };
+  toLabel: string;
+  to: { lat: number; lng: number };
+}
+
 /**
  * Driver persona facade — the ONLY operations the driver app can name. Because it exports just this
  * slice, the driver PWA literally cannot type an operator or fleet-manager call: a compile-time mirror
@@ -58,9 +66,16 @@ export function createDriverApi(sbg: SbgClient) {
     setVehiclePrice: (vehicleId: string, price: number) =>
       sbg.request((c) => c.PATCH('/v1/sbg/vehicles/{id}/pricing', { params: { path: { id: vehicleId } }, body: { price } })),
 
-    /** Start a shift by scanning the vehicle QR (couples driver ↔ vehicle). */
-    startSession: (did: string, vehicleQr: string) =>
-      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/start-session', { params: { path: { did } }, body: { vehicleQr } })),
+    /** Start a shift by scanning the vehicle QR (couples driver ↔ vehicle), optionally saying where it goes. */
+    startSession: (did: string, vehicleQr: string, leg?: DeclaredLegBody) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/start-session', { params: { path: { did } }, body: { vehicleQr, leg } })),
+
+    /** Say (or re-say) the road this shift is running — what "a load near you" is matched against. */
+    declareLeg: (did: string, leg: DeclaredLegBody) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/leg', { params: { path: { did } }, body: leg })),
+
+    /** The roads this driver has run before — offered instead of naming two places every morning. */
+    driverLegs: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}/legs', { params: { path: { did } } })),
 
     /** End the shift (decouple). */
     endSession: (did: string) => sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/end-session', { params: { path: { did } } })),

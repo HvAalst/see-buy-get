@@ -7,7 +7,7 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
 import { AgentService } from './agent.service';
 import { MdpService } from './mdp.service';
 import { ToteService } from './tote.service';
-import { Tote } from './pudo.types';
+import { GeoPoint, Tote } from './pudo.types';
 import { FleetService } from './fleet.service';
 import { CargoService } from './cargo.service';
 import { CargoNature, Equipment, VehicleCapability } from './cargo.types';
@@ -550,6 +550,28 @@ export class DispatchService {
     const toteKg = this.totes.list().filter((t) => t.claimedBy === driverDid && (t.status === 'claimed' || t.status === 'in_transit')).reduce((s, t) => s + t.weightKg, 0);
     const freightKg = [...this.freights.values()].filter((f) => f.claimedBy === driverDid && (f.status === 'claimed' || f.status === 'in_transit')).reduce((s, f) => s + f.weightKg, 0);
     return Math.round((vehicle.capacityKg - toteKg - freightKg) * 100) / 100;
+  }
+
+  /**
+   * Is this pickup on the road the driver SAID they are running?
+   *
+   * "A load near you" has always meant near your last GPS fix, which is only half the question — a driver
+   * leaving Hawassa for Addis is a hundred metres from a bag going the other way, and got pinged about it.
+   * With a declared leg we can ask the real question: is this load on your way? The same detour budget the
+   * offer list uses, so being told about a load and being offered it agree.
+   *
+   * A driver who has declared nothing is not excluded: we cannot say they are NOT heading there, and going
+   * quiet on them would punish the very drivers we most want to start declaring. Never throws — this is a
+   * notification filter.
+   */
+  headingTowards(driverDid: string, point: GeoPoint): boolean {
+    const leg = this.fleet.legFor(driverDid);
+    if (!leg) return true;
+    try {
+      return this.router.detourKm(leg.from, point, leg.to) <= DISPATCH_MAX_DETOUR_KM;
+    } catch {
+      return true; // an unroutable leg must not silence a driver
+    }
   }
 
   /**

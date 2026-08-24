@@ -29,6 +29,10 @@ function OffShift({ state, actions }: HomeScreenProps) {
   const t = useT();
   const notice = driverStatusNotice(state.driver?.status, t);
   const ready = canStartShift(state.driver?.status);
+  // Which of this driver's usual roads they are running today. Optional: a driver who does not yet know
+  // starts the shift anyway and says it later, when they look for work.
+  const [legIndex, setLegIndex] = useState<number | null>(null);
+  const leg = legIndex != null ? state.legs[legIndex] : undefined;
 
   return (
     <div class="scr">
@@ -51,8 +55,35 @@ function OffShift({ state, actions }: HomeScreenProps) {
         <p class="card__note">{t('driver.home.qrNote')}</p>
       </Card>
 
+      {/* Where the shift is going. It is what decides which loads reach this driver at all — near is only
+          half the question, and the roads they already run are one tap instead of naming two places. */}
+      {state.legs.length ? (
+        <Card label={t('driver.home.whereToday')}>
+          <div class="rows" role="list">
+            {state.legs.map((l, i) => (
+              <button
+                key={`${l.fromLabel}-${l.toLabel}`}
+                type="button"
+                class={`row${legIndex === i ? ' row--on' : ''}`}
+                role="listitem"
+                aria-pressed={legIndex === i}
+                onClick={() => setLegIndex(legIndex === i ? null : i)}
+              >
+                <span class="row__ic">
+                  <Icon name={legIndex === i ? 'check' : 'route'} size={24} />
+                </span>
+                <span class="row__body">
+                  <span class="row__t">{t('driver.home.legLine', { from: l.fromLabel, to: l.toLabel })}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+          <p class="card__note">{t('driver.home.whereTodayNote')}</p>
+        </Card>
+      ) : null}
+
       <div class="scr__cta">
-        <Button onClick={() => void actions.startShift()} disabled={!ready} busy={state.busy === 'start'}>
+        <Button onClick={() => void actions.startShift(leg && { fromLabel: leg.fromLabel, from: leg.from, toLabel: leg.toLabel, to: leg.to })} disabled={!ready} busy={state.busy === 'start'}>
           {t('driver.home.startShift')}
         </Button>
       </div>
@@ -127,6 +158,20 @@ function OnShift({ state, actions }: HomeScreenProps) {
           ) : null}
         </Card>
       ) : null}
+
+      {/* The road this shift is on — the thing that decides which loads are pushed at this driver. Shown
+          because a stale heading is worse than none: after turning round, it must be easy to see and change. */}
+      <Card label={t('driver.home.headingLabel')}>
+        {state.session.assignment?.leg ? (
+          <p class="t-body">{t('driver.home.legLine', { from: state.session.assignment.leg.fromLabel, to: state.session.assignment.leg.toLabel })}</p>
+        ) : (
+          <p class="t-body">{t('driver.home.headingUnset')}</p>
+        )}
+        <p class="card__note">{state.session.assignment?.leg ? t('driver.home.headingNote') : t('driver.home.headingUnsetNote')}</p>
+        <Button variant="link" full={false} onClick={() => actions.go('route')}>
+          {state.session.assignment?.leg ? t('driver.home.headingChange') : t('driver.home.headingSet')}
+        </Button>
+      </Card>
 
       <div class="scr__cta">
         <Button onClick={() => actions.go('route')}>{t('driver.home.findWork')}</Button>
