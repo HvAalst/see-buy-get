@@ -55,6 +55,7 @@ export const ERROR_CODES = {
   PARCEL_EXISTS: { status: 400, title: 'A parcel with this ID already exists' },
   SHIPMENT_NOT_PAID: { status: 400, title: 'The shipment has not been paid' },
   CODE_MISMATCH: { status: 400, title: 'The code does not match' },
+  WRONG_DESTINATION: { status: 400, title: 'That is going somewhere else' },
   CODE_LOCKED: { status: 400, title: 'Too many wrong codes' },
 
   // --- 400 Bad Request: fleet coupling ---------------------------------------------------------

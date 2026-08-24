@@ -252,6 +252,12 @@ export class SbgController {
     return this.agents.setShopfront(did, dto.mediaId);
   }
 
+  /** Drop a waiting parcel into the shop's bag — refuses one that is going somewhere else. */
+  @Post('agents/:did/totes/:code/fill')
+  fillShopBag(@Param('did') did: string, @Param('code') code: string, @Body() dto: FillToteDto, @Actor() actor: IntrospectionResult) {
+    return this.mdps.fillShopBag(code, actingDid(actor, did), dto.parcelId);
+  }
+
   /** Seal the bag — where the completeness gate lives for a bagged hand-over (see sealShopBag). */
   @Post('agents/:did/totes/:code/seal')
   sealShopBag(@Param('did') did: string, @Param('code') code: string, @Body() dto: SealBagDto, @Actor() actor: IntrospectionResult) {

@@ -149,6 +149,36 @@ export class MdpService {
   }
 
   /**
+   * Drop one of the shop's waiting parcels into its open bag.
+   *
+   * The check the generic fillTote cannot make: **a parcel may only go in a bag that is going where the
+   * parcel is going.** fillTote guards capacity and cargo compatibility, and is shared with MDP sorting
+   * where a bag is addressed to a NEXT HOP rather than a final zone — so the destination rule belongs
+   * here, on the shop path, where both sides mean the same thing.
+   *
+   * Without it a parcel for one city rides to another in a sealed bag, and nothing notices: the seal gate
+   * only checks that everything EXPECTED is in the bag, never that everything in the bag BELONGS.
+   */
+  fillShopBag(code: string, agentDid: string, parcelId: string): { tote: Tote; fillPct: number } {
+    const bag = this.totes.requireByCode(code);
+    if (bag.locationId !== agentDid) throw new GlosError('WRONG_PUDO', `Bag ${code} was not opened at this shop`);
+    if (bag.status !== 'filling') throw new GlosError('INVALID_STATE', `Bag ${code} is ${bag.status}, it is closed`);
+
+    const parcel = this.parcels.get(parcelId);
+    if (parcel.originAgentDid !== agentDid || parcel.status !== 'At_PUDO') {
+      throw new GlosError('INVALID_STATE', `Parcel ${parcelId} is not waiting at this shop`);
+    }
+    if (parcel.destZone !== bag.destinationNodeId) {
+      throw new GlosError(
+        'WRONG_DESTINATION',
+        `${parcelId} is going to ${parcel.destZone}, but this bag goes to ${bag.destinationLabel}`,
+        { parcelId, parcelDest: parcel.destZone, bagDest: bag.destinationLabel },
+      );
+    }
+    return this.fillTote(code, parcelId);
+  }
+
+  /**
    * Seal the bag: the shop's commitment about what is going.
    *
    * This is where the S25 completeness gate moves for a bagged hand-over, and it has to move, because

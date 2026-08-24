@@ -251,9 +251,9 @@ export function createAgentApi(sbg: SbgClient) {
     openBag: (did: string, destZone: string) =>
       sbg.request((c) => c.POST('/v1/sbg/agents/{did}/totes', { params: { path: { did } }, body: { destZone } })),
 
-    /** Drop a waiting parcel into the open bag. */
-    fillBag: (code: string, parcelId: string) =>
-      sbg.request((c) => c.POST('/v1/sbg/totes/{code}/fill', { params: { path: { code } }, body: { parcelId } })),
+    /** Drop a waiting parcel into the open bag. The shop path, so a parcel going elsewhere is refused. */
+    fillBag: (did: string, code: string, parcelId: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/agents/{did}/totes/{code}/fill', { params: { path: { did, code } }, body: { parcelId } })),
 
     /** Seal it. The server refuses if a parcel for that destination is still on the shelf, unless the
      *  shop knowingly leaves it — the same gate the parcel-by-parcel handover has. */

@@ -4161,6 +4161,46 @@
         }
       }
     },
+    "/v1/sbg/agents/{did}/totes/{code}/fill": {
+      "post": {
+        "operationId": "Sbg.fillShopBag",
+        "summary": "",
+        "description": "Drop a waiting parcel into the shop's bag — refuses one that is going somewhere else.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FillToteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/agents/{did}/totes/{code}/seal": {
       "post": {
         "operationId": "Sbg.sealShopBag",
@@ -11955,6 +11995,17 @@
           "mediaId"
         ]
       },
+      "FillToteDto": {
+        "type": "object",
+        "properties": {
+          "parcelId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "parcelId"
+        ]
+      },
       "SealBagDto": {
         "type": "object",
         "properties": {
@@ -13558,17 +13609,6 @@
         "required": [
           "destinationNodeId",
           "destinationLabel"
-        ]
-      },
-      "FillToteDto": {
-        "type": "object",
-        "properties": {
-          "parcelId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "parcelId"
         ]
       },
       "LoadBagDto": {

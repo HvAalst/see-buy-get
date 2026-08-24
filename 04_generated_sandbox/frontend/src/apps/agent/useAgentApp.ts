@@ -1139,13 +1139,14 @@ export function useAgentApp() {
       if (!client) return;
       const bag = stateRef.current.bag;
       if (!bag || bag.sealed) return;
+      if (!did) return;
       await run('bag-fill', async () => {
-        const r = await client.api.fillBag(bag.code, parcelId);
+        const r = await client.api.fillBag(did, bag.code, parcelId);
         if (r.error) return fail(r.error);
         setState((s) => (s.bag ? { ...s, bag: { ...s.bag, parcels: [...s.bag.parcels, parcelId], missed: s.bag.missed.filter((m) => m !== parcelId) } } : s));
       });
     },
-    [client, run, fail],
+    [client, did, run, fail],
   );
 
   /**

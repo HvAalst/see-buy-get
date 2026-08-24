@@ -22,6 +22,7 @@ const SAY: Record<string, string> = {
   'error.no_fragile': 'This vehicle cannot carry fragile loads.',
   'error.not_found': 'We could not find that. Check the code.',
   'error.wrong_code': 'That code is not right. Try again.',
+  'error.wrong_destination': 'That parcel is going somewhere else. It belongs in another bag.',
   'error.code_locked': 'That code is locked. Ask for a new one.',
   // Consumer phone + PIN sign-in (S20/S21).
   'error.wrong_pin': 'That PIN is not right. Try again.',

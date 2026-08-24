@@ -1028,6 +1028,35 @@ describe('PUDO Light', () => {
       expect(parcels.get('QR-B2').status).toBe('On_Bus');
     });
 
+    it('refuses a parcel that is going somewhere else — a bag cannot carry the wrong city', () => {
+      const { origin } = shopWithTwoWaiting();
+      onboardAgent('Far Dest', 'EastTown', 50);
+      corridors.addCorridor({ name: 'N-E bag', originZone: 'NorthTown', destZone: 'EastTown' });
+      parcels.accept({ agentDid: origin.did, parcelId: 'QR-EAST', size: 'S', destZone: 'EastTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+
+      const bag = mdps.openShopBag(origin.did, 'SouthTown');
+      // The seal gate only checks that everything EXPECTED is IN the bag — it would never have noticed a
+      // stowaway going the other way, which is why the check has to happen at the moment it is added.
+      expect(() => mdps.fillShopBag(bag.code, origin.did, 'QR-EAST')).toThrow(/going to EastTown, but this bag goes to SouthTown/);
+      expect(totes.requireByCode(bag.code).parcels).toEqual([]);
+
+      mdps.fillShopBag(bag.code, origin.did, 'QR-B1'); // the right way → accepted
+      expect(totes.requireByCode(bag.code).parcels).toEqual(['QR-B1']);
+    });
+
+    it('will not fill another shop’s bag, a closed bag, or with a parcel that is not waiting here', () => {
+      const { origin } = shopWithTwoWaiting();
+      const other = onboardAgent('Other Filler', 'NorthTown', 50);
+      const bag = mdps.openShopBag(origin.did, 'SouthTown');
+      expect(() => mdps.fillShopBag(bag.code, other.did, 'QR-B1')).toThrow(/not opened at this shop/);
+      expect(() => mdps.fillShopBag(bag.code, origin.did, 'QR-NOPE')).toThrow(/not found/i);
+
+      mdps.fillShopBag(bag.code, origin.did, 'QR-B1');
+      mdps.fillShopBag(bag.code, origin.did, 'QR-B2');
+      mdps.sealShopBag(bag.code, origin.did);
+      expect(() => mdps.fillShopBag(bag.code, origin.did, 'QR-B1')).toThrow(/it is closed/);
+    });
+
     it('refuses to seal a bag that leaves a waiting parcel behind, unless it is deliberate', () => {
       const { origin } = shopWithTwoWaiting();
       const bag = mdps.openShopBag(origin.did, 'SouthTown');
