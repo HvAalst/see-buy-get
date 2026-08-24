@@ -26,6 +26,14 @@ describe('errorSentence — identity codes resolve to specific guidance (not the
     expect(sentence).toContain('code'); // points at "sign in with a code"
   });
 
+  it('the bagging refusals both name the bag — a scanning loop must not say "something went wrong"', () => {
+    for (const code of ['WRONG_DESTINATION', 'ALREADY_IN_BAG'] as SbgErrorCode[]) {
+      const sentence = errorSentence(mk(code));
+      expect(sentence).not.toBe(GENERIC);
+      expect(sentence.toLowerCase()).toContain('bag'); // the counter's next move is another bag, and it says so
+    }
+  });
+
   it('INCOMPLETE_MANIFEST (S25) resolves to the gate guidance, not the generic fallback', () => {
     const sentence = errorSentence(mk('INCOMPLETE_MANIFEST'));
     expect(sentence).not.toBe(GENERIC);

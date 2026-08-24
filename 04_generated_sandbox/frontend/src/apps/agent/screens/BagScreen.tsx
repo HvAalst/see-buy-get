@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { Button, Card, CodeCard, ErrorNote, Icon, Note, Pill, ReadAloud, Sheet } from '../../../shared/ui';
+import { Button, Card, CodeCard, ErrorNote, Icon, Note, Pill, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import type { AgentActions, AgentState } from '../useAgentApp';
 
@@ -18,10 +18,14 @@ const LEFT_OUT_REASONS: Array<{ value: string; labelKey: MessageKey }> = [
 /**
  * Bag the parcels for one destination so the driver scans ONCE instead of a dozen times.
  *
- * The shop picks where the bag is going, taps the waiting parcels in, and seals it. Sealing is the
- * commitment: the server refuses a bag that leaves a parcel for that destination on the shelf, and names
- * the ones missing, which light up here exactly as the handover screen's "waiting" rows do. Either tap
- * them in, or leave them behind on purpose with a reason.
+ * The shop picks where the bag is going, SCANS each parcel in, and seals it. Scanning is the working
+ * loop — the worker is looking at the parcel in their hands, not at the screen — so the sticker field
+ * comes first and the list below is the fallback for a parcel whose sticker will not read. It is also
+ * where the wrong-destination refusal lands at the moment of the mistake, with the parcel still in hand.
+ *
+ * Sealing is the commitment: the server refuses a bag that leaves a parcel for that destination on the
+ * shelf, and names the ones missing, which light up here exactly as the handover screen's "waiting" rows
+ * do. Either put them in, or leave them behind on purpose with a reason.
  */
 export function BagScreen({ state, actions }: BagScreenProps) {
   const t = useT();
@@ -83,6 +87,29 @@ export function BagScreen({ state, actions }: BagScreenProps) {
             </>
           ) : (
             <>
+              {/* The working loop: scan, hear the beep, take the next parcel. The camera closes on each
+                  read, so the field is cleared here and is ready for the next one. */}
+              <Card>
+                <ScanField
+                  id="bag-parcel"
+                  label={t('agent.bag.scanLabel')}
+                  value={bag.scan}
+                  onValue={(v) => actions.setBagScan(v)}
+                  expect="parcel"
+                  placeholder={t('agent.scanPlaceholder')}
+                  upper
+                  enterKeyHint="go"
+                  onScan={(v) => void actions.submitBagScan(v)}
+                />
+                {/* Spoken back for the worker whose eyes are on the parcel, not the screen. */}
+                <p class="card__note" aria-live="polite">
+                  {bag.lastAdded ? t('agent.bag.wentIn', { id: bag.lastAdded }) : t('agent.bag.scanHint')}
+                </p>
+                <Button variant="outline" onClick={() => void actions.submitBagScan()} disabled={!bag.scan.trim()} busy={state.busy === 'bag-fill'}>
+                  {t('agent.bag.addCta')}
+                </Button>
+              </Card>
+
               <Card label={t('agent.bag.inBag', { count: bag.parcels.length })}>
                 {forDest.length === 0 ? (
                   <p class="hint">{t('agent.bag.nothingForZone')}</p>

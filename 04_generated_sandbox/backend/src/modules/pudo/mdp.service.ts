@@ -175,6 +175,17 @@ export class MdpService {
         { parcelId, parcelDest: parcel.destZone, bagDest: bag.destinationLabel },
       );
     }
+    // One parcel, one bag. A parcel stays At_PUDO until the driver takes the bag, so a sealed bag still on
+    // the shop floor would happily let its contents be scanned into the NEXT bag — and then two manifests
+    // both claim it. Checked across every bag at this shop, not off parcel.toteId, which can be stale.
+    const holder = this.totes.list({ locationId: agentDid }).find((t) => t.parcels.includes(parcelId));
+    if (holder) {
+      throw new GlosError('ALREADY_IN_BAG', `Parcel ${parcelId} is already in bag ${holder.code}`, {
+        parcelId,
+        bagCode: holder.code,
+        sameBag: holder.code === code,
+      });
+    }
     return this.fillTote(code, parcelId);
   }
 

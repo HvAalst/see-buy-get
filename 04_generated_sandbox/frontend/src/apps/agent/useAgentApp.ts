@@ -96,8 +96,9 @@ export interface AgentState {
   bagPlan: { groups: BagGroup[]; bags: OpenBag[] };
   bagPlanState: 'idle' | 'loading' | 'ready' | 'error';
   /** The bag being packed right now. `missed` is the server's verdict at the last seal attempt —
-   *  parcels for that destination still on the shelf. */
-  bag: { code: string; destKey: string; label: string; parcels: string[]; missed: string[]; sealed: boolean } | null;
+   *  parcels for that destination still on the shelf. `scan` + `lastAdded` are the scanning loop: what is
+   *  in the field, and what went in last (spoken back, so the counter never has to hunt the list). */
+  bag: { code: string; destKey: string; label: string; parcels: string[]; missed: string[]; sealed: boolean; scan: string; lastAdded: string | null } | null;
   rates: RatesView | null;
   ratesState: 'idle' | 'loading' | 'ready' | 'error';
   /** F3 — the shop's consolidation lots (loaded when the Consignments screen opens). */
@@ -1157,10 +1158,21 @@ export function useAgentApp() {
             return narrow<{ code: string }>(r.data)?.code;
           })());
         if (!code) return;
+        // Re-opening a bag left half-packed restores what is IN it: the tote is durable, so the screen must
+        // agree with the physical bag on the floor rather than starting from zero.
         const already = stateRef.current.bagPlan.bags.find((b) => b.code === code);
         setState((s) => ({
           ...s,
-          bag: { code, destKey: group.key, label: group.label, parcels: [], missed: [], sealed: already?.status === 'available' },
+          bag: {
+            code,
+            destKey: group.key,
+            label: group.label,
+            parcels: already?.parcelIds ?? [],
+            missed: [],
+            sealed: already?.status === 'available',
+            scan: '',
+            lastAdded: null,
+          },
         }));
         await loadBagPlan();
       });
@@ -1174,7 +1186,13 @@ export function useAgentApp() {
     void loadBagPlan();
   }, [loadBagPlan]);
 
-  /** Drop a waiting parcel into the open bag. */
+  /**
+   * Drop a waiting parcel into the open bag — by tapping its row, or by scanning its sticker.
+   *
+   * Both paths land here so both get the loud feedback: a bagging shop is a scanning LOOP, and the worker
+   * is looking at the parcel in their hands, not at the screen. The green beep is the confirmation; the red
+   * one is what stops a wrong-destination parcel from going in unnoticed.
+   */
   const addToBag = useCallback(
     async (parcelId: string) => {
       if (!client) return;
@@ -1183,11 +1201,50 @@ export function useAgentApp() {
       if (!did) return;
       await run('bag-fill', async () => {
         const r = await client.api.fillBag(did, bag.code, parcelId);
-        if (r.error) return fail(r.error);
-        setState((s) => (s.bag ? { ...s, bag: { ...s.bag, parcels: [...s.bag.parcels, parcelId], missed: s.bag.missed.filter((m) => m !== parcelId) } } : s));
+        if (r.error) {
+          signal('error');
+          return fail(r.error);
+        }
+        signal('ok');
+        setState((s) =>
+          s.bag
+            ? {
+                ...s,
+                bag: { ...s.bag, parcels: [...s.bag.parcels, parcelId], missed: s.bag.missed.filter((m) => m !== parcelId), scan: '', lastAdded: parcelId },
+              }
+            : s,
+        );
       });
     },
     [client, did, run, fail],
+  );
+
+  /** What is typed/scanned into the bag's parcel field. */
+  const setBagScan = useCallback((scan: string) => {
+    setState((s) => (s.bag ? { ...s, bag: { ...s.bag, scan } } : s));
+  }, []);
+
+  /**
+   * Scan (or type) a sticker into the open bag. The same sticker waved twice is the routine accident of a
+   * scanning loop, so it is answered HERE — at the counter, with no round-trip — as "already in, carry on"
+   * rather than as a failure. The server refuses it too (a bag must never count a parcel twice); this is
+   * only the faster, kinder answer for the case we can already see.
+   */
+  const submitBagScan = useCallback(
+    async (override?: string) => {
+      const bag = stateRef.current.bag;
+      if (!bag || bag.sealed) return;
+      const parcelId = (override ?? bag.scan).trim().toUpperCase();
+      if (!parcelId) return;
+      if (bag.parcels.includes(parcelId)) {
+        signal('warn');
+        setState((s) => (s.bag ? { ...s, bag: { ...s.bag, scan: '', lastAdded: parcelId } } : s));
+        pushToast({ tone: 'info', icon: 'bag', title: t('agent.bag.alreadyIn'), detail: t('agent.bag.alreadyInDetail', { id: parcelId }) });
+        return;
+      }
+      await addToBag(parcelId);
+    },
+    [addToBag, pushToast],
   );
 
   /**
@@ -1472,6 +1529,8 @@ export function useAgentApp() {
       loadBagPlan,
       openBag,
       addToBag,
+      setBagScan,
+      submitBagScan,
       sealBag,
       clearBag,
       findRelease,

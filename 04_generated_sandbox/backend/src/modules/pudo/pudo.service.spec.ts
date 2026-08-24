@@ -1083,6 +1083,28 @@ describe('PUDO Light', () => {
       expect(totes.requireByCode(bag.code).parcels).toEqual(['QR-B1']);
     });
 
+    it('takes a parcel once — the same sticker scanned twice, and a parcel already in another bag', () => {
+      const { origin } = shopWithTwoWaiting();
+      const bag = mdps.openShopBag(origin.did, 'SouthTown');
+      mdps.fillShopBag(bag.code, origin.did, 'QR-B1');
+
+      // The scanning accident: the same sticker waved again. A silent second push would double-count its
+      // units, so the bag would report itself full while half empty.
+      const before = totes.requireByCode(bag.code).unitsUsed;
+      expect(() => mdps.fillShopBag(bag.code, origin.did, 'QR-B1')).toThrow(/already in bag/);
+      expect(totes.requireByCode(bag.code).parcels).toEqual(['QR-B1']);
+      expect(totes.requireByCode(bag.code).unitsUsed).toBe(before);
+
+      // And a parcel sitting in a bag already sealed on the shop floor cannot be scanned into the next one:
+      // it stays At_PUDO until the driver takes it, so nothing else would have stopped two manifests
+      // claiming the same parcel.
+      mdps.fillShopBag(bag.code, origin.did, 'QR-B2');
+      mdps.sealShopBag(bag.code, origin.did);
+      const next = mdps.openShopBag(origin.did, 'SouthTown');
+      expect(() => mdps.fillShopBag(next.code, origin.did, 'QR-B1')).toThrow(new RegExp(`already in bag ${bag.code}`));
+      expect(totes.requireByCode(next.code).parcels).toEqual([]);
+    });
+
     it('will not fill another shop’s bag, a closed bag, or with a parcel that is not waiting here', () => {
       const { origin } = shopWithTwoWaiting();
       const other = onboardAgent('Other Filler', 'NorthTown', 50);

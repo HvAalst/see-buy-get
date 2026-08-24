@@ -69,6 +69,10 @@ export class ToteService {
   add(code: string, parcelId: string, size: ParcelSize): Tote {
     const tote = this.requireByCode(code);
     if (tote.status !== 'filling') throw new GlosError('INVALID_STATE', `Bag ${code} is ${tote.status}, assign it to a destination first`);
+    // A parcel goes in ONCE. Bagging is a scanning loop, so the same sticker WILL be waved twice, and a
+    // silent second push would double-count its units and weight — the bag would report itself full while
+    // half empty, and the manifest would name a parcel that is in there once.
+    if (tote.parcels.includes(parcelId)) throw new GlosError('ALREADY_IN_BAG', `Parcel ${parcelId} is already in bag ${code}`, { parcelId, bagCode: code, sameBag: true });
     if (!this.fits(tote, size)) throw new GlosError('BAG_FULL', `Bag ${code} is full (${this.fillPct(tote)}%) — open a new bag for this destination`);
     if (!tote.parcels.length) tote.filledAt = new Date().toISOString();
     tote.parcels.push(parcelId);

@@ -32,6 +32,7 @@ const SAY: Record<string, string> = {
   'error.phone_invalid': 'That phone number is not right. Check it.',
   'error.verify_phone': 'Verify your phone first — we will send you a code.',
   'error.bag_full': 'That bag is full.',
+  'error.already_in_bag': 'That parcel is already in a bag. Check the other bag if it is not in this one.',
   'error.shelf_full': 'There is no shelf space left.',
   'error.manifest_incomplete': 'Some parcels for this bus are still waiting. Load them, or leave them behind.',
   // S26 media upload + retention.

@@ -33,6 +33,8 @@ export interface BagGroup {
 export interface OpenBag {
   code: string;
   destinationLabel?: string;
+  /** What is actually in it — a bag is filled across a working day, so re-opening one must restore it. */
+  parcelIds: string[];
   parcels: number;
   fillPct: number;
   status: string;

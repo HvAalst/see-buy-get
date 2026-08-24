@@ -39,7 +39,7 @@ export class BagPlanService {
    * which; a shopkeeper should never have to work out whether a given parcel goes direct. So each group
    * is one bag's worth of work, and several bags are open at once by design.
    */
-  forShop(agentDid: string): { groups: BagGroup[]; bags: Array<{ code: string; destinationLabel?: string; parcels: number; fillPct: number; status: string }> } {
+  forShop(agentDid: string): { groups: BagGroup[]; bags: Array<{ code: string; destinationLabel?: string; parcelIds: string[]; parcels: number; fillPct: number; status: string }> } {
     this.agents.get(agentDid); // 404 for an unknown shop
     const open = this.totes.atLocation(agentDid).filter((t) => t.status === 'filling' || t.status === 'available');
     const byKey = new Map<string, BagGroup>();
@@ -57,7 +57,9 @@ export class BagPlanService {
       groups: [...byKey.values()]
         .sort((a, b) => b.parcelIds.length - a.parcelIds.length || a.label.localeCompare(b.label))
         .map((g) => ({ ...g, openBagCode: open.find((t) => t.destinationNodeId === g.key)?.code })),
-      bags: open.map((t) => ({ code: t.code, destinationLabel: t.destinationLabel, parcels: t.parcels.length, fillPct: this.totes.fillPct(t), status: t.status })),
+      // parcelIds, not just a count: a shop fills a bag across a working day, so re-opening one has to show
+      // what is already inside it — otherwise the screen says "0 in the bag" over a bag holding three.
+      bags: open.map((t) => ({ code: t.code, destinationLabel: t.destinationLabel, parcelIds: [...t.parcels], parcels: t.parcels.length, fillPct: this.totes.fillPct(t), status: t.status })),
     };
   }
 
