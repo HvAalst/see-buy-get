@@ -34,7 +34,11 @@ export function BagScreen({ state, actions }: BagScreenProps) {
 
   // What to bag is the SERVER's answer, grouped by next hop — several bags at once is the normal case,
   // and a shopkeeper never has to work out whether a parcel goes direct or via the hub.
-  const { groups } = state.bagPlan;
+  const { groups, staging } = state.bagPlan;
+  // Floor room decides how much of that plan can happen at once. With room for two bags and four
+  // destinations, the useful question is not "what is waiting" but "which two do I pack" — which is what
+  // busiest-first has always answered; the number is what makes the ordering matter.
+  const noRoom = !!staging && staging.free <= 0;
   const group = bag ? groups.find((g) => g.key === bag.destKey) : undefined;
   const forDest = group ? state.shopParcels.filter((p) => group.parcelIds.includes(p.parcelId)) : [];
   const inBag = new Set(bag?.parcels ?? []);
@@ -55,22 +59,47 @@ export function BagScreen({ state, actions }: BagScreenProps) {
             <Note tone="info" icon="box" title={t('agent.bag.nothingTitle')} detail={t('agent.bag.nothingBody')} />
           ) : (
             <div class="rows" role="list">
-              {groups.map((g) => (
-                <button key={g.key} type="button" class="row" role="listitem" onClick={() => void actions.openBag(g)} disabled={state.busy === 'bag-open'}>
-                  <span class="row__ic"><Icon name="bag" size={24} /></span>
-                  <span class="row__body">
-                    <span class="row__t">{g.label}</span>
-                    {/* "Direct" is the useful word at a counter: it means this bag skips the hub. */}
-                    <span class="row__s">
-                      {t('agent.bag.waitingForZone', { count: g.parcelIds.length })}
-                      {g.via === 'direct' ? ` · ${t('agent.bag.viaDirect')}` : ` · ${t('agent.bag.viaHub')}`}
+              {groups.map((g) => {
+                // A group with a bag already open is always reachable; a NEW bag needs floor room.
+                const blocked = noRoom && !g.openBagCode;
+                return (
+                  <button
+                    key={g.key}
+                    type="button"
+                    class="row"
+                    role="listitem"
+                    onClick={() => void actions.openBag(g)}
+                    disabled={blocked || state.busy === 'bag-open'}
+                  >
+                    <span class="row__ic"><Icon name="bag" size={24} /></span>
+                    <span class="row__body">
+                      <span class="row__t">{g.label}</span>
+                      {/* "Direct" is the useful word at a counter: it means this bag skips the hub. */}
+                      <span class="row__s">
+                        {t('agent.bag.waitingForZone', { count: g.parcelIds.length })}
+                        {g.via === 'direct' ? ` · ${t('agent.bag.viaDirect')}` : ` · ${t('agent.bag.viaHub')}`}
+                      </span>
                     </span>
-                  </span>
-                  {g.openBagCode ? <Pill tone="info" dot>{g.openBagCode}</Pill> : <span class="row__end"><Icon name="chevronRight" size={22} /></span>}
-                </button>
-              ))}
+                    {g.openBagCode ? (
+                      <Pill tone="info" dot>{g.openBagCode}</Pill>
+                    ) : blocked ? (
+                      <Pill tone="warn" dot>{t('agent.bag.noRoomPill')}</Pill>
+                    ) : (
+                      <span class="row__end"><Icon name="chevronRight" size={22} /></span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           )}
+          {/* Say the room, always — knowing you have one bay left changes which destination you pack. */}
+          {staging ? (
+            <p class="card__note">
+              {staging.free > 0
+                ? t('agent.bag.roomFree', { free: staging.free, capacity: staging.capacity })
+                : t('agent.bag.roomNone', { capacity: staging.capacity })}
+            </p>
+          ) : null}
         </Card>
       ) : (
         <>

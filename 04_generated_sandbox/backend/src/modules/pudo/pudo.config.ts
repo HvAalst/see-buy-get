@@ -113,6 +113,14 @@ export const BAG_CAPACITY_UNITS = 10;
 export const SIZE_UNITS: Record<ParcelSize, number> = { S: 0.18, M: 1, L: 2, HEAVY: 10 };
 export const TOTE_CODE_PREFIX = 'BAG';
 
+// How many bags a shop can have STANDING ON ITS FLOOR at once — the other capacity, and until now the
+// unmodelled one: BAG_CAPACITY_UNITS says what fits INSIDE a bag, nothing said how many bags fit in the
+// shop. A kiosk has room for a couple; a hardware store can stage plenty. The shop declares it (like the
+// shelf); this is what a shop that has never said gets, and it is deliberately modest — a small counter is
+// the common case, and a shop that needs more can see the number and raise it.
+export const DEFAULT_BAG_BAYS = 2;
+export const MAX_BAG_BAYS = 20;
+
 // Tote/MDP-path settlement (parallel to the direct-path LABOUR/HANDOVER/PICKUP fees).
 export const TOTE_LOAD_FEE = 0.5; // paid to the driver who scans a bag onto their vehicle
 export const MDP_SORT_FEE = 0.2; // MDP labour, per parcel sorted into its next-hop bag

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { Button, Card, ErrorNote, Note, ReadAloud } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
-import { MIN_SHELF_SLOTS, SHELF_COLORS, gridDims } from '../logic';
+import { DEFAULT_BAG_BAYS, MAX_BAG_BAYS, MIN_SHELF_SLOTS, SHELF_COLORS, gridDims } from '../logic';
 import type { AgentActions, AgentState } from '../useAgentApp';
 
 export interface ShelfScreenProps {
@@ -133,6 +133,10 @@ export function ShelfScreen({ state, actions }: ShelfScreenProps) {
         <span class="shelflegend__item"><span class="shelfcell shelfcell--legendfree shelfcell--bundle" /> {t('agent.shelf.legendBundle')}</span>
       </div>
 
+      {/* The other pile in the room. The shelf holds parcels waiting for a customer; these are the bags
+          waiting for a bus, and until now nothing asked how many the shop could actually stand on its floor. */}
+      <BagBays state={state} actions={actions} />
+
       {belowMin ? <Note tone="warn" icon="warning" title={t('agent.shelf.minSlots', { min: MIN_SHELF_SLOTS })} /> : null}
       {orphan.length ? (
         <Note tone="warn" icon="warning" title={orphan.length === 1 ? t('agent.shelf.orphanOne', { count: orphan.length }) : t('agent.shelf.orphanMany', { count: orphan.length })} />
@@ -148,6 +152,30 @@ export function ShelfScreen({ state, actions }: ShelfScreenProps) {
         <ReadAloud text={() => t('agent.shelf.aloud', { total, free })} label={t('agent.readAloud')} />
       </div>
     </div>
+  );
+}
+
+/**
+ * Bag space — how many outbound bags this shop can stand on its floor at once.
+ *
+ * The same declaration as the shelf, for the other pile in the room: a kiosk has space for a couple, a
+ * hardware store for plenty, and only the shopkeeper knows which they are. It matters because a bag is
+ * refused once the floor is full, and because the bag plan then has to say WHICH destinations to pack
+ * first rather than listing everything that is waiting.
+ */
+function BagBays({ state, actions }: ShelfScreenProps) {
+  const t = useT();
+  const current = state.agent?.bagBays ?? DEFAULT_BAG_BAYS;
+  const [bays, setBays] = useState<number | null>(null);
+  const n = bays ?? current;
+  return (
+    <Card label={t('agent.shelf.baysTitle')}>
+      <Stepper id="bag-bays" label={t('agent.shelf.baysLabel')} value={n} min={1} max={MAX_BAG_BAYS} onChange={setBays} />
+      <p class="card__note">{t('agent.shelf.baysNote')}</p>
+      <Button variant="outline" chevron={false} busy={state.busy === 'bag-bays'} disabled={n === current} onClick={() => void actions.saveBagBays(n)}>
+        {t('agent.shelf.baysSave')}
+      </Button>
+    </Card>
   );
 }
 

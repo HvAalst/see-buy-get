@@ -660,6 +660,11 @@ export class CoupleDto {
   @IsOptional() @ValidateNested() @Type(() => DeclareLegDto) leg?: DeclareLegDto;
 }
 
+/** How many outbound bags a shop can stage on its floor at once. */
+export class BagBaysDto {
+  @IsNumber() @Min(1) bays!: number;
+}
+
 export class AssignCorridorDto {
   @IsString() corridorId!: string;
 }

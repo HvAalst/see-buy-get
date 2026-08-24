@@ -84,6 +84,12 @@ export class Agent {
   openState: OpenState; // agent-controlled open / temporarily-closed
   openingHours: WeeklyHours; // per-day schedule (pickup window + ETA constraint)
   shelf: ShelfConfig; // rows × cols → colour/number slot grid (replaces the m² cap)
+  /**
+   * How many outbound BAGS this shop has floor room to stage at once — the shelf's counterpart for the
+   * other pile in the room. Undefined on every pre-slice record (and on a shop that has never said), which
+   * reads as DEFAULT_BAG_BAYS: read it through AgentService.bagBaysOf, never off the field.
+   */
+  bagBays?: number;
   shopfrontMediaId?: string; // the shop-front photo shown on the My-shop dashboard (owner-gated media)
   pricePerParcel: number; // open-data handling fee the agent advertises (public — competition pressure)
   // S32c — load/unload equipment on hand at this site (MAN baseline + declared). A heavy dedicated-freight

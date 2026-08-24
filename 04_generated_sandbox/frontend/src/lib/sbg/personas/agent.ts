@@ -64,6 +64,10 @@ export function createAgentApi(sbg: SbgClient) {
     setShelf: (did: string, rows: number, cols: number, consolidationSlots: string[] = []) =>
       sbg.request((c) => c.POST('/v1/sbg/agents/{did}/shelf', { params: { path: { did } }, body: { rows, cols, consolidationSlots } })),
 
+    /** Declare how many outbound BAGS the shop can stage on its floor at once (the shelf's counterpart). */
+    setBagBays: (did: string, bays: number) =>
+      sbg.request((c) => c.POST('/v1/sbg/agents/{did}/bag-bays', { params: { path: { did } }, body: { bays } })),
+
     /** Move the shop's map pin (My-shop location editor). */
     setLocation: (did: string, lat: number, lng: number) =>
       sbg.request((c) => c.POST('/v1/sbg/agents/{did}/location', { params: { path: { did } }, body: { lat, lng } })),

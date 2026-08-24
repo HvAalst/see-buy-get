@@ -39,8 +39,12 @@ export class BagPlanService {
    * which; a shopkeeper should never have to work out whether a given parcel goes direct. So each group
    * is one bag's worth of work, and several bags are open at once by design.
    */
-  forShop(agentDid: string): { groups: BagGroup[]; bags: Array<{ code: string; destinationLabel?: string; parcelIds: string[]; parcels: number; fillPct: number; status: string }> } {
-    this.agents.get(agentDid); // 404 for an unknown shop
+  forShop(agentDid: string): {
+    groups: BagGroup[];
+    bags: Array<{ code: string; destinationLabel?: string; parcelIds: string[]; parcels: number; fillPct: number; status: string }>;
+    staging: { capacity: number; used: number; free: number };
+  } {
+    const agent = this.agents.get(agentDid); // 404 for an unknown shop
     const open = this.totes.atLocation(agentDid).filter((t) => t.status === 'filling' || t.status === 'available');
     const byKey = new Map<string, BagGroup>();
 
@@ -52,6 +56,12 @@ export class BagPlanService {
       byKey.set(hop.key, group);
     }
 
+    // What the floor can take. Once bags are limited, "here is everything" stops being a plan: with room for
+    // two bags and four destinations, the shop needs to know WHICH two to pack — which is what busiest-first
+    // has always answered, now with the number that makes the ordering matter.
+    const staged = this.totes.atLocation(agentDid).filter((t) => t.status === 'filling' || t.status === 'available' || t.status === 'claimed');
+    const capacity = this.agents.bagBaysOf(agent);
+
     return {
       // Busiest first: the bag with the most parcels in it is the one worth packing next.
       groups: [...byKey.values()]
@@ -59,6 +69,7 @@ export class BagPlanService {
         // Only a FILLING bag is "the bag for this group": a sealed one is waiting for its driver, and
         // pointing the shop back into it would trap them there — the next parcel needs a new bag.
         .map((g) => ({ ...g, openBagCode: open.find((t) => t.destinationNodeId === g.key && t.status === 'filling')?.code })),
+      staging: { capacity, used: staged.length, free: Math.max(0, capacity - staged.length) },
       // parcelIds, not just a count: a shop fills a bag across a working day, so re-opening one has to show
       // what is already inside it — otherwise the screen says "0 in the bag" over a bag holding three.
       bags: open.map((t) => ({ code: t.code, destinationLabel: t.destinationLabel, parcelIds: [...t.parcels], parcels: t.parcels.length, fillPct: this.totes.fillPct(t), status: t.status })),

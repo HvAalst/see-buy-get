@@ -144,10 +144,47 @@ export class MdpService {
   openShopBag(agentDid: string, destZone: string): Tote {
     this.agents.get(agentDid); // 404 for an unknown shop
     if (!destZone?.trim()) throw new GlosError('FIELD_REQUIRED', 'A bag needs a destination');
+    // A bag is a physical object standing on a floor, and floors run out. The shelf has always been sized by
+    // the shop; this is the same declaration for the other pile in the room. Counted as what is STANDING
+    // there — filling, sealed and waiting, or claimed by a driver who has not arrived — because all three
+    // take up the same square metre. A flat, unassigned tote takes none.
+    this.assertStagingRoom(agentDid);
     const tote = this.totes.register(agentDid);
     // sealRequired: this bag leaves the shop when the SHOPKEEPER says it is closed, never when a sweep
     // decides it looks full. A bag on a counter is open until a human shuts it.
     return this.totes.assign(tote.code, destZone.trim(), destZone.trim(), { sealRequired: true });
+  }
+
+  /** The bags physically taking up room at this shop right now (see openShopBag for why these three). */
+  stagedBags(agentDid: string): Tote[] {
+    return this.totes.atLocation(agentDid).filter((t) => t.status === 'filling' || t.status === 'available' || t.status === 'claimed');
+  }
+
+  /**
+   * Address a bag to its next destination — the generic route, which a HUB uses freely.
+   *
+   * A bag becomes staged the moment it is addressed, not when it is registered (a flat, unassigned tote
+   * takes no floor room), so the shop's bay limit has to be applied here too. Otherwise the limit is walked
+   * around by opening a bare tote and addressing it afterwards, which is two calls the same app can make.
+   */
+  assignTote(code: string, destinationNodeId: string, destinationLabel: string): Tote {
+    const tote = this.totes.requireByCode(code);
+    const shop = this.agents.list().find((a) => a.did === tote.locationId);
+    if (shop) this.assertStagingRoom(shop.did);
+    return this.totes.assign(code, destinationNodeId, destinationLabel);
+  }
+
+  /** Refuse a new bag when the shop's floor is already carrying as many as it declared it can. */
+  private assertStagingRoom(agentDid: string): void {
+    const bays = this.agents.bagBaysOf(this.agents.get(agentDid));
+    const staged = this.stagedBags(agentDid);
+    if (staged.length >= bays) {
+      throw new GlosError(
+        'STAGING_FULL',
+        `This shop has room for ${bays} bag(s) and ${staged.length} are on the floor — hand one to a driver, or raise your bag space`,
+        { capacity: bays, used: staged.length },
+      );
+    }
   }
 
   /**

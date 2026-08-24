@@ -8,7 +8,7 @@ import { OperationalStore } from '../../foundation/data-firewall/operational-sto
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { WalletService } from '../m1/wallet/wallet.service';
-import { DEFAULT_PUDO_PRICE_PER_PARCEL, LOCK_THRESHOLD, MIN_ANDROID_VERSION, MIN_OPEN_HOURS, MIN_SLOTS, NETWORK_JURISDICTION, TRADE_CREDIT_LIMIT } from './pudo.config';
+import { DEFAULT_BAG_BAYS, DEFAULT_PUDO_PRICE_PER_PARCEL, LOCK_THRESHOLD, MAX_BAG_BAYS, MIN_ANDROID_VERSION, MIN_OPEN_HOURS, MIN_SLOTS, NETWORK_JURISDICTION, TRADE_CREDIT_LIMIT } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { BooksService } from '../../foundation/books/books.service';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
@@ -223,6 +223,26 @@ export class AgentService {
     const agent = this.require(did);
     if (shelf.rows < 1 || shelf.cols < 1) throw new GlosError('INVALID_INPUT', 'Shelf needs at least one row and column');
     agent.shelf = shelf;
+    return agent;
+  }
+
+  /**
+   * How many bags this shop can stage at once. Read through here, never off the record: the field is absent
+   * on every shop that existed before bays did, and on every shop that has never been asked.
+   */
+  bagBaysOf(agent: Agent): number {
+    const n = agent.bagBays;
+    return typeof n === 'number' && Number.isFinite(n) && n >= 1 ? Math.floor(n) : DEFAULT_BAG_BAYS;
+  }
+
+  /** The shop declares its floor room for outbound bags (the shelf's counterpart for the other pile). */
+  setBagBays(did: string, bays: number): Agent {
+    const agent = this.require(did);
+    if (!Number.isFinite(bays) || bays < 1 || bays > MAX_BAG_BAYS) {
+      throw new GlosError('INVALID_INPUT', `Bag space must be between 1 and ${MAX_BAG_BAYS} bags`);
+    }
+    agent.bagBays = Math.floor(bays);
+    this.agents.set(did, agent); // durable record, mutated in place — re-store so the snapshot flushes
     return agent;
   }
 

@@ -29,6 +29,13 @@ export interface BagGroup {
   openBagCode?: string;
 }
 
+/** How much floor room the shop has for outbound bags, and how much of it is taken right now. */
+export interface BagStaging {
+  capacity: number;
+  used: number;
+  free: number;
+}
+
 /** A bag already open on the shop's floor. */
 export interface OpenBag {
   code: string;
@@ -60,6 +67,8 @@ export interface AgentView {
   status: AgentStatus;
   openingHours?: WeeklyHours;
   shopfrontMediaId?: string; // the shop-front photo (owner-gated media)
+  /** Floor room for outbound bags. Absent until the shop says — the plan's `staging.capacity` is the answer. */
+  bagBays?: number;
   /** Merged in by the controller alongside the record. */
   balance: number;
   rating?: { count: number; average: number; isNew?: boolean } | null;

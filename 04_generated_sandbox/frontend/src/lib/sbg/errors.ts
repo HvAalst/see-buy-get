@@ -17,7 +17,7 @@ export type SbgErrorCode =
   | 'REQUIREMENTS_NOT_MET' | 'KYC_INCOMPLETE' | 'APPROVAL_BLOCKED' | 'INVALID_STATE' | 'WINDOW_EXPIRED'
   | 'NOT_INBOUND' | 'PARCEL_EXISTS' | 'SHIPMENT_NOT_PAID' | 'CODE_MISMATCH' | 'CODE_LOCKED' | 'WRONG_DESTINATION' | 'NOT_COUPLED' | 'ALREADY_COUPLED'
   | 'CANNOT_COUPLE' | 'CAPACITY_EXCEEDED' | 'FRAGILE_NOT_ALLOWED' | 'BAG_FULL' | 'BAG_EMPTY' | 'BAG_RESERVED'
-  | 'BAG_MISADDRESSED' | 'ALREADY_IN_BAG' | 'SHELF_FULL' | 'NO_CAPACITY_AVAILABLE' | 'OTP_INVALID' | 'OTP_LOCKED' | 'PIN_INVALID' | 'UNAUTHORIZED'
+  | 'BAG_MISADDRESSED' | 'ALREADY_IN_BAG' | 'STAGING_FULL' | 'SHELF_FULL' | 'NO_CAPACITY_AVAILABLE' | 'OTP_INVALID' | 'OTP_LOCKED' | 'PIN_INVALID' | 'UNAUTHORIZED'
   | 'AUTH_FAILED' | 'AUTH_CODE_INVALID' | 'AUTH_NOT_ACTIVE' | 'PAYMENT_REQUIRED' | 'WALLET_INSUFFICIENT'
   | 'FORBIDDEN' | 'WRONG_PUDO' | 'AGENT_LOCKED' | 'PIN_LOCKED' | 'ROLE_NOT_HELD' | 'MEDIA_LOCKED' | 'CARGO_REQUIRES_DEDICATED' | 'CARGO_INCOMPATIBLE' | 'VEHICLE_MISSING_CAPABILITY' | 'NOT_FOUND' | 'CONFLICT' | 'DUPLICATE' | 'INCOMPLETE_MANIFEST' | 'INVITE_LIMIT'
   | 'MEDIA_EXPIRED' | 'MEDIA_TOO_LARGE' | 'UNSUPPORTED_MEDIA' | 'RATE_LIMITED' | 'PRICE_CHANGED'
@@ -108,6 +108,8 @@ const PRESENTATION: Partial<Record<SbgErrorCode, ErrorPresentation>> = {
   // Scanning is a loop, so the same sticker gets waved twice — and a parcel already in a SEALED bag on the
   // floor is still on the shelf as far as the shop is concerned. Neither is a failure; both need saying.
   ALREADY_IN_BAG: { icon: 'box', tone: 'info', say: 'error.already_in_bag' },
+  // The shop's own floor is full of bags. Not a failure — a queue: one has to leave before another starts.
+  STAGING_FULL: { icon: 'box', tone: 'warn', say: 'error.staging_full' },
   SHELF_FULL: { icon: 'box', tone: 'warn', say: 'error.shelf_full' },
   // S25 handover completeness gate — a short load the agent must resolve (load the rest, or short-ship).
   INCOMPLETE_MANIFEST: { icon: 'box', tone: 'warn', say: 'error.manifest_incomplete' },

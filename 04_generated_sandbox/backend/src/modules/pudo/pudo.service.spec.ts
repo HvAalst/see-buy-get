@@ -1216,6 +1216,43 @@ describe('PUDO Light', () => {
       expect(plan.groups.find((g) => g.label === 'SouthTown')?.openBagCode).toBeUndefined();
     });
 
+    it('a shop can only stage as many bags as it has floor room for — and says how many', () => {
+      const { origin } = shopWithTwoWaiting();
+      onboardAgent('East Dest', 'EastTown', 50);
+      onboardAgent('West Dest', 'WestTown', 50);
+
+      // The default is deliberately modest: a small counter is the common case.
+      expect(bagPlans.forShop(origin.did).staging).toEqual({ capacity: 2, used: 0, free: 2 });
+
+      const one = mdps.openShopBag(origin.did, 'SouthTown');
+      const two = mdps.openShopBag(origin.did, 'EastTown');
+      expect(bagPlans.forShop(origin.did).staging).toEqual({ capacity: 2, used: 2, free: 0 });
+      expect(() => mdps.openShopBag(origin.did, 'WestTown')).toThrow(/room for 2 bag/);
+
+      // A SEALED bag still takes up the same square metre — it is standing there waiting for its driver.
+      mdps.fillShopBag(one.code, origin.did, 'QR-B1');
+      mdps.sealShopBag(one.code, origin.did, { acknowledgeShortShip: true, shortShipReason: 'later bus' });
+      expect(bagPlans.forShop(origin.did).staging.used).toBe(2);
+      expect(() => mdps.openShopBag(origin.did, 'WestTown')).toThrow(/room for 2 bag/);
+
+      // Room comes back when a bag actually LEAVES.
+      const driver = coupleTipper('bays', { min: 0.8, max: 1.5 });
+      mdps.loadBag(one.code, drivers.get(driver.did).badgeId!);
+      expect(bagPlans.forShop(origin.did).staging).toEqual({ capacity: 2, used: 1, free: 1 });
+      expect(mdps.openShopBag(origin.did, 'WestTown').code).toBeTruthy();
+
+      // The limit cannot be walked around by opening a bare tote and ADDRESSING it afterwards — two calls
+      // the same app can make. A bag becomes staged when it is addressed, so the gate lives there too.
+      const bare = totes.register(origin.did); // flat and unassigned: takes no floor room, so registering is fine
+      expect(() => mdps.assignTote(bare.code, 'WestTown', 'WestTown')).toThrow(/room for 2 bag/);
+
+      // …or when the shop says it has more floor than we assumed. The declaration is the shop's, like the shelf's.
+      expect(() => agents.setBagBays(origin.did, 0)).toThrow(/between 1 and/);
+      agents.setBagBays(origin.did, 4);
+      expect(bagPlans.forShop(origin.did).staging).toEqual({ capacity: 4, used: 2, free: 2 });
+      expect(two.code).toBeTruthy();
+    });
+
     it('refuses the manual early-release for a shop bag — closing it IS the shop’s release', () => {
       const { origin } = shopWithTwoWaiting();
       const bag = mdps.openShopBag(origin.did, 'SouthTown');

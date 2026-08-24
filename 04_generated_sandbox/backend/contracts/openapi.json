@@ -4083,6 +4083,45 @@
         }
       }
     },
+    "/v1/sbg/agents/{did}/bag-bays": {
+      "post": {
+        "operationId": "Sbg.setBagBays",
+        "summary": "",
+        "description": "Declare the floor room for outbound BAGS — the shelf's counterpart for the other pile in the room.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BagBaysDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Agent"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/agents/{did}/location": {
       "post": {
         "operationId": "Sbg.setLocation",
@@ -11885,6 +11924,9 @@
           "shelf": {
             "$ref": "#/components/schemas/ShelfConfig"
           },
+          "bagBays": {
+            "type": "number"
+          },
           "shopfrontMediaId": {
             "type": "string"
           },
@@ -12050,6 +12092,18 @@
         },
         "required": [
           "openingHours"
+        ]
+      },
+      "BagBaysDto": {
+        "type": "object",
+        "properties": {
+          "bays": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "bays"
         ]
       },
       "SetLocationDto": {

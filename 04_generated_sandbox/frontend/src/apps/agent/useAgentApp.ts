@@ -24,6 +24,7 @@ import type {
   AgentView,
   BagGroup,
   OpenBag,
+  BagStaging,
   ClassifyView,
   ConsignmentView,
   CollectView,
@@ -93,7 +94,7 @@ export interface AgentState {
   shopParcelsState: 'idle' | 'loading' | 'ready' | 'error';
   /** What to bag, from the server: waiting parcels grouped by NEXT HOP (several bags open at once is the
    *  normal case — direct-to-Addis alongside one for the local hub), plus the bags already open here. */
-  bagPlan: { groups: BagGroup[]; bags: OpenBag[] };
+  bagPlan: { groups: BagGroup[]; bags: OpenBag[]; staging?: BagStaging };
   bagPlanState: 'idle' | 'loading' | 'ready' | 'error';
   /** The bag being packed right now. `missed` is the server's verdict at the last seal attempt —
    *  parcels for that destination still on the shelf. `scan` + `lastAdded` are the scanning loop: what is
@@ -510,7 +511,7 @@ export function useAgentApp() {
       setState((s) => ({ ...s, bagPlanState: 'error' }));
       return fail(r.error);
     }
-    const plan = narrow<{ groups: BagGroup[]; bags: OpenBag[] }>(r.data) ?? { groups: [], bags: [] };
+    const plan = narrow<{ groups: BagGroup[]; bags: OpenBag[]; staging?: BagStaging }>(r.data) ?? { groups: [], bags: [] };
     setState((s) => ({ ...s, bagPlan: plan, bagPlanState: 'ready' }));
   }, [client, did, fail]);
 
@@ -830,6 +831,20 @@ export function useAgentApp() {
       });
     },
     [client, did, run, fail, pushToast, refresh, loadShelf],
+  );
+
+  /** Declare the floor room for outbound BAGS — the shelf's counterpart for the other pile in the room. */
+  const saveBagBays = useCallback(
+    async (bays: number) => {
+      if (!client || !did) return;
+      await run('bag-bays', async () => {
+        const r = await client.api.setBagBays(did, bays);
+        if (r.error) return fail(r.error);
+        pushToast({ tone: 'ok', icon: 'bag', title: t('agent.toast.baysSaved'), detail: t('agent.toast.baysSavedDetail', { count: bays }) });
+        await refresh(); // the merged agent record carries the new number (and the wallet hero it sits beside)
+      });
+    },
+    [client, did, run, fail, pushToast, refresh],
   );
 
   /* -------------------------------------------------- My-shop editors (location / hours / photo) */
@@ -1548,6 +1563,7 @@ export function useAgentApp() {
       setPrice,
       loadShelf,
       saveShelf,
+      saveBagBays,
       loadMedia,
       setLocationPin,
       saveHours,
