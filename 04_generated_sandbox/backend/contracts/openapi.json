@@ -13340,6 +13340,9 @@
           "capacityKg": {
             "type": "number"
           },
+          "toteCapacity": {
+            "type": "number"
+          },
           "pricePerKm": {
             "type": "number"
           },

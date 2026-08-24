@@ -34,10 +34,18 @@ export function isFull(remainingKg: number): boolean {
   return remainingKg <= 0;
 }
 
-/** One line of plain language under the big number. Units spelled out, no abbreviations. */
-export function capacitySubLine(remainingKg: number, capacityKg: number, claimCount: number, t: Translate): string {
+/**
+ * One line of plain language under the big number. Units spelled out, no abbreviations.
+ *
+ * `remainingTotes` is the OTHER capacity, and on a line-haul it is usually the one that binds: a bus with
+ * 400 kg free whose boot holds no more bags is full in every way that matters to the driver standing at it,
+ * so when the bags run out first the line says so instead of advertising kilos they cannot use.
+ */
+export function capacitySubLine(remainingKg: number, capacityKg: number, claimCount: number, t: Translate, remainingTotes?: number): string {
   const loads = claimCount === 1 ? t('driver.logic.loadClaimedOne') : t('driver.logic.loadClaimedMany', { count: claimCount });
   if (remainingKg <= 0) return t('driver.logic.vanFull', { loads });
+  if (remainingTotes != null && remainingTotes <= 0) return t('driver.logic.bagsFull', { loads });
+  if (remainingTotes != null) return t('driver.logic.freeSpaceBags', { kg: capacityKg, bags: remainingTotes, loads });
   return t('driver.logic.freeSpace', { kg: capacityKg, loads });
 }
 

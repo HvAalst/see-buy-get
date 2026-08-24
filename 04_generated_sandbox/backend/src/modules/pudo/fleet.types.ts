@@ -71,6 +71,12 @@ export class Vehicle {
   vehicleClass: VehicleClass;
   truckSubtype?: TruckSubtype; // only for class 'truck'
   capacityKg: number; // system-computed (light) or operator-declared within class bounds (heavy)
+  /**
+   * How many BAGS the hold takes — the constraint kilos cannot express (a tote of letters weighs nothing, so
+   * by weight a bus fits a hundred while its boot holds a dozen). Absent on vehicles registered before this
+   * existed: read it through DispatchService.toteCapacityOf, never off the field.
+   */
+  toteCapacity?: number;
   pricePerKm: number; // open-data transport rate set by the driver/fleet manager (public, locked to the vehicle)
   // S34 — the dynamic-pricing profile. baseFee is the flag-down (deadhead + loading) fee; pricePerKm above is
   // R_base; [minMultiplier, maxMultiplier] is the corridor the market engine may flex the per-km rate within.

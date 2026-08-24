@@ -173,8 +173,8 @@ function OnShift({ state, actions }: HomeScreenProps) {
         value={state.remaining}
         unit="kg"
         percent={pct}
-        alert={isFull(state.remaining)}
-        sub={capacitySubLine(state.remaining, v.capacityKg, state.claims.length, t)}
+        alert={isFull(state.remaining) || state.remainingTotes === 0}
+        sub={capacitySubLine(state.remaining, v.capacityKg, state.claims.length, t, state.remainingTotes ?? undefined)}
       />
 
       <Card

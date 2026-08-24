@@ -9,6 +9,7 @@ import { OperationalStore } from '../../foundation/data-firewall/operational-sto
 import { AgentService } from './agent.service';
 import { ParcelService } from './parcel.service';
 import { ToteService } from './tote.service';
+import { toteCapacityOf } from './fleet.config';
 import { FleetService } from './fleet.service';
 import { WalletGateService } from './wallet-gate.service';
 import { CargoService } from './cargo.service';
@@ -343,6 +344,18 @@ export class MdpService {
         if (!fleet.vehicle[cap]) throw new GlosError('VEHICLE_MISSING_CAPABILITY', `A ${fleet.vehicle.vehicleClass} lacks ${cap} that bag ${code}'s cargo requires`);
       }
       if (kg > fleet.capacityKg) throw new GlosError('CAPACITY_EXCEEDED', `Bag ${code} (${kg}kg) exceeds this ${fleet.vehicle.vehicleClass}'s ${fleet.capacityKg}kg capacity`);
+    }
+    // And room in the hold for one more BAG. This is the moment the bag physically goes in, so it is the last
+    // honest place to refuse it: a bus whose boot is full is full whatever the scales say. Counted over what
+    // this driver is already carrying, and only for a bag they have NOT already reserved (a claimed bag was
+    // counted the moment it was claimed — loading it must not charge for the same space twice).
+    if (fleet) {
+      const held = this.totes.list().filter((t) => t.claimedBy === fleet.driverDid && (t.status === 'claimed' || t.status === 'in_transit')).length;
+      const capacity = toteCapacityOf(fleet.vehicle);
+      const alreadyMine = pending.claimedBy === fleet.driverDid;
+      if (!alreadyMine && held >= capacity) {
+        throw new GlosError('CAPACITY_EXCEEDED', `This ${fleet.vehicle.vehicleClass} is carrying all ${capacity} bag(s) it holds — drop one before loading bag ${code}`);
+      }
     }
     const tote = this.totes.load(code, driverBadgeId);
     for (const parcelId of tote.parcels) {

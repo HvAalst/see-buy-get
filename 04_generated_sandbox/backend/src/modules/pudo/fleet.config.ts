@@ -66,6 +66,12 @@ export interface VehicleClassSpec {
   registry: 'light' | 'heavy'; // drives driver-onboarding rigor
   defaultCapacityKg: number; // system-computed capacity when none is provided
   maxCapacityKg: number; // upper bound the operator may declare (heavy registry)
+  /**
+   * How many BAGS the hold takes — the constraint weight cannot express. A tote of letters weighs almost
+   * nothing, so by kilos a bus "fits" a hundred of them while its boot holds a dozen. This is the number a
+   * driver actually runs out of on a line-haul, and it is what a bag claim is checked against.
+   */
+  defaultTotes: number;
   maxParcelKg: number; // largest single parcel this class may carry
   allowsFragile: boolean; // a bike/motorcycle may not carry fragile items
   carriesBulk: boolean; // bulk cargo (sugar/cement bags) — trucks only
@@ -74,13 +80,15 @@ export interface VehicleClassSpec {
 }
 
 export const VEHICLE_SPEC: Record<VehicleClass, VehicleClassSpec> = {
-  bike: { registry: 'light', defaultCapacityKg: 20, maxCapacityKg: 20, maxParcelKg: 20, allowsFragile: false, carriesBulk: false, defaultBaseFee: 0.5, role: 'micro feeder · MDP→PUDO last mile' },
-  motorcycle: { registry: 'light', defaultCapacityKg: 50, maxCapacityKg: 80, maxParcelKg: 30, allowsFragile: false, carriesBulk: false, defaultBaseFee: 0.8, role: 'micro feeder · last mile' },
-  tuktuk: { registry: 'heavy', defaultCapacityKg: 250, maxCapacityKg: 400, maxParcelKg: 80, allowsFragile: true, carriesBulk: false, defaultBaseFee: 1.5, role: 'last mile · light distribution' },
-  car: { registry: 'heavy', defaultCapacityKg: 300, maxCapacityKg: 500, maxParcelKg: 100, allowsFragile: true, carriesBulk: false, defaultBaseFee: 2, role: 'last mile' },
-  van: { registry: 'heavy', defaultCapacityKg: 1200, maxCapacityKg: 2000, maxParcelKg: 300, allowsFragile: true, carriesBulk: false, defaultBaseFee: 5, role: 'feeder · distribution' },
-  bus: { registry: 'heavy', defaultCapacityKg: 500, maxCapacityKg: 800, maxParcelKg: 200, allowsFragile: true, carriesBulk: false, defaultBaseFee: 4, role: 'corridor line-haul' },
-  truck: { registry: 'heavy', defaultCapacityKg: 8000, maxCapacityKg: 30000, maxParcelKg: 2000, allowsFragile: true, carriesBulk: true, defaultBaseFee: 10, role: 'bulk cargo · line-haul' },
+  bike: { registry: 'light', defaultCapacityKg: 20, maxCapacityKg: 20, defaultTotes: 1, maxParcelKg: 20, allowsFragile: false, carriesBulk: false, defaultBaseFee: 0.5, role: 'micro feeder · MDP→PUDO last mile' },
+  motorcycle: { registry: 'light', defaultCapacityKg: 50, maxCapacityKg: 80, defaultTotes: 2, maxParcelKg: 30, allowsFragile: false, carriesBulk: false, defaultBaseFee: 0.8, role: 'micro feeder · last mile' },
+  tuktuk: { registry: 'heavy', defaultCapacityKg: 250, maxCapacityKg: 400, defaultTotes: 4, maxParcelKg: 80, allowsFragile: true, carriesBulk: false, defaultBaseFee: 1.5, role: 'last mile · light distribution' },
+  car: { registry: 'heavy', defaultCapacityKg: 300, maxCapacityKg: 500, defaultTotes: 4, maxParcelKg: 100, allowsFragile: true, carriesBulk: false, defaultBaseFee: 2, role: 'last mile' },
+  van: { registry: 'heavy', defaultCapacityKg: 1200, maxCapacityKg: 2000, defaultTotes: 15, maxParcelKg: 300, allowsFragile: true, carriesBulk: false, defaultBaseFee: 5, role: 'feeder · distribution' },
+  // A bus carries people first: the parcels ride in the boot and on the roof, which is why its bag count is
+  // modest next to its kilos — the constraint a conductor actually hits on a corridor run.
+  bus: { registry: 'heavy', defaultCapacityKg: 500, maxCapacityKg: 800, defaultTotes: 12, maxParcelKg: 200, allowsFragile: true, carriesBulk: false, defaultBaseFee: 4, role: 'corridor line-haul' },
+  truck: { registry: 'heavy', defaultCapacityKg: 8000, maxCapacityKg: 30000, defaultTotes: 60, maxParcelKg: 2000, allowsFragile: true, carriesBulk: true, defaultBaseFee: 10, role: 'bulk cargo · line-haul' },
 };
 
 // S34 — dynamic-pricing bounds. A driver/fleet delegates a "pricing agent" (the multiplier engine) that may
@@ -88,6 +96,21 @@ export const VEHICLE_SPEC: Record<VehicleClass, VehicleClassSpec> = {
 // are the defaults when a vehicle declares none.
 export const DEFAULT_MIN_MULTIPLIER = 0.8;
 export const DEFAULT_MAX_MULTIPLIER = 1.5;
+
+/**
+ * How many BAGS a vehicle's hold takes.
+ *
+ * A pure helper rather than a service method because both sides of the bag flow need it and they cannot see
+ * each other: dispatch asks it when offering and claiming, the MDP/shop path asks it at the moment a bag is
+ * physically scanned aboard. Absent on every vehicle registered before bag space existed, and a missing
+ * figure must read as the CLASS DEFAULT — never as "no room" (which would strand every legacy bus) and never
+ * as "unlimited" (which is the hole this closes).
+ */
+export function toteCapacityOf(vehicle: { toteCapacity?: number; vehicleClass: VehicleClass }): number {
+  const n = vehicle.toteCapacity;
+  if (typeof n === 'number' && Number.isFinite(n) && n >= 1) return Math.floor(n);
+  return VEHICLE_SPEC[vehicle.vehicleClass]?.defaultTotes ?? 1;
+}
 
 /** Map a vehicle class onto the corridor's coarse bus/truck heuristic for line-haul legs. */
 export const CLASS_TO_CORRIDOR_VEHICLE: Record<VehicleClass, 'bus' | 'truck'> = {

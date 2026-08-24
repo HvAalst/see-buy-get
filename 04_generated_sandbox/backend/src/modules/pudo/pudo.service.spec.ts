@@ -3723,6 +3723,48 @@ describe('PUDO Light', () => {
     expect(dispatch.headingTowards(quiet.did, arbaMinch)).toBe(true);
   });
 
+  it('a bus runs out of BAG SPACES long before it runs out of kilos', () => {
+    const origin = onboardAgent('Bagspace Origin', 'NorthTown', 200);
+    const dest = onboardAgent('Bagspace Dest', 'SouthTown', 200);
+    corridors.addCorridor({ name: 'bagspace', originZone: 'NorthTown', destZone: 'SouthTown' });
+
+    // A conductor's bus: 500 kg, and a boot that holds two bags for this test.
+    const d = drivers.register({ displayName: 'Conductor', fullName: 'C C', nationalId: 'ID-bus-cap', mobile: '+254900bus', licenceClasses: ['bus'], licenceNumber: 'L-bus', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const bus = vehicles.register({ plate: 'BUS-CAP', vehicleClass: 'bus', capacityKg: 500, toteCapacity: 2, ownerName: 'Owner' });
+    fleet.couple(d.did, bus.vehicleId);
+
+    // Three bags of letters. By WEIGHT all three fit many times over — that was the whole problem.
+    const bags = ['A', 'B', 'C'].map((tag) => {
+      parcels.accept({ agentDid: origin.did, parcelId: `LET-${tag}`, size: 'S', destZone: 'SouthTown', destPudoDid: dest.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+      const bag = mdps.openShopBag(origin.did, 'SouthTown');
+      mdps.fillShopBag(bag.code, origin.did, `LET-${tag}`);
+      mdps.sealShopBag(bag.code, origin.did, { acknowledgeShortShip: true, shortShipReason: 'one per bag for the test' });
+      agents.setBagBays(origin.did, 9); // the shop's floor is not what this test is about
+      return bag;
+    });
+    expect(dispatch.remainingCapacity(d.did)).toBeGreaterThan(400); // kilos are nowhere near the limit
+    expect(dispatch.remainingTotes(d.did)).toBe(2);
+
+    const claimBag = (code: string) => {
+      const offer = dispatch.suggest(d.did, { from: origin.location, to: dest.location }).find((o) => o.ref === code);
+      return offer ? dispatch.claim(offer.offerId) : undefined;
+    };
+    expect(claimBag(bags[0].code)).toBeTruthy();
+    expect(claimBag(bags[1].code)).toBeTruthy();
+    expect(dispatch.remainingTotes(d.did)).toBe(0);
+
+    // The third is not even OFFERED — the list stops promising what the boot cannot take.
+    expect(dispatch.suggest(d.did, { from: origin.location, to: dest.location }).some((o) => o.ref === bags[2].code)).toBe(false);
+
+    // And the physical scan refuses it too: a full boot is full whatever the scales say.
+    const badge = drivers.get(d.did).badgeId!;
+    expect(() => mdps.loadBag(bags[2].code, badge)).toThrow(/all 2 bag\(s\) it holds/);
+    // A bag this driver already RESERVED is not charged for the space twice.
+    expect(mdps.loadBag(bags[0].code, badge).moved).toEqual(['LET-A']);
+  });
+
   it('offers the vehicles this driver has driven before — the day starts at a coffee table, not at the bus', () => {
     const d = coupleTipper('picker', { min: 0.8, max: 1.5 });
     const mine = drivers.get(d.did).assignedVehicleId!;

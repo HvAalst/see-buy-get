@@ -1648,7 +1648,7 @@ export class SbgController {
     // REP4 — return the LIVE freight-bar verdict alongside the offers, so the app's "freight is paused" note
     // comes from the SAME read as the loads it sits next to (never stale: missing when a pause just began, or
     // contradicting freight cards after it lifted).
-    return { remainingCapacityKg: this.dispatch.remainingCapacity(did), offers, expected, freightPaused: belowFloor(this.ratings.driverRating(did)) };
+    return { remainingCapacityKg: this.dispatch.remainingCapacity(did), remainingTotes: this.dispatch.remainingTotes(did), offers, expected, freightPaused: belowFloor(this.ratings.driverRating(did)) };
   }
 
   /** Driver GPS heartbeat — updates the vehicle's position on the live fleet map. */
@@ -1682,7 +1682,7 @@ export class SbgController {
 
   @Get('fleet/drivers/:did/claims')
   driverClaims(@Param('did') did: string) {
-    return { remainingCapacityKg: this.dispatch.remainingCapacity(did), claims: this.dispatch.claimsFor(did) };
+    return { remainingCapacityKg: this.dispatch.remainingCapacity(did), remainingTotes: this.dispatch.remainingTotes(did), claims: this.dispatch.claimsFor(did) };
   }
 
   /** A driver's JOBS + EARNINGS register (R5): the dedicated-freight hauls they claimed, server-side searched /

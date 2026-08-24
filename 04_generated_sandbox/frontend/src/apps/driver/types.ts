@@ -148,6 +148,8 @@ export interface Claimable {
 
 export interface ClaimsView {
   remainingCapacityKg: number;
+  /** Bag spaces left in the hold — the capacity kilos cannot express (a bus's boot, not its scales). */
+  remainingTotes?: number;
   claims: Claimable[];
 }
 
@@ -208,6 +210,8 @@ export interface ExpectedLoadView {
 
 export interface SuggestView {
   remainingCapacityKg: number;
+  /** Bag spaces left in the hold, alongside the kilos. */
+  remainingTotes?: number;
   offers: OfferView[];
   /** F3 — lots filling along this route: nothing to claim, everything to plan around. */
   expected?: ExpectedLoadView[];

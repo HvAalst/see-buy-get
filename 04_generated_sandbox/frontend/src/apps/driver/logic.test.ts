@@ -56,6 +56,15 @@ describe('usedPercent — the capacity bar', () => {
     expect(capacitySubLine(600, 800, 3, t)).toBe('Free space out of 800 kg — 3 loads claimed.');
     expect(capacitySubLine(0, 800, 2, t)).toContain('Your van is full');
   });
+
+  it('leads with BAG spaces when those run out first — the constraint kilos cannot express', () => {
+    // A bus with 400 kg free and no room for another bag is full in the only way the driver can act on.
+    expect(capacitySubLine(400, 800, 2, t, 0)).toContain('No bag space left');
+    expect(capacitySubLine(400, 800, 2, t, 0)).toContain('nowhere to put a bag');
+    expect(capacitySubLine(400, 800, 1, t, 3)).toBe('Free space out of 800 kg · room for 3 more bag(s) — 1 load claimed.');
+    // Weight still wins when it is the one that has actually run out.
+    expect(capacitySubLine(0, 800, 2, t, 5)).toContain('Your van is full');
+  });
 });
 
 describe('rateBand — per-km price against the network median', () => {

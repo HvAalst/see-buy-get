@@ -66,6 +66,8 @@ export interface DriverState {
   session: SessionView;
   vehicle: VehicleView | null;
   remaining: number;
+  /** Bag spaces left in the hold — on a line-haul this is usually what binds, not the kilos. */
+  remainingTotes: number | null;
   claims: ClaimsView['claims'];
   rates: RatesView | null;
   nodes: NodeOption[];
@@ -105,6 +107,7 @@ const INITIAL: DriverState = {
   session: { active: false },
   vehicle: null,
   remaining: 0,
+  remainingTotes: null,
   claims: [],
   rates: null,
   nodes: [],
@@ -275,6 +278,7 @@ export function useDriverApp() {
 
       let vehicle: VehicleView | null = null;
       let remaining = 0;
+      let remainingTotes: number | null = null;
       let claims: ClaimsView['claims'] = [];
       let rates: RatesView | null = null;
 
@@ -289,6 +293,7 @@ export function useDriverApp() {
         }
         const cv = narrow<ClaimsView>(clR.data);
         remaining = cv?.remainingCapacityKg ?? 0;
+        remainingTotes = cv?.remainingTotes ?? null;
         claims = cv?.claims ?? [];
 
         // Network per-km benchmark (vehicles roam, so no lat/lng). Soft-fail by design.
@@ -314,6 +319,7 @@ export function useDriverApp() {
         session,
         vehicle,
         remaining,
+        remainingTotes,
         claims,
         rates,
         route: savedRoute(did),
@@ -599,6 +605,7 @@ export function useDriverApp() {
           // so the "freight is paused" note never lags the marketplace it explains.
           driver: s.driver && v?.freightPaused != null ? { ...s.driver, freightPaused: v.freightPaused } : s.driver,
           remaining: v?.remainingCapacityKg ?? s.remaining,
+          remainingTotes: v?.remainingTotes ?? s.remainingTotes,
           offers: v?.offers ?? [],
           expected: v?.expected ?? [],
           offerIndex: 0,

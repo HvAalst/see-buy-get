@@ -15,6 +15,7 @@ interface RegisterVehicleInput {
   vehicleClass: VehicleClass;
   truckSubtype?: TruckSubtype;
   capacityKg?: number; // heavy registry may declare a real load capacity within class bounds
+  toteCapacity?: number; // how many BAGS the hold takes (defaults per class — see VehicleClassSpec.defaultTotes)
   ownerType?: VehicleOwnerType;
   ownerName: string;
   documents?: VehicleDocuments;
@@ -65,6 +66,9 @@ export class VehicleService {
       vehicleClass: input.vehicleClass,
       truckSubtype: input.truckSubtype,
       capacityKg,
+      // The other capacity: how many BAGS the hold takes. A declared figure is honoured (an owner knows their
+      // own boot); otherwise the class default. Never zero — a vehicle that can carry nothing is not a vehicle.
+      toteCapacity: input.toteCapacity != null && input.toteCapacity > 0 ? Math.floor(input.toteCapacity) : spec.defaultTotes,
       pricePerKm: input.pricePerKm != null ? Math.round(input.pricePerKm * 1000) / 1000 : DEFAULT_PRICE_PER_KM,
       // S34 — the pricing profile. Defaults are class-scaled (a bike's flag-down is cents, a truck's is dollars)
       // with a sane [0.8, 1.5] corridor; a fleet may declare its own. Bounds are sanitised so min ≤ max ≤ 3.

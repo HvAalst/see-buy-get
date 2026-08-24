@@ -18,7 +18,7 @@ import { clampMultiplier, computeFreightPrice, freightMultiplier, shipperCharge 
 import { isTempBreach, loadSafetyItems, missingKeys, requiredLoadKeys, requiredUnloadKeys, tempBand, unloadSafetyItems } from './heavy-cargo';
 import { MediaService } from './media.service';
 import { MarketPulseStore } from './market-pulse.store';
-import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, VEHICLE_SPEC } from './fleet.config';
+import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, toteCapacityOf, VEHICLE_SPEC } from './fleet.config';
 import { Router, ROUTER } from './router';
 import { DEFAULT_PRICE_PER_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, NETWORK_CURRENCY, OFFER_TTL_MIN, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
 import { hashPhone } from '../../foundation/identity/phone';
@@ -381,6 +381,7 @@ export class DispatchService {
     this.publishReady(now);
     this.publishReadyFreight(now); // any scheduled freight that has come due joins the marketplace now
     const remaining = this.remainingCapacity(driverDid);
+    const remainingTotes = this.remainingTotes(driverDid); // bag spaces, the constraint kilos cannot express
     const profile = this.pricingProfile(vehicle); // S34 — fixed for this driver+vehicle across all offers here
     const floor = minEarn != null && Number.isFinite(minEarn) && minEarn > 0 ? minEarn : undefined;
 
@@ -393,7 +394,7 @@ export class DispatchService {
     const matches = this.availableLoads()
       .filter((load) => !(freightBarred && load.kind === 'freight'))
       .map((load) => ({ load, detour: this.router.detourKm(route.from, load.pickupLocation, route.to), minutesAway: this.minutes(route.from, load.pickupLocation) }))
-      .filter(({ load, detour, minutesAway }) => detour <= DISPATCH_MAX_DETOUR_KM && minutesAway <= DISPATCH_MAX_PICKUP_MIN && this.vehicleCanCarry(vehicle, load, remaining))
+      .filter(({ load, detour, minutesAway }) => detour <= DISPATCH_MAX_DETOUR_KM && minutesAway <= DISPATCH_MAX_PICKUP_MIN && this.vehicleCanCarry(vehicle, load, remaining, remainingTotes))
       .sort((a, b) => a.detour - b.detour || a.minutesAway - b.minutesAway);
 
     const out: Offer[] = [];
@@ -453,6 +454,12 @@ export class DispatchService {
     const vehicle = this.fleet.vehicleForDriver(offer.driverDid);
     if (!vehicle) throw new GlosError('NOT_COUPLED', 'Driver is no longer coupled to a vehicle');
     if (offer.weightKg > this.remainingCapacity(offer.driverDid)) throw new GlosError('CAPACITY_EXCEEDED', 'Not enough remaining capacity for this load');
+    // …and room in the hold for one more BAG. Kilos are not the binding constraint on a line-haul: a driver
+    // claiming from a coffee table could reserve twenty bags of letters against a weight limit they never
+    // reach, and arrive at a bus whose boot holds twelve.
+    if (offer.kind === 'tote' && this.remainingTotes(offer.driverDid) < 1) {
+      throw new GlosError('CAPACITY_EXCEEDED', `Your ${vehicle.vehicleClass} is carrying all ${this.toteCapacityOf(vehicle)} bag(s) it holds — deliver one before taking another`);
+    }
     // S31/S32: re-check the load's required capabilities AND equipment against the driver's CURRENT vehicle —
     // coupling is re-assignable, so what held when the offer was made (suggest → vehicleCanCarry) may not hold
     // now. Without this, a driver could re-couple to an unsuitable vehicle and RESERVE the load (markClaimed)
@@ -550,6 +557,24 @@ export class DispatchService {
     const toteKg = this.totes.list().filter((t) => t.claimedBy === driverDid && (t.status === 'claimed' || t.status === 'in_transit')).reduce((s, t) => s + t.weightKg, 0);
     const freightKg = [...this.freights.values()].filter((f) => f.claimedBy === driverDid && (f.status === 'claimed' || f.status === 'in_transit')).reduce((s, f) => s + f.weightKg, 0);
     return Math.round((vehicle.capacityKg - toteKg - freightKg) * 100) / 100;
+  }
+
+  /** How many BAGS this vehicle holds (the shared pure helper — see fleet.config toteCapacityOf). */
+  toteCapacityOf(vehicle: Vehicle): number {
+    return toteCapacityOf(vehicle);
+  }
+
+  /**
+   * Bag spaces left in the hold — the capacity kilos cannot express.
+   *
+   * A tote of letters weighs nothing, so a bus with 500 kg free could be offered a hundred bags while its
+   * boot holds a dozen. Counted in BAGS, against what the driver is already carrying or has reserved.
+   */
+  remainingTotes(driverDid: string): number {
+    const vehicle = this.fleet.vehicleForDriver(driverDid);
+    if (!vehicle) return 0;
+    const held = this.totes.list().filter((t) => t.claimedBy === driverDid && (t.status === 'claimed' || t.status === 'in_transit')).length;
+    return Math.max(0, this.toteCapacityOf(vehicle) - held);
   }
 
   /**
@@ -750,9 +775,11 @@ export class DispatchService {
     return { kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached };
   }
 
-  private vehicleCanCarry(vehicle: Vehicle, load: Claimable, remainingKg: number): boolean {
+  private vehicleCanCarry(vehicle: Vehicle, load: Claimable, remainingKg: number, remainingTotes = Number.POSITIVE_INFINITY): boolean {
     if (load.weightKg > remainingKg) return false;
     if (load.weightKg > vehicle.capacityKg) return false;
+    // A bag needs a bag space, not just kilos — otherwise the offer list keeps offering bags to a full boot.
+    if (load.kind === 'tote' && remainingTotes < 1) return false;
     if (load.fragile && !vehicle.allowsFragile) return false;
     if (load.bulk && !vehicle.carriesBulk) return false;
     // S31: the vehicle must satisfy EVERY capability the load's cargo requires (perishable → cold chain,

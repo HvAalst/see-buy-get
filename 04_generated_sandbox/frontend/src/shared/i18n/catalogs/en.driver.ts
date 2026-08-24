@@ -259,6 +259,8 @@ export const enDriver = {
   'driver.logic.loadClaimedMany': '{count} loads claimed',
   'driver.logic.vanFull': 'Your van is full — {loads}. Deliver something to free up space.',
   'driver.logic.freeSpace': 'Free space out of {kg} kg — {loads}.',
+  'driver.logic.freeSpaceBags': 'Free space out of {kg} kg · room for {bags} more bag(s) — {loads}.',
+  'driver.logic.bagsFull': 'No bag space left — {loads}. You still have weight free, but nowhere to put a bag.',
   'driver.logic.rateAbove': '{pct}% above',
   'driver.logic.rateBelow': '{pct}% below',
   'driver.logic.rateAt': 'at',
