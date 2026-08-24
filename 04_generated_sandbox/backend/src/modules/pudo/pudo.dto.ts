@@ -391,9 +391,9 @@ export class CollectDto {
   @IsString() collectionCode!: string;
 }
 
-/** Open a bag at a shop for one destination zone. */
+/** Open a bag at a shop. With a destZone it is addressed at the same time; without, it is a bare tote. */
 export class OpenBagDto {
-  @IsString() destZone!: string;
+  @IsOptional() @IsString() destZone?: string;
 }
 
 /** Seal a shop's bag. Leaving a waiting parcel out of it must be deliberate, exactly as at handover. */

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import {
   isMintSourced,
   isSignInRequired,
@@ -38,7 +38,7 @@ import type {
   ShelfGrid,
 } from './types';
 
-export type Screen = 'home' | 'accept' | 'handover' | 'release' | 'collect' | 'receivebag' | 'rates' | 'void' | 'records' | 'consignments' | 'shelf';
+export type Screen = 'home' | 'accept' | 'handover' | 'bag' | 'release' | 'collect' | 'receivebag' | 'rates' | 'void' | 'records' | 'consignments' | 'shelf';
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
 
 /* --- R4 registers: the shop's parcel history + earnings, server-side searched / filtered / paged --- */
@@ -89,9 +89,12 @@ export interface AgentState {
   /** Parcels waiting at this shop for the bus (loaded when the handover screen opens). */
   shopParcels: ParcelView[];
   shopParcelsState: 'idle' | 'loading' | 'ready' | 'error';
+  /** The bag this shop currently has open: its code, where it is going, and what is in it. `missed` is
+   *  the server's verdict at the last seal attempt â€” parcels for that destination still on the shelf. */
+  bag: { code: string; destZone: string; parcels: string[]; missed: string[]; sealed: boolean } | null;
   rates: RatesView | null;
   ratesState: 'idle' | 'loading' | 'ready' | 'error';
-  /** F3 — the shop's consolidation lots (loaded when the Consignments screen opens). */
+  /** F3 â€” the shop's consolidation lots (loaded when the Consignments screen opens). */
   consignments: ConsignmentView[];
   consignmentsState: 'idle' | 'loading' | 'ready' | 'error';
   /** The pickup-shelf grid + free-slot count (loaded on the Shelf screen AND the Home occupancy strip). */
@@ -100,12 +103,12 @@ export interface AgentState {
   /** A shelf-load failure, kept SEPARATE from the screen-level error so a secondary occupancy fetch on Home
    *  never raises the cockpit's error banner. */
   shelfError: SbgError | null;
-  /** R4 — the shop's parcel-history register (a filtered/paged page). */
+  /** R4 â€” the shop's parcel-history register (a filtered/paged page). */
   parcelHist: AgentParcelRow[];
   parcelHistTotal: number;
   parcelHistState: 'idle' | 'loading' | 'ready' | 'error';
   parcelHistQuery: HistQuery;
-  /** R4 — the shop's earnings register (a filtered/paged page + the current view's totals). */
+  /** R4 â€” the shop's earnings register (a filtered/paged page + the current view's totals). */
   ledger: AgentLedgerRow[];
   ledgerTotal: number;
   ledgerState: 'idle' | 'loading' | 'ready' | 'error';
@@ -127,11 +130,11 @@ export interface AgentState {
   acceptNear: GeoPoint | null;
   acceptGeoBusy: boolean;
   acceptGeoNote: string | null;
-  /** DT — the label the last accept produced, shown to print + stick on the parcel (null once dismissed).
+  /** DT â€” the label the last accept produced, shown to print + stick on the parcel (null once dismissed).
    *  `releaseCode` is the pickup code, handed to the SENDER at the counter: it is not on the parcel and the
    *  collecting shop never learns it, so this sheet is where it reaches a human. */
   acceptedLabel: { parcelId: string; trackingKey?: string; svg?: string; releaseCode?: string } | null;
-  /** F2 — the freight the last counter booking produced: the FRT code + tracking key to print for the
+  /** F2 â€” the freight the last counter booking produced: the FRT code + tracking key to print for the
    *  customer, plus the site-equipment advisory. Null until a booking succeeds / once dismissed. */
   bookedFreight: {
     code: string;
@@ -143,15 +146,15 @@ export interface AgentState {
     equipmentGaps?: Array<'origin' | 'dest'>;
     maxSpend?: number;
   } | null;
-  /** PG4 — the scanned sticker resolved to an EXISTING parcel (a pre-minted send, a store order, or an
-   *  in-use sticker); null/idle = a fresh sticker → the walk-up form. */
+  /** PG4 â€” the scanned sticker resolved to an EXISTING parcel (a pre-minted send, a store order, or an
+   *  in-use sticker); null/idle = a fresh sticker â†’ the walk-up form. */
   preMint: IntakePreview | null;
   preMintState: 'idle' | 'loading' | 'ready' | 'error';
   preMintError: SbgError | null;
   /** Bumped to re-fire the preview for an unchanged code (a retry after a transient failure). */
   previewNonce: number;
   intakePhotoRef: string;
-  /** The last completed intake — drives the "taken in, cash collected" sheet. */
+  /** The last completed intake â€” drives the "taken in, cash collected" sheet. */
   intakeDone: { parcelId: string; kind: IntakePreview['kind']; cashDue: number; destShopName?: string } | null;
   /** `missed` is the last server verdict of parcels for this bus still waiting (the S25 gate). */
   handover: { badge: string; selected: string[]; missed: string[] };
@@ -160,7 +163,7 @@ export interface AgentState {
   receivebag: { code: string };
   /** The reverse-logistics window: which recent drop-off is being undone, + its torn-label photo. */
   void: { parcelId: string | null; photoRef: string };
-  /** REP2 — the "rate the driver" prompt, opened after a handover/bag-receipt. `profile` fills in once fetched. */
+  /** REP2 â€” the "rate the driver" prompt, opened after a handover/bag-receipt. `profile` fills in once fetched. */
   driverRating: { driverDid: string; profile: ReputationProfileView | null } | null;
 }
 
@@ -175,6 +178,7 @@ const INITIAL: AgentState = {
   gate: null,
   shopParcels: [],
   shopParcelsState: 'idle',
+  bag: null,
   rates: null,
   ratesState: 'idle',
   consignments: [],
@@ -273,7 +277,7 @@ export function useAgentApp() {
   /**
    * One place decides what a failure means to the shell (the driver's rules, plus one):
    * a mint-sourced UNAUTHORIZED from the seeded session means the shift token died and the
-   * password is not on this device — the only way forward is the sign-in screen, so route
+   * password is not on this device â€” the only way forward is the sign-in screen, so route
    * there with the error instead of a dead retry loop.
    */
   const fail = useCallback((error: SbgError) => {
@@ -294,7 +298,7 @@ export function useAgentApp() {
   const refreshEpoch = useRef(0);
   const refreshesRunning = useRef(0);
 
-  /** Boot/refresh: me → can-transact → corridors (soft) → ping (fire-and-forget). */
+  /** Boot/refresh: me â†’ can-transact â†’ corridors (soft) â†’ ping (fire-and-forget). */
   const refresh = useCallback(async () => {
     if (!client || !did) return;
     const epoch = ++refreshEpoch.current;
@@ -384,7 +388,7 @@ export function useAgentApp() {
   }, []);
 
   useEffect(() => {
-    // Identity settled: drop every other shop's stored token — never on first render
+    // Identity settled: drop every other shop's stored token â€” never on first render
     // while did is still null, which would wipe the token that survives a cold start.
     if (did) purgeAgentTokens(did);
     if (client && did) void refresh();
@@ -514,7 +518,7 @@ export function useAgentApp() {
     setState((s) => ({ ...s, rates: narrow<RatesView>(r.data), ratesState: 'ready' }));
   }, [client, fail]);
 
-  /** F3 — the shop's consolidation lots. Loaded when the Consignments screen opens. */
+  /** F3 â€” the shop's consolidation lots. Loaded when the Consignments screen opens. */
   const loadConsignments = useCallback(async () => {
     if (!client || !did) return;
     setState((s) => ({ ...s, consignmentsState: 'loading' }));
@@ -633,7 +637,7 @@ export function useAgentApp() {
         handover: screen === 'handover' ? { ...s.handover, missed: [] } : s.handover,
         void: screen === 'void' ? { parcelId: null, photoRef: '' } : s.void,
       }));
-      if (screen === 'handover' || screen === 'void') void loadShopParcels();
+      if (screen === 'handover' || screen === 'void' || screen === 'bag') void loadShopParcels();
       if (screen === 'rates') void loadRates();
       if (screen === 'accept') void loadAcceptPoints();
       if (screen === 'consignments') void loadConsignments();
@@ -651,14 +655,14 @@ export function useAgentApp() {
   /* --- walk-up intake: measure + destination picker (Map | Address) --- */
 
   // A dims edit invalidates the derived tier AND supersedes any classify already in flight for the old
-  // dims — bump the epoch so a stale result can't repopulate the just-cleared tier (and flip the P4+ warn).
+  // dims â€” bump the epoch so a stale result can't repopulate the just-cleared tier (and flip the P4+ warn).
   const deriveEpoch = useRef(0);
   const setDims = useCallback((patch: Partial<DimsForm>) => {
     deriveEpoch.current++;
     setState((s) => ({ ...s, accept: { ...s.accept, dims: { ...s.accept.dims, ...patch } }, acceptDerived: null }));
   }, []);
 
-  // Classify the measured dims → the tier + cargo class (shown as a pill; P4+ warns + blocks). Epoch-guarded.
+  // Classify the measured dims â†’ the tier + cargo class (shown as a pill; P4+ warns + blocks). Epoch-guarded.
   const deriveSize = useCallback(async () => {
     const parsed = parseDims(stateRef.current.accept.dims);
     if (!client || !parsed) return;
@@ -668,7 +672,7 @@ export function useAgentApp() {
     setState((s) => ({ ...s, acceptDerived: narrow<ClassifyView>(r.data) }));
   }, [client]);
 
-  // The typed area drives the nearest-first sort + the confidence note — but ONLY after Find geocodes it.
+  // The typed area drives the nearest-first sort + the confidence note â€” but ONLY after Find geocodes it.
   // Editing the text (or switching mode) drops the stale near-point/note so the list + distances can never
   // lag behind what the box says.
   const setAddress = useCallback((v: string) => {
@@ -683,7 +687,7 @@ export function useAgentApp() {
     setState((s) => ({ ...s, accept: { ...s.accept, destPudoDid: point.did, destZone: point.zone, destShopName: point.shopName } }));
   }, []);
 
-  // Geocode the typed area → a point the destination list sorts nearest-first around, with a plain note on
+  // Geocode the typed area â†’ a point the destination list sorts nearest-first around, with a plain note on
   // the match quality (exact / approximate / best-guess) so an approximate pin isn't mistaken for exact.
   const geocodeEpoch = useRef(0);
   const geocodeAddress = useCallback(async () => {
@@ -709,7 +713,7 @@ export function useAgentApp() {
     setState((s) => {
       const has = s.handover.selected.includes(parcelId);
       const selected = has ? s.handover.selected.filter((x) => x !== parcelId) : [...s.handover.selected, parcelId];
-      // Selecting a parcel the gate flagged as missing resolves it — drop it from the highlight.
+      // Selecting a parcel the gate flagged as missing resolves it â€” drop it from the highlight.
       const missed = has ? s.handover.missed : s.handover.missed.filter((x) => x !== parcelId);
       return { ...s, handover: { ...s.handover, selected, missed } };
     });
@@ -749,7 +753,7 @@ export function useAgentApp() {
     }
   }, []);
 
-  /** Export the whole current-filter parcel history (every page) as a CSV download — server-rendered. */
+  /** Export the whole current-filter parcel history (every page) as a CSV download â€” server-rendered. */
   const exportHistory = useCallback(async () => {
     if (!client || !did) return;
     await run('export-history', async () => {
@@ -761,7 +765,7 @@ export function useAgentApp() {
     });
   }, [client, did, run, fail, pushToast]);
 
-  /** Export the whole current-filter earnings ledger (every page) as a CSV download — server-rendered. */
+  /** Export the whole current-filter earnings ledger (every page) as a CSV download â€” server-rendered. */
   const exportLedger = useCallback(async () => {
     if (!client || !did) return;
     await run('export-ledger', async () => {
@@ -773,7 +777,7 @@ export function useAgentApp() {
     });
   }, [client, did, run, fail, pushToast]);
 
-  /** Reconfigure the pickup shelf (rows × colour columns + bundle slots) → refresh the agent record + re-read the grid. */
+  /** Reconfigure the pickup shelf (rows Ã— colour columns + bundle slots) â†’ refresh the agent record + re-read the grid. */
   const saveShelf = useCallback(
     async (rows: number, cols: number, consolidationSlots: string[]) => {
       if (!client || !did) return;
@@ -781,7 +785,7 @@ export function useAgentApp() {
         const r = await client.api.setShelf(did, rows, cols, consolidationSlots);
         if (r.error) return fail(r.error);
         pushToast({ tone: 'ok', icon: 'check', title: t('agent.toast.shelfSaved'), detail: t('agent.toast.shelfSavedDetail', { total: rows * cols }) });
-        // Re-fetch the MERGED agent (balance + rating) — the raw setShelf response body carries neither, so
+        // Re-fetch the MERGED agent (balance + rating) â€” the raw setShelf response body carries neither, so
         // trusting it would blank the wallet hero until the next background refresh. Siblings do the same.
         await refresh();
         await loadShelf();
@@ -792,13 +796,13 @@ export function useAgentApp() {
 
   /* -------------------------------------------------- My-shop editors (location / hours / photo) */
 
-  /** Authenticated byte loader for <AuthImage> (media is owner-gated — no plain <img src>). */
+  /** Authenticated byte loader for <AuthImage> (media is owner-gated â€” no plain <img src>). */
   const loadMedia = useCallback(
     (mediaId: string) => (client ? client.api.mediaBlob(mediaId) : Promise.resolve({ data: null, error: {} as unknown })),
     [client],
   );
 
-  /** Move the shop's map pin → refresh the record so the dashboard shows the new spot + three words. */
+  /** Move the shop's map pin â†’ refresh the record so the dashboard shows the new spot + three words. */
   const setLocationPin = useCallback(
     async (lat: number, lng: number) => {
       if (!client || !did) return;
@@ -826,7 +830,7 @@ export function useAgentApp() {
     [client, did, run, fail, pushToast, refresh],
   );
 
-  /** Capture + upload a shop-front photo → point the shop at it → refresh. */
+  /** Capture + upload a shop-front photo â†’ point the shop at it â†’ refresh. */
   const saveShopfront = useCallback(
     async (file: File) => {
       if (!client || !did) return;
@@ -896,7 +900,7 @@ export function useAgentApp() {
     if (!client || !did) return;
     const f = stateRef.current.accept;
     const dims = parseDims(f.dims);
-    // A dedicated (P4+) load can't ride the bus — the server refuses it, so don't even send it.
+    // A dedicated (P4+) load can't ride the bus â€” the server refuses it, so don't even send it.
     if (!dims || !f.destPudoDid || stateRef.current.acceptDerived?.dedicated) return;
     await run('accept', async () => {
       const r = await client.api.accept({
@@ -917,7 +921,7 @@ export function useAgentApp() {
       });
       if (r.error) return fail(r.error);
       buzz();
-      // DT — capture the label the parcel was born with so the agent can print it and stick it on the parcel
+      // DT â€” capture the label the parcel was born with so the agent can print it and stick it on the parcel
       // (peer-send parcels never had one). Clearing the form but staying on the accept screen; a Sheet shows it.
       const p = narrow<{ parcelId: string; trackingKey?: string; otp?: string; label?: { svg?: string } }>(r.data);
       setState((s) => ({ ...s, accept: { ...EMPTY_ACCEPT }, acceptDerived: null, acceptNear: null, acceptGeoNote: null, acceptedLabel: p ? { parcelId: p.parcelId, trackingKey: p.trackingKey, svg: p.label?.svg, releaseCode: p.otp } : null }));
@@ -926,14 +930,14 @@ export function useAgentApp() {
     });
   }, [client, did, run, fail, pushToast, refresh]);
 
-  /** DT — dismiss the printed-label sheet and return to the shop home. */
+  /** DT â€” dismiss the printed-label sheet and return to the shop home. */
   const dismissAcceptedLabel = useCallback(() => setState((s) => ({ ...s, acceptedLabel: null, screen: 'home' })), []);
 
   /**
-   * F2 — book a too-big (dedicated/P4+) walk-up as FREIGHT. Only fires for a dedicated load with a valid
+   * F2 â€” book a too-big (dedicated/P4+) walk-up as FREIGHT. Only fires for a dedicated load with a valid
    * booking (dims + destination PUDO + a cash cap, and a future date when planned); the same guard the CTA
    * uses, re-checked here so a stale click can't send. The agent is the originator; the customer's cash cap
-   * becomes the freight's ceiling and settles off-platform — no wallet is billed.
+   * becomes the freight's ceiling and settles off-platform â€” no wallet is billed.
    */
   const submitBookFreight = useCallback(async () => {
     if (!client || !did) return;
@@ -965,12 +969,12 @@ export function useAgentApp() {
     });
   }, [client, did, run, fail, pushToast, refresh]);
 
-  /** F2 — dismiss the booked-freight receipt and return to the shop home. */
+  /** F2 â€” dismiss the booked-freight receipt and return to the shop home. */
   const dismissBookedFreight = useCallback(() => setState((s) => ({ ...s, bookedFreight: null, screen: 'home' })), []);
 
   /* -------------------------------------------------------- REP2: rate a driver */
 
-  /** REP2 — open the "rate the driver" prompt (after a handover / bag-receipt) and fetch the driver's public
+  /** REP2 â€” open the "rate the driver" prompt (after a handover / bag-receipt) and fetch the driver's public
    *  profile so the sheet can show who they are and their standing rating. */
   const openRateDriver = useCallback(
     async (driverDid: string) => {
@@ -985,7 +989,7 @@ export function useAgentApp() {
 
   const dismissRateDriver = useCallback(() => setState((s) => ({ ...s, driverRating: null })), []);
 
-  /** REP2 — submit the shop's rating of the driver (stars + issue tags) for the leg just completed. */
+  /** REP2 â€” submit the shop's rating of the driver (stars + issue tags) for the leg just completed. */
   const submitDriverRating = useCallback(
     async (stars: number, issues: string[]) => {
       const driverDid = stateRef.current.driverRating?.driverDid;
@@ -994,7 +998,7 @@ export function useAgentApp() {
         const r = await client.api.rateDriver(driverDid, { stars, issues: issues.length ? issues : undefined });
         if (r.error) {
           // The rate sheet is a modal that covers the screen's ErrorNote, so surface the failure as a toast
-          // (which renders above it) — otherwise a failed submit looks identical to a saved one.
+          // (which renders above it) â€” otherwise a failed submit looks identical to a saved one.
           pushToast({ tone: 'danger', icon: 'warning', title: t('agent.toast.ratingFail'), detail: errorSentence(r.error) });
           return fail(r.error);
         }
@@ -1006,7 +1010,7 @@ export function useAgentApp() {
     [client, run, fail, pushToast],
   );
 
-  /** F3 — open a consolidation lot for a durable dry commodity. */
+  /** F3 â€” open a consolidation lot for a durable dry commodity. */
   const openConsignment = useCallback(
     async (input: { natureCode: string; destLabel: string; targetKg: number; maxSpend?: number }) => {
       if (!client || !did || !input.destLabel.trim() || !(input.targetKg > 0)) return;
@@ -1021,7 +1025,7 @@ export function useAgentApp() {
     [client, did, run, fail, pushToast, loadConsignments],
   );
 
-  /** F3 — record a member deposit into a lot; it auto-posts a freight once full. */
+  /** F3 â€” record a member deposit into a lot; it auto-posts a freight once full. */
   const depositConsignment = useCallback(
     async (code: string, memberRef: string, weightKg: number) => {
       if (!client || !did || !memberRef.trim() || !(weightKg > 0)) return;
@@ -1043,10 +1047,10 @@ export function useAgentApp() {
 
   /* -------------------------------------------------- pre-minted intake (PG4) */
 
-  // The scanned sticker might already BE a parcel — a peer send booked in the Send app (cash due at this
+  // The scanned sticker might already BE a parcel â€” a peer send booked in the Send app (cash due at this
   // counter), a store order, or a sticker that is simply in use. Resolve it as the id is typed/scanned;
-  // 404 = a fresh sticker → the walk-up form stays. Debounced; a re-scan clears the PREVIOUS parcel's
-  // preview + its proof photo SYNCHRONOUSLY (so A's cash card + A's photo can never sit under B's code —
+  // 404 = a fresh sticker â†’ the walk-up form stays. Debounced; a re-scan clears the PREVIOUS parcel's
+  // preview + its proof photo SYNCHRONOUSLY (so A's cash card + A's photo can never sit under B's code â€”
   // charging or evidencing the wrong parcel), and the async result is epoch-guarded against abandonment.
   const previewEpoch = useRef(0);
   useEffect(() => {
@@ -1062,7 +1066,7 @@ export function useAgentApp() {
       const r = await client.api.intakePreview(id);
       if (epoch !== previewEpoch.current) return;
       if (r.error) {
-        if (isSignInRequired(r.error)) return fail(r.error); // an expired shift → the shell's one sign-in route
+        if (isSignInRequired(r.error)) return fail(r.error); // an expired shift â†’ the shell's one sign-in route
         const fresh = r.error.status === 404; // an unknown id IS the normal walk-up case, not an error
         setState((s) => ({ ...s, preMint: null, preMintState: fresh ? 'idle' : 'error', preMintError: fresh ? null : r.error }));
         return;
@@ -1083,7 +1087,7 @@ export function useAgentApp() {
     if (!client || !did) return;
     const pm = stateRef.current.preMint;
     const photo = stateRef.current.intakePhotoRef;
-    // Only ever act on a SETTLED preview — never a stale one still on screen during a re-scan's fetch.
+    // Only ever act on a SETTLED preview â€” never a stale one still on screen during a re-scan's fetch.
     if (!pm || stateRef.current.preMintState !== 'ready' || (pm.kind === 'peer_send' && !photo)) return;
     await run('intake', async () => {
       const r = await client.api.intake(pm.parcelId, pm.kind === 'peer_send' ? photo : undefined);
@@ -1110,8 +1114,69 @@ export function useAgentApp() {
    * Hand the selected parcels to the bus. `shortShipReason` opts into the S25 short-ship: it is passed
    * only when the agent has knowingly chosen to leave the waiting parcels behind. Without it, the server
    * gate refuses a short load (INCOMPLETE_MANIFEST) and we surface exactly which parcels are still waiting
-   * — the agent then loads them (and re-submits) or short-ships with a reason.
+   * â€” the agent then loads them (and re-submits) or short-ships with a reason.
    */
+  /* ------------------------------------------------------------------- bagging for the bus (tote) */
+
+  /** Open a bag for one destination. The shop keeps at most one open at a time in this UI â€” a second
+   *  would only invite parcels being split between bags with no reason to prefer either. */
+  const openBag = useCallback(
+    async (destZone: string) => {
+      if (!client || !did || !destZone) return;
+      await run('bag-open', async () => {
+        const r = await client.api.openBag(did, destZone);
+        if (r.error) return fail(r.error);
+        const bag = narrow<{ code: string }>(r.data);
+        if (bag) setState((s) => ({ ...s, bag: { code: bag.code, destZone, parcels: [], missed: [], sealed: false } }));
+      });
+    },
+    [client, did, run, fail],
+  );
+
+  /** Drop a waiting parcel into the open bag. */
+  const addToBag = useCallback(
+    async (parcelId: string) => {
+      if (!client) return;
+      const bag = stateRef.current.bag;
+      if (!bag || bag.sealed) return;
+      await run('bag-fill', async () => {
+        const r = await client.api.fillBag(bag.code, parcelId);
+        if (r.error) return fail(r.error);
+        setState((s) => (s.bag ? { ...s, bag: { ...s.bag, parcels: [...s.bag.parcels, parcelId], missed: s.bag.missed.filter((m) => m !== parcelId) } } : s));
+      });
+    },
+    [client, run, fail],
+  );
+
+  /**
+   * Seal it. A short bag is REFUSED unless the shop knowingly leaves parcels â€” the server returns which
+   * ones, and they light up on the list exactly as the handover screen's "waiting" rows do.
+   */
+  const sealBag = useCallback(
+    async (opts?: { acknowledgeShortShip?: boolean; shortShipReason?: string }) => {
+      if (!client || !did) return;
+      const bag = stateRef.current.bag;
+      if (!bag || bag.sealed) return;
+      await run('bag-seal', async () => {
+        const r = await client.api.sealBag(did, bag.code, opts);
+        if (r.error) {
+          // Same shape the handover gate uses: the server names the parcels still on the shelf.
+          const missed = Array.isArray(r.error.params?.missed) ? (r.error.params!.missed as string[]) : [];
+          setState((s) => (s.bag ? { ...s, bag: { ...s.bag, missed } } : s));
+          if (r.error.code === 'INCOMPLETE_MANIFEST') return; // the list explains it; no error banner needed
+          return fail(r.error);
+        }
+        setState((s) => (s.bag ? { ...s, bag: { ...s.bag, sealed: true, missed: [] } } : s));
+        pushToast({ tone: 'ok', icon: 'bag', title: t('agent.bag.toastSealed'), detail: t('agent.bag.toastSealedDetail', { count: bag.parcels.length }) });
+        await loadShopParcels();
+      });
+    },
+    [client, did, run, fail, pushToast, loadShopParcels],
+  );
+
+  /** Put the bag away and start fresh (after the driver has taken it). */
+  const clearBag = useCallback(() => setState((s) => ({ ...s, bag: null })), []);
+
   const submitHandover = useCallback(async (shortShipReason?: string) => {
     if (!client || !did) return;
     const f = stateRef.current.handover;
@@ -1126,10 +1191,10 @@ export function useAgentApp() {
         acknowledge ? { acknowledgeShortShip: true, shortShipReason } : undefined,
       );
       if (r.error) {
-        // The completeness gate: don't treat it as a dead failure — reconcile the list and show the
+        // The completeness gate: don't treat it as a dead failure â€” reconcile the list and show the
         // agent which parcels for this bus are still waiting, so they can load them or short-ship. The
         // on-screen warn Note (+ the read-aloud foot) carries the guidance, so leave the generic
-        // ErrorNote banner cleared — one message, not two.
+        // ErrorNote banner cleared â€” one message, not two.
         if (r.error.code === 'INCOMPLETE_MANIFEST') {
           const missed = Array.isArray(r.error.params?.missed) ? (r.error.params!.missed as string[]) : [];
           await loadShopParcels();
@@ -1156,7 +1221,7 @@ export function useAgentApp() {
             : undefined,
       });
       await refresh();
-      if (v?.driverDid) void openRateDriver(v.driverDid); // REP2 — offer to rate the driver for this pickup
+      if (v?.driverDid) void openRateDriver(v.driverDid); // REP2 â€” offer to rate the driver for this pickup
     });
   }, [client, did, run, fail, pushToast, refresh, loadShopParcels, openRateDriver]);
 
@@ -1164,7 +1229,7 @@ export function useAgentApp() {
   // the same tick, and stateRef has not caught up yet, so the scan passes its value in.
   const findRelease = useCallback(async (override?: string) => {
     if (!client) return;
-    // Parcel ids are uppercase and resolved by a case-sensitive Map — a typed lowercase
+    // Parcel ids are uppercase and resolved by a case-sensitive Map â€” a typed lowercase
     // sticker would otherwise read as "not found".
     const id = (override ?? stateRef.current.release.stickerId).trim().toUpperCase();
     if (!id) return;
@@ -1282,13 +1347,13 @@ export function useAgentApp() {
         detail: t('agent.toast.bagReceivedDetail', { count: v?.delivered?.length ?? 0 }),
       });
       await refresh();
-      if (v?.driverDid) void openRateDriver(v.driverDid); // REP2 — offer to rate the driver for this arrival
+      if (v?.driverDid) void openRateDriver(v.driverDid); // REP2 â€” offer to rate the driver for this arrival
     });
   }, [client, did, run, fail, pushToast, refresh, openRateDriver]);
 
   /**
    * Reverse logistics (compendium Ch 16.1): undo a drop-off inside the 5-minute window with
-   * a photo of the torn label, and the wallet is refunded. The server is the real clock —
+   * a photo of the torn label, and the wallet is refunded. The server is the real clock â€”
    * WINDOW_EXPIRED / WRONG_PUDO come back as typed errors and fire the red signal, so a
    * worker who was a second too late hears it.
    */
@@ -1313,7 +1378,7 @@ export function useAgentApp() {
   return {
     state,
     did,
-    // The Web Push controls (N1b) — surfaced for the TopBar NotificationBell; null while signed out.
+    // The Web Push controls (N1b) â€” surfaced for the TopBar NotificationBell; null while signed out.
     notifications: client?.notifications ?? null,
     actions: {
       refresh,
@@ -1361,6 +1426,10 @@ export function useAgentApp() {
       submitIntake,
       dismissIntakeDone,
       submitHandover,
+      openBag,
+      addToBag,
+      sealBag,
+      clearBag,
       findRelease,
       markArrived,
       submitPickup,

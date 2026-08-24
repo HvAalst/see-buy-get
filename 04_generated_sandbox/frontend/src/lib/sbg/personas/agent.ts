@@ -247,6 +247,21 @@ export function createAgentApi(sbg: SbgClient) {
       ),
 
     /** A bus dropped a bag here — one scan shelves every parcel inside for pickup. */
+    /** Open a bag at this shop for one destination — the driver will scan it once instead of every parcel. */
+    openBag: (did: string, destZone: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/agents/{did}/totes', { params: { path: { did } }, body: { destZone } })),
+
+    /** Drop a waiting parcel into the open bag. */
+    fillBag: (code: string, parcelId: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/totes/{code}/fill', { params: { path: { code } }, body: { parcelId } })),
+
+    /** Seal it. The server refuses if a parcel for that destination is still on the shelf, unless the
+     *  shop knowingly leaves it — the same gate the parcel-by-parcel handover has. */
+    sealBag: (did: string, code: string, opts?: { acknowledgeShortShip?: boolean; shortShipReason?: string }) =>
+      sbg.request((c) =>
+        c.POST('/v1/sbg/agents/{did}/totes/{code}/seal', { params: { path: { did, code } }, body: { ...opts } }),
+      ),
+
     receiveBag: (did: string, code: string) =>
       sbg.request((c) => c.POST('/v1/sbg/agents/{did}/receive-bag', { params: { path: { did } }, body: { code } })),
 

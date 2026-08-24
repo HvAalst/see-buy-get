@@ -18,6 +18,7 @@ const JOBS: Array<{ screen: Screen; icon: IconName; titleKey: MessageKey; subKey
   { screen: 'release', icon: 'person', titleKey: 'agent.release.title', subKey: 'agent.home.jobReleaseSub' },
   { screen: 'collect', icon: 'search', titleKey: 'agent.collect.title', subKey: 'agent.home.jobCollectSub' },
   { screen: 'handover', icon: 'truck', titleKey: 'agent.handover.title', subKey: 'agent.home.jobHandoverSub' },
+  { screen: 'bag', icon: 'bag', titleKey: 'agent.bag.title', subKey: 'agent.home.jobBagSub' },
   { screen: 'receivebag', icon: 'bag', titleKey: 'agent.receivebag.title', subKey: 'agent.home.jobReceiveBagSub' },
   { screen: 'void', icon: 'refresh', titleKey: 'agent.void.title', subKey: 'agent.home.jobVoidSub' },
   { screen: 'rates', icon: 'scale', titleKey: 'agent.rates.title', subKey: 'agent.home.jobRatesSub' },

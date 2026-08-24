@@ -252,16 +252,6 @@ export class SbgController {
     return this.agents.setShopfront(did, dto.mediaId);
   }
 
-  /**
-   * Tote GENESIS at a shop: open a bag for one destination so the shop's outbound parcels leave as one
-   * scan instead of a dozen. Bag creation used to be MDP-only, which left the busiest hand-over in the
-   * network — a shopkeeper and a waiting driver — working parcel by parcel.
-   */
-  @Post('agents/:did/totes')
-  openShopBag(@Param('did') did: string, @Body() dto: OpenBagDto, @Actor() actor: IntrospectionResult) {
-    return this.mdps.openShopBag(actingDid(actor, did), dto.destZone);
-  }
-
   /** Seal the bag — where the completeness gate lives for a bagged hand-over (see sealShopBag). */
   @Post('agents/:did/totes/:code/seal')
   sealShopBag(@Param('did') did: string, @Param('code') code: string, @Body() dto: SealBagDto, @Actor() actor: IntrospectionResult) {
@@ -1479,9 +1469,19 @@ export class SbgController {
 
   // --- PUDO outbound totes + the dispatch marketplace (opportunistic line-haul) ---
 
-  /** Register a fresh tote at a PUDO so the agent can bag outbound parcels for a destination MDP. */
+  /**
+   * Register a fresh tote at a PUDO so the agent can bag outbound parcels.
+   *
+   * With a `destZone` the bag is opened AND addressed in one step, which is what a counter actually
+   * needs — a bag with no destination cannot take a parcel, so making the shop do it in two calls only
+   * created a state where the bag exists and is useless. Without one, the original register-only
+   * behaviour is unchanged.
+   */
   @Post('agents/:did/totes')
-  registerAgentTote(@Param('did') did: string) {
+  registerAgentTote(@Param('did') did: string, @Body() dto: OpenBagDto) {
+    // Every field is optional, so a bodyless call still means "just a bare tote" — and unlike a union
+    // type, this one the schema emitter can actually describe.
+    if (dto?.destZone) return this.mdps.openShopBag(did, dto.destZone);
     this.agents.get(did); // 404 if unknown
     return this.totes.register(did);
   }

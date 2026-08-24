@@ -4,6 +4,7 @@ import { useT } from '../../shared/i18n';
 import { AcceptScreen } from './screens/AcceptScreen';
 import { CollectScreen } from './screens/CollectScreen';
 import { ConsignmentsScreen } from './screens/ConsignmentsScreen';
+import { BagScreen } from './screens/BagScreen';
 import { HandoverScreen } from './screens/HandoverScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { RateDriverSheet } from './screens/RateDriverSheet';
@@ -106,6 +107,8 @@ function ScreenRouter({ screen, state, actions }: { screen: Screen; state: Agent
       return <AcceptScreen state={state} actions={actions} />;
     case 'handover':
       return <HandoverScreen state={state} actions={actions} />;
+    case 'bag':
+      return <BagScreen state={state} actions={actions} />;
     case 'release':
       return <ReleaseScreen state={state} actions={actions} />;
     case 'collect':
