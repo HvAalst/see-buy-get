@@ -4161,6 +4161,28 @@
         }
       }
     },
+    "/v1/sbg/agents/{did}/bag-plan": {
+      "get": {
+        "operationId": "Sbg.bagPlan",
+        "summary": "",
+        "description": "What this shop should be bagging: its waiting parcels grouped by NEXT HOP, plus the bags it already\nhas open. Several bags at once is the normal case — direct-to-Addis alongside one for the local hub.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/agents/{did}/totes/{code}/fill": {
       "post": {
         "operationId": "Sbg.fillShopBag",

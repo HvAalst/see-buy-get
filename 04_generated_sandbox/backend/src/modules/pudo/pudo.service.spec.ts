@@ -47,6 +47,7 @@ import { AuthService } from '../../foundation/auth/auth.service';
 import { DidService } from '../../foundation/did/did.service';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { BooksService } from '../../foundation/books/books.service';
+import { BagPlanService } from './bag-plan.service';
 import { IdentityVault } from '../../foundation/data-firewall/identity-vault.service';
 import { OperationalStore } from '../../foundation/data-firewall/operational-store.service';
 import { FieldEncryption } from '../../foundation/data-firewall/field-encryption.service';
@@ -92,6 +93,7 @@ describe('PUDO Light', () => {
   let dids: DidService;
   let entities: EntityService;
   let books: BooksService;
+  let bagPlans: BagPlanService;
   let vault: IdentityVault;
   let core: OperationalStore;
   let events: EventBus;
@@ -100,7 +102,7 @@ describe('PUDO Light', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
-        GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, ToteService, ConsignmentService, VehicleService, DriverService, FleetService, DispatchService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
+        GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, BagPlanService, ToteService, ConsignmentService, VehicleService, DriverService, FleetService, DispatchService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus, EntityService, BooksService,
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
@@ -114,6 +116,7 @@ describe('PUDO Light', () => {
     entities = moduleRef.get(EntityService);
     entities.seed();
     books = moduleRef.get(BooksService);
+    bagPlans = moduleRef.get(BagPlanService);
     books.reset(); // each test starts on clean books — the money is derived from them now
     agents = moduleRef.get(AgentService);
     gate = moduleRef.get(WalletGateService);
@@ -1026,6 +1029,42 @@ describe('PUDO Light', () => {
       expect(moved.moved.sort()).toEqual(['QR-B1', 'QR-B2']);
       expect(parcels.get('QR-B1').status).toBe('On_Bus');
       expect(parcels.get('QR-B2').status).toBe('On_Bus');
+    });
+
+    it('plans several bags at once, keyed by NEXT HOP — direct where the route is direct', () => {
+      // The Hawassa case: one shop, parcels for three places. Some go straight out; some route via the hub.
+      const shop = onboardAgent('Hawassa Shop', 'Hawassa', 50);
+      const addis = onboardAgent('Addis PUDO', 'Addis', 50);
+      const arba = onboardAgent('Arba Minch PUDO', 'ArbaMinch', 50);
+      corridors.addCorridor({ name: 'Hawassa-Addis', originZone: 'Hawassa', destZone: 'Addis' });
+      corridors.addCorridor({ name: 'Hawassa-ArbaMinch', originZone: 'Hawassa', destZone: 'ArbaMinch' });
+
+      const drop = (id: string, zone: string, destPudoDid: string) =>
+        parcels.accept({ agentDid: shop.did, parcelId: id, size: 'S', destZone: zone, destPudoDid, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+      drop('QR-AA1', 'Addis', addis.did);
+      drop('QR-AA2', 'Addis', addis.did);
+      drop('QR-AM1', 'ArbaMinch', arba.did);
+
+      const plan = bagPlans.forShop(shop.did);
+      // Two groups, busiest first — two bags' worth of work, not one queue of loose parcels.
+      expect(plan.groups.map((g) => g.label)).toEqual(['Addis', 'ArbaMinch']);
+      expect(plan.groups[0].parcelIds.sort()).toEqual(['QR-AA1', 'QR-AA2']);
+      expect(plan.groups[0].via).toBe('direct'); // a direct corridor: no hub in the middle
+      expect(plan.groups.every((g) => g.openBagCode === undefined)).toBe(true);
+      expect(plan.bags).toEqual([]);
+
+      // Open the Addis bag; the plan now points at it, and the other group is still waiting for its own.
+      const bag = mdps.openShopBag(shop.did, 'Addis');
+      mdps.fillShopBag(bag.code, shop.did, 'QR-AA1');
+      const after = bagPlans.forShop(shop.did);
+      expect(after.groups.find((g) => g.label === 'Addis')?.openBagCode).toBe(bag.code);
+      expect(after.groups.find((g) => g.label === 'ArbaMinch')?.openBagCode).toBeUndefined();
+      expect(after.bags).toHaveLength(1);
+      expect(after.bags[0]).toMatchObject({ code: bag.code, destinationLabel: 'Addis', parcels: 1, status: 'filling' });
+
+      // And a second bag for the other place can be open at the same time — the whole point.
+      const bag2 = mdps.openShopBag(shop.did, 'ArbaMinch');
+      expect(bagPlans.forShop(shop.did).bags.map((b) => b.code).sort()).toEqual([bag.code, bag2.code].sort());
     });
 
     it('refuses a parcel that is going somewhere else — a bag cannot carry the wrong city', () => {

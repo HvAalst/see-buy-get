@@ -20,6 +20,24 @@ export type ParcelStatus =
   | 'Disputed'
   | 'Voided';
 
+/** One bag's worth of work: the waiting parcels that share a NEXT HOP, and the open bag for it if any. */
+export interface BagGroup {
+  key: string; // the next hop — an MDP id, or a zone where the route runs direct
+  label: string;
+  via: 'direct' | 'hub';
+  parcelIds: string[];
+  openBagCode?: string;
+}
+
+/** A bag already open on the shop's floor. */
+export interface OpenBag {
+  code: string;
+  destinationLabel?: string;
+  parcels: number;
+  fillPct: number;
+  status: string;
+}
+
 export type Weekday = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
 export interface DayHours {
   open: string; // "HH:MM"

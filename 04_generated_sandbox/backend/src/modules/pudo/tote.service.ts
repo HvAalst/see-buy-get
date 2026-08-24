@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
+import { PersistentMap } from '../../foundation/store/persistent-map';
 import { randomBytes } from 'crypto';
 import { BAG_CAPACITY_UNITS, SIZE_UNITS, SIZE_WEIGHT_KG, TOTE_CODE_PREFIX } from './pudo.config';
 import { ParcelSize, Tote } from './pudo.types';
@@ -14,25 +15,39 @@ import { ParcelSize, Tote } from './pudo.types';
  */
 @Injectable()
 export class ToteService {
-  private readonly totes = new Map<string, Tote>(); // toteId → tote
-  private readonly byCode = new Map<string, string>(); // code → toteId
-  private seq = 0;
+  /**
+   * Durable. A bag is a physical object holding real parcels, and a shop fills one across a working day
+   * — closing the app, or a restart, must not lose which parcels are in which bag. It was an in-memory
+   * Map, which was survivable only while nothing outlived a single session.
+   */
+  private readonly totes = new PersistentMap<string, Tote>('pudo-totes'); // toteId → tote
+
+  /** Re-store an in-place-mutated tote so the snapshot store flushes it. */
+  private save(tote: Tote): Tote {
+    this.totes.set(tote.toteId, tote);
+    return tote;
+  }
 
   /** Register a fresh (laminated) tote into the pool at a location. */
   register(locationId: string): Tote {
-    this.seq += 1;
+    // The sequence is derived from what already exists rather than kept in a field: a counter reset by a
+    // restart would hand a second bag the code of one still sitting full on a shop floor.
+    const seq = [...this.totes.values()].reduce((max, t) => Math.max(max, Number(t.code.split('-')[1]) || 0), 0) + 1;
     const tote: Tote = {
       toteId: `tote_${randomBytes(6).toString('hex')}`,
-      code: `${TOTE_CODE_PREFIX}-${String(this.seq).padStart(3, '0')}`,
+      code: `${TOTE_CODE_PREFIX}-${String(seq).padStart(3, '0')}`,
       status: 'free',
       locationId,
       parcels: [],
       unitsUsed: 0,
       weightKg: 0,
     };
-    this.totes.set(tote.toteId, tote);
-    this.byCode.set(tote.code, tote.toteId);
-    return tote;
+    return this.save(tote);
+  }
+
+  /** Every tote currently at a location — the shop's bag shelf. */
+  atLocation(locationId: string): Tote[] {
+    return [...this.totes.values()].filter((t) => t.locationId === locationId).sort((a, b) => a.code.localeCompare(b.code));
   }
 
   /** Link a free tote to a single next destination — it can now take parcels for that destination. */
@@ -42,7 +57,7 @@ export class ToteService {
     tote.status = 'filling';
     tote.destinationNodeId = destinationNodeId;
     tote.destinationLabel = destinationLabel;
-    return tote;
+    return this.save(tote);
   }
 
   /** Whether a parcel of this size still fits (heavy fills a bag on its own → needs an empty one). */
@@ -59,7 +74,7 @@ export class ToteService {
     tote.parcels.push(parcelId);
     tote.unitsUsed = Math.round((tote.unitsUsed + SIZE_UNITS[size]) * 1000) / 1000;
     tote.weightKg = Math.round((tote.weightKg + SIZE_WEIGHT_KG[size]) * 100) / 100;
-    return tote;
+    return this.save(tote);
   }
 
   /** Truly full — cannot take even a small parcel (drives the auto-publish for claim). */
@@ -74,7 +89,7 @@ export class ToteService {
     if (!tote.parcels.length) throw new GlosError('BAG_EMPTY', `Bag ${code} is empty`);
     tote.status = 'available';
     tote.availableAt = new Date().toISOString();
-    return tote;
+    return this.save(tote);
   }
 
   /** A driver claims an available bag (reserves it for pickup). */
@@ -83,7 +98,7 @@ export class ToteService {
     if (tote.status !== 'available') throw new GlosError('INVALID_STATE', `Bag ${code} is ${tote.status}, not available to claim`);
     tote.status = 'claimed';
     tote.claimedBy = driverDid;
-    return tote;
+    return this.save(tote);
   }
 
   /** Release a claim back to the marketplace (driver dropped it / no-show). */
@@ -92,7 +107,7 @@ export class ToteService {
     if (tote.status !== 'claimed') throw new GlosError('INVALID_STATE', `Bag ${code} is ${tote.status}, not claimed`);
     tote.status = 'available';
     tote.claimedBy = undefined;
-    return tote;
+    return this.save(tote);
   }
 
   /** Scan the bag onto a bus — the whole tote (and its parcels) moves with one scan. */
@@ -102,7 +117,7 @@ export class ToteService {
     if (!tote.parcels.length) throw new GlosError('BAG_EMPTY', `Bag ${code} is empty`);
     tote.status = 'in_transit';
     tote.locationId = `bus:${driverBadgeId}`;
-    return tote;
+    return this.save(tote);
   }
 
   /** Unpack the bag at its destination → returns the parcelIds, frees + unlinks the tote for reuse. */
@@ -119,7 +134,7 @@ export class ToteService {
     tote.availableAt = undefined;
     tote.claimedBy = undefined;
     tote.locationId = atLocationId;
-    return { tote, parcels };
+    return { tote: this.save(tote), parcels };
   }
 
   /**
@@ -139,9 +154,9 @@ export class ToteService {
     );
   }
 
+  /** Looked up by scan rather than kept as a second index — one source of truth cannot drift from itself. */
   byCodeMaybe(code: string): Tote | undefined {
-    const id = this.byCode.get(code);
-    return id ? this.totes.get(id) : undefined;
+    return [...this.totes.values()].find((t) => t.code === code);
   }
 
   requireByCode(code: string): Tote {

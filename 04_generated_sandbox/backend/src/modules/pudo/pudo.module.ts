@@ -40,6 +40,7 @@ import { FleetManagerService } from './fleet-manager.service';
 import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { CargoService } from './cargo.service';
+import { BagPlanService } from './bag-plan.service';
 
 /**
  * PUDO Light — emerging-market Tier 1/2 on-ramp (Compendium Ch 12–19).
@@ -52,7 +53,7 @@ import { CargoService } from './cargo.service';
 @Module({
   imports: [M1Module, M4Module, M7Module],
   controllers: [SbgController, IdentityController, MediaController, NotificationsController],
-  providers: [AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService, GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, ToteService, ConsignmentService, VehicleService, DriverService, FleetService, DispatchService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, NotificationService, NotificationDispatcher, OutboxPushSender, { provide: PUSH_SENDER, useExisting: OutboxPushSender }, GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder }, HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter }],
-  exports: [AgentService, ParcelService, MonitorService, RatingService, MdpService, ToteService, VehicleService, DriverService, FleetService, DispatchService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, NotificationService, OutboxPushSender],
+  providers: [AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService, GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, BagPlanService, ToteService, ConsignmentService, VehicleService, DriverService, FleetService, DispatchService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, NotificationService, NotificationDispatcher, OutboxPushSender, { provide: PUSH_SENDER, useExisting: OutboxPushSender }, GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder }, HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter }],
+  exports: [AgentService, ParcelService, MonitorService, RatingService, MdpService, BagPlanService, ToteService, VehicleService, DriverService, FleetService, DispatchService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, NotificationService, OutboxPushSender],
 })
 export class PudoModule {}

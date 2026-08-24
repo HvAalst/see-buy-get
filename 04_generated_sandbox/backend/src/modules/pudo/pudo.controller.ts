@@ -34,6 +34,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
 import { classifySize, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { BooksService } from '../../foundation/books/books.service';
+import { BagPlanService } from './bag-plan.service';
 import { haversineKm } from './geo';
 import { GEOCODER, Geocoder } from './geocoder';
 
@@ -60,6 +61,7 @@ export class SbgController {
     private readonly ratings: RatingService,
     private readonly entities: EntityService,
     private readonly books: BooksService,
+    private readonly bagPlans: BagPlanService,
     private readonly vendors: VendorService,
     private readonly shelf: ShelfService,
     private readonly routing: RoutingService,
@@ -250,6 +252,15 @@ export class SbgController {
   @Post('agents/:did/shopfront')
   setShopfront(@Param('did') did: string, @Body() dto: ShopfrontDto) {
     return this.agents.setShopfront(did, dto.mediaId);
+  }
+
+  /**
+   * What this shop should be bagging: its waiting parcels grouped by NEXT HOP, plus the bags it already
+   * has open. Several bags at once is the normal case — direct-to-Addis alongside one for the local hub.
+   */
+  @Get('agents/:did/bag-plan')
+  bagPlan(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
+    return this.bagPlans.forShop(actingDid(actor, did));
   }
 
   /** Drop a waiting parcel into the shop's bag — refuses one that is going somewhere else. */

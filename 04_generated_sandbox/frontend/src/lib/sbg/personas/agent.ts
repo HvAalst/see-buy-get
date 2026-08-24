@@ -247,6 +247,9 @@ export function createAgentApi(sbg: SbgClient) {
       ),
 
     /** A bus dropped a bag here — one scan shelves every parcel inside for pickup. */
+    /** What to bag: waiting parcels grouped by NEXT HOP, plus the bags already open at this shop. */
+    bagPlan: (did: string) => sbg.request((c) => c.GET('/v1/sbg/agents/{did}/bag-plan', { params: { path: { did } } })),
+
     /** Open a bag at this shop for one destination — the driver will scan it once instead of every parcel. */
     openBag: (did: string, destZone: string) =>
       sbg.request((c) => c.POST('/v1/sbg/agents/{did}/totes', { params: { path: { did } }, body: { destZone } })),

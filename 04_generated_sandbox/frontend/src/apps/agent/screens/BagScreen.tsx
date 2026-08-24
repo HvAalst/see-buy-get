@@ -28,10 +28,11 @@ export function BagScreen({ state, actions }: BagScreenProps) {
   const bag = state.bag;
   const [leaveOpen, setLeaveOpen] = useState(false);
 
-  // Where can a bag go? The destinations that actually have parcels waiting — no free typing, no zone
-  // that would produce an empty bag.
-  const destinations = [...new Set(state.shopParcels.map((p) => p.destZone))].sort();
-  const forDest = bag ? state.shopParcels.filter((p) => p.destZone === bag.destZone) : [];
+  // What to bag is the SERVER's answer, grouped by next hop — several bags at once is the normal case,
+  // and a shopkeeper never has to work out whether a parcel goes direct or via the hub.
+  const { groups } = state.bagPlan;
+  const group = bag ? groups.find((g) => g.key === bag.destKey) : undefined;
+  const forDest = group ? state.shopParcels.filter((p) => group.parcelIds.includes(p.parcelId)) : [];
   const inBag = new Set(bag?.parcels ?? []);
   const missed = new Set(bag?.missed ?? []);
 
@@ -44,32 +45,34 @@ export function BagScreen({ state, actions }: BagScreenProps) {
 
       {!bag ? (
         <Card label={t('agent.bag.whereTo')}>
-          {state.shopParcelsState === 'loading' ? (
+          {state.bagPlanState === 'loading' ? (
             <p class="hint">{t('agent.handover.gettingParcels')}</p>
-          ) : destinations.length === 0 ? (
+          ) : groups.length === 0 ? (
             <Note tone="info" icon="box" title={t('agent.bag.nothingTitle')} detail={t('agent.bag.nothingBody')} />
           ) : (
             <div class="rows" role="list">
-              {destinations.map((zone) => {
-                const count = state.shopParcels.filter((p) => p.destZone === zone).length;
-                return (
-                  <button key={zone} type="button" class="row" role="listitem" onClick={() => void actions.openBag(zone)} disabled={state.busy === 'bag-open'}>
-                    <span class="row__ic"><Icon name="bag" size={24} /></span>
-                    <span class="row__body">
-                      <span class="row__t">{zone}</span>
-                      <span class="row__s">{t('agent.bag.waitingForZone', { count })}</span>
+              {groups.map((g) => (
+                <button key={g.key} type="button" class="row" role="listitem" onClick={() => void actions.openBag(g)} disabled={state.busy === 'bag-open'}>
+                  <span class="row__ic"><Icon name="bag" size={24} /></span>
+                  <span class="row__body">
+                    <span class="row__t">{g.label}</span>
+                    {/* "Direct" is the useful word at a counter: it means this bag skips the hub. */}
+                    <span class="row__s">
+                      {t('agent.bag.waitingForZone', { count: g.parcelIds.length })}
+                      {g.via === 'direct' ? ` · ${t('agent.bag.viaDirect')}` : ` · ${t('agent.bag.viaHub')}`}
                     </span>
-                    <span class="row__end"><Icon name="chevronRight" size={22} /></span>
-                  </button>
-                );
-              })}
+                  </span>
+                  {g.openBagCode ? <Pill tone="info" dot>{g.openBagCode}</Pill> : <span class="row__end"><Icon name="chevronRight" size={22} /></span>}
+                </button>
+              ))}
             </div>
           )}
         </Card>
       ) : (
         <>
           {/* The bag's own code is the thing the driver scans — it IS the hand-over. */}
-          <CodeCard label={t('agent.bag.bagCode', { zone: bag.destZone })} code={bag.code} scanAs="parcel" sayLabel={t('agent.bag.hearCode')} />
+          <CodeCard label={t('agent.bag.bagCode', { zone: bag.label })} code={bag.code} scanAs="parcel" sayLabel={t('agent.bag.hearCode')} />
+          <Button variant="link" full={false} onClick={() => actions.clearBag()}>{t('agent.bag.backToPlan')}</Button>
 
           {bag.sealed ? (
             <>
