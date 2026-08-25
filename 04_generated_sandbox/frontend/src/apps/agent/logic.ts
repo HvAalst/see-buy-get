@@ -129,20 +129,6 @@ export function natureLabel(code: string, t: Translate): string {
  *  this is the curated on-screen subset. */
 export const DURABLE_NATURES: CargoNature[] = ['GEN', 'FOD', 'HAZ-DUST'];
 
-/** Where a destination pin came from: looked up FROM the typed name, or dropped on the map by hand. */
-export type PinSource = 'name' | 'map' | null;
-
-/**
- * F3 — what happens to the destination pin when the name is edited.
- *
- * A pin the geocoder found IS the name: the moment the name changes it points at a place nobody asked for,
- * and the haul would be priced to it. A pin dropped by hand is the shopkeeper's own answer about where the
- * market is, and a corrected spelling must not throw it away.
- */
-export function pinAfterRename(pin: GeoPoint | null, from: PinSource): GeoPoint | null {
-  return from === 'name' ? null : pin;
-}
-
 /** F3 — a lot's fill progress for the UI: the accumulated vs target weight with a clamped percentage. */
 export function consignmentProgress(lot: { weightKg: number; targetKg: number }): { pct: number; label: string } {
   const pct = lot.targetKg > 0 ? Math.min(100, Math.max(0, Math.round((lot.weightKg / lot.targetKg) * 100))) : 0;

@@ -1,10 +1,58 @@
-import { Button, Card, ErrorNote, Note, ReadAloud } from '../../../shared/ui';
-import { useT } from '../../../shared/i18n';
-import type { DriverActions, DriverState } from '../useDriverApp';
+import { Button, Card, ErrorNote, Note, PlacePicker, ReadAloud, type PlaceNote } from '../../../shared/ui';
+import { useT, type Translate } from '../../../shared/i18n';
+import { CUSTOM_PLACE, type CustomPlace, type DriverActions, type DriverState } from '../useDriverApp';
 
 export interface RouteScreenProps {
   state: DriverState;
   actions: DriverActions;
+}
+
+/**
+ * What a placed (or unplaced) road end MEANS here: whether we can match loads to it at all. A guessed pin
+ * still works — it just matches around the wrong village, which the driver can see and correct on the map.
+ */
+function roadNote(t: Translate, note: PlaceNote): string {
+  switch (note.kind) {
+    case 'notFound':
+      return t('driver.route.geoNotFound');
+    case 'pinned':
+      return t('driver.route.pinned');
+    case 'found':
+      return note.confidence === 'exact'
+        ? t('driver.route.geoExact', { where: note.where })
+        : note.confidence === 'approx'
+          ? t('driver.route.geoApprox', { where: note.where })
+          : t('driver.route.geoGuess');
+    default:
+      return t('driver.route.noPin');
+  }
+}
+
+/** Is this end usable? A network place is; a hand-named one needs both a name and a pin. */
+function ready(id: string, place: CustomPlace): boolean {
+  if (!id) return false;
+  return id === CUSTOM_PLACE ? Boolean(place.pin && place.label.trim()) : true;
+}
+
+/** One end of the road when it is not a place on the network — a market, a junction, a depot gate. */
+function CustomEnd({ end, place, actions, reference, idPrefix }: { end: 'fromPlace' | 'toPlace'; place: CustomPlace; actions: DriverActions; reference: { lat: number; lng: number } | null; idPrefix: string }) {
+  const t = useT();
+  return (
+    <PlacePicker
+      id={`${idPrefix}-place`}
+      fieldLabel={t('driver.route.customLabel')}
+      placeholder={t('driver.route.customPh')}
+      mapLabel={t('driver.route.customMapLabel')}
+      findLabel={t('driver.route.findOnMap')}
+      label={place.label}
+      pin={place.pin}
+      reference={reference}
+      onLabel={(label) => actions.setPlace(end, { label })}
+      onPin={(pin, from) => actions.setPlace(end, { pin, from })}
+      geocode={actions.geocodePlace}
+      noteText={(n) => roadNote(t, n)}
+    />
+  );
 }
 
 export function RouteScreen({ state, actions }: RouteScreenProps) {
@@ -43,8 +91,14 @@ export function RouteScreen({ state, actions }: RouteScreenProps) {
                 {n.label}
               </option>
             ))}
+            {/* Not every road starts at a shop or a hub. A depot gate, a market, the junction where you
+                actually join the highway — name it and put it on the map. */}
+            <option value={CUSTOM_PLACE}>{t('driver.route.somewhereElse')}</option>
           </select>
         </div>
+        {state.form.fromId === CUSTOM_PLACE ? (
+          <CustomEnd end="fromPlace" place={state.form.fromPlace} actions={actions} reference={state.route?.from ?? null} idPrefix="from" />
+        ) : null}
 
         <div class="field" style="margin-top:16px">
           <label class="field__label" for="to">
@@ -63,8 +117,12 @@ export function RouteScreen({ state, actions }: RouteScreenProps) {
                 {n.label}
               </option>
             ))}
+            <option value={CUSTOM_PLACE}>{t('driver.route.somewhereElse')}</option>
           </select>
         </div>
+        {state.form.toId === CUSTOM_PLACE ? (
+          <CustomEnd end="toPlace" place={state.form.toPlace} actions={actions} reference={state.form.fromPlace.pin ?? state.route?.from ?? null} idPrefix="to" />
+        ) : null}
 
         <div class="field" style="margin-top:16px">
           <label class="field__label" for="min-earn">
@@ -91,7 +149,14 @@ export function RouteScreen({ state, actions }: RouteScreenProps) {
         <Button
           onClick={() => void actions.submitRoute()}
           busy={state.busy === 'suggest'}
-          disabled={loading || empty || !state.form.fromId || !state.form.toId}
+          // A hand-named end is only an end once it has BOTH a name and a point — a road that stops at a
+          // word cannot be matched against anything.
+          disabled={
+            loading ||
+            empty ||
+            !ready(state.form.fromId, state.form.fromPlace) ||
+            !ready(state.form.toId, state.form.toPlace)
+          }
         >
           {t('driver.route.submit')}
         </Button>

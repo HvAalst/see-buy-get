@@ -13,6 +13,7 @@ import type {
   MdpRow,
   NodeOption,
   DeclaredLegView,
+  GeocodeResult,
   RecentVehicleView,
   ExpectedLoadView,
   OfferView,
@@ -23,6 +24,7 @@ import type {
   VehicleView,
 } from './types';
 import { lastReadingBreached, minEarnFilter, nodeOptions } from './logic';
+import { pinAfterRename, type GeoPoint, type PinSource } from '../../shared/geo';
 import { t } from '../../shared/i18n';
 import { downscaleImage } from '../../shared/media';
 import { triggerDownload } from '../../shared/download';
@@ -95,10 +97,33 @@ export interface DriverState {
   refreshing: boolean;
   /** A refresh failed for want of network; what is on screen is the last known truth. */
   stale: boolean;
-  form: { vehicleQr: string; fromId: string; toId: string; minEarn: string };
+  /**
+   * `fromId`/`toId` name a place on the network. `CUSTOM_PLACE` means "somewhere else" — a market, a
+   * junction, a depot gate — and then the matching `fromPlace`/`toPlace` carries the name and the pin,
+   * because the roads this network runs have ends that are not PUDOs.
+   */
+  form: {
+    vehicleQr: string;
+    fromId: string;
+    toId: string;
+    minEarn: string;
+    fromPlace: CustomPlace;
+    toPlace: CustomPlace;
+  };
 }
 
-const EMPTY_FORM = { vehicleQr: '', fromId: '', toId: '', minEarn: '' };
+/** A road end the driver named and pinned themselves. `from` records whether the pin outlives a rename. */
+export interface CustomPlace {
+  label: string;
+  pin: GeoPoint | null;
+  from: PinSource;
+}
+
+/** The sentinel `fromId`/`toId` take when the end is not a network place. */
+export const CUSTOM_PLACE = '__custom';
+
+const EMPTY_PLACE: CustomPlace = { label: '', pin: null, from: null };
+const EMPTY_FORM = { vehicleQr: '', fromId: '', toId: '', minEarn: '', fromPlace: { ...EMPTY_PLACE }, toPlace: { ...EMPTY_PLACE } };
 
 const INITIAL: DriverState = {
   phase: 'boot',
@@ -647,8 +672,14 @@ export function useDriverApp() {
   );
 
   const submitRoute = useCallback(async () => {
-    const from = state.nodes.find((n) => n.id === state.form.fromId);
-    const to = state.nodes.find((n) => n.id === state.form.toId);
+    // Either end may be a place on the network OR one the driver named and pinned. Both arrive here as the
+    // same thing — a label and a point — because that is all a road end has ever been to the matcher.
+    const endOf = (id: string, place: CustomPlace) => {
+      if (id === CUSTOM_PLACE) return place.pin && place.label.trim() ? { label: place.label.trim(), lat: place.pin.lat, lng: place.pin.lng } : undefined;
+      return state.nodes.find((n) => n.id === id);
+    };
+    const from = endOf(state.form.fromId, state.form.fromPlace);
+    const to = endOf(state.form.toId, state.form.toPlace);
     if (!from || !to) {
       pushToast({ tone: 'warn', icon: 'pin', title: t('driver.toast.pickRoute') });
       return;
@@ -669,7 +700,29 @@ export function useDriverApp() {
       if (client) void client.api.declareLeg(did, { fromLabel: from.label, from: { lat: from.lat, lng: from.lng }, toLabel: to.label, to: { lat: to.lat, lng: to.lng } });
     }
     await runSuggest({ lat: from.lat, lng: from.lng }, { lat: to.lat, lng: to.lng }, minEarnFilter(state.form.minEarn));
-  }, [state.nodes, state.form.fromId, state.form.toId, state.form.minEarn, did, client, pushToast, runSuggest]);
+  }, [state.nodes, state.form.fromId, state.form.toId, state.form.fromPlace, state.form.toPlace, state.form.minEarn, did, client, pushToast, runSuggest]);
+
+  /** Edit one end of a hand-named road. A pin the geocoder found dies with the name it came from. */
+  const setPlace = useCallback((end: 'fromPlace' | 'toPlace', patch: Partial<CustomPlace>) => {
+    setState((s) => {
+      const cur = s.form[end];
+      const next: CustomPlace = { ...cur, ...patch };
+      if (patch.label !== undefined && patch.pin === undefined) next.pin = pinAfterRename(cur.pin, cur.from);
+      return { ...s, form: { ...s.form, [end]: next } };
+    });
+  }, []);
+
+  /** Resolve a typed place to a point + how sure we are — the driver's half of the shared place picker. */
+  const geocodePlace = useCallback(
+    async (q: string): Promise<GeocodeResult | null> => {
+      const query = q.trim();
+      if (!client || !query) return null;
+      const r = await client.api.geocode(query);
+      if (r.error || !r.data) return null;
+      return narrow<GeocodeResult>(r.data);
+    },
+    [client],
+  );
 
   const repeatRoute = useCallback(async () => {
     const r = did ? savedRoute(did) : null;
@@ -839,6 +892,8 @@ export function useDriverApp() {
       signOut,
       go,
       setForm,
+      setPlace,
+      geocodePlace,
       queryJobs,
       loadJobs,
       exportJobs,

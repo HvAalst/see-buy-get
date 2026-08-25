@@ -22,6 +22,21 @@ export interface GeoBounds {
 /** The sandbox network's home box — used when there is nothing to fit yet. */
 export const DEFAULT_BOUNDS: GeoBounds = { minLat: -1.4, maxLat: -1.1, minLng: 36.6, maxLng: 37.0 };
 
+/** Where a pin came from: looked up FROM a typed name, or dropped on the map by hand. */
+export type PinSource = 'name' | 'map' | null;
+
+/**
+ * What happens to a pin when the name beside it is edited.
+ *
+ * A pin the geocoder found IS the name: the moment the name changes it points at a place nobody asked for.
+ * A pin dropped by hand is the person's own answer about where somewhere is, and correcting a spelling must
+ * not throw it away. Shared because every "name it and pin it" surface in the network has this same rule —
+ * a consolidation lot's two ends, a driver's road.
+ */
+export function pinAfterRename(pin: GeoPoint | null, from: PinSource): GeoPoint | null {
+  return from === 'name' ? null : pin;
+}
+
 /**
  * A box around the points with breathing room. One point (or a degenerate cluster) gets a
  * minimum span instead of a divide-by-zero; no points falls back to the network box.

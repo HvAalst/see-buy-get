@@ -35,6 +35,7 @@ export { BandScale, type BandScaleProps } from './BandScale';
 export { CodeBoxes, type CodeBoxesProps } from './CodeBoxes';
 export { CodeCard, type CodeCardProps } from './CodeCard';
 export { PlaceMap, type PlaceMapPin, type PlaceMapProps } from './PlaceMap';
+export { PlacePicker, type PlaceNote, type PlacePickerProps } from './PlacePicker';
 export { QrBlock, type QrBlockProps } from './QrBlock';
 export { Scanner, type ScannerProps } from './Scanner';
 export { ScanField, type ScanFieldProps } from './ScanField';

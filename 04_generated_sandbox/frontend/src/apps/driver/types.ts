@@ -68,6 +68,13 @@ export interface VehicleView {
   status: string;
 }
 
+/** GET /sbg/geocode — a typed place resolved to a point, with how sure the gazetteer is of it. */
+export interface GeocodeResult {
+  location: { lat: number; lng: number };
+  confidence: 'exact' | 'approx' | 'fallback';
+  matched?: string;
+}
+
 /** A vehicle this driver has driven before — the morning "which one today?" list. */
 export interface RecentVehicleView {
   vehicleId: string;

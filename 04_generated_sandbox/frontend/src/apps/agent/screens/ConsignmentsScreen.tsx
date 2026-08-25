@@ -1,8 +1,8 @@
 import { useState } from 'preact/hooks';
-import { Button, Card, ErrorNote, Note, Pill, PlaceMap } from '../../../shared/ui';
-import { useT } from '../../../shared/i18n';
-import { DURABLE_NATURES, consignmentProgress, natureLabel, pinAfterRename, type PinSource } from '../logic';
-import type { GeoPoint } from '../../../shared/geo';
+import { Button, Card, ErrorNote, Note, Pill, PlacePicker, type PlaceNote } from '../../../shared/ui';
+import { useT, type Translate } from '../../../shared/i18n';
+import { DURABLE_NATURES, consignmentProgress, natureLabel } from '../logic';
+import { pinAfterRename, type GeoPoint, type PinSource } from '../../../shared/geo';
 import type { ConsignmentView } from '../types';
 import type { AgentActions, AgentState } from '../useAgentApp';
 
@@ -46,86 +46,24 @@ export function ConsignmentsScreen({ state, actions }: ConsignmentsScreenProps) 
 }
 
 /**
- * One end of the haul, as a PLACE and not just a word.
- *
- * A cooperative's truckload moves between two places the platform cannot resolve for itself: it is collected
- * where the crop is — a shed, a yard, a farm gate — and delivered to a market, neither of which has an
- * address, and both of which decide what the haul is worth. A name alone was a silent trap: a typo geocodes
- * to somewhere else, or to nothing, and the driver hauls the whole route paid only the deadhead. The name
- * still names it for the humans; the map says where it actually is. Tap "Find it" to have the name looked
- * up, or tap the map to place the pin by hand when the name is not on the map at all — which, for a farm
- * gate, is the normal case. A lot cannot open until BOTH ends have a point: those points are what price the
- * haul, and what let us tell the drivers near it that a load is coming.
+ * What a placed (or unplaced) end MEANS on this screen: money. The haul is priced between these two points,
+ * so an approximate or guessed pin is named as such, with the map right there to correct it.
  */
-function PlacePicker({
-  actions,
-  id,
-  fieldLabel,
-  placeholder,
-  mapLabel,
-  label,
-  onLabel,
-  pin,
-  onPin,
-  reference,
-}: {
-  actions: AgentActions;
-  id: string;
-  fieldLabel: string;
-  placeholder: string;
-  mapLabel: string;
-  label: string;
-  pin: GeoPoint | null;
-  onLabel: (v: string) => void;
-  onPin: (p: GeoPoint, from: 'name' | 'map') => void;
-  /** The orange locator — the shop's own site, so the map opens somewhere the shopkeeper recognises. */
-  reference: GeoPoint | null;
-}) {
-  const t = useT();
-  const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
-
-  // What a match MEANS here is money: the haul is priced between these two points. So the note says how sure
-  // we are — an approximate or guessed pin is named as such, with the map right there to correct it.
-  const find = async () => {
-    setBusy(true);
-    const g = await actions.geocodePlace(label);
-    setBusy(false);
-    if (!g) {
-      setNote(t('agent.toast.geoNotFound'));
-      return;
-    }
-    const where = g.matched ?? label.trim();
-    setNote(g.confidence === 'exact' ? t('agent.consignments.geoExact', { where }) : g.confidence === 'approx' ? t('agent.consignments.geoApprox', { where }) : t('agent.consignments.geoGuess'));
-    onPin(g.location, 'name');
-  };
-
-  return (
-    <>
-      <div class="field" style="margin-top:12px">
-        <label class="field__label" for={id}>
-          {fieldLabel}
-        </label>
-        <input
-          id={id}
-          class="input"
-          value={label}
-          onInput={(e) => {
-            onLabel(e.currentTarget.value);
-            setNote(null);
-          }}
-          placeholder={placeholder}
-          autocapitalize="words"
-        />
-        <Button variant="outline" chevron={false} disabled={!label.trim()} busy={busy} onClick={() => void find()}>
-          {t('agent.consignments.findOnMap')}
-        </Button>
-      </div>
-
-      <PlaceMap label={mapLabel} pins={[]} reference={reference} onDrop={(p) => { onPin(p, 'map'); setNote(null); }} dropped={pin} />
-      <p class="card__note">{note ?? (pin ? t('agent.consignments.pinned') : t('agent.consignments.noPin'))}</p>
-    </>
-  );
+function lotNote(t: Translate, note: PlaceNote): string {
+  switch (note.kind) {
+    case 'notFound':
+      return t('agent.toast.geoNotFound');
+    case 'pinned':
+      return t('agent.consignments.pinned');
+    case 'found':
+      return note.confidence === 'exact'
+        ? t('agent.consignments.geoExact', { where: note.where })
+        : note.confidence === 'approx'
+          ? t('agent.consignments.geoApprox', { where: note.where })
+          : t('agent.consignments.geoGuess');
+    default:
+      return t('agent.consignments.noPin');
+  }
 }
 
 /**
@@ -183,28 +121,32 @@ function OpenLotCard({ state, actions }: ConsignmentsScreenProps) {
         </select>
       </div>
       <PlacePicker
-        actions={actions}
         id="lot-pickup"
         fieldLabel={t('agent.consignments.whereCollected')}
         placeholder={t('agent.consignments.pickupPh')}
         mapLabel={t('agent.consignments.pickupMapLabel')}
+        findLabel={t('agent.consignments.findOnMap')}
         label={pickup.label}
         pin={pickup.pin}
         reference={shopAt}
         onLabel={pickup.onLabel}
         onPin={pickup.onPin}
+        geocode={actions.geocodePlace}
+        noteText={(n) => lotNote(t, n)}
       />
       <PlacePicker
-        actions={actions}
         id="lot-dest"
         fieldLabel={t('agent.consignments.whereGo')}
         placeholder={t('agent.consignments.destPh')}
         mapLabel={t('agent.consignments.mapLabel')}
+        findLabel={t('agent.consignments.findOnMap')}
         label={dest.label}
         pin={dest.pin}
         reference={pickup.pin ?? shopAt}
         onLabel={dest.onLabel}
         onPin={dest.onPin}
+        geocode={actions.geocodePlace}
+        noteText={(n) => lotNote(t, n)}
       />
       <div class="dims" style="margin-top:12px">
         <div class="field">

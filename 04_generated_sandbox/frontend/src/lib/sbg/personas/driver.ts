@@ -80,6 +80,9 @@ export function createDriverApi(sbg: SbgClient) {
     /** The roads this driver has run before — offered instead of naming two places every morning. */
     driverLegs: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}/legs', { params: { path: { did } } })),
 
+    /** Resolve a typed place to a point — for a road end that is a market or a junction, not a PUDO. */
+    geocode: (q: string) => sbg.request((c) => c.GET('/v1/sbg/geocode', { params: { query: { q } } })),
+
     /** End the shift (decouple). */
     endSession: (did: string) => sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/end-session', { params: { path: { did } } })),
 
