@@ -14,13 +14,13 @@ import { CargoNature, Equipment, VehicleCapability } from './cargo.types';
 import { VendorService } from './vendor.service';
 import { RatingService, belowFloor } from './rating.service';
 import { WalletGateService } from './wallet-gate.service';
-import { clampMultiplier, computeFreightPrice, freightMultiplier, shipperCharge } from './pricing';
+import { clampMultiplier, computeFreightPrice, freightMultiplier, shipperCharge, type PriceBreakdown } from './pricing';
 import { isTempBreach, loadSafetyItems, missingKeys, requiredLoadKeys, requiredUnloadKeys, tempBand, unloadSafetyItems } from './heavy-cargo';
 import { MediaService } from './media.service';
 import { MarketPulseStore } from './market-pulse.store';
 import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, toteCapacityOf, VEHICLE_SPEC } from './fleet.config';
 import { Router, ROUTER } from './router';
-import { DEFAULT_PRICE_PER_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, NETWORK_CURRENCY, OFFER_TTL_MIN, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
+import { DEFAULT_PRICE_PER_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, NETWORK_CURRENCY, NUDGE_RADIUS_KM, OFFER_TTL_MIN, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
 import { Claimable, ClaimableKind, Freight, FreightShipmentView, FreightStatus, Offer, RoutePlan } from './dispatch.types';
@@ -133,6 +133,8 @@ export class DispatchService {
   // so — unlike the ephemeral offer bulletin — it must survive a restart.
   private readonly freights = new PersistentMap<string, Freight>('pudo-freights');
   private readonly offers = new Map<string, Offer>();
+  /** Live "decline this one offer" capabilities (see mintDeclineToken). In-memory like the offers they answer. */
+  private readonly declineTokens = new Map<string, { offerId: string; expiresAt: number }>();
   private freightSeq = 0;
 
   constructor(
@@ -420,30 +422,108 @@ export class DispatchService {
         if (load.maxSpend != null && shipperCharge(price.total) > load.maxSpend) continue;
         if (floor != null && price.total < floor) continue;
       }
-      // One live offer per driver+load — reuse the existing pending one if any (now that it still qualifies).
-      const existing = [...this.offers.values()].find((o) => o.driverDid === driverDid && o.ref === load.ref && o.status === 'pending' && new Date(o.expiresAt).getTime() > now);
-      if (existing) { out.push(existing); continue; }
-      const offer: Offer = {
-        offerId: `ofr_${randomBytes(6).toString('hex')}`,
-        driverDid,
-        kind: load.kind,
-        ref: load.ref,
-        pickupLabel: load.pickupLabel,
-        pickupLocation: load.pickupLocation,
-        destLabel: load.destLabel,
-        weightKg: load.weightKg,
-        detourKm: detour,
-        minutesAway,
-        message: `≈${minutesAway} min from ${load.pickupLabel}: a ${load.weightKg} kg shipment to ${load.destLabel} is ready. Claim it?`,
-        price,
-        createdAt: new Date(now).toISOString(),
-        expiresAt: new Date(now + OFFER_TTL_MIN * 60_000).toISOString(),
-        status: 'pending',
-      };
-      this.offers.set(offer.offerId, offer);
-      out.push(offer);
+      out.push(this.makeOffer(driverDid, load, { detour, minutesAway, price, now }));
     }
     return out;
+  }
+
+  /**
+   * Mint (or re-use) the one live offer for this driver + load. One live offer per pair: re-asking a driver
+   * about a load they are already looking at is how a helpful app becomes a nuisance, and it would also let
+   * two offers for the same bag disagree about the price.
+   */
+  private makeOffer(driverDid: string, load: Claimable, ctx: { detour: number; minutesAway: number; price?: PriceBreakdown; now: number }): Offer {
+    const { detour, minutesAway, price, now } = ctx;
+    const existing = [...this.offers.values()].find((o) => o.driverDid === driverDid && o.ref === load.ref && o.status === 'pending' && new Date(o.expiresAt).getTime() > now);
+    if (existing) return existing;
+    const offer: Offer = {
+      offerId: `ofr_${randomBytes(6).toString('hex')}`,
+      driverDid,
+      kind: load.kind,
+      ref: load.ref,
+      pickupLabel: load.pickupLabel,
+      pickupLocation: load.pickupLocation,
+      destLabel: load.destLabel,
+      weightKg: load.weightKg,
+      detourKm: detour,
+      minutesAway,
+      message: `≈${minutesAway} min from ${load.pickupLabel}: a ${load.weightKg} kg shipment to ${load.destLabel} is ready. Claim it?`,
+      price,
+      createdAt: new Date(now).toISOString(),
+      expiresAt: new Date(now + OFFER_TTL_MIN * 60_000).toISOString(),
+      status: 'pending',
+    };
+    this.offers.set(offer.offerId, offer);
+    return offer;
+  }
+
+  /**
+   * The ONE load worth interrupting this driver for, right where they are — or null.
+   *
+   * The route list answers "what is on the road I named"; this answers "what am I about to drive past". It
+   * is the same fitness question (heading, kilos, bag spaces, capability, budget, the freight bar) asked
+   * against a live position instead of a planned trip, and it returns a single load on purpose: a driver at
+   * speed can hold one question in their head, not a list. Minting the offer here is what makes the pop-up
+   * actionable — the price is fixed at the moment they are asked, and the tap has something to open.
+   */
+  offerNear(driverDid: string, point: GeoPoint, now: number = Date.now()): Offer | null {
+    const vehicle = this.fleet.vehicleForDriver(driverDid);
+    if (!vehicle) return null;
+    const remaining = this.remainingCapacity(driverDid);
+    const remainingTotes = this.remainingTotes(driverDid);
+    const profile = this.pricingProfile(vehicle);
+    const freightBarred = belowFloor(this.ratings.driverRating(driverDid));
+
+    const best = this.availableLoads()
+      .filter((load) => !(freightBarred && load.kind === 'freight'))
+      .filter((load) => this.vehicleCanCarry(vehicle, load, remaining, remainingTotes))
+      .map((load) => ({ load, km: this.router.roadKm(point, load.pickupLocation) }))
+      .filter(({ load, km }) => km <= NUDGE_RADIUS_KM && this.headingTowards(driverDid, load.pickupLocation))
+      .sort((a, b) => a.km - b.km)[0];
+    if (!best) return null;
+
+    const { load } = best;
+    const price = load.kind === 'freight'
+      ? computeFreightPrice({
+          baseFee: profile.baseFee,
+          ratePerKm: profile.ratePerKm,
+          deadheadKm: best.km,
+          tripKm: load.destLocation ? this.router.roadKm(load.pickupLocation, load.destLocation) : 0,
+          multiplier: freightMultiplier(new Date(now), { min: profile.min, max: profile.max }, this.market.factorFor(load.pickupLocation, now)),
+        })
+      : undefined;
+    // The shipper's budget still binds — an interruption offering a price nobody will pay is worse than silence.
+    if (price && load.kind === 'freight' && load.maxSpend != null && shipperCharge(price.total) > load.maxSpend) return null;
+
+    return this.makeOffer(driverDid, load, { detour: Math.round(best.km * 10) / 10, minutesAway: this.minutes(point, load.pickupLocation), price, now });
+  }
+
+  /* --- declining from the lock screen --- */
+
+  /**
+   * A one-shot capability to decline ONE offer, and nothing else.
+   *
+   * "Not now" has to work from the notification itself — a driver who must open an app to say no will simply
+   * not say it, and the load sits reserved-in-spirit while someone else could have taken it. But the service
+   * worker that handles that tap has no session, and giving it the driver's token would hand a background
+   * script the driver's whole identity to solve a one-word problem.
+   *
+   * So the push carries a capability instead: unguessable, bound to a single offer, single-use, and dead when
+   * the offer lapses. Leaked, it can decline one load the driver was declining anyway.
+   */
+  mintDeclineToken(offerId: string, now: number = Date.now()): string {
+    const token = randomBytes(24).toString('hex');
+    this.declineTokens.set(token, { offerId, expiresAt: now + OFFER_TTL_MIN * 60_000 });
+    return token;
+  }
+
+  /** Redeem a decline capability. Burned on use, and refused once it (or its offer) has lapsed. */
+  declineByToken(token: string, now: number = Date.now()): Offer {
+    const held = this.declineTokens.get(token);
+    if (!held) throw new GlosError('NOT_FOUND', 'That link has already been used, or has expired');
+    this.declineTokens.delete(token); // one shot, whatever happens next
+    if (held.expiresAt <= now) throw new GlosError('WINDOW_EXPIRED', 'That offer has already lapsed');
+    return this.ignore(held.offerId);
   }
 
   /** Driver accepts an offer → reserves the load (and its weight) for this driver. */

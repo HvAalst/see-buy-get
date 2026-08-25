@@ -88,6 +88,9 @@ export function createDriverApi(sbg: SbgClient) {
       sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/suggest-work', { params: { path: { did } }, body })),
 
     /** Accept an offer. */
+    /** The offers still awaiting an answer — what a notification tap opens, without re-declaring a route. */
+    activeOffers: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}/offers', { params: { path: { did } } })),
+
     claimOffer: (offerId: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/offers/{id}/claim', { params: { path: { id: offerId } } })),
 
     /** Decline an offer. */

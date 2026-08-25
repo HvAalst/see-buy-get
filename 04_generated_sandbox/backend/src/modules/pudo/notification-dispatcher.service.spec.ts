@@ -27,6 +27,9 @@ interface HarnessOpts {
   canCarry?: (driverDid: string) => boolean;
   // rules 2 + 5 — which drivers' DECLARED LEG runs past the pickup (default: all, as an undeclared leg does)
   heading?: (driverDid: string) => boolean;
+  // rule 2c — the single best load near a moving driver, and what they are already deciding
+  offerNear?: () => unknown | null;
+  activeOffers?: () => unknown[];
 }
 
 /** Build a dispatcher over a real EventBus + NotificationService, with fake domain lookups. */
@@ -63,6 +66,9 @@ function harness(opts: HarnessOpts) {
   const dispatch = {
     freightCarryableByDriver: (_freightId: string, driverDid: string) => (opts.canCarry ? opts.canCarry(driverDid) : true),
     headingTowards: (driverDid: string) => (opts.heading ? opts.heading(driverDid) : true),
+    offerNear: () => (opts.offerNear ? opts.offerNear() : null),
+    activeOffersFor: () => (opts.activeOffers ? opts.activeOffers() : []),
+    mintDeclineToken: () => 'decline-token',
   } as unknown as DispatchService;
 
   const dispatcher = new NotificationDispatcher(events, notifications, parcels, persons, agents, fleet, totes, mdps, dispatch);
@@ -210,6 +216,51 @@ describe('NotificationDispatcher — rule 2: driver "load near you" (N3)', () =>
     const agedRow = aged.notifications.inboxFor('did:agent:shop')[0];
     expect(agedRow).toMatchObject({ title: 'A bag has been waiting' });
     expect(agedRow.body).toContain('Close it');
+  });
+
+  it('interrupts a MOVING driver with one load, all of it decidable from the banner', async () => {
+    const offer = { offerId: 'ofr_1', kind: 'tote', ref: 'BAG-9', pickupLabel: 'Mama Njeri Shop', destLabel: 'Addis', weightKg: 12, detourKm: 2, minutesAway: 6 };
+    const { events, notifications } = harness({ offerNear: () => offer });
+
+    await events.publish(GlosEvent.Pudo.DriverMoved, { driverDid: 'd-1', location: at(0, 0) });
+    const inbox = notifications.inboxFor('d-1');
+    expect(inbox).toHaveLength(1);
+    // Everything the decision needs: what, where to, how far off the road, what it pays, where to collect.
+    expect(inbox[0].title).toBe('Bag to Addis · 6 min away');
+    expect(inbox[0].body).toContain('12 kg · 2 km off your road · you earn');
+    expect(inbox[0].body).toContain('Waiting at Mama Njeri Shop');
+    expect(inbox[0].link).toBe('/?offer=ofr_1'); // one tap → that one card
+    expect(inbox[0].data).toMatchObject({ offerId: 'ofr_1', declineToken: 'decline-token' });
+  });
+
+  it('keeps quiet: a parked phone, a second load inside the cooldown, one already being decided, and one already refused', async () => {
+    const offer = { offerId: 'ofr_1', kind: 'tote', ref: 'BAG-9', pickupLabel: 'Shop', destLabel: 'Addis', weightKg: 12, detourKm: 2, minutesAway: 6 };
+
+    // A GPS that jitters where it stands is not movement.
+    const parked = harness({ offerNear: () => offer });
+    await parked.events.publish(GlosEvent.Pudo.DriverMoved, { driverDid: 'd', location: at(0, 0) });
+    await parked.events.publish(GlosEvent.Pudo.DriverMoved, { driverDid: 'd', location: at(0, 0.0005) }); // ~55 m
+    expect(parked.notifications.inboxFor('d')).toHaveLength(1); // the first fix asked; the jitter did not
+
+    // Driving on, a SECOND load inside the cooldown waits its turn.
+    const second = { ...offer, offerId: 'ofr_2', ref: 'BAG-10' };
+    let next: unknown = offer;
+    const moving = harness({ offerNear: () => next });
+    await moving.events.publish(GlosEvent.Pudo.DriverMoved, { driverDid: 'd', location: at(0, 0) });
+    next = second;
+    await moving.events.publish(GlosEvent.Pudo.DriverMoved, { driverDid: 'd', location: at(0, 0.05) }); // ~5 km on
+    expect(moving.notifications.inboxFor('d')).toHaveLength(1);
+
+    // An unanswered offer is an open question — do not ask another.
+    const busy = harness({ offerNear: () => offer, activeOffers: () => [offer] });
+    await busy.events.publish(GlosEvent.Pudo.DriverMoved, { driverDid: 'd', location: at(0, 0) });
+    expect(busy.notifications.inboxFor('d')).toHaveLength(0);
+
+    // Nothing near, nothing said.
+    const quiet = harness({ offerNear: () => null });
+    await quiet.events.publish(GlosEvent.Pudo.DriverMoved, { driverDid: 'd', location: at(0, 0) });
+    expect(quiet.notifications.inboxFor('d')).toHaveLength(0);
+    expect(quiet.events.getDeadLetters()).toHaveLength(0);
   });
 
   it('says nothing when the bag is not sitting at a real PUDO', async () => {

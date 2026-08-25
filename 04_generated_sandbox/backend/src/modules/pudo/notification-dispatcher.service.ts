@@ -11,7 +11,7 @@ import { MdpService } from './mdp.service';
 import { DispatchService } from './dispatch.service';
 import { haversineKm } from './geo';
 import { GeoPoint } from './pudo.types';
-import { MARKET_SUPPLY_STALE_MIN } from './pudo.config';
+import { MARKET_SUPPLY_STALE_MIN, NETWORK_CURRENCY, NUDGE_COOLDOWN_MIN, NUDGE_MIN_MOVE_KM, TOTE_LOAD_FEE } from './pudo.config';
 
 /**
  * NotificationDispatcher (N2/N3) — the bridge from the event cascade to a person's devices. It
@@ -34,6 +34,14 @@ export class NotificationDispatcher implements OnModuleInit {
   /** "Near you" radius + a fan-out cap so one tote never pings a whole city of drivers. */
   private static readonly NEARBY_DRIVER_KM = 8;
   private static readonly NEARBY_DRIVER_CAP = 12;
+
+  /**
+   * What each driver has already been asked while moving: where they were when we last looked, when we last
+   * interrupted them, and which loads they have already been offered. In memory on purpose — this is
+   * politeness state, not a record. The worst a restart costs is one driver hearing about one load a second
+   * time, which is a far smaller price than persisting chatter.
+   */
+  private readonly nudges = new Map<string, { at?: GeoPoint; lastPushAt?: number; told: Set<string> }>();
 
   constructor(
     private readonly events: EventBus,
@@ -69,6 +77,10 @@ export class NotificationDispatcher implements OnModuleInit {
     this.events.subscribe<{ code: string; agentDid?: string; reason?: 'full' | 'max_wait'; destination?: string }>(GlosEvent.Pudo.ToteNeedsSeal, (e) =>
       this.onToteNeedsSeal(e.payload),
     );
+    // Rule 2c (driver) — the driver MOVED. Everything else here fires when a load appears; this one fires
+    // when the driver does, which is the only way to catch a bag that has been waiting since morning on a
+    // road they are driving down now.
+    this.events.subscribe<{ driverDid: string; location: GeoPoint }>(GlosEvent.Pudo.DriverMoved, (e) => this.onDriverMoved(e.payload));
     // Rule 3 (PUDO agent) — a bag went onto a bus bound for a PUDO; tell that shop its parcels are inbound.
     this.events.subscribe<{ destinationNodeId?: string; parcels?: number; code?: string }>(GlosEvent.Pudo.BagLoaded, (e) =>
       this.onBagLoaded(e.payload),
@@ -189,6 +201,64 @@ export class NotificationDispatcher implements OnModuleInit {
       );
     } catch (err) {
       this.logger.warn(`load-nearby notify failed for ${payload.code}: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * The moving driver: a load they are about to drive past, offered while they can still act on it.
+   *
+   * The whole design problem here is restraint. A pop-up that interrupts someone at the wheel earns its place
+   * only if it is rare, relevant and answerable in one glance, so four rules stand between a GPS fix and a
+   * buzz — and every one of them exists because breaking it turns the feature into the thing drivers switch
+   * off, after which they hear nothing at all:
+   *   1. they must have actually MOVED (a parked phone's GPS jitters all day);
+   *   2. one interruption per cooldown, however much they drive;
+   *   3. silence while they already have an unanswered offer — one open question at a time;
+   *   4. never the same load twice, even after they ignore it.
+   * What survives all four is ONE load (offerNear picks the best), already priced and offered, so the pop-up
+   * is a decision and not an advertisement.
+   */
+  private async onDriverMoved(payload: { driverDid: string; location: GeoPoint }): Promise<void> {
+    const { driverDid, location } = payload;
+    if (!location || !Number.isFinite(location.lat) || !Number.isFinite(location.lng)) return;
+    try {
+      const now = Date.now();
+      const seen = this.nudges.get(driverDid) ?? { told: new Set<string>() };
+      // 1. Real movement only. The last point is NOT updated when they have barely moved, so a slow crawl
+      // still accumulates into a real move rather than being reset to zero on every heartbeat.
+      if (seen.at && haversineKm(seen.at, location) < NUDGE_MIN_MOVE_KM) return;
+      seen.at = location;
+      this.nudges.set(driverDid, seen);
+      // 2 + 3. Not too often, and not while they are already deciding something.
+      if (seen.lastPushAt && now - seen.lastPushAt < NUDGE_COOLDOWN_MIN * 60_000) return;
+      if (this.dispatch.activeOffersFor(driverDid, now).length > 0) return;
+
+      const offer = this.dispatch.offerNear(driverDid, location, now);
+      if (!offer) return;
+      if (seen.told.has(offer.ref)) return; // 4. asked once, answered or not
+      seen.told.add(offer.ref);
+      seen.lastPushAt = now;
+
+      // Everything needed to decide, in the two lines a lock screen will actually show: what and where to,
+      // how far off the road, what it pays, and where to collect it.
+      const earn = offer.price ? `${NETWORK_CURRENCY} ${offer.price.total.toFixed(2)}` : `${NETWORK_CURRENCY} ${TOTE_LOAD_FEE.toFixed(2)}`;
+      const what = offer.kind === 'tote' ? 'Bag' : 'Load';
+      await this.notifications.notify(driverDid, {
+        kind: 'load_nearby',
+        title: `${what} to ${offer.destLabel} · ${offer.minutesAway} min away`,
+        body: `${offer.weightKg} kg · ${offer.detourKm} km off your road · you earn ${earn}\nWaiting at ${offer.pickupLabel}`,
+        link: `/?offer=${offer.offerId}`, // one tap → that one card, with the claim button on it
+        tag: `load:${offer.ref}`,
+        // Two buttons is what a phone gives us, and two is what the decision has. "Not now" carries a
+        // one-shot capability so the service worker can free the load without holding the driver's session.
+        actions: [
+          { action: 'take', title: 'Take it' },
+          { action: 'no', title: 'Not now' },
+        ],
+        data: { offerId: offer.offerId, ref: offer.ref, declineToken: this.dispatch.mintDeclineToken(offer.offerId, now) },
+      });
+    } catch (err) {
+      this.logger.warn(`driver-moved notify failed for ${driverDid}: ${(err as Error).message}`);
     }
   }
 

@@ -134,7 +134,15 @@ const APP_DIR = resolve(ROOT, 'src/apps', APP_ID);
  * dependency. Runs on build only; the SW is disabled in dev (devOptions.enabled: false).
  */
 function pushSwPlugin(): Plugin {
-  const source = readFileSync(resolve(ROOT, 'scripts/push-sw.js'), 'utf8');
+  // The SW's ONE outbound call (declining an offer from its "Not now" button) needs the API origin, and a
+  // service worker cannot read `window.SBG_API`. Bake in the same build-time env the app resolves from,
+  // with the same localhost fallback — see src/lib/sbg/config.ts.
+  const apiBase = process.env.VITE_SBG_API ?? 'http://localhost:3000';
+  // Match the QUOTED placeholder, not the bare token: the file's own header explains the substitution and
+  // names it, and a plain first-match replace rewrote that sentence while leaving the constant untouched.
+  const raw = readFileSync(resolve(ROOT, 'scripts/push-sw.js'), 'utf8');
+  const source = raw.replace("'__SBG_API_BASE__'", JSON.stringify(apiBase));
+  if (source === raw) throw new Error('push-sw.js: API base placeholder not found — the decline button would call nowhere');
   return {
     name: 'sbg-push-sw',
     apply: 'build',

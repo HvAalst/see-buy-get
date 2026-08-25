@@ -212,6 +212,10 @@ export class FleetService {
     if (!active) return undefined;
     active.location = location;
     active.lastLocatedAt = new Date().toISOString();
+    // "The driver moved" is a fact worth publishing: it is the trigger for telling them about a load they
+    // are about to drive past. Everything that decides whether that is worth an interruption — how far they
+    // actually moved, their heading, the cooldown — lives with the rule, not here.
+    void this.events.publish(GlosEvent.Pudo.DriverMoved, { driverDid, location }, { source: 'pudo' }).catch(() => undefined);
     return active;
   }
 

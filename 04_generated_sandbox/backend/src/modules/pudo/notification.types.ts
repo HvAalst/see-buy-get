@@ -66,6 +66,12 @@ export interface NotificationPayload {
   body: string;
   link?: string;
   tag?: string;
+  /**
+   * Buttons on the notification itself — a phone shows at most two, which is exactly what a decision taken
+   * at the wheel can hold. The service worker maps `action` to what it does: anything but a known action
+   * falls through to opening `link`.
+   */
+  actions?: Array<{ action: string; title: string }>;
   data?: Record<string, unknown>;
 }
 

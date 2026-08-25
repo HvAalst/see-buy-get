@@ -149,6 +149,13 @@ export const ROAD_CIRCUITY_FACTOR = 1.35;
 // Dispatch marketplace (Ch 19 — opportunistic line-haul). A filling tote is published for drivers to
 // claim once it is full OR has waited this long; suggestions auto-ignore if unanswered within the TTL.
 export const TOTE_MAX_WAIT_H = 24; // max time a tote waits before it is offered even if not full
+
+// The moving nudge (a load on the road you are ON, right now). Every one of these numbers exists to keep a
+// pop-up rare enough to be worth reading: a driver who is pinged while parked, or twice in five minutes,
+// turns notifications off — and then hears nothing at all, which is worse than never having built this.
+export const NUDGE_RADIUS_KM = 3; // tighter than the publish-time ping: this one interrupts someone driving
+export const NUDGE_COOLDOWN_MIN = 10; // at most one interruption per driver in this window
+export const NUDGE_MIN_MOVE_KM = 0.4; // a parked phone's GPS jitters; only real movement asks the question
 export const OFFER_TTL_MIN = 10; // a suggestion auto-ignores if the driver does not answer in time
 // F1 — an early-CLAIMED scheduled freight not picked up by this long AFTER its pickup date is a no-show:
 // it is released back to the marketplace (and the shipper rebated) so an early reservation can't strand it.

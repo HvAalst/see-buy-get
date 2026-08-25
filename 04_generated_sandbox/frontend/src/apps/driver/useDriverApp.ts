@@ -341,6 +341,34 @@ export function useDriverApp() {
     }
   }, [client, did, fail]);
 
+  /**
+   * A notification tap lands here: `?offer=<id>` opens THAT offer and nothing else.
+   *
+   * The point of the pop-up is one decision in one view, so arriving from it must not dump the driver on a
+   * home screen to go and find the load again. The offer already lives on the server, so this works on a cold
+   * start with no route declared — we fetch what is still awaiting an answer and open the card. The parameter
+   * is stripped once used: a later refresh (or the driver simply re-opening the app) must not re-jump them
+   * onto a load they have already dealt with.
+   */
+  const openOfferFromLink = useCallback(async () => {
+    if (!client || !did || typeof location === 'undefined') return;
+    const offerId = new URLSearchParams(location.search).get('offer');
+    if (!offerId) return;
+    try {
+      const url = new URL(location.href);
+      url.searchParams.delete('offer');
+      history.replaceState(null, '', url.toString());
+    } catch {
+      /* a browser that refuses the rewrite still gets the right screen — it just may re-jump on reload */
+    }
+    const r = await client.api.activeOffers(did);
+    if (r.error) return; // the offer lapsed, or we are offline: the app opens where it normally would
+    const offers = narrow<OfferView[]>(r.data) ?? [];
+    const index = offers.findIndex((o) => o.offerId === offerId);
+    if (index < 0) return; // someone else took it, or it expired while the phone was in a pocket
+    setState((s) => ({ ...s, offers, offerIndex: index, screen: 'offers' }));
+  }, [client, did]);
+
   /* -------------------------------------------------------------- recovery */
 
   // Always-current handles, so the recovery listeners can be attached ONCE and still call the
@@ -406,9 +434,11 @@ export function useDriverApp() {
     // survives-navigation guarantee and forcing a fresh mint on every cold start, which is a second
     // failure point on exactly the flaky links this app is built for.
     if (did) purgeDriverTokens(did);
-    if (client && did) void refresh();
+    // Boot, then honour a notification tap — in that order, so the offer screen opens over a loaded app
+    // rather than being overwritten by the refresh that follows it.
+    if (client && did) void refresh().then(() => openOfferFromLink());
     // refresh is stable per (client, did)
-  }, [client, did, refresh]);
+  }, [client, did, refresh, openOfferFromLink]);
 
   const signIn = useCallback((value: string) => {
     const next = value.trim();

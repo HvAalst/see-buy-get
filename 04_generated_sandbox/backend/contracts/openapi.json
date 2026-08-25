@@ -9459,6 +9459,36 @@
         }
       }
     },
+    "/v1/sbg/dispatch/offers/decline": {
+      "post": {
+        "operationId": "Sbg.declineOffer",
+        "summary": "",
+        "description": "Decline an offer straight from the notification's \"Not now\", using the one-shot capability that rode in\nthe push. PUBLIC by necessity and safe by construction: the service worker handling that tap has no\nsession, and the alternative — handing a background script the driver's token — trades a one-word\nproblem for their whole identity. The token is unguessable, bound to a single offer, single-use, and\ndead when the offer lapses (see mintDeclineToken). It carries no authority to claim anything.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeclineOfferDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Offer"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/identity/enroll": {
       "post": {
         "operationId": "Identity.enroll",
@@ -15077,6 +15107,17 @@
           "createdAt",
           "expiresAt",
           "status"
+        ]
+      },
+      "DeclineOfferDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
         ]
       },
       "EnrollDto": {

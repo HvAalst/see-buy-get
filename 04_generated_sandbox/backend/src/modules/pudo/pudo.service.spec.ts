@@ -3723,6 +3723,58 @@ describe('PUDO Light', () => {
     expect(dispatch.headingTowards(quiet.did, arbaMinch)).toBe(true);
   });
 
+  it('offers the ONE load a moving driver is about to pass — and nothing they are heading away from', () => {
+    const origin = onboardAgent('Nudge Origin', 'NorthTown', 50);
+    const far = onboardAgent('Nudge Far', 'EastTown', 50);
+    corridors.addCorridor({ name: 'nudge', originZone: 'NorthTown', destZone: 'SouthTown' });
+    const d = coupleTipper('nudge', { min: 0.8, max: 1.5 });
+
+    const bagAt = (agentDid: string, parcelId: string, zone: string) => {
+      parcels.accept({ agentDid, parcelId, size: 'S', destZone: zone, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+      const bag = totes.register(agentDid);
+      totes.assign(bag.code, zone, zone);
+      mdps.fillTote(bag.code, parcelId);
+      dispatch.release(bag.code);
+      return bag;
+    };
+    const near = bagAt(origin.did, 'NUDGE-1', 'SouthTown');
+
+    // Standing at the shop, that bag is the one worth interrupting for — and the offer is MINTED, so the
+    // pop-up has a price, a card to open and something to claim.
+    const offer = dispatch.offerNear(d.did, origin.location);
+    expect(offer).toMatchObject({ ref: near.code, kind: 'tote', driverDid: d.did, status: 'pending' });
+
+    // Asked again, it is the SAME offer — a driver is never asked twice about one load at two prices.
+    expect(dispatch.offerNear(d.did, origin.location)?.offerId).toBe(offer!.offerId);
+
+    // A load down the road they are NOT taking stays silent (the declared leg, reused).
+    const east = { lat: origin.location.lat, lng: origin.location.lng + 0.6 }; // a long way off a southbound run
+    agents.setLocation(far.did, east);
+    fleet.declareLeg(d.did, { fromLabel: 'North', from: origin.location, toLabel: 'South', to: { lat: origin.location.lat - 2, lng: origin.location.lng } });
+    bagAt(far.did, 'NUDGE-2', 'EastTown');
+    expect(dispatch.offerNear(d.did, east)).toBeNull();
+  });
+
+  it('declines from the lock screen with a one-shot capability that can do nothing else', () => {
+    const origin = onboardAgent('Decline Origin', 'NorthTown', 50);
+    corridors.addCorridor({ name: 'decline', originZone: 'NorthTown', destZone: 'SouthTown' });
+    const d = coupleTipper('decl', { min: 0.8, max: 1.5 });
+    parcels.accept({ agentDid: origin.did, parcelId: 'DECL-1', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+    const bag = totes.register(origin.did);
+    totes.assign(bag.code, 'SouthTown', 'SouthTown');
+    mdps.fillTote(bag.code, 'DECL-1');
+    dispatch.release(bag.code);
+
+    const offer = dispatch.offerNear(d.did, origin.location)!;
+    const token = dispatch.mintDeclineToken(offer.offerId);
+
+    // It declines exactly that offer, freeing the load for someone else the moment the driver says no.
+    expect(controller.declineOffer({ token } as never)).toMatchObject({ offerId: offer.offerId, status: 'ignored' });
+    // …and then it is spent. A capability that could be replayed is a capability worth stealing.
+    expect(() => controller.declineOffer({ token } as never)).toThrow(/already been used/);
+    expect(() => controller.declineOffer({ token: 'made-up' } as never)).toThrow(/already been used|expired/);
+  });
+
   it('a bus runs out of BAG SPACES long before it runs out of kilos', () => {
     const origin = onboardAgent('Bagspace Origin', 'NorthTown', 200);
     const dest = onboardAgent('Bagspace Dest', 'SouthTown', 200);

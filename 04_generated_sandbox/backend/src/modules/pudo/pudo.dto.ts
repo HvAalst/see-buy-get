@@ -660,6 +660,11 @@ export class CoupleDto {
   @IsOptional() @ValidateNested() @Type(() => DeclareLegDto) leg?: DeclareLegDto;
 }
 
+/** The one-shot capability from a push notification's "Not now" — see DispatchService.mintDeclineToken. */
+export class DeclineOfferDto {
+  @IsString() token!: string;
+}
+
 /** How many outbound bags a shop can stage on its floor at once. */
 export class BagBaysDto {
   @IsNumber() @Min(1) bays!: number;
