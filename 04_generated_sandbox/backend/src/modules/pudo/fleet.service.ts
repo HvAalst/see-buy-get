@@ -7,8 +7,9 @@ import { CorridorService } from './corridor.service';
 import { DriverService } from './driver.service';
 import { VehicleService } from './vehicle.service';
 import { CLASS_TO_CORRIDOR_VEHICLE } from './fleet.config';
+import { MAX_WORK_RADIUS_KM } from './pudo.config';
 import { PersistentMap } from '../../foundation/store/persistent-map';
-import { Assignment, DeclaredLeg, ResolvedBadge } from './fleet.types';
+import { Assignment, DeclaredLeg, DeclaredWork, ResolvedBadge } from './fleet.types';
 import { GeoPoint } from './pudo.types';
 
 /** What a caller declares: the two ends, each named and pinned. */
@@ -86,13 +87,13 @@ export class FleetService {
       driverDid,
       vehicleId,
       corridorId,
-      leg: leg ? this.normalizeLeg(leg) : undefined,
+      work: leg ? this.normalizeLeg(leg) : undefined,
       status: 'active',
       startedAt: new Date().toISOString(),
     };
     this.assignments.set(assignment.assignmentId, assignment);
     this.rememberVehicle(driverDid, vehicleId);
-    if (assignment.leg) this.rememberLeg(driverDid, assignment.leg);
+    if (assignment.work?.kind === 'leg') this.rememberLeg(driverDid, assignment.work);
     this.drivers.setAssignedVehicle(driverDid, vehicleId);
     void this.events.publish(GlosEvent.Pudo.DriverCoupled, { assignmentId: assignment.assignmentId, driverDid, vehicleId, vehicleClass: vehicle.vehicleClass, corridorId }, { source: 'pudo' }).catch(() => undefined);
     return assignment;
@@ -149,14 +150,29 @@ export class FleetService {
   declareLeg(driverDid: string, leg: LegInput): Assignment {
     const active = this.activeForDriver(driverDid);
     if (!active) throw new GlosError('NOT_COUPLED', 'Start a shift before saying where you are going');
-    active.leg = this.normalizeLeg(leg);
-    this.rememberLeg(driverDid, active.leg);
+    const declared = this.normalizeLeg(leg);
+    active.work = declared;
+    this.rememberLeg(driverDid, declared);
     return active;
   }
 
-  /** The leg this driver declared for the shift they are on, if any. */
-  legFor(driverDid: string): DeclaredLeg | undefined {
-    return this.activeForDriver(driverDid)?.leg;
+  /**
+   * Declare a PATCH instead of a road: "I take work within this many km of me". The radius is the whole
+   * declaration — there is no centre, because the centre is wherever the rider currently is.
+   */
+  declareArea(driverDid: string, radiusKm: number): Assignment {
+    const active = this.activeForDriver(driverDid);
+    if (!active) throw new GlosError('NOT_COUPLED', 'Start a shift before saying where you are working');
+    if (!Number.isFinite(radiusKm) || radiusKm < 1 || radiusKm > MAX_WORK_RADIUS_KM) {
+      throw new GlosError('INVALID_INPUT', `Pick a distance between 1 and ${MAX_WORK_RADIUS_KM} km`);
+    }
+    active.work = { kind: 'area', radiusKm: Math.round(radiusKm), declaredAt: new Date().toISOString() };
+    return active;
+  }
+
+  /** How this driver takes work on the shift they are on, if they have said. */
+  workFor(driverDid: string): DeclaredWork | undefined {
+    return this.activeForDriver(driverDid)?.work;
   }
 
   /** The roads this driver has run before, most recent first — what the app offers instead of re-typing. */
@@ -173,7 +189,7 @@ export class FleetService {
         throw new GlosError('INVALID_INPUT', 'A leg needs a point for each end — name it and place it on the map');
       }
     }
-    return { fromLabel, from: { lat: leg.from.lat, lng: leg.from.lng }, toLabel, to: { lat: leg.to.lat, lng: leg.to.lng }, declaredAt: new Date().toISOString() };
+    return { kind: 'leg', fromLabel, from: { lat: leg.from.lat, lng: leg.from.lng }, toLabel, to: { lat: leg.to.lat, lng: leg.to.lng }, declaredAt: new Date().toISOString() };
   }
 
   /** Keep the leg at the head of this driver's history, deduped by its two ends (the same road, re-run). */

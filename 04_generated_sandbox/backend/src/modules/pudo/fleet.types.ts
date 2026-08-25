@@ -164,6 +164,7 @@ export type AssignmentStatus = 'active' | 'ended';
  * no addresses.
  */
 export class DeclaredLeg {
+  kind: 'leg';
   fromLabel: string;
   from: GeoPoint;
   toLabel: string;
@@ -171,14 +172,35 @@ export class DeclaredLeg {
   declaredAt: string;
 }
 
+/**
+ * The other shape a working day has: a PATCH, not a road.
+ *
+ * A bike or a bajaj does not run a corridor — it works a market district and comes back. Made to declare a
+ * leg, such a rider would name the same place twice, and the detour maths would count the trip out AND back,
+ * so a load two streets away would read as further off than it is. Declaring nothing is no better: it drops
+ * them back to being pinged about everything within reach, including loads a bus should take.
+ *
+ * The patch travels WITH them: it is a radius around wherever they are now, not a circle pinned where they
+ * declared it — which is what "near me" means to someone drifting across a city all day.
+ */
+export class DeclaredArea {
+  kind: 'area';
+  radiusKm: number;
+  declaredAt: string;
+}
+
+/** How a driver has said they take work: along a road, or within a radius of themselves. */
+export type DeclaredWork = DeclaredLeg | DeclaredArea;
+
 /** The flexible coupling: which driver is operating which vehicle (and on which corridor) right now. */
 export class Assignment {
   assignmentId: string;
   driverDid: string;
   vehicleId: string;
   corridorId?: string; // optional line-haul corridor this coupling serves
-  /** The leg the driver declared for this shift. Absent until they say — matching then falls back to proximity. */
-  leg?: DeclaredLeg;
+  /** How this driver takes work today: a road, or a radius around themselves. Absent until they say — and
+   *  then matching falls back to plain proximity, as it did before anyone could declare anything. */
+  work?: DeclaredWork;
   status: AssignmentStatus;
   startedAt: string;
   endedAt?: string;

@@ -8455,6 +8455,77 @@
         }
       }
     },
+    "/v1/sbg/fleet/drivers/{did}/area": {
+      "post": {
+        "operationId": "Sbg.declareArea",
+        "summary": "",
+        "description": "Declare a PATCH instead of a road: \"I take work within this many km of me\". For a bike or a bajaj there\nis no corridor to name — there is a district, and it moves with them.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeclareAreaDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Assignment"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/drivers/{did}/suggest-nearby": {
+      "post": {
+        "operationId": "Sbg.suggestNearby",
+        "summary": "",
+        "description": "Find work AROUND me rather than along a road — the same marketplace, matched by distance.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuggestNearbyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/drivers/{did}/end-session": {
       "post": {
         "operationId": "Sbg.endSession",
@@ -14463,33 +14534,6 @@
           "vehicleId"
         ]
       },
-      "DeclaredLeg": {
-        "type": "object",
-        "properties": {
-          "fromLabel": {
-            "type": "string"
-          },
-          "from": {
-            "$ref": "#/components/schemas/GeoPoint"
-          },
-          "toLabel": {
-            "type": "string"
-          },
-          "to": {
-            "$ref": "#/components/schemas/GeoPoint"
-          },
-          "declaredAt": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "fromLabel",
-          "from",
-          "toLabel",
-          "to",
-          "declaredAt"
-        ]
-      },
       "Assignment": {
         "type": "object",
         "properties": {
@@ -14505,8 +14549,8 @@
           "corridorId": {
             "type": "string"
           },
-          "leg": {
-            "$ref": "#/components/schemas/DeclaredLeg"
+          "work": {
+            "type": "object"
           },
           "status": {
             "type": "object"
@@ -14550,6 +14594,38 @@
             ]
           }
         }
+      },
+      "DeclareAreaDto": {
+        "type": "object",
+        "properties": {
+          "radiusKm": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "radiusKm"
+        ]
+      },
+      "SuggestNearbyDto": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "$ref": "#/components/schemas/GeoDto"
+          },
+          "radiusKm": {
+            "type": "number",
+            "minimum": 1
+          },
+          "minEarn": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "at",
+          "radiusKm"
+        ]
       },
       "AssignCorridorDto": {
         "type": "object",

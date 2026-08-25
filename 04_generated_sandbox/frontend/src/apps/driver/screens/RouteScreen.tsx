@@ -1,5 +1,6 @@
-import { Button, Card, ErrorNote, Note, PlacePicker, ReadAloud, type PlaceNote } from '../../../shared/ui';
+import { Button, Card, ErrorNote, Icon, Note, PlacePicker, ReadAloud, type PlaceNote } from '../../../shared/ui';
 import { useT, type Translate } from '../../../shared/i18n';
+import { MAX_WORK_RADIUS_KM } from '../logic';
 import { CUSTOM_PLACE, type CustomPlace, type DriverActions, type DriverState } from '../useDriverApp';
 
 export interface RouteScreenProps {
@@ -59,13 +60,79 @@ export function RouteScreen({ state, actions }: RouteScreenProps) {
   const t = useT();
   const loading = state.nodesState === 'loading';
   const empty = state.nodesState === 'error' || (state.nodesState === 'ready' && state.nodes.length === 0);
+  const near = state.form.mode === 'near';
 
   return (
     <div class="scr">
       <h1 class="scr__title">{t('driver.route.title')}</h1>
-      <p class="scr__lede">{t('driver.route.lede')}</p>
+      <p class="scr__lede">{near ? t('driver.route.ledeNear') : t('driver.route.lede')}</p>
 
       {state.error ? <ErrorNote error={state.error} onRetry={() => void actions.loadNodes()} /> : null}
+
+      {/* Two shapes a working day has. A click-only choice, so it is a group of pressed buttons rather than
+          a tablist — nothing is being revealed behind a tab, the search itself changes. */}
+      <div class="pmap-toggle" role="group" aria-label={t('driver.route.modeAria')}>
+        <button type="button" class={`pmap-toggle__btn${!near ? ' is-on' : ''}`} aria-pressed={!near} onClick={() => actions.setForm({ mode: 'route' })}>
+          <Icon name="route" size={18} /> {t('driver.route.modeRoad')}
+        </button>
+        <button type="button" class={`pmap-toggle__btn${near ? ' is-on' : ''}`} aria-pressed={near} onClick={() => actions.setForm({ mode: 'near' })}>
+          <Icon name="pin" size={18} /> {t('driver.route.modeNear')}
+        </button>
+      </div>
+
+      {near ? (
+        <>
+          <Card>
+            {/* No place to name: for a rider there is only here, and how far they will go for a load. */}
+            <div class="stepper">
+              <span class="stepper__label" id="radius-l">{t('driver.route.radiusLabel')}</span>
+              <div class="stepper__ctrl" role="group" aria-labelledby="radius-l">
+                <button type="button" class="stepper__btn" aria-label={t('driver.route.radiusLess')} disabled={state.form.radiusKm <= 1} onClick={() => actions.setForm({ radiusKm: state.form.radiusKm - 1 })}>−</button>
+                <span class="stepper__val" aria-live="polite">{t('driver.route.radiusValue', { km: state.form.radiusKm })}</span>
+                <button type="button" class="stepper__btn" aria-label={t('driver.route.radiusMore')} disabled={state.form.radiusKm >= MAX_WORK_RADIUS_KM} onClick={() => actions.setForm({ radiusKm: state.form.radiusKm + 1 })}>+</button>
+              </div>
+            </div>
+            <p class="card__note">{t('driver.route.radiusNote')}</p>
+
+            <div class="field" style="margin-top:16px">
+              <label class="field__label" for="min-earn-near">
+                {t('driver.route.minEarnLabel')}
+              </label>
+              <input
+                id="min-earn-near"
+                class="input"
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="1"
+                placeholder={t('driver.route.minEarnPlaceholder')}
+                value={state.form.minEarn}
+                onInput={(e) => actions.setForm({ minEarn: e.currentTarget.value })}
+              />
+            </div>
+          </Card>
+
+          <div class="scr__cta">
+            <Button onClick={() => void actions.findNearby()} busy={state.busy === 'suggest'}>
+              {t('driver.route.findNear')}
+            </Button>
+          </div>
+
+          <div class="scr__foot">
+            <ReadAloud text={() => t('driver.route.aloudNear', { km: state.form.radiusKm })} label={t('driver.readAloud')} />
+          </div>
+        </>
+      ) : (
+        <RouteSearch state={state} actions={actions} loading={loading} empty={empty} />
+      )}
+    </div>
+  );
+}
+
+function RouteSearch({ state, actions, loading, empty }: RouteScreenProps & { loading: boolean; empty: boolean }) {
+  const t = useT();
+  return (
+    <>
 
       {empty ? (
         /* The legacy page swallowed this failure into an empty <select> and a button that
@@ -177,6 +244,6 @@ export function RouteScreen({ state, actions }: RouteScreenProps) {
       <div class="scr__foot">
         <ReadAloud text={() => t('driver.route.aloud')} label={t('driver.readAloud')} />
       </div>
-    </div>
+    </>
   );
 }

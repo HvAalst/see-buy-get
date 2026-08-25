@@ -25,7 +25,8 @@ interface HarnessOpts {
   mdps?: Record<string, { location: Geo }>;
   // rule 5 — which drivers' vehicles can carry the posted freight (default: all)
   canCarry?: (driverDid: string) => boolean;
-  // rules 2 + 5 — which drivers' DECLARED LEG runs past the pickup (default: all, as an undeclared leg does)
+  // rules 2 + 5 — whose DECLARED WORK (a road, or a radius) covers the pickup (default: all, as no
+  // declaration does)
   heading?: (driverDid: string) => boolean;
   // rule 2c — the single best load near a moving driver, and what they are already deciding
   offerNear?: () => unknown | null;
@@ -65,7 +66,7 @@ function harness(opts: HarnessOpts) {
   } as unknown as MdpService;
   const dispatch = {
     freightCarryableByDriver: (_freightId: string, driverDid: string) => (opts.canCarry ? opts.canCarry(driverDid) : true),
-    headingTowards: (driverDid: string) => (opts.heading ? opts.heading(driverDid) : true),
+    worksNear: (driverDid: string) => (opts.heading ? opts.heading(driverDid) : true),
     offerNear: () => (opts.offerNear ? opts.offerNear() : null),
     activeOffersFor: () => (opts.activeOffers ? opts.activeOffers() : []),
     mintDeclineToken: () => 'decline-token',

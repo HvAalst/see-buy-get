@@ -94,3 +94,17 @@ export function saveRoute(did: string, route: SavedRoute): void {
     /* no-op */
   }
 }
+
+/* ---------------------------------------------------------------- radius -- */
+
+/** The patch a rider works, remembered per driver: how far they will ride is a habit, not a setting. */
+const radiusKey = (did: string) => `glos-driver-radius:${did}`;
+
+export function savedRadius(did: string): number | null {
+  const raw = Number(get(radiusKey(did)));
+  return Number.isFinite(raw) && raw >= 1 ? Math.round(raw) : null;
+}
+
+export function saveRadius(did: string, km: number): void {
+  set(radiusKey(did), String(Math.round(km)));
+}

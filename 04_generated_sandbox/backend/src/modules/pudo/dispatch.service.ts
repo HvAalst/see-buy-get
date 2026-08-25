@@ -8,6 +8,7 @@ import { AgentService } from './agent.service';
 import { MdpService } from './mdp.service';
 import { ToteService } from './tote.service';
 import { GeoPoint, Tote } from './pudo.types';
+import { haversineKm } from './geo';
 import { FleetService } from './fleet.service';
 import { CargoService } from './cargo.service';
 import { CargoNature, Equipment, VehicleCapability } from './cargo.types';
@@ -20,7 +21,7 @@ import { MediaService } from './media.service';
 import { MarketPulseStore } from './market-pulse.store';
 import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, toteCapacityOf, VEHICLE_SPEC } from './fleet.config';
 import { Router, ROUTER } from './router';
-import { DEFAULT_PRICE_PER_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, NETWORK_CURRENCY, NUDGE_RADIUS_KM, OFFER_TTL_MIN, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
+import { DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NUDGE_RADIUS_KM, OFFER_TTL_MIN, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
 import { Claimable, ClaimableKind, Freight, FreightShipmentView, FreightStatus, Offer, RoutePlan } from './dispatch.types';
@@ -466,6 +467,58 @@ export class DispatchService {
    * speed can hold one question in their head, not a list. Minting the offer here is what makes the pop-up
    * actionable — the price is fixed at the moment they are asked, and the tap has something to open.
    */
+  /** How far out to look when interrupting: a patch rider's own radius, else the tight driving-nudge one. */
+  private nudgeRadiusFor(driverDid: string): number {
+    const work = this.fleet.workFor(driverDid);
+    return work?.kind === 'area' ? work.radiusKm : NUDGE_RADIUS_KM;
+  }
+
+  /**
+   * Find work around a point rather than along a road — the bike/bajaj half of the marketplace.
+   *
+   * Same fitness rules as everything else (kilos, bag spaces, capability, budget, the freight bar); only the
+   * geometry differs. There is no destination and no detour, because for a rider there is no "on the way":
+   * there is only how far they must ride to fetch it, which is what `detourKm` carries here.
+   */
+  suggestNearby(driverDid: string, from: GeoPoint, radiusKm: number, now: number = Date.now(), minEarn?: number): Offer[] {
+    const vehicle = this.fleet.vehicleForDriver(driverDid);
+    if (!vehicle) throw new GlosError('NOT_COUPLED', 'Couple the driver to a vehicle before requesting work');
+    this.publishReady(now);
+    this.publishReadyFreight(now);
+    const remaining = this.remainingCapacity(driverDid);
+    const remainingTotes = this.remainingTotes(driverDid);
+    const profile = this.pricingProfile(vehicle);
+    const floor = minEarn != null && Number.isFinite(minEarn) && minEarn > 0 ? minEarn : undefined;
+    const freightBarred = belowFloor(this.ratings.driverRating(driverDid));
+    const radius = Math.min(Math.max(radiusKm || DEFAULT_WORK_RADIUS_KM, 1), MAX_WORK_RADIUS_KM);
+
+    const out: Offer[] = [];
+    const matches = this.availableLoads()
+      .filter((load) => !(freightBarred && load.kind === 'freight'))
+      .filter((load) => this.vehicleCanCarry(vehicle, load, remaining, remainingTotes))
+      .map((load) => ({ load, km: this.router.roadKm(from, load.pickupLocation) }))
+      .filter(({ km }) => km <= radius)
+      .sort((a, b) => a.km - b.km);
+
+    for (const { load, km } of matches) {
+      const price = load.kind === 'freight'
+        ? computeFreightPrice({
+            baseFee: profile.baseFee,
+            ratePerKm: profile.ratePerKm,
+            deadheadKm: km,
+            tripKm: load.destLocation ? this.router.roadKm(load.pickupLocation, load.destLocation) : 0,
+            multiplier: freightMultiplier(new Date(now), { min: profile.min, max: profile.max }, this.market.factorFor(load.pickupLocation, now)),
+          })
+        : undefined;
+      if (price && load.kind === 'freight') {
+        if (load.maxSpend != null && shipperCharge(price.total) > load.maxSpend) continue;
+        if (floor != null && price.total < floor) continue;
+      }
+      out.push(this.makeOffer(driverDid, load, { detour: Math.round(km * 10) / 10, minutesAway: this.minutes(from, load.pickupLocation), price, now }));
+    }
+    return out;
+  }
+
   offerNear(driverDid: string, point: GeoPoint, now: number = Date.now()): Offer | null {
     const vehicle = this.fleet.vehicleForDriver(driverDid);
     if (!vehicle) return null;
@@ -478,7 +531,9 @@ export class DispatchService {
       .filter((load) => !(freightBarred && load.kind === 'freight'))
       .filter((load) => this.vehicleCanCarry(vehicle, load, remaining, remainingTotes))
       .map((load) => ({ load, km: this.router.roadKm(point, load.pickupLocation) }))
-      .filter(({ load, km }) => km <= NUDGE_RADIUS_KM && this.headingTowards(driverDid, load.pickupLocation))
+      // A rider who declared a patch is asking to hear about their whole patch; anyone else gets the tighter
+      // interrupt-someone-driving radius. Either way the declaration below decides whether it is really theirs.
+      .filter(({ load, km }) => km <= this.nudgeRadiusFor(driverDid) && this.worksNear(driverDid, load.pickupLocation))
       .sort((a, b) => a.km - b.km)[0];
     if (!best) return null;
 
@@ -658,24 +713,32 @@ export class DispatchService {
   }
 
   /**
-   * Is this pickup on the road the driver SAID they are running?
+   * Would this driver take a load HERE, given what they said about their day?
    *
    * "A load near you" has always meant near your last GPS fix, which is only half the question — a driver
    * leaving Hawassa for Addis is a hundred metres from a bag going the other way, and got pinged about it.
-   * With a declared leg we can ask the real question: is this load on your way? The same detour budget the
-   * offer list uses, so being told about a load and being offered it agree.
+   * What they declared answers it, in one of two shapes:
+   *   - a ROAD: is this load on my way? (the same detour budget the offer list uses, so being told about a
+   *     load and being offered it agree with each other);
+   *   - a PATCH: is this load within my radius of where I am NOW? A bajaj works a district, not a corridor,
+   *     and the circle travels with the rider — which is the only reading of "near me" that survives them
+   *     drifting across town all morning.
    *
-   * A driver who has declared nothing is not excluded: we cannot say they are NOT heading there, and going
+   * A driver who has declared nothing is not excluded: we cannot say they are NOT going there, and going
    * quiet on them would punish the very drivers we most want to start declaring. Never throws — this is a
-   * notification filter.
+   * notification filter, and a rider with no fix yet is better over-told than silenced.
    */
-  headingTowards(driverDid: string, point: GeoPoint): boolean {
-    const leg = this.fleet.legFor(driverDid);
-    if (!leg) return true;
+  worksNear(driverDid: string, point: GeoPoint): boolean {
+    const work = this.fleet.workFor(driverDid);
+    if (!work) return true;
     try {
-      return this.router.detourKm(leg.from, point, leg.to) <= DISPATCH_MAX_DETOUR_KM;
+      if (work.kind === 'area') {
+        const at = this.fleet.activeForDriver(driverDid)?.location;
+        return at ? haversineKm(at, point) <= work.radiusKm : true;
+      }
+      return this.router.detourKm(work.from, point, work.to) <= DISPATCH_MAX_DETOUR_KM;
     } catch {
-      return true; // an unroutable leg must not silence a driver
+      return true; // an unroutable declaration must not silence a driver
     }
   }
 

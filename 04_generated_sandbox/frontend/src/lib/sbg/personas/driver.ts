@@ -90,6 +90,19 @@ export function createDriverApi(sbg: SbgClient) {
     suggestWork: (did: string, body: { from: { lat: number; lng: number }; to: { lat: number; lng: number }; departAt?: string; minEarn?: number }) =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/suggest-work', { params: { path: { did } }, body })),
 
+    /** Find work AROUND me — the bike/bajaj half of the marketplace, matched by distance, not by detour. */
+    suggestNearby: (did: string, body: { at: { lat: number; lng: number }; radiusKm: number; minEarn?: number }) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/suggest-nearby', { params: { path: { did } }, body })),
+
+    /** Declare the patch this rider works: "loads within this many km of me". */
+    declareArea: (did: string, radiusKm: number) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/area', { params: { path: { did } }, body: { radiusKm } })),
+
+    /** GPS heartbeat: where the vehicle is now. Feeds the live map, the market's supply side, and the
+     *  "a load on the road you are on" nudge — none of which can be true without it. */
+    locate: (did: string, at: { lat: number; lng: number }) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/locate', { params: { path: { did } }, body: at })),
+
     /** Accept an offer. */
     /** The offers still awaiting an answer — what a notification tap opens, without re-declaring a route. */
     activeOffers: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}/offers', { params: { path: { did } } })),

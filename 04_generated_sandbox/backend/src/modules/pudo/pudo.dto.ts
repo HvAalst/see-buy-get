@@ -653,6 +653,18 @@ export class DeclareLegDto {
   @ValidateNested() @Type(() => GeoDto) to!: GeoDto;
 }
 
+/** "I work within this many km of me" — the patch a rider declares instead of a road. */
+export class DeclareAreaDto {
+  @IsNumber() @Min(1) radiusKm!: number;
+}
+
+/** Find work around a point: where I am, how far I will go, and my own earning floor. */
+export class SuggestNearbyDto {
+  @ValidateNested() @Type(() => GeoDto) at!: GeoDto;
+  @IsNumber() @Min(1) radiusKm!: number;
+  @IsOptional() @IsNumber() @Min(0) minEarn?: number;
+}
+
 export class CoupleDto {
   @IsString() vehicleId!: string;
   @IsOptional() @IsString() corridorId?: string;

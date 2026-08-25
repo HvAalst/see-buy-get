@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import type { SbgError } from '../../lib/sbg';
 import type { IconName } from '../../shared/ui/Icon';
 import { createDriverClient, isMintSourced, isUnknownIdentity, narrow, purgeDriverTokens } from './api';
-import { adoptDidFromUrl, clearDid, saveDid, saveRoute, savedRoute } from './storage';
+import { adoptDidFromUrl, clearDid, saveDid, saveRadius, saveRoute, savedRadius, savedRoute } from './storage';
 import type {
   AgentRow,
   ClaimsView,
@@ -23,8 +23,9 @@ import type {
   SuggestView,
   VehicleView,
 } from './types';
-import { lastReadingBreached, minEarnFilter, nodeOptions } from './logic';
+import { DEFAULT_WORK_RADIUS_KM, defaultWorkMode, lastReadingBreached, minEarnFilter, nodeOptions } from './logic';
 import { pinAfterRename, type GeoPoint, type PinSource } from '../../shared/geo';
+import { currentPosition, watchPosition } from '../../shared/position';
 import { t } from '../../shared/i18n';
 import { downscaleImage } from '../../shared/media';
 import { triggerDownload } from '../../shared/download';
@@ -109,6 +110,10 @@ export interface DriverState {
     minEarn: string;
     fromPlace: CustomPlace;
     toPlace: CustomPlace;
+    /** How work is searched for: along a declared road, or within a radius of the rider. */
+    mode: 'route' | 'near';
+    /** The patch, in km. Only meaningful in 'near' mode. */
+    radiusKm: number;
   };
 }
 
@@ -123,7 +128,16 @@ export interface CustomPlace {
 export const CUSTOM_PLACE = '__custom';
 
 const EMPTY_PLACE: CustomPlace = { label: '', pin: null, from: null };
-const EMPTY_FORM = { vehicleQr: '', fromId: '', toId: '', minEarn: '', fromPlace: { ...EMPTY_PLACE }, toPlace: { ...EMPTY_PLACE } };
+const EMPTY_FORM = {
+  vehicleQr: '',
+  fromId: '',
+  toId: '',
+  minEarn: '',
+  fromPlace: { ...EMPTY_PLACE },
+  toPlace: { ...EMPTY_PLACE },
+  mode: 'route' as 'route' | 'near',
+  radiusKm: DEFAULT_WORK_RADIUS_KM,
+};
 
 const INITIAL: DriverState = {
   phase: 'boot',
@@ -350,6 +364,13 @@ export function useDriverApp() {
         route: savedRoute(did),
         legs,
         vehicles,
+        // The right search for what they are driving, and the patch they used last — a rider should find
+        // their own screen already set up rather than configuring it every morning.
+        form: {
+          ...s.form,
+          mode: s.form.mode === 'route' && vehicle ? defaultWorkMode(vehicle.vehicleClass) : s.form.mode,
+          radiusKm: savedRadius(did) ?? s.form.radiusKm,
+        },
         error: null,
         stale: false,
         refreshing: false,
@@ -365,6 +386,26 @@ export function useDriverApp() {
       refreshesRunning.current -= 1;
     }
   }, [client, did, fail]);
+
+  /**
+   * Follow the phone while the shift lasts.
+   *
+   * Until now this app never told the server where it was: the only fix it ever sent was the START of a
+   * route the driver typed, which meant the live fleet map, the market's read on supply, and the whole
+   * "a load on the road you are on" nudge were all running on a position nobody was reporting. A driver on
+   * shift is the one person whose position is genuinely operational, so it is reported while they are on
+   * shift and never a moment longer — the watch is released the instant the shift ends or the app unmounts.
+   *
+   * A refusal is a normal outcome. Everything degrades to what it was: they can still name a place, still
+   * find work, still be offered loads at the moment those loads appear.
+   */
+  useEffect(() => {
+    if (!client || !did || !state.session.active) return;
+    const stop = watchPosition((p) => {
+      void client.api.locate(did, p);
+    });
+    return stop;
+  }, [client, did, state.session.active]);
 
   /**
    * A notification tap lands here: `?offer=<id>` opens THAT offer and nothing else.
@@ -724,6 +765,41 @@ export function useDriverApp() {
     [client],
   );
 
+  /**
+   * Find work AROUND me — the bike/bajaj search, and the one the rider will pull up all day.
+   *
+   * It asks the phone where it is rather than making them name a place, because for a rider there is no
+   * place to name: there is here, and how far they will ride. The radius is also DECLARED, so the pop-ups
+   * that reach them for the rest of the shift use the same number they just chose — one decision, not two.
+   */
+  const findNearby = useCallback(async () => {
+    if (!client || !did) return;
+    const radiusKm = stateRef.current.form.radiusKm;
+    await run('suggest', async () => {
+      const at = await currentPosition();
+      if (!at) {
+        // No permission, or no signal: say so once, and leave them the route search that needs no GPS.
+        pushToast({ tone: 'warn', icon: 'pin', title: t('driver.toast.noLocation'), detail: t('driver.toast.noLocationDetail') });
+        return;
+      }
+      saveRadius(did, radiusKm);
+      void client.api.declareArea(did, radiusKm); // best-effort: the search still stands if this fails
+      const r = await client.api.suggestNearby(did, { at, radiusKm, ...(minEarnFilter(stateRef.current.form.minEarn) ? { minEarn: minEarnFilter(stateRef.current.form.minEarn) } : {}) });
+      if (r.error) return fail(r.error);
+      const v = narrow<SuggestView>(r.data);
+      setState((s) => ({
+        ...s,
+        driver: s.driver && v?.freightPaused != null ? { ...s.driver, freightPaused: v.freightPaused } : s.driver,
+        remaining: v?.remainingCapacityKg ?? s.remaining,
+        remainingTotes: v?.remainingTotes ?? s.remainingTotes,
+        offers: v?.offers ?? [],
+        expected: v?.expected ?? [],
+        offerIndex: 0,
+        screen: 'offers',
+      }));
+    });
+  }, [client, did, run, fail, pushToast]);
+
   const repeatRoute = useCallback(async () => {
     const r = did ? savedRoute(did) : null;
     if (!r) return go('route');
@@ -894,6 +970,7 @@ export function useDriverApp() {
       setForm,
       setPlace,
       geocodePlace,
+      findNearby,
       queryJobs,
       loadJobs,
       exportJobs,

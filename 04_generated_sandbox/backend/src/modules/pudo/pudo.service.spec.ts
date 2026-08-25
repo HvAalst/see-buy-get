@@ -5,7 +5,7 @@ import { HeuristicRouter, ROUTER } from './router';
 import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
 import { ParcelService, labelDate } from './parcel.service';
-import { OTP_MAX_ATTEMPTS, TRADE_CREDIT_LIMIT, TRADE_CREDIT_PARCELS, WHOLESALE } from './pudo.config';
+import { MAX_WORK_RADIUS_KM, OTP_MAX_ATTEMPTS, TRADE_CREDIT_LIMIT, TRADE_CREDIT_PARCELS, WHOLESALE } from './pudo.config';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
 import { CargoService } from './cargo.service';
 import { SbgController } from './pudo.controller';
@@ -3699,19 +3699,19 @@ describe('PUDO Light', () => {
     fleet.uncouple(d.did); // coupleTipper already coupled; re-couple declaring where we are going
 
     const asg = fleet.couple(d.did, vehicleId, undefined, { fromLabel: 'Hawassa', from: hawassa, toLabel: 'Addis', to: addis });
-    expect(asg.leg).toMatchObject({ fromLabel: 'Hawassa', toLabel: 'Addis' });
+    expect(asg.work).toMatchObject({ fromLabel: 'Hawassa', toLabel: 'Addis' });
 
     // A pickup ON the road is worth telling them about; one down the OTHER road is not — both are equally
     // near the driver, which is exactly why proximity alone was never the question.
-    expect(dispatch.headingTowards(d.did, { lat: 8.0, lng: 38.6 })).toBe(true);
-    expect(dispatch.headingTowards(d.did, arbaMinch)).toBe(false);
+    expect(dispatch.worksNear(d.did, { lat: 8.0, lng: 38.6 })).toBe(true);
+    expect(dispatch.worksNear(d.did, arbaMinch)).toBe(false);
 
     // The road is remembered for next time — a driver who must name two places every morning stops declaring.
     expect(fleet.recentLegs(d.did)[0]).toMatchObject({ fromLabel: 'Hawassa', toLabel: 'Addis' });
 
     // Turning round mid-shift is the normal case, not a correction.
     fleet.declareLeg(d.did, { fromLabel: 'Addis', from: addis, toLabel: 'Hawassa', to: hawassa });
-    expect(fleet.legFor(d.did)).toMatchObject({ fromLabel: 'Addis', toLabel: 'Hawassa' });
+    expect(fleet.workFor(d.did)).toMatchObject({ fromLabel: 'Addis', toLabel: 'Hawassa' });
     expect(fleet.recentLegs(d.did).map((l) => l.toLabel)).toEqual(['Hawassa', 'Addis']); // newest first, both kept
 
     // Re-running the SAME road moves it back to the top rather than stacking a duplicate.
@@ -3720,7 +3720,66 @@ describe('PUDO Light', () => {
 
     // A driver who has declared NOTHING is never silenced — we cannot say they are not heading there.
     const quiet = coupleTipper('quiet', { min: 0.8, max: 1.5 });
-    expect(dispatch.headingTowards(quiet.did, arbaMinch)).toBe(true);
+    expect(dispatch.worksNear(quiet.did, arbaMinch)).toBe(true);
+  });
+
+  it('a rider declares a PATCH, not a road — and the patch travels with them', () => {
+    const town = { lat: 7.06, lng: 38.47 };
+    const acrossTown = { lat: 7.09, lng: 38.47 }; // ~3.3 km north
+    const nextTown = { lat: 7.3, lng: 38.47 }; // ~27 km north
+    const rider = coupleTipper('patch', { min: 0.8, max: 1.5 });
+
+    fleet.declareArea(rider.did, 5);
+    expect(fleet.workFor(rider.did)).toMatchObject({ kind: 'area', radiusKm: 5 });
+
+    // Standing in town, work across town is theirs; the next town is not. No destination was ever named —
+    // for a bajaj there is no "on the way", only how far they must ride to fetch it.
+    fleet.reportLocation(rider.did, town);
+    expect(dispatch.worksNear(rider.did, acrossTown)).toBe(true);
+    expect(dispatch.worksNear(rider.did, nextTown)).toBe(false);
+
+    // Ride to the next town and the patch comes along — the same load is now theirs, with nothing re-declared.
+    fleet.reportLocation(rider.did, nextTown);
+    expect(dispatch.worksNear(rider.did, nextTown)).toBe(true);
+    expect(dispatch.worksNear(rider.did, town)).toBe(false);
+
+    // A radius is a distance a person can ride, not a number a form will take on trust.
+    expect(() => fleet.declareArea(rider.did, 0)).toThrow(/between 1 and/);
+    expect(() => fleet.declareArea(rider.did, 500)).toThrow(/between 1 and/);
+    // …and declaring a road afterwards replaces the patch: a day has ONE shape at a time.
+    fleet.declareLeg(rider.did, { fromLabel: 'Town', from: town, toLabel: 'Next', to: nextTown });
+    expect(fleet.workFor(rider.did)).toMatchObject({ kind: 'leg' });
+  });
+
+  it('finds work AROUND a rider, sorted by how far they must ride, and stops at their radius', () => {
+    const near = onboardAgent('Patch Near', 'NorthTown', 50);
+    const far = onboardAgent('Patch Far', 'NorthTown', 50);
+    corridors.addCorridor({ name: 'patch', originZone: 'NorthTown', destZone: 'SouthTown' });
+    // ~9 km apart as the crow flies, ~12 km by road (the router's circuity) — outside a 5 km patch, inside 15.
+    agents.setLocation(far.did, { lat: near.location.lat + 0.08, lng: near.location.lng });
+    const rider = coupleTipper('find', { min: 0.8, max: 1.5 });
+
+    const bagAt = (agentDid: string, parcelId: string) => {
+      parcels.accept({ agentDid, parcelId, size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+      const bag = totes.register(agentDid);
+      totes.assign(bag.code, 'SouthTown', 'SouthTown');
+      mdps.fillTote(bag.code, parcelId);
+      dispatch.release(bag.code);
+      return bag;
+    };
+    const here = bagAt(near.did, 'PATCH-1');
+    const yonder = bagAt(far.did, 'PATCH-2');
+
+    const offers = dispatch.suggestNearby(rider.did, near.location, 5);
+    expect(offers.map((o) => o.ref)).toEqual([here.code]); // the far one is outside the patch, not "a long detour"
+    expect(offers[0].detourKm).toBe(0); // for a rider this is the ride to fetch it, and it is at their feet
+
+    // Widen the patch and the far load becomes theirs — the rider decides how far they will go, within reason.
+    const wide = dispatch.suggestNearby(rider.did, near.location, MAX_WORK_RADIUS_KM).map((o) => o.ref);
+    expect(wide).toEqual([here.code, yonder.code]); // nearest first: the ride is the whole cost for a rider
+    // An absurd radius is CLAMPED, not honoured. A patch is a district someone can actually ride; a rider
+    // asking for 200 km is asking for the line-haul marketplace, and should declare a road instead.
+    expect(dispatch.suggestNearby(rider.did, near.location, 200).map((o) => o.ref)).toEqual(wide);
   });
 
   it('offers the ONE load a moving driver is about to pass — and nothing they are heading away from', () => {

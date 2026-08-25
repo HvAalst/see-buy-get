@@ -29,6 +29,20 @@ export function usedPercent(capacityKg: number | null | undefined, remainingKg: 
   return Math.max(0, Math.min(100, Math.round(((capacityKg - remainingKg) / capacityKg) * 100)));
 }
 
+/**
+ * How this driver looks for work by default, from what they drive.
+ *
+ * A bike or a bajaj works a district and comes back; a van, bus or truck runs a road. Neither is forbidden
+ * the other — a trucker waiting out a morning in town may well want the patch — but the first screen should
+ * already be the right one for the vehicle they just coupled to.
+ */
+export const DEFAULT_WORK_RADIUS_KM = 5;
+export const MAX_WORK_RADIUS_KM = 15;
+
+export function defaultWorkMode(vehicleClass: string | undefined): 'route' | 'near' {
+  return vehicleClass === 'bike' || vehicleClass === 'motorcycle' || vehicleClass === 'tuktuk' ? 'near' : 'route';
+}
+
 /** True once there is no usable space left — turns the capacity bar red. */
 export function isFull(remainingKg: number): boolean {
   return remainingKg <= 0;
