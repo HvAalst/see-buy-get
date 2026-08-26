@@ -123,6 +123,11 @@ export class ApiKeyService {
     return caller.kind === 'secret';
   }
 
+  /** May this caller create a shipment? A credential that ships things must never sit in a page. */
+  static canMint(caller: Caller): boolean {
+    return caller.kind === 'secret';
+  }
+
   private find(presented: string): ApiKey | undefined {
     if (presented.startsWith(`${PREFIXES.publishable}_`)) {
       // Public by construction: nothing is protected by comparing it slowly.

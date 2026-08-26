@@ -275,6 +275,12 @@ export class QuoteEndpointDto {
   @IsOptional() @IsString() area?: string;
 }
 
+/** One line of what is in the box — what a border officer reads, from what a checkout already has. */
+export class LineItemDto {
+  @IsString() name!: string;
+  @IsNumber() @Min(1) qty!: number;
+}
+
 export class QuoteDimsDto {
   @IsNumber() @Min(0.1) l!: number;
   @IsNumber() @Min(0.1) w!: number;
@@ -294,6 +300,30 @@ export class PublicQuoteDto {
   @IsOptional() @ValidateNested() @Type(() => QuoteDimsDto) dimensionsCm?: QuoteDimsDto;
   @IsOptional() @IsNumber() @Min(0.01) weightKg?: number;
   @IsOptional() @IsIn(['S', 'M', 'L']) size?: 'S' | 'M' | 'L';
+}
+
+/**
+ * Create a shipment from a quote. Needs a secret key; send `Idempotency-Key` to make retrying safe.
+ *
+ * The store is NOT named here — it is whoever the key belongs to. A merchant cannot mint against somebody
+ * else's account by changing a field, because there is no field to change.
+ */
+export class MintShipmentDto {
+  @ValidateNested() @Type(() => QuoteEndpointDto) from!: QuoteEndpointDto;
+  @ValidateNested() @Type(() => QuoteEndpointDto) to!: QuoteEndpointDto;
+  @IsOptional() @ValidateNested() @Type(() => QuoteDimsDto) dimensionsCm?: QuoteDimsDto;
+  @IsOptional() @IsNumber() @Min(0.01) weightKg?: number;
+  @IsOptional() @IsIn(['S', 'M', 'L']) size?: 'S' | 'M' | 'L';
+  /** Somebody has to be told where to collect it. */
+  @IsString() buyerMobile!: string;
+  /** A photo of the contents — the baseline a damage claim is judged against. Upload it first. */
+  @IsString() contentPhotoRef!: string;
+  /** Your own order reference, carried through and returned on every callback. */
+  @IsOptional() @IsString() externalOrderId?: string;
+  /** What is in the box, and what it is worth. Required when the route crosses a border. */
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => LineItemDto) items?: LineItemDto[];
+  @IsOptional() @IsNumber() @Min(0) subtotal?: number;
+  @IsOptional() @IsIn(['flexible', 'locked']) routeMode?: 'flexible' | 'locked';
 }
 
 /** Push one currency's standing against the base — from a feed, or by hand when the feed is down. */

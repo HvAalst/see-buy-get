@@ -1,10 +1,11 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Post, UseGuards } from '@nestjs/common';
+import { IdempotencyService } from '../../foundation/http/idempotency.service';
 import { Public } from '../../foundation/auth/public.decorator';
 import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
 import { ShippingApiService } from './shipping-api.service';
 import { ApiKeyGuard, CallerKey } from './api-key.guard';
 import type { Caller } from './api-key.service';
-import { PublicQuoteDto } from './pudo.dto';
+import { MintShipmentDto, PublicQuoteDto } from './pudo.dto';
 
 /**
  * The public shipping API — SBG as a Shipment Service Provider.
@@ -26,7 +27,10 @@ import { PublicQuoteDto } from './pudo.dto';
 @Controller('sbg/shipping')
 @UseGuards(ApiKeyGuard, RateLimitGuard) // in this order: the limit spends whoever the first guard found
 export class ShippingApiController {
-  constructor(private readonly shipping: ShippingApiService) {}
+  constructor(
+    private readonly shipping: ShippingApiService,
+    private readonly idempotency: IdempotencyService,
+  ) {}
 
   /**
    * What would this cost to ship? Creates nothing — no parcel, no account, no reservation.
@@ -40,6 +44,29 @@ export class ShippingApiController {
   @Post('quotes')
   quote(@Body() dto: PublicQuoteDto, @CallerKey() caller: Caller) {
     return this.shipping.quote(dto, caller);
+  }
+
+  /**
+   * Turn a price into a shipment. Needs a SECRET key: a credential that ships things must never sit in a
+   * page. Send an `Idempotency-Key` header and the same name is spent at most once, however many times a
+   * flaky network makes you ask.
+   *
+   * A TEST key runs every check and creates nothing — see ShippingApiService.mint.
+   */
+  @Public() // "public" as in no session; the key is the credential, and mint requires a secret one
+  @RateLimit(30, 60)
+  @Post('shipments')
+  async mint(@Body() dto: MintShipmentDto, @CallerKey() caller: Caller, @Headers('idempotency-key') idempotencyKey?: string) {
+    const { result, replayed } = await this.idempotency.run(
+      // Scoped to the merchant: two of them choosing the same uuid is unlikely and must still be harmless.
+      `shipments:${caller.vendorId ?? 'anonymous'}`,
+      idempotencyKey,
+      dto,
+      () => this.shipping.mint(dto, caller),
+    );
+    // Said on the body rather than only in a header, because a client that retried needs to know it got
+    // the FIRST answer back — and bodies are what get logged, compared and pasted into a support ticket.
+    return { ...result, replayed };
   }
 
   /**

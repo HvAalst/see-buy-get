@@ -10567,6 +10567,38 @@
         }
       }
     },
+    "/v1/sbg/shipping/shipments": {
+      "post": {
+        "operationId": "ShippingApi.mint",
+        "summary": "",
+        "description": "Turn a price into a shipment. Needs a SECRET key: a credential that ships things must never sit in a\npage. Send an `Idempotency-Key` header and the same name is spent at most once, however many times a\nflaky network makes you ask.\n\nA TEST key runs every check and creates nothing — see ShippingApiService.mint.",
+        "parameters": [
+          {
+            "name": "idempotency-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MintShipmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/shipping/areas": {
       "get": {
         "operationId": "ShippingApi.areas",
@@ -16316,6 +16348,84 @@
         "required": [
           "from",
           "to"
+        ]
+      },
+      "LineItemDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "qty": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "name",
+          "qty"
+        ]
+      },
+      "MintShipmentDto": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "$ref": "#/components/schemas/QuoteEndpointDto"
+          },
+          "to": {
+            "$ref": "#/components/schemas/QuoteEndpointDto"
+          },
+          "dimensionsCm": {
+            "$ref": "#/components/schemas/QuoteDimsDto"
+          },
+          "weightKg": {
+            "type": "number",
+            "minimum": 0.01
+          },
+          "size": {
+            "type": "string",
+            "enum": [
+              "S",
+              "M",
+              "L"
+            ]
+          },
+          "buyerMobile": {
+            "type": "string",
+            "description": "Somebody has to be told where to collect it."
+          },
+          "contentPhotoRef": {
+            "type": "string",
+            "description": "A photo of the contents — the baseline a damage claim is judged against. Upload it first."
+          },
+          "externalOrderId": {
+            "type": "string",
+            "description": "Your own order reference, carried through and returned on every callback."
+          },
+          "items": {
+            "description": "What is in the box, and what it is worth. Required when the route crosses a border.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LineItemDto"
+            }
+          },
+          "subtotal": {
+            "type": "number",
+            "minimum": 0
+          },
+          "routeMode": {
+            "type": "string",
+            "enum": [
+              "flexible",
+              "locked"
+            ]
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "buyerMobile",
+          "contentPhotoRef"
         ]
       },
       "MilestoneTermDto": {

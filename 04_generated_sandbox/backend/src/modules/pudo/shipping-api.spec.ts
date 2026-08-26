@@ -33,6 +33,7 @@ import { FleetManagerService } from './fleet-manager.service';
 import { GazetteerGeocoder, GEOCODER } from './geocoder';
 import { HeuristicRouter, ROUTER } from './router';
 import { RateLimitGuard } from '../../foundation/http/rate-limit.guard';
+import { IdempotencyService } from '../../foundation/http/idempotency.service';
 import { DigitalTwinService } from '../m7/digital-twin.service';
 import { TrackingService } from '../m4/tracking.service';
 import { TrackingContextService } from '../m4/tracking-context.service';
@@ -66,6 +67,7 @@ describe('the public shipping quote', () => {
   let gate: WalletGateService;
   let vendors: VendorService;
   let apiKeys: ApiKeyService;
+  let parcels: ParcelService;
 
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -78,7 +80,7 @@ describe('the public shipping quote', () => {
         FleetManagerService, MediaService, CargoService, DigitalTwinService, TrackingService,
         TrackingContextService, NormalizationService, ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
-        EntityService, BooksService, FxService, RateLimitGuard, ApiKeyService,
+        EntityService, BooksService, FxService, RateLimitGuard, ApiKeyService, IdempotencyService,
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
         GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder },
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
@@ -93,6 +95,8 @@ describe('the public shipping quote', () => {
     gate = moduleRef.get(WalletGateService);
     vendors = moduleRef.get(VendorService);
     apiKeys = moduleRef.get(ApiKeyService);
+    parcels = moduleRef.get(ParcelService);
+    moduleRef.get(BooksService).reset();
   });
 
   let seq = 0;
@@ -259,6 +263,133 @@ describe('the public shipping quote', () => {
       const { secret } = issue('publishable');
       expect(apiKeys.resolve(secret).rateKey).toMatch(/^key_/);
       expect(ANONYMOUS.rateKey).toBeUndefined(); // …and a stranger falls back to their IP
+    });
+  });
+
+  describe('turning a price into a shipment', () => {
+    const merchant = (mode: 'test' | 'live' = 'live') => {
+      const store = vendors.register({ name: `Store ${(seq += 1)}`, country: 'KE' });
+      vendors.topUp(store.vendorId, 500);
+      return { store, caller: apiKeys.resolve(apiKeys.issue(store.vendorId, 'secret', mode).secret) };
+    };
+    const order = (over: Record<string, unknown> = {}) => ({
+      from: { country: 'KE', area: 'Nairobi' },
+      to: { country: 'KE', area: 'Kisumu' },
+      dimensionsCm: { l: 30, w: 20, h: 10 },
+      weightKg: 2,
+      buyerMobile: '+254700999',
+      contentPhotoRef: 'contents.jpg',
+      externalOrderId: 'SO-1',
+      ...over,
+    });
+
+    it('mints against whoever the KEY belongs to — there is no store field to change', () => {
+      domesticPair();
+      const { store, caller } = merchant();
+      const made = shipping.mint(order(), caller);
+      expect(made.simulated).toBe(false);
+      expect(made.paid).toBe(true);
+      expect(made.shipmentId).toMatch(/^PUD-/);
+      expect(made.trackingKey).toMatch(/^T-/);
+      expect(made.externalOrderId).toBe('SO-1');
+      expect(parcels.get(made.shipmentId).vendorId).toBe(store.vendorId);
+    });
+
+    it('never hands the merchant the collection code', () => {
+      // The handover secret is the only thing between a stranger and the parcel, and it belongs to the
+      // person collecting, in their own app. A merchant does not need it.
+      domesticPair();
+      const made = shipping.mint(order(), merchant().caller);
+      expect(JSON.stringify(made)).not.toContain(parcels.get(made.shipmentId).collectionCode);
+      expect(JSON.stringify(made)).not.toContain('collectionCode');
+    });
+
+    it('refuses a publishable key and a stranger — a credential that ships things is not a page credential', () => {
+      domesticPair();
+      const store = vendors.register({ name: 'Page Key Store', country: 'KE' });
+      const pk = apiKeys.resolve(apiKeys.issue(store.vendorId, 'publishable', 'live').secret);
+      expect(() => shipping.mint(order(), pk)).toThrow(/secret key/);
+      expect(() => shipping.mint(order(), ANONYMOUS)).toThrow(/secret key/);
+    });
+
+    it('asks for the two things a shipment cannot be sent without', () => {
+      domesticPair();
+      const { caller } = merchant();
+      expect(() => shipping.mint(order({ buyerMobile: '  ' }), caller)).toThrow(/somebody has to be told/i);
+      expect(() => shipping.mint(order({ contentPhotoRef: '' }), caller)).toThrow(/photo of the contents/i);
+    });
+
+    it('runs a TEST key through every check and then commits nothing', () => {
+      // The whole promise of a sandbox: a request refused in test is refused live for the same reason, and
+      // one that works in test would have worked. What it cannot give you is something to track.
+      domesticPair();
+      const before = parcels.list({}).length;
+      const made = shipping.mint(order(), merchant('test').caller);
+
+      expect(made.mode).toBe('test');
+      expect(made.simulated).toBe(true);
+      expect(made.shipmentId).toMatch(/^test_/);
+      expect(made.price.amount).toBeGreaterThan(0); // priced by the same arithmetic a live one is
+      expect(made.collect.name).toBe('Kisumu Duka');
+      expect(made.did).toBeUndefined(); // nothing to track, and it does not pretend otherwise
+      expect(made.label).toBeUndefined();
+      expect(parcels.list({}).length).toBe(before); // no parcel
+    });
+
+    it('refuses in test for exactly the reasons it refuses live', () => {
+      domesticPair();
+      const live = merchant('live').caller;
+      const test = merchant('test').caller;
+      const tooBig = order({ dimensionsCm: { l: 200, w: 120, h: 120 }, weightKg: 400 });
+      const nowhere = order({ to: { country: 'KE', area: 'Nowhere' } });
+
+      for (const caller of [live, test]) {
+        expect(() => shipping.mint(tooBig, caller)).toThrow(/dedicated freight/);
+        expect(() => shipping.mint(nowhere, caller)).toThrow(/no collection point in Nowhere/);
+        expect(() => shipping.mint(order({ contentPhotoRef: '' }), caller)).toThrow(/photo/i);
+      }
+    });
+
+    it('will not sell a border crossing that cannot legally travel, in either mode', () => {
+      shop('Nairobi CBD', 'Nairobi', NAIROBI);
+      shop("Bambi's Super Market", 'AddisAbaba', ADDIS, 'ET');
+      corridors.addCorridor({ name: 'Nairobi–Addis', originZone: 'Nairobi', destZone: 'AddisAbaba' });
+      const abroad = order({ to: { country: 'ET', area: 'AddisAbaba' } });
+
+      expect(() => shipping.mint(abroad, merchant('test').caller)).toThrow(/what is in the parcel/);
+      const made = shipping.mint({ ...abroad, items: [{ name: 'Ankara shirt', qty: 2 }], subtotal: 3400 }, merchant('live').caller);
+      expect(made.route.crossesBorder).toBe(true);
+      expect(parcels.get(made.shipmentId).customs?.declaredValue).toBe(3400);
+    });
+
+    it('spends an idempotency key at most once, through the endpoint', async () => {
+      // The half that is not safe to repeat. A dropped response leaves a merchant unable to tell a request
+      // that failed from one that succeeded silently, and both of their options are wrong without this.
+      domesticPair();
+      const { caller } = merchant();
+      const dto = order() as never;
+
+      const first = (await controller.mint(dto, caller, 'order-88')) as { shipmentId: string; replayed: boolean };
+      const again = (await controller.mint(dto, caller, 'order-88')) as { shipmentId: string; replayed: boolean };
+
+      expect(first.replayed).toBe(false);
+      expect(again.replayed).toBe(true);
+      expect(again.shipmentId).toBe(first.shipmentId); // the same shipment, not a second one
+      expect(parcels.list({}).filter((p) => p.externalOrderId === 'SO-1')).toHaveLength(1);
+
+      // The same name for a different order is the merchant's own bookkeeping going wrong — refused.
+      await expect(controller.mint(order({ weightKg: 9 }) as never, caller, 'order-88')).rejects.toThrow(/already used/);
+    });
+
+    it('says so plainly when the store cannot pay for it', () => {
+      // Not an error: the shipment exists and is waiting on money. A label is a claim on the network, so
+      // it does not issue until it is paid for.
+      domesticPair();
+      const store = vendors.register({ name: 'Broke Store', country: 'KE' }); // no top-up
+      const caller = apiKeys.resolve(apiKeys.issue(store.vendorId, 'secret', 'live').secret);
+      const made = shipping.mint(order(), caller);
+      expect(made.paid).toBe(false);
+      expect(made.label).toBeUndefined();
     });
   });
 

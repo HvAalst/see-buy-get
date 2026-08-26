@@ -86,8 +86,8 @@
 <header class="page">
   <h1>SBG Shipping API</h1>
   <p class="sub">
-    Ask what a shipment would cost before anyone commits to it. One call, no account, no parcel created —
-    the number behind a “calculate your shipping fee” button, or a line in your checkout.
+    Ask what a shipment would cost before anyone commits to it, then create it when they do. The number
+    behind a “calculate your shipping fee” button, and the call that turns it into a parcel.
   </p>
   <p class="base">Base URL &nbsp;<b>http://localhost:3000/v1</b> &nbsp;· &nbsp;sandbox</p>
 </header>
@@ -100,6 +100,7 @@
     <li><a href="#keys">Keys and modes</a></li>
     <li><a href="#places">Naming a place</a></li>
     <li><a href="#quote">Quote reference</a></li>
+    <li><a href="#ship">Creating a shipment</a></li>
     <li><a href="#areas">Where we deliver</a></li>
     <li><a href="#embed">The drop-in button</a></li>
     <li><a href="#borders">Crossing a border</a></li>
@@ -284,6 +285,104 @@
   </div>
 </section>
 
+<section id="ship">
+  <h2>Creating a shipment</h2>
+  <p class="lede">The half that is not safe to repeat. Needs a secret key, and you should send an
+  idempotency key with it.</p>
+
+  <div class="endpoint"><span class="verb">POST</span> /v1/sbg/shipping/shipments</div>
+
+<pre><code>curl -X POST http://localhost:3000/v1/sbg/shipping/shipments \
+  -H 'x-sbg-key: sk_test_…' \
+  -H 'idempotency-key: 0f8c2b1e-order-4471' \
+  -H 'content-type: application/json' \
+  -d '{
+    "from": { "country": "KE", "area": "Nairobi" },
+    "to":   { "country": "KE", "area": "Kisumu" },
+    "dimensionsCm": { "l": 30, "w": 20, "h": 10 },
+    "weightKg": 2,
+    "buyerMobile": "+254700123456",
+    "contentPhotoRef": "med_9f21…",
+    "externalOrderId": "SO-4471"
+  }'</code></pre>
+
+<pre><code>{
+  "shipmentId": "PUD-9C4A1B7E2F",
+  "did": "did:glos:…",
+  "trackingKey": "T-4B1C9E7A02",
+  "externalOrderId": "SO-4471",
+  "status": "Created",
+  "paid": true,
+  "price": { "currency": "KES", "amount": 32.13 },
+  "parcel": { "size": "M", "weightKg": 2 },
+  "collect": { "pointId": "did:glos:…", "name": "Kisumu Duka", "area": "Kisumu", … },
+  "eta": { "readyAt": "2026-08-28T08:00:00.000Z" },
+  "route": { "crossesBorder": false, "crossings": [] },
+  "label": { … },
+  "mode": "live",
+  "simulated": false,
+  "replayed": false
+}</code></pre>
+
+  <h3>The store is the key</h3>
+  <p>There is no store field in that request. The shipment is minted against whoever the secret key belongs
+  to, so a merchant cannot mint on somebody else's account by changing a value — there is nothing to
+  change. A publishable key is refused here: a credential that ships things must never sit in a page.</p>
+
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>from · to</td><td>object</td><td class="desc">Exactly as on a quote.</td></tr>
+      <tr><td>dimensionsCm · weightKg · size</td><td>—</td><td class="desc">Exactly as on a quote; the tier is derived the same way.</td></tr>
+      <tr><td>buyerMobile <span class="req">required</span></td><td>string</td><td class="desc">Somebody has to be told where to collect it.</td></tr>
+      <tr><td>contentPhotoRef <span class="req">required</span></td><td>string</td><td class="desc">A photo of the contents, uploaded first. It is the baseline a damage claim is judged against — which is why we do not make it optional for an API caller when it is required of everyone else.</td></tr>
+      <tr><td>externalOrderId</td><td>string</td><td class="desc">Your own reference. Carried through and returned on every status callback.</td></tr>
+      <tr><td>items · subtotal</td><td>—</td><td class="desc">What is in the box and what it is worth. <b>Required when the route crosses a border</b> — see <a href="#borders">crossing a border</a>.</td></tr>
+      <tr><td>routeMode</td><td>flexible · locked</td><td class="desc">Reserve the ceiling and get the difference back on delivery, or commit to the cheapest route now. Defaults to flexible.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note warn">
+    <b>The collection code is not in that response, and will not be.</b>
+    It is the handover secret — the only thing between a stranger and the parcel — and it belongs to the
+    person collecting, in their own app. Track the shipment with <code>trackingKey</code>.
+  </div>
+
+  <h3>Not paid yet</h3>
+  <p><code>paid: false</code> is not an error. The shipment exists and is waiting on your prepaid balance;
+  a label is a claim on the network, so it does not issue until the shipment is paid for. Top up and it
+  settles.</p>
+
+  <h3>Retrying safely</h3>
+  <p>Send an <code>Idempotency-Key</code> header — any string you can reproduce, your own order id is
+  ideal. Then:</p>
+  <ul class="plain">
+    <li><b>The same key with the same request</b> returns the first answer with
+      <code>replayed: true</code>. Nothing is created twice.</li>
+    <li><b>The same key with a different request</b> is refused with
+      <code>IDEMPOTENCY_REUSED</code>. It means two shipments are sharing one name — quietly returning the
+      first would ship the wrong parcel and report success.</li>
+    <li><b>A key still in flight</b> is refused with <code>CONFLICT</code>. Wait, then retry.</li>
+    <li><b>A failed attempt releases its key</b>, so you can fix the problem — a top-up that had not landed
+      — and retry with the same one.</li>
+    <li>Keys are remembered for <b>24 hours</b> and scoped to your account.</li>
+  </ul>
+
+  <h3>Test mode</h3>
+  <p>A test key runs <b>every check a live one runs</b> — the same resolution, the same derived size, the
+  same cargo gate, the same customs declaration, the same price — and then commits nothing. No parcel, no
+  billing, no label, and nobody told to collect anything.</p>
+  <div class="note">
+    <b>What it cannot do is give you something to track.</b>
+    <code>simulated: true</code>, a <code>test_…</code> id, and no <code>did</code> — because a shipment
+    that does not exist has nothing to follow, and pretending otherwise is the one thing a sandbox must not
+    do. Everything else is real: a request refused in test is refused live for the same reason, and one
+    that works in test would have worked.
+  </div>
+</section>
+
 <section id="areas">
   <h2>Where we deliver</h2>
   <p class="lede">Every country the network operates in and the areas inside it that have a collection point.
@@ -397,6 +496,11 @@
       <tr><td>CARGO_REQUIRES_DEDICATED</td><td>400</td><td class="desc">Too big for the pick-up network. It needs dedicated freight, quoted separately.</td></tr>
       <tr><td>FX_REQUIRED</td><td>400</td><td class="desc">The route spans two currencies with no exchange rate between them.</td></tr>
       <tr><td>AUTH_CODE_INVALID</td><td>401</td><td class="desc">The key you sent is not one of ours, or it has been revoked. A <em>missing</em> key is not an error — it is anonymous.</td></tr>
+      <tr><td>FORBIDDEN</td><td>403</td><td class="desc">A publishable key tried to create a shipment. Quotes only.</td></tr>
+      <tr><td>PHONE_REQUIRED<br>PHOTO_REQUIRED</td><td>400</td><td class="desc">A shipment needs a buyer to tell and a photo of its contents.</td></tr>
+      <tr><td>CUSTOMS_INCOMPLETE</td><td>400</td><td class="desc">The route crosses a border and the contents list or declared value is missing.</td></tr>
+      <tr><td>IDEMPOTENCY_REUSED</td><td>409</td><td class="desc">That idempotency key was already used for a <em>different</em> request.</td></tr>
+      <tr><td>CONFLICT</td><td>409</td><td class="desc">A request with that idempotency key is still in progress.</td></tr>
       <tr><td>RATE_LIMITED</td><td>429</td><td class="desc">Too many requests. <code>retryAfterSec</code> says how long to wait. Safe to retry.</td></tr>
     </tbody>
   </table>
@@ -423,12 +527,14 @@
 <section id="limits">
   <h2>Limits</h2>
   <ul class="plain">
-    <li><b>60 quotes a minute per caller</b>, and 120 for <code>/areas</code>. Generous for a product page,
-      useless for a scrape. Exceeding it is a <code>429</code> with <code>retryAfterSec</code>.</li>
+    <li><b>60 quotes a minute per caller</b>, 30 shipments, and 120 for <code>/areas</code>. Generous for a
+      product page, useless for a scrape. Exceeding it is a <code>429</code> with
+      <code>retryAfterSec</code>.</li>
     <li><b>Counted per KEY when you send one</b>, and per IP when you do not — which is the practical
       reason to use one: without a key your limit is shared with everyone behind the same address.</li>
-    <li><b>Nothing is created and nothing is reserved.</b> A quote is a question — asking it twice costs
-      nothing and changes nothing, so it is always safe to retry.</li>
+    <li><b>A quote creates nothing and reserves nothing</b> — asking it twice costs nothing and changes
+      nothing, so it is always safe to retry. A shipment is the opposite, which is what
+      <code>Idempotency-Key</code> is for.</li>
   </ul>
 </section>
 
@@ -437,12 +543,12 @@
   <p class="lede">Said plainly, because you will ask. None of these exist today and none of them are
   faked.</p>
   <ul class="plain">
-    <li><b>Idempotency keys.</b> A quote is naturally safe to repeat. Minting is not, and that surface is
-      not public yet.</li>
-    <li><b>A quote you can redeem.</b> The price is not held against a reference — <code>expiresAt</code>
-      tells you when to ask again.</li>
-    <li><b>A test mode that behaves differently.</b> Today it is a separate credential and a label on the
-      answer, and nothing more, because a quote has nothing to fake. It starts mattering when minting does.</li>
+    <li><b>A quote you can redeem.</b> The price is not held against a reference: minting re-prices at the
+      moment you commit. <code>expiresAt</code> tells you when a converted price is worth re-asking for.</li>
+    <li><b>Cancelling or amending through this API.</b> A shipment is created here and then lives in the
+      merchant console.</li>
+    <li><b>A media upload on this surface.</b> <code>contentPhotoRef</code> comes from the authenticated
+      media endpoint.</li>
     <li><b>Free-text destinations.</b> You name a point or an area, not “12 Biashara Street”. Place
       look-up covers Kenya only today.</li>
     <li><b>Translations for the button.</b> Its words are English until you replace them with

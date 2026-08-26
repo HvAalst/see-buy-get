@@ -119,6 +119,7 @@ export const ERROR_CODES = {
   DUPLICATE: { status: 409, title: 'Already registered' },
   INCOMPLETE_MANIFEST: { status: 409, title: 'Some waiting parcels were not loaded' },
   INVITE_LIMIT: { status: 409, title: 'Too many open invites' },
+  IDEMPOTENCY_REUSED: { status: 409, title: 'That idempotency key was used for a different request' },
 
   // --- 410 / 413 / 415: media upload + retention -----------------------------------------------
   MEDIA_EXPIRED: { status: 410, title: 'This media has passed its retention window' },

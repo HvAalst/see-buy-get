@@ -3,7 +3,10 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { AgentService } from './agent.service';
 import { ShelfService } from './shelf.service';
 import { RoutingService } from './routing.service';
+import { ParcelService } from './parcel.service';
+import { VendorService } from './vendor.service';
 import { requireCountryCode } from './country';
+import { declareFor } from './customs';
 import { BorderCrossing } from './country';
 import { ANONYMOUS, ApiKeyService, type Caller } from './api-key.service';
 import { classifySize, SIZE_WEIGHT_KG } from './pudo.config';
@@ -86,12 +89,55 @@ export interface PublicQuote {
   breakdown?: QuoteBreakdown;
 }
 
+/** What a merchant asks for when they want the shipment, not just the price. */
+export interface MintInput {
+  from: QuoteEndpoint;
+  to: QuoteEndpoint;
+  dimensionsCm?: { l: number; w: number; h: number };
+  weightKg?: number;
+  size?: ParcelSize;
+  buyerMobile: string;
+  contentPhotoRef: string;
+  externalOrderId?: string;
+  items?: Array<{ name: string; qty: number }>;
+  subtotal?: number;
+  routeMode?: 'flexible' | 'locked';
+}
+
+/**
+ * A shipment, as the merchant who paid for it sees it.
+ *
+ * Deliberately WITHOUT the collection code. That is the handover secret — the only thing standing between
+ * a stranger and the parcel — and it belongs to the person collecting, in their own app. A merchant does
+ * not need it, and putting it on an API response would widen its exposure for nobody's benefit.
+ */
+export interface MintedShipment {
+  shipmentId: string;
+  did?: string;
+  trackingKey?: string;
+  externalOrderId?: string;
+  status: string;
+  paid: boolean;
+  price: { currency: string; amount: number };
+  parcel: { size: ParcelSize; weightKg: number };
+  collect: QuotedPoint;
+  eta: { readyAt: string };
+  route: { crossesBorder: boolean; crossings: BorderCrossing[] };
+  /** The printable label, once the shipment is paid for. Absent while it is not. */
+  label?: unknown;
+  mode: 'test' | 'live';
+  /** True when nothing was created: a test key ran every check and then committed nothing. */
+  simulated: boolean;
+}
+
 @Injectable()
 export class ShippingApiService {
   constructor(
     private readonly agents: AgentService,
     private readonly shelf: ShelfService,
     private readonly routing: RoutingService,
+    private readonly parcels: ParcelService,
+    private readonly vendors: VendorService,
   ) {}
 
   quote(input: { from: QuoteEndpoint; to: QuoteEndpoint; dimensionsCm?: { l: number; w: number; h: number }; weightKg?: number; size?: ParcelSize }, caller: Caller = ANONYMOUS): PublicQuote {
@@ -139,6 +185,125 @@ export class ShippingApiService {
             },
           }
         : {}),
+    };
+  }
+
+  /**
+   * Turn a price into a shipment.
+   *
+   * The half that is not safe to repeat, which is why the caller names the attempt (see IdempotencyService)
+   * and why it takes a SERVER-SIDE key: a credential that ships things must never sit in a page.
+   *
+   * ONE PREFLIGHT, TWO ENDINGS. Every check runs identically in both modes — the same resolution, the same
+   * derived size, the same cargo gate, the same customs declaration, the same quote — and only then do the
+   * paths part. That is the whole promise of a sandbox: a request that is refused in test is refused live
+   * for the same reason, and one that works in test would have worked. A test mode that validates less
+   * teaches a merchant to build something that fails on the day it matters.
+   */
+  mint(input: MintInput, caller: Caller): MintedShipment {
+    if (!ApiKeyService.canMint(caller) || !caller.vendorId) {
+      throw new GlosError('FORBIDDEN', 'Creating a shipment needs a secret key (sk_…) — a publishable key can only ask for prices');
+    }
+    const vendor = this.vendors.get(caller.vendorId);
+    if (!input.buyerMobile?.trim()) throw new GlosError('PHONE_REQUIRED', 'Give the buyer’s mobile — somebody has to be told where to collect it');
+    if (!input.contentPhotoRef?.trim()) throw new GlosError('PHOTO_REQUIRED', 'A photo of the contents is required — it is the baseline a damage claim is judged against');
+
+    // The price and every gate behind it: the endpoints must resolve, the parcel must fit the network, the
+    // route must exist, the currencies must be bridgeable. `quote` runs the caller's own key so a test mint
+    // is priced by exactly the arithmetic a live one is.
+    const quoted = this.quote(input, caller);
+    const origin = this.agents.get(quoted.from.pointId);
+    const dest = this.agents.get(quoted.to.pointId);
+
+    // THE PAPERWORK GATE RUNS HERE, in the preflight, so it runs in BOTH modes. Leaving it to the live
+    // mint — which does re-derive it, and is what actually writes it onto the parcel — meant a test mint
+    // sailed past a border it could never have crossed. A sandbox that validates less than production
+    // teaches a merchant to build something that fails on the day it matters. The declaration built here
+    // is deliberately thrown away: one place writes it, and this is not that place.
+    if (quoted.route.crossesBorder) {
+      declareFor({
+        crossings: quoted.route.crossings,
+        items: input.items,
+        declaredValue: input.subtotal,
+        currency: quoted.price.currency,
+        exporterId: vendor.vendorId,
+        at: new Date().toISOString(),
+        context: 'This shipment',
+      });
+    }
+
+    if (caller.mode === 'test') {
+      // A DRY RUN, and it says so. Everything above ran; nothing below does. No parcel, no billing, no
+      // label a shop would accept, no notification to a buyer who did not order anything. What it cannot
+      // give you is something to track — that is the one thing a sandbox is not able to fake honestly.
+      return this.shipmentView(
+        {
+          shipmentId: `test_${quoted.to.pointId.slice(-6)}_${quoted.parcel.size}`,
+          status: 'Created',
+          paid: false,
+          externalOrderId: input.externalOrderId,
+        },
+        quoted,
+        'test',
+        true,
+      );
+    }
+
+    const { parcel, label, paid } = this.parcels.createInbound({
+      vendorId: vendor.vendorId,
+      externalOrderId: input.externalOrderId,
+      originAgentDid: origin.did,
+      destAgentDid: dest.did,
+      buyerMobile: input.buyerMobile.trim(),
+      size: quoted.parcel.size,
+      dimensionsCm: input.dimensionsCm,
+      weightKg: input.weightKg,
+      contentPhotoRef: input.contentPhotoRef.trim(),
+      items: input.items,
+      subtotal: input.subtotal,
+      shippingPolicy: vendor.shippingPolicy,
+      routeMode: input.routeMode,
+      quote: this.routing.quoteShipment(origin.did, dest.did, quoted.parcel.size),
+    });
+    return this.shipmentView(
+      {
+        shipmentId: parcel.parcelId,
+        did: parcel.did,
+        trackingKey: parcel.trackingKey,
+        externalOrderId: parcel.externalOrderId,
+        status: parcel.status,
+        paid,
+        // A label is a claim on the network, so it issues only once the shipment is paid for.
+        label: paid ? (label ?? undefined) : undefined,
+        amount: parcel.shipmentCost,
+      },
+      quoted,
+      'live',
+      false,
+    );
+  }
+
+  private shipmentView(
+    made: { shipmentId: string; did?: string; trackingKey?: string; externalOrderId?: string; status: string; paid: boolean; label?: unknown; amount?: number },
+    quoted: PublicQuote,
+    mode: 'test' | 'live',
+    simulated: boolean,
+  ): MintedShipment {
+    return {
+      shipmentId: made.shipmentId,
+      did: made.did,
+      trackingKey: made.trackingKey,
+      externalOrderId: made.externalOrderId,
+      status: made.status,
+      paid: made.paid,
+      price: { currency: quoted.price.currency, amount: made.amount ?? quoted.price.amount },
+      parcel: quoted.parcel,
+      collect: quoted.to,
+      eta: { readyAt: quoted.eta.readyAt },
+      route: { crossesBorder: quoted.route.crossesBorder, crossings: quoted.route.crossings },
+      ...(made.label ? { label: made.label } : {}),
+      mode,
+      simulated,
     };
   }
 
