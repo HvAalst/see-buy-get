@@ -344,9 +344,11 @@ export class VendorService {
    * Deliberately a small, revocable thing on the vendor's own record rather than an agent registration: it
    * grants exactly one power — a driver may be sent here to collect a sealed bag — and no other.
    */
-  setCollectionPoint(vendorId: string, input: { label: string; location: GeoPoint; bays?: number }): Vendor {
+  setCollectionPoint(vendorId: string, input: { label: string; zone: string; location: GeoPoint; bays?: number }): Vendor {
     const vendor = this.get(vendorId);
     const label = input.label?.trim();
+    const zone = input.zone?.trim();
+    if (!zone) throw new GlosError('ZONES_REQUIRED', 'Name the zone the dock sits in — corridors and hubs are keyed to zones');
     if (!label) throw new GlosError('FIELD_REQUIRED', 'Name the collection point — a driver has to find the right door');
     if (!input.location || !Number.isFinite(input.location.lat) || !Number.isFinite(input.location.lng)) {
       throw new GlosError('INVALID_INPUT', 'Put the collection point on the map — a driver is sent to a point, not to a name');
@@ -357,6 +359,7 @@ export class VendorService {
     }
     vendor.collection = {
       label,
+      zone,
       location: { lat: input.location.lat, lng: input.location.lng },
       bays: Math.floor(bays),
       enabledAt: vendor.collection?.enabledAt ?? new Date().toISOString(),

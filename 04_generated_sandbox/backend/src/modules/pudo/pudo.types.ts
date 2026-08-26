@@ -293,6 +293,7 @@ export class ShippingPolicy {
  */
 export class CollectionPoint {
   label: string; // what a driver reads on the offer: "Njiro warehouse, gate 2"
+  zone: string; // the delivery zone the dock sits in — corridors are zone-keyed, so a journey needs one
   location: GeoPoint; // the loading door, which is not always the storefront pin
   bays: number; // floor room for staged bags — the shop's bag bays, at a dock
   enabledAt: string;
@@ -402,7 +403,13 @@ export class Parcel {
   // GEN), which the compatibility matrix reads to keep e.g. cement dust off fresh produce on one vehicle.
   cargoClass?: CargoClass;
   natureCode?: CargoNature;
-  originAgentDid: string;
+  /**
+   * The first PUDO to take custody — absent when there is none, which is a real case rather than missing
+   * data: a store collected from its own dock hands the parcel straight to a driver. This is NOT where the
+   * parcel came from; that is `birthplace`, which every parcel has. The two were one field until they had
+   * to be told apart.
+   */
+  originAgentDid?: string;
   originZone: string;
   destZone: string;
   destAgentDid?: string;

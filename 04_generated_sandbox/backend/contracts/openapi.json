@@ -13023,7 +13023,8 @@
             "type": "object"
           },
           "originAgentDid": {
-            "type": "string"
+            "type": "string",
+            "description": "The first PUDO to take custody — absent when there is none, which is a real case rather than missing\ndata: a store collected from its own dock hands the parcel straight to a driver. This is NOT where the\nparcel came from; that is `birthplace`, which every parcel has. The two were one field until they had\nto be told apart."
           },
           "originZone": {
             "type": "string"
@@ -13221,7 +13222,6 @@
           "direction",
           "size",
           "weightKg",
-          "originAgentDid",
           "originZone",
           "destZone",
           "senderMobile",
@@ -13439,6 +13439,9 @@
           "label": {
             "type": "string"
           },
+          "zone": {
+            "type": "string"
+          },
           "location": {
             "$ref": "#/components/schemas/GeoPoint"
           },
@@ -13451,6 +13454,7 @@
         },
         "required": [
           "label",
+          "zone",
           "location",
           "bays",
           "enabledAt"
@@ -13576,6 +13580,9 @@
           "label": {
             "type": "string"
           },
+          "zone": {
+            "type": "string"
+          },
           "location": {
             "$ref": "#/components/schemas/GeoDto"
           },
@@ -13586,6 +13593,7 @@
         },
         "required": [
           "label",
+          "zone",
           "location"
         ]
       },

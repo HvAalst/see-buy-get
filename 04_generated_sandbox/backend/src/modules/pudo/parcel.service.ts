@@ -944,7 +944,9 @@ export class ParcelService implements OnApplicationBootstrap {
     const parcel = this.require(parcelId);
     if (!['Created', 'At_PUDO', 'At_MDP'].includes(parcel.status)) throw new GlosError('INVALID_STATE', `Cannot cancel a ${parcel.status} parcel`);
     // Only an At_PUDO cash parcel moved agent cash at intake; reverse it flow-correctly (peer-send vs walk-up).
-    if (parcel.status === 'At_PUDO') this.reverseIntakeCharge(parcel, parcel.originAgentDid);
+    // Only a parcel a SHOP took in has an intake charge to reverse — a dock parcel never had one, because
+    // no shop ever handled it.
+    if (parcel.status === 'At_PUDO' && parcel.originAgentDid) this.reverseIntakeCharge(parcel, parcel.originAgentDid);
     parcel.status = 'Voided';
     this.media.anchorParcelTerminal(parcel.parcelId); // S26: shipment-proof retention starts at this terminal state
     this.scan(parcel, 'Voided', by, reason ? `cancelled · ${reason}` : 'cancelled');
@@ -960,10 +962,15 @@ export class ParcelService implements OnApplicationBootstrap {
    * Generates the handover collection code AND a public tracking key, persists the label, and books the
    * split/contribution settlement (buyer's capped share + the vendor's share).
    */
-  createInbound(input: { vendorId: string; externalOrderId?: string; originAgentDid: string; destAgentDid: string; buyerMobile: string; buyerEmail?: string; size?: ParcelSize; dimensionsCm?: { l: number; w: number; h: number }; weightKg?: number; contentPhotoRef: string; fragile?: boolean; natureCode?: CargoNature; items?: Array<{ name: string; qty: number }>; subtotal?: number; shippingPolicy: ShippingPolicy; routeMode?: 'flexible' | 'locked'; quote: ShipmentQuote }): { parcel: Parcel; label: PhygitalLabel | null; paid: boolean } {
-    const origin = this.agents.get(input.originAgentDid);
+  createInbound(input: { vendorId: string; externalOrderId?: string; originAgentDid?: string; originZone?: string; destAgentDid: string; buyerMobile: string; buyerEmail?: string; size?: ParcelSize; dimensionsCm?: { l: number; w: number; h: number }; weightKg?: number; contentPhotoRef: string; fragile?: boolean; natureCode?: CargoNature; items?: Array<{ name: string; qty: number }>; subtotal?: number; shippingPolicy: ShippingPolicy; routeMode?: 'flexible' | 'locked'; quote: ShipmentQuote }): { parcel: Parcel; label: PhygitalLabel | null; paid: boolean } {
     const dest = this.agents.get(input.destAgentDid);
     const vendor = this.vendors.get(input.vendorId); // the store IS the birthplace — read it, don't infer it
+    // A parcel handed in at a shop names that shop; one collected from the store's own dock names none,
+    // and takes its zone from the dock. It is not origin-LESS — it is born at the store either way — it
+    // simply has no first PUDO, which is a different fact and now recorded as one.
+    const origin = input.originAgentDid ? this.agents.get(input.originAgentDid) : undefined;
+    const originZone = origin?.zone ?? input.originZone;
+    if (!originZone) throw new GlosError('FIELD_REQUIRED', 'A shipment needs an origin: a drop-off PUDO, or the store collection point it leaves from');
     if (!input.contentPhotoRef) throw new GlosError('PHOTO_REQUIRED', 'A photo of the contents is required (the baseline for dispute resolution)');
     // Derive the tier from dimensions+weight when provided; otherwise trust the explicit size.
     const size: ParcelSize = input.dimensionsCm ? classifySize({ ...input.dimensionsCm, kg: input.weightKg ?? SIZE_WEIGHT_KG[input.size ?? 'M'] }) : (input.size ?? 'M');
@@ -1002,8 +1009,10 @@ export class ParcelService implements OnApplicationBootstrap {
       natureCode,
       fragile: input.fragile ?? false,
       originAgentDid: input.originAgentDid,
+      // Committed to a first-mile shop only when there is one. A dock parcel commits to nobody: it waits at
+      // the store until a driver takes it, which is the whole point of collecting from the store.
       committedNodeDid: input.originAgentDid,
-      originZone: origin.zone,
+      originZone,
       destZone: dest.zone,
       destAgentDid: input.destAgentDid,
       // R1 — a vendor order is paid by the store, so the store's sister collects (and bills its float).

@@ -656,6 +656,7 @@ export class DeclareLegDto {
 /** A vendor's own dock: where a driver comes to collect, and how many bags can wait there. */
 export class CollectionPointDto {
   @IsString() label!: string;
+  @IsString() zone!: string;
   @ValidateNested() @Type(() => GeoDto) location!: GeoDto;
   @IsOptional() @IsNumber() @Min(1) bays?: number;
 }

@@ -1019,11 +1019,24 @@ export class SbgController {
       if (handoff) this.vendors.consumeCheckout(handoff.id, freight.freightId);
       return { diverted: true, reason: 'dedicated_freight', cargoClass, freight };
     }
-    const quote = this.routing.quoteShipment(dto.originPudoDid, destPudoDid, size);
+    // Where does this shipment START? Either a drop-off PUDO the store names, or — when it names none and
+    // has a collection point — its own dock. The dock is a place on the route, not a node of the network,
+    // so the quote carries no origin node fee: nobody handled the parcel, so nobody is owed for handling
+    // it. The margin then belongs to the store's own sister, which is who is selling the shipment.
+    const dock = dto.originPudoDid ? undefined : this.vendors.requireCollection(dto.vendorId);
+    const quote = dock
+      ? this.routing.quoteShipmentFrom(
+          { type: 'dock', id: vendor.did, label: dock.label, zone: dock.zone, location: dock.location },
+          destPudoDid,
+          size,
+          this.vendors.entityIdOf(vendor),
+        )
+      : this.routing.quoteShipment(dto.originPudoDid!, destPudoDid, size);
     const result = this.parcels.createInbound({
       vendorId: dto.vendorId,
       externalOrderId: dto.externalOrderId ?? handoff?.externalOrderId,
       originAgentDid: dto.originPudoDid,
+      originZone: dock?.zone,
       destAgentDid: destPudoDid,
       buyerMobile: dto.buyerMobile ?? handoff?.buyerMobile ?? '',
       buyerEmail: dto.buyerEmail ?? handoff?.buyerEmail,

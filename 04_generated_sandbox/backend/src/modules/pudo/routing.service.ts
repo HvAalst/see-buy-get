@@ -22,7 +22,7 @@ export interface QuoteLeg { transport: number; base: number; total: number; }
 /** A stop on the journey + its open-data fee, and the sister company that will be owed that fee. */
 export interface QuoteNode { type: 'pudo' | 'mdp'; id: string; label: string; fee: number; entityId: string; }
 export interface ShipmentQuote {
-  hops: Array<{ type: 'pudo' | 'mdp'; id: string; label: string; zone: string }>;
+  hops: Array<{ type: 'pudo' | 'mdp' | 'dock'; id: string; label: string; zone: string }>;
   nodes: QuoteNode[]; // each stop + its open-data fee (the tail)
   legs: Array<{ from: string; to: string; km: number }>; // per-leg distance (the tail)
   /** The sister companies that perform this journey. One today; on a cross-border route the second is
@@ -38,9 +38,26 @@ export interface ShipmentQuote {
   locked: QuoteLeg;
 }
 
-/** A located waypoint on the journey: the origin PUDO, an MDP hub, or the destination PUDO. */
+/**
+ * Where a journey STARTS, which is not always a node of the network.
+ *
+ * A PUDO counter is a node: it handles the parcel and earns a fee for doing so. A store's own dock is a
+ * PLACE — the parcel is born there and a driver comes to it — so it belongs on the route (it has a point,
+ * a zone and a name a driver can read) and nowhere near the fee stack, because nobody worked there.
+ */
+export interface RouteEnd {
+  type: 'pudo' | 'dock';
+  id: string;
+  label: string;
+  zone: string;
+  location: { lat: number; lng: number };
+}
+
+/** A located waypoint on the journey: the origin (a PUDO or a store's own dock), an MDP hub, or the
+ *  destination PUDO. A 'dock' is a place the journey STARTS from that is not a node of the network — see
+ *  RouteEnd — which is why it appears in the route and never in the fee stack. */
 interface RouteHop {
-  type: 'pudo' | 'mdp';
+  type: 'pudo' | 'mdp' | 'dock';
   id: string;
   label: string;
   zone: string;
@@ -72,11 +89,26 @@ export class RoutingService {
    * (the over-hold is rebated on delivery); `locked` is the cheapest carrier if the vendor commits the route.
    */
   quoteShipment(originAgentDid: string, destAgentDid: string, size: ParcelSize = 'M'): ShipmentQuote {
-    const plan = this.planJourney({ originAgentDid, destAgentDid, weightKg: SIZE_WEIGHT_KG[size] });
+    return this.quoteJourney(this.planJourney({ originAgentDid, destAgentDid, weightKg: SIZE_WEIGHT_KG[size] }), size);
+  }
+
+  /**
+   * Quote a journey that starts at a PLACE rather than a node — a store's own dock.
+   *
+   * Same stack, one term missing: no origin shop handled it, so no origin node fee is charged. That is not
+   * a discount, it is the absence of work. `sellerEntityId` is the sister that sells the shipment (the
+   * store's own), which is who the margin belongs to when there is no origin shop to take it from.
+   */
+  quoteShipmentFrom(from: RouteEnd, destAgentDid: string, size: ParcelSize = 'M', sellerEntityId?: string): ShipmentQuote {
+    return this.quoteJourney(this.planJourney({ from, destAgentDid, weightKg: SIZE_WEIGHT_KG[size] }), size, sellerEntityId);
+  }
+
+  private quoteJourney(plan: ReturnType<RoutingService['planJourney']>, size: ParcelSize, sellerEntityId?: string): ShipmentQuote {
     // Each stop names the sister that will be owed its fee. Today they are all the same company, so the
     // quote reads as one entity's cost stack — but the fee is owed to a shop by a specific sister, and
     // writing that down now is what makes a cross-border route expressible later without a re-quote.
-    const nodes: QuoteNode[] = plan.hops.map((h) => {
+    // A DOCK is on the route but not in the stack: it is where the parcel was, not somebody who handled it.
+    const nodes: QuoteNode[] = plan.hops.filter((h): h is typeof h & { type: 'pudo' | 'mdp' } => h.type !== 'dock').map((h) => {
       const isHub = h.type === 'mdp';
       const site = isHub ? this.mdps.require(h.id) : this.agents.get(h.id);
       return {
@@ -97,7 +129,7 @@ export class RoutingService {
     // The margin belongs to the sister selling the shipment, not to the network. Today one company
     // performs the whole journey, so the origin node's rate is that company's; when a route crosses a
     // border the COLLECTING sister's rate is the one that should apply, per R1 — revisit it there.
-    const feePct = this.entities.feePctOf(nodes[0]?.entityId ?? entityIds[0]);
+    const feePct = this.entities.feePctOf(sellerEntityId ?? nodes[0]?.entityId ?? entityIds[0]);
     const leg = (rate: number) => { const t = transport(rate); const base = Math.round((nodeFees + t) * 100) / 100; return { transport: t, base, total: withPlatformFee(base, feePct) }; };
     return {
       hops: plan.hops, nodes, legs, entityIds, totalKm, nodeFees, size, transportFactor: factor, perKm: { min, max }, platformFeePct: feePct,
@@ -130,10 +162,18 @@ export class RoutingService {
    * a single direct corridor when neither end is served by a hub. The final arrival is corrected to
    * the destination's opening hours — a parcel is never "ready for pickup" while the shop is closed.
    */
-  planJourney(input: { originAgentDid?: string; destAgentDid: string; fromLocation?: { lat: number; lng: number }; weightKg?: number }) {
+  planJourney(input: { originAgentDid?: string; destAgentDid: string; fromLocation?: { lat: number; lng: number }; weightKg?: number; from?: RouteEnd }) {
     const dest = this.agents.get(input.destAgentDid);
-    const originPick = input.originAgentDid ? this.nodePick(input.originAgentDid) : this.assignFirstMileNode({ location: input.fromLocation });
-    const origin = this.agents.get(originPick.agentDid);
+    // A journey may start at a place that is not a node (a store's dock). When one is given it is used as
+    // it stands; otherwise the origin is a PUDO — named, or the nearest one with room.
+    let origin: RouteEnd;
+    if (input.from) {
+      origin = input.from;
+    } else {
+      const pick = input.originAgentDid ? this.nodePick(input.originAgentDid) : this.assignFirstMileNode({ location: input.fromLocation });
+      const a = this.agents.get(pick.agentDid);
+      origin = { type: 'pudo', id: a.did, label: a.shopName, zone: a.zone, location: a.location };
+    }
 
     const route = this.buildRoute(origin, dest);
     const viaMdp = route.some((h) => h.type === 'mdp');
@@ -176,7 +216,10 @@ export class RoutingService {
     const totalHours = Math.round(((arrivalDate.getTime() - Date.now()) / 3_600_000) * 10) / 10;
 
     return {
-      originNode: { ...originPick, committed: true },
+      // The origin as a NODE, for the callers that commit a parcel to a first-mile shop. A dock is not one
+      // — the journey starts there, but nothing was committed to anybody — so it reports itself plainly
+      // rather than pretending to be a shop with a DID.
+      originNode: { agentDid: origin.type === 'pudo' ? origin.id : '', shopName: origin.label, zone: origin.zone, committed: origin.type === 'pudo' },
       hops: route.map((h) => ({ type: h.type, id: h.id, label: h.label, zone: h.zone })),
       mdpRouted: viaMdp,
       destNode: { agentDid: dest.did, shopName: dest.shopName, zone: dest.zone, freeSlots: this.shelf.available(dest.did) },
@@ -189,8 +232,8 @@ export class RoutingService {
   }
 
   /** origin PUDO → MDP(origin zone) → MDP(dest zone, if different) → dest PUDO (hubs collapse if shared). */
-  private buildRoute(origin: ReturnType<AgentService['get']>, dest: ReturnType<AgentService['get']>): RouteHop[] {
-    const route: RouteHop[] = [{ type: 'pudo', id: origin.did, label: origin.shopName, zone: origin.zone, location: origin.location }];
+  private buildRoute(origin: RouteEnd, dest: ReturnType<AgentService['get']>): RouteHop[] {
+    const route: RouteHop[] = [{ type: origin.type, id: origin.id, label: origin.label, zone: origin.zone, location: origin.location }];
     const originMdp = this.mdps.mdpForZone(origin.zone);
     const destMdp = this.mdps.mdpForZone(dest.zone);
     if (originMdp) route.push({ type: 'mdp', id: originMdp.mdpId, label: originMdp.name, zone: origin.zone, location: originMdp.location });

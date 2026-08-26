@@ -688,13 +688,14 @@ describe('PUDO Light', () => {
 
   it('a store keeps its OWN goods until a driver takes them — the dock chain has no shop leg at all', async () => {
     const dest = onboardAgent('Chain Dest', 'SouthTown', 50);
-    const originPudo = onboardAgent('Chain Origin', 'NorthTown', 50);
     corridors.addCorridor({ name: 'chain', originZone: 'NorthTown', destZone: 'SouthTown' });
     const store = vendors.register({ name: 'Chain Traders', location: { lat: -1.2, lng: 36.8 } });
     vendors.topUp(store.vendorId, 200);
     const asStore = { role: 'genesis', did: store.did } as never;
-    controller.setCollectionPoint(store.vendorId, { label: 'Chain dock', location: { lat: -1.21, lng: 36.81 } } as never, asStore);
-    const parcelId = (controller.createInbound({ vendorId: store.vendorId, originPudoDid: originPudo.did, destPudoDid: dest.did, buyerMobile: '+254700999', size: 'M', contentPhotoRef: 'c.jpg' } as never, asStore) as any).parcel.parcelId;
+    controller.setCollectionPoint(store.vendorId, { label: 'Chain dock', zone: 'NorthTown', location: { lat: -1.21, lng: 36.81 } } as never, asStore);
+    const parcelId = (controller.createInbound({ vendorId: store.vendorId, destPudoDid: dest.did, buyerMobile: '+254700999', size: 'M', contentPhotoRef: 'c.jpg' } as never, asStore) as any).parcel.parcelId;
+    expect(parcels.get(parcelId).originAgentDid).toBeUndefined(); // no first PUDO: a fact, not missing data
+    expect(parcels.get(parcelId).originZone).toBe('NorthTown'); // the dock's zone — corridors are zone-keyed
 
     // Born at the STORE — never at the shop it was quoted through.
     expect(birthplaceOf(parcels.get(parcelId))).toMatchObject({ kind: 'store', atId: store.vendorId, label: 'Chain Traders' });
@@ -723,19 +724,27 @@ describe('PUDO Light', () => {
 
     // The dock is the store's own address — a door, not a PUDO.
     const dock = { lat: -1.21, lng: 36.81 };
-    controller.setCollectionPoint(store.vendorId, { label: 'Njiro warehouse, gate 2', location: dock } as never, asStore);
+    controller.setCollectionPoint(store.vendorId, { label: 'Njiro warehouse, gate 2', zone: 'NorthTown', location: dock } as never, asStore);
 
     // Mint two paid parcels for the same place. KNOWN GAP (next slice): the mint still demands an origin
     // PUDO and prices that shop's node fee into the quote, even though a dock parcel never goes near it —
     // making the mint origin-less is routing surgery (planJourney/quoteShipment start at a NODE, not a
     // point). What is proven here is everything after the mint.
-    const originPudo = onboardAgent('Dock Origin', 'NorthTown', 50);
     const mint = (mobile: string) =>
-      (controller.createInbound({ vendorId: store.vendorId, originPudoDid: originPudo.did, destPudoDid: dest.did, buyerMobile: mobile, size: 'M', contentPhotoRef: 'c.jpg' } as never, asStore) as any).parcel.parcelId;
+      (controller.createInbound({ vendorId: store.vendorId, destPudoDid: dest.did, buyerMobile: mobile, size: 'M', contentPhotoRef: 'c.jpg' } as never, asStore) as any).parcel.parcelId;
     const p1 = mint('+254700111');
     const p2 = mint('+254700222');
 
     const plan: any = controller.dockPlan(store.vendorId, asStore);
+    // THE MONEY. A dock shipment pays the DESTINATION shop's fee and nothing else: no origin shop handled
+    // it, so no origin node fee is in the price. Not a discount — the absence of work.
+    expect(parcels.get(p1).nodeFees).toBe(dest.pricePerParcel);
+    // …and the same parcel handed in at a shop instead pays for that shop too, which is the difference the
+    // store is saving by being collected from.
+    const viaShop = onboardAgent('Via Shop', 'NorthTown', 50);
+    const dropped = (controller.createInbound({ vendorId: store.vendorId, originPudoDid: viaShop.did, destPudoDid: dest.did, buyerMobile: '+254700444', size: 'M', contentPhotoRef: 'c.jpg' } as never, asStore) as any).parcel;
+    expect(dropped.nodeFees).toBe(Math.round((viaShop.pricePerParcel + dest.pricePerParcel) * 100) / 100);
+
     expect(plan.groups[0]).toMatchObject({ label: 'SouthTown', parcelIds: [p1, p2] });
     expect(plan.staging).toEqual({ capacity: 2, used: 0, free: 2 });
 
@@ -778,15 +787,15 @@ describe('PUDO Light', () => {
     const asStore = { role: 'genesis', did: store.did } as never;
     expect(() => controller.openDockBag(store.vendorId, { destZone: 'SouthTown' } as never, asStore)).toThrow(/no collection point/);
 
-    controller.setCollectionPoint(store.vendorId, { label: 'Yard', location: { lat: -1.2, lng: 36.8 }, bays: 1 } as never, asStore);
-    const originPudo = onboardAgent('Dock2 Origin', 'NorthTown', 50);
-    controller.createInbound({ vendorId: store.vendorId, originPudoDid: originPudo.did, destPudoDid: dest.did, buyerMobile: '+254700333', size: 'M', contentPhotoRef: 'c.jpg' } as never, asStore);
+    controller.setCollectionPoint(store.vendorId, { label: 'Yard', zone: 'NorthTown', location: { lat: -1.2, lng: 36.8 }, bays: 1 } as never, asStore);
+    controller.createInbound({ vendorId: store.vendorId, destPudoDid: dest.did, buyerMobile: '+254700333', size: 'M', contentPhotoRef: 'c.jpg' } as never, asStore);
     controller.openDockBag(store.vendorId, { destZone: 'SouthTown' } as never, asStore);
     // One bay, one bag: a dock runs out of floor exactly as a shop counter does.
     expect(() => controller.openDockBag(store.vendorId, { destZone: 'EastTown' } as never, asStore)).toThrow(/room for 1 bag/);
 
     // A pin is not optional — a driver is sent to a point, not to a name.
-    expect(() => controller.setCollectionPoint(store.vendorId, { label: 'Yard', location: { lat: Number.NaN, lng: 36.8 } } as never, asStore)).toThrow(/on the map/);
+    expect(() => controller.setCollectionPoint(store.vendorId, { label: 'Yard', zone: 'NorthTown', location: { lat: Number.NaN, lng: 36.8 } } as never, asStore)).toThrow(/on the map/);
+    expect(() => controller.setCollectionPoint(store.vendorId, { label: 'Yard', zone: '  ', location: { lat: -1.2, lng: 36.8 } } as never, asStore)).toThrow(/zone the dock sits in/);
   });
 
   it('PG0: settle / top-up / profile updates are gated to the owning store', () => {

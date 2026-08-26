@@ -85,7 +85,11 @@ export class RatingService {
     if (parcel.status !== 'Delivered') throw new GlosError('INVALID_STATE', 'Only a delivered parcel can be rated');
     if (!(input.stars >= 1 && input.stars <= 5)) throw new GlosError('INVALID_RATING', 'Stars must be 1–5');
 
-    const agentDid = parcel.originAgentDid;
+    // The shop being rated. Normally the origin (which is what this has always used); when a parcel had no
+    // origin shop at all — collected from a store's own dock — the only shop that served it is the one the
+    // customer collected from, so the rating goes there rather than nowhere.
+    const agentDid = parcel.originAgentDid ?? parcel.destAgentDid;
+    if (!agentDid) throw new GlosError('INVALID_STATE', 'This parcel passed through no shop — there is nobody to rate');
     const raterHash = hashPhone(input.raterMobile) || 'anon'; // never store the cleartext number
     const now = new Date().toISOString();
 
