@@ -38,7 +38,8 @@ import { WalletService } from '../m1/wallet/wallet.service';
 import { DidService } from '../../foundation/did/did.service';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { BooksService } from '../../foundation/books/books.service';
-import { FxService } from '../../foundation/money/fx.service';
+import { ACCOUNT_CODES } from '../../foundation/books/books.types';
+import { FX_SPREAD_PCT, FxService } from '../../foundation/money/fx.service';
 import { IdentityVault } from '../../foundation/data-firewall/identity-vault.service';
 import { OperationalStore } from '../../foundation/data-firewall/operational-store.service';
 import { FieldEncryption } from '../../foundation/data-firewall/field-encryption.service';
@@ -65,6 +66,8 @@ describe('crossing a border', () => {
   let entities: EntityService;
   let fx: FxService;
   let parcels: ParcelService;
+  let gate: WalletGateService;
+  let books: BooksService;
 
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -92,6 +95,9 @@ describe('crossing a border', () => {
     corridors = moduleRef.get(CorridorService);
     vendors = moduleRef.get(VendorService);
     parcels = moduleRef.get(ParcelService);
+    gate = moduleRef.get(WalletGateService);
+    books = moduleRef.get(BooksService);
+    books.reset(); // each test starts on clean books — the money is derived from them
   });
 
   let seq = 0;
@@ -235,12 +241,15 @@ describe('crossing a border', () => {
       expect(quote.crossesBorder).toBe(true);
       expect(quote.currency).toBe('KES'); // the SELLING sister's money — here, the origin shop's
 
-      // The Kenyan shop is owed shillings and quoted in shillings: one number, unconverted.
+      // The Kenyan shop is owed shillings and quoted in shillings: one number, unconverted, unbuffered.
       expect(quote.nodes[0]).toMatchObject({ currency: 'KES', nativeFee: 55, fee: 55 });
       // Bambi's is owed 60 BIRR and always will be. What the buyer's price carries is that 60 expressed
-      // in shillings — at the seeded rate (129.0 KES and 118.5 ETB to the dollar), 65.32.
-      expect(quote.nodes[1]).toMatchObject({ currency: 'ETB', nativeFee: 60, fee: 65.32 });
-      expect(quote.nodeFees).toBe(120.32);
+      // in shillings at the BUFFERED rate — the seeded mid (129.0 / 118.5 to the dollar) is 65.32, and the
+      // 1.5% buffer against the rate moving before settlement makes it 66.30. The buyer carries that, not
+      // the shop and not the sister that has to hand the shop exactly what it asked for.
+      expect(quote.nodes[1]).toMatchObject({ currency: 'ETB', nativeFee: 60, fee: 66.3 });
+      expect(quote.nodeFees).toBe(121.3);
+      expect(quote.fx!.buffer).toBe(0.98); // 66.30 charged − 65.32 the sisters settle at
     });
 
     it('shows the rate it used, where it came from, and how long the price is good for', () => {
@@ -251,8 +260,12 @@ describe('crossing a border', () => {
       const fxUsed = routing.quoteShipment(from.did, to.did).fx!;
       expect(fxUsed.base).toBe('KES');
       expect(fxUsed.rates).toHaveLength(1);
-      expect(fxUsed.rates[0]).toMatchObject({ from: 'ETB', to: 'KES', via: 'USD', source: 'seed/seed', stale: false });
-      expect(fxUsed.rates[0].rate).toBeCloseTo(129.0 / 118.5, 6);
+      expect(fxUsed.rates[0]).toMatchObject({ from: 'ETB', to: 'KES', via: 'USD', source: 'seed/seed', stale: false, spreadPct: FX_SPREAD_PCT });
+      // BOTH numbers ride along, and that is the policy made visible: `mid` is what the two sisters will
+      // settle between themselves at, `rate` is what the buyer was charged. The gap is the buffer, and it
+      // is booked as a buffer rather than kept as margin — SBG does not profit from exchange rates.
+      expect(fxUsed.rates[0].mid).toBeCloseTo(129.0 / 118.5, 6);
+      expect(fxUsed.rates[0].rate).toBeCloseTo((129.0 / 118.5) * (1 + FX_SPREAD_PCT), 6);
       // A price built on a rate has a shelf life, even when the rate itself is fresh.
       expect(new Date(fxUsed.expiresAt).getTime()).toBeGreaterThan(new Date(fxUsed.quotedAt).getTime());
     });
@@ -312,6 +325,30 @@ describe('crossing a border', () => {
       expect(parcelCurrency({ ...parcel, currency: undefined })).toBe('KES'); // written before prices named a unit
     });
 
+    it('books the buffer as a buffer, never as margin', () => {
+      // SBG is not a bank profiting from exchange rates (user, 2026-08-26). What the buffer absorbs is
+      // split out of revenue at billing, so a buffer that is systematically too fat shows up as a growing
+      // FX number somebody has to answer for rather than quietly padding the margin.
+      const store = vendors.register({ name: 'Nairobi Store', country: 'KE' });
+      vendors.topUp(store.vendorId, 500);
+      vendors.billShipment(store.vendorId, 'PUD-FX', 121.3, 0.98);
+
+      const ke = entities.requireForJurisdiction('KE').entityId;
+      expect(books.balance(ke, ACCOUNT_CODES.REVENUE)).toBe(-120.32); // credit: what we actually sold
+      expect(books.balance(ke, ACCOUNT_CODES.FX_GAINLOSS)).toBe(-0.98); // and what was only ever a hedge
+      expect(books.balances(ke).balanced).toBe(true);
+    });
+
+    it('cannot be told the buffer was bigger than the price', () => {
+      const store = vendors.register({ name: 'Nairobi Store', country: 'KE' });
+      vendors.topUp(store.vendorId, 500);
+      vendors.billShipment(store.vendorId, 'PUD-ODD', 100, 250); // a caller's arithmetic mistake
+      const ke = entities.requireForJurisdiction('KE').entityId;
+      expect(books.balance(ke, ACCOUNT_CODES.REVENUE)).toBe(0); // clamped to the whole price, not beyond it
+      expect(books.balance(ke, ACCOUNT_CODES.FX_GAINLOSS)).toBe(-100);
+      expect(books.balances(ke).balanced).toBe(true);
+    });
+
     it('still refuses when the rate book has never heard of a currency', () => {
       // The old refusal, kept where it is still true. A price that cannot be stated in one currency is
       // not a price, and inventing a rate would be worse than saying so.
@@ -334,6 +371,70 @@ describe('crossing a border', () => {
       expect(quote.hops.map((h) => h.type)).toEqual(['dock', 'pudo']);
       expect(quote.nodes).toHaveLength(1); // the dock is on the route and not in the fee stack
       expect(quote.nodeFees).toBe(quote.nodes[0].fee);
+    });
+  });
+
+  describe('and the two companies settle at cost', () => {
+    /** A shop that can actually be paid — the wallet is provisioned at KYC approval. */
+    function activeShop(shopName: string, zone: string, location: { lat: number; lng: number }, country?: string) {
+      const a = shop(shopName, zone, location, country);
+      agents.submitKyc(a.did, { idCopyRef: 'id.jpg', tradingLicenceRef: 'licence.pdf', shopPhotoRefs: ['shop.jpg'] });
+      agents.decideKyc(a.did, true);
+      return agents.get(a.did);
+    }
+
+    it('makes the performing sister whole and leaves it earning nothing', () => {
+      // "We will recover cost only" (user, 2026-08-26). The Ethiopian sister pays its own shop in birr for
+      // handling a parcel the Kenyan sister sold, and recovers exactly that — no margin, and no revenue at
+      // all, because it did not sell anything. Its expense is REVERSED rather than matched with income.
+      const bambi = activeShop("Bambi's Super Market", 'AddisAbaba', ADDIS, 'ET');
+      const ke = entities.requireForJurisdiction('KE').entityId;
+      const et = entities.requireForJurisdiction('ET').entityId;
+
+      gate.payLabour(bambi.did, 0.3, 'PUD-XB', 'parcel', ke); // the collection fee, on a KE-sold parcel
+
+      expect(books.balance(et, ACCOUNT_CODES.EXPENSE_PROVIDER_FEES)).toBe(0); // paid, then recharged
+      expect(books.balance(et, ACCOUNT_CODES.REVENUE)).toBe(0); // it sold nothing, so it earned nothing
+      expect(books.balance(et, ACCOUNT_CODES.INTERCOMPANY, undefined, ke)).toBe(0.3); // owed, in birr
+      expect(books.balance(et, ACCOUNT_CODES.DEPOSIT_AGENT, undefined, bambi.did)).toBe(-0.3); // the shop has its money
+    });
+
+    it('puts the cost on the sister that sold the shipment, in its own money, at the MID rate', () => {
+      const bambi = activeShop("Bambi's Super Market", 'AddisAbaba', ADDIS, 'ET');
+      const ke = entities.requireForJurisdiction('KE').entityId;
+      const et = entities.requireForJurisdiction('ET').entityId;
+
+      gate.payLabour(bambi.did, 0.3, 'PUD-XB', 'parcel', ke);
+
+      // NOT the same number as the birr side, and that is the design: two entries, one per book, equal in
+      // VALUE rather than in digits. The buyer's buffer never enters here — that is what makes it not ours.
+      const cost = fx.convert(0.3, 'ETB', 'KES');
+      expect(cost).not.toBe(0.3);
+      expect(books.balance(ke, ACCOUNT_CODES.EXPENSE_PROVIDER_FEES)).toBe(cost);
+      expect(books.balance(ke, ACCOUNT_CODES.INTERCOMPANY, undefined, et)).toBe(-cost); // negative = a payable
+      expect(books.balances(ke)).toEqual({ balanced: true, drift: 0 });
+      expect(books.balances(et)).toEqual({ balanced: true, drift: 0 });
+    });
+
+    it('links the two entries by the same reference, so the pair can be found', () => {
+      const bambi = activeShop("Bambi's Super Market", 'AddisAbaba', ADDIS, 'ET');
+      gate.payLabour(bambi.did, 0.3, 'PUD-XB', 'parcel', entities.requireForJurisdiction('KE').entityId);
+      const pair = books.journal({ ref: 'PUD-XB' }).filter((e) => e.kind === 'recharge-at-cost');
+      expect(pair).toHaveLength(2);
+      expect(new Set(pair.map((e) => e.entityId)).size).toBe(2); // one in each sister's book
+    });
+
+    it('recharges nobody inside one company, and nobody at all on an older parcel', () => {
+      const duka = activeShop('Nairobi CBD', 'Nairobi', NAIROBI);
+      const ke = entities.requireForJurisdiction('KE').entityId;
+
+      gate.payLabour(duka.did, 0.3, 'PUD-KE', 'parcel', ke); // same sister both sides
+      gate.payLabour(duka.did, 0.3, 'PUD-OLD', 'parcel'); // minted before parcels named a seller
+
+      // The cost stays where it was paid, both times — which is exactly right for a single-sister world.
+      expect(books.balance(ke, ACCOUNT_CODES.EXPENSE_PROVIDER_FEES)).toBe(0.6);
+      expect(books.balance(ke, ACCOUNT_CODES.INTERCOMPANY, undefined, ke)).toBe(0);
+      expect(books.journal({}).some((e) => e.kind === 'recharge-at-cost')).toBe(false);
     });
   });
 });

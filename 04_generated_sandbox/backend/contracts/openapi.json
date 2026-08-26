@@ -13017,6 +13017,9 @@
           },
           "stale": {
             "type": "boolean"
+          },
+          "buffer": {
+            "type": "number"
           }
         },
         "required": [
@@ -13024,7 +13027,8 @@
           "rates",
           "quotedAt",
           "expiresAt",
-          "stale"
+          "stale",
+          "buffer"
         ]
       },
       "Birthplace": {
@@ -13257,6 +13261,10 @@
           },
           "currency": {
             "type": "string"
+          },
+          "sellerEntityId": {
+            "type": "string",
+            "description": "The sister that SOLD this shipment: it collected the price and carries the cost of every leg, so a\n shop in another country that handles this parcel recharges its own sister's outlay to this one, at\n cost. Absent on records written before a parcel named its seller — then nobody recharges anybody,\n which is exactly right for a single-sister world."
           },
           "fx": {
             "description": "The exchange rates this parcel's price was struck at, when it needed any.\n\n Kept for the same reason `platformFeePct` is: a price is a promise made at a moment, and the rate\n behind it moves. Without this, a cross-border parcel's cost is a number nobody can reconstruct or\n argue about, and the sister that collected it could not later prove what it owed the sister that\n performed the leg. Absent on every domestic parcel, because nothing was converted.",

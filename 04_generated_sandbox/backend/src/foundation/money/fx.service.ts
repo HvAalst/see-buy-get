@@ -42,6 +42,22 @@ export const FX_RATE_MAX_AGE_H = 24;
 /** How long a converted PRICE is good for. The rate may be old; what was promised is only good for this. */
 export const FX_QUOTE_TTL_MIN = 30;
 
+/**
+ * The buffer on a rate QUOTED TO A CUSTOMER, and the one policy statement in this file.
+ *
+ * A price is agreed now and settled days later, when the parcel is actually handled. Somebody has to carry
+ * the rate moving in between, and it is the person who chose to ship across a border — not the shop that
+ * quoted its own price in its own money, and not the sister that has to hand that shop exactly what it
+ * asked for. So a customer-facing conversion is buffered, always in the direction that protects the shops.
+ *
+ * WHAT IT IS NOT is a spread we earn. **SBG is not a bank profiting from exchange rates** (user, 2026-08-26).
+ * The buffer exists to absorb a movement, so what it absorbs must be visible as exactly that: the internal
+ * settlement runs at the MID rate, and the difference is booked to FX gain/loss rather than to revenue —
+ * where a buffer that is systematically too fat shows up as a growing number somebody has to answer for,
+ * instead of quietly padding the margin. Both rates are on every quote for the same reason.
+ */
+export const FX_SPREAD_PCT = 0.015;
+
 /** One currency's standing against the base, as last taken. */
 export interface FxPoint {
   currency: CurrencyCode;
@@ -54,7 +70,11 @@ export interface FxPoint {
 export interface FxRate {
   from: CurrencyCode;
   to: CurrencyCode;
-  rate: number; // multiply an amount in `from` by this to get `to`
+  rate: number; // multiply an amount in `from` by this to get `to` — the rate ACTUALLY APPLIED
+  /** The market rate, before any buffer. Equal to `rate` on an internal conversion; on a customer-facing
+   *  one it is what the sisters will settle between themselves at, which is the point of showing it. */
+  mid: number;
+  spreadPct: number; // 0 on an internal conversion; FX_SPREAD_PCT on a price quoted to a customer
   via: CurrencyCode; // the base the cross-rate was derived through
   at: string; // the older of the two legs — a derived rate is only as fresh as its stalest half
   source: string;
@@ -108,7 +128,7 @@ export class FxService implements OnApplicationBootstrap {
     const a = from?.trim().toUpperCase();
     const b = to?.trim().toUpperCase();
     const now = Date.now();
-    if (a === b) return { from: a, to: b, rate: 1, via: FX_BASE, at: new Date(now).toISOString(), source: 'identity', stale: false };
+    if (a === b) return { from: a, to: b, rate: 1, mid: 1, spreadPct: 0, via: FX_BASE, at: new Date(now).toISOString(), source: 'identity', stale: false };
 
     const pa = this.requirePoint(a);
     const pb = this.requirePoint(b);
@@ -119,14 +139,36 @@ export class FxService implements OnApplicationBootstrap {
     // see which one went cold.
     const olderAt = new Date(pa.at).getTime() <= new Date(pb.at).getTime() ? pa.at : pb.at;
     const ageH = (now - new Date(olderAt).getTime()) / 3_600_000;
-    return { from: a, to: b, rate, via: FX_BASE, at: olderAt, source: `${pa.source}/${pb.source}`, stale: ageH > FX_RATE_MAX_AGE_H };
+    return { from: a, to: b, rate, mid: rate, spreadPct: 0, via: FX_BASE, at: olderAt, source: `${pa.source}/${pb.source}`, stale: ageH > FX_RATE_MAX_AGE_H };
   }
 
-  /** Convert an amount, rounded to the cent. Identical currencies pass through untouched, not round-tripped. */
+  /**
+   * The rate to QUOTE A CUSTOMER: the market rate plus the buffer, always in the direction that protects
+   * the shop being paid. Same currency both ends is not an FX transaction at all, so it is never buffered.
+   *
+   * The mid stays on the returned rate, because the difference between these two numbers is not ours (see
+   * FX_SPREAD_PCT) — it has to be readable by anyone who looks at the quote.
+   */
+  quoteRate(from: CurrencyCode, to: CurrencyCode): FxRate {
+    const rate = this.rateFor(from, to);
+    if (rate.spreadPct === FX_SPREAD_PCT || rate.source === 'identity') return rate;
+    return { ...rate, rate: rate.mid * (1 + FX_SPREAD_PCT), spreadPct: FX_SPREAD_PCT };
+  }
+
+  /** Convert at the MARKET rate — what the sisters settle between themselves at. Never a customer price. */
   convert(amount: number, from: CurrencyCode, to: CurrencyCode): number {
+    return this.applyRate(amount, from, to, (a, b) => this.rateFor(a, b));
+  }
+
+  /** Convert for a price somebody will be CHARGED: the buffered rate, and the buyer carries the movement. */
+  convertForQuote(amount: number, from: CurrencyCode, to: CurrencyCode): number {
+    return this.applyRate(amount, from, to, (a, b) => this.quoteRate(a, b));
+  }
+
+  private applyRate(amount: number, from: CurrencyCode, to: CurrencyCode, pick: (a: CurrencyCode, b: CurrencyCode) => FxRate): number {
     if (!Number.isFinite(amount)) throw new GlosError('AMOUNT_INVALID', `Cannot convert ${amount}`);
     if (from?.trim().toUpperCase() === to?.trim().toUpperCase()) return Math.round(amount * 100) / 100;
-    return Math.round(amount * this.rateFor(from, to).rate * 100) / 100;
+    return Math.round(amount * pick(from, to).rate * 100) / 100;
   }
 
   private requirePoint(currency: CurrencyCode): FxPoint {

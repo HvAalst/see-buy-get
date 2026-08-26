@@ -250,14 +250,26 @@ export class VendorService {
     return this.syncBalance(vendor);
   }
 
-  /** Bill the full shipment cost. Returns whether the prepaid balance covered it (the 'ParcelPaid' gate). */
-  billShipment(vendorId: string, parcelId: string, amount: number): { paid: boolean; balance: number } {
+  /**
+   * Bill the full shipment cost. Returns whether the prepaid balance covered it (the 'ParcelPaid' gate).
+   *
+   * `fxBuffer` is the part of the price that came from the exchange-rate buffer rather than from selling a
+   * service. It is split out of revenue here, at the only moment the whole price passes through one entry,
+   * because **SBG is not a bank profiting from exchange rates**: what the buffer absorbs belongs in FX
+   * gain/loss, where a buffer that is consistently too fat is a number somebody has to answer for.
+   */
+  billShipment(vendorId: string, parcelId: string, amount: number, fxBuffer = 0): { paid: boolean; balance: number } {
     const vendor = this.get(vendorId);
     if (this.balanceOf(vendorId) + 1e-9 < amount) return { paid: false, balance: this.balanceOf(vendorId) };
-    // The service is delivered: the deposit is drawn down and the sister recognises the revenue HERE.
+    // Clamped rather than trusted: a buffer larger than the price, or a negative one, would move money
+    // between two of our own accounts on a caller's arithmetic mistake. It can only ever be a slice of this.
+    const buffer = Number.isFinite(fxBuffer) ? Math.min(Math.max(Math.round(fxBuffer * 100) / 100, 0), amount) : 0;
+    // The service is delivered: the deposit is drawn down and the sister recognises the revenue HERE —
+    // all of it, less whatever of it was only ever a hedge against the rate moving.
     const entryId = this.post(vendor, 'shipping', parcelId, [
       { code: ACCOUNT_CODES.DEPOSIT_VENDOR, counterparty: vendorId, amount },
-      { code: ACCOUNT_CODES.REVENUE, amount: -amount },
+      { code: ACCOUNT_CODES.REVENUE, amount: -(Math.round((amount - buffer) * 100) / 100) },
+      ...(buffer > 0 ? [{ code: ACCOUNT_CODES.FX_GAINLOSS, amount: -buffer }] : []),
     ]);
     this.book(vendor, 'BILLING', '-', amount, parcelId, 'shipment', entryId);
     return { paid: true, balance: this.syncBalance(vendor).balance };

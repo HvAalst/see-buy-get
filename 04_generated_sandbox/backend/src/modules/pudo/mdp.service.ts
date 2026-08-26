@@ -439,7 +439,8 @@ export class MdpService {
     }
     this.totes.add(tote.code, parcelId, parcel.size);
     parcel.toteId = tote.toteId; // bag ↔ parcel; stays At_MDP until the bag is loaded onward
-    this.gate.sortLabour(mdpId, MDP_SORT_FEE, parcelId); // MDP sort labour
+    // MDP sort labour, recharged at cost when this hub's sister is not the one that sold the shipment.
+    this.gate.sortLabour(mdpId, MDP_SORT_FEE, parcelId, this.entityIdOf(this.require(mdpId)), parcel.sellerEntityId);
 
     void this.events.publish(GlosEvent.Pudo.ParcelSorted, { parcelId, mdpId, nextDestinationId: next.id, nextDestinationType: next.type, toteCode: tote.code }, { source: 'pudo' }).catch(() => undefined);
     return { parcelId, nextDestination: next, toteCode: tote.code, toteId: tote.toteId, fillPct: this.totes.fillPct(tote) };

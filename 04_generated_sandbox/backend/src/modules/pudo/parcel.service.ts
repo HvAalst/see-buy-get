@@ -715,7 +715,7 @@ export class ParcelService implements OnApplicationBootstrap {
     this.media.link(input.dropoffPhotoRef, { type: 'parcel', id: parcel.parcelId }, 'dropoff');
 
     if (mode === 'cash') this.gate.chargeShipping(input.agentDid, WHOLESALE, parcel.parcelId);
-    else this.gate.payLabour(input.agentDid, LABOUR_FEE, parcel.parcelId, 'parcel');
+    else this.gate.payLabour(input.agentDid, LABOUR_FEE, parcel.parcelId, 'parcel', parcel.sellerEntityId);
 
     void this.events.publish(GlosEvent.Pudo.ParcelAccepted, { parcelId: parcel.parcelId, agentDid: input.agentDid, destZone: input.destZone, mode }, { source: 'pudo' }).catch(() => undefined);
     return parcel;
@@ -1056,6 +1056,7 @@ export class ParcelService implements OnApplicationBootstrap {
       // Same reason as the margin rate above: a promise is made at a moment, and the rate behind it moves.
       currency: quote.currency,
       fx: quote.fx,
+      sellerEntityId: quote.sellerEntityId,
       shipmentCost,
       ceilingCost: quote.flexible.total,
       buyerCharge,
@@ -1074,7 +1075,7 @@ export class ParcelService implements OnApplicationBootstrap {
     this.media.link(input.contentPhotoRef, { type: 'parcel', id: parcelId }, 'content');
 
     // Prepaid gate: bill the vendor's balance with the country daughter company → 'ParcelPaid' or 'unpaid'.
-    const bill = this.vendors.billShipment(input.vendorId, parcelId, shipmentCost);
+    const bill = this.vendors.billShipment(input.vendorId, parcelId, shipmentCost, quote.fx?.buffer);
     parcel.paidStatus = bill.paid ? 'ParcelPaid' : 'unpaid';
     const label = this.label(parcel, dest.shopName);
     if (bill.paid) {
@@ -1149,6 +1150,7 @@ export class ParcelService implements OnApplicationBootstrap {
       platformFeePct: quote.platformFeePct, // the rate quoted, locked to this parcel
       currency: quote.currency, // the cash the shop will take at the counter is in a named money
       fx: quote.fx,
+      sellerEntityId: quote.sellerEntityId,
       shipmentCost: chosen.total,
       ceilingCost: quote.flexible.total,
       paidStatus: 'unpaid',
@@ -1182,7 +1184,9 @@ export class ParcelService implements OnApplicationBootstrap {
     if (parcel.direction !== 'inbound' || !parcel.vendorId) throw new GlosError('NOT_INBOUND', 'Not a vendor shipment');
     if (parcel.paidStatus === 'ParcelPaid') return { parcel, label: parcel.label ?? null, paid: true };
     const dest = parcel.destAgentDid ? this.agents.get(parcel.destAgentDid) : undefined;
-    const bill = this.vendors.billShipment(parcel.vendorId, parcelId, parcel.shipmentCost ?? 0);
+    // The buffer travels on the parcel, so a shipment billed later — after a top-up — splits exactly as
+    // one billed at mint would. The rate it was struck at is not re-derived; it is the one it was quoted at.
+    const bill = this.vendors.billShipment(parcel.vendorId, parcelId, parcel.shipmentCost ?? 0, parcel.fx?.buffer);
     if (!bill.paid) return { parcel, label: null, paid: false };
     parcel.paidStatus = 'ParcelPaid';
     parcel.label = dest ? this.label(parcel, dest.shopName) : parcel.label;
@@ -1251,7 +1255,7 @@ export class ParcelService implements OnApplicationBootstrap {
     // isn't attached elsewhere may bind here (S29/S33a media-laundering guard).
     this.media.adopt(dropoffPhotoRef, agentDid, { type: 'parcel', id: parcelId }, 'dropoff');
     if (due > 0) this.gate.chargeShipping(agentDid, due, parcelId); // remit the collected cash (a 0-priced route charges nothing)
-    this.gate.payLabour(agentDid, LABOUR_FEE, parcelId, 'parcel');
+    this.gate.payLabour(agentDid, LABOUR_FEE, parcelId, 'parcel', parcel.sellerEntityId);
     void this.events.publish(GlosEvent.Pudo.ParcelAccepted, { parcelId, agentDid, destZone: parcel.destZone, mode: 'cash' }, { source: 'pudo' }).catch(() => undefined);
     return parcel;
   }
@@ -1267,7 +1271,7 @@ export class ParcelService implements OnApplicationBootstrap {
     parcel.acceptedAt = new Date().toISOString();
     this.handTo(parcel, 'shop', agentDid, 'handed in at the counter');
     this.scan(parcel, 'At_PUDO', agentDid, 'inbound intake');
-    this.gate.payLabour(agentDid, LABOUR_FEE, parcelId, 'parcel');
+    this.gate.payLabour(agentDid, LABOUR_FEE, parcelId, 'parcel', parcel.sellerEntityId);
     void this.events.publish(GlosEvent.Pudo.ParcelAccepted, { parcelId, agentDid, destZone: parcel.destZone, mode: 'prepaid' }, { source: 'pudo' }).catch(() => undefined);
     return parcel;
   }
@@ -1334,7 +1338,7 @@ export class ParcelService implements OnApplicationBootstrap {
     this.handTo(parcel, 'receiver', parcel.receiverPhoneHash ?? 'receiver', 'collected in person');
     this.endCustody(parcel);
     this.scan(parcel, 'Delivered', agentDid, 'collected · OK');
-    this.gate.payLabour(agentDid, PICKUP_FEE, parcelId, 'parcel');
+    this.gate.payLabour(agentDid, PICKUP_FEE, parcelId, 'parcel', parcel.sellerEntityId);
     this.rebateFlexible(parcel); // a flexible parcel taken by a cheaper carrier → refund the over-hold
     void this.events.publish(GlosEvent.Pudo.ParcelDelivered, { parcelId, agentDid, vendorId: parcel.vendorId, externalOrderId: parcel.externalOrderId }, { source: 'pudo' }).catch(() => undefined);
     return parcel;

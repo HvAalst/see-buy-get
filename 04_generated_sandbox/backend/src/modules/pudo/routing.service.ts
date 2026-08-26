@@ -43,6 +43,9 @@ export interface ShipmentQuote {
   /** The sister companies that perform this journey. One today; on a cross-border route the second is
    *  what one sister will owe the other, which is the whole reason a leg has to name its performer. */
   entityIds: string[];
+  /** The sister SELLING this shipment: it collects the whole price, keeps the margin, and carries the
+   *  cost of every leg — including the ones another sister's shops perform and recharge to it at cost. */
+  sellerEntityId: string;
   /** The currency every figure below is in — the selling sister's. A quote is a promise to a buyer, and
    *  a promise made in no particular currency is not one. */
   currency: string;
@@ -170,18 +173,26 @@ export class RoutingService {
     const used = new Map<string, FxRate>();
     const nodes: QuoteNode[] = stops.map((n) => {
       if (n.currency !== currency) {
-        const rate = this.fx.rateFor(n.currency, currency);
+        // The BUFFERED rate, because this is a price somebody will be charged. The shop is owed exactly
+        // what it asked for in its own money whatever the rate does afterwards; the person who chose to
+        // ship across a border carries the movement. Both rates ride along — see FX_SPREAD_PCT.
+        const rate = this.fx.quoteRate(n.currency, currency);
         used.set(`${rate.from}>${rate.to}`, rate);
       }
-      return { type: n.type, id: n.id, label: n.label, entityId: n.entityId, country: n.country, currency: n.currency, nativeFee: n.nativeFee, fee: this.fx.convert(n.nativeFee, n.currency, currency) };
+      return { type: n.type, id: n.id, label: n.label, entityId: n.entityId, country: n.country, currency: n.currency, nativeFee: n.nativeFee, fee: this.fx.convertForQuote(n.nativeFee, n.currency, currency) };
     });
     const nodeFees = Math.round(nodes.reduce((sum, n) => sum + n.fee, 0) * 100) / 100;
     const rates = [...used.values()];
+    // What the buffer actually came to, in money: the gap between what the buyer is charged for the
+    // foreign stops and what the sisters will settle them at. Computed HERE, where both numbers exist,
+    // rather than re-derived later from a rate — and stamped on the parcel so billing can book it as the
+    // buffer it is instead of as margin.
+    const buffer = Math.round(nodes.reduce((sum, n) => sum + (n.currency === currency ? 0 : n.fee - this.fx.convert(n.nativeFee, n.currency, currency)), 0) * 100) / 100;
     // The rate may be old — that is a fact about the world and it is reported. What was PROMISED is only
     // good for the window: a price stated in converted money cannot be honoured indefinitely, and the
     // mint re-quotes against this before it commits anybody.
     const fx: QuoteFx | undefined = rates.length
-      ? { base: currency, rates, quotedAt: quotedAt.toISOString(), expiresAt: new Date(quotedAt.getTime() + FX_QUOTE_TTL_MIN * 60_000).toISOString(), stale: rates.some((r) => r.stale) }
+      ? { base: currency, rates, buffer, quotedAt: quotedAt.toISOString(), expiresAt: new Date(quotedAt.getTime() + FX_QUOTE_TTL_MIN * 60_000).toISOString(), stale: rates.some((r) => r.stale) }
       : undefined;
 
     // Where the goods leave one customs territory for another. Read off the route rather than stored, and
@@ -190,7 +201,7 @@ export class RoutingService {
     const crossings = crossingsOn(plan.hops);
     const leg = (rate: number) => { const t = transport(rate); const base = Math.round((nodeFees + t) * 100) / 100; return { transport: t, base, total: withPlatformFee(base, feePct) }; };
     return {
-      hops: plan.hops, nodes, legs, entityIds, currency, fx, crossesBorder: crossings.length > 0, crossings,
+      hops: plan.hops, nodes, legs, entityIds, sellerEntityId: sellerId, currency, fx, crossesBorder: crossings.length > 0, crossings,
       totalKm, nodeFees, size, transportFactor: factor, perKm: { min, max }, platformFeePct: feePct,
       flexible: leg(max), locked: leg(min),
     };

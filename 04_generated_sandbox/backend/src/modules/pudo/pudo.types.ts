@@ -122,6 +122,15 @@ export class ParcelFx {
   quotedAt: string;
   expiresAt: string; // how long the converted price was good for
   stale: boolean; // whether any rate behind it was already past its refresh window
+  /**
+   * How much of this price is the FX BUFFER — the difference between what the buyer was charged and what
+   * the sisters will settle at (see FX_SPREAD_PCT).
+   *
+   * Carried as money rather than left as a rate to re-derive, because it is booked: at billing it is split
+   * out of revenue into FX gain/loss, so a buffer that turns out to be systematically fat is a number
+   * somebody has to answer for rather than quiet margin. Zero on a domestic price.
+   */
+  buffer: number;
 }
 
 export type ParcelSize = 'S' | 'M' | 'L' | 'HEAVY';
@@ -505,6 +514,11 @@ export class Parcel {
   /** The money every figure above is in — the SELLING sister's, stamped at mint. Absent on records
    *  written before prices named their unit; read it through ParcelService.currencyOf. */
   currency?: string;
+  /** The sister that SOLD this shipment: it collected the price and carries the cost of every leg, so a
+   *  shop in another country that handles this parcel recharges its own sister's outlay to this one, at
+   *  cost. Absent on records written before a parcel named its seller — then nobody recharges anybody,
+   *  which is exactly right for a single-sister world. */
+  sellerEntityId?: string;
   /** The exchange rates this parcel's price was struck at, when it needed any.
    *
    *  Kept for the same reason `platformFeePct` is: a price is a promise made at a moment, and the rate

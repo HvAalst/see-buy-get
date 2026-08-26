@@ -9,6 +9,9 @@ import { AgentService } from './agent.service';
 import { LOCK_THRESHOLD, NETWORK_CURRENCY, TRADE_CREDIT_LIMIT, TRADE_CREDIT_PARCELS } from './pudo.config';
 import { BooksService } from '../../foundation/books/books.service';
 import { ACCOUNT_CODES, type AccountCode } from '../../foundation/books/books.types';
+import { EntityService } from '../../foundation/entity/entity.service';
+import { FxService } from '../../foundation/money/fx.service';
+import { currencyForJurisdiction } from '../../foundation/money/currency';
 import { LedgerType, PudoLedgerEntry } from './pudo.types';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
 
@@ -139,6 +142,8 @@ export class WalletGateService {
     private readonly agents: AgentService,
     private readonly events: EventBus,
     private readonly books: BooksService,
+    private readonly entities: EntityService,
+    private readonly fx: FxService,
   ) {}
 
   /**
@@ -229,15 +234,64 @@ export class WalletGateService {
   }
 
   /** Pay the agent a labour/handover fee. It lands in their float (spendable credit, as it always has),
-   *  and the sister books the cost — a fee that increased a balance out of nowhere is what we just fixed. */
-  payLabour(did: string, amount: number, reference: string, refType: PudoLedgerEntry['refType']): PudoLedgerEntry {
+   *  and the sister books the cost — a fee that increased a balance out of nowhere is what we just fixed.
+   *
+   *  `sellerEntityId` is the sister that SOLD the shipment. When it is another company, this shop's own
+   *  sister has just paid for work on somebody else's sale, and recovers it at cost (see recoverAtCost). */
+  payLabour(did: string, amount: number, reference: string, refType: PudoLedgerEntry['refType'], sellerEntityId?: string): PudoLedgerEntry {
     const entryId = this.postAgent(did, 'labour', reference, [
       { code: ACCOUNT_CODES.EXPENSE_PROVIDER_FEES, amount },
       { code: ACCOUNT_CODES.DEPOSIT_AGENT, counterparty: did, amount: -amount },
     ]);
+    this.recoverAtCost(this.agents.entityIdOf(this.agents.get(did)), sellerEntityId, amount, reference);
     const entry = this.record('LABOR_PAYOUT', '+', amount, did, reference, refType, entryId);
     this.agents.refreshLock(did);
     return entry;
+  }
+
+  /**
+   * Recharge one sister's outlay to the sister that sold the shipment — AT COST, and no more.
+   *
+   * The rule, decided rather than derived (user, 2026-08-26): *"we will recover cost only."* The performing
+   * sister takes no margin for handling somebody else's sale, and the way that is written down matters —
+   * its own expense is REVERSED rather than matched with revenue, so its books show nothing at all for this
+   * parcel. It was reimbursed; it did not sell anything.
+   *
+   * Two entries, one per book, linked by the same `ref` — the rule JournalEntry states. Each sister's book
+   * stays internally complete and readable alone, and the pair is explicit rather than an artefact of some
+   * clever cross-book entry. The amounts are deliberately NOT equal numbers: they are equal VALUE, each in
+   * its own currency, converted at the MID rate. The buffer the buyer paid never enters here — that is the
+   * whole point of it not being ours.
+   */
+  private recoverAtCost(payerEntityId: string, sellerEntityId: string | undefined, amount: number, ref: string): void {
+    if (!sellerEntityId || sellerEntityId === payerEntityId || !(amount > 0)) return;
+    // The performer: made whole, earning nothing. A receivable from the seller, and its expense undone.
+    this.books.post({
+      entityId: payerEntityId,
+      kind: 'recharge-at-cost',
+      ref,
+      lines: [
+        { code: ACCOUNT_CODES.INTERCOMPANY, counterparty: sellerEntityId, amount },
+        { code: ACCOUNT_CODES.EXPENSE_PROVIDER_FEES, amount: -amount },
+      ],
+    });
+    // The seller: it collected the price for this leg, so it carries the cost of it — in its own money.
+    const cost = this.fx.convert(amount, this.currencyOf(payerEntityId), this.currencyOf(sellerEntityId));
+    this.books.post({
+      entityId: sellerEntityId,
+      kind: 'recharge-at-cost',
+      ref,
+      lines: [
+        { code: ACCOUNT_CODES.EXPENSE_PROVIDER_FEES, amount: cost },
+        { code: ACCOUNT_CODES.INTERCOMPANY, counterparty: payerEntityId, amount: -cost },
+      ],
+    });
+  }
+
+  /** The money a sister keeps its books in. */
+  private currencyOf(entityId: string): string {
+    const entity = this.entities.get(entityId);
+    return entity.currency ?? currencyForJurisdiction(entity.jurisdiction);
   }
 
   /** Reverse a shipping charge within the void window. A 0 refund is a no-op (a zero-priced parcel was
@@ -288,8 +342,9 @@ export class WalletGateService {
     return this.record('DRIVER_PAYOUT', '-', amount, undefined, driverId, 'driver', entryId);
   }
 
-  /** MDP sort labour — the hub is a provider like any other, so the sister accrues what it owes. */
-  sortLabour(mdpId: string, amount: number, reference: string, entityId?: string): PudoLedgerEntry {
+  /** MDP sort labour — the hub is a provider like any other, so the sister accrues what it owes. A hub in
+   *  another country recharges its sister's outlay to the seller exactly as a shop does. */
+  sortLabour(mdpId: string, amount: number, reference: string, entityId?: string, sellerEntityId?: string): PudoLedgerEntry {
     const entryId = entityId
       ? this.books.post({
           entityId,
@@ -301,6 +356,7 @@ export class WalletGateService {
           ],
         }).entryId
       : undefined;
+    if (entityId) this.recoverAtCost(entityId, sellerEntityId, amount, reference || mdpId);
     return this.record('LABOR_PAYOUT', '-', amount, undefined, reference || mdpId, 'mdp', entryId);
   }
 
