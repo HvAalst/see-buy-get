@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SBG · Shipment Service Provider — build progress</title>
+<style>
+  :root {
+    --bg: #f7f7f5; --panel: #ffffff; --ink: #17181c; --muted: #6b6f76; --line: #e3e3df;
+    --accent: #4c46e0; --ship: #1c7c54; --now: #b4690e; --next: #3f6ea8; --gap: #a33a3a;
+    --shadow: 0 1px 2px rgba(20,20,25,.06), 0 8px 24px rgba(20,20,25,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121317; --panel: #1a1c21; --ink: #eceef2; --muted: #9aa0aa; --line: #2a2d34;
+      --accent: #8f8bff; --ship: #5cc08c; --now: #e0a44a; --next: #7fb0e8; --gap: #e07a7a;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #121317; --panel: #1a1c21; --ink: #eceef2; --muted: #9aa0aa; --line: #2a2d34;
+    --accent: #8f8bff; --ship: #5cc08c; --now: #e0a44a; --next: #7fb0e8; --gap: #e07a7a;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 40px 24px 96px; }
+  header { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: baseline; margin-bottom: 8px; }
+  h1 { font-size: 26px; letter-spacing: -.01em; margin: 0; text-wrap: balance; }
+  .sub { color: var(--muted); font-size: 15px; max-width: 68ch; margin: 10px 0 0; }
+  .stamp { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; margin-left: auto; }
+
+  .bar { display: flex; gap: 10px; flex-wrap: wrap; margin: 28px 0 36px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 999px;
+    background: var(--panel); border: 1px solid var(--line); font-size: 13px; box-shadow: var(--shadow);
+  }
+  .chip b { font-variant-numeric: tabular-nums; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .d-ship { background: var(--ship); } .d-now { background: var(--now); }
+  .d-next { background: var(--next); } .d-gap { background: var(--gap); }
+
+  .tracks { display: grid; grid-template-columns: 1fr; gap: 28px; }
+  @media (min-width: 900px) { .tracks { grid-template-columns: 1fr 1fr; gap: 32px; } }
+
+  section.track { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; }
+  .track > header { display: block; padding: 22px 22px 16px; border-bottom: 1px solid var(--line); margin: 0; }
+  .track h2 { margin: 0; font-size: 18px; letter-spacing: -.01em; }
+  .who { color: var(--muted); font-size: 13px; margin: 6px 0 0; }
+  .steps { list-style: none; margin: 0; padding: 8px 0; }
+  .steps li { display: grid; grid-template-columns: 22px 1fr; gap: 12px; padding: 14px 22px; border-bottom: 1px solid var(--line); }
+  .steps li:last-child { border-bottom: 0; }
+  .steps .mark { margin-top: 6px; }
+  .t { font-weight: 600; font-size: 15px; }
+  .d { color: var(--muted); font-size: 14px; margin-top: 3px; }
+  .ref { font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--muted); margin-top: 6px; word-break: break-word; }
+  .state { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; margin-top: 6px; }
+  .s-ship { color: var(--ship); } .s-now { color: var(--now); }
+  .s-next { color: var(--next); } .s-gap { color: var(--gap); }
+
+  .found { margin-top: 32px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 22px; }
+  .found h2 { margin: 0 0 6px; font-size: 18px; }
+  .found ul { margin: 14px 0 0; padding-left: 18px; }
+  .found li { margin-bottom: 10px; color: var(--ink); }
+  .found li span { color: var(--muted); }
+  footer { margin-top: 36px; color: var(--muted); font-size: 13px; }
+  code { font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: color-mix(in srgb, var(--ink) 7%, transparent); padding: 1px 5px; border-radius: 5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div>
+    <h1>Shipment Service Provider</h1>
+    <p class="sub">
+      A shipping price a buyer can see <em>before</em> deciding to buy — embedded in any vendor's checkout or
+      behind a “calculate your shipping fee” button. Two people have to find it effortless: the vendor
+      integrating it, and the buyer clicking it.
+    </p>
+  </div>
+  <div class="stamp" id="stamp"></div>
+</header>
+
+<div class="bar">
+  <span class="chip"><span class="dot d-ship"></span> shipped <b id="n-ship">0</b></span>
+  <span class="chip"><span class="dot d-now"></span> in progress <b id="n-now">0</b></span>
+  <span class="chip"><span class="dot d-next"></span> next <b id="n-next">0</b></span>
+  <span class="chip"><span class="dot d-gap"></span> gap <b id="n-gap">0</b></span>
+</div>
+
+<div class="tracks" id="tracks"></div>
+
+<div class="found">
+  <h2>Foundations both tracks stand on</h2>
+  <ul id="foundations"></ul>
+</div>
+
+<footer>
+  Updated as each slice lands — the states below are written by hand from the repo, not scraped, so they say
+  what is <em>true</em> rather than what compiled. Open it directly, or serve the repo root
+  (<code>npx serve .</code>) and visit <code>localhost:3000/progress.html</code>.
+</footer>
+
+</div>
+
+<script>
+const DATA = {
+  updated: '2026-08-26',
+  tracks: [
+    {
+      title: 'The vendor integrates it',
+      who: 'A merchant putting a shipping quote on a product page or in checkout. The big one: it has to work first time, from documentation alone.',
+      steps: [
+        { state: 'gap', t: 'A public quote endpoint', d: 'Today a quote only exists inside an authenticated vendor mint. A buyer-facing price needs a public, rate-limited call that creates no parcel and needs no buyer account.', ref: 'RoutingService.quoteShipment · quoteShipmentFrom' },
+        { state: 'gap', t: 'Merchant keys + a sandbox mode', d: 'Vendors have an HMAC secret for callbacks, but there is no publishable key, no test mode, and no way to try the widget without shipping something real.', ref: 'VendorService.register · secret' },
+        { state: 'gap', t: 'The embeddable button', d: 'A drop-in snippet for an article page: buyer picks a destination, sees a price and an ETA. Nothing like it exists yet.', ref: '—' },
+        { state: 'gap', t: 'Documentation', d: 'Quickstart, API reference, test keys, copy-paste embed, error catalogue. This is what makes the integration flawless or not; it is the deliverable, not the afterthought.', ref: '—' },
+        { state: 'next', t: 'Versioned, idempotent public API', d: 'A quote is safe to repeat; a mint is not. The public surface needs an explicit version and idempotency keys before anyone builds on it.', ref: 'OpenAPI gate · 342 operations' },
+        { state: 'shipped', t: 'The quote already returns a full participant stack', d: 'Not just a number: every hop, each site’s open-data fee, the sister owed it, per-leg kilometres, and both a flexible and a locked price. Marketplace-shaped already.', ref: 'ShipmentQuote { hops, nodes, legs, totalKm, nodeFees, platformFeePct, flexible, locked }' },
+        { state: 'shipped', t: 'A journey can start at a place, not only a PUDO', d: 'So a quote can be asked from a vendor’s own address — the precondition for quoting from a warehouse.', ref: 'RouteEnd · quoteShipmentFrom · 175d080' },
+        { state: 'shipped', t: 'Signed status callbacks', d: 'HMAC-signed milestone callbacks to the store already exist — the webhook half of an SSP.', ref: 'VendorCallbackService' },
+      ],
+    },
+    {
+      title: 'The buyer clicks the button',
+      who: 'Somebody on a product page deciding whether to buy at all. What happens between the click and a number they trust.',
+      steps: [
+        { state: 'gap', t: 'The buyer has no pre-purchase surface', d: 'Every price today is computed after a vendor decides to ship. Nothing answers “what would this cost me?” before a parcel exists.', ref: '—' },
+        { state: 'gap', t: 'Continental quotes are wrong today', d: 'A Nairobi → Addis quote computes, but every site is contracted to the hard-coded Kenyan sister, so it prices as if no border were crossed.', ref: 'NETWORK_JURISDICTION = "KE"' },
+        { state: 'next', t: 'Destination without an account', d: 'A buyer should name a place or pick a collection point without signing in. The picker exists inside the merchant handoff; it needs a public form.', ref: 'VendorService.captureCheckout · CheckoutHandoff' },
+        { state: 'next', t: 'A price they can act on', d: 'Price + ETA + where they would collect it, in one view, with the flexible/locked difference explained in words rather than jargon.', ref: 'quote.flexible vs quote.locked' },
+        { state: 'shipped', t: 'Real routing behind the number', d: 'Corridors, hubs, road distance (great-circle × 1.35), opening-hours-corrected arrival. The quote is a real itinerary, not a table lookup.', ref: 'planJourney · buildRoute · nextOpenAt' },
+        { state: 'shipped', t: 'Collection points are real places', d: 'Every PUDO carries its own pin and hours, so “where would I collect it” has a true answer.', ref: 'Agent.location · openingHours' },
+      ],
+    },
+  ],
+  foundations: [
+    { state: 'gap', t: 'Cross-border is not modelled', d: 'No country on a site, no customs step, no inter-sister invoice for a leg. Every agent registers against the constant KE sister. This is the first real blocker for continental trade — and the smallest fix is putting a country on every site and resolving the entity from it.' },
+    { state: 'shipped', t: 'The parcel trunk', d: 'Birthplace, itinerary, destination, owner — with custody recorded as a chain and fees following custody events. A quote is a prediction of that chain; the two must stay consistent.' },
+    { state: 'shipped', t: 'Mother + per-jurisdiction sisters', d: 'The Merchant-of-Record model a cross-border quote will settle through already exists in the entity model and the books.' },
+    { state: 'next', t: 'ETA realism', d: 'Deliberately parked. Vehicle choice is by weight alone and a leg is one continuous run — optimistic, and acceptable for now by decision.' },
+  ],
+};
+
+const LABEL = { ship: 'shipped', now: 'in progress', next: 'next', gap: 'gap' };
+const KEY = { shipped: 'ship', 'in progress': 'now', next: 'next', gap: 'gap' };
+
+function stateKey(s) { return s === 'shipped' ? 'ship' : s === 'in progress' ? 'now' : s; }
+
+function render() {
+  document.getElementById('stamp').textContent = 'updated ' + DATA.updated;
+
+  const counts = { ship: 0, now: 0, next: 0, gap: 0 };
+  const tracks = document.getElementById('tracks');
+
+  for (const track of DATA.tracks) {
+    const sec = document.createElement('section');
+    sec.className = 'track';
+    const head = document.createElement('header');
+    const h = document.createElement('h2');
+    h.textContent = track.title;
+    const who = document.createElement('p');
+    who.className = 'who';
+    who.textContent = track.who;
+    head.append(h, who);
+
+    const ul = document.createElement('ul');
+    ul.className = 'steps';
+    for (const step of track.steps) {
+      const k = stateKey(step.state);
+      counts[k] = (counts[k] || 0) + 1;
+      const li = document.createElement('li');
+      const mark = document.createElement('span');
+      mark.className = 'dot mark d-' + k;
+      const body = document.createElement('div');
+      const t = document.createElement('div'); t.className = 't'; t.textContent = step.t;
+      const d = document.createElement('div'); d.className = 'd'; d.textContent = step.d;
+      const st = document.createElement('div'); st.className = 'state s-' + k; st.textContent = LABEL[k];
+      body.append(t, d, st);
+      if (step.ref && step.ref !== '—') {
+        const r = document.createElement('div'); r.className = 'ref'; r.textContent = step.ref;
+        body.append(r);
+      }
+      li.append(mark, body);
+      ul.append(li);
+    }
+    sec.append(head, ul);
+    tracks.append(sec);
+  }
+
+  const f = document.getElementById('foundations');
+  for (const item of DATA.foundations) {
+    const k = stateKey(item.state);
+    const li = document.createElement('li');
+    const b = document.createElement('b'); b.textContent = item.t + ' ';
+    const s = document.createElement('span'); s.textContent = '— ' + item.d;
+    li.append(b, s);
+    f.append(li);
+  }
+
+  for (const k of ['ship', 'now', 'next', 'gap']) {
+    document.getElementById('n-' + k).textContent = String(counts[k] || 0);
+  }
+}
+render();
+</script>
+</body>
+</html>
