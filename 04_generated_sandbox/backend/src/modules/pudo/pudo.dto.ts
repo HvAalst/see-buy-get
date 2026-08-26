@@ -46,6 +46,8 @@ export class ShopfrontDto {
 export class RegisterAgentDto {
   @IsString() shopName!: string;
   @IsString() zone!: string;
+  /** The country the shop stands in (ISO-3166 alpha-2). Omitted = this deployment's home country. */
+  @IsOptional() @IsString() country?: string;
   @IsOptional() @ValidateNested() @Type(() => GeoDto) location?: GeoDto; // map pin AND/OR physicalAddress
   @IsOptional() @IsString() physicalAddress?: string;
   @IsString() landmark!: string;
@@ -423,6 +425,8 @@ export class DisputeDto {
 export class RegisterMdpDto {
   @IsString() name!: string;
   @IsArray() @ArrayMinSize(1) @IsString({ each: true }) zones!: string[];
+  /** The country the hub stands in. A hub may serve zones across a border; it stands in one country. */
+  @IsOptional() @IsString() country?: string;
   @ValidateNested() @Type(() => GeoDto) location!: GeoDto;
 }
 
@@ -657,6 +661,8 @@ export class DeclareLegDto {
 export class CollectionPointDto {
   @IsString() label!: string;
   @IsString() zone!: string;
+  /** The country the dock stands in. Omitted = the store's own — a warehouse abroad says so. */
+  @IsOptional() @IsString() country?: string;
   @ValidateNested() @Type(() => GeoDto) location!: GeoDto;
   @IsOptional() @IsNumber() @Min(1) bays?: number;
 }

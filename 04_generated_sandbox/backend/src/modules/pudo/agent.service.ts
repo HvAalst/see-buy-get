@@ -13,6 +13,7 @@ import { EntityService } from '../../foundation/entity/entity.service';
 import { BooksService } from '../../foundation/books/books.service';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
 import { Geocoder, GEOCODER } from './geocoder';
+import { countryOfSite, requireCountryCode } from './country';
 import { MediaService } from './media.service';
 import { averageOpenHours } from './hours';
 import { Agent, AgentRequirements, AgentStatus, KycDocuments, ShelfConfig, WeeklyHours } from './pudo.types';
@@ -21,6 +22,8 @@ import { Equipment } from './cargo.types';
 interface RegisterAgentInput {
   shopName: string;
   zone: string;
+  country?: string; // ISO-3166 alpha-2; defaults to the deployment's home country
+
   location?: { lat: number; lng: number }; // map pin
   physicalAddress?: string; // typed address — one of pin/address is required
   landmark: string;
@@ -69,9 +72,18 @@ export class AgentService {
     return this.entities.requireForJurisdiction(NETWORK_JURISDICTION).entityId;
   }
 
-  /** The sister that contracts this shop; pre-entity records resolve to the network's home sister. */
+  /** The country this shop stands in — declared at registration, this deployment's home for older records. */
+  countryOf(agent: Agent): string {
+    return countryOfSite(agent);
+  }
+
+  /**
+   * The sister that contracts this shop — resolved from the country the shop is IN, not from the country
+   * the deployment happens to run in. Those were the same answer while the network was one country and
+   * are not the same question, which is what made a shop in Addis come out contracted to Nairobi.
+   */
   entityIdOf(agent: Agent): string {
-    return agent.entityId ?? this.entities.requireForJurisdiction(NETWORK_JURISDICTION).entityId;
+    return agent.entityId ?? this.entities.requireForJurisdiction(this.countryOf(agent)).entityId;
   }
 
   /** The agent-eligibility filter (18.1). Returns the list of unmet hard requirements. */
@@ -89,6 +101,12 @@ export class AgentService {
 
   /** Capture shop + identity, run the eligibility filter + dedup, mint a DID, vault the Golden Record → DRAFT. */
   register(input: RegisterAgentInput): Agent {
+    // WHICH COUNTRY, asked before anything else is spent on this application. A shop the network cannot
+    // lawfully contract is refused here, by name — better than an approved shop discovering at its first
+    // payout that no company in its country was ever party to the deal.
+    const country = requireCountryCode(input.country);
+    const entity = this.entities.requireForJurisdiction(country);
+
     // Location: a map pin AND/OR a physical address — at least one. Geocode the address if no pin.
     if (!input.location && !input.physicalAddress?.trim()) throw new GlosError('ADDRESS_REQUIRED', 'Provide a map pin (location) and/or a physical address');
     // A map pin is exact; otherwise resolve the address against the geocoder (real coords for a known
@@ -116,9 +134,10 @@ export class AgentService {
       vaultRef,
       shopName: input.shopName,
       zone: input.zone,
-      // The sister that contracts this shop. One jurisdiction today, so it is the network's home
-      // sister; when a second country opens, this is where the shop's own country starts deciding it.
-      entityId: this.entities.requireForJurisdiction(NETWORK_JURISDICTION).entityId,
+      // Where the shop IS, and the sister that follows from it. These are one decision written twice on
+      // purpose: the country is the durable fact (a border is drawn from it), the entity is who invoices.
+      country,
+      entityId: entity.entityId,
       location,
       physicalAddress: input.physicalAddress?.trim() || undefined,
       landmark: input.landmark,

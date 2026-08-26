@@ -166,6 +166,19 @@ export class SbgController {
   }
 
   /**
+   * Where this network can actually operate — one entry per country with a daughter company behind it.
+   *
+   * Public on purpose, and the counterpart of the open-data rates: a shop deciding whether to sign up, a
+   * store wondering whether we reach its customers, and (soon) a vendor integrating the shipping API all
+   * ask the same question first. It is derived from the sisters rather than listed, so a country cannot
+   * appear here that nobody could lawfully invoice in.
+   */
+  @Get('countries')
+  countries() {
+    return this.entities.sisters().map((e) => ({ country: e.jurisdiction, name: e.name, currency: e.currency, entityId: e.entityId }));
+  }
+
+  /**
    * The group and its sister companies — who is registered where, and which of them may transact.
    * Operator-only: it is the shape of the business, not a public directory. Structural facts only;
    * no balances, no accounts (those belong to the sisters' books, which do not exist yet).
@@ -1026,7 +1039,7 @@ export class SbgController {
     const dock = dto.originPudoDid ? undefined : this.vendors.requireCollection(dto.vendorId);
     const quote = dock
       ? this.routing.quoteShipmentFrom(
-          { type: 'dock', id: vendor.did, label: dock.label, zone: dock.zone, location: dock.location },
+          { type: 'dock', id: vendor.did, label: dock.label, zone: dock.zone, country: this.vendors.dockCountryOf(vendor), location: dock.location },
           destPudoDid,
           size,
           this.vendors.entityIdOf(vendor),

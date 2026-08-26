@@ -6,6 +6,7 @@ import { DidService } from '../../foundation/did/did.service';
 import { OperationalStore } from '../../foundation/data-firewall/operational-store.service';
 import { CheckoutHandoff, CollectionPoint, GeoPoint, ShippingPolicy, Vendor } from './pudo.types';
 import { DEFAULT_BAG_BAYS, DEFAULT_VENDOR_COUNTRY, MAX_BAG_BAYS, NETWORK_CURRENCY } from './pudo.config';
+import { countryOfSite, requireCountryCode } from './country';
 import { currencyForJurisdiction } from '../../foundation/money/currency';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { BooksService } from '../../foundation/books/books.service';
@@ -194,7 +195,7 @@ export class VendorService {
   }
 
   register(input: { name: string; callbackUrl?: string; secret?: string; location?: { lat: number; lng: number }; address?: string; country?: string; shippingPolicy?: Partial<ShippingPolicy> }): Vendor {
-    const country = input.country || DEFAULT_VENDOR_COUNTRY;
+    const country = requireCountryCode(input.country, DEFAULT_VENDOR_COUNTRY);
     // Which sister company will settle this store — refused outright if the network has no daughter
     // company there. Registering a vendor we cannot lawfully invoice is not a favour to anyone.
     const entity = this.entities.requireForJurisdiction(country);
@@ -344,10 +345,14 @@ export class VendorService {
    * Deliberately a small, revocable thing on the vendor's own record rather than an agent registration: it
    * grants exactly one power — a driver may be sent here to collect a sealed bag — and no other.
    */
-  setCollectionPoint(vendorId: string, input: { label: string; zone: string; location: GeoPoint; bays?: number }): Vendor {
+  setCollectionPoint(vendorId: string, input: { label: string; zone: string; country?: string; location: GeoPoint; bays?: number }): Vendor {
     const vendor = this.get(vendorId);
     const label = input.label?.trim();
     const zone = input.zone?.trim();
+    // The dock's own country, defaulting to the store's. No sister is required for it: a dock earns
+    // nothing and invoices nobody, so the network needs no company there — it only needs to know that a
+    // journey leaving this door leaves a customs territory.
+    const country = requireCountryCode(input.country, vendor.country);
     if (!zone) throw new GlosError('ZONES_REQUIRED', 'Name the zone the dock sits in — corridors and hubs are keyed to zones');
     if (!label) throw new GlosError('FIELD_REQUIRED', 'Name the collection point — a driver has to find the right door');
     if (!input.location || !Number.isFinite(input.location.lat) || !Number.isFinite(input.location.lng)) {
@@ -360,6 +365,7 @@ export class VendorService {
     vendor.collection = {
       label,
       zone,
+      country,
       location: { lat: input.location.lat, lng: input.location.lng },
       bays: Math.floor(bays),
       enabledAt: vendor.collection?.enabledAt ?? new Date().toISOString(),
@@ -374,6 +380,11 @@ export class VendorService {
     vendor.collection = undefined;
     this.vendors.set(vendorId, vendor);
     return vendor;
+  }
+
+  /** The country a store's dock stands in — its own, or the store's when the dock never said. */
+  dockCountryOf(vendor: Vendor): string {
+    return countryOfSite({ country: vendor.collection?.country ?? vendor.country });
   }
 
   /** The dock, or a refusal that says how to get one. */

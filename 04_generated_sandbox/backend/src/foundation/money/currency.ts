@@ -16,7 +16,7 @@ export type CurrencyCode = string;
 
 /** ISO-3166-alpha-2 jurisdiction → ISO-4217 currency, for the markets the network operates in. */
 export const CURRENCY_BY_JURISDICTION: Record<string, CurrencyCode> = {
-  KE: 'KES',
+  KE: 'KES', ET: 'ETB',
   NL: 'EUR', DE: 'EUR', FR: 'EUR', BE: 'EUR', ES: 'EUR', IT: 'EUR', IE: 'EUR', PT: 'EUR', AT: 'EUR',
   GB: 'GBP', US: 'USD', SG: 'SGD', CN: 'CNY',
 };

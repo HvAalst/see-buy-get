@@ -3800,6 +3800,19 @@
         }
       }
     },
+    "/v1/sbg/countries": {
+      "get": {
+        "operationId": "Sbg.countries",
+        "summary": "",
+        "description": "Where this network can actually operate — one entry per country with a daughter company behind it.\n\nPublic on purpose, and the counterpart of the open-data rates: a shop deciding whether to sign up, a\nstore wondering whether we reach its customers, and (soon) a vendor integrating the shipping API all\nask the same question first. It is derived from the sisters rather than listed, so a country cannot\nappear here that nobody could lawfully invoice in.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/entities": {
       "get": {
         "operationId": "Sbg.listEntities",
@@ -12131,6 +12144,10 @@
           "zone": {
             "type": "string"
           },
+          "country": {
+            "type": "string",
+            "description": "The country the shop stands in (ISO-3166 alpha-2). Omitted = this deployment's home country."
+          },
           "location": {
             "$ref": "#/components/schemas/GeoDto"
           },
@@ -12293,6 +12310,10 @@
           },
           "zone": {
             "type": "string"
+          },
+          "country": {
+            "type": "string",
+            "description": "The country this shop stands in (ISO-3166 alpha-2). It decides which sister contracts it, and a\n journey that leaves it crosses a border. Absent on every pre-slice record, which reads as this\n deployment's home country — read it through AgentService.countryOf, never off the field."
           },
           "entityId": {
             "type": "string",
@@ -13442,6 +13463,9 @@
           "zone": {
             "type": "string"
           },
+          "country": {
+            "type": "string"
+          },
           "location": {
             "$ref": "#/components/schemas/GeoPoint"
           },
@@ -13582,6 +13606,10 @@
           },
           "zone": {
             "type": "string"
+          },
+          "country": {
+            "type": "string",
+            "description": "The country the dock stands in. Omitted = the store's own — a warehouse abroad says so."
           },
           "location": {
             "$ref": "#/components/schemas/GeoDto"
@@ -13831,6 +13859,10 @@
           },
           "name": {
             "type": "string"
+          },
+          "country": {
+            "type": "string",
+            "description": "The country this hub stands in — same fact as a shop's, and it matters more here: a hub is where a\n cross-border journey changes hands, so the leg into it is the one that clears customs. Absent on\n pre-slice records; read it through MdpService.countryOf."
           },
           "entityId": {
             "type": "string",
@@ -14263,6 +14295,10 @@
             "items": {
               "type": "string"
             }
+          },
+          "country": {
+            "type": "string",
+            "description": "The country the hub stands in. A hub may serve zones across a border; it stands in one country."
           },
           "location": {
             "$ref": "#/components/schemas/GeoDto"

@@ -74,6 +74,10 @@ export class Agent {
   vaultRef: string; // Golden Record PII (name, national ID, mobile) in the IdentityVault
   shopName: string;
   zone: string;
+  /** The country this shop stands in (ISO-3166 alpha-2). It decides which sister contracts it, and a
+   *  journey that leaves it crosses a border. Absent on every pre-slice record, which reads as this
+   *  deployment's home country — read it through AgentService.countryOf, never off the field. */
+  country?: string;
   /** The sister company this shop is contracted to — it buys the shop's handling and owes it the fee.
    *  A shop sits in exactly one country, so this is unambiguous. Absent on pre-entity records; read it
    *  through AgentService.entityIdOf(). */
@@ -161,6 +165,10 @@ export class Mdp {
   /** Real GLOS DID (S2). The mdpId stays the domain key; the DID is what an actor token binds to. */
   did: string;
   name: string;
+  /** The country this hub stands in — same fact as a shop's, and it matters more here: a hub is where a
+   *  cross-border journey changes hands, so the leg into it is the one that clears customs. Absent on
+   *  pre-slice records; read it through MdpService.countryOf. */
+  country?: string;
   /** The sister company this hub is contracted to — same reasoning as a shop's: a fixed site sits in
    *  one country. Absent on pre-entity records; read it through MdpService.entityIdOf(). */
   entityId?: string;
@@ -294,6 +302,10 @@ export class ShippingPolicy {
 export class CollectionPoint {
   label: string; // what a driver reads on the offer: "Njiro warehouse, gate 2"
   zone: string; // the delivery zone the dock sits in — corridors are zone-keyed, so a journey needs one
+  /** The country the dock stands in. Its own field rather than the store's, because a warehouse is not
+   *  always in the country the company is registered in — and a route only cares where the GOODS are.
+   *  Absent = the store's own country; read it through VendorService.dockCountryOf. */
+  country?: string;
   location: GeoPoint; // the loading door, which is not always the storefront pin
   bays: number; // floor room for staged bags — the shop's bag bays, at a dock
   enabledAt: string;

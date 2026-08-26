@@ -24,6 +24,12 @@ const GROUP_SEED = { entityId: 'sbg', name: 'SeeBuyGet Group' };
 /** The jurisdictions with a real daughter company. One line per country the network actually operates in. */
 const SISTER_SEEDS: Array<{ entityId: string; name: string; jurisdiction: string }> = [
   { entityId: 'sbg-ke', name: 'SeeBuyGet Kenya', jurisdiction: 'KE' },
+  // The second country, and the reason it is here: a border cannot be modelled with one company. Until
+  // now every site in the network resolved to Kenya by construction, so "cross-border" had nowhere to
+  // live — a shop in Addis would have been contracted to Nairobi, which is the exact fallback this list
+  // exists to forbid. A sister in Ethiopia makes the border a fact two records disagree about, rather
+  // than a case nobody can express. Adding a third is one line, and the same deliberate act.
+  { entityId: 'sbg-et', name: 'SeeBuyGet Ethiopia', jurisdiction: 'ET' },
 ];
 
 @Injectable()
