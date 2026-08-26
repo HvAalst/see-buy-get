@@ -172,12 +172,15 @@ export class SbgController {
    *
    * Public on purpose, and the counterpart of the open-data rates: a shop deciding whether to sign up, a
    * store wondering whether we reach its customers, and (soon) a vendor integrating the shipping API all
-   * ask the same question first. It is derived from the sisters rather than listed, so a country cannot
-   * appear here that nobody could lawfully invoice in.
+   * ask the same question first — and the sign-up wizard needs it before anyone can choose. It is derived
+   * from the sisters rather than listed, so a country cannot appear here that nobody could lawfully
+   * invoice in. Structural only: which country, what it is called, what it settles in. The entity's own id
+   * is the shape of the business and stays behind GET /entities, which is operator-only.
    */
+  @Public()
   @Get('countries')
   countries() {
-    return this.entities.sisters().map((e) => ({ country: e.jurisdiction, name: e.name, currency: e.currency, entityId: e.entityId }));
+    return this.entities.sisters().map((e) => ({ country: e.jurisdiction, name: e.name, currency: e.currency }));
   }
 
   /**
@@ -995,6 +998,9 @@ export class SbgController {
       did: a.did,
       shopName: a.shopName,
       zone: a.zone,
+      // Which country the shop stands in — already implied by its pin, and needed explicitly so a sign-up
+      // can suggest the areas of the country somebody is joining rather than every area on the network.
+      country: this.agents.countryOf(a),
       location: a.location,
       landmark: a.landmark,
       openState: a.openState,

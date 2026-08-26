@@ -129,6 +129,8 @@ export const enVendor = {
   'vendor.signin.createTitle': 'Create your store',
   'vendor.signin.storeName': 'Store name',
   'vendor.signin.country': 'Country',
+  'vendor.signin.countryChoose': 'Choose a country',
+  'vendor.signin.countryNote': 'The company that will invoice you, so it has to be where your store really trades.',
   'vendor.signin.address': 'Address (optional)',
   'vendor.signin.createCta': 'Create the store',
   'vendor.signin.goBack': 'Go back',

@@ -56,6 +56,7 @@ export interface NetworkPoint {
   did: string;
   shopName: string;
   zone: string;
+  country?: string;
   location?: { lat: number; lng: number };
   openState: 'open' | 'closed';
 }
@@ -63,6 +64,24 @@ export interface NetworkPoint {
 /** The public directory — the join map's bearings, and where the zone list comes from. */
 export function fetchPoints(): Promise<Result<NetworkPoint[]>> {
   return publicRequest<NetworkPoint[]>(homeConfig(), '/v1/sbg/network/points');
+}
+
+/** One country the network actually operates in — a real company, and the money it settles in. */
+export interface OperatingCountry {
+  country: string;
+  name: string;
+  currency?: string;
+}
+
+/**
+ * Where the network can lawfully take somebody on.
+ *
+ * Asked at the front door rather than guessed, because joining from a country with no company behind it
+ * is refused by the backend — and being told that at the end of a sign-up wizard is the worst moment to
+ * find out. The list is derived from the sisters, so it cannot offer somewhere we could not invoice.
+ */
+export function fetchCountries(): Promise<Result<OperatingCountry[]>> {
+  return publicRequest<OperatingCountry[]>(homeConfig(), '/v1/sbg/countries');
 }
 
 /* ---------------------------------------------------------------- handoff -- */

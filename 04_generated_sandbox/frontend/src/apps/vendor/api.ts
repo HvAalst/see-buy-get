@@ -44,6 +44,21 @@ export function fetchPoints(): Promise<Result<NetworkPoint[]>> {
   return publicRequest<NetworkPoint[]>(vendorConfig(), '/v1/sbg/network/points');
 }
 
+/** One country the network operates in — a real company there, and the money it settles in. */
+export interface OperatingCountry {
+  country: string;
+  name: string;
+  currency?: string;
+}
+
+/**
+ * Where a store can register. @Public, and needed BEFORE the store exists: registering in a country with
+ * no daughter company is refused, and a merchant should be told that by the form rather than by a 404.
+ */
+export function fetchCountries(): Promise<Result<OperatingCountry[]>> {
+  return publicRequest<OperatingCountry[]>(vendorConfig(), '/v1/sbg/countries');
+}
+
 /* ----------------------------------------------------------------- client -- */
 
 export interface VendorClient {

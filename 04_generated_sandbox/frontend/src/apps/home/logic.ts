@@ -118,9 +118,16 @@ export interface JoinForm {
   location: { lat: number; lng: number } | null;
   landmark: string;
   zone: string;
+  /**
+   * The country being joined in — for EVERY role, not only stores.
+   *
+   * It decides which company contracts them, so it is asked rather than assumed: a shop in Addis that came
+   * out contracted to Nairobi is the exact mistake the network spent a slice removing, and it must not be
+   * reintroduced by a wizard that never asks. Preselected and hidden when there is only one answer.
+   */
+  country: string;
   /* role extras */
   licenceClasses: string[];
-  vendorCountry: string;
 }
 
 export const EMPTY_JOIN: JoinForm = {
@@ -134,8 +141,8 @@ export const EMPTY_JOIN: JoinForm = {
   location: null,
   landmark: '',
   zone: '',
+  country: '',
   licenceClasses: ['bike'],
-  vendorCountry: '',
 };
 
 /** The wizard's steps, per role. `vendor` skips the phone gate the backend does not ask for. */
@@ -167,13 +174,15 @@ export function stepBlocker(role: RoleSpec, step: JoinStep, f: JoinForm, t: Tran
     case 'code':
       return codeLooksValid(f.code) ? null : t('home.block.code');
     case 'about':
-      if (role.kind === 'vendor') return f.displayName.trim() ? null : t('home.block.nameStore');
+      // A store never reaches the 'where' step, so its country is asked for here instead.
+      if (role.kind === 'vendor') return !f.displayName.trim() ? t('home.block.nameStore') : !f.country.trim() ? t('home.block.country') : null;
       if (!f.displayName.trim()) return role.id === 'pudo' ? t('home.block.nameShop') : role.id === 'mdp' ? t('home.block.nameHub') : t('home.block.nameGeneric');
       if (role.id !== 'mdp' && !f.fullName.trim()) return t('home.block.fullName');
       if (role.id !== 'mdp' && !f.nationalId.trim()) return t('home.block.idNumber');
       if (role.id === 'driver' && f.licenceClasses.length === 0) return t('home.block.drive');
       return null;
     case 'where':
+      if (!f.country.trim()) return t('home.block.country');
       if (!f.location) return t('home.block.location');
       if (!f.zone.trim()) return t('home.block.zone');
       return null;
@@ -216,6 +225,7 @@ export function signupBody(role: RoleSpec, f: JoinForm, deviceMarker: string): R
           nationalId: f.nationalId.trim(),
           mobile: phone,
           deviceImei: deviceMarker,
+          country: f.country.trim().toUpperCase(), // which sister contracts this shop — refused if we have none there
           zone: f.zone.trim(),
           landmark: f.landmark.trim() || 'Pin dropped on the map',
           location: f.location,
@@ -243,6 +253,9 @@ export function signupBody(role: RoleSpec, f: JoinForm, deviceMarker: string): R
           nationalId: f.nationalId.trim(),
           mobile: phone,
           licenceClasses: f.licenceClasses,
+          // An INDEPENDENT courier is contracted by a sister and needs to say which; one who joins a fleet
+          // carries no jurisdiction at all by design, and the backend ignores this for them.
+          jurisdiction: f.country.trim().toUpperCase(),
           homeZone: f.zone.trim(),
         },
       },
@@ -255,6 +268,7 @@ export function signupBody(role: RoleSpec, f: JoinForm, deviceMarker: string): R
       mdp: {
         name: f.displayName.trim(),
         zones: [f.zone.trim()],
+        country: f.country.trim().toUpperCase(), // a hub may serve zones across a border; it stands in one country
         location: f.location,
         pricePerParcel: 0.4,
       },

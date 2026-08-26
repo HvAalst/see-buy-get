@@ -31,6 +31,7 @@ const filled = (over: Partial<JoinForm> = {}): JoinForm => ({
   nationalId: 'NID-1',
   location: { lat: -1.28, lng: 36.82 },
   zone: 'Z-A',
+  country: 'KE',
   ...over,
 });
 
@@ -86,6 +87,9 @@ describe('stepBlocker', () => {
     expect(stepBlocker(shop, 'phone', filled(), t)).toBeNull();
     expect(stepBlocker(shop, 'about', { ...filled(), displayName: '' }, t)).toContain('shop');
     expect(stepBlocker(shop, 'about', { ...filled(), fullName: '' }, t)).toContain('full name');
+    // The country comes first on this step: it decides which company contracts them, and it narrows the
+    // areas offered below it. A wizard that never asked is how a shop in Addis ended up billed by Nairobi.
+    expect(stepBlocker(shop, 'where', { ...filled(), country: '' }, t)).toContain('country');
     expect(stepBlocker(shop, 'where', { ...filled(), location: null }, t)).toContain('map');
     expect(stepBlocker(shop, 'where', filled(), t)).toBeNull();
     expect(stepBlocker(shop, 'login', { ...filled(), password: '123' }, t)).toContain('6 characters');
@@ -97,9 +101,12 @@ describe('stepBlocker', () => {
     expect(stepBlocker(role('mdp'), 'about', { ...filled(), fullName: '', nationalId: '' }, t)).toBeNull();
   });
 
-  it('a store only needs its name', () => {
+  it('a store needs its name and the country that will invoice it', () => {
+    // A store never reaches the 'where' step, so its country is asked on this one — and it is not optional:
+    // registering where the network has no company is refused, and the form should say so, not the server.
     expect(stepBlocker(role('vendor'), 'about', EMPTY_JOIN, t)).toContain('Name your store');
-    expect(stepBlocker(role('vendor'), 'about', { ...EMPTY_JOIN, displayName: 'Nairobi Threads' }, t)).toBeNull();
+    expect(stepBlocker(role('vendor'), 'about', { ...EMPTY_JOIN, displayName: 'Nairobi Threads' }, t)).toContain('country');
+    expect(stepBlocker(role('vendor'), 'about', { ...EMPTY_JOIN, displayName: 'Nairobi Threads', country: 'KE' }, t)).toBeNull();
   });
 });
 
@@ -120,6 +127,21 @@ describe('signupBody', () => {
     expect(a.shelf).toEqual({ rows: 4, cols: 5 });
     expect(Object.keys(a.openingHours as object)).toHaveLength(7);
     expect((a.requirements as { criminalRecordClear: boolean }).criminalRecordClear).toBe(true);
+    expect(a.country).toBe('KE'); // which company contracts this shop — never inferred from the pin
+  });
+
+  it('sends the country every role is contracted through, normalised', () => {
+    const shop = signupBody(role('pudo'), filled({ country: 'et' }), 'x') as { profile: { agent: { country: string } } };
+    expect(shop.profile.agent.country).toBe('ET');
+
+    // A hub stands in one country even when it serves zones across a border.
+    const hub = signupBody(role('mdp'), filled({ country: 'et' }), 'x') as { profile: { mdp: { country: string } } };
+    expect(hub.profile.mdp.country).toBe('ET');
+
+    // An INDEPENDENT courier is contracted by a sister and says which; a fleet-attached one carries no
+    // jurisdiction at all by design, and the backend drops this for them.
+    const driver = signupBody(role('driver'), filled({ country: 'et' }), 'x') as { profile: { driver: { jurisdiction: string } } };
+    expect(driver.profile.driver.jurisdiction).toBe('ET');
   });
 
   it('a driver sends licence classes and a home zone; a hub sends its zone list', () => {

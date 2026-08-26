@@ -133,6 +133,42 @@ function CodeStep({ state, actions }: JoinScreenProps) {
   );
 }
 
+/* ---------------------------------------------------------------- country -- */
+
+/**
+ * Which country somebody is joining in — and nothing to choose when there is only one.
+ *
+ * A pick list rather than a free-text code, because this decides which company contracts them and the
+ * backend refuses a country with no company behind it. Typing "TZ" and being told at the end of a wizard
+ * that nobody there can invoice you is the worst possible moment to find out; the list only ever offers
+ * countries the network can actually take somebody on in.
+ *
+ * With one country the control is not rendered at all — a select with a single option is a decision nobody
+ * is making. The hook has already put that country on the form, so the sign-up still names it.
+ */
+function CountryField({ id, state, actions }: JoinScreenProps & { id: string }) {
+  const t = useT();
+  const { countries, countriesState, form } = state;
+  if (countriesState === 'error') return <Note tone="warn" icon="warning" title={t('home.join.country.unavailable')} />;
+  if (countries.length < 2) return null;
+  return (
+    <div class="field" style="margin-top:12px">
+      <label class="field__label" for={id}>
+        {t('home.join.country.label')}
+      </label>
+      <select id={id} class="input" value={form.country} onChange={(e) => actions.setForm({ country: e.currentTarget.value, zone: '' })}>
+        <option value="">{t('home.join.country.choose')}</option>
+        {countries.map((c) => (
+          <option key={c.country} value={c.country}>
+            {c.name} ({c.country})
+          </option>
+        ))}
+      </select>
+      <p class="card__note">{t('home.join.country.note')}</p>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ about -- */
 
 function AboutStep({ state, actions }: JoinScreenProps) {
@@ -162,21 +198,7 @@ function AboutStep({ state, actions }: JoinScreenProps) {
           />
         </div>
 
-        {role.id === 'vendor' ? (
-          <div class="field" style="margin-top:12px">
-            <label class="field__label" for="country">
-              {t('home.join.about.country')}
-            </label>
-            <input
-              id="country"
-              class="input"
-              value={f.vendorCountry}
-              onInput={(e) => actions.setForm({ vendorCountry: e.currentTarget.value })}
-              placeholder="KE"
-              autocapitalize="characters"
-            />
-          </div>
-        ) : null}
+        {role.id === 'vendor' ? <CountryField id="country" state={state} actions={actions} /> : null}
 
         {role.id !== 'mdp' && role.id !== 'vendor' ? (
           <>
@@ -240,7 +262,9 @@ function WhereStep({ state, actions }: JoinScreenProps) {
   const role = state.role!;
   const f = state.form;
   const blocker = stepBlocker(role, 'where', f, t);
-  const zones = [...new Set(state.points.map((p) => p.zone).filter(Boolean))].sort();
+  // Suggest the areas of the country being joined, not every area on the network — a Kenyan zone code is
+  // no help to somebody opening in Addis, and offering it invites picking one.
+  const zones = [...new Set(state.points.filter((p) => !f.country || !p.country || p.country === f.country).map((p) => p.zone).filter(Boolean))].sort();
   const [openShop, setOpenShop] = useState<string | null>(null);
   const preview = openShop ? state.points.find((p) => p.did === openShop) ?? null : null;
 
@@ -269,17 +293,25 @@ function WhereStep({ state, actions }: JoinScreenProps) {
       )}
 
       <Card label={t('home.join.where.areaTitle')}>
+        {/* Which country first: it narrows the areas below, and it is what decides who contracts them. */}
+        <CountryField id="join-country" state={state} actions={actions} />
         {/* Type-or-pick: existing network zones are SUGGESTIONS (datalist), but a shop opening in a brand-new
             area must be able to type it — a plain dropdown of existing zones would trap them (they cannot add
             an area that isn't already on the map). */}
-        <input
-          class="input"
-          list="join-zones"
-          value={f.zone}
-          onInput={(e) => actions.setForm({ zone: e.currentTarget.value })}
-          placeholder="Z-A"
-          autocapitalize="characters"
-        />
+        <div class="field" style="margin-top:12px">
+          <label class="field__label" for="join-zone">
+            {t('home.join.where.areaLabel')}
+          </label>
+          <input
+            id="join-zone"
+            class="input"
+            list="join-zones"
+            value={f.zone}
+            onInput={(e) => actions.setForm({ zone: e.currentTarget.value })}
+            placeholder="Z-A"
+            autocapitalize="characters"
+          />
+        </div>
         {zones.length ? (
           <datalist id="join-zones">
             {zones.map((z) => (

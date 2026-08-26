@@ -3804,7 +3804,7 @@
       "get": {
         "operationId": "Sbg.countries",
         "summary": "",
-        "description": "Where this network can actually operate — one entry per country with a daughter company behind it.\n\nPublic on purpose, and the counterpart of the open-data rates: a shop deciding whether to sign up, a\nstore wondering whether we reach its customers, and (soon) a vendor integrating the shipping API all\nask the same question first. It is derived from the sisters rather than listed, so a country cannot\nappear here that nobody could lawfully invoice in.",
+        "description": "Where this network can actually operate — one entry per country with a daughter company behind it.\n\nPublic on purpose, and the counterpart of the open-data rates: a shop deciding whether to sign up, a\nstore wondering whether we reach its customers, and (soon) a vendor integrating the shipping API all\nask the same question first — and the sign-up wizard needs it before anyone can choose. It is derived\nfrom the sisters rather than listed, so a country cannot appear here that nobody could lawfully\ninvoice in. Structural only: which country, what it is called, what it settles in. The entity's own id\nis the shape of the business and stays behind GET /entities, which is operator-only.",
         "parameters": [],
         "responses": {
           "200": {

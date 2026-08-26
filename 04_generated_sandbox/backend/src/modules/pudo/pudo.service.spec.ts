@@ -781,6 +781,23 @@ describe('PUDO Light', () => {
     expect((controller.networkPoints() as any[]).some((p) => p.did === store.did)).toBe(false);
   });
 
+  it('publishes where the network operates, and nothing more than that', () => {
+    // The first question anybody asks before signing up, and the list a country picker is built from. It is
+    // DERIVED from the sisters, so it can never offer a country nobody could lawfully invoice in.
+    const countries = controller.countries();
+    expect(countries.map((c) => c.country).sort()).toEqual(['ET', 'KE']);
+    expect(countries.find((c) => c.country === 'KE')).toEqual({ country: 'KE', name: 'SeeBuyGet Kenya', currency: 'KES' });
+    // The entity's own id is the shape of the business and stays behind the operator-only /entities.
+    expect(countries.every((c) => !('entityId' in c))).toBe(true);
+  });
+
+  it('says which country each network point stands in', () => {
+    // So a sign-up can suggest the areas of the country somebody is joining, rather than every area we run.
+    const shop = onboardAgent('Country Point', 'NorthTown', 50);
+    const point = (controller.networkPoints() as Array<{ did: string; country?: string }>).find((p) => p.did === shop.did);
+    expect(point?.country).toBe('KE');
+  });
+
   it('a store with no collection point is told how to get one, and a full dock refuses another bag', () => {
     const dest = onboardAgent('Dock2 Dest', 'SouthTown', 50);
     corridors.addCorridor({ name: 'dock2', originZone: 'NorthTown', destZone: 'SouthTown' });

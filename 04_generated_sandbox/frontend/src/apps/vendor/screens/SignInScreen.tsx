@@ -1,7 +1,8 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { Button, Card, Checklist, ErrorNote, ReadAloud, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
+import { fetchCountries, type OperatingCountry } from '../api';
 import type { SbgError } from '../../../lib/sbg';
 import type { VendorState, VendorActions } from '../useVendorApp';
 
@@ -115,6 +116,18 @@ function CreateSheet({ open, onClose, state, actions, error }: { open: boolean; 
   const [name, setName] = useState('');
   const [country, setCountry] = useState('');
   const [address, setAddress] = useState('');
+  // Where the network can actually take a store on. Loaded when the sheet opens rather than on mount — a
+  // merchant signing IN never needs it, and it is the one thing this form cannot sensibly guess.
+  const [countries, setCountries] = useState<OperatingCountry[] | null>(null);
+  useEffect(() => {
+    if (!open || countries) return;
+    void fetchCountries().then((r) => {
+      const list = r.data ?? [];
+      setCountries(list);
+      if (list.length === 1) setCountry(list[0].country); // one answer is not a choice
+    });
+  }, [open, countries]);
+  const choices = countries ?? [];
 
   return (
     <Sheet open={open} onClose={onClose} title={t('vendor.signin.createTitle')}>
@@ -125,19 +138,29 @@ function CreateSheet({ open, onClose, state, actions, error }: { open: boolean; 
         </label>
         <input id="sname" class="input" value={name} onInput={(e) => setName(e.currentTarget.value)} placeholder="Nairobi Threads" />
       </div>
-      <div class="field" style="margin-top:12px">
-        <label class="field__label" for="scountry">
-          {t('vendor.signin.country')}
-        </label>
-        <input id="scountry" class="input" value={country} onInput={(e) => setCountry(e.currentTarget.value)} placeholder="KE" autocapitalize="characters" />
-      </div>
+      {choices.length > 1 ? (
+        <div class="field" style="margin-top:12px">
+          <label class="field__label" for="scountry">
+            {t('vendor.signin.country')}
+          </label>
+          <select id="scountry" class="input" value={country} onChange={(e) => setCountry(e.currentTarget.value)}>
+            <option value="">{t('vendor.signin.countryChoose')}</option>
+            {choices.map((c) => (
+              <option key={c.country} value={c.country}>
+                {c.name} ({c.country})
+              </option>
+            ))}
+          </select>
+          <p class="card__note">{t('vendor.signin.countryNote')}</p>
+        </div>
+      ) : null}
       <div class="field" style="margin-top:12px">
         <label class="field__label" for="saddress">
           {t('vendor.signin.address')}
         </label>
         <input id="saddress" class="input" value={address} onInput={(e) => setAddress(e.currentTarget.value)} placeholder="Biashara St 12" />
       </div>
-      <Button chevron={false} busy={state.busy === 'register'} disabled={!name.trim()} onClick={() => void actions.register(name, country, address)}>
+      <Button chevron={false} busy={state.busy === 'register'} disabled={!name.trim() || (choices.length > 1 && !country)} onClick={() => void actions.register(name, country, address)}>
         {t('vendor.signin.createCta')}
       </Button>
       <Button variant="link" onClick={onClose}>

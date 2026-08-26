@@ -3,6 +3,7 @@ import { t } from '../../shared/i18n';
 import type { SbgError } from '../../lib/sbg';
 import {
   deviceMarker,
+  fetchCountries,
   fetchPoints,
   handOff,
   registerStore,
@@ -10,6 +11,7 @@ import {
   signup,
   verifyCode,
   type NetworkPoint,
+  type OperatingCountry,
   type SignupView,
   type VendorRegisteredView,
 } from './api';
@@ -26,6 +28,9 @@ export interface HomeState {
   issuedCode: string | null;
   points: NetworkPoint[];
   pointsState: 'idle' | 'loading' | 'ready' | 'error';
+  /** The countries the network can take somebody on in. Empty until loaded — see countriesState. */
+  countries: OperatingCountry[];
+  countriesState: 'idle' | 'loading' | 'ready' | 'error';
   /** What the account became — the "you are in" card. */
   account: SignupView | null;
   store: VendorRegisteredView | null;
@@ -41,6 +46,8 @@ const INITIAL: HomeState = {
   issuedCode: null,
   points: [],
   pointsState: 'idle',
+  countries: [],
+  countriesState: 'idle',
   account: null,
   store: null,
   error: null,
@@ -68,6 +75,29 @@ export function useHomeApp() {
     setState((s) => ({ ...s, points: r.data ?? [], pointsState: 'ready' }));
   }, []);
 
+  /**
+   * Load where the network operates, and preselect when there is only one answer.
+   *
+   * Preselecting matters: with a single country there is nothing to choose and the wizard shows no
+   * control at all, so the form must already hold the country the sign-up will be made in — otherwise the
+   * only deployment anybody has ever run would submit a blank one.
+   */
+  const loadCountries = useCallback(async () => {
+    setState((s) => ({ ...s, countriesState: 'loading' }));
+    const r = await fetchCountries();
+    if (r.error) {
+      setState((s) => ({ ...s, countriesState: 'error' }));
+      return;
+    }
+    const countries = r.data ?? [];
+    setState((s) => ({
+      ...s,
+      countries,
+      countriesState: 'ready',
+      form: s.form.country ? s.form : { ...s.form, country: countries.length === 1 ? countries[0].country : '' },
+    }));
+  }, []);
+
   const go = useCallback((screen: Screen) => {
     setState((s) => ({ ...s, screen, error: null }));
   }, []);
@@ -88,8 +118,10 @@ export function useHomeApp() {
         error: null,
       }));
       if (stateRef.current.pointsState !== 'ready') void loadPoints();
+      if (stateRef.current.countriesState !== 'ready') void loadCountries();
+      else if (stateRef.current.countries.length === 1) setState((s) => ({ ...s, form: { ...s.form, country: stateRef.current.countries[0].country } }));
     },
-    [loadPoints],
+    [loadPoints, loadCountries],
   );
 
   const setForm = useCallback((p: Partial<JoinForm>) => {
@@ -168,7 +200,7 @@ export function useHomeApp() {
     if (role.kind === 'vendor') {
       if (stepBlocker(role, 'about', form, t)) return;
       await run('submit', async () => {
-        const r = await registerStore({ name: form.displayName.trim(), country: form.vendorCountry.trim() || undefined });
+        const r = await registerStore({ name: form.displayName.trim(), country: form.country.trim() || undefined });
         if (r.error) {
           setState((s) => ({ ...s, error: r.error }));
           return;
