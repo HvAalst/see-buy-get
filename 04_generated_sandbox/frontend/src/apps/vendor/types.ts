@@ -62,6 +62,9 @@ export interface OrderRow {
   size: ParcelSize;
   shipmentCost?: number;
   buyerCharge?: number;
+  /** What those two amounts ARE — the money this store's own sister sells in, stamped on the parcel.
+   *  Optional because rows served before parcels named their unit carry none. */
+  currency?: string;
   routeMode?: 'flexible' | 'locked';
   createdAt?: string;
 }

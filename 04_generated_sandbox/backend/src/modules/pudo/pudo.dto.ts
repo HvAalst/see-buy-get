@@ -252,6 +252,13 @@ export class SetPriceDto {
   @IsNumber() @Min(0) price!: number;
 }
 
+/** Push one currency's standing against the base — from a feed, or by hand when the feed is down. */
+export class SetFxRateDto {
+  @IsString() currency!: string;
+  @IsNumber() @Min(0) perBase!: number; // how many of this currency one unit of the base buys
+  @IsOptional() @IsString() source?: string;
+}
+
 /** R0 — the vendor shipment register query. All optional; params arrive as strings on the query string. */
 export class VendorOrdersQueryDto {
   @IsOptional() @IsString() q?: string; // smart search: order-ref / DID / parcelId / tracking / buyer / product / zone

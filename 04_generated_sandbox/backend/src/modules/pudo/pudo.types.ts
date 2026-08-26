@@ -2,6 +2,7 @@
 // backbone (DID, vault, wallet, ledger, events) but models its own light parcel/agent/corridor flow.
 
 import { CargoClass, CargoNature, Equipment } from './cargo.types';
+import { FxRate } from '../../foundation/money/fx.service';
 
 /** A map pin. Named (not an inline literal) so it is one reusable schema in the contract. */
 export class GeoPoint {
@@ -107,6 +108,20 @@ export class Agent {
   status: AgentStatus;
   lastPingAt: string;
   createdAt: string;
+}
+
+/**
+ * The rates a price was struck at, stamped onto the thing that was priced.
+ *
+ * A named type rather than an inline shape, so the quote and the parcel carry the SAME record — the whole
+ * value of keeping it is that what was promised and what was minted can be compared line for line.
+ */
+export class ParcelFx {
+  base: string; // the currency everything was converted INTO
+  rates: FxRate[]; // one per foreign currency on the route
+  quotedAt: string;
+  expiresAt: string; // how long the converted price was good for
+  stale: boolean; // whether any rate behind it was already past its refresh window
 }
 
 export type ParcelSize = 'S' | 'M' | 'L' | 'HEAVY';
@@ -487,6 +502,16 @@ export class Parcel {
    *  time; a parcel in transit must settle on the rate its price was quoted with, not on today's. */
   platformFeePct?: number;
   shipmentCost?: number; // what the vendor is billed prepaid (nodeFees + transport + platform fee)
+  /** The money every figure above is in — the SELLING sister's, stamped at mint. Absent on records
+   *  written before prices named their unit; read it through ParcelService.currencyOf. */
+  currency?: string;
+  /** The exchange rates this parcel's price was struck at, when it needed any.
+   *
+   *  Kept for the same reason `platformFeePct` is: a price is a promise made at a moment, and the rate
+   *  behind it moves. Without this, a cross-border parcel's cost is a number nobody can reconstruct or
+   *  argue about, and the sister that collected it could not later prove what it owed the sister that
+   *  performed the leg. Absent on every domestic parcel, because nothing was converted. */
+  fx?: ParcelFx;
   ceilingCost?: number; // the worst-case (highest-rate) total a flexible parcel reserves
   actualCost?: number; // the real total once the carrier is known (drives the flexible rebate)
   rebate?: number; // refunded to the vendor after delivery (ceiling − actual) on a flexible parcel

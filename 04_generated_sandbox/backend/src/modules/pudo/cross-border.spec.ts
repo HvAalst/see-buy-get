@@ -5,7 +5,7 @@ import { RoutingService } from './routing.service';
 import { CorridorService } from './corridor.service';
 import { ShelfService } from './shelf.service';
 import { VendorService } from './vendor.service';
-import { ParcelService } from './parcel.service';
+import { ParcelService, parcelCurrency, vendorOrderRowOf } from './parcel.service';
 import { ToteService } from './tote.service';
 import { VehicleService } from './vehicle.service';
 import { DriverService } from './driver.service';
@@ -38,6 +38,7 @@ import { WalletService } from '../m1/wallet/wallet.service';
 import { DidService } from '../../foundation/did/did.service';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { BooksService } from '../../foundation/books/books.service';
+import { FxService } from '../../foundation/money/fx.service';
 import { IdentityVault } from '../../foundation/data-firewall/identity-vault.service';
 import { OperationalStore } from '../../foundation/data-firewall/operational-store.service';
 import { FieldEncryption } from '../../foundation/data-firewall/field-encryption.service';
@@ -62,6 +63,8 @@ describe('crossing a border', () => {
   let corridors: CorridorService;
   let vendors: VendorService;
   let entities: EntityService;
+  let fx: FxService;
+  let parcels: ParcelService;
 
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -73,7 +76,7 @@ describe('crossing a border', () => {
         MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
-        EntityService, BooksService,
+        EntityService, BooksService, FxService,
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
         GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder },
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
@@ -81,20 +84,23 @@ describe('crossing a border', () => {
     }).compile();
     entities = moduleRef.get(EntityService);
     entities.seed(); // compile() runs no lifecycle hooks — the sisters are seeded by hand, as at boot
+    fx = moduleRef.get(FxService);
+    fx.seed();
     agents = moduleRef.get(AgentService);
     mdps = moduleRef.get(MdpService);
     routing = moduleRef.get(RoutingService);
     corridors = moduleRef.get(CorridorService);
     vendors = moduleRef.get(VendorService);
+    parcels = moduleRef.get(ParcelService);
   });
 
   let seq = 0;
   const hours = { mon: { open: '08:00', close: '18:00' }, tue: { open: '08:00', close: '18:00' }, wed: { open: '08:00', close: '18:00' }, thu: { open: '08:00', close: '18:00' }, fri: { open: '08:00', close: '18:00' }, sat: { open: '08:00', close: '18:00' }, sun: null };
 
-  function shop(shopName: string, zone: string, location: { lat: number; lng: number }, country?: string) {
+  function shop(shopName: string, zone: string, location: { lat: number; lng: number }, country?: string, pricePerParcel?: number) {
     seq += 1;
     return agents.register({
-      shopName, zone, country, location, landmark: 'by the road', openingHours: hours, shelf: { rows: 3, cols: 3 },
+      shopName, zone, country, location, pricePerParcel, landmark: 'by the road', openingHours: hours, shelf: { rows: 3, cols: 3 },
       fullName: `${shopName} owner`, nationalId: `ID-${seq}`, mobile: `+2547000${seq}`, deviceImei: `IMEI-${seq}`,
       requirements: { androidVersion: 13, reliablePower: true, tradingLicence: 'TL-1', criminalRecordClear: true },
     });
@@ -219,18 +225,97 @@ describe('crossing a border', () => {
     });
   });
 
-  describe('and refuses to invent a price across it', () => {
-    it('will not add shillings to birr and call the sum a quote', () => {
-      const from = shop('Nairobi CBD', 'Nairobi', NAIROBI);
-      const to = shop("Bambi's Super Market", 'AddisAbaba', ADDIS, 'ET');
+  describe('and states one price across it, at a rate it will show you', () => {
+    it('converts a foreign stop into the quote currency, and keeps both numbers', () => {
+      const from = shop('Nairobi CBD', 'Nairobi', NAIROBI, 'KE', 55);
+      const to = shop("Bambi's Super Market", 'AddisAbaba', ADDIS, 'ET', 60);
       corridors.addCorridor({ name: 'Nairobi–Addis', originZone: 'Nairobi', destZone: 'AddisAbaba' });
 
-      // The route PLANS — a driver could be sent — but the price cannot be stated, and the refusal says
-      // exactly which stop is paid in the other money. Lifting this is the FX slice, not a rounding fix.
-      expect(() => routing.quoteShipment(from.did, to.did)).toThrow(/KES/);
-      expect(() => routing.quoteShipment(from.did, to.did)).toThrow(/ETB/);
-      expect(() => routing.quoteShipment(from.did, to.did)).toThrow(/not available yet/);
-      expect(routing.planJourney({ originAgentDid: from.did, destAgentDid: to.did }).crossesBorder).toBe(true);
+      const quote = routing.quoteShipment(from.did, to.did);
+      expect(quote.crossesBorder).toBe(true);
+      expect(quote.currency).toBe('KES'); // the SELLING sister's money — here, the origin shop's
+
+      // The Kenyan shop is owed shillings and quoted in shillings: one number, unconverted.
+      expect(quote.nodes[0]).toMatchObject({ currency: 'KES', nativeFee: 55, fee: 55 });
+      // Bambi's is owed 60 BIRR and always will be. What the buyer's price carries is that 60 expressed
+      // in shillings — at the seeded rate (129.0 KES and 118.5 ETB to the dollar), 65.32.
+      expect(quote.nodes[1]).toMatchObject({ currency: 'ETB', nativeFee: 60, fee: 65.32 });
+      expect(quote.nodeFees).toBe(120.32);
+    });
+
+    it('shows the rate it used, where it came from, and how long the price is good for', () => {
+      const from = shop('Nairobi CBD', 'Nairobi', NAIROBI, 'KE', 55);
+      const to = shop("Bambi's Super Market", 'AddisAbaba', ADDIS, 'ET', 60);
+      corridors.addCorridor({ name: 'Nairobi–Addis', originZone: 'Nairobi', destZone: 'AddisAbaba' });
+
+      const fxUsed = routing.quoteShipment(from.did, to.did).fx!;
+      expect(fxUsed.base).toBe('KES');
+      expect(fxUsed.rates).toHaveLength(1);
+      expect(fxUsed.rates[0]).toMatchObject({ from: 'ETB', to: 'KES', via: 'USD', source: 'seed/seed', stale: false });
+      expect(fxUsed.rates[0].rate).toBeCloseTo(129.0 / 118.5, 6);
+      // A price built on a rate has a shelf life, even when the rate itself is fresh.
+      expect(new Date(fxUsed.expiresAt).getTime()).toBeGreaterThan(new Date(fxUsed.quotedAt).getTime());
+    });
+
+    it('leaves a domestic quote with no fx block at all — nothing was converted, so nothing expires', () => {
+      const from = shop('Nairobi CBD', 'Nairobi', NAIROBI);
+      const to = shop('Kisumu Duka', 'Kisumu', { lat: -0.09, lng: 34.77 });
+      corridors.addCorridor({ name: 'Nairobi–Kisumu', originZone: 'Nairobi', destZone: 'Kisumu' });
+      const quote = routing.quoteShipment(from.did, to.did);
+      expect(quote.fx).toBeUndefined();
+      expect(quote.nodes.every((n) => n.fee === n.nativeFee)).toBe(true);
+    });
+
+    it('follows the rate when the rate moves', () => {
+      const from = shop('Nairobi CBD', 'Nairobi', NAIROBI, 'KE', 55);
+      const to = shop("Bambi's Super Market", 'AddisAbaba', ADDIS, 'ET', 60);
+      corridors.addCorridor({ name: 'Nairobi–Addis', originZone: 'Nairobi', destZone: 'AddisAbaba' });
+      const before = routing.quoteShipment(from.did, to.did).nodes[1].fee;
+
+      fx.setRate('ETB', 237.0, 'central-bank'); // the birr halves against the dollar
+      const after = routing.quoteShipment(from.did, to.did);
+      expect(after.nodes[1].nativeFee).toBe(60); // the shop's own price did not change
+      expect(after.nodes[1].fee).toBeLessThan(before); // what it costs a Kenyan buyer did
+      expect(after.fx!.rates[0].source).toBe('central-bank/seed'); // the ETB leg is the fresh one
+    });
+
+    it('stamps the rates onto the parcel, so a price can always be traced back to them', () => {
+      const from = shop('Nairobi CBD', 'Nairobi', NAIROBI, 'KE', 55);
+      const to = shop("Bambi's Super Market", 'AddisAbaba', ADDIS, 'ET', 60);
+      corridors.addCorridor({ name: 'Nairobi–Addis', originZone: 'Nairobi', destZone: 'AddisAbaba' });
+      const store = vendors.register({ name: 'Nairobi Store', country: 'KE' });
+      const quote = routing.quoteShipment(from.did, to.did);
+
+      const { parcel } = parcels.createInbound({
+        vendorId: store.vendorId, originAgentDid: from.did, destAgentDid: to.did, buyerMobile: '+254700999',
+        contentPhotoRef: 'contents.jpg', size: 'M', shippingPolicy: store.shippingPolicy, quote,
+      });
+      // Same reason the margin rate is stamped: a price is a promise made at a moment, and both the rate
+      // and the knob behind it move. Without this the sister that collected could not later prove what it
+      // owed the sister that performed the leg.
+      expect(parcel.currency).toBe('KES');
+      expect(parcel.fx?.rates).toEqual(quote.fx!.rates);
+      expect(parcelCurrency(parcel)).toBe('KES');
+      expect(vendorOrderRowOf(parcel).currency).toBe('KES');
+    });
+
+    it('leaves a domestic parcel with no rates at all, and reads an old parcel as the home currency', () => {
+      const from = shop('Nairobi CBD', 'Nairobi', NAIROBI);
+      const to = shop('Kisumu Duka', 'Kisumu', { lat: -0.09, lng: 34.77 });
+      corridors.addCorridor({ name: 'Nairobi–Kisumu', originZone: 'Nairobi', destZone: 'Kisumu' });
+      const store = vendors.register({ name: 'Nairobi Store', country: 'KE' });
+      const { parcel } = parcels.createInbound({
+        vendorId: store.vendorId, originAgentDid: from.did, destAgentDid: to.did, buyerMobile: '+254700998',
+        contentPhotoRef: 'contents.jpg', size: 'M', shippingPolicy: store.shippingPolicy, quote: routing.quoteShipment(from.did, to.did),
+      });
+      expect(parcel.fx).toBeUndefined();
+      expect(parcelCurrency({ ...parcel, currency: undefined })).toBe('KES'); // written before prices named a unit
+    });
+
+    it('still refuses when the rate book has never heard of a currency', () => {
+      // The old refusal, kept where it is still true. A price that cannot be stated in one currency is
+      // not a price, and inventing a rate would be worse than saying so.
+      expect(() => fx.rateFor('KES', 'XOF')).toThrow(/No exchange rate for XOF/);
     });
 
     it('prices a store collected from its own dock at home, border or not', () => {

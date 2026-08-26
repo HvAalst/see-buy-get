@@ -10,8 +10,9 @@ import { isOpenAt, nextOpenAt } from './hours';
 import { DISPATCH_BUFFER_H, HANDOVER_BUFFER_H, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, VEHICLE_SPEED_KMH, withPlatformFee } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { currencyForJurisdiction } from '../../foundation/money/currency';
+import { FX_QUOTE_TTL_MIN, FxRate, FxService } from '../../foundation/money/fx.service';
 import { BorderCrossing, crossingsOn } from './country';
-import { ParcelSize } from './pudo.types';
+import { ParcelFx, ParcelSize } from './pudo.types';
 
 export interface NodePick {
   agentDid: string;
@@ -21,8 +22,20 @@ export interface NodePick {
 }
 
 export interface QuoteLeg { transport: number; base: number; total: number; }
-/** A stop on the journey + its open-data fee, the sister company owed that fee, and what it is owed IN. */
-export interface QuoteNode { type: 'pudo' | 'mdp'; id: string; label: string; fee: number; entityId: string; country: string; currency: string; }
+/**
+ * A stop on the journey + its open-data fee, the sister company owed that fee, and what it is owed IN.
+ *
+ * Two amounts on purpose. `nativeFee` in `currency` is what the site actually charges — the number it
+ * advertises and the number it will be paid. `fee` is that amount expressed in the QUOTE's currency, which
+ * is what the buyer's price is built from. On a domestic route they are the same number; across a border
+ * they must not be conflated, because one of them is a promise to a shop and the other is a promise to a
+ * buyer, and the rate between them can move.
+ */
+export interface QuoteNode { type: 'pudo' | 'mdp'; id: string; label: string; fee: number; nativeFee: number; entityId: string; country: string; currency: string; }
+
+/** The rates a quote was converted at, and how long the resulting price is good for. Shared with the
+ *  parcel, so what was quoted and what was minted can be compared line for line. */
+export type QuoteFx = ParcelFx;
 export interface ShipmentQuote {
   hops: Array<{ type: 'pudo' | 'mdp' | 'dock'; id: string; label: string; zone: string; country: string }>;
   nodes: QuoteNode[]; // each stop + its open-data fee (the tail)
@@ -33,6 +46,9 @@ export interface ShipmentQuote {
   /** The currency every figure below is in — the selling sister's. A quote is a promise to a buyer, and
    *  a promise made in no particular currency is not one. */
   currency: string;
+  /** The rates this quote was converted at. ABSENT on a single-currency route — nothing was converted,
+   *  so there is nothing to expire. Present means the price stands on a rate and has a shelf life. */
+  fx?: QuoteFx;
   /** Whether the goods leave one country for another, and on which legs. Empty on a domestic route. */
   crossesBorder: boolean;
   crossings: BorderCrossing[];
@@ -91,6 +107,7 @@ export class RoutingService {
     private readonly mdps: MdpService,
     private readonly vehicles: VehicleService,
     private readonly entities: EntityService,
+    private readonly fx: FxService,
     @Inject(ROUTER) private readonly router: Router,
   ) {}
 
@@ -120,25 +137,16 @@ export class RoutingService {
     // quote reads as one entity's cost stack — but the fee is owed to a shop by a specific sister, and
     // writing that down now is what makes a cross-border route expressible later without a re-quote.
     // A DOCK is on the route but not in the stack: it is where the parcel was, not somebody who handled it.
-    const nodes: QuoteNode[] = plan.hops.filter((h): h is typeof h & { type: 'pudo' | 'mdp' } => h.type !== 'dock').map((h) => {
+    // Each stop, what it is owed, and IN WHAT. The native amount is the shop's own advertised rate in its
+    // own money; the fee the price is built from comes after, once we know what money the price is in.
+    const stops = plan.hops.filter((h): h is typeof h & { type: 'pudo' | 'mdp' } => h.type !== 'dock').map((h) => {
       const isHub = h.type === 'mdp';
       const site = isHub ? this.mdps.require(h.id) : this.agents.get(h.id);
       const entityId = isHub ? this.mdps.entityIdOf(this.mdps.require(h.id)) : this.agents.entityIdOf(this.agents.get(h.id));
-      return {
-        type: h.type,
-        id: h.id,
-        label: h.label,
-        fee: Math.round(site.pricePerParcel * 100) / 100,
-        entityId,
-        country: h.country,
-        // What this stop is owed IN. A shop's advertised rate is a number in its own money; adding it to a
-        // number in somebody else's is not arithmetic, and the gate below is what stops us pretending.
-        currency: this.currencyOf(entityId),
-      };
+      return { type: h.type, id: h.id, label: h.label, entityId, country: h.country, nativeFee: Math.round(site.pricePerParcel * 100) / 100, currency: this.currencyOf(entityId) };
     });
-    const entityIds = [...new Set(nodes.map((n) => n.entityId))];
+    const entityIds = [...new Set(stops.map((n) => n.entityId))];
     const legs = plan.legs.map((l) => ({ from: l.from, to: l.to, km: l.distanceKm }));
-    const nodeFees = Math.round(nodes.reduce((sum, n) => sum + n.fee, 0) * 100) / 100;
     const totalKm = Math.round(legs.reduce((s, l) => s + l.km, 0) * 10) / 10;
     const factor = SIZE_TRANSPORT_FACTOR[size];
     const { min, max } = this.vehicles.priceRange();
@@ -146,28 +154,35 @@ export class RoutingService {
     // The margin belongs to the sister selling the shipment, not to the network. Today one company
     // performs the whole journey, so the origin node's rate is that company's; when a route crosses a
     // border the COLLECTING sister's rate is the one that should apply, per R1 — revisit it there.
-    const sellerId = sellerEntityId ?? nodes[0]?.entityId ?? entityIds[0];
+    const sellerId = sellerEntityId ?? stops[0]?.entityId ?? entityIds[0];
     const feePct = this.entities.feePctOf(sellerId);
 
-    // THE CURRENCY GATE. The seller quotes in its own money, and every figure in this quote is summed:
-    // node fees, transport, margin. When a stop on the route is owed in a different currency, that sum is
-    // not a price — it is two prices added together as though the numbers meant the same thing.
+    // ONE CURRENCY, NAMED. The seller quotes in its own money and every figure below is summed into it, so
+    // a stop paid in another currency is CONVERTED here — at a stated rate, from a rate book that says
+    // where the number came from and how old it is. This used to refuse outright; the refusal survives
+    // where it is still true, which is a currency the rate book has never heard of.
     //
-    // So the quote refuses, by name, instead of returning a plausible wrong number. Note the gate is on
-    // CURRENCY and not on the border: two countries sharing a currency quote perfectly well, and one
-    // country could in principle not. What a quote cannot survive is two units, not two flags.
-    //
-    // Lifting this is the FX slice — a rate source, a rate held for the life of the quote, and a
-    // cross-sister settlement for the leg one company performs and another collects for.
+    // Note what is converted and what is not: a NODE FEE is somebody else's price in their own money.
+    // Transport and the margin are the seller's own, already in the quote's currency, and converting them
+    // would be converting a number that never left home.
     const currency = this.currencyOf(sellerId);
-    const foreign = nodes.find((n) => n.currency !== currency);
-    if (foreign) {
-      throw new GlosError(
-        'FX_REQUIRED',
-        `This route is priced in ${currency} but ${foreign.label} is paid in ${foreign.currency} — cross-currency shipping is not available yet`,
-        { currency, otherCurrency: foreign.currency, at: foreign.label, country: foreign.country },
-      );
-    }
+    const quotedAt = new Date();
+    const used = new Map<string, FxRate>();
+    const nodes: QuoteNode[] = stops.map((n) => {
+      if (n.currency !== currency) {
+        const rate = this.fx.rateFor(n.currency, currency);
+        used.set(`${rate.from}>${rate.to}`, rate);
+      }
+      return { type: n.type, id: n.id, label: n.label, entityId: n.entityId, country: n.country, currency: n.currency, nativeFee: n.nativeFee, fee: this.fx.convert(n.nativeFee, n.currency, currency) };
+    });
+    const nodeFees = Math.round(nodes.reduce((sum, n) => sum + n.fee, 0) * 100) / 100;
+    const rates = [...used.values()];
+    // The rate may be old — that is a fact about the world and it is reported. What was PROMISED is only
+    // good for the window: a price stated in converted money cannot be honoured indefinitely, and the
+    // mint re-quotes against this before it commits anybody.
+    const fx: QuoteFx | undefined = rates.length
+      ? { base: currency, rates, quotedAt: quotedAt.toISOString(), expiresAt: new Date(quotedAt.getTime() + FX_QUOTE_TTL_MIN * 60_000).toISOString(), stale: rates.some((r) => r.stale) }
+      : undefined;
 
     // Where the goods leave one customs territory for another. Read off the route rather than stored, and
     // reported rather than charged for: a crossing costs time and paperwork that this quote does NOT yet
@@ -175,7 +190,7 @@ export class RoutingService {
     const crossings = crossingsOn(plan.hops);
     const leg = (rate: number) => { const t = transport(rate); const base = Math.round((nodeFees + t) * 100) / 100; return { transport: t, base, total: withPlatformFee(base, feePct) }; };
     return {
-      hops: plan.hops, nodes, legs, entityIds, currency, crossesBorder: crossings.length > 0, crossings,
+      hops: plan.hops, nodes, legs, entityIds, currency, fx, crossesBorder: crossings.length > 0, crossings,
       totalKm, nodeFees, size, transportFactor: factor, perKm: { min, max }, platformFeePct: feePct,
       flexible: leg(max), locked: leg(min),
     };

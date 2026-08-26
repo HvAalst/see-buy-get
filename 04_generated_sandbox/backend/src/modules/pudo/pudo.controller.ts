@@ -30,10 +30,11 @@ import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
-import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityFeeDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetLocationDto, SetPriceDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
+import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityFeeDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
 import { classifySize, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { BooksService } from '../../foundation/books/books.service';
+import { FX_BASE, FX_RATE_MAX_AGE_H, FxService } from '../../foundation/money/fx.service';
 import { BagPlanService } from './bag-plan.service';
 import { ForthcomingService } from './forthcoming.service';
 import { DockService } from './dock.service';
@@ -62,6 +63,7 @@ export class SbgController {
     private readonly monitor: MonitorService,
     private readonly ratings: RatingService,
     private readonly entities: EntityService,
+    private readonly fx: FxService,
     private readonly books: BooksService,
     private readonly bagPlans: BagPlanService,
     private readonly forthcoming: ForthcomingService,
@@ -176,6 +178,28 @@ export class SbgController {
   @Get('countries')
   countries() {
     return this.entities.sisters().map((e) => ({ country: e.jurisdiction, name: e.name, currency: e.currency, entityId: e.entityId }));
+  }
+
+  /**
+   * The rate book every cross-border price stands on: one rate per currency against the base, with when
+   * it was taken and who from. Operator-only — not because it is a secret, but because a rate with no
+   * context invites being read as a promise; what a customer sees is the rate ON THEIR QUOTE.
+   */
+  @Roles('operator')
+  @Get('fx')
+  fxRates() {
+    return { base: FX_BASE, maxAgeHours: FX_RATE_MAX_AGE_H, rates: this.fx.rates() };
+  }
+
+  /**
+   * Push a rate. This is the door a live feed comes through — the same one an operator uses by hand when
+   * the feed is down, which is deliberate: there is one way a rate enters the system, and it is recorded
+   * with its source either way.
+   */
+  @Roles('operator')
+  @Post('fx')
+  setFxRate(@Body() dto: SetFxRateDto) {
+    return this.fx.setRate(dto.currency, dto.perBase, dto.source?.trim() || 'operator');
   }
 
   /**

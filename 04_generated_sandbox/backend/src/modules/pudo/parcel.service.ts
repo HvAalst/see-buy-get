@@ -77,6 +77,7 @@ export interface VendorOrderRow {
   size: ParcelSize;
   shipmentCost?: number;
   buyerCharge?: number;
+  currency: string; // what those two amounts ARE — the selling sister's money, not the network's
   routeMode?: 'flexible' | 'locked';
   collectionCode?: string;
   trackingKey?: string;
@@ -144,6 +145,17 @@ export function filterVendorParcels(rows: Parcel[], q: VendorOrdersQuery): Parce
   return [...out].sort(vendorOrderSort(q.sort));
 }
 
+/**
+ * What a parcel's money IS — the currency it was quoted and will be billed in.
+ *
+ * The SELLING sister's, stamped at mint. A parcel written before prices named their unit was necessarily
+ * in this deployment's own currency, because there was only one; defaulting on READ keeps the old rows and
+ * the new ones answering the same question, exactly as a site's country does.
+ */
+export function parcelCurrency(p: Parcel): string {
+  return p.currency ?? NETWORK_CURRENCY;
+}
+
 /** Project a Parcel to a register row (adds the DID, buyer + product names the raw list lacked). */
 export function vendorOrderRowOf(p: Parcel): VendorOrderRow {
   return {
@@ -160,6 +172,7 @@ export function vendorOrderRowOf(p: Parcel): VendorOrderRow {
     size: p.size,
     shipmentCost: p.shipmentCost,
     buyerCharge: p.buyerCharge,
+    currency: parcelCurrency(p),
     routeMode: p.routeMode,
     collectionCode: p.collectionCode,
     trackingKey: p.trackingKey,
@@ -172,7 +185,9 @@ export function vendorOrderRowOf(p: Parcel): VendorOrderRow {
 export function vendorOrdersToCsv(rows: Parcel[]): string {
   return toCsv(
     ['Order', 'Shipment DID', 'Buyer', 'Products', 'Status', 'Paid', 'Destination', 'Shipping cost', 'Buyer charge', 'Currency', 'Created'],
-    rows.map((p) => [p.externalOrderId ?? p.parcelId, p.did ?? '', p.receiverMobile, vendorProducts(p), p.status, p.paidStatus ?? '', p.destZone, p.shipmentCost ?? '', p.buyerCharge ?? '', NETWORK_CURRENCY, p.acceptedAt]),
+    // The currency is the PARCEL's, not the network's: a store selling out of another country bills in its
+    // own sister's money, and an export that stamped every row 'KES' would be quietly wrong for that store.
+    rows.map((p) => [p.externalOrderId ?? p.parcelId, p.did ?? '', p.receiverMobile, vendorProducts(p), p.status, p.paidStatus ?? '', p.destZone, p.shipmentCost ?? '', p.buyerCharge ?? '', parcelCurrency(p), p.acceptedAt]),
   );
 }
 
@@ -1037,6 +1052,10 @@ export class ParcelService implements OnApplicationBootstrap {
       transportCost: chosen.transport,
       platformFee,
       platformFeePct: quote.platformFeePct, // the rate quoted, locked to this parcel
+      // What the price IS, and — where the route crossed a currency line — the rates it was struck at.
+      // Same reason as the margin rate above: a promise is made at a moment, and the rate behind it moves.
+      currency: quote.currency,
+      fx: quote.fx,
       shipmentCost,
       ceilingCost: quote.flexible.total,
       buyerCharge,
@@ -1128,6 +1147,8 @@ export class ParcelService implements OnApplicationBootstrap {
       transportCost: chosen.transport,
       platformFee: Math.round((chosen.total - chosen.base) * 100) / 100,
       platformFeePct: quote.platformFeePct, // the rate quoted, locked to this parcel
+      currency: quote.currency, // the cash the shop will take at the counter is in a named money
+      fx: quote.fx,
       shipmentCost: chosen.total,
       ceilingCost: quote.flexible.total,
       paidStatus: 'unpaid',

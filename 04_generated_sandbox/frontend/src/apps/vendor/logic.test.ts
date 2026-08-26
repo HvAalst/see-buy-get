@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n'; // English is the base catalog, so the real `t` yields the English literals
 import {
   EMPTY_MINT,
+  ORDER_CSV_HEADERS,
   dimsComplete,
   fromHandoff,
   handoffLine,
   mintMissing,
   money,
+  orderRowsToCsv,
   orderStatus,
   ordersSummary,
   originRows,
@@ -14,7 +16,7 @@ import {
   policyLine,
   priceCards,
 } from './logic';
-import type { CheckoutRow, NetworkPoint, OriginOption, QuoteView } from './types';
+import type { CheckoutRow, NetworkPoint, OrderRow, OriginOption, QuoteView } from './types';
 
 const point = (over: Partial<NetworkPoint> = {}): NetworkPoint => ({
   did: 'did:a',
@@ -123,6 +125,39 @@ describe('price cards', () => {
     const cards = priceCards(quote(), t);
     expect(cards.map((c) => c.key)).toEqual(['locked', 'flexible']);
     expect(cards[0].total).toBeLessThan(cards[1].total);
+  });
+});
+
+/**
+ * The client export and the server export are the SAME file.
+ *
+ * "Export selected" runs here; "export all" runs in vendorOrdersToCsv on the server. A column added to one
+ * and not the other is not a cosmetic difference — it is two files with the same name and different shapes,
+ * and whoever reconciles them cannot tell which one they are holding. The list below is copied from the
+ * server's and is meant to be edited only in step with it.
+ */
+const SERVER_ORDER_HEADERS = ['Order', 'Shipment DID', 'Buyer', 'Products', 'Status', 'Paid', 'Destination', 'Shipping cost', 'Buyer charge', 'Currency', 'Created'];
+
+const orderRow = (over: Partial<OrderRow> = {}): OrderRow => ({
+  parcelId: 'PUD-1', status: 'Created', paidStatus: 'ParcelPaid', destZone: 'Kisumu', size: 'M',
+  shipmentCost: 12.5, buyerCharge: 3, currency: 'KES', createdAt: '2026-08-26T10:00:00Z', ...over,
+});
+
+describe('the shipment export', () => {
+  it('carries the server export’s columns, in the server export’s order', () => {
+    expect(ORDER_CSV_HEADERS).toEqual(SERVER_ORDER_HEADERS);
+  });
+
+  it('takes the currency from the row, so a store selling in another market exports its own money', () => {
+    const lines = orderRowsToCsv([orderRow(), orderRow({ parcelId: 'PUD-2', currency: 'ETB' })]).split('\r\n');
+    expect(lines[0]).toBe(SERVER_ORDER_HEADERS.join(','));
+    expect(lines[1].split(',')[SERVER_ORDER_HEADERS.indexOf('Currency')]).toBe('KES');
+    expect(lines[2].split(',')[SERVER_ORDER_HEADERS.indexOf('Currency')]).toBe('ETB');
+  });
+
+  it('leaves the cell blank rather than guessing when a row carries no currency', () => {
+    const lines = orderRowsToCsv([orderRow({ currency: undefined })]).split('\r\n');
+    expect(lines[1].split(',')[SERVER_ORDER_HEADERS.indexOf('Currency')]).toBe('');
   });
 });
 

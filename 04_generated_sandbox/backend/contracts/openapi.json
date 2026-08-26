@@ -3813,6 +3813,47 @@
         }
       }
     },
+    "/v1/sbg/fx": {
+      "get": {
+        "operationId": "Sbg.fxRates",
+        "summary": "",
+        "description": "The rate book every cross-border price stands on: one rate per currency against the base, with when\nit was taken and who from. Operator-only — not because it is a secret, but because a rate with no\ncontext invites being read as a promise; what a customer sees is the rate ON THEIR QUOTE.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "operationId": "Sbg.setFxRate",
+        "summary": "",
+        "description": "Push a rate. This is the door a live feed comes through — the same one an operator uses by hand when\nthe feed is down, which is deliberate: there is one way a rate enters the system, and it is recorded\nwith its source either way.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetFxRateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/entities": {
       "get": {
         "operationId": "Sbg.listEntities",
@@ -12431,6 +12472,25 @@
           "approve"
         ]
       },
+      "SetFxRateDto": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "type": "string"
+          },
+          "perBase": {
+            "type": "number",
+            "minimum": 0
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "currency",
+          "perBase"
+        ]
+      },
       "EntityFeeDto": {
         "type": "object",
         "properties": {
@@ -12937,6 +12997,36 @@
           "svg"
         ]
       },
+      "ParcelFx": {
+        "type": "object",
+        "properties": {
+          "base": {
+            "type": "string"
+          },
+          "rates": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "quotedAt": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string"
+          },
+          "stale": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "base",
+          "rates",
+          "quotedAt",
+          "expiresAt",
+          "stale"
+        ]
+      },
       "Birthplace": {
         "type": "object",
         "properties": {
@@ -13164,6 +13254,17 @@
           },
           "shipmentCost": {
             "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "fx": {
+            "description": "The exchange rates this parcel's price was struck at, when it needed any.\n\n Kept for the same reason `platformFeePct` is: a price is a promise made at a moment, and the rate\n behind it moves. Without this, a cross-border parcel's cost is a number nobody can reconstruct or\n argue about, and the sister that collected it could not later prove what it owed the sister that\n performed the leg. Absent on every domestic parcel, because nothing was converted.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ParcelFx"
+              }
+            ]
           },
           "ceilingCost": {
             "type": "number"
