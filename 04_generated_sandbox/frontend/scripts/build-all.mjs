@@ -59,3 +59,23 @@ for (const app of apps) {
 }
 
 console.log(`\nbuilt ${apps.length} app(s): ${apps.join(', ')}`);
+
+/**
+ * The embeddable quote widget — built last, and only on a full run.
+ *
+ * It is not an app (no manifest, no service worker, no install path) so it is not in the loop above, and
+ * its count is reported on its own line: "built N app(s)" has been the one-line proof that a frontend
+ * change did not break a build, and quietly folding a library into that number would blunt it.
+ *
+ * After the apps because the root app's outDir IS dist/ with emptyOutDir off — order does not matter today,
+ * and this way it cannot start to.
+ */
+if (!wanted.length) {
+  console.log(`\n--- vite build: embed widget ---`);
+  const r = spawnSync(process.execPath, [VITE_BIN, 'build', '--config', 'vite.widget.config.ts'], { cwd: ROOT, env: process.env, stdio: 'inherit' });
+  if (r.status !== 0) {
+    console.error(`\nbuild failed: embed widget (exit ${r.status ?? 'signal ' + r.signal})`);
+    process.exit(r.status ?? 1);
+  }
+  console.log('built 1 embed: sbg-quote.js');
+}

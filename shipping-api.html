@@ -100,6 +100,7 @@
     <li><a href="#places">Naming a place</a></li>
     <li><a href="#quote">Quote reference</a></li>
     <li><a href="#areas">Where we deliver</a></li>
+    <li><a href="#embed">The drop-in button</a></li>
     <li><a href="#borders">Crossing a border</a></li>
     <li><a href="#errors">Errors</a></li>
     <li><a href="#limits">Limits</a></li>
@@ -232,6 +233,58 @@
   <code>GET /v1/sbg/countries</code>.</p>
 </section>
 
+<section id="embed">
+  <h2>The drop-in button</h2>
+  <p class="lede">If you do not want to call the API yourself, paste this instead. One script tag and one
+  element, no build step and no framework.</p>
+
+<pre><code>&lt;script src="https://sbg.example/embed/sbg-quote.js" defer&gt;&lt;/script&gt;
+
+&lt;sbg-shipping-quote
+  from-country="KE"
+  from-area="Nairobi"
+  length-cm="30" width-cm="20" height-cm="10" weight-kg="0.6"
+&gt;&lt;/sbg-shipping-quote&gt;</code></pre>
+
+  <p style="margin-top:14px">The button opens a destination picker, calls
+  <code>/shipping/quotes</code>, and shows the price, where the buyer would collect it and when. Your page
+  gets the whole quote:</p>
+
+<pre><code>document.querySelector('sbg-shipping-quote')
+  .addEventListener('sbg:quote', (e) =&gt; {
+    console.log(e.detail.price.amount, e.detail.price.currency);
+  });</code></pre>
+
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Attribute</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td>from-point</td><td class="desc">The collection point you ship from, by its public id.</td></tr>
+      <tr><td>from-country · from-area</td><td class="desc">…or where you ship from, and we find the point. <span class="req">one form required</span></td></tr>
+      <tr><td>length-cm · width-cm · height-cm</td><td class="desc">The packed box. All three or none — two of three is not a box, and half-measurements are dropped rather than sent.</td></tr>
+      <tr><td>weight-kg</td><td class="desc">Actual weight.</td></tr>
+      <tr><td>size</td><td class="desc"><code>S</code> · <code>M</code> · <code>L</code>, when you have no measurements. Ignored when you do.</td></tr>
+      <tr><td>label</td><td class="desc">Your own words on the button.</td></tr>
+      <tr><td>locale</td><td class="desc">BCP-47 tag for money and date formats. Defaults to the visitor's.</td></tr>
+      <tr><td>api</td><td class="desc">Override the API root for one embed.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note">
+    <b>It renders in a shadow root.</b>
+    Your CSS cannot reach into it and its CSS cannot reach out. It takes your font and colour so it does not
+    look bolted on; <code>--sbg-accent</code>, <code>--sbg-radius</code> and <code>--sbg-fg</code> are the
+    whole styling contract. Roughly 4 kB over the wire, and no framework — you should not pay for a UI
+    runtime to render one price.
+  </div>
+
+  <p style="margin-top:16px">Set <code>window.SBG_QUOTE_STRINGS</code> before the script loads to replace
+  any of its words. A misconfigured widget logs to the console and renders nothing — a shopper should never
+  be shown a setup error. There is a working demo at
+  <a href="shipping-widget.html">shipping-widget.html</a>.</p>
+</section>
+
 <section id="borders">
   <h2>Crossing a border</h2>
   <p class="lede">A continental quote is a real one: it plans across the border, names the leg that crosses,
@@ -324,7 +377,10 @@
       but a costed route on an unauthenticated call is a competitor's cost sheet. It waits for a key.</li>
     <li><b>Free-text destinations.</b> You name a point or an area, not “12 Biashara Street”. Place
       look-up covers Kenya only today.</li>
-    <li><b>The drop-in button.</b> This is the API the widget will call; the widget itself is next.</li>
+    <li><b>Translations for the button.</b> Its words are English until you replace them with
+      <code>window.SBG_QUOTE_STRINGS</code>; it is not wired to the network's own translation catalogues.</li>
+    <li><b>Minting from the button.</b> It quotes. Turning a quote into a shipment is still the
+      authenticated merchant API.</li>
   </ul>
 </section>
 

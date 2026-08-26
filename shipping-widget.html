@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SBG Shipping Widget — demo</title>
+<style>
+  :root {
+    --bg: #f7f7f5; --panel: #ffffff; --ink: #17181c; --muted: #6b6f76; --line: #e3e3df;
+    --accent: #4c46e0; --ship: #1c7c54; --now: #b4690e; --code-bg: #f2f2ef;
+    --shadow: 0 1px 2px rgba(20,20,25,.06), 0 8px 24px rgba(20,20,25,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121317; --panel: #1a1c21; --ink: #eceef2; --muted: #9aa0aa; --line: #2a2d34;
+      --accent: #8f8bff; --ship: #5cc08c; --now: #e0a44a; --code-bg: #14161a;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #121317; --panel: #1a1c21; --ink: #eceef2; --muted: #9aa0aa; --line: #2a2d34;
+    --accent: #8f8bff; --ship: #5cc08c; --now: #e0a44a; --code-bg: #14161a;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 40px 24px 96px; }
+  h1 { font-size: 26px; letter-spacing: -.01em; margin: 0; text-wrap: balance; }
+  .sub { color: var(--muted); font-size: 15px; max-width: 68ch; margin: 10px 0 0; }
+  p { max-width: 72ch; }
+
+  .run { margin: 20px 0 36px; padding: 14px 16px; border-left: 3px solid var(--now);
+         background: color-mix(in srgb, var(--now) 8%, transparent); border-radius: 0 8px 8px 0; font-size: 14px; }
+  .run b { display: block; margin-bottom: 3px; }
+
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 24px; margin-bottom: 24px; }
+  section > h2 { margin: 0 0 6px; font-size: 19px; letter-spacing: -.01em; }
+  section > h2 + p { margin-top: 0; color: var(--muted); font-size: 14px; }
+
+  /* A pretend product page, so the widget is seen where it will actually live. */
+  .product { display: grid; grid-template-columns: 1fr; gap: 24px; }
+  @media (min-width: 720px) { .product { grid-template-columns: 200px 1fr; } }
+  .shot { aspect-ratio: 1; border-radius: 12px; background:
+    repeating-linear-gradient(45deg, color-mix(in srgb, var(--accent) 14%, transparent) 0 12px,
+    color-mix(in srgb, var(--accent) 7%, transparent) 12px 24px); }
+  .product h3 { margin: 0; font-size: 20px; letter-spacing: -.01em; }
+  .brand { color: var(--muted); font-size: 13px; margin: 4px 0 0; }
+  .cost { font-size: 22px; font-weight: 700; margin: 14px 0 4px; font-variant-numeric: tabular-nums; }
+  .stock { color: var(--ship); font-size: 13px; margin: 0 0 20px; }
+  .shipbox { border-top: 1px solid var(--line); padding-top: 18px; }
+  .shiphint { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+
+  pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 10px; padding: 16px; overflow-x: auto; margin: 14px 0 0; }
+  pre code { font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  code { font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: color-mix(in srgb, var(--ink) 7%, transparent); padding: 1px 5px; border-radius: 5px; }
+  .scroll { overflow-x: auto; margin-top: 14px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 480px; }
+  th, td { text-align: left; padding: 9px 14px 9px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  td:first-child { white-space: nowrap; font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  td.desc { color: var(--muted); }
+  ul.plain { margin: 12px 0 0; padding-left: 18px; }
+  ul.plain li { margin-bottom: 8px; color: var(--muted); }
+  ul.plain li b { color: var(--ink); font-weight: 600; }
+  footer { color: var(--muted); font-size: 13px; }
+  footer a, .sub a { color: var(--accent); }
+  #event { min-height: 3em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>The drop-in shipping button</h1>
+<p class="sub">
+  One script tag and one element, on a page we do not own. This is that page — a pretend product listing,
+  so the widget is seen where it will actually live rather than on a slide.
+</p>
+
+<div class="run">
+  <b>To see it work</b>
+  Start the backend, then serve this folder — <code>npx serve .</code> — and open
+  <code>localhost:3000/shipping-widget.html</code> (or whichever port <code>serve</code> reports). Opening
+  the file directly will render the button but cannot reach the API. You will need at least one live
+  collection point at each end: sign shops up through the front door first.
+</div>
+
+<section>
+  <h2>On a product page</h2>
+  <p>Everything below the divider is the merchant's own markup. The button is the element.</p>
+
+  <div class="product" style="margin-top:20px">
+    <div class="shot" role="img" aria-label="Product photo placeholder"></div>
+    <div>
+      <h3>Ankara wrap shirt</h3>
+      <p class="brand">Nairobi Threads · cotton · unisex</p>
+      <p class="cost">KES 2,400</p>
+      <p class="stock">In stock — ships from Nairobi</p>
+
+      <div class="shipbox">
+        <p class="shiphint">Not sure what delivery costs? Ask before you decide.</p>
+        <sbg-shipping-quote
+          from-country="KE"
+          from-area="Nairobi"
+          length-cm="30" width-cm="20" height-cm="10" weight-kg="0.6"
+        ></sbg-shipping-quote>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>What the merchant pasted</h2>
+  <p>No build step, no framework, no configuration file.</p>
+<pre><code>&lt;script src="https://sbg.example/embed/sbg-quote.js" defer&gt;&lt;/script&gt;
+
+&lt;sbg-shipping-quote
+  from-country="KE"
+  from-area="Nairobi"
+  length-cm="30" width-cm="20" height-cm="10" weight-kg="0.6"
+&gt;&lt;/sbg-shipping-quote&gt;</code></pre>
+  <p style="margin-top:14px">
+    On this page the <code>src</code> points at the local build,
+    <code>04_generated_sandbox/frontend/dist/embed/sbg-quote.js</code>.
+  </p>
+</section>
+
+<section>
+  <h2>Attributes</h2>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Attribute</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td>from-point</td><td class="desc">The collection point you ship from, by its public id. Exact.</td></tr>
+      <tr><td>from-country<br>from-area</td><td class="desc">…or where you ship from, and we find the point. One of these two forms is required — without either, the widget renders nothing and says why in the console.</td></tr>
+      <tr><td>length-cm<br>width-cm<br>height-cm</td><td class="desc">The packed box. All three or none: two of three is not a box, and half-measurements are dropped rather than sent.</td></tr>
+      <tr><td>weight-kg</td><td class="desc">Actual weight.</td></tr>
+      <tr><td>size</td><td class="desc"><code>S</code>, <code>M</code> or <code>L</code> — the fallback when you have no measurements. Ignored when you do.</td></tr>
+      <tr><td>label</td><td class="desc">Your own words on the button.</td></tr>
+      <tr><td>locale</td><td class="desc">BCP-47 tag for the money and date formats. Defaults to the visitor's.</td></tr>
+      <tr><td>api</td><td class="desc">Override the API root for one embed — staging, mostly.</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section>
+  <h2>Reading the answer</h2>
+  <p>The widget shows the price. Your page gets the whole quote, so a checkout can add it to a total.</p>
+<pre><code>document.querySelector('sbg-shipping-quote')
+  .addEventListener('sbg:quote', (e) =&gt; {
+    console.log(e.detail.price.amount, e.detail.price.currency);
+  });</code></pre>
+  <p style="margin-top:14px">The last event this page saw:</p>
+  <pre id="event"><code>— nothing yet. Ask for a price above.</code></pre>
+</section>
+
+<section>
+  <h2>How it behaves in somebody else's page</h2>
+  <ul class="plain">
+    <li><b>It cannot break your CSS and you cannot break it.</b> The widget renders in a shadow root, so
+      neither side's styles reach the other by accident.</li>
+    <li><b>It inherits your typography.</b> A widget that shouts in its own house style looks bolted on, so
+      it takes the page's font and colour. Three custom properties are the whole styling contract:
+      <code>--sbg-accent</code>, <code>--sbg-radius</code>, <code>--sbg-fg</code>.</li>
+    <li><b>It brings no framework.</b> Plain DOM, about 4 kB over the wire — a merchant should not pay for
+      a UI runtime to render one price.</li>
+    <li><b>Configuration mistakes go to the console, never to the shopper.</b> A misconfigured widget
+      renders as though it were not on the page.</li>
+    <li><b>Failures are said in the buyer's terms.</b> The server's message is written for a developer; the
+      stable error code is what gets turned into a sentence about their situation.</li>
+    <li><b>The words are replaceable.</b> Set <code>window.SBG_QUOTE_STRINGS</code> before the script loads
+      to translate it, without a build.</li>
+  </ul>
+</section>
+
+<footer>
+  <p>
+    The API behind this button is documented in <a href="shipping-api.html">shipping-api.html</a>;
+    build progress for the wider project is in <a href="progress.html">progress.html</a>.
+  </p>
+</footer>
+
+</div>
+
+<script src="04_generated_sandbox/frontend/dist/embed/sbg-quote.js" defer></script>
+<script>
+  // The merchant's side of the contract, live on this page: whatever the widget answers, show it raw.
+  document.addEventListener('sbg:quote', (e) => {
+    document.getElementById('event').textContent = JSON.stringify(e.detail, null, 2);
+  });
+</script>
+</body>
+</html>
