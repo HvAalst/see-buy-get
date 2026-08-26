@@ -201,6 +201,15 @@ export class Assignment {
   /** How this driver takes work today: a road, or a radius around themselves. Absent until they say — and
    *  then matching falls back to plain proximity, as it did before anyone could declare anything. */
   work?: DeclaredWork;
+  /**
+   * New offers are SNOOZED until this instant (absent = taking work).
+   *
+   * A rider needs this far more than a line-haul driver does: lunch, a fare of their own, a puncture, the
+   * last hour of a long day. It stops NEW work only — everything already claimed is still theirs to carry,
+   * hand over and deliver, because snoozing offers is not going off shift. It lives on the coupling, so
+   * ending the shift ends it: nobody discovers tomorrow morning that they are still snoozed.
+   */
+  snoozedUntil?: string;
   status: AssignmentStatus;
   startedAt: string;
   endedAt?: string;

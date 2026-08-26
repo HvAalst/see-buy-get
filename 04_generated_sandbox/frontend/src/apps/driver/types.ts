@@ -92,6 +92,7 @@ export interface RecentVehicleView {
  * it the network can only see how NEAR a driver is, and pings one heading north about a bag going south.
  */
 export interface DeclaredLegView {
+  kind?: 'leg';
   fromLabel: string;
   from: { lat: number; lng: number };
   toLabel: string;
@@ -103,7 +104,10 @@ export interface AssignmentView {
   assignmentId: string;
   vehicleId: string;
   corridorId?: string;
-  leg?: DeclaredLegView;
+  /** A road or a patch — whichever this driver declared for the shift. */
+  work?: DeclaredLegView | { kind: 'area'; radiusKm: number; declaredAt: string };
+  /** New offers are held until this instant. Absent = taking work. */
+  snoozedUntil?: string;
   startedAt: string;
 }
 

@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks';
 import { Button, Card, Checklist, ErrorNote, GlanceNumber, Icon, Note, Pill, QrBlock, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
-import { useT } from '../../../shared/i18n';
+import { formatDate, useT } from '../../../shared/i18n';
 import { qrPayload } from '../../../shared/qr';
 import {
   canStartShift,
@@ -153,6 +153,81 @@ function OffShift({ state, actions }: HomeScreenProps) {
   );
 }
 
+/**
+ * How this shift takes work, and the one control that stops it for a while.
+ *
+ * The declaration and the snooze belong on the same card because they answer the same question — what will
+ * reach me right now — and a driver who wants to be left alone should not have to hunt for it in a settings
+ * screen. The duration is chosen at the moment of snoozing: it is the only moment anyone knows how long they
+ * need, and picking it there is also what lets most snoozes end by themselves.
+ */
+function WorkCard({ state, actions }: HomeScreenProps) {
+  const t = useT();
+  const [ask, setAsk] = useState(false);
+  const work = state.session.assignment?.work;
+  const until = state.session.assignment?.snoozedUntil;
+  const snoozed = !!until && new Date(until).getTime() > Date.now();
+
+  if (snoozed) {
+    return (
+      <Card label={t('driver.home.snoozeLabel')}>
+        <p class="t-body">{t('driver.home.snoozedUntil', { time: formatDate(until!, { timeStyle: 'short' }) })}</p>
+        {/* Say what it does NOT stop: a driver holding a bag must never wonder if they have abandoned it. */}
+        <p class="card__note">{t('driver.home.snoozedNote')}</p>
+        <Button variant="outline" chevron={false} busy={state.busy === 'snooze'} onClick={() => void actions.resumeWork()}>
+          {t('driver.home.resumeNow')}
+        </Button>
+      </Card>
+    );
+  }
+
+  return (
+    <Card label={t('driver.home.headingLabel')}>
+      <p class="t-body">
+        {work?.kind === 'area'
+          ? t('driver.home.workArea', { km: work.radiusKm })
+          : work
+            ? t('driver.home.legLine', { from: work.fromLabel, to: work.toLabel })
+            : t('driver.home.headingUnset')}
+      </p>
+      <p class="card__note">{work ? t('driver.home.headingNote') : t('driver.home.headingUnsetNote')}</p>
+      <Button variant="link" full={false} onClick={() => actions.go('route')}>
+        {work ? t('driver.home.headingChange') : t('driver.home.headingSet')}
+      </Button>
+      <Button variant="link" full={false} onClick={() => setAsk(true)}>
+        {t('driver.home.snoozeNew')}
+      </Button>
+
+      <Sheet open={ask} onClose={() => setAsk(false)} title={t('driver.home.snoozeSheetTitle')}>
+        <p class="t-body">{t('driver.home.snoozeSheetBody')}</p>
+        <div class="rows">
+          {[
+            { minutes: 30, key: 'driver.home.snooze30' as const },
+            { minutes: 60, key: 'driver.home.snooze60' as const },
+            { minutes: undefined, key: 'driver.home.snoozeOpen' as const },
+          ].map((choice) => (
+            <button
+              key={choice.key}
+              type="button"
+              class="row"
+              onClick={() => {
+                setAsk(false);
+                void actions.snoozeWork(choice.minutes);
+              }}
+            >
+              <span class="row__ic"><Icon name="clock" size={24} /></span>
+              <span class="row__body"><span class="row__t">{t(choice.key)}</span></span>
+              <span class="row__end"><Icon name="chevronRight" size={22} /></span>
+            </button>
+          ))}
+        </div>
+        <p class="card__note">{t('driver.home.snoozeSheetNote')}</p>
+        <Button variant="link" onClick={() => setAsk(false)}>{t('driver.notYet')}</Button>
+      </Sheet>
+    </Card>
+  );
+}
+
 /* =============================================================== on shift == */
 
 function OnShift({ state, actions }: HomeScreenProps) {
@@ -204,19 +279,10 @@ function OnShift({ state, actions }: HomeScreenProps) {
         </Card>
       ) : null}
 
-      {/* The road this shift is on — the thing that decides which loads are pushed at this driver. Shown
-          because a stale heading is worse than none: after turning round, it must be easy to see and change. */}
-      <Card label={t('driver.home.headingLabel')}>
-        {state.session.assignment?.leg ? (
-          <p class="t-body">{t('driver.home.legLine', { from: state.session.assignment.leg.fromLabel, to: state.session.assignment.leg.toLabel })}</p>
-        ) : (
-          <p class="t-body">{t('driver.home.headingUnset')}</p>
-        )}
-        <p class="card__note">{state.session.assignment?.leg ? t('driver.home.headingNote') : t('driver.home.headingUnsetNote')}</p>
-        <Button variant="link" full={false} onClick={() => actions.go('route')}>
-          {state.session.assignment?.leg ? t('driver.home.headingChange') : t('driver.home.headingSet')}
-        </Button>
-      </Card>
+      {/* How this shift takes work — the thing that decides which loads are pushed at this driver. Shown
+          because a stale declaration is worse than none: after turning round, or stopping for lunch, it must
+          be easy to see and to change. */}
+      <WorkCard state={state} actions={actions} />
 
       <div class="scr__cta">
         <Button onClick={() => actions.go('route')}>{t('driver.home.findWork')}</Button>

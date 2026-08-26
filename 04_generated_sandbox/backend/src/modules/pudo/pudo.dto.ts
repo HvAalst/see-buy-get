@@ -653,6 +653,11 @@ export class DeclareLegDto {
   @ValidateNested() @Type(() => GeoDto) to!: GeoDto;
 }
 
+/** Hold new offers. Omitted `minutes` = until the driver resumes (bounded by the shift either way). */
+export class SnoozeDto {
+  @IsOptional() @IsNumber() @Min(1) minutes?: number;
+}
+
 /** "I work within this many km of me" — the patch a rider declares instead of a road. */
 export class DeclareAreaDto {
   @IsNumber() @Min(1) radiusKm!: number;

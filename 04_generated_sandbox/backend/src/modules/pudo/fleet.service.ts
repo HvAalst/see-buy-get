@@ -7,7 +7,7 @@ import { CorridorService } from './corridor.service';
 import { DriverService } from './driver.service';
 import { VehicleService } from './vehicle.service';
 import { CLASS_TO_CORRIDOR_VEHICLE } from './fleet.config';
-import { MAX_WORK_RADIUS_KM } from './pudo.config';
+import { MAX_SNOOZE_MIN, MAX_WORK_RADIUS_KM } from './pudo.config';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { Assignment, DeclaredLeg, DeclaredWork, ResolvedBadge } from './fleet.types';
 import { GeoPoint } from './pudo.types';
@@ -173,6 +173,47 @@ export class FleetService {
   /** How this driver takes work on the shift they are on, if they have said. */
   workFor(driverDid: string): DeclaredWork | undefined {
     return this.activeForDriver(driverDid)?.work;
+  }
+
+  /* --- snoozing new offers --- */
+
+  /**
+   * Hold new offers for a while. `minutes` undefined means "until I say" — the driver comes back to it.
+   *
+   * The duration is chosen at the moment of snoozing rather than living in a settings screen, because the
+   * only time anyone knows how long they need is when they are stopping. A snooze a tired driver forgets is
+   * a driver who gets no work all afternoon and blames the app, so most of them expire on their own.
+   */
+  snooze(driverDid: string, minutes?: number): Assignment {
+    const active = this.activeForDriver(driverDid);
+    if (!active) throw new GlosError('NOT_COUPLED', 'You are not on shift');
+    if (minutes != null && (!Number.isFinite(minutes) || minutes <= 0 || minutes > MAX_SNOOZE_MIN)) {
+      throw new GlosError('INVALID_INPUT', `Snooze for up to ${MAX_SNOOZE_MIN} minutes, or until you resume`);
+    }
+    // No duration = the far end of this shift. It cannot outlive the coupling either way (uncouple drops it).
+    active.snoozedUntil = new Date(Date.now() + (minutes ?? MAX_SNOOZE_MIN) * 60_000).toISOString();
+    return active;
+  }
+
+  /** Take work again, now. Always available — a snooze must never be a state you cannot leave. */
+  resume(driverDid: string): Assignment {
+    const active = this.activeForDriver(driverDid);
+    if (!active) throw new GlosError('NOT_COUPLED', 'You are not on shift');
+    active.snoozedUntil = undefined;
+    return active;
+  }
+
+  /**
+   * Is this driver taking new work right now? False only while a snooze is live — and an expired snooze is
+   * cleared as it is read, so the driver's own screen and the matcher can never disagree about whether it
+   * has run out.
+   */
+  acceptingWork(driverDid: string, now: number = Date.now()): boolean {
+    const active = this.activeForDriver(driverDid);
+    if (!active?.snoozedUntil) return true;
+    if (new Date(active.snoozedUntil).getTime() > now) return false;
+    active.snoozedUntil = undefined;
+    return true;
   }
 
   /** The roads this driver has run before, most recent first — what the app offers instead of re-typing. */

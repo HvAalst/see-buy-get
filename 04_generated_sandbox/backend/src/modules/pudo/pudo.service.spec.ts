@@ -3751,6 +3751,54 @@ describe('PUDO Light', () => {
     expect(fleet.workFor(rider.did)).toMatchObject({ kind: 'leg' });
   });
 
+  it('snoozes NEW offers without touching the load already on the bike', () => {
+    const origin = onboardAgent('Snooze Origin', 'NorthTown', 50);
+    corridors.addCorridor({ name: 'snooze', originZone: 'NorthTown', destZone: 'SouthTown' });
+    const rider = coupleTipper('snooze', { min: 0.8, max: 1.5 });
+    const bagAt = (parcelId: string) => {
+      parcels.accept({ agentDid: origin.did, parcelId, size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+      const bag = totes.register(origin.did);
+      totes.assign(bag.code, 'SouthTown', 'SouthTown');
+      mdps.fillTote(bag.code, parcelId);
+      dispatch.release(bag.code);
+      return bag;
+    };
+    const mine = bagAt('SNZ-1');
+    const other = bagAt('SNZ-2');
+
+    // Claim one, then stop for lunch.
+    const [offer] = dispatch.suggestNearby(rider.did, origin.location, 5);
+    expect(offer.ref).toBe(mine.code);
+    dispatch.claim(offer.offerId);
+    controller.snoozeWork(rider.did, { minutes: 30 } as never);
+
+    // The marketplace goes quiet on ALL surfaces at once — they share the gate, so they cannot disagree.
+    expect(dispatch.suggestNearby(rider.did, origin.location, 5)).toEqual([]);
+    expect(dispatch.suggest(rider.did, { from: origin.location, to: { lat: origin.location.lat - 1, lng: origin.location.lng } })).toEqual([]);
+    expect(dispatch.offerNear(rider.did, origin.location)).toBeNull();
+
+    // …but the bag they are already carrying is still theirs. Snoozing offers is not going off shift.
+    expect(dispatch.claimsFor(rider.did).map((c) => c.ref)).toContain(mine.code);
+    expect(mdps.loadBag(mine.code, drivers.get(rider.did).badgeId!).moved).toEqual(['SNZ-1']);
+
+    // It ends when they say…
+    controller.resumeWork(rider.did);
+    expect(dispatch.suggestNearby(rider.did, origin.location, 5).map((o) => o.ref)).toContain(other.code);
+
+    // …or on its own, so a snooze nobody remembers cannot cost them an afternoon.
+    fleet.snooze(rider.did, 30);
+    expect(fleet.acceptingWork(rider.did)).toBe(false);
+    expect(fleet.acceptingWork(rider.did, Date.now() + 31 * 60_000)).toBe(true);
+    // Reading it as expired CLEARS it, so the driver's screen and the matcher can never disagree.
+    expect(fleet.sessionFor(rider.did)).toMatchObject({ assignment: { snoozedUntil: undefined } });
+
+    // And it cannot outlive the shift: a new day never starts snoozed.
+    fleet.snooze(rider.did);
+    fleet.uncouple(rider.did);
+    fleet.couple(rider.did, drivers.get(rider.did).assignedVehicleId ?? vehicles.list().find((v) => v.plate === 'MK-SNOOZE')!.vehicleId);
+    expect(fleet.acceptingWork(rider.did)).toBe(true);
+  });
+
   it('finds work AROUND a rider, sorted by how far they must ride, and stops at their radius', () => {
     const near = onboardAgent('Patch Near', 'NorthTown', 50);
     const far = onboardAgent('Patch Far', 'NorthTown', 50);

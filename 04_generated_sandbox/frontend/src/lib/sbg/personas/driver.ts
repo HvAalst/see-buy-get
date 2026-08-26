@@ -94,6 +94,13 @@ export function createDriverApi(sbg: SbgClient) {
     suggestNearby: (did: string, body: { at: { lat: number; lng: number }; radiusKm: number; minEarn?: number }) =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/suggest-nearby', { params: { path: { did } }, body })),
 
+    /** Hold new offers. Omit `minutes` for "until I resume". Never touches loads already claimed. */
+    snoozeWork: (did: string, minutes?: number) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/snooze', { params: { path: { did } }, body: { minutes } })),
+
+    /** Take work again, now. */
+    resumeWork: (did: string) => sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/resume', { params: { path: { did } } })),
+
     /** Declare the patch this rider works: "loads within this many km of me". */
     declareArea: (did: string, radiusKm: number) =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/area', { params: { path: { did } }, body: { radiusKm } })),

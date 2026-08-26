@@ -8494,6 +8494,74 @@
         }
       }
     },
+    "/v1/sbg/fleet/drivers/{did}/snooze": {
+      "post": {
+        "operationId": "Sbg.snoozeWork",
+        "summary": "",
+        "description": "Hold new offers for a while — lunch, a fare of their own, a puncture, the last hour of a long day.\nStops NEW work only: whatever they are already carrying is still theirs to hand over and deliver.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SnoozeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Assignment"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/drivers/{did}/resume": {
+      "post": {
+        "operationId": "Sbg.resumeWork",
+        "summary": "",
+        "description": "Take work again, now.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Assignment"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/drivers/{did}/suggest-nearby": {
       "post": {
         "operationId": "Sbg.suggestNearby",
@@ -14552,6 +14620,10 @@
           "work": {
             "type": "object"
           },
+          "snoozedUntil": {
+            "type": "string",
+            "description": "New offers are SNOOZED until this instant (absent = taking work).\n\nA rider needs this far more than a line-haul driver does: lunch, a fare of their own, a puncture, the\nlast hour of a long day. It stops NEW work only — everything already claimed is still theirs to carry,\nhand over and deliver, because snoozing offers is not going off shift. It lives on the coupling, so\nending the shift ends it: nobody discovers tomorrow morning that they are still snoozed."
+          },
           "status": {
             "type": "object"
           },
@@ -14606,6 +14678,15 @@
         "required": [
           "radiusKm"
         ]
+      },
+      "SnoozeDto": {
+        "type": "object",
+        "properties": {
+          "minutes": {
+            "type": "number",
+            "minimum": 1
+          }
+        }
       },
       "SuggestNearbyDto": {
         "type": "object",

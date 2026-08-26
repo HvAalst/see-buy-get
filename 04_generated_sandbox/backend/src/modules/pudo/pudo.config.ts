@@ -158,6 +158,9 @@ export const NUDGE_RADIUS_KM = 3; // tighter than the publish-time ping: this on
 // bajaj; 15 is generous for anything that is not a line-haul, and a line-haul driver declares a road instead.
 export const DEFAULT_WORK_RADIUS_KM = 5;
 export const MAX_WORK_RADIUS_KM = 15;
+// A snooze on new offers cannot outlive the shift it was taken in, and 12 h is longer than any shift — so
+// "until I resume" and "the rest of my day" are the same promise, and neither can strand a driver tomorrow.
+export const MAX_SNOOZE_MIN = 12 * 60;
 export const NUDGE_COOLDOWN_MIN = 10; // at most one interruption per driver in this window
 export const NUDGE_MIN_MOVE_KM = 0.4; // a parked phone's GPS jitters; only real movement asks the question
 export const OFFER_TTL_MIN = 10; // a suggestion auto-ignores if the driver does not answer in time

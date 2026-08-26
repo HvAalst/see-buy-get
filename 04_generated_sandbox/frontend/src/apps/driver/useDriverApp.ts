@@ -663,6 +663,36 @@ export function useDriverApp() {
     });
   }, [client, did, state.form.vehicleQr, run, fail, pushToast, refresh]);
 
+  /**
+   * Hold new offers for a while — chosen with the duration in the same breath, because the only moment
+   * anyone knows how long they need is when they are stopping.
+   */
+  const snoozeWork = useCallback(
+    async (minutes?: number) => {
+      if (!client || !did) return;
+      await run('snooze', async () => {
+        const r = await client.api.snoozeWork(did, minutes);
+        if (r.error) return fail(r.error);
+        buzz();
+        pushToast({ tone: 'ok', icon: 'clock', title: t('driver.toast.snoozed'), detail: minutes ? t('driver.toast.snoozedFor', { count: minutes }) : t('driver.toast.snoozedOpen') });
+        await refresh();
+      });
+    },
+    [client, did, run, fail, pushToast, refresh],
+  );
+
+  /** Take work again, now. Always available — a snooze must never be a state you cannot leave. */
+  const resumeWork = useCallback(async () => {
+    if (!client || !did) return;
+    await run('snooze', async () => {
+      const r = await client.api.resumeWork(did);
+      if (r.error) return fail(r.error);
+      buzz();
+      pushToast({ tone: 'ok', icon: 'check', title: t('driver.toast.resumed'), detail: t('driver.toast.resumedDetail') });
+      await refresh();
+    });
+  }, [client, did, run, fail, pushToast, refresh]);
+
   const endShift = useCallback(async () => {
     if (!client || !did) return;
     await run('end', async () => {
@@ -971,6 +1001,8 @@ export function useDriverApp() {
       setPlace,
       geocodePlace,
       findNearby,
+      snoozeWork,
+      resumeWork,
       queryJobs,
       loadJobs,
       exportJobs,

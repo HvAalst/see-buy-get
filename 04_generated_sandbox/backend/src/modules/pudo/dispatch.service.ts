@@ -381,6 +381,7 @@ export class DispatchService {
   suggest(driverDid: string, route: RoutePlan, now: number = Date.now(), minEarn?: number): Offer[] {
     const vehicle = this.fleet.vehicleForDriver(driverDid);
     if (!vehicle) throw new GlosError('NOT_COUPLED', 'Couple the driver to a vehicle before requesting work');
+    if (!this.fleet.acceptingWork(driverDid, now)) return []; // snoozed: the screen says so, and says how to undo it
     this.publishReady(now);
     this.publishReadyFreight(now); // any scheduled freight that has come due joins the marketplace now
     const remaining = this.remainingCapacity(driverDid);
@@ -433,6 +434,14 @@ export class DispatchService {
    * about a load they are already looking at is how a helpful app becomes a nuisance, and it would also let
    * two offers for the same bag disagree about the price.
    */
+  /**
+   * Nothing is offered to a driver who has snoozed new work.
+   *
+   * Checked at the one place every offer is born, so the route search, the near-me search and the moving
+   * pop-up all go quiet together — three surfaces cannot drift apart if they share the gate. What is NOT
+   * touched: anything already claimed. Snoozing offers is not going off shift, and a driver holding a bag
+   * must still be able to hand it over, load it and deliver it.
+   */
   private makeOffer(driverDid: string, load: Claimable, ctx: { detour: number; minutesAway: number; price?: PriceBreakdown; now: number }): Offer {
     const { detour, minutesAway, price, now } = ctx;
     const existing = [...this.offers.values()].find((o) => o.driverDid === driverDid && o.ref === load.ref && o.status === 'pending' && new Date(o.expiresAt).getTime() > now);
@@ -483,6 +492,7 @@ export class DispatchService {
   suggestNearby(driverDid: string, from: GeoPoint, radiusKm: number, now: number = Date.now(), minEarn?: number): Offer[] {
     const vehicle = this.fleet.vehicleForDriver(driverDid);
     if (!vehicle) throw new GlosError('NOT_COUPLED', 'Couple the driver to a vehicle before requesting work');
+    if (!this.fleet.acceptingWork(driverDid, now)) return [];
     this.publishReady(now);
     this.publishReadyFreight(now);
     const remaining = this.remainingCapacity(driverDid);
@@ -522,6 +532,7 @@ export class DispatchService {
   offerNear(driverDid: string, point: GeoPoint, now: number = Date.now()): Offer | null {
     const vehicle = this.fleet.vehicleForDriver(driverDid);
     if (!vehicle) return null;
+    if (!this.fleet.acceptingWork(driverDid, now)) return null; // a snooze must silence the phone above all
     const remaining = this.remainingCapacity(driverDid);
     const remainingTotes = this.remainingTotes(driverDid);
     const profile = this.pricingProfile(vehicle);
