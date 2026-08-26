@@ -5,6 +5,7 @@ import { ShelfService } from './shelf.service';
 import { RoutingService } from './routing.service';
 import { requireCountryCode } from './country';
 import { BorderCrossing } from './country';
+import { ANONYMOUS, ApiKeyService, type Caller } from './api-key.service';
 import { classifySize, SIZE_WEIGHT_KG } from './pudo.config';
 import { Agent, ParcelSize } from './pudo.types';
 
@@ -48,6 +49,23 @@ export interface QuotedPoint {
   openState: 'open' | 'closed';
 }
 
+/**
+ * The costed route: every stop's own published fee and the company owed it.
+ *
+ * This is open data — each participant advertises its own rate and competition depends on that being
+ * visible. What it is not is something to hand a competitor on an anonymous call, so it rides only with a
+ * SERVER-SIDE key: the merchant paying for the shipment can see what they are paying for, and a stranger
+ * with a scraper sees the number and nothing behind it.
+ */
+export interface QuoteBreakdown {
+  nodes: Array<{ type: 'pudo' | 'mdp'; label: string; country: string; fee: number; nativeFee: number; currency: string }>;
+  nodeFees: number;
+  transport: number;
+  platformFeePct: number;
+  /** The rates the price was converted at, when it crossed a currency line. */
+  fx?: { base: string; buffer: number; rates: Array<{ from: string; to: string; rate: number; mid: number; spreadPct: number; at: string; source: string; stale: boolean }> };
+}
+
 export interface PublicQuote {
   from: QuotedPoint;
   to: QuotedPoint;
@@ -61,6 +79,11 @@ export interface PublicQuote {
   requires: string[];
   /** When this price stops being good, when it stands on an exchange rate. Absent when nothing was converted. */
   expiresAt?: string;
+  /** Which world answered — `live` unless a test key asked. Always present, so a caller can never be in
+   *  doubt about whether the thing they are looking at is real. */
+  mode: 'test' | 'live';
+  /** The costed route. Present only for a server-side key. */
+  breakdown?: QuoteBreakdown;
 }
 
 @Injectable()
@@ -71,7 +94,7 @@ export class ShippingApiService {
     private readonly routing: RoutingService,
   ) {}
 
-  quote(input: { from: QuoteEndpoint; to: QuoteEndpoint; dimensionsCm?: { l: number; w: number; h: number }; weightKg?: number; size?: ParcelSize }): PublicQuote {
+  quote(input: { from: QuoteEndpoint; to: QuoteEndpoint; dimensionsCm?: { l: number; w: number; h: number }; weightKg?: number; size?: ParcelSize }, caller: Caller = ANONYMOUS): PublicQuote {
     const from = this.resolve(input.from, 'from');
     const to = this.resolve(input.to, 'to');
     if (from.did === to.did) throw new GlosError('INVALID_INPUT', 'Collect from and send to are the same point — a shipment needs two ends');
@@ -100,6 +123,22 @@ export class ShippingApiService {
       // sent without a contents list and a declared value, and an integrator should know that at quote time.
       requires: quote.crossesBorder ? ['customs_declaration'] : [],
       expiresAt: quote.fx?.expiresAt,
+      // Always said, never inferred. A caller must not have to work out from context whether the thing in
+      // front of them is real — the answer says so.
+      mode: caller.mode,
+      // ABSENT, not undefined, for a caller who has not earned it: a key that is simply missing from the
+      // body cannot be mistaken for one that came back empty, and there is nothing for a reader to probe.
+      ...(ApiKeyService.seesBreakdown(caller)
+        ? {
+            breakdown: {
+              nodes: quote.nodes.map((n) => ({ type: n.type, label: n.label, country: n.country, fee: n.fee, nativeFee: n.nativeFee, currency: n.currency })),
+              nodeFees: quote.nodeFees,
+              transport: quote.flexible.transport,
+              platformFeePct: quote.platformFeePct,
+              ...(quote.fx ? { fx: { base: quote.fx.base, buffer: quote.fx.buffer, rates: quote.fx.rates } } : {}),
+            },
+          }
+        : {}),
     };
   }
 

@@ -252,6 +252,18 @@ export class SetPriceDto {
   @IsNumber() @Min(0) price!: number;
 }
 
+/**
+ * Mint a merchant API key.
+ *
+ * `mode` defaults to TEST, deliberately: the safe key is the one you get by not thinking about it, and a
+ * live key should be a thing somebody chose.
+ */
+export class IssueApiKeyDto {
+  @IsIn(['publishable', 'secret']) kind!: 'publishable' | 'secret';
+  @IsOptional() @IsIn(['test', 'live']) mode?: 'test' | 'live';
+  @IsOptional() @IsString() label?: string;
+}
+
 // --- the public shipping API (SSP): a price a buyer can see before deciding to buy ---
 
 /** Where a shipment starts or ends, said the way somebody without a DID can say it. */

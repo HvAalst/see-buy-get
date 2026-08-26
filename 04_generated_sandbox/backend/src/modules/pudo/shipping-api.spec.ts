@@ -7,6 +7,7 @@ import { RoutingService } from './routing.service';
 import { CorridorService } from './corridor.service';
 import { ShelfService } from './shelf.service';
 import { ShippingApiService } from './shipping-api.service';
+import { ANONYMOUS, ApiKeyService, type Caller } from './api-key.service';
 import { ShippingApiController } from './shipping-api.controller';
 import { VendorService } from './vendor.service';
 import { ParcelService } from './parcel.service';
@@ -63,6 +64,8 @@ describe('the public shipping quote', () => {
   let shipping: ShippingApiService;
   let controller: ShippingApiController;
   let gate: WalletGateService;
+  let vendors: VendorService;
+  let apiKeys: ApiKeyService;
 
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -75,7 +78,7 @@ describe('the public shipping quote', () => {
         FleetManagerService, MediaService, CargoService, DigitalTwinService, TrackingService,
         TrackingContextService, NormalizationService, ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
-        EntityService, BooksService, FxService, RateLimitGuard,
+        EntityService, BooksService, FxService, RateLimitGuard, ApiKeyService,
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
         GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder },
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
@@ -88,6 +91,8 @@ describe('the public shipping quote', () => {
     shipping = moduleRef.get(ShippingApiService);
     controller = moduleRef.get(ShippingApiController);
     gate = moduleRef.get(WalletGateService);
+    vendors = moduleRef.get(VendorService);
+    apiKeys = moduleRef.get(ApiKeyService);
   });
 
   let seq = 0;
@@ -205,10 +210,56 @@ describe('the public shipping quote', () => {
     // deliberately, but handing a competitor a costed route on an unauthenticated call is a different act.
     domesticPair();
     const q = shipping.quote({ from: { country: 'KE', area: 'Nairobi' }, to: { country: 'KE', area: 'Kisumu' }, size: 'M' }) as unknown as Record<string, unknown>;
-    expect(Object.keys(q).sort()).toEqual(['eta', 'expiresAt', 'from', 'parcel', 'price', 'requires', 'route', 'to'].sort());
+    // The breakdown key is ABSENT rather than undefined, so there is nothing for a reader to probe at.
+    expect(Object.keys(q).sort()).toEqual(['eta', 'expiresAt', 'from', 'mode', 'parcel', 'price', 'requires', 'route', 'to'].sort());
     expect(JSON.stringify(q)).not.toContain('entityId');
     expect(JSON.stringify(q)).not.toContain('nodeFees');
     expect(JSON.stringify(q)).not.toContain('platformFeePct');
+  });
+
+  describe('and who is asking', () => {
+    const issue = (kind: 'publishable' | 'secret', mode: 'test' | 'live' = 'live') => {
+      const store = vendors.register({ name: `Store ${(seq += 1)}`, country: 'KE' });
+      return { store, ...apiKeys.issue(store.vendorId, kind, mode) };
+    };
+    const ask = (caller?: Caller) =>
+      shipping.quote({ from: { country: 'KE', area: 'Nairobi' }, to: { country: 'KE', area: 'Kisumu' }, size: 'M' }, caller);
+
+    it('answers a stranger, and keeps the cost sheet back', () => {
+      // The quote surface stays public: a merchant should see a price before they have an account, or the
+      // product never gets integrated in the first place.
+      domesticPair();
+      const q = ask();
+      expect(q.price.amount).toBeGreaterThan(0);
+      expect(q.breakdown).toBeUndefined();
+      expect(q.mode).toBe('live');
+    });
+
+    it('gives a server-side key the costed route, and a page key nothing extra', () => {
+      domesticPair();
+      const secret = apiKeys.resolve(issue('secret').secret);
+      const publishable = apiKeys.resolve(issue('publishable').secret);
+
+      const open = ask(publishable);
+      expect(open.breakdown).toBeUndefined(); // a key in a page is a key a competitor can read
+
+      const full = ask(secret).breakdown!;
+      expect(full.nodes.map((n) => n.label)).toEqual(['Nairobi CBD', 'Kisumu Duka']);
+      expect(full.nodeFees).toBeGreaterThan(0);
+      expect(full.platformFeePct).toBeGreaterThanOrEqual(0);
+    });
+
+    it('always says which world answered', () => {
+      domesticPair();
+      expect(ask(apiKeys.resolve(issue('publishable', 'test').secret)).mode).toBe('test');
+      expect(ask(apiKeys.resolve(issue('publishable', 'live').secret)).mode).toBe('live');
+    });
+
+    it('spends the merchant’s own rate limit, not their visitors’ shared one', () => {
+      const { secret } = issue('publishable');
+      expect(apiKeys.resolve(secret).rateKey).toMatch(/^key_/);
+      expect(ANONYMOUS.rateKey).toBeUndefined(); // …and a stranger falls back to their IP
+    });
   });
 
   it('lists the countries and areas a picker is built from, and no half-signed-up shop', () => {

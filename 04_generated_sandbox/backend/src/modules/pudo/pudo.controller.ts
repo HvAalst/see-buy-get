@@ -30,7 +30,7 @@ import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
-import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityFeeDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
+import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityFeeDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
 import { classifySize, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { BooksService } from '../../foundation/books/books.service';
@@ -38,6 +38,7 @@ import { FX_BASE, FX_RATE_MAX_AGE_H, FxService } from '../../foundation/money/fx
 import { BagPlanService } from './bag-plan.service';
 import { ForthcomingService } from './forthcoming.service';
 import { DockService } from './dock.service';
+import { ApiKeyService } from './api-key.service';
 import { haversineKm } from './geo';
 import { GEOCODER, Geocoder } from './geocoder';
 
@@ -64,6 +65,7 @@ export class SbgController {
     private readonly ratings: RatingService,
     private readonly entities: EntityService,
     private readonly fx: FxService,
+    private readonly apiKeys: ApiKeyService,
     private readonly books: BooksService,
     private readonly bagPlans: BagPlanService,
     private readonly forthcoming: ForthcomingService,
@@ -667,6 +669,40 @@ export class SbgController {
   setCollectionPoint(@Param('id') id: string, @Body() dto: CollectionPointDto, @Actor() actor: IntrospectionResult) {
     this.assertVendorOwner(id, actor);
     return VendorService.publicView(this.vendors.setCollectionPoint(id, dto));
+  }
+
+  /* --- merchant API keys: who the shipping API sees when this store calls it --- */
+
+  /**
+   * Mint a key. The SECRET is in this response and in no other, ever — see ApiKeyService.
+   *
+   * A store issues its own, as many as it likes: one per environment, one per storefront, one to rotate
+   * into before revoking the old. Keys being cheap is what makes revoking one an easy decision.
+   */
+  @Scopes('vendor:manage:self')
+  @Post('vendors:id/api-keys')
+  issueApiKey(@Param('id') id: string, @Body() dto: IssueApiKeyDto, @Actor() actor: IntrospectionResult) {
+    this.assertVendorOwner(id, actor);
+    this.vendors.get(id); // 404 on an unknown store before anything is minted
+    const { key, secret } = this.apiKeys.issue(id, dto.kind, dto.mode ?? 'test', dto.label);
+    // `secret` is the only place the full value appears. The stored record is a hash for a secret key.
+    return { ...this.apiKeys.list(id).find((k) => k.keyId === key.keyId)!, secret };
+  }
+
+  /** This store's keys, in a shape safe to render — never a secret, not even to its owner. */
+  @Scopes('vendor:read:self')
+  @Get('vendors:id/api-keys')
+  listApiKeys(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    this.assertVendorOwner(id, actor);
+    return this.apiKeys.list(id);
+  }
+
+  /** Stop a key working. Kept rather than deleted, so "what was that key doing" stays answerable. */
+  @Scopes('vendor:manage:self')
+  @Delete('vendors:id/api-keys:keyId')
+  revokeApiKey(@Param('id') id: string, @Param('keyId') keyId: string, @Actor() actor: IntrospectionResult) {
+    this.assertVendorOwner(id, actor);
+    return this.apiKeys.revoke(id, keyId);
   }
 
   /** Stop collecting here. Bags already claimed stay with the drivers who claimed them. */

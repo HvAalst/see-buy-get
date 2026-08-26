@@ -141,6 +141,7 @@
       <tr><td>size</td><td class="desc"><code>S</code>, <code>M</code> or <code>L</code> — the fallback when you have no measurements. Ignored when you do.</td></tr>
       <tr><td>label</td><td class="desc">Your own words on the button.</td></tr>
       <tr><td>locale</td><td class="desc">BCP-47 tag for the money and date formats. Defaults to the visitor's.</td></tr>
+      <tr><td>key</td><td class="desc">Your <b>publishable</b> key (<code>pk_…</code>), so the rate limit is yours rather than shared with everyone behind your visitors' IP. Optional. A secret <code>sk_</code> key here makes the widget refuse to render and tell your console to revoke it — by the time you read that, it is already in somebody's browser.</td></tr>
       <tr><td>api</td><td class="desc">Override the API root for one embed — staging, mostly.</td></tr>
     </tbody>
   </table>

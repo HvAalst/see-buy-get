@@ -43,8 +43,11 @@ export class RateLimitGuard implements CanActivate {
     const spec = this.reflector.getAllAndOverride<RateLimitSpec | undefined>(RATE_LIMIT_KEY, [context.getHandler(), context.getClass()]);
     if (!spec) return true;
 
-    const req = context.switchToHttp().getRequest<{ ip?: string; socket?: { remoteAddress?: string }; route?: { path?: string }; url?: string }>();
-    const caller = req.ip || req.socket?.remoteAddress || 'unknown';
+    const req = context.switchToHttp().getRequest<{ sbgRateKey?: string; ip?: string; socket?: { remoteAddress?: string }; route?: { path?: string }; url?: string }>();
+    // An identified caller is counted as THEMSELVES; everyone else shares an IP bucket. `sbgRateKey` is set
+    // by whatever guard ran first and worked out who this is — this one deliberately does not know or care
+    // what an identity is, which is what keeps it in the foundation and out of the domain.
+    const caller = req.sbgRateKey || req.ip || req.socket?.remoteAddress || 'unknown';
     const key = `${caller}:${req.route?.path ?? req.url ?? ''}`;
 
     const now = Date.now();

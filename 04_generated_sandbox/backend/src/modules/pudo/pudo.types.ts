@@ -355,6 +355,41 @@ export class CollectionPoint {
   enabledAt: string;
 }
 
+/** Where a key is allowed to be: in a page, or only on a server. See ApiKeyService. */
+export type ApiKeyKind = 'publishable' | 'secret';
+/** Which world it points at. Carried in the key itself, so a glance at a config file tells you. */
+export type ApiKeyMode = 'test' | 'live';
+
+/** A merchant's API key. The full secret exists only in the response that created it. */
+export class ApiKey {
+  keyId: string;
+  vendorId: string;
+  kind: ApiKeyKind;
+  mode: ApiKeyMode;
+  label?: string;
+  /** The key itself — PUBLISHABLE ONLY, because it is public by construction and gets read back. */
+  value?: string;
+  /** SHA-256 of a secret key. See ApiKeyService for why a fast hash is the right one here. */
+  hash?: string;
+  hint: string; // last four characters — enough to tell two keys apart in a list
+  createdAt: string;
+  lastUsedAt?: string;
+  revokedAt?: string;
+}
+
+/** A key as its owner may see it: never a secret, not even to them. */
+export class ApiKeyView {
+  keyId: string;
+  kind: ApiKeyKind;
+  mode: ApiKeyMode;
+  label?: string;
+  hint: string;
+  value?: string; // publishable only
+  createdAt: string;
+  lastUsedAt?: string;
+  revokedAt?: string;
+}
+
 export class Vendor {
   vendorId: string;
   /** Real GLOS DID (S15). The vendorId stays the domain key; the DID is what an actor token binds to. */

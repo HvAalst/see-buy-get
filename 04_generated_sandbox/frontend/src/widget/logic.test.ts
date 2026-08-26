@@ -5,6 +5,7 @@ import {
   configProblem,
   EN,
   errorLine,
+  headers,
   money,
   parseAreas,
   priceLine,
@@ -35,6 +36,22 @@ describe('setting the widget up', () => {
     expect(configProblem({ fromPoint: 'did:glos:1' })).toBeNull();
     expect(configProblem({ fromCountry: 'KE' })).toMatch(/from-point, or both/);
     expect(configProblem({})).toMatch(/cannot guess where you ship from/);
+  });
+
+  it('refuses to render at all when a SECRET key has been pasted into the page', () => {
+    // Not a preference — a credential published to the world. Refusing is the only response that cannot be
+    // ignored, and the message says to revoke it, because by now it is already in somebody's history.
+    expect(configProblem(attrs({ key: 'sk_live_abc123' }))).toMatch(/revoke it/);
+    expect(configProblem(attrs({ key: 'whatever' }))).toMatch(/not a publishable key/);
+    expect(configProblem(attrs({ key: 'pk_test_abc' }))).toBeNull();
+    expect(configProblem(attrs())).toBeNull(); // and no key at all is fine — the quote is public
+  });
+
+  it('sends a publishable key in a header, never in the URL', () => {
+    // A query string ends up in access logs, proxies and referrers. A header does not.
+    expect(headers(attrs({ key: 'pk_live_abc' }))['x-sbg-key']).toBe('pk_live_abc');
+    expect(headers(attrs())['x-sbg-key']).toBeUndefined();
+    expect(headers(attrs({ key: 'sk_live_abc' }))['x-sbg-key']).toBeUndefined(); // belt and braces
   });
 
   it('lets one embed override the baked API root, and never doubles a slash', () => {

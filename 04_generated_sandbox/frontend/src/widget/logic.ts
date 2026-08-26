@@ -13,6 +13,8 @@
 /** What the merchant configured, read off the element's attributes. All strings, as HTML gives them. */
 export interface WidgetAttrs {
   api?: string | null;
+  /** A PUBLISHABLE key (`pk_…`). Optional — the quote works without one. */
+  key?: string | null;
   fromPoint?: string | null;
   fromCountry?: string | null;
   fromArea?: string | null;
@@ -80,9 +82,21 @@ export function apiBase(attrs: WidgetAttrs, baked: string): string {
  * missing" learns nothing and distrusts the shop. The widget renders nothing at all until it is set up.
  */
 export function configProblem(attrs: WidgetAttrs): string | null {
+  const key = attrs.key?.trim();
+  // A SECRET key in a page is not a configuration preference, it is a credential published to the world.
+  // Refusing to render is the only response that cannot be ignored — and the console says to revoke it,
+  // because by the time a developer reads this the key is already in somebody's browser history.
+  if (key?.startsWith('sk_')) return 'that is a SECRET key and it is now public — revoke it and use the pk_ key instead';
+  if (key && !key.startsWith('pk_')) return `"${key.slice(0, 8)}…" is not a publishable key — it should start with pk_`;
   if (attrs.fromPoint?.trim()) return null;
   if (attrs.fromCountry?.trim() && attrs.fromArea?.trim()) return null;
   return 'set from-point, or both from-country and from-area — the widget cannot guess where you ship from';
+}
+
+/** The headers every call carries. The key rides in a header, never a query string — those reach logs. */
+export function headers(attrs: WidgetAttrs): Record<string, string> {
+  const key = attrs.key?.trim();
+  return { accept: 'application/json', ...(key?.startsWith('pk_') ? { 'x-sbg-key': key } : {}) };
 }
 
 /** Where the shipment starts, in the shape the API takes. */

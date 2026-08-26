@@ -1,6 +1,7 @@
 import {
   apiBase,
   collectLine,
+  headers,
   configProblem,
   errorLine,
   parseAreas,
@@ -78,7 +79,7 @@ select {
 .link { background: none; border: 0; padding: 0; color: var(--sbg-accent, #4c46e0); text-decoration: underline; font-size: 13px; }
 `;
 
-const ATTRS = ['api', 'from-point', 'from-country', 'from-area', 'weight-kg', 'length-cm', 'width-cm', 'height-cm', 'size', 'label', 'locale'];
+const ATTRS = ['api', 'key', 'from-point', 'from-country', 'from-area', 'weight-kg', 'length-cm', 'width-cm', 'height-cm', 'size', 'label', 'locale'];
 
 class SbgShippingQuote extends HTMLElement {
   static get observedAttributes(): string[] {
@@ -113,7 +114,7 @@ class SbgShippingQuote extends HTMLElement {
   private attrs(): WidgetAttrs {
     const a = (n: string) => this.getAttribute(n);
     return {
-      api: a('api'), fromPoint: a('from-point'), fromCountry: a('from-country'), fromArea: a('from-area'),
+      api: a('api'), key: a('key'), fromPoint: a('from-point'), fromCountry: a('from-country'), fromArea: a('from-area'),
       weightKg: a('weight-kg'), lengthCm: a('length-cm'), widthCm: a('width-cm'), heightCm: a('height-cm'), size: a('size'),
     };
   }
@@ -127,7 +128,7 @@ class SbgShippingQuote extends HTMLElement {
   private async load(): Promise<void> {
     if (this.areas.length) return;
     try {
-      const res = await fetch(`${apiBase(this.attrs(), BAKED_API)}/sbg/shipping/areas`, { headers: { accept: 'application/json' } });
+      const res = await fetch(`${apiBase(this.attrs(), BAKED_API)}/sbg/shipping/areas`, { headers: headers(this.attrs()) });
       this.areas = parseAreas(await res.json());
       if (this.areas.length === 1) this.picked.country = this.areas[0].country; // one country is not a choice
     } catch {
@@ -145,7 +146,7 @@ class SbgShippingQuote extends HTMLElement {
     try {
       const res = await fetch(`${apiBase(this.attrs(), BAKED_API)}/sbg/shipping/quotes`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        headers: { 'content-type': 'application/json', ...headers(this.attrs()) },
         body: JSON.stringify(quoteRequest(this.attrs(), { country, area })),
       });
       const body = (await res.json()) as QuoteResponse & Problem;

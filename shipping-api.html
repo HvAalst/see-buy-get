@@ -97,6 +97,7 @@
 <nav class="toc" aria-label="Contents">
   <ol>
     <li><a href="#quickstart">Quickstart</a></li>
+    <li><a href="#keys">Keys and modes</a></li>
     <li><a href="#places">Naming a place</a></li>
     <li><a href="#quote">Quote reference</a></li>
     <li><a href="#areas">Where we deliver</a></li>
@@ -146,6 +147,71 @@
     costs if the seller commits to a single route. A buyer told 400 and charged 480 has been misled; one
     told 480 and charged 400 has not. In a sandbox with one carrier rate the two are equal.
   </div>
+</section>
+
+<section id="keys">
+  <h2>Keys and modes</h2>
+  <p class="lede">You do not need a key to quote, and you never will. A key buys you a rate limit of your
+  own and the costed breakdown behind the number.</p>
+
+  <p>Issue them from your store console — as many as you like, one per environment or per storefront.
+  Send one in a header; never in a query string, which ends up in access logs and referrers.</p>
+
+<pre><code>curl -X POST http://localhost:3000/v1/sbg/shipping/quotes \
+  -H 'x-sbg-key: sk_live_…' \
+  -H 'content-type: application/json' \
+  -d '{ "from": {…}, "to": {…} }'</code></pre>
+
+  <h3>Two kinds</h3>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Kind</th><th>Where it belongs</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td>pk_…</td><td class="desc">In a page, in plain sight — the widget's <code>key</code> attribute.</td><td class="desc">Asks what something costs. Nothing else. Readable back from your console whenever you rebuild a template, because it was never a secret.</td></tr>
+      <tr><td>sk_…</td><td class="desc">On your server only.</td><td class="desc">Everything a publishable key does, plus the <code>breakdown</code>. Shown <b>once</b>, at creation, and stored as a hash — so a breach of our table cannot be replayed as you.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note warn">
+    <b>Lost a secret key?</b>
+    There is exactly one honest answer: issue another and revoke the old one. We cannot show it to you
+    again because we do not have it. Revoked keys are kept, not deleted, so “what was that key doing” stays
+    a question you can answer.
+  </div>
+
+  <h3>Two modes</h3>
+  <p>Every key is <code>test</code> or <code>live</code>, and says which in the key itself — a glance at a
+  config file tells you which world it points at. Every response carries <code>mode</code>, so you are
+  never in doubt about whether what you are looking at is real.</p>
+
+  <div class="note">
+    <b>Today a test key quotes exactly as a live one does.</b>
+    That is not an omission — a quote creates nothing, so there is nothing for a sandbox to spare. The
+    modes exist now because the credentials have to be separate <em>before</em> minting does: the point is
+    that the key you develop with can never be the key that ships something.
+  </div>
+
+  <h3>The breakdown</h3>
+  <p>With a secret key, the response gains a <code>breakdown</code>: every stop's own published fee and the
+  currency it is owed in, the transport, the margin rate, and the exchange rates if any were applied. Each
+  participant advertises its own rate and competition depends on that being visible — what it is not is
+  something to hand a stranger with a scraper.</p>
+
+<pre><code>"breakdown": {
+  "nodes": [
+    { "type": "pudo", "label": "Nairobi CBD", "country": "KE",
+      "fee": 1.5, "nativeFee": 1.5, "currency": "KES" },
+    { "type": "pudo", "label": "Kisumu Duka", "country": "KE",
+      "fee": 1.5, "nativeFee": 1.5, "currency": "KES" }
+  ],
+  "nodeFees": 3,
+  "transport": 28.5,
+  "platformFeePct": 0.02
+}</code></pre>
+
+  <p style="margin-top:14px">The key is <b>absent</b> rather than empty when you have not earned it —
+  there is nothing to probe at.</p>
 </section>
 
 <section id="places">
@@ -210,7 +276,9 @@
       <tr><td>route.crossesBorder</td><td>boolean</td><td class="desc">Whether the goods leave one customs territory for another.</td></tr>
       <tr><td>route.crossings</td><td>object[]</td><td class="desc">Each crossing: <code>legIndex</code>, <code>from</code>, <code>to</code>, <code>fromCountry</code>, <code>toCountry</code>.</td></tr>
       <tr><td>requires</td><td>string[]</td><td class="desc">What this shipment will additionally need before it can be sent. Empty for an ordinary domestic one.</td></tr>
+      <tr><td>mode</td><td>test · live</td><td class="desc">Which world answered. Always present — see <a href="#keys">keys and modes</a>.</td></tr>
       <tr><td>expiresAt</td><td>ISO 8601</td><td class="desc">When the price stops being good. Present only when an exchange rate was applied.</td></tr>
+      <tr><td>breakdown</td><td>object</td><td class="desc">The costed route. Present only for a secret key.</td></tr>
     </tbody>
   </table>
   </div>
@@ -266,6 +334,7 @@
       <tr><td>size</td><td class="desc"><code>S</code> · <code>M</code> · <code>L</code>, when you have no measurements. Ignored when you do.</td></tr>
       <tr><td>label</td><td class="desc">Your own words on the button.</td></tr>
       <tr><td>locale</td><td class="desc">BCP-47 tag for money and date formats. Defaults to the visitor's.</td></tr>
+      <tr><td>key</td><td class="desc">Your <b>publishable</b> key, so the rate limit is yours. A <code>sk_</code> key here makes the widget refuse to render and tell your console to revoke it — by then it is already public.</td></tr>
       <tr><td>api</td><td class="desc">Override the API root for one embed.</td></tr>
     </tbody>
   </table>
@@ -327,6 +396,7 @@
       <tr><td>NO_CAPACITY_AVAILABLE</td><td>400</td><td class="desc">Every collection point in that area is full right now. Try another area.</td></tr>
       <tr><td>CARGO_REQUIRES_DEDICATED</td><td>400</td><td class="desc">Too big for the pick-up network. It needs dedicated freight, quoted separately.</td></tr>
       <tr><td>FX_REQUIRED</td><td>400</td><td class="desc">The route spans two currencies with no exchange rate between them.</td></tr>
+      <tr><td>AUTH_CODE_INVALID</td><td>401</td><td class="desc">The key you sent is not one of ours, or it has been revoked. A <em>missing</em> key is not an error — it is anonymous.</td></tr>
       <tr><td>RATE_LIMITED</td><td>429</td><td class="desc">Too many requests. <code>retryAfterSec</code> says how long to wait. Safe to retry.</td></tr>
     </tbody>
   </table>
@@ -355,8 +425,8 @@
   <ul class="plain">
     <li><b>60 quotes a minute per caller</b>, and 120 for <code>/areas</code>. Generous for a product page,
       useless for a scrape. Exceeding it is a <code>429</code> with <code>retryAfterSec</code>.</li>
-    <li><b>Counted per IP</b> today, because a public call has no other identity. When merchant keys land
-      the count moves to the key.</li>
+    <li><b>Counted per KEY when you send one</b>, and per IP when you do not — which is the practical
+      reason to use one: without a key your limit is shared with everyone behind the same address.</li>
     <li><b>Nothing is created and nothing is reserved.</b> A quote is a question — asking it twice costs
       nothing and changes nothing, so it is always safe to retry.</li>
   </ul>
@@ -367,14 +437,12 @@
   <p class="lede">Said plainly, because you will ask. None of these exist today and none of them are
   faked.</p>
   <ul class="plain">
-    <li><b>Merchant keys and a sandbox mode.</b> Quotes are anonymous; there is no publishable key, no test
-      mode, and no way to identify yourself to the API.</li>
     <li><b>Idempotency keys.</b> A quote is naturally safe to repeat. Minting is not, and that surface is
       not public yet.</li>
     <li><b>A quote you can redeem.</b> The price is not held against a reference — <code>expiresAt</code>
       tells you when to ask again.</li>
-    <li><b>The participant breakdown.</b> Each stop's own published fee is open data we intend to expose,
-      but a costed route on an unauthenticated call is a competitor's cost sheet. It waits for a key.</li>
+    <li><b>A test mode that behaves differently.</b> Today it is a separate credential and a label on the
+      answer, and nothing more, because a quote has nothing to fake. It starts mattering when minting does.</li>
     <li><b>Free-text destinations.</b> You name a point or an area, not “12 Biashara Street”. Place
       look-up covers Kenya only today.</li>
     <li><b>Translations for the button.</b> Its words are English until you replace them with

@@ -5671,6 +5671,103 @@
         }
       }
     },
+    "/v1/sbg/vendors{id}/api-keys": {
+      "post": {
+        "operationId": "Sbg.issueApiKey",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueApiKeyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      },
+      "get": {
+        "operationId": "Sbg.listApiKeys",
+        "summary": "",
+        "description": "This store's keys, in a shape safe to render — never a secret, not even to its owner.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ApiKeyView"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/vendors{id}/api-keys{keyId}": {
+      "delete": {
+        "operationId": "Sbg.revokeApiKey",
+        "summary": "",
+        "description": "Stop a key working. Kept rather than deleted, so \"what was that key doing\" stays answerable.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "keyId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeyView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/vendors/{id}/dock": {
       "get": {
         "operationId": "Sbg.dockPlan",
@@ -10444,7 +10541,7 @@
       "post": {
         "operationId": "ShippingApi.quote",
         "summary": "",
-        "description": "What would this cost to ship? Creates nothing — no parcel, no account, no reservation.\n\nThe one call the \"calculate your shipping fee\" button makes.",
+        "description": "What would this cost to ship? Creates nothing — no parcel, no account, no reservation.\n\nThe one call the \"calculate your shipping fee\" button makes. A key is optional: send one in\n`X-SBG-Key` and the limit becomes yours rather than your IP's, and a server-side key also returns the\ncosted breakdown.",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -13828,6 +13925,70 @@
           "label",
           "zone",
           "location"
+        ]
+      },
+      "IssueApiKeyDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "publishable",
+              "secret"
+            ]
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "test",
+              "live"
+            ]
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "ApiKeyView": {
+        "type": "object",
+        "properties": {
+          "keyId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "object"
+          },
+          "mode": {
+            "type": "object"
+          },
+          "label": {
+            "type": "string"
+          },
+          "hint": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "lastUsedAt": {
+            "type": "string"
+          },
+          "revokedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "keyId",
+          "kind",
+          "mode",
+          "hint",
+          "createdAt"
         ]
       },
       "OpenDockBagDto": {
