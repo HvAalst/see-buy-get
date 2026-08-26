@@ -5553,6 +5553,207 @@
         }
       }
     },
+    "/v1/sbg/vendors/{id}/collection-point": {
+      "post": {
+        "operationId": "Sbg.setCollectionPoint",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionPointDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "Sbg.clearCollectionPoint",
+        "summary": "",
+        "description": "Stop collecting here. Bags already claimed stay with the drivers who claimed them.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/vendors/{id}/dock": {
+      "get": {
+        "operationId": "Sbg.dockPlan",
+        "summary": "",
+        "description": "What this dock should be bagging: paid parcels grouped by destination, plus the bags already open.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/vendors/{id}/dock/bags": {
+      "post": {
+        "operationId": "Sbg.openDockBag",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenDockBagDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Tote"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/vendors/{id}/dock/bags/{code}/fill": {
+      "post": {
+        "operationId": "Sbg.fillDockBag",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FillToteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/vendors/{id}/dock/bags/{code}/seal": {
+      "post": {
+        "operationId": "Sbg.sealDockBag",
+        "summary": "",
+        "description": "Close the bag: the store's commitment, and the moment drivers near the dock are told it is ready.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SealBagDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/vendors/{id}/orders": {
       "get": {
         "operationId": "Sbg.vendorOrders",
@@ -13166,6 +13367,29 @@
           "name"
         ]
       },
+      "CollectionPoint": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/GeoPoint"
+          },
+          "bays": {
+            "type": "number"
+          },
+          "enabledAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "location",
+          "bays",
+          "enabledAt"
+        ]
+      },
       "ShippingPolicy": {
         "type": "object",
         "properties": {
@@ -13212,6 +13436,14 @@
           },
           "address": {
             "type": "string"
+          },
+          "collection": {
+            "description": "Their own dock, if they have asked for one. Absent = they drop off at a PUDO like everyone else.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CollectionPoint"
+              }
+            ]
           },
           "country": {
             "type": "string"
@@ -13271,6 +13503,100 @@
             "$ref": "#/components/schemas/ShippingPolicyDto"
           }
         }
+      },
+      "CollectionPointDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/GeoDto"
+          },
+          "bays": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "label",
+          "location"
+        ]
+      },
+      "OpenDockBagDto": {
+        "type": "object",
+        "properties": {
+          "destZone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "destZone"
+        ]
+      },
+      "Tote": {
+        "type": "object",
+        "properties": {
+          "toteId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "status": {
+            "type": "object"
+          },
+          "locationId": {
+            "type": "string"
+          },
+          "destinationNodeId": {
+            "type": "string"
+          },
+          "destinationLabel": {
+            "type": "string"
+          },
+          "parcels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "unitsUsed": {
+            "type": "number"
+          },
+          "weightKg": {
+            "type": "number"
+          },
+          "filledAt": {
+            "type": "string"
+          },
+          "availableAt": {
+            "type": "string"
+          },
+          "claimedBy": {
+            "type": "string"
+          },
+          "sealRequired": {
+            "type": "boolean"
+          },
+          "sealPromptedFor": {
+            "type": "object",
+            "description": "Which nudge this shop has already had for this bag, so the sweep asks once per reason (full → aged)."
+          },
+          "sealedAt": {
+            "type": "string",
+            "description": "When the shop closed it. The record that the completeness gate ran, distinct from being published."
+          }
+        },
+        "required": [
+          "toteId",
+          "code",
+          "status",
+          "locationId",
+          "parcels",
+          "unitsUsed",
+          "weightKg"
+        ]
       },
       "CheckoutHandoff": {
         "type": "object",
@@ -13872,70 +14198,6 @@
           "name",
           "zones",
           "location"
-        ]
-      },
-      "Tote": {
-        "type": "object",
-        "properties": {
-          "toteId": {
-            "type": "string"
-          },
-          "code": {
-            "type": "string"
-          },
-          "status": {
-            "type": "object"
-          },
-          "locationId": {
-            "type": "string"
-          },
-          "destinationNodeId": {
-            "type": "string"
-          },
-          "destinationLabel": {
-            "type": "string"
-          },
-          "parcels": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "unitsUsed": {
-            "type": "number"
-          },
-          "weightKg": {
-            "type": "number"
-          },
-          "filledAt": {
-            "type": "string"
-          },
-          "availableAt": {
-            "type": "string"
-          },
-          "claimedBy": {
-            "type": "string"
-          },
-          "sealRequired": {
-            "type": "boolean"
-          },
-          "sealPromptedFor": {
-            "type": "object",
-            "description": "Which nudge this shop has already had for this bag, so the sweep asks once per reason (full → aged)."
-          },
-          "sealedAt": {
-            "type": "string",
-            "description": "When the shop closed it. The record that the completeness gate ran, distinct from being published."
-          }
-        },
-        "required": [
-          "toteId",
-          "code",
-          "status",
-          "locationId",
-          "parcels",
-          "unitsUsed",
-          "weightKg"
         ]
       },
       "AssignToteDto": {

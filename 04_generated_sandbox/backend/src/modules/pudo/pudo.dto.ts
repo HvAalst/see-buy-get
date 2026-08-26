@@ -653,6 +653,18 @@ export class DeclareLegDto {
   @ValidateNested() @Type(() => GeoDto) to!: GeoDto;
 }
 
+/** A vendor's own dock: where a driver comes to collect, and how many bags can wait there. */
+export class CollectionPointDto {
+  @IsString() label!: string;
+  @ValidateNested() @Type(() => GeoDto) location!: GeoDto;
+  @IsOptional() @IsNumber() @Min(1) bays?: number;
+}
+
+/** Open a bag on the dock for one destination zone. */
+export class OpenDockBagDto {
+  @IsString() destZone!: string;
+}
+
 /** Hold new offers. Omitted `minutes` = until the driver resumes (bounded by the shift either way). */
 export class SnoozeDto {
   @IsOptional() @IsNumber() @Min(1) minutes?: number;

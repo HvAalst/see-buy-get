@@ -30,12 +30,13 @@ import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
-import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, BagBaysDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityFeeDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetLocationDto, SetPriceDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
+import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityFeeDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetLocationDto, SetPriceDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
 import { classifySize, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { BooksService } from '../../foundation/books/books.service';
 import { BagPlanService } from './bag-plan.service';
 import { ForthcomingService } from './forthcoming.service';
+import { DockService } from './dock.service';
 import { haversineKm } from './geo';
 import { GEOCODER, Geocoder } from './geocoder';
 
@@ -65,6 +66,7 @@ export class SbgController {
     private readonly bagPlans: BagPlanService,
     private readonly forthcoming: ForthcomingService,
     private readonly vendors: VendorService,
+    private readonly dock: DockService,
     private readonly shelf: ShelfService,
     private readonly routing: RoutingService,
     private readonly mdps: MdpService,
@@ -610,6 +612,59 @@ export class SbgController {
     if (actor?.role !== 'operator' && (!actor?.did || actor.did !== did)) {
       throw new GlosError('FORBIDDEN', 'These jobs are not yours to view');
     }
+  }
+
+  /* --- a vendor's own collection point: OUTBOUND ONLY (see CollectionPoint) --- */
+
+  /**
+   * Turn the store's own address into a place the network collects from — a saved drop-off trip, and one
+   * handover fewer for the goods. It grants exactly one power: a driver may be sent here for a sealed bag.
+   * It is NOT a PUDO — no shelf, no release, never a destination, and no intake fee, because nobody takes
+   * in a box its own owner packed.
+   */
+  @Scopes('vendor:manage:self')
+  @Post('vendors/:id/collection-point')
+  setCollectionPoint(@Param('id') id: string, @Body() dto: CollectionPointDto, @Actor() actor: IntrospectionResult) {
+    this.assertVendorOwner(id, actor);
+    return VendorService.publicView(this.vendors.setCollectionPoint(id, dto));
+  }
+
+  /** Stop collecting here. Bags already claimed stay with the drivers who claimed them. */
+  @Scopes('vendor:manage:self')
+  @Delete('vendors/:id/collection-point')
+  clearCollectionPoint(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    this.assertVendorOwner(id, actor);
+    return VendorService.publicView(this.vendors.clearCollectionPoint(id));
+  }
+
+  /** What this dock should be bagging: paid parcels grouped by destination, plus the bags already open. */
+  @Scopes('vendor:read:self')
+  @Get('vendors/:id/dock')
+  dockPlan(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    this.assertVendorOwner(id, actor);
+    return this.dock.plan(id);
+  }
+
+  @Scopes('vendor:manage:self')
+  @Post('vendors/:id/dock/bags')
+  openDockBag(@Param('id') id: string, @Body() dto: OpenDockBagDto, @Actor() actor: IntrospectionResult) {
+    this.assertVendorOwner(id, actor);
+    return this.dock.openBag(id, dto.destZone);
+  }
+
+  @Scopes('vendor:manage:self')
+  @Post('vendors/:id/dock/bags/:code/fill')
+  fillDockBag(@Param('id') id: string, @Param('code') code: string, @Body() dto: FillToteDto, @Actor() actor: IntrospectionResult) {
+    this.assertVendorOwner(id, actor);
+    return this.dock.fillBag(code, id, dto.parcelId);
+  }
+
+  /** Close the bag: the store's commitment, and the moment drivers near the dock are told it is ready. */
+  @Scopes('vendor:manage:self')
+  @Post('vendors/:id/dock/bags/:code/seal')
+  sealDockBag(@Param('id') id: string, @Param('code') code: string, @Body() dto: SealBagDto, @Actor() actor: IntrospectionResult) {
+    this.assertVendorOwner(id, actor);
+    return this.dock.sealBag(code, id, dto ?? {});
   }
 
   /** A vendor's shipment register (R0): their OWN inbound parcels, server-side searched / filtered /

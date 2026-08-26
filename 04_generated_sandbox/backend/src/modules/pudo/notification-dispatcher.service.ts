@@ -414,15 +414,13 @@ export class NotificationDispatcher implements OnModuleInit {
     }
   }
 
-  /** Resolve a node id (an agentDid or an mdpId) to its coordinates — undefined if it is neither. */
+  /**
+   * Where a bag is standing. Asks DISPATCH rather than resolving it here: a load's location can be a shop, a
+   * hub or a vendor's dock, and two copies of that question would drift the day a fourth kind appears.
+   */
   private nodeLocation(nodeId: string): GeoPoint | undefined {
     try {
-      return this.agents.get(nodeId).location;
-    } catch {
-      /* not a PUDO agent — try an MDP */
-    }
-    try {
-      return this.mdps.require(nodeId).location;
+      return this.dispatch.pickupPlace(nodeId)?.loc;
     } catch {
       return undefined;
     }

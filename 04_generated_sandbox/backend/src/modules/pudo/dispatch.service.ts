@@ -899,7 +899,7 @@ export class DispatchService {
     if (!t) return null;
     // A loaded (in-transit) tote sits on the bus — fall back to an "on board" label so it still shows
     // among the driver's loads. Available/claimed totes resolve to their PUDO/MDP pickup point.
-    const place = this.place(t.locationId) ?? { loc: { lat: 0, lng: 0 }, label: 'on board' };
+    const place = this.pickupPlace(t.locationId) ?? { loc: { lat: 0, lng: 0 }, label: 'on board' };
     const fragile = false; // totes are not individually flagged fragile here; parcel rules apply at load
     // S31: surface the capabilities the bag's cargo needs (perishable → cold chain, hazardous → hazmat) so a
     // vehicle that lacks one is never offered the tote — the offer would only dead-end at loadBag otherwise.
@@ -966,10 +966,26 @@ export class DispatchService {
   }
 
   /** Resolve a tote's locationId (an MDP id or an agent DID) → its coordinates + display label. */
-  private place(locationId: string): { loc: { lat: number; lng: number }; label: string } | null {
+  /**
+   * Where a bag is standing, and what a driver should be told it is called.
+   *
+   * The one place that knows what a load's `locationId` can BE. It was a PUDO or a hub; a vendor's own dock
+   * is the third kind, and adding it here is the whole of what "the network can collect from a warehouse"
+   * required — everything downstream (the offer, the price, the notification) reads the pickup through this.
+   * Public because the notification rules need the same answer, and two copies of this question would drift.
+   */
+  pickupPlace(locationId: string): { loc: { lat: number; lng: number }; label: string } | null {
     const mdp = this.mdps.list().find((m) => m.mdpId === locationId);
     if (mdp) return { loc: mdp.location, label: mdp.name };
-    try { const a = this.agents.get(locationId); return { loc: a.location, label: a.shopName }; } catch { return null; }
+    try {
+      const a = this.agents.get(locationId);
+      return { loc: a.location, label: a.shopName };
+    } catch {
+      /* not a PUDO — a vendor dock, or nowhere */
+    }
+    const vendor = this.vendors.byDid(locationId);
+    if (vendor?.collection) return { loc: vendor.collection.location, label: vendor.collection.label };
+    return null;
   }
 
   private minutes(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {

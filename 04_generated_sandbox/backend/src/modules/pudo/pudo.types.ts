@@ -235,6 +235,26 @@ export class ShippingPolicy {
 }
 
 /** A registered e-commerce vendor that wires its checkout into PUDO for click-and-collect. */
+/**
+ * A vendor's own dock, as a place the network COLLECTS FROM — and nothing else.
+ *
+ * A store that ships every day should not have to carry its parcels to a shop first. But being a PUDO is a
+ * bundle, and outbound is the smallest part of it: a PUDO also takes custody of strangers' parcels, holds
+ * release secrets, sits in the destination directory, earns a labour fee for taking a box in, and passes
+ * eligibility written for a retail counter. A dock needs none of that and must be granted none of it.
+ *
+ * So this is deliberately NOT an agent: outbound only, never a destination, no shelf, no release, no
+ * rating, and NO INTAKE FEE — nobody was paid to take in a box its own owner packed. What the vendor gains
+ * is a saved trip and, having photographed their own goods at mint, their own evidence of their condition.
+ * What they accept is that they are the only witness to what they declared.
+ */
+export class CollectionPoint {
+  label: string; // what a driver reads on the offer: "Njiro warehouse, gate 2"
+  location: GeoPoint; // the loading door, which is not always the storefront pin
+  bays: number; // floor room for staged bags — the shop's bag bays, at a dock
+  enabledAt: string;
+}
+
 export class Vendor {
   vendorId: string;
   /** Real GLOS DID (S15). The vendorId stays the domain key; the DID is what an actor token binds to. */
@@ -244,6 +264,8 @@ export class Vendor {
   secret: string;
   location?: GeoPoint; // store map pin — origin-PUDO suggestions are ranked from here
   address?: string;
+  /** Their own dock, if they have asked for one. Absent = they drop off at a PUDO like everyone else. */
+  collection?: CollectionPoint;
   country: string; // which per-country daughter company settles this vendor
   /** That daughter company, by id. Absent on records written before entities existed — resolve it
    *  through VendorService.entityIdOf(), which derives it from the country the record already has. */

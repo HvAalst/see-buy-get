@@ -49,6 +49,7 @@ import { EntityService } from '../../foundation/entity/entity.service';
 import { BooksService } from '../../foundation/books/books.service';
 import { BagPlanService } from './bag-plan.service';
 import { ForthcomingService } from './forthcoming.service';
+import { DockService } from './dock.service';
 import { IdentityVault } from '../../foundation/data-firewall/identity-vault.service';
 import { OperationalStore } from '../../foundation/data-firewall/operational-store.service';
 import { FieldEncryption } from '../../foundation/data-firewall/field-encryption.service';
@@ -103,7 +104,7 @@ describe('PUDO Light', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
-        GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, BagPlanService, ForthcomingService, ToteService, ConsignmentService, VehicleService, DriverService, FleetService, DispatchService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
+        GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, VehicleService, DriverService, FleetService, DispatchService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus, EntityService, BooksService,
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
@@ -641,6 +642,81 @@ describe('PUDO Light', () => {
     expect(own.parcel).toBeDefined();
     const op: any = controller.createInbound(dto, { role: 'operator' } as never);
     expect(op.parcel).toBeDefined();
+  });
+
+  it('a vendor collects from its OWN dock: bag, seal, driver — no PUDO, no intake fee, no new powers', async () => {
+    const dest = onboardAgent('Dock Dest', 'SouthTown', 50);
+    corridors.addCorridor({ name: 'dock', originZone: 'NorthTown', destZone: 'SouthTown' });
+    const store = vendors.register({ name: 'Njiro Traders', location: { lat: -1.2, lng: 36.8 } });
+    vendors.topUp(store.vendorId, 200);
+    const asStore = { role: 'genesis', did: store.did } as never;
+
+    // The dock is the store's own address — a door, not a PUDO.
+    const dock = { lat: -1.21, lng: 36.81 };
+    controller.setCollectionPoint(store.vendorId, { label: 'Njiro warehouse, gate 2', location: dock } as never, asStore);
+
+    // Mint two paid parcels for the same place. KNOWN GAP (next slice): the mint still demands an origin
+    // PUDO and prices that shop's node fee into the quote, even though a dock parcel never goes near it —
+    // making the mint origin-less is routing surgery (planJourney/quoteShipment start at a NODE, not a
+    // point). What is proven here is everything after the mint.
+    const originPudo = onboardAgent('Dock Origin', 'NorthTown', 50);
+    const mint = (mobile: string) =>
+      (controller.createInbound({ vendorId: store.vendorId, originPudoDid: originPudo.did, destPudoDid: dest.did, buyerMobile: mobile, size: 'M', contentPhotoRef: 'c.jpg' } as never, asStore) as any).parcel.parcelId;
+    const p1 = mint('+254700111');
+    const p2 = mint('+254700222');
+
+    const plan: any = controller.dockPlan(store.vendorId, asStore);
+    expect(plan.groups[0]).toMatchObject({ label: 'SouthTown', parcelIds: [p1, p2] });
+    expect(plan.staging).toEqual({ capacity: 2, used: 0, free: 2 });
+
+    const bag: any = controller.openDockBag(store.vendorId, { destZone: 'SouthTown' } as never, asStore);
+    controller.fillDockBag(store.vendorId, bag.code, { parcelId: p1 } as never, asStore);
+
+    // The same completeness gate a shop answers to: a paid parcel left on a dock is as stranded as one on
+    // a shelf, and the person who can fix it is standing next to it.
+    expect(() => controller.sealDockBag(store.vendorId, bag.code, {} as never, asStore)).toThrow(/still on the dock/);
+    controller.fillDockBag(store.vendorId, bag.code, { parcelId: p2 } as never, asStore);
+    const sealed: any = controller.sealDockBag(store.vendorId, bag.code, {} as never, asStore);
+    expect(sealed.tote.status).toBe('available'); // sealing is what publishes it, exactly as at a counter
+
+    // A driver is told where to come — the dock resolves as a pickup place like a shop or a hub does.
+    await Promise.resolve();
+    const d = coupleTipper('dock', { min: 0.8, max: 1.5 });
+    const [offer] = dispatch.suggest(d.did, { from: dock, to: dest.location });
+    expect(offer).toMatchObject({ ref: bag.code, pickupLabel: 'Njiro warehouse, gate 2' });
+
+    // Custody moves when the BAG does, not before: until the driver scans it, the goods are the store's.
+    expect(parcels.get(p1).status).toBe('Created');
+    dispatch.claim(offer.offerId);
+    mdps.loadBag(bag.code, drivers.get(d.did).badgeId!);
+    expect(parcels.get(p1).status).toBe('On_Bus');
+
+    // And NOBODY was paid to take in a box its own owner packed — no agent earned a labour fee here.
+    expect(gate.entries({ type: 'LABOR_PAYOUT' }).filter((e) => e.reference === p1 || e.reference === p2)).toEqual([]);
+
+    // The dock is another store's business only. And it never becomes a place to send things TO.
+    const other = vendors.register({ name: 'Rival' });
+    expect(() => controller.openDockBag(store.vendorId, { destZone: 'SouthTown' } as never, { role: 'genesis', did: other.did } as never)).toThrow(/not yours/);
+    expect((controller.networkPoints() as any[]).some((p) => p.did === store.did)).toBe(false);
+  });
+
+  it('a store with no collection point is told how to get one, and a full dock refuses another bag', () => {
+    const dest = onboardAgent('Dock2 Dest', 'SouthTown', 50);
+    corridors.addCorridor({ name: 'dock2', originZone: 'NorthTown', destZone: 'SouthTown' });
+    const store = vendors.register({ name: 'No Dock' });
+    vendors.topUp(store.vendorId, 200);
+    const asStore = { role: 'genesis', did: store.did } as never;
+    expect(() => controller.openDockBag(store.vendorId, { destZone: 'SouthTown' } as never, asStore)).toThrow(/no collection point/);
+
+    controller.setCollectionPoint(store.vendorId, { label: 'Yard', location: { lat: -1.2, lng: 36.8 }, bays: 1 } as never, asStore);
+    const originPudo = onboardAgent('Dock2 Origin', 'NorthTown', 50);
+    controller.createInbound({ vendorId: store.vendorId, originPudoDid: originPudo.did, destPudoDid: dest.did, buyerMobile: '+254700333', size: 'M', contentPhotoRef: 'c.jpg' } as never, asStore);
+    controller.openDockBag(store.vendorId, { destZone: 'SouthTown' } as never, asStore);
+    // One bay, one bag: a dock runs out of floor exactly as a shop counter does.
+    expect(() => controller.openDockBag(store.vendorId, { destZone: 'EastTown' } as never, asStore)).toThrow(/room for 1 bag/);
+
+    // A pin is not optional — a driver is sent to a point, not to a name.
+    expect(() => controller.setCollectionPoint(store.vendorId, { label: 'Yard', location: { lat: Number.NaN, lng: 36.8 } } as never, asStore)).toThrow(/on the map/);
   });
 
   it('PG0: settle / top-up / profile updates are gated to the owning store', () => {

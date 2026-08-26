@@ -67,6 +67,14 @@ function harness(opts: HarnessOpts) {
   const dispatch = {
     freightCarryableByDriver: (_freightId: string, driverDid: string) => (opts.canCarry ? opts.canCarry(driverDid) : true),
     worksNear: (driverDid: string) => (opts.heading ? opts.heading(driverDid) : true),
+    // Dispatch owns "what can a load's location BE" (shop, hub, or a vendor's own dock), so the dispatcher
+    // asks it rather than resolving twice. The fake answers for the two kinds these rules exercise.
+    pickupPlace: (id: string) => {
+      const agent = opts.agents?.[id];
+      if (agent?.location) return { loc: agent.location, label: agent.shopName ?? id };
+      const mdp = opts.mdps?.[id];
+      return mdp ? { loc: mdp.location, label: id } : null;
+    },
     offerNear: () => (opts.offerNear ? opts.offerNear() : null),
     activeOffersFor: () => (opts.activeOffers ? opts.activeOffers() : []),
     mintDeclineToken: () => 'decline-token',

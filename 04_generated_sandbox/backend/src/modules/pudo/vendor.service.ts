@@ -4,8 +4,8 @@ import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { DidService } from '../../foundation/did/did.service';
 import { OperationalStore } from '../../foundation/data-firewall/operational-store.service';
-import { CheckoutHandoff, ShippingPolicy, Vendor } from './pudo.types';
-import { DEFAULT_VENDOR_COUNTRY, NETWORK_CURRENCY } from './pudo.config';
+import { CheckoutHandoff, CollectionPoint, GeoPoint, ShippingPolicy, Vendor } from './pudo.types';
+import { DEFAULT_BAG_BAYS, DEFAULT_VENDOR_COUNTRY, MAX_BAG_BAYS, NETWORK_CURRENCY } from './pudo.config';
 import { currencyForJurisdiction } from '../../foundation/money/currency';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { BooksService } from '../../foundation/books/books.service';
@@ -334,6 +334,55 @@ export class VendorService {
     if (patch.shippingPolicy !== undefined) vendor.shippingPolicy = VendorService.policy({ ...vendor.shippingPolicy, ...patch.shippingPolicy });
     this.vendors.set(vendor.vendorId, vendor);
     return vendor;
+  }
+
+  /* --- the vendor's own dock (outbound only — see CollectionPoint) --- */
+
+  /**
+   * Turn the vendor's own address into a place the network collects from, or move/resize it.
+   *
+   * Deliberately a small, revocable thing on the vendor's own record rather than an agent registration: it
+   * grants exactly one power — a driver may be sent here to collect a sealed bag — and no other.
+   */
+  setCollectionPoint(vendorId: string, input: { label: string; location: GeoPoint; bays?: number }): Vendor {
+    const vendor = this.get(vendorId);
+    const label = input.label?.trim();
+    if (!label) throw new GlosError('FIELD_REQUIRED', 'Name the collection point — a driver has to find the right door');
+    if (!input.location || !Number.isFinite(input.location.lat) || !Number.isFinite(input.location.lng)) {
+      throw new GlosError('INVALID_INPUT', 'Put the collection point on the map — a driver is sent to a point, not to a name');
+    }
+    const bays = input.bays ?? vendor.collection?.bays ?? DEFAULT_BAG_BAYS;
+    if (!Number.isFinite(bays) || bays < 1 || bays > MAX_BAG_BAYS) {
+      throw new GlosError('INVALID_INPUT', `Bag space must be between 1 and ${MAX_BAG_BAYS} bags`);
+    }
+    vendor.collection = {
+      label,
+      location: { lat: input.location.lat, lng: input.location.lng },
+      bays: Math.floor(bays),
+      enabledAt: vendor.collection?.enabledAt ?? new Date().toISOString(),
+    };
+    this.vendors.set(vendorId, vendor);
+    return vendor;
+  }
+
+  /** Stop collecting here. Bags already sealed on the dock still belong to the drivers who claimed them. */
+  clearCollectionPoint(vendorId: string): Vendor {
+    const vendor = this.get(vendorId);
+    vendor.collection = undefined;
+    this.vendors.set(vendorId, vendor);
+    return vendor;
+  }
+
+  /** The dock, or a refusal that says how to get one. */
+  requireCollection(vendorId: string): CollectionPoint {
+    const vendor = this.get(vendorId);
+    if (!vendor.collection) throw new GlosError('INVALID_STATE', 'This store has no collection point — set one up, or drop off at a PUDO');
+    return vendor.collection;
+  }
+
+  /** Resolve a bag's `locationId` back to the vendor whose dock it stands on, if it is one. */
+  byDid(did: string): Vendor | undefined {
+    return [...this.vendors.values()].find((v) => v.did === did);
   }
 
   get(vendorId: string): Vendor {
