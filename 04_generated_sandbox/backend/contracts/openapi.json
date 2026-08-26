@@ -12916,6 +12916,57 @@
           "svg"
         ]
       },
+      "Birthplace": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "object"
+          },
+          "atId": {
+            "type": "string",
+            "description": "Whose place it was: an agent DID, a vendorId, or the sender's own DID."
+          },
+          "label": {
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/GeoPoint"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "label",
+          "at"
+        ]
+      },
+      "CustodyLeg": {
+        "type": "object",
+        "properties": {
+          "holderId": {
+            "type": "string"
+          },
+          "holderKind": {
+            "type": "object"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "holderId",
+          "holderKind",
+          "from"
+        ]
+      },
       "ParcelScan": {
         "type": "object",
         "properties": {
@@ -13142,6 +13193,21 @@
           },
           "deliveredAt": {
             "type": "string"
+          },
+          "birthplace": {
+            "description": "Where it came into being. Absent on pre-slice records — read it through `birthplaceOf`.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Birthplace"
+              }
+            ]
+          },
+          "custody": {
+            "description": "Who has physically held it, in order. Absent on pre-slice records — read through `custodianOf`.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustodyLeg"
+            }
           },
           "scans": {
             "type": "array",

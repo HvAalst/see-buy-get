@@ -13,7 +13,7 @@ import { CorridorService } from './corridor.service';
 import { ShelfService } from './shelf.service';
 import { FleetService } from './fleet.service';
 import { HANDOVER_FEE, LABEL_TZ_OFFSET_MIN, LABOUR_FEE, NETWORK_CURRENCY, OTP_MAX_ATTEMPTS, PICKUP_FEE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, VOID_WINDOW_MS, WHOLESALE, classifySize, withPlatformFee } from './pudo.config';
-import { ConsumerParcelView, Parcel, ParcelDirection, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy } from './pudo.types';
+import { Birthplace, ConsumerParcelView, CustodyKind, CustodyLeg, Parcel, ParcelDirection, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy } from './pudo.types';
 import { VendorService } from './vendor.service';
 import { VehicleService } from './vehicle.service';
 import { MediaService } from './media.service';
@@ -246,6 +246,82 @@ export interface AgentParcelRow {
   size: ParcelSize;
   trackingKey?: string;
   createdAt: string;
+}
+
+/* ------------------------------------------------ birthplace, custody, ownership (the parcel's own facts) */
+
+/**
+ * Where this parcel came into being — recorded since the birthplace slice, RECONSTRUCTED before it.
+ *
+ * The reconstruction is honest rather than clever: an older parcel names the shop that first held it, which
+ * for a counter parcel IS where it was born, and for a store order is the nearest true thing we kept.
+ */
+export function birthplaceOf(p: Parcel): Birthplace | undefined {
+  if (p.birthplace) return p.birthplace;
+  if (p.originAgentDid) return { kind: p.vendorId ? 'store' : 'counter', atId: p.originAgentDid, label: p.originZone ?? 'origin', at: p.acceptedAt };
+  return undefined;
+}
+
+/**
+ * Who is holding it right now — the open custody leg.
+ *
+ * For a parcel written before custody was recorded, the answer is RECONSTRUCTED from its status and last
+ * scan. That reconstruction is a reading, not a record: it says where the parcel was, and infers from that
+ * who must have had it. Anything that needs proof (a damage claim) should say so when it is relying on it.
+ */
+export function custodianOf(p: Parcel): CustodyLeg | undefined {
+  const open = (p.custody ?? []).find((l) => !l.to);
+  if (open) return open;
+  if (p.custody?.length) return undefined; // a closed chain: nobody holds it (delivered, voided)
+  const last = p.scans[p.scans.length - 1];
+  if (!last) return undefined;
+  const kind: CustodyKind | undefined =
+    p.status === 'On_Bus' ? 'driver' : p.status === 'At_MDP' ? 'hub' : p.status === 'Delivered' ? 'receiver' : p.status === 'At_PUDO' || p.status === 'Ready_For_Pickup' ? 'shop' : undefined;
+  return kind ? { holderId: last.by, holderKind: kind, from: last.at, note: 'reconstructed from the scan trail' } : undefined;
+}
+
+/**
+ * Who held it at a given moment — the question a damage claim actually asks.
+ *
+ * Answerable only from a recorded chain: a status trail says where a parcel WAS, which is a different thing
+ * from who was answerable for it. Undefined means we do not know, and saying so is the point.
+ */
+export function custodyAt(p: Parcel, iso: string): CustodyLeg | undefined {
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return undefined;
+  // The LAST leg that covers the instant, and both ends are inclusive: a hand-off is a moment two parties
+  // share, and the honest answer to "who had it at exactly then" is the one who ended up with it. It also
+  // keeps a leg that opened and closed inside the same millisecond answerable rather than invisible.
+  let held: CustodyLeg | undefined;
+  for (const leg of p.custody ?? []) {
+    const from = new Date(leg.from).getTime();
+    const to = leg.to ? new Date(leg.to).getTime() : Number.POSITIVE_INFINITY;
+    if (t >= from && t <= to) held = leg;
+  }
+  return held;
+}
+
+/** The two owners of a parcel, which are different parties and do not change as it travels. */
+export interface ParcelOwnership {
+  /** The SHIPMENT: whoever bought the carriage. They pay, they may void it, refunds return to them. */
+  shipment: { kind: 'store' | 'sender'; id?: string };
+  /** The GOODS: whoever the parcel is for. They inspect, they dispute, and only they hold the release secret. */
+  goods: { kind: 'receiver'; phoneHash?: string };
+}
+
+/**
+ * Ownership, stated rather than implied.
+ *
+ * "Who owns a parcel" has two answers and the system has always known both without naming either: the
+ * sender owns the contract of carriage, the receiver owns what is inside. Custody is neither — it is the
+ * chain of hands between them, and the network only ever appears there. The phone hash never leaves the
+ * operator boundary; it is here so a dispute can be tied to a person, not so a view can print one.
+ */
+export function ownershipOf(p: Parcel): ParcelOwnership {
+  return {
+    shipment: p.vendorId ? { kind: 'store', id: p.vendorId } : { kind: 'sender', id: p.senderPhoneHash },
+    goods: { kind: 'receiver', phoneHash: p.receiverPhoneHash },
+  };
 }
 
 /** This shop's relation to a parcel: the drop-off (origin) or the collection point (dest). */
@@ -610,6 +686,10 @@ export class ParcelService implements OnApplicationBootstrap {
       // vendor flow's does. Public surface, no PII — inbound parcels had it since day one
       // and the counter flow simply never minted one.
       trackingKey: `T-${randomBytes(5).toString('hex').toUpperCase()}`,
+      // Born at this counter — and held by it from the same moment, because a walk-up is created BY the
+      // shop taking it. The sender's own leg happened off the network, on the way here.
+      birthplace: { kind: 'counter', atId: input.agentDid, label: agent.shopName, location: agent.location, at: now },
+      custody: [{ holderId: input.agentDid, holderKind: 'shop', from: now, note: 'taken in at the counter' }],
       scans: [{ at: now, status: 'CREATED', by: input.agentDid, note: agent.shopName, anchorTxId }],
     };
     // DT — a printable label at creation for OUTBOUND too (the counter flow never issued one). Direction-aware:
@@ -729,6 +809,7 @@ export class ParcelService implements OnApplicationBootstrap {
       if (fleet && parcel.actualPerKm == null) parcel.actualPerKm = fleet.vehicle.pricePerKm; // the real carrier rate → flexible rebate
       parcel.handedToBusAt = new Date().toISOString();
       loadKg += parcel.weightKg;
+      this.handTo(parcel, 'driver', this.driverIdOf(badgeId), `handed to the bus · manifest ${manifestId}`);
       this.scan(parcel, 'On_Bus', badgeId, `manifest ${manifestId}`);
       handed.push(parcelId);
       void this.events.publish(GlosEvent.Pudo.ParcelHandedToBus, { parcelId, driverBadgeId: badgeId, corridorId, manifestId }, { source: 'pudo' }).catch(() => undefined);
@@ -782,6 +863,7 @@ export class ParcelService implements OnApplicationBootstrap {
     parcel.otpAttempts = 0;
     parcel.otpLockedAt = undefined;
     parcel.binSlot = this.shelf.assign(destAgentDid, parcelId, parcel.size); // commit to a shelf slot for pickup (small parcels may bundle)
+    this.handTo(parcel, 'shop', destAgentDid, 'arrived at the collection point');
     this.scan(parcel, 'Ready_For_Pickup', destAgentDid, `arrived · shelf ${parcel.binSlot}`);
     void this.events.publish(GlosEvent.Pudo.ParcelReadyForPickup, { parcelId, destAgentDid, binSlot: parcel.binSlot }, { source: 'pudo' }).catch(() => undefined);
     // No secret in this response: the customer brings the code, the shop checks it.
@@ -813,6 +895,8 @@ export class ParcelService implements OnApplicationBootstrap {
     this.media.link(deliveredPhotoRef, { type: 'parcel', id: parcelId }, 'pod');
     this.media.anchorParcelTerminal(parcelId);
     this.shelf.release(parcel.destAgentDid ?? agentDid, parcelId); // free the shelf slot
+    this.handTo(parcel, 'receiver', parcel.receiverPhoneHash ?? 'receiver', 'collected in person');
+    this.endCustody(parcel);
     this.scan(parcel, 'Delivered', agentDid, 'OTP verified');
     void this.events.publish(GlosEvent.Pudo.ParcelDelivered, { parcelId, agentDid }, { source: 'pudo' }).catch(() => undefined);
     return parcel;
@@ -830,6 +914,7 @@ export class ParcelService implements OnApplicationBootstrap {
     // S26: the torn-label void proof + the original drop-off proof enter the shipment-proof window now.
     this.media.link(voidedPhotoRef, { type: 'parcel', id: parcel.parcelId }, 'dropoff');
     this.media.anchorParcelTerminal(parcel.parcelId);
+    this.endCustody(parcel); // undone at the counter: the network is not holding it any more
     this.scan(parcel, 'Voided', agentDid, 'voided + refunded');
     this.reverseIntakeCharge(parcel, agentDid);
     void this.events.publish(GlosEvent.Pudo.ParcelVoided, { parcelId, agentDid }, { source: 'pudo' }).catch(() => undefined);
@@ -878,6 +963,7 @@ export class ParcelService implements OnApplicationBootstrap {
   createInbound(input: { vendorId: string; externalOrderId?: string; originAgentDid: string; destAgentDid: string; buyerMobile: string; buyerEmail?: string; size?: ParcelSize; dimensionsCm?: { l: number; w: number; h: number }; weightKg?: number; contentPhotoRef: string; fragile?: boolean; natureCode?: CargoNature; items?: Array<{ name: string; qty: number }>; subtotal?: number; shippingPolicy: ShippingPolicy; routeMode?: 'flexible' | 'locked'; quote: ShipmentQuote }): { parcel: Parcel; label: PhygitalLabel | null; paid: boolean } {
     const origin = this.agents.get(input.originAgentDid);
     const dest = this.agents.get(input.destAgentDid);
+    const vendor = this.vendors.get(input.vendorId); // the store IS the birthplace — read it, don't infer it
     if (!input.contentPhotoRef) throw new GlosError('PHOTO_REQUIRED', 'A photo of the contents is required (the baseline for dispute resolution)');
     // Derive the tier from dimensions+weight when provided; otherwise trust the explicit size.
     const size: ParcelSize = input.dimensionsCm ? classifySize({ ...input.dimensionsCm, kg: input.weightKg ?? SIZE_WEIGHT_KG[input.size ?? 'M'] }) : (input.size ?? 'M');
@@ -947,6 +1033,11 @@ export class ParcelService implements OnApplicationBootstrap {
       buyerCharge,
       paidStatus: 'unpaid',
       acceptedAt: now,
+      // Born at the STORE, not at the shop it will be handed in at — the two were always different facts
+      // and only one of them was recorded. The store holds its own goods until it parts with them, whether
+      // that is over a counter or onto a driver at its own dock.
+      birthplace: { kind: 'store', atId: input.vendorId, label: vendor.name, location: vendor.location, at: now },
+      custody: [{ holderId: input.vendorId, holderKind: 'sender', from: now, note: 'packed at the store' }],
       scans: [{ at: now, status: 'CREATED', by: input.vendorId, note: `inbound · order ${input.externalOrderId ?? '—'}`, anchorTxId }],
     };
     this.parcels.set(parcelId, parcel);
@@ -1036,6 +1127,10 @@ export class ParcelService implements OnApplicationBootstrap {
       // this moment and relays it to the receiver. Nothing about the handover secret waits for arrival.
       otp: releaseOtp(),
       otpAttempts: 0,
+      // Born in the sender's own hands. We know WHOSE, not WHERE — a person packs a parcel wherever they
+      // are — so the point is honestly absent rather than guessed at from the shop they chose.
+      birthplace: { kind: 'hand', atId: input.senderPersonDid, label: 'the sender', at: now },
+      custody: [{ holderId: input.senderPersonDid, holderKind: 'sender', from: now, note: 'packed by the sender' }],
       scans: [{ at: now, status: 'CREATED', by: input.senderPersonDid, note: `peer send · drop off at ${origin.shopName}`, anchorTxId }],
     };
     parcel.label = this.label(parcel, dest.shopName); // outbound branch: tracking key, no handover secret
@@ -1120,6 +1215,7 @@ export class ParcelService implements OnApplicationBootstrap {
     parcel.acceptedAt = new Date().toISOString();
     parcel.dropoffPhotoRef = dropoffPhotoRef;
     parcel.paidStatus = 'ParcelPaid'; // the sender paid the shop in cash, against the price locked at mint
+    this.handTo(parcel, 'shop', agentDid, 'dropped off at the counter');
     this.scan(parcel, 'At_PUDO', agentDid, 'peer-send drop-off · cash collected');
     // adopt(), not link(): the photo id came from the CLIENT — only a photo the acting shop owns and that
     // isn't attached elsewhere may bind here (S29/S33a media-laundering guard).
@@ -1139,6 +1235,7 @@ export class ParcelService implements OnApplicationBootstrap {
     if (parcel.originAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Intake only at the vendor-selected origin PUDO');
     parcel.status = 'At_PUDO';
     parcel.acceptedAt = new Date().toISOString();
+    this.handTo(parcel, 'shop', agentDid, 'handed in at the counter');
     this.scan(parcel, 'At_PUDO', agentDid, 'inbound intake');
     this.gate.payLabour(agentDid, LABOUR_FEE, parcelId, 'parcel');
     void this.events.publish(GlosEvent.Pudo.ParcelAccepted, { parcelId, agentDid, destZone: parcel.destZone, mode: 'prepaid' }, { source: 'pudo' }).catch(() => undefined);
@@ -1159,6 +1256,7 @@ export class ParcelService implements OnApplicationBootstrap {
     // parcel that nobody has yet tried to collect).
     parcel.otpAttempts = 0;
     parcel.otpLockedAt = undefined;
+    this.handTo(parcel, 'shop', agentDid, 'shelved at the collection point');
     this.scan(parcel, 'Ready_For_Pickup', agentDid, `shelved · bin ${parcel.binSlot}`);
     void this.events.publish(GlosEvent.Pudo.ParcelReadyForPickup, { parcelId, destAgentDid: agentDid, collectionCode: parcel.collectionCode, binSlot: parcel.binSlot, vendorId: parcel.vendorId, externalOrderId: parcel.externalOrderId }, { source: 'pudo' }).catch(() => undefined);
     return { parcelId, binSlot: parcel.binSlot, status: parcel.status };
@@ -1203,6 +1301,8 @@ export class ParcelService implements OnApplicationBootstrap {
     parcel.deliveredAt = new Date().toISOString();
     this.media.anchorParcelTerminal(parcelId); // S26: shipment-proof retention starts at collection
     this.shelf.release(agentDid, parcelId); // free the shelf slot
+    this.handTo(parcel, 'receiver', parcel.receiverPhoneHash ?? 'receiver', 'collected in person');
+    this.endCustody(parcel);
     this.scan(parcel, 'Delivered', agentDid, 'collected · OK');
     this.gate.payLabour(agentDid, PICKUP_FEE, parcelId, 'parcel');
     this.rebateFlexible(parcel); // a flexible parcel taken by a cheaper carrier → refund the over-hold
@@ -1333,6 +1433,11 @@ export class ParcelService implements OnApplicationBootstrap {
       parcel.driverBadgeId = by;
       if (!parcel.handedToBusAt) parcel.handedToBusAt = new Date().toISOString();
     }
+    // The bag path's hand-offs, which are the same transfers the direct path makes one parcel at a time:
+    // onto a vehicle (a driver now answers for it), or into a hub (the hub does). `by` is a badge on the
+    // bus leg and the hub's own name on the other — the chain records the party, not the token scanned.
+    if (status === 'On_Bus') this.handTo(parcel, 'driver', this.driverIdOf(by), note);
+    else this.handTo(parcel, 'hub', by, note);
     this.scan(parcel, status, by, note);
     return parcel;
   }
@@ -1430,6 +1535,41 @@ export class ParcelService implements OnApplicationBootstrap {
   }
 
   // --- internals ---
+
+  /**
+   * Hand the parcel to somebody: close whoever was holding it, open a leg for whoever now is.
+   *
+   * One door for every transfer, so the chain cannot grow a gap the day a new path is added — a gap being
+   * precisely the thing that makes a damage claim unanswerable. Idempotent about the obvious: handing it to
+   * the party already holding it does nothing rather than inventing a hand-off that did not happen.
+   */
+  private handTo(parcel: Parcel, holderKind: CustodyKind, holderId: string, note?: string): void {
+    const at = new Date().toISOString();
+    parcel.custody = parcel.custody ?? [];
+    const open = parcel.custody.find((l) => !l.to);
+    if (open && open.holderKind === holderKind && open.holderId === holderId) return;
+    if (open) open.to = at;
+    parcel.custody.push({ holderId, holderKind, from: at, note });
+  }
+
+  /** Close the chain: nobody holds it any more (it was delivered, or it never left). */
+  private endCustody(parcel: Parcel): void {
+    const open = (parcel.custody ?? []).find((l) => !l.to);
+    if (open) open.to = new Date().toISOString();
+  }
+
+  /**
+   * The driver behind a badge, for the custody chain. A badge is what gets scanned; a DID is who is
+   * answerable — and the chain must name the second. An unknown badge falls back to the badge itself
+   * rather than dropping the leg: a hand-off we cannot fully identify still happened.
+   */
+  private driverIdOf(badgeId: string): string {
+    try {
+      return this.fleet.resolveBadge(badgeId)?.driverDid ?? badgeId;
+    } catch {
+      return badgeId;
+    }
+  }
 
   private scan(parcel: Parcel, status: Parcel['status'], by: string, note: string): void {
     const at = new Date().toISOString();

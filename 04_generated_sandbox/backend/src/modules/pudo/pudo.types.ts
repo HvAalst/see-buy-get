@@ -108,6 +108,49 @@ export class Agent {
 export type ParcelSize = 'S' | 'M' | 'L' | 'HEAVY';
 export type ParcelStatus = 'Created' | 'At_PUDO' | 'On_Bus' | 'At_MDP' | 'Ready_For_Pickup' | 'Delivered' | 'Disputed' | 'Voided';
 
+/** Where a parcel came into being: a shop counter, a store's own premises, or somebody's hands. */
+export type BirthplaceKind = 'counter' | 'store' | 'hand';
+
+/**
+ * A parcel's BIRTHPLACE — the place it came into being, which is not the same fact as the first node that
+ * took custody of it.
+ *
+ * They coincide at a counter, which is why one field carried both for so long: `originAgentDid` meant
+ * "where it was born" AND "which shop first held it". For a store they already differ (packed in a
+ * warehouse, handed in at a shop), and for a store that is collected from directly they diverge entirely —
+ * born at the dock, first held by a driver. Conflating them made the collection point look like a parcel
+ * with no origin, which no parcel has ever been.
+ */
+export class Birthplace {
+  kind: BirthplaceKind;
+  /** Whose place it was: an agent DID, a vendorId, or the sender's own DID. */
+  atId?: string;
+  label: string; // what a human calls it — a shop name, a store name
+  location?: GeoPoint; // known for a counter or a store; often unknown for a parcel born in someone's hands
+  at: string;
+}
+
+/** Who can be holding a parcel. The network is never an owner — it is one of these holders, in turn. */
+export type CustodyKind = 'sender' | 'shop' | 'driver' | 'hub' | 'receiver';
+
+/**
+ * One stretch of TIME during which one party physically held the parcel. An open leg (no `to`) is who has
+ * it right now.
+ *
+ * Recorded rather than inferred, because the question a damage claim asks is "who had it when", and a
+ * status trail answers only "where was it". Ownership is a different question again and does not move: the
+ * SENDER owns the shipment (they paid for it, they can void it, refunds return to them) and the RECEIVER
+ * owns the goods (they inspect, they dispute, they hold a collection secret nobody else has). Custody is
+ * the chain of hands in between, and it is the only one of the three that changes on every leg.
+ */
+export class CustodyLeg {
+  holderId: string; // an agent DID, a driver DID, an MDP id, a vendorId, or the sender/receiver's own id
+  holderKind: CustodyKind;
+  from: string;
+  to?: string;
+  note?: string;
+}
+
 /**
  * MDP hub (Compendium Ch 17 — Main Distribution Point). A regional sort centre, distinct from a PUDO
  * shop: parcels are NOT shelved here, they are sorted into tote bags by next destination. One MDP
@@ -447,6 +490,10 @@ export class Parcel {
   acceptedAt: string;
   handedToBusAt?: string;
   deliveredAt?: string;
+  /** Where it came into being. Absent on pre-slice records — read it through `birthplaceOf`. */
+  birthplace?: Birthplace;
+  /** Who has physically held it, in order. Absent on pre-slice records — read through `custodianOf`. */
+  custody?: CustodyLeg[];
   scans: ParcelScan[];
 }
 

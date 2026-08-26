@@ -4,7 +4,7 @@ import { GazetteerGeocoder, GEOCODER } from './geocoder';
 import { HeuristicRouter, ROUTER } from './router';
 import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
-import { ParcelService, labelDate } from './parcel.service';
+import { ParcelService, birthplaceOf, custodianOf, custodyAt, labelDate, ownershipOf } from './parcel.service';
 import { MAX_WORK_RADIUS_KM, OTP_MAX_ATTEMPTS, TRADE_CREDIT_LIMIT, TRADE_CREDIT_PARCELS, WHOLESALE } from './pudo.config';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
 import { CargoService } from './cargo.service';
@@ -642,6 +642,76 @@ describe('PUDO Light', () => {
     expect(own.parcel).toBeDefined();
     const op: any = controller.createInbound(dto, { role: 'operator' } as never);
     expect(op.parcel).toBeDefined();
+  });
+
+  it('a parcel knows where it was BORN and who has HELD it — the two facts a status trail cannot give', () => {
+    const origin = onboardAgent('Birth Shop', 'NorthTown', 50);
+    const dest = onboardAgent('Birth Dest', 'SouthTown', 50);
+    const corridor = corridors.addCorridor({ name: 'birth', originZone: 'NorthTown', destZone: 'SouthTown' });
+    const driver = drivers.register({ displayName: 'Bea', fullName: 'Bea B', nationalId: 'ID-birth', mobile: '+254birth', licenceClasses: ['motorcycle'] });
+    const bike = vehicles.register({ plate: 'BR-1', vehicleClass: 'motorcycle', ownerName: 'Bea' });
+    fleet.couple(driver.did, bike.vehicleId);
+    fleet.assignCorridor(driver.did, corridor.corridorId);
+    const badge = drivers.get(driver.did).badgeId!;
+
+    parcels.accept({ agentDid: origin.did, parcelId: 'BIRTH-1', size: 'S', destZone: 'SouthTown', destPudoDid: dest.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+
+    // Born at the counter — a place, with a name and a point, not merely "an origin agent id".
+    expect(birthplaceOf(parcels.get('BIRTH-1'))).toMatchObject({ kind: 'counter', atId: origin.did, label: 'Birth Shop', location: origin.location });
+
+    // …and held by that shop from the same moment.
+    expect(custodianOf(parcels.get('BIRTH-1'))).toMatchObject({ holderKind: 'shop', holderId: origin.did });
+
+    parcels.handover({ agentDid: origin.did, driverBadgeId: badge, parcelIds: ['BIRTH-1'] });
+    const onBus = custodianOf(parcels.get('BIRTH-1'))!;
+    // The chain names the DRIVER, not the badge that was scanned: a badge is a token, a DID is who answers.
+    expect(onBus).toMatchObject({ holderKind: 'driver', holderId: driver.did });
+
+    parcels.arrive('BIRTH-1', dest.did);
+    expect(custodianOf(parcels.get('BIRTH-1'))).toMatchObject({ holderKind: 'shop', holderId: dest.did });
+
+    // "Who had it when?" — the question a damage claim asks, which a status trail cannot answer because it
+    // records where a parcel WAS, not who was answerable for it. Asked of the moment it was taken in, the
+    // answer is the shop, whatever has happened to the parcel since.
+    expect(custodyAt(parcels.get('BIRTH-1'), parcels.get('BIRTH-1').acceptedAt)).toMatchObject({ holderKind: 'shop', holderId: origin.did });
+    expect(onBus.from).toBeTruthy(); // …and the driver's leg is a recorded fact, not an inference from status
+
+    parcels.pickup('BIRTH-1', dest.did, releaseCodeOf('BIRTH-1'));
+    expect(custodianOf(parcels.get('BIRTH-1'))).toBeUndefined(); // collected: the network holds nothing
+    const chain = parcels.get('BIRTH-1').custody!.map((l) => l.holderKind);
+    expect(chain).toEqual(['shop', 'driver', 'shop', 'receiver']);
+
+    // Ownership is a different question and it never moved: the sender bought the carriage, the receiver
+    // owns what is inside. Neither is the network, which only ever appears in the chain above.
+    expect(ownershipOf(parcels.get('BIRTH-1'))).toMatchObject({ shipment: { kind: 'sender' }, goods: { kind: 'receiver' } });
+  });
+
+  it('a store keeps its OWN goods until a driver takes them — the dock chain has no shop leg at all', async () => {
+    const dest = onboardAgent('Chain Dest', 'SouthTown', 50);
+    const originPudo = onboardAgent('Chain Origin', 'NorthTown', 50);
+    corridors.addCorridor({ name: 'chain', originZone: 'NorthTown', destZone: 'SouthTown' });
+    const store = vendors.register({ name: 'Chain Traders', location: { lat: -1.2, lng: 36.8 } });
+    vendors.topUp(store.vendorId, 200);
+    const asStore = { role: 'genesis', did: store.did } as never;
+    controller.setCollectionPoint(store.vendorId, { label: 'Chain dock', location: { lat: -1.21, lng: 36.81 } } as never, asStore);
+    const parcelId = (controller.createInbound({ vendorId: store.vendorId, originPudoDid: originPudo.did, destPudoDid: dest.did, buyerMobile: '+254700999', size: 'M', contentPhotoRef: 'c.jpg' } as never, asStore) as any).parcel.parcelId;
+
+    // Born at the STORE — never at the shop it was quoted through.
+    expect(birthplaceOf(parcels.get(parcelId))).toMatchObject({ kind: 'store', atId: store.vendorId, label: 'Chain Traders' });
+    // And the store is holding its own goods: it is the SENDER in the chain, not a node of the network.
+    expect(custodianOf(parcels.get(parcelId))).toMatchObject({ holderKind: 'sender', holderId: store.vendorId });
+
+    const bag: any = controller.openDockBag(store.vendorId, { destZone: 'SouthTown' } as never, asStore);
+    controller.fillDockBag(store.vendorId, bag.code, { parcelId } as never, asStore);
+    controller.sealDockBag(store.vendorId, bag.code, {} as never, asStore);
+    // Bagging is not a hand-off: the goods are still the store's while the bag stands on its own dock.
+    expect(custodianOf(parcels.get(parcelId))).toMatchObject({ holderKind: 'sender' });
+
+    const d = coupleTipper('chain', { min: 0.8, max: 1.5 });
+    mdps.loadBag(bag.code, drivers.get(d.did).badgeId!);
+    expect(custodianOf(parcels.get(parcelId))).toMatchObject({ holderKind: 'driver', holderId: d.did });
+    // The whole point: store → driver, with no shop in between, because no shop ever touched it.
+    expect(parcels.get(parcelId).custody!.map((l) => l.holderKind)).toEqual(['sender', 'driver']);
   });
 
   it('a vendor collects from its OWN dock: bag, seal, driver — no PUDO, no intake fee, no new powers', async () => {
