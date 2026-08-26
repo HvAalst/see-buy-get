@@ -3,6 +3,7 @@
 
 import { CargoClass, CargoNature, Equipment } from './cargo.types';
 import { FxRate } from '../../foundation/money/fx.service';
+import { BorderCrossing } from './country';
 
 /** A map pin. Named (not an inline literal) so it is one reusable schema in the contract. */
 export class GeoPoint {
@@ -131,6 +132,25 @@ export class ParcelFx {
    * somebody has to answer for rather than quiet margin. Zero on a domestic price.
    */
   buffer: number;
+}
+
+/**
+ * What travels with a parcel that leaves one customs territory for another.
+ *
+ * Built at mint from what the sender already declared, and REQUIRED: a crossing is a step with a
+ * precondition now, not a line on a route. See customs.ts for the three limits this deliberately keeps —
+ * we are not a broker, duty is the importer's, and the importer is referenced rather than named.
+ */
+export class CustomsDeclaration {
+  crossings: BorderCrossing[]; // which borders, read off the route it was quoted on
+  contents: string; // what a border officer reads: "Ankara shirt ×2, Kitenge scarf"
+  itemCount: number;
+  declaredValue: number; // what the GOODS are worth — never the shipping price
+  currency: string;
+  exporterId: string; // the store or person sending it
+  importerRef?: string; // the receiver, by the hash we hold — a real filing needs a name and address
+  incoterm: 'DDU'; // delivered duty unpaid: the importer settles duty, and none of it moves through us
+  declaredAt: string;
 }
 
 export type ParcelSize = 'S' | 'M' | 'L' | 'HEAVY';
@@ -514,6 +534,9 @@ export class Parcel {
   /** The money every figure above is in — the SELLING sister's, stamped at mint. Absent on records
    *  written before prices named their unit; read it through ParcelService.currencyOf. */
   currency?: string;
+  /** The paperwork this parcel crosses a border with. Absent on a domestic shipment, which needs none —
+   *  and never absent on one that crosses, because the mint refuses to sell that shipment without it. */
+  customs?: CustomsDeclaration;
   /** The sister that SOLD this shipment: it collected the price and carries the cost of every leg, so a
    *  shop in another country that handles this parcel recharges its own sister's outlay to this one, at
    *  cost. Absent on records written before a parcel named its seller — then nobody recharges anybody,

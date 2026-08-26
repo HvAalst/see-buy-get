@@ -28,7 +28,7 @@ import { FleetManagerService } from './fleet-manager.service';
 import { GazetteerGeocoder, GEOCODER } from './geocoder';
 import { HeuristicRouter, ROUTER } from './router';
 import { countryOfSite, crossingsOn, requireCountryCode } from './country';
-import { NETWORK_JURISDICTION } from './pudo.config';
+import { BORDER_DWELL_H, NETWORK_JURISDICTION } from './pudo.config';
 import { DigitalTwinService } from '../m7/digital-twin.service';
 import { TrackingService } from '../m4/tracking.service';
 import { TrackingContextService } from '../m4/tracking-context.service';
@@ -302,6 +302,7 @@ describe('crossing a border', () => {
       const { parcel } = parcels.createInbound({
         vendorId: store.vendorId, originAgentDid: from.did, destAgentDid: to.did, buyerMobile: '+254700999',
         contentPhotoRef: 'contents.jpg', size: 'M', shippingPolicy: store.shippingPolicy, quote,
+        items: [{ name: 'Ankara shirt', qty: 2 }], subtotal: 3400, // it crosses a border, so it must declare
       });
       // Same reason the margin rate is stamped: a price is a promise made at a moment, and both the rate
       // and the knob behind it move. Without this the sister that collected could not later prove what it
@@ -371,6 +372,91 @@ describe('crossing a border', () => {
       expect(quote.hops.map((h) => h.type)).toEqual(['dock', 'pudo']);
       expect(quote.nodes).toHaveLength(1); // the dock is on the route and not in the fee stack
       expect(quote.nodeFees).toBe(quote.nodes[0].fee);
+    });
+  });
+
+  describe('and the crossing is a step, not a line on a route', () => {
+    function crossBorderPair() {
+      const from = shop('Nairobi CBD', 'Nairobi', NAIROBI, 'KE', 55);
+      const to = shop("Bambi's Super Market", 'AddisAbaba', ADDIS, 'ET', 60);
+      corridors.addCorridor({ name: 'Nairobi–Addis', originZone: 'Nairobi', destZone: 'AddisAbaba' });
+      const store = vendors.register({ name: 'Nairobi Store', country: 'KE' });
+      return { from, to, store, quote: routing.quoteShipment(from.did, to.did) };
+    }
+
+    const mint = (p: ReturnType<typeof crossBorderPair>, extra: Record<string, unknown> = {}) =>
+      parcels.createInbound({
+        vendorId: p.store.vendorId, originAgentDid: p.from.did, destAgentDid: p.to.did, buyerMobile: '+254700999',
+        contentPhotoRef: 'contents.jpg', size: 'M', shippingPolicy: p.store.shippingPolicy, quote: p.quote, ...extra,
+      } as never);
+
+    it('will not sell a shipment that cannot legally travel, and says which part is missing', () => {
+      const p = crossBorderPair();
+      expect(() => mint(p)).toThrow(/a list of what is in the parcel and what the goods are worth/);
+      expect(() => mint(p, { items: [{ name: 'Ankara shirt', qty: 2 }] })).toThrow(/what the goods are worth/);
+      expect(() => mint(p, { subtotal: 3400 })).toThrow(/a list of what is in the parcel/);
+      // A value of zero is not a declaration — an officer reads it as an undeclared parcel, not a free one.
+      expect(() => mint(p, { items: [{ name: 'Ankara shirt', qty: 2 }], subtotal: 0 })).toThrow(/what the goods are worth/);
+    });
+
+    it('leaves no trace of the shipment it refused', () => {
+      // Checked before an id, a DID or a ledger anchor is spent: a shipment that cannot travel should not
+      // leave a half-born parcel behind for somebody to find.
+      const p = crossBorderPair();
+      const before = parcels.list({}).length;
+      expect(() => mint(p)).toThrow();
+      expect(parcels.list({}).length).toBe(before);
+    });
+
+    it('writes the paperwork from what the store already typed', () => {
+      const p = crossBorderPair();
+      const { parcel } = mint(p, { items: [{ name: 'Ankara shirt', qty: 2 }, { name: 'Kitenge scarf', qty: 1 }], subtotal: 3400 });
+      expect(parcel.customs).toMatchObject({
+        contents: 'Ankara shirt ×2, Kitenge scarf',
+        itemCount: 3,
+        declaredValue: 3400, // what the GOODS are worth — never the shipping price
+        currency: 'KES',
+        exporterId: p.store.vendorId,
+        incoterm: 'DDU', // the importer settles duty; none of it moves through our books
+      });
+      expect(parcel.customs!.crossings).toEqual(p.quote.crossings);
+      expect(parcel.customs!.importerRef).not.toContain('+254'); // the receiver is referenced, never named
+    });
+
+    it('asks a domestic parcel for none of it', () => {
+      const from = shop('Nairobi CBD', 'Nairobi', NAIROBI);
+      const to = shop('Kisumu Duka', 'Kisumu', { lat: -0.09, lng: 34.77 });
+      corridors.addCorridor({ name: 'Nairobi–Kisumu', originZone: 'Nairobi', destZone: 'Kisumu' });
+      const store = vendors.register({ name: 'Nairobi Store', country: 'KE' });
+      const { parcel } = parcels.createInbound({
+        vendorId: store.vendorId, originAgentDid: from.did, destAgentDid: to.did, buyerMobile: '+254700998',
+        contentPhotoRef: 'contents.jpg', size: 'M', shippingPolicy: store.shippingPolicy, quote: routing.quoteShipment(from.did, to.did),
+      });
+      expect(parcel.customs).toBeUndefined();
+    });
+
+    it('turns a walk-up counter send to another country away, and says who can', () => {
+      // The counter asks for a size and a photo, never a contents list and a value. Minting an undeclared
+      // international shipment and letting a border post discover it is the worse of the two answers.
+      const from = shop('Nairobi CBD', 'Nairobi', NAIROBI);
+      const to = shop("Bambi's Super Market", 'AddisAbaba', ADDIS, 'ET');
+      expect(() =>
+        parcels.accept({ parcelId: 'PUD-WALKUP', agentDid: from.did, destPudoDid: to.did, destZone: 'AddisAbaba', size: 'M', senderMobile: '+254700111', receiverMobile: '+251900111', dropoffPhotoRef: 'p.jpg' } as never),
+      ).toThrow(/another country/);
+    });
+
+    it('makes the leg that stops at a post read as one that stops', () => {
+      const p = crossBorderPair();
+      const plan = routing.planJourney({ originAgentDid: p.from.did, destAgentDid: p.to.did });
+      expect(plan.legs[0].borderDwellH).toBe(BORDER_DWELL_H);
+
+      // The same road, domestically: the wait is the difference, and it is on the leg rather than smeared
+      // over the whole journey — the ETA stays optimistic by decision, but not about a queue at a border.
+      const home = shop('Kisumu Duka', 'Kisumu', { lat: -0.09, lng: 34.77 });
+      corridors.addCorridor({ name: 'Nairobi–Kisumu', originZone: 'Nairobi', destZone: 'Kisumu' });
+      const domestic = routing.planJourney({ originAgentDid: p.from.did, destAgentDid: home.did });
+      expect(domestic.legs[0].borderDwellH).toBe(0);
+      expect(plan.totalHours).toBeGreaterThan(BORDER_DWELL_H);
     });
   });
 

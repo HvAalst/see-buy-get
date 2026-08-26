@@ -76,6 +76,17 @@ export const NETWORK_CURRENCY = currencyForJurisdiction(DEFAULT_VENDOR_COUNTRY);
 // Named separately from DEFAULT_VENDOR_COUNTRY because they answer different questions and will stop
 // agreeing the moment a second country opens: a Kenyan shop can serve a Dutch vendor's parcel.
 export const NETWORK_JURISDICTION = DEFAULT_VENDOR_COUNTRY;
+/**
+ * What a border post costs a load, in hours.
+ *
+ * The ETA is optimistic by decision (a leg is one continuous run at a nominal speed) and this does not
+ * change that — a queue at a border is a DISCRETE event on a specific leg, not a refinement of how fast a
+ * bus goes. Leaving it at zero made the one leg that genuinely stops read as the one that does not.
+ *
+ * One number for every crossing, deliberately: a per-post table is a thing that goes stale silently, and a
+ * plainly-stated average is easier to argue with than a table nobody maintains.
+ */
+export const BORDER_DWELL_H = 4;
 export const round2cfg = round2;
 
 /** Apply the platform margin to a base provider cost. */

@@ -12997,6 +12997,51 @@
           "svg"
         ]
       },
+      "CustomsDeclaration": {
+        "type": "object",
+        "properties": {
+          "crossings": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "contents": {
+            "type": "string"
+          },
+          "itemCount": {
+            "type": "number"
+          },
+          "declaredValue": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "exporterId": {
+            "type": "string"
+          },
+          "importerRef": {
+            "type": "string"
+          },
+          "incoterm": {
+            "type": "string"
+          },
+          "declaredAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "crossings",
+          "contents",
+          "itemCount",
+          "declaredValue",
+          "currency",
+          "exporterId",
+          "incoterm",
+          "declaredAt"
+        ]
+      },
       "ParcelFx": {
         "type": "object",
         "properties": {
@@ -13261,6 +13306,14 @@
           },
           "currency": {
             "type": "string"
+          },
+          "customs": {
+            "description": "The paperwork this parcel crosses a border with. Absent on a domestic shipment, which needs none —\n and never absent on one that crosses, because the mint refuses to sell that shipment without it.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CustomsDeclaration"
+              }
+            ]
           },
           "sellerEntityId": {
             "type": "string",

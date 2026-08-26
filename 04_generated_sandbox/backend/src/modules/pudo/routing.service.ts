@@ -7,7 +7,7 @@ import { MdpService } from './mdp.service';
 import { VehicleService } from './vehicle.service';
 import { Router, ROUTER } from './router';
 import { isOpenAt, nextOpenAt } from './hours';
-import { DISPATCH_BUFFER_H, HANDOVER_BUFFER_H, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, VEHICLE_SPEED_KMH, withPlatformFee } from './pudo.config';
+import { BORDER_DWELL_H, DISPATCH_BUFFER_H, HANDOVER_BUFFER_H, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, VEHICLE_SPEED_KMH, withPlatformFee } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { currencyForJurisdiction } from '../../foundation/money/currency';
 import { FX_QUOTE_TTL_MIN, FxRate, FxService } from '../../foundation/money/fx.service';
@@ -268,8 +268,11 @@ export class RoutingService {
       const to = route[i + 1];
       const distanceKm = Math.round(this.router.roadKm(from.location, to.location) * 10) / 10;
       const transitH = distanceKm / VEHICLE_SPEED_KMH[vehicle];
+      // A leg that leaves one country for another stops at a post and waits. It is the one leg on a
+      // continental route that genuinely does not move, and reading it as if it did was the lie.
+      const crossesBorder = from.country !== to.country;
       const departAt = cursor;
-      const arriveAt = departAt + (transitH + HANDOVER_BUFFER_H) * 3_600_000;
+      const arriveAt = departAt + (transitH + HANDOVER_BUFFER_H + (crossesBorder ? BORDER_DWELL_H : 0)) * 3_600_000;
       cursor = arriveAt + (to.type === 'mdp' ? HANDOVER_BUFFER_H * 3_600_000 : 0); // sort dwell at a hub
       return {
         index: i,
@@ -281,10 +284,9 @@ export class RoutingService {
         toNode: to.id,
         fromCountry: from.country,
         toCountry: to.country,
-        // A driver on this leg presents the goods at a border. NOTHING is added to the clock for it yet —
-        // no queue, no paperwork, no overnight — which is the same optimism the ETA already carries and is
-        // recorded here so the customs slice knows exactly which leg to hang itself on.
-        crossesBorder: from.country !== to.country,
+        crossesBorder,
+        /** The wait at the post, called out separately from the driving so the ETA can be argued with. */
+        borderDwellH: crossesBorder ? BORDER_DWELL_H : 0,
         distanceKm,
         departAt: new Date(departAt).toISOString(),
         arriveAt: new Date(arriveAt).toISOString(),

@@ -19,6 +19,7 @@ import { VehicleService } from './vehicle.service';
 import { MediaService } from './media.service';
 import { CargoService } from './cargo.service';
 import { CargoNature } from './cargo.types';
+import { declareFor } from './customs';
 import type { ShipmentQuote } from './routing.service';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
 
@@ -640,6 +641,19 @@ export class ParcelService implements OnApplicationBootstrap {
     // equal originZone and never match a corridor). Mirrors createConsumerSend's same-shop refusal.
     if (input.destPudoDid && input.destPudoDid === input.agentDid) throw new GlosError('INVALID_INPUT', 'A parcel cannot be sent to the shop taking it in — pick a different destination.');
     const agent = this.agents.get(input.agentDid);
+    // A counter take-in declares a size and a photo, never a contents list and a value, so a parcel handed
+    // over this counter cannot be papered for a border. Compared shop-to-shop rather than through a quote,
+    // because this flow prices from the wholesale rate and never asks for one.
+    if (input.destPudoDid) {
+      const dest = this.agents.get(input.destPudoDid);
+      if (this.agents.countryOf(dest) !== this.agents.countryOf(agent)) {
+        throw new GlosError(
+          'CUSTOMS_INCOMPLETE',
+          `${dest.shopName} is in another country, and a counter take-in cannot declare contents and value for a border — a store can ship there today`,
+          { fromCountry: this.agents.countryOf(agent), toCountry: this.agents.countryOf(dest) },
+        );
+      }
+    }
     const mode: PaymentMode = input.paymentMode ?? 'cash';
 
     // 'No money, no scan' gate applies to cash parcels (they consume a platform credit).
@@ -998,15 +1012,32 @@ export class ParcelService implements OnApplicationBootstrap {
     if (this.cargo.dedicatedRequired(cargoClass)) {
       throw new GlosError('CARGO_REQUIRES_DEDICATED', `Cargo class ${cargoClass} is too large for the PUDO network — it needs dedicated freight transport`);
     }
+    const now = new Date().toISOString();
+    const quote = input.quote;
+    // THE CROSSING IS A STEP, and this is its precondition — checked before an id, a DID or a ledger anchor
+    // is spent, because a shipment that cannot legally travel should leave no trace of having been started.
+    // A store selling across a border already types both of these at checkout; one that does not cannot
+    // ship there, and is told which part it is missing.
+    const customs = quote.crossesBorder
+      ? declareFor({
+          crossings: quote.crossings,
+          items: input.items,
+          declaredValue: input.subtotal,
+          currency: quote.currency,
+          exporterId: input.vendorId,
+          importerRef: hashPhone(input.buyerMobile) || undefined,
+          at: now,
+          context: 'This shipment',
+        })
+      : undefined;
+
     const parcelId = `PUD-${randomBytes(5).toString('hex').toUpperCase()}`;
     const collectionCode = `COL-${randomBytes(4).toString('hex').toUpperCase()}`;
     const trackingKey = `T-${randomBytes(5).toString('hex').toUpperCase()}`;
-    const now = new Date().toISOString();
     const anchorTxId = this.ledger.anchor({ p: parcelId, v: input.vendorId, o: input.originAgentDid, d: input.destAgentDid, at: now }).txId;
 
     // Open-data quote: vendor is billed the FULL cost (prepaid). flexible reserves the ceiling (rebated on
     // delivery); locked commits the cheapest route. The buyer-charge is REPORTED only (collected at checkout).
-    const quote = input.quote;
     const routeMode = input.routeMode === 'locked' ? 'locked' : 'flexible';
     const chosen = routeMode === 'locked' ? quote.locked : quote.flexible;
     const shipmentCost = chosen.total;
@@ -1056,6 +1087,7 @@ export class ParcelService implements OnApplicationBootstrap {
       // Same reason as the margin rate above: a promise is made at a moment, and the rate behind it moves.
       currency: quote.currency,
       fx: quote.fx,
+      customs,
       sellerEntityId: quote.sellerEntityId,
       shipmentCost,
       ceilingCost: quote.flexible.total,
@@ -1100,6 +1132,16 @@ export class ParcelService implements OnApplicationBootstrap {
     const origin = this.agents.get(input.originAgentDid);
     const dest = this.agents.get(input.destAgentDid);
     if (input.originAgentDid === input.destAgentDid) throw new GlosError('INVALID_INPUT', 'Drop-off and collection shop must be two different shops');
+    // A person sending from a counter declares nothing — the flow asks for a size and a photo, not a
+    // contents list and a value — so a crossing cannot be papered. Refusing is the honest answer: the
+    // alternative is minting an undeclared international shipment and letting a border post discover it.
+    if (input.quote.crossesBorder) {
+      throw new GlosError(
+        'CUSTOMS_INCOMPLETE',
+        'Sending to another country needs a declared contents list and value, which a counter send cannot take yet — a store can ship there today',
+        { crossings: input.quote.crossings.map((c) => `${c.fromCountry}→${c.toCountry}`) },
+      );
+    }
     const size = classifySize({ ...input.dimensionsCm, kg: input.weightKg });
     const natureCode: CargoNature = input.natureCode ?? 'GEN';
     const cargoClass = this.cargo.classify({ kg: input.weightKg, dimsCm: [input.dimensionsCm.l, input.dimensionsCm.w, input.dimensionsCm.h] });
