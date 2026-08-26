@@ -125,6 +125,17 @@ export class RoutingService {
   }
 
   /**
+   * The quote AND the journey behind it, in one pass.
+   *
+   * A customer-facing answer needs both — a price and when they could collect it — and planning the same
+   * route twice to get them is work a public endpoint should not be doing on a stranger's behalf.
+   */
+  quoteWithPlan(originAgentDid: string, destAgentDid: string, size: ParcelSize = 'M'): { plan: ReturnType<RoutingService['planJourney']>; quote: ShipmentQuote } {
+    const plan = this.planJourney({ originAgentDid, destAgentDid, weightKg: SIZE_WEIGHT_KG[size] });
+    return { plan, quote: this.quoteJourney(plan, size) };
+  }
+
+  /**
    * Quote a journey that starts at a PLACE rather than a node — a store's own dock.
    *
    * Same stack, one term missing: no origin shop handled it, so no origin node fee is charged. That is not

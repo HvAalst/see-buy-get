@@ -252,6 +252,38 @@ export class SetPriceDto {
   @IsNumber() @Min(0) price!: number;
 }
 
+// --- the public shipping API (SSP): a price a buyer can see before deciding to buy ---
+
+/** Where a shipment starts or ends, said the way somebody without a DID can say it. */
+export class QuoteEndpointDto {
+  /** A collection point by its public id — exact, and what a merchant's checkout already holds. */
+  @IsOptional() @IsString() pointId?: string;
+  /** …or a country and an area, which is what a person actually knows. */
+  @IsOptional() @IsString() country?: string;
+  @IsOptional() @IsString() area?: string;
+}
+
+export class QuoteDimsDto {
+  @IsNumber() @Min(0.1) l!: number;
+  @IsNumber() @Min(0.1) w!: number;
+  @IsNumber() @Min(0.1) h!: number;
+}
+
+/**
+ * Ask what a shipment would cost. Creates nothing.
+ *
+ * Give measurements when you have them — the size tier is DERIVED from them, exactly as it is at every
+ * mint, so a quote and the shipment it becomes cannot disagree about how big the parcel was. `size` is the
+ * fallback for a store that only knows its own tiers.
+ */
+export class PublicQuoteDto {
+  @ValidateNested() @Type(() => QuoteEndpointDto) from!: QuoteEndpointDto;
+  @ValidateNested() @Type(() => QuoteEndpointDto) to!: QuoteEndpointDto;
+  @IsOptional() @ValidateNested() @Type(() => QuoteDimsDto) dimensionsCm?: QuoteDimsDto;
+  @IsOptional() @IsNumber() @Min(0.01) weightKg?: number;
+  @IsOptional() @IsIn(['S', 'M', 'L']) size?: 'S' | 'M' | 'L';
+}
+
 /** Push one currency's standing against the base — from a feed, or by hand when the feed is down. */
 export class SetFxRateDto {
   @IsString() currency!: string;

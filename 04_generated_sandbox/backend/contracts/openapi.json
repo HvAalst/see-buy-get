@@ -10440,6 +10440,49 @@
         }
       }
     },
+    "/v1/sbg/shipping/quotes": {
+      "post": {
+        "operationId": "ShippingApi.quote",
+        "summary": "",
+        "description": "What would this cost to ship? Creates nothing — no parcel, no account, no reservation.\n\nThe one call the \"calculate your shipping fee\" button makes.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublicQuoteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/shipping/areas": {
+      "get": {
+        "operationId": "ShippingApi.areas",
+        "summary": "",
+        "description": "Where the network can deliver: every country it operates in and the areas inside it that have a\ncollection point somebody can actually stand at. What a destination picker is built from.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/settlement/module-info": {
       "get": {
         "operationId": "Sse.info",
@@ -16044,6 +16087,74 @@
         },
         "required": [
           "endpoint"
+        ]
+      },
+      "QuoteEndpointDto": {
+        "type": "object",
+        "properties": {
+          "pointId": {
+            "type": "string",
+            "description": "A collection point by its public id — exact, and what a merchant's checkout already holds."
+          },
+          "country": {
+            "type": "string",
+            "description": "…or a country and an area, which is what a person actually knows."
+          },
+          "area": {
+            "type": "string"
+          }
+        }
+      },
+      "QuoteDimsDto": {
+        "type": "object",
+        "properties": {
+          "l": {
+            "type": "number",
+            "minimum": 0.1
+          },
+          "w": {
+            "type": "number",
+            "minimum": 0.1
+          },
+          "h": {
+            "type": "number",
+            "minimum": 0.1
+          }
+        },
+        "required": [
+          "l",
+          "w",
+          "h"
+        ]
+      },
+      "PublicQuoteDto": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "$ref": "#/components/schemas/QuoteEndpointDto"
+          },
+          "to": {
+            "$ref": "#/components/schemas/QuoteEndpointDto"
+          },
+          "dimensionsCm": {
+            "$ref": "#/components/schemas/QuoteDimsDto"
+          },
+          "weightKg": {
+            "type": "number",
+            "minimum": 0.01
+          },
+          "size": {
+            "type": "string",
+            "enum": [
+              "S",
+              "M",
+              "L"
+            ]
+          }
+        },
+        "required": [
+          "from",
+          "to"
         ]
       },
       "MilestoneTermDto": {

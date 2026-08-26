@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SBG Shipping API — quotes</title>
+<style>
+  :root {
+    --bg: #f7f7f5; --panel: #ffffff; --ink: #17181c; --muted: #6b6f76; --line: #e3e3df;
+    --accent: #4c46e0; --ship: #1c7c54; --now: #b4690e; --next: #3f6ea8; --gap: #a33a3a;
+    --code-bg: #f2f2ef;
+    --shadow: 0 1px 2px rgba(20,20,25,.06), 0 8px 24px rgba(20,20,25,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121317; --panel: #1a1c21; --ink: #eceef2; --muted: #9aa0aa; --line: #2a2d34;
+      --accent: #8f8bff; --ship: #5cc08c; --now: #e0a44a; --next: #7fb0e8; --gap: #e07a7a;
+      --code-bg: #14161a;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #121317; --panel: #1a1c21; --ink: #eceef2; --muted: #9aa0aa; --line: #2a2d34;
+    --accent: #8f8bff; --ship: #5cc08c; --now: #e0a44a; --next: #7fb0e8; --gap: #e07a7a;
+    --code-bg: #14161a;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 40px 24px 96px; }
+  .cols { display: grid; grid-template-columns: 1fr; gap: 32px; }
+  @media (min-width: 960px) { .cols { grid-template-columns: 200px 1fr; gap: 48px; align-items: start; } nav.toc { position: sticky; top: 32px; } }
+
+  header.page { margin-bottom: 8px; }
+  h1 { font-size: 26px; letter-spacing: -.01em; margin: 0; text-wrap: balance; }
+  .sub { color: var(--muted); font-size: 15px; max-width: 68ch; margin: 10px 0 0; }
+  .base { margin: 20px 0 36px; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--muted); }
+  .base b { color: var(--ink); font-weight: 600; }
+
+  nav.toc ol { list-style: none; margin: 0; padding: 0; font-size: 14px; }
+  nav.toc li { margin-bottom: 9px; }
+  nav.toc a { color: var(--muted); text-decoration: none; }
+  nav.toc a:hover, nav.toc a:focus-visible { color: var(--accent); text-decoration: underline; }
+
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 24px; margin-bottom: 24px; }
+  section > h2 { margin: 0 0 6px; font-size: 19px; letter-spacing: -.01em; }
+  section > h2 + p { margin-top: 0; color: var(--muted); font-size: 14px; }
+  h3 { font-size: 15px; margin: 26px 0 8px; }
+  p { max-width: 72ch; }
+  p.lede { margin-top: 0; }
+
+  .endpoint { display: inline-flex; align-items: center; gap: 10px; font: 13px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin-bottom: 4px; }
+  .verb { font-weight: 700; color: var(--ship); letter-spacing: .04em; }
+  .verb.get { color: var(--next); }
+
+  pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 10px; padding: 16px; overflow-x: auto; margin: 12px 0 0; }
+  pre code { background: none; padding: 0; font-size: 13px; line-height: 1.6; }
+  code { font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: color-mix(in srgb, var(--ink) 7%, transparent); padding: 1px 5px; border-radius: 5px; }
+
+  .scroll { overflow-x: auto; margin-top: 14px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 520px; }
+  th, td { text-align: left; padding: 9px 14px 9px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  td:first-child { white-space: nowrap; font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  td.desc { color: var(--muted); }
+  .req { color: var(--gap); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; font-weight: 700; }
+
+  .note { border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 6%, transparent); border-radius: 0 8px 8px 0; padding: 14px 16px; margin: 18px 0 0; font-size: 14px; }
+  .note b { display: block; margin-bottom: 3px; }
+  .note.warn { border-left-color: var(--now); background: color-mix(in srgb, var(--now) 8%, transparent); }
+
+  ul.plain { margin: 12px 0 0; padding-left: 18px; }
+  ul.plain li { margin-bottom: 8px; color: var(--muted); }
+  ul.plain li b { color: var(--ink); font-weight: 600; }
+  footer { color: var(--muted); font-size: 13px; }
+  footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="page">
+  <h1>SBG Shipping API</h1>
+  <p class="sub">
+    Ask what a shipment would cost before anyone commits to it. One call, no account, no parcel created —
+    the number behind a “calculate your shipping fee” button, or a line in your checkout.
+  </p>
+  <p class="base">Base URL &nbsp;<b>http://localhost:3000/v1</b> &nbsp;· &nbsp;sandbox</p>
+</header>
+
+<div class="cols">
+
+<nav class="toc" aria-label="Contents">
+  <ol>
+    <li><a href="#quickstart">Quickstart</a></li>
+    <li><a href="#places">Naming a place</a></li>
+    <li><a href="#quote">Quote reference</a></li>
+    <li><a href="#areas">Where we deliver</a></li>
+    <li><a href="#borders">Crossing a border</a></li>
+    <li><a href="#errors">Errors</a></li>
+    <li><a href="#limits">Limits</a></li>
+    <li><a href="#soon">Not here yet</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<section id="quickstart">
+  <h2>Quickstart</h2>
+  <p class="lede">A price in one call. Nothing is created, so you can call it on every page view and on every
+  change to the basket.</p>
+
+  <div class="endpoint"><span class="verb">POST</span> /v1/sbg/shipping/quotes</div>
+
+<pre><code>curl -X POST http://localhost:3000/v1/sbg/shipping/quotes \
+  -H 'content-type: application/json' \
+  -d '{
+    "from": { "country": "KE", "area": "Nairobi" },
+    "to":   { "country": "KE", "area": "Kisumu" },
+    "dimensionsCm": { "l": 30, "w": 20, "h": 10 },
+    "weightKg": 2
+  }'</code></pre>
+
+<pre><code>{
+  "from": { "pointId": "did:glos:…", "name": "Nairobi CBD", "area": "Nairobi",
+            "country": "KE", "landmark": "by the road", "openState": "open" },
+  "to":   { "pointId": "did:glos:…", "name": "Kisumu Duka", "area": "Kisumu",
+            "country": "KE", "openState": "open",
+            "location": { "lat": -0.09, "lng": 34.77 } },
+  "parcel": { "size": "M", "weightKg": 2 },
+  "price":  { "currency": "KES", "amount": 32.13, "minimum": 32.13 },
+  "eta":    { "readyAt": "2026-08-28T08:00:00.000Z", "hours": 13.6, "arrivesWhileOpen": false },
+  "route":  { "hops": ["Nairobi CBD", "Kisumu Duka"], "km": 356.2,
+              "crossesBorder": false, "crossings": [] },
+  "requires": []
+}</code></pre>
+
+  <div class="note">
+    <b>Show <code>price.amount</code>.</b>
+    It is the ceiling — the shipment will not cost more than this. <code>price.minimum</code> is what it
+    costs if the seller commits to a single route. A buyer told 400 and charged 480 has been misled; one
+    told 480 and charged 400 has not. In a sandbox with one carrier rate the two are equal.
+  </div>
+</section>
+
+<section id="places">
+  <h2>Naming a place</h2>
+  <p class="lede">Both ends of a quote take the same shape, and you can use either form on either end.</p>
+
+  <h3>By collection point</h3>
+  <p>Exact, and what your checkout already holds if you use the PUDO picker. Point ids are public — they
+  come from the network directory at <code>GET /v1/sbg/network/points</code>.</p>
+<pre><code>{ "pointId": "did:glos:7f3a…" }</code></pre>
+
+  <h3>By country and area</h3>
+  <p>What a person actually knows. We pick the collection point with the most room, and the same ask gives
+  the same answer twice. Choosing one reserves nothing — it is where they <em>would</em> collect.</p>
+<pre><code>{ "country": "KE", "area": "Kisumu" }</code></pre>
+
+  <div class="note">
+    <b>Only live shops are offered.</b>
+    A point that has not finished signing up is never returned and is refused if you name it. A quote should
+    describe somewhere a person can actually stand.
+  </div>
+</section>
+
+<section id="quote">
+  <h2>Quote reference</h2>
+
+  <h3>Request</h3>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>from <span class="req">required</span></td><td>object</td><td class="desc">Where the shipment is collected. <code>pointId</code>, or <code>country</code> + <code>area</code>.</td></tr>
+      <tr><td>to <span class="req">required</span></td><td>object</td><td class="desc">Where the buyer collects it. Same shape.</td></tr>
+      <tr><td>dimensionsCm</td><td>object</td><td class="desc"><code>l</code>, <code>w</code>, <code>h</code> in centimetres. Give these when you have them.</td></tr>
+      <tr><td>weightKg</td><td>number</td><td class="desc">Actual weight. Defaults to the nominal weight of the tier.</td></tr>
+      <tr><td>size</td><td>S · M · L</td><td class="desc">Fallback when you only know your own tiers. Ignored when measurements are given.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note">
+    <b>The tier is derived, not chosen.</b>
+    Send measurements and the size comes from them — the same rule every shipment in the network is minted
+    under, so a quote and the shipment it becomes cannot disagree about how big the parcel was.
+  </div>
+
+  <h3>Response</h3>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>from · to</td><td>object</td><td class="desc">The resolved collection points: <code>pointId</code>, <code>name</code>, <code>area</code>, <code>country</code>, <code>landmark</code>, <code>location</code>, <code>openState</code>.</td></tr>
+      <tr><td>parcel</td><td>object</td><td class="desc">The <code>size</code> tier this was priced at, and the <code>weightKg</code> used.</td></tr>
+      <tr><td>price.currency</td><td>string</td><td class="desc">ISO-4217. The selling company's money — see <a href="#borders">crossing a border</a>.</td></tr>
+      <tr><td>price.amount</td><td>number</td><td class="desc">The ceiling. Show this one.</td></tr>
+      <tr><td>price.minimum</td><td>number</td><td class="desc">The price if the seller commits to one route.</td></tr>
+      <tr><td>eta.readyAt</td><td>ISO 8601</td><td class="desc">When the buyer could collect it — already corrected to the shop's opening hours.</td></tr>
+      <tr><td>eta.hours</td><td>number</td><td class="desc">Hours until arrival at the collection point.</td></tr>
+      <tr><td>eta.arrivesWhileOpen</td><td>boolean</td><td class="desc">False when it lands outside opening hours and waits for the door.</td></tr>
+      <tr><td>route.hops</td><td>string[]</td><td class="desc">The stops it travels through, in order, by name.</td></tr>
+      <tr><td>route.km</td><td>number</td><td class="desc">Road distance over the whole journey.</td></tr>
+      <tr><td>route.crossesBorder</td><td>boolean</td><td class="desc">Whether the goods leave one customs territory for another.</td></tr>
+      <tr><td>route.crossings</td><td>object[]</td><td class="desc">Each crossing: <code>legIndex</code>, <code>from</code>, <code>to</code>, <code>fromCountry</code>, <code>toCountry</code>.</td></tr>
+      <tr><td>requires</td><td>string[]</td><td class="desc">What this shipment will additionally need before it can be sent. Empty for an ordinary domestic one.</td></tr>
+      <tr><td>expiresAt</td><td>ISO 8601</td><td class="desc">When the price stops being good. Present only when an exchange rate was applied.</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section id="areas">
+  <h2>Where we deliver</h2>
+  <p class="lede">Every country the network operates in and the areas inside it that have a collection point.
+  This is what a destination picker is built from.</p>
+
+  <div class="endpoint"><span class="verb get">GET</span> /v1/sbg/shipping/areas</div>
+
+<pre><code>[
+  { "country": "ET", "areas": ["AddisAbaba"] },
+  { "country": "KE", "areas": ["Kisumu", "Nairobi"] }
+]</code></pre>
+
+  <p>An area appears only when somebody there is live and taking parcels, so anything in this list is
+  something a quote will answer. For the company behind each country and the money it settles in, see
+  <code>GET /v1/sbg/countries</code>.</p>
+</section>
+
+<section id="borders">
+  <h2>Crossing a border</h2>
+  <p class="lede">A continental quote is a real one: it plans across the border, names the leg that crosses,
+  and converts the far shop's price into the money you are billed in.</p>
+
+  <ul class="plain">
+    <li><b>One currency, named.</b> <code>price.currency</code> is the selling company's. Shops in another
+      country are paid in their own money; the conversion happens in the quote.</li>
+    <li><b>The price has a shelf life.</b> When a rate was applied, <code>expiresAt</code> is set. Re-quote
+      after it, rather than honouring a stale figure.</li>
+    <li><b>The rate carries a buffer</b> against the market moving between quote and settlement, and the
+      buyer carries it. We do not profit from exchange rates: what the buffer absorbs is booked as an FX
+      difference, not as margin.</li>
+    <li><b>A crossing needs paperwork.</b> <code>requires</code> contains <code>customs_declaration</code>.
+      When you mint the shipment you must send a contents list and a declared value, or it is refused.
+      Duties are the importer's — DDU — and none of it moves through us.</li>
+    <li><b>A border post costs time</b>, and it is in the ETA rather than hidden in the driving.</li>
+  </ul>
+
+  <div class="note warn">
+    <b>Two currencies with no rate between them cannot be priced.</b>
+    You get <code>FX_REQUIRED</code> rather than a plausible wrong number. Adding one currency to another is
+    not arithmetic, and a quote that pretends otherwise is worse than one that refuses.
+  </div>
+</section>
+
+<section id="errors">
+  <h2>Errors</h2>
+  <p class="lede">Every failure is an RFC 9457 problem document with a stable machine-readable
+  <code>code</code>. Show the <code>code</code>'s meaning to a person; log the <code>detail</code>.</p>
+
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Code</th><th>Status</th><th>What happened</th></tr></thead>
+    <tbody>
+      <tr><td>FIELD_REQUIRED</td><td>400</td><td class="desc">An end of the journey was not named — no point id and no area.</td></tr>
+      <tr><td>VALIDATION_FAILED</td><td>400</td><td class="desc">A field was the wrong shape. The body names which.</td></tr>
+      <tr><td>INVALID_INPUT</td><td>400</td><td class="desc">Both ends resolved to the same point, or a country was not a two-letter code.</td></tr>
+      <tr><td>NOT_FOUND</td><td>404</td><td class="desc">No such collection point, it is not taking parcels yet, or no point exists in that area.</td></tr>
+      <tr><td>NO_CAPACITY_AVAILABLE</td><td>400</td><td class="desc">Every collection point in that area is full right now. Try another area.</td></tr>
+      <tr><td>CARGO_REQUIRES_DEDICATED</td><td>400</td><td class="desc">Too big for the pick-up network. It needs dedicated freight, quoted separately.</td></tr>
+      <tr><td>FX_REQUIRED</td><td>400</td><td class="desc">The route spans two currencies with no exchange rate between them.</td></tr>
+      <tr><td>RATE_LIMITED</td><td>429</td><td class="desc">Too many requests. <code>retryAfterSec</code> says how long to wait. Safe to retry.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+<pre><code>{
+  "type": "https://glos.dev/problems/NO_CAPACITY_AVAILABLE",
+  "title": "No pick-up point with free capacity",
+  "status": 400,
+  "code": "NO_CAPACITY_AVAILABLE",
+  "detail": "Every collection point in Kisumu is full right now",
+  "message": "Every collection point in Kisumu is full right now",
+  "retryable": false,
+  "traceId": "trc_9f1c…",
+  "instance": "/v1/sbg/shipping/quotes"
+}</code></pre>
+
+  <p><code>message</code> is an alias of <code>detail</code> for older clients. <code>retryable</code> says
+  whether the same request may be sent again unchanged. <code>traceId</code> correlates the response with
+  our logs — quote it if you report a problem. Some codes add a <code>params</code> object: a validation
+  failure lists <code>violations</code>, a rate limit carries <code>retryAfterSec</code>.</p>
+</section>
+
+<section id="limits">
+  <h2>Limits</h2>
+  <ul class="plain">
+    <li><b>60 quotes a minute per caller</b>, and 120 for <code>/areas</code>. Generous for a product page,
+      useless for a scrape. Exceeding it is a <code>429</code> with <code>retryAfterSec</code>.</li>
+    <li><b>Counted per IP</b> today, because a public call has no other identity. When merchant keys land
+      the count moves to the key.</li>
+    <li><b>Nothing is created and nothing is reserved.</b> A quote is a question — asking it twice costs
+      nothing and changes nothing, so it is always safe to retry.</li>
+  </ul>
+</section>
+
+<section id="soon">
+  <h2>Not here yet</h2>
+  <p class="lede">Said plainly, because you will ask. None of these exist today and none of them are
+  faked.</p>
+  <ul class="plain">
+    <li><b>Merchant keys and a sandbox mode.</b> Quotes are anonymous; there is no publishable key, no test
+      mode, and no way to identify yourself to the API.</li>
+    <li><b>Idempotency keys.</b> A quote is naturally safe to repeat. Minting is not, and that surface is
+      not public yet.</li>
+    <li><b>A quote you can redeem.</b> The price is not held against a reference — <code>expiresAt</code>
+      tells you when to ask again.</li>
+    <li><b>The participant breakdown.</b> Each stop's own published fee is open data we intend to expose,
+      but a costed route on an unauthenticated call is a competitor's cost sheet. It waits for a key.</li>
+    <li><b>Free-text destinations.</b> You name a point or an area, not “12 Biashara Street”. Place
+      look-up covers Kenya only today.</li>
+    <li><b>The drop-in button.</b> This is the API the widget will call; the widget itself is next.</li>
+  </ul>
+</section>
+
+<footer>
+  <p>
+    Written against what actually runs — every field, error and limit on this page is covered by
+    <code>shipping-api.spec.ts</code>. Build progress for the wider project lives in
+    <a href="progress.html">progress.html</a>.
+  </p>
+</footer>
+
+</main>
+</div>
+</div>
+</body>
+</html>
