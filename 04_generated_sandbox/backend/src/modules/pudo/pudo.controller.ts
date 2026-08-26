@@ -680,7 +680,7 @@ export class SbgController {
    * into before revoking the old. Keys being cheap is what makes revoking one an easy decision.
    */
   @Scopes('vendor:manage:self')
-  @Post('vendors:id/api-keys')
+  @Post('vendors/:id/api-keys')
   issueApiKey(@Param('id') id: string, @Body() dto: IssueApiKeyDto, @Actor() actor: IntrospectionResult) {
     this.assertVendorOwner(id, actor);
     this.vendors.get(id); // 404 on an unknown store before anything is minted
@@ -691,7 +691,7 @@ export class SbgController {
 
   /** This store's keys, in a shape safe to render — never a secret, not even to its owner. */
   @Scopes('vendor:read:self')
-  @Get('vendors:id/api-keys')
+  @Get('vendors/:id/api-keys')
   listApiKeys(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
     this.assertVendorOwner(id, actor);
     return this.apiKeys.list(id);
@@ -699,7 +699,7 @@ export class SbgController {
 
   /** Stop a key working. Kept rather than deleted, so "what was that key doing" stays answerable. */
   @Scopes('vendor:manage:self')
-  @Delete('vendors:id/api-keys:keyId')
+  @Delete('vendors/:id/api-keys/:keyId')
   revokeApiKey(@Param('id') id: string, @Param('keyId') keyId: string, @Actor() actor: IntrospectionResult) {
     this.assertVendorOwner(id, actor);
     return this.apiKeys.revoke(id, keyId);

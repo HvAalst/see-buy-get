@@ -5671,7 +5671,7 @@
         }
       }
     },
-    "/v1/sbg/vendors{id}/api-keys": {
+    "/v1/sbg/vendors/{id}/api-keys": {
       "post": {
         "operationId": "Sbg.issueApiKey",
         "parameters": [
@@ -5731,7 +5731,7 @@
         }
       }
     },
-    "/v1/sbg/vendors{id}/api-keys{keyId}": {
+    "/v1/sbg/vendors/{id}/api-keys/{keyId}": {
       "delete": {
         "operationId": "Sbg.revokeApiKey",
         "summary": "",

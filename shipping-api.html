@@ -155,8 +155,9 @@
   <p class="lede">You do not need a key to quote, and you never will. A key buys you a rate limit of your
   own and the costed breakdown behind the number.</p>
 
-  <p>Issue them from your store console — as many as you like, one per environment or per storefront.
-  Send one in a header; never in a query string, which ends up in access logs and referrers.</p>
+  <p>Issue them from your store console, under <b>Store → Shipping API keys</b> — as many as you like, one
+  per environment or per storefront. Send one in a header; never in a query string, which ends up in access
+  logs and referrers.</p>
 
 <pre><code>curl -X POST http://localhost:3000/v1/sbg/shipping/quotes \
   -H 'x-sbg-key: sk_live_…' \

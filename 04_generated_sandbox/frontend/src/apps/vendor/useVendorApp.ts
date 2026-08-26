@@ -15,8 +15,10 @@ import {
 } from './api';
 import { EMPTY_MINT, dimsComplete, fromHandoff, type MintForm } from './logic';
 import type {
+  ApiKeyRow,
   CallbackRow,
   CheckoutRow,
+  IssuedKey,
   LedgerSummary,
   MintView,
   NetworkPoint,
@@ -122,6 +124,9 @@ export interface VendorState {
   detailState: 'idle' | 'loading' | 'ready';
   settlement: SettlementRow[];
   callbacks: CallbackRow[];
+  apiKeys: ApiKeyRow[];
+  /** A key the moment it was minted — the ONE time a secret is on screen, and it is gone when dismissed. */
+  issuedKey: IssuedKey | null;
   storeState: 'idle' | 'loading' | 'ready';
   points: NetworkPoint[];
   pointsState: 'idle' | 'loading' | 'ready' | 'error';
@@ -161,6 +166,8 @@ const INITIAL: VendorState = {
   detailState: 'idle',
   settlement: [],
   callbacks: [],
+  apiKeys: [],
+  issuedKey: null,
   storeState: 'idle',
   points: [],
   pointsState: 'idle',
@@ -485,12 +492,13 @@ export function useVendorApp() {
   const loadStore = useCallback(async () => {
     if (!client || !creds) return;
     setState((s) => ({ ...s, storeState: 'loading' }));
-    const [setR, cbR] = await Promise.all([client.api.settlement(creds.vendorId), client.api.callbacks(creds.vendorId)]);
+    const [setR, cbR, keyR] = await Promise.all([client.api.settlement(creds.vendorId), client.api.callbacks(creds.vendorId), client.api.apiKeys(creds.vendorId)]);
     setState((s) => ({
       ...s,
       storeState: 'ready',
       settlement: setR.error ? s.settlement : (narrow<SettlementRow[]>(setR.data) ?? []),
       callbacks: cbR.error ? s.callbacks : (narrow<CallbackRow[]>(cbR.data) ?? []),
+      apiKeys: keyR.error ? s.apiKeys : (narrow<ApiKeyRow[]>(keyR.data) ?? []),
     }));
     if (setR.error) fail(setR.error);
   }, [client, creds, fail]);
@@ -807,10 +815,49 @@ export function useVendorApp() {
     [client, creds, run, fail, pushToast, refresh],
   );
 
+  /**
+   * Mint a key and put the secret on screen — once.
+   *
+   * It is held in state rather than pushed through a toast because the merchant has to be able to READ it,
+   * select it and copy it before it is gone, and a toast that disappears on a timer is exactly the wrong
+   * container for the only copy of a credential.
+   */
+  const issueApiKey = useCallback(
+    async (kind: 'publishable' | 'secret', mode: 'test' | 'live', label: string) => {
+      if (!client || !creds) return;
+      await run('issue-key', async () => {
+        const r = await client.api.issueApiKey(creds.vendorId, { kind, mode, label: label.trim() || undefined });
+        if (r.error) return fail(r.error);
+        setState((s) => ({ ...s, issuedKey: narrow<IssuedKey>(r.data) ?? null }));
+        await loadStore();
+      });
+    },
+    [client, creds, run, fail, loadStore],
+  );
+
+  /** Forget the one-time secret. Nothing to undo — it was never stored on our side either. */
+  const dismissIssuedKey = useCallback(() => setState((s) => ({ ...s, issuedKey: null })), []);
+
+  const revokeApiKey = useCallback(
+    async (keyId: string) => {
+      if (!client || !creds) return;
+      await run('revoke-key', async () => {
+        const r = await client.api.revokeApiKey(creds.vendorId, keyId);
+        if (r.error) return fail(r.error);
+        pushToast({ tone: 'ok', icon: 'check', title: t('vendor.toast.keyRevoked') });
+        await loadStore();
+      });
+    },
+    [client, creds, run, fail, pushToast, loadStore],
+  );
+
   return {
     state,
     actions: {
       refresh,
+      issueApiKey,
+      dismissIssuedKey,
+      revokeApiKey,
       queryOrders,
       queryLedger,
       exportLedger,

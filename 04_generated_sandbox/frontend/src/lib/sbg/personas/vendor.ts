@@ -126,6 +126,19 @@ export function createVendorApi(sbg: SbgClient) {
     /** The prepaid settlement book, newest first. */
     settlement: (vendorId: string) => sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/settlement', { params: { path: { id: vendorId } } })),
 
+    /* --- merchant API keys: who the public shipping API sees when this store calls it --- */
+
+    /** This store's keys. Never carries a secret — not even to its owner; see the issue call. */
+    apiKeys: (vendorId: string) => sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/api-keys', { params: { path: { id: vendorId } } })),
+
+    /** Mint a key. The response carries the full value ONCE and it is never retrievable again. */
+    issueApiKey: (vendorId: string, body: { kind: 'publishable' | 'secret'; mode?: 'test' | 'live'; label?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/api-keys', { params: { path: { id: vendorId } }, body })),
+
+    /** Stop a key working. Kept rather than deleted, so "what was that key doing" stays answerable. */
+    revokeApiKey: (vendorId: string, keyId: string) =>
+      sbg.request((c) => c.DELETE('/v1/sbg/vendors/{id}/api-keys/{keyId}', { params: { path: { id: vendorId, keyId } } })),
+
     /** The HMAC-signed status-callback outbox. */
     callbacks: (vendorId: string) => sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/callbacks', { params: { path: { id: vendorId } } })),
 

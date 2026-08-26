@@ -63,6 +63,8 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
         )}
       </Card>
 
+      <KeysCard state={state} actions={actions} />
+
       <Card title={t('vendor.store.settlementTitle')}>
         {state.storeState === 'loading' ? <p class="hint">{t('vendor.store.gettingBooks')}</p> : null}
         {state.settlement.length === 0 && state.storeState === 'ready' ? <p class="hint">{t('vendor.noEntriesYet')}</p> : null}
@@ -83,6 +85,126 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
 
       <PolicySheet open={policyOpen} onClose={() => setPolicyOpen(false)} state={state} actions={actions} />
     </div>
+  );
+}
+
+/**
+ * The keys this store calls the shipping API with.
+ *
+ * The screen's whole job is to make ONE moment unmissable: a secret key exists on screen exactly once and
+ * is then gone, because we keep only a hash of it. So the reveal is a sheet the merchant has to close by
+ * hand — never a toast, which would take the only copy of a credential away on a timer.
+ */
+function KeysCard({ state, actions }: { state: VendorState; actions: VendorActions }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const [kind, setKind] = useState<'publishable' | 'secret'>('publishable');
+  const [mode, setMode] = useState<'test' | 'live'>('test');
+  const [label, setLabel] = useState('');
+  const [confirm, setConfirm] = useState<string | null>(null);
+  const live = state.apiKeys.filter((k) => !k.revokedAt);
+
+  return (
+    <>
+      <Card
+        title={t('vendor.keys.title')}
+        aside={
+          <Button variant="link" full={false} onClick={() => setOpen(true)}>
+            {t('vendor.keys.new')}
+          </Button>
+        }
+      >
+        <p class="card__note">{t('vendor.keys.note')}</p>
+        {state.storeState === 'ready' && live.length === 0 ? <p class="hint" style="margin-top:8px">{t('vendor.keys.none')}</p> : null}
+        {live.map((k) => (
+          <div key={k.keyId} class="kv">
+            <span>
+              {k.label ? `${k.label} · ` : ''}
+              {t(k.kind === 'secret' ? 'vendor.keys.kindSecret' : 'vendor.keys.kindPublishable')}
+              {' · '}
+              {t(k.mode === 'live' ? 'vendor.keys.modeLive' : 'vendor.keys.modeTest')}
+            </span>
+            <b class="mono-t">{k.value ?? `…${k.hint}`}</b>
+          </div>
+        ))}
+        {live.length ? (
+          <div class="chips" style="margin-top:10px">
+            {live.map((k) => (
+              <button key={k.keyId} type="button" class="chip chip--tap" onClick={() => setConfirm(k.keyId)}>
+                {t('vendor.keys.revokeOne', { key: k.label || `…${k.hint}` })}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </Card>
+
+      <Sheet open={open} onClose={() => setOpen(false)} title={t('vendor.keys.newTitle')}>
+        <div class="field">
+          <label class="field__label" for="key-kind">
+            {t('vendor.keys.kind')}
+          </label>
+          <select id="key-kind" class="input" value={kind} onChange={(e) => setKind(e.currentTarget.value as 'publishable' | 'secret')}>
+            <option value="publishable">{t('vendor.keys.kindPublishable')}</option>
+            <option value="secret">{t('vendor.keys.kindSecret')}</option>
+          </select>
+          <p class="card__note">{t(kind === 'secret' ? 'vendor.keys.kindSecretNote' : 'vendor.keys.kindPublishableNote')}</p>
+        </div>
+        <div class="field" style="margin-top:12px">
+          <label class="field__label" for="key-mode">
+            {t('vendor.keys.mode')}
+          </label>
+          <select id="key-mode" class="input" value={mode} onChange={(e) => setMode(e.currentTarget.value as 'test' | 'live')}>
+            <option value="test">{t('vendor.keys.modeTest')}</option>
+            <option value="live">{t('vendor.keys.modeLive')}</option>
+          </select>
+          <p class="card__note">{t(mode === 'live' ? 'vendor.keys.modeLiveNote' : 'vendor.keys.modeTestNote')}</p>
+        </div>
+        <div class="field" style="margin-top:12px">
+          <label class="field__label" for="key-label">
+            {t('vendor.keys.label')}
+          </label>
+          <input id="key-label" class="input" value={label} onInput={(e) => setLabel(e.currentTarget.value)} placeholder={t('vendor.keys.labelPh')} />
+        </div>
+        <Button
+          chevron={false}
+          busy={state.busy === 'issue-key'}
+          onClick={() =>
+            void actions.issueApiKey(kind, mode, label).then(() => {
+              setOpen(false);
+              setLabel('');
+            })
+          }
+        >
+          {t('vendor.keys.create')}
+        </Button>
+      </Sheet>
+
+      {/* The one and only time a secret is on screen. Closed by hand, never on a timer. */}
+      <Sheet open={Boolean(state.issuedKey)} onClose={actions.dismissIssuedKey} title={t('vendor.keys.madeTitle')}>
+        <p class="t-body">{t(state.issuedKey?.kind === 'secret' ? 'vendor.keys.madeSecret' : 'vendor.keys.madePublishable')}</p>
+        <p class="words" style="word-break:break-all">{state.issuedKey?.secret}</p>
+        <p class="card__note">{t('vendor.keys.madeWhere')}</p>
+        <Button chevron={false} onClick={actions.dismissIssuedKey}>
+          {t('vendor.keys.madeDone')}
+        </Button>
+      </Sheet>
+
+      <Sheet open={Boolean(confirm)} onClose={() => setConfirm(null)} title={t('vendor.keys.revokeTitle')}>
+        <p class="t-body">{t('vendor.keys.revokeBody')}</p>
+        <Button
+          chevron={false}
+          busy={state.busy === 'revoke-key'}
+          onClick={() =>
+            void actions.revokeApiKey(confirm!).then(() => setConfirm(null))
+          }
+        >
+          {t('vendor.keys.revokeConfirm')}
+        </Button>
+        <Button variant="link" onClick={() => setConfirm(null)}>
+          {t('common.cancel')}
+        </Button>
+      </Sheet>
+    </>
   );
 }
 

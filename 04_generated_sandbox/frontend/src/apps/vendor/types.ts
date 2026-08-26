@@ -85,6 +85,30 @@ export interface OrderDetail extends OrderRow {
   scans?: Array<{ at: string; status: string; note?: string }>;
 }
 
+/**
+ * A merchant API key, as its owner may see it.
+ *
+ * `value` is present for a PUBLISHABLE key only — it lives in a page in plain sight and gets pasted into a
+ * template again every time one is rebuilt. A secret key shows four characters and no more, because we do
+ * not have the rest of it: it existed in exactly one response, at creation.
+ */
+export interface ApiKeyRow {
+  keyId: string;
+  kind: 'publishable' | 'secret';
+  mode: 'test' | 'live';
+  label?: string;
+  hint: string;
+  value?: string;
+  createdAt: string;
+  lastUsedAt?: string;
+  revokedAt?: string;
+}
+
+/** A key the moment it was minted — the one and only time a secret is on screen. */
+export interface IssuedKey extends ApiKeyRow {
+  secret: string;
+}
+
 export interface CheckoutRow {
   id: string;
   vendorId: string;
