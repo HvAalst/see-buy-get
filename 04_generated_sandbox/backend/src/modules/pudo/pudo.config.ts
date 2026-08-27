@@ -87,6 +87,14 @@ export const NETWORK_JURISDICTION = DEFAULT_VENDOR_COUNTRY;
  * plainly-stated average is easier to argue with than a table nobody maintains.
  */
 export const BORDER_DWELL_H = 4;
+/**
+ * How long a QUOTED price is held for, once a merchant has a name to redeem it by.
+ *
+ * Long enough for a real checkout — a buyer still has an address to type and a card to find — and short
+ * enough that we are not underwriting a shop's advertised rate for the afternoon. A converted price is
+ * capped tighter still by the rate behind it (see QuoteBookService.hold).
+ */
+export const QUOTE_TTL_MIN = 60;
 export const round2cfg = round2;
 
 /** Apply the platform margin to a base provider cost. */

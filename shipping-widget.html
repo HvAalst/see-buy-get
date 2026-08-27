@@ -155,6 +155,10 @@
   .addEventListener('sbg:quote', (e) =&gt; {
     console.log(e.detail.price.amount, e.detail.price.currency);
   });</code></pre>
+  <p style="margin-top:14px">With a <code>key</code> set, the quote also carries a <code>quoteId</code>.
+  Keep it with the basket and hand it to the shipment call at checkout — then the buyer is charged the
+  number they were just shown, not whatever the world has moved to by the time they pay.</p>
+
   <p style="margin-top:14px">The last event this page saw:</p>
   <pre id="event"><code>— nothing yet. Ask for a price above.</code></pre>
 </section>

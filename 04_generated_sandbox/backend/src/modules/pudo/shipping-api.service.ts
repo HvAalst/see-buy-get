@@ -2,7 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
 import { AgentService } from './agent.service';
 import { ShelfService } from './shelf.service';
-import { RoutingService } from './routing.service';
+import { RoutingService, type ShipmentQuote } from './routing.service';
+import { QuoteBookService, type HeldQuote } from './quote-book.service';
 import { ParcelService } from './parcel.service';
 import { VendorService } from './vendor.service';
 import { requireCountryCode } from './country';
@@ -80,7 +81,14 @@ export interface PublicQuote {
   route: { hops: string[]; km: number; crossesBorder: boolean; crossings: BorderCrossing[] };
   /** What this shipment will additionally need before it can be sent. Empty for an ordinary domestic one. */
   requires: string[];
-  /** When this price stops being good, when it stands on an exchange rate. Absent when nothing was converted. */
+  /**
+   * The name this price is HELD under — send it back when you create the shipment and it is minted at
+   * this figure rather than at the one the world has moved to since.
+   *
+   * Absent on an anonymous quote: we cannot promise a price to somebody we will not recognise later.
+   */
+  quoteId?: string;
+  /** When this price stops being good. Present whenever it is held, or whenever a rate was applied. */
   expiresAt?: string;
   /** Which world answered — `live` unless a test key asked. Always present, so a caller can never be in
    *  doubt about whether the thing they are looking at is real. */
@@ -91,11 +99,13 @@ export interface PublicQuote {
 
 /** What a merchant asks for when they want the shipment, not just the price. */
 export interface MintInput {
-  from: QuoteEndpoint;
-  to: QuoteEndpoint;
+  from?: QuoteEndpoint;
+  to?: QuoteEndpoint;
   dimensionsCm?: { l: number; w: number; h: number };
   weightKg?: number;
   size?: ParcelSize;
+  /** A price held earlier. Give this OR the shape above — see mint(). */
+  quoteId?: string;
   buyerMobile: string;
   contentPhotoRef: string;
   externalOrderId?: string;
@@ -138,6 +148,7 @@ export class ShippingApiService {
     private readonly routing: RoutingService,
     private readonly parcels: ParcelService,
     private readonly vendors: VendorService,
+    private readonly quotes: QuoteBookService,
   ) {}
 
   quote(input: { from: QuoteEndpoint; to: QuoteEndpoint; dimensionsCm?: { l: number; w: number; h: number }; weightKg?: number; size?: ParcelSize }, caller: Caller = ANONYMOUS): PublicQuote {
@@ -156,6 +167,32 @@ export class ShippingApiService {
     const weightKg = input.weightKg ?? SIZE_WEIGHT_KG[size];
 
     const { plan, quote } = this.routing.quoteWithPlan(from.did, to.did, size);
+    // A price is only worth holding for somebody we can recognise when they come back to claim it. An
+    // anonymous quote is a calculation; a keyed one is a promise, and that difference is the honest reason
+    // a key is worth having.
+    const held = caller.vendorId
+      ? this.quotes.hold({ vendorId: caller.vendorId, mode: caller.mode, quote, fromPointId: from.did, toPointId: to.did, size, weightKg, dimensionsCm: input.dimensionsCm })
+      : undefined;
+    return this.viewOf(quote, plan, from, to, size, weightKg, caller, held);
+  }
+
+  /**
+   * One answer, built one way.
+   *
+   * A fresh quote and a redeemed one must be the same shape and read the same, or an integrator ends up
+   * writing two parsers for one endpoint's output. The only difference between them is which figures went
+   * in: a redemption brings back the price it was promised and recomputes nothing but the arrival time.
+   */
+  private viewOf(
+    quote: ShipmentQuote,
+    plan: ReturnType<RoutingService['planJourney']>,
+    from: Agent,
+    to: Agent,
+    size: ParcelSize,
+    weightKg: number,
+    caller: Caller,
+    held?: HeldQuote,
+  ): PublicQuote {
     return {
       from: this.point(from),
       to: this.point(to),
@@ -168,10 +205,14 @@ export class ShippingApiService {
       // Said out loud rather than left for the mint to refuse: a shipment that crosses a border cannot be
       // sent without a contents list and a declared value, and an integrator should know that at quote time.
       requires: quote.crossesBorder ? ['customs_declaration'] : [],
-      expiresAt: quote.fx?.expiresAt,
+      // When the price is held, its own expiry is the one that matters — and it is already the earlier of
+      // the two, because a converted price cannot outlive the rate behind it. Unheld, the rate's window is
+      // still worth saying: it is when the number stops being worth re-using.
+      expiresAt: held?.expiresAt ?? quote.fx?.expiresAt,
       // Always said, never inferred. A caller must not have to work out from context whether the thing in
       // front of them is real — the answer says so.
       mode: caller.mode,
+      ...(held ? { quoteId: held.quoteId } : {}),
       // ABSENT, not undefined, for a caller who has not earned it: a key that is simply missing from the
       // body cannot be mistaken for one that came back empty, and there is nothing for a reader to probe.
       ...(ApiKeyService.seesBreakdown(caller)
@@ -208,10 +249,24 @@ export class ShippingApiService {
     if (!input.buyerMobile?.trim()) throw new GlosError('PHONE_REQUIRED', 'Give the buyer’s mobile — somebody has to be told where to collect it');
     if (!input.contentPhotoRef?.trim()) throw new GlosError('PHOTO_REQUIRED', 'A photo of the contents is required — it is the baseline a damage claim is judged against');
 
+    // REDEEM, or re-price. A held quote is honoured at the figure the buyer was shown; without one the
+    // price is whatever the world says now, which is the older behaviour and still the right default for a
+    // caller who never asked us to hold anything.
+    const held = input.quoteId ? this.quotes.require(input.quoteId, caller.vendorId, caller.mode) : undefined;
+    if (held && (input.from || input.to || input.dimensionsCm || input.weightKg || input.size)) {
+      // Refused rather than resolved in somebody's favour. A quote that says "M to Kisumu" and a request
+      // that says "L to Nakuru" is a caller who believes two different things about one shipment, and
+      // silently honouring either of them ships the wrong parcel at a price nobody agreed to.
+      throw new GlosError('INVALID_INPUT', 'Send a quoteId or the shipment’s shape, not both — the held quote already says where it goes and how big it is');
+    }
+
     // The price and every gate behind it: the endpoints must resolve, the parcel must fit the network, the
     // route must exist, the currencies must be bridgeable. `quote` runs the caller's own key so a test mint
     // is priced by exactly the arithmetic a live one is.
-    const quoted = this.quote(input, caller);
+    if (!held && !(input.from && input.to)) {
+      throw new GlosError('FIELD_REQUIRED', 'Send a quoteId, or say where to collect from and send to');
+    }
+    const quoted = held ? this.heldAsQuote(held, caller) : this.quote({ ...input, from: input.from!, to: input.to! }, caller);
     const origin = this.agents.get(quoted.from.pointId);
     const dest = this.agents.get(quoted.to.pointId);
 
@@ -236,6 +291,10 @@ export class ShippingApiService {
       // A DRY RUN, and it says so. Everything above ran; nothing below does. No parcel, no billing, no
       // label a shop would accept, no notification to a buyer who did not order anything. What it cannot
       // give you is something to track — that is the one thing a sandbox is not able to fake honestly.
+      //
+      // A held quote is NOT spent here either, and that is the same rule rather than an exception to it:
+      // spending a name is a commitment, and a dry run makes none. It also means a developer can rehearse
+      // the same checkout as many times as it takes without minting a fresh quote between every attempt.
       return this.shipmentView(
         {
           shipmentId: `test_${quoted.to.pointId.slice(-6)}_${quoted.parcel.size}`,
@@ -263,8 +322,14 @@ export class ShippingApiService {
       subtotal: input.subtotal,
       shippingPolicy: vendor.shippingPolicy,
       routeMode: input.routeMode,
-      quote: this.routing.quoteShipment(origin.did, dest.did, quoted.parcel.size),
+      // THE HELD PRICE, when there is one. This line is the promise: the parcel is billed at the figure
+      // the buyer was shown, not at the one the world has moved to since.
+      quote: held ? held.quote : this.routing.quoteShipment(origin.did, dest.did, quoted.parcel.size),
     });
+    // Spent only now, because the shipment now exists. A mint that threw leaves the price held, so a
+    // merchant can fix what was wrong and redeem the same promise rather than go back to the buyer with a
+    // different number.
+    if (held) this.quotes.markRedeemed(held.quoteId, parcel.parcelId);
     return this.shipmentView(
       {
         shipmentId: parcel.parcelId,
@@ -281,6 +346,29 @@ export class ShippingApiService {
       'live',
       false,
     );
+  }
+
+  /**
+   * A held price, read back as the answer it was — with one thing re-checked.
+   *
+   * WE HOLD THE PRICE, NOT THE WORLD. The figure survives the route getting dearer, which is the entire
+   * promise. What it cannot survive is the route becoming impossible: a shop that has stopped taking
+   * parcels is not somewhere a buyer can be sent, whatever they were charged, and minting into it would
+   * turn a price promise into an undeliverable parcel. So the ends are re-checked and nothing else is.
+   */
+  private heldAsQuote(held: HeldQuote, caller: Caller): PublicQuote {
+    for (const [pointId, side] of [[held.fromPointId, 'collect from'], [held.toPointId, 'send to']] as const) {
+      const agent = this.agents.list().find((a) => a.did === pointId);
+      if (!agent || agent.status !== 'ACTIVE') {
+        throw new GlosError('NOT_FOUND', `The point this quote would ${side} is no longer taking parcels — ask for a new quote`, { quoteId: held.quoteId });
+      }
+    }
+    const from = this.agents.get(held.fromPointId);
+    const to = this.agents.get(held.toPointId);
+    const plan = this.routing.planJourney({ originAgentDid: from.did, destAgentDid: to.did, weightKg: held.weightKg });
+    // The ETA is recomputed and the PRICE is not, and that asymmetry is deliberate: an arrival time is a
+    // prediction that should be as good as we can make it today, while a price is a promise made earlier.
+    return this.viewOf(held.quote, plan, from, to, held.size as ParcelSize, held.weightKg, caller);
   }
 
   private shipmentView(

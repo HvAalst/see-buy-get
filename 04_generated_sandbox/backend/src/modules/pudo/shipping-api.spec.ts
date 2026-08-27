@@ -7,6 +7,8 @@ import { RoutingService } from './routing.service';
 import { CorridorService } from './corridor.service';
 import { ShelfService } from './shelf.service';
 import { ShippingApiService } from './shipping-api.service';
+import { QuoteBookService } from './quote-book.service';
+import { TRADE_CREDIT_LIMIT } from './pudo.config';
 import { ANONYMOUS, ApiKeyService, type Caller } from './api-key.service';
 import { ShippingApiController } from './shipping-api.controller';
 import { VendorService } from './vendor.service';
@@ -68,6 +70,7 @@ describe('the public shipping quote', () => {
   let vendors: VendorService;
   let apiKeys: ApiKeyService;
   let parcels: ParcelService;
+  let quoteBook: QuoteBookService;
 
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -80,7 +83,7 @@ describe('the public shipping quote', () => {
         FleetManagerService, MediaService, CargoService, DigitalTwinService, TrackingService,
         TrackingContextService, NormalizationService, ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
-        EntityService, BooksService, FxService, RateLimitGuard, ApiKeyService, IdempotencyService,
+        EntityService, BooksService, FxService, RateLimitGuard, ApiKeyService, IdempotencyService, QuoteBookService,
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
         GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder },
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
@@ -96,6 +99,7 @@ describe('the public shipping quote', () => {
     vendors = moduleRef.get(VendorService);
     apiKeys = moduleRef.get(ApiKeyService);
     parcels = moduleRef.get(ParcelService);
+    quoteBook = moduleRef.get(QuoteBookService);
     moduleRef.get(BooksService).reset();
   });
 
@@ -379,6 +383,106 @@ describe('the public shipping quote', () => {
 
       // The same name for a different order is the merchant's own bookkeeping going wrong — refused.
       await expect(controller.mint(order({ weightKg: 9 }) as never, caller, 'order-88')).rejects.toThrow(/already used/);
+    });
+
+    it('mints at the price the buyer was SHOWN, not the one the world moved to', () => {
+      // The whole point. Between the product page and the checkout, everything a price rests on is free to
+      // move — a shop's own advertised rate, a margin, a carrier range. Neither party did anything wrong,
+      // and without this the buyer is simply charged the difference.
+      const { from, to } = domesticPair();
+      const { caller } = merchant();
+      const quoted = shipping.quote({ from: { pointId: from.did }, to: { pointId: to.did }, size: 'M' }, caller);
+      expect(quoted.quoteId).toMatch(/^qt_/);
+
+      agents.setPrice(to.did, 40); // the destination shop puts its rate up, as it is free to do
+
+      const fresh = shipping.quote({ from: { pointId: from.did }, to: { pointId: to.did }, size: 'M' }, caller);
+      expect(fresh.price.amount).toBeGreaterThan(quoted.price.amount); // the world really did move
+
+      const made = shipping.mint({ quoteId: quoted.quoteId, buyerMobile: '+254700999', contentPhotoRef: 'c.jpg' }, caller);
+      expect(made.price.amount).toBe(quoted.price.amount);
+      expect(parcels.get(made.shipmentId).shipmentCost).toBe(quoted.price.amount);
+    });
+
+    it('holds a price only for somebody it will recognise later', () => {
+      // An anonymous quote is a calculation; a keyed one is a promise. We cannot promise a price to
+      // somebody we have no way to know at the counter — and it is the honest reason a key is worth having.
+      domesticPair();
+      expect(shipping.quote({ from: { country: 'KE', area: 'Nairobi' }, to: { country: 'KE', area: 'Kisumu' }, size: 'M' }).quoteId).toBeUndefined();
+    });
+
+    it('spends a quote once, and only once a shipment exists', () => {
+      domesticPair();
+      const { caller } = merchant();
+      const quoted = shipping.quote({ from: { country: 'KE', area: 'Nairobi' }, to: { country: 'KE', area: 'Kisumu' }, size: 'M' }, caller);
+
+      // A mint that THREW leaves the price held: the merchant fixes what was wrong and redeems the same
+      // promise, rather than going back to the buyer with a different number.
+      expect(() => shipping.mint({ quoteId: quoted.quoteId, buyerMobile: '+254700999', contentPhotoRef: '' }, caller)).toThrow(/photo/i);
+      expect(quoteBook.get(quoted.quoteId!)?.redeemedAt).toBeUndefined();
+
+      const made = shipping.mint({ quoteId: quoted.quoteId, buyerMobile: '+254700999', contentPhotoRef: 'c.jpg' }, caller);
+      expect(quoteBook.get(quoted.quoteId!)?.redeemedAs).toBe(made.shipmentId);
+      // One name, one shipment. A promise made for one parcel is not a licence to mint ten at a stale price.
+      expect(() => shipping.mint({ quoteId: quoted.quoteId, buyerMobile: '+254700999', contentPhotoRef: 'c.jpg' }, caller)).toThrow(/already been used/);
+    });
+
+    it('refuses a quote that has expired, that belongs to somebody else, or that was made in the other world', () => {
+      domesticPair();
+      const mine = merchant();
+      const theirs = merchant();
+      const quoted = shipping.quote({ from: { country: 'KE', area: 'Nairobi' }, to: { country: 'KE', area: 'Kisumu' }, size: 'M' }, mine.caller);
+      const body = { quoteId: quoted.quoteId, buyerMobile: '+254700999', contentPhotoRef: 'c.jpg' };
+
+      // A stranger's quote reads as one that never existed: that an id they guessed belongs to a real
+      // merchant is a fact they have not earned.
+      expect(() => shipping.mint(body, theirs.caller)).toThrow(/No such quote/);
+
+      const testKey = apiKeys.resolve(apiKeys.issue(mine.store.vendorId, 'secret', 'test').secret);
+      expect(() => shipping.mint(body, testKey)).toThrow(/cannot be used with a test one/);
+
+      const held = quoteBook.get(quoted.quoteId!)!;
+      held.expiresAt = new Date(Date.now() - 1000).toISOString();
+      expect(() => shipping.mint(body, mine.caller)).toThrow(/expired/);
+    });
+
+    it('holds the price, not the world', () => {
+      // A held quote survives the route getting dearer — that is the promise. It must not survive the
+      // route becoming impossible: minting into a shop that has stopped taking parcels would turn a price
+      // promise into an undeliverable parcel.
+      const { to } = domesticPair();
+      const { caller } = merchant();
+      const quoted = shipping.quote({ from: { country: 'KE', area: 'Nairobi' }, to: { country: 'KE', area: 'Kisumu' }, size: 'M' }, caller);
+
+      agents.setAvailability(to.did, false); // merely closed for the day — still honoured
+      expect(shipping.mint({ quoteId: quoted.quoteId, buyerMobile: '+254700999', contentPhotoRef: 'c.jpg' }, caller).price.amount).toBe(quoted.price.amount);
+
+      const second = shipping.quote({ from: { country: 'KE', area: 'Nairobi' }, to: { pointId: to.did }, size: 'M' }, caller);
+      gate.chargeShipping(to.did, 50 + TRADE_CREDIT_LIMIT, 'drain'); // float AND credit line spent → LOCKED
+      agents.refreshLock(to.did);
+      expect(agents.get(to.did).status).toBe('LOCKED');
+      expect(() => shipping.mint({ quoteId: second.quoteId, buyerMobile: '+254700999', contentPhotoRef: 'c.jpg' }, caller)).toThrow(/no longer taking parcels/);
+    });
+
+    it('will not be told two different things about one shipment', () => {
+      domesticPair();
+      const { caller } = merchant();
+      const quoted = shipping.quote({ from: { country: 'KE', area: 'Nairobi' }, to: { country: 'KE', area: 'Kisumu' }, size: 'M' }, caller);
+      expect(() =>
+        shipping.mint({ quoteId: quoted.quoteId, size: 'L', buyerMobile: '+254700999', contentPhotoRef: 'c.jpg' }, caller),
+      ).toThrow(/not both/);
+      expect(() => shipping.mint({ buyerMobile: '+254700999', contentPhotoRef: 'c.jpg' }, caller)).toThrow(/Send a quoteId, or say where/);
+    });
+
+    it('lets a developer rehearse the same checkout without minting a fresh quote each time', () => {
+      // A dry run makes no commitment, and spending a name IS one. Same rule, not an exception to it.
+      domesticPair();
+      const { caller } = merchant('test');
+      const quoted = shipping.quote({ from: { country: 'KE', area: 'Nairobi' }, to: { country: 'KE', area: 'Kisumu' }, size: 'M' }, caller);
+      const body = { quoteId: quoted.quoteId, buyerMobile: '+254700999', contentPhotoRef: 'c.jpg' };
+      expect(shipping.mint(body, caller).simulated).toBe(true);
+      expect(shipping.mint(body, caller).simulated).toBe(true);
+      expect(quoteBook.get(quoted.quoteId!)?.redeemedAt).toBeUndefined();
     });
 
     it('says so plainly when the store cannot pay for it', () => {

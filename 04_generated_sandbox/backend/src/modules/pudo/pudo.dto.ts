@@ -309,8 +309,10 @@ export class PublicQuoteDto {
  * else's account by changing a field, because there is no field to change.
  */
 export class MintShipmentDto {
-  @ValidateNested() @Type(() => QuoteEndpointDto) from!: QuoteEndpointDto;
-  @ValidateNested() @Type(() => QuoteEndpointDto) to!: QuoteEndpointDto;
+  /** A price held earlier. Give this OR the four fields below — never both. */
+  @IsOptional() @IsString() quoteId?: string;
+  @IsOptional() @ValidateNested() @Type(() => QuoteEndpointDto) from?: QuoteEndpointDto;
+  @IsOptional() @ValidateNested() @Type(() => QuoteEndpointDto) to?: QuoteEndpointDto;
   @IsOptional() @ValidateNested() @Type(() => QuoteDimsDto) dimensionsCm?: QuoteDimsDto;
   @IsOptional() @IsNumber() @Min(0.01) weightKg?: number;
   @IsOptional() @IsIn(['S', 'M', 'L']) size?: 'S' | 'M' | 'L';

@@ -16369,6 +16369,10 @@
       "MintShipmentDto": {
         "type": "object",
         "properties": {
+          "quoteId": {
+            "type": "string",
+            "description": "A price held earlier. Give this OR the four fields below — never both."
+          },
           "from": {
             "$ref": "#/components/schemas/QuoteEndpointDto"
           },
@@ -16422,8 +16426,6 @@
           }
         },
         "required": [
-          "from",
-          "to",
           "buyerMobile",
           "contentPhotoRef"
         ]
