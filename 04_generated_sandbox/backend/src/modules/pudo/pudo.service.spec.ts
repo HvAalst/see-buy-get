@@ -3125,6 +3125,41 @@ describe('PUDO Light', () => {
     expect(dispatch.listFreight().find((x) => x.freightId === f.freightId)!.driverPaid).toBe(true);
   });
 
+  it('FB0a: the locked price keeps the deadhead/loaded split — a claimed haul is not recorded as all-empty running', () => {
+    const d = drivers.register({ displayName: 'SP', fullName: 'S', nationalId: 'ID-SP', mobile: '+254770123', licenceClasses: ['truck'], licenceNumber: 'L-SP', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const truck = vehicles.register({ plate: 'SP-1', vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 10_000, ownerName: 'X', equipment: ['TLT'], baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5 });
+    fleet.couple(d.did, truck.vehicleId);
+
+    const vendor = vendors.register({ name: 'SplitVendor' });
+    vendors.topUp(vendor.vendorId, 500);
+    // Three points on one line so the detour stays inside the cap: the driver starts SOUTH of the pickup and
+    // the haul runs NORTH of it. Both legs are therefore non-zero — the case the old code could not express.
+    const start = { lat: -1.22, lng: 36.8 };
+    const pickup = { lat: -1.2, lng: 36.8 };
+    const dest = { lat: -1.15, lng: 36.8 };
+    const f = dispatch.registerFreight({ description: 'Machinery', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', destLocation: dest, weightKg: 200, bulk: false, shipperDid: vendor.vendorId });
+
+    const noon = new Date('2026-07-22T11:00:00').getTime();
+    const [offer] = dispatch.suggest(d.did, { from: start, to: dest }, noon);
+    expect(offer.price).toBeDefined();
+    expect(offer.price!.deadheadKm!).toBeGreaterThan(0);
+    expect(offer.price!.loadedKm!).toBeGreaterThan(0);
+    expect(offer.price!.deadheadKm! + offer.price!.loadedKm!).toBe(offer.price!.distanceKm);
+
+    dispatch.claim(offer.offerId, noon);
+    const claimed = dispatch.listFreight().find((x) => x.freightId === f.freightId)!;
+    // The DURABLE breakdown — what any later market series reads off this haul. It must carry the same split
+    // the offer showed, not the sum re-labelled as deadhead (the shape the pre-FB0a lock produced, which would
+    // have booked every kilometre of a real haul as empty running).
+    expect(claimed.priceBreakdown!.deadheadKm).toBe(offer.price!.deadheadKm);
+    expect(claimed.priceBreakdown!.loadedKm).toBe(offer.price!.loadedKm);
+    expect(claimed.priceBreakdown!.distanceKm).toBe(offer.price!.distanceKm);
+    expect(claimed.priceBreakdown!.deadheadKm).not.toBe(claimed.priceBreakdown!.distanceKm);
+    expect(claimed.lockedPrice).toBe(offer.price!.total); // and the money is unchanged by the relabelling
+  });
+
   it('S34: a legacy vehicle with no pricing profile prices at its class default — never NaN into money', () => {
     const d = drivers.register({ displayName: 'LG', fullName: 'L', nationalId: 'ID-LG', mobile: '+254770999', licenceClasses: ['truck'], licenceNumber: 'L-LG', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
     drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });

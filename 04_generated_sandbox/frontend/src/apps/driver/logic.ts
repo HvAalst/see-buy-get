@@ -232,6 +232,12 @@ export function priceBreakdownLines(price: PriceBreakdown | undefined, t: Transl
     t('driver.logic.baseFee', { amount: money(price.baseFee) }),
     t('driver.logic.distanceAt', { km: price.distanceKm, rate: price.effectiveRate.toFixed(3) }),
   ];
+  // FB0a — how much of that distance is run EMPTY. The pay is on the total either way; this line exists
+  // because "80 km, 8 of them loaded" and "80 km, 72 of them loaded" are not the same job. Only shown when the
+  // price actually carries the split — an older locked price has none, and a guess here would be a lie.
+  if (typeof price.deadheadKm === 'number' && typeof price.loadedKm === 'number') {
+    lines.push(t('driver.logic.distanceSplit', { empty: price.deadheadKm, loaded: price.loadedKm }));
+  }
   if (price.multiplier > 1) lines.push(t('driver.logic.busyRate', { pct: Math.round((price.multiplier - 1) * 100) }));
   else if (price.multiplier < 1) lines.push(t('driver.logic.quietRate', { pct: Math.round((1 - price.multiplier) * 100) }));
   return lines;

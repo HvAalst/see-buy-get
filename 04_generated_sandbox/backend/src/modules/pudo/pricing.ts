@@ -44,11 +44,53 @@ export function freightMultiplier(now: Date, bounds: { min: number; max: number 
 /** The transparent price breakdown shown on an offer card — every term the driver can see and trust. */
 export interface PriceBreakdown {
   baseFee: number; // B — the flag-down / loading fee
-  distanceKm: number; // D — deadhead + haul
+  distanceKm: number; // D — deadhead + haul. The BILLED distance; the price is computed on this and only this.
+  /**
+   * FB0a — the two halves of D, kept apart instead of summed away.
+   *
+   * They add up to distanceKm and change no money: the price has always been charged on the total, and still
+   * is. What was missing is the question an operator with a fixed asset actually asks — "how far do I run
+   * EMPTY to earn this?" — which a single collapsed number cannot answer. Loaded km is also the only honest
+   * denominator for a market series: an empty kilometre is cost, not work done.
+   *
+   * OPTIONAL because a breakdown is DURABLE — it is locked onto a freight at claim and outlives this slice.
+   * A price locked before FB0a has no split, and there is no way to recover one from the total (any division
+   * would be invention). Read them through `distanceSplit()`, which returns null rather than guessing.
+   */
+  deadheadKm?: number; // the empty run: where the vehicle is now → the pickup
+  loadedKm?: number; // the paid run: pickup → dropoff
   ratePerKm: number; // R_base
   multiplier: number; // M — already clamped to the driver's bounds
   effectiveRate: number; // R_base × M
   total: number; // B + D × effectiveRate — the driver's earning (the offer price)
+}
+
+/**
+ * The deadhead/loaded split of a breakdown, or null when it predates FB0a and simply does not have one.
+ *
+ * Never derive a split from distanceKm alone. A caller showing "—" tells the truth; a caller that assumes the
+ * whole distance was loaded (or was empty) invents the one figure the operator is deciding on.
+ */
+export function distanceSplit(b: Pick<PriceBreakdown, 'deadheadKm' | 'loadedKm'> | undefined): { deadheadKm: number; loadedKm: number } | null {
+  if (!b || !Number.isFinite(b.deadheadKm as number) || !Number.isFinite(b.loadedKm as number)) return null;
+  return { deadheadKm: b.deadheadKm as number, loadedKm: b.loadedKm as number };
+}
+
+/**
+ * What the driver earns per kilometre they actually turn — INCLUDING the empty run to reach the load.
+ *
+ * This is the board's sort key, and it is deliberately not earnings-per-loaded-km: a 200 km haul reached by
+ * running 180 km empty is a worse job than a 40 km haul at the door, and only the total denominator says so.
+ * Returns null when the breakdown has no split (pre-FB0a) or the distance is zero — an unsortable row is
+ * shown as unsortable, never floated to the top by a fabricated score.
+ */
+export function earningsPerKm(b: PriceBreakdown | undefined): number | null {
+  if (!b || !Number.isFinite(b.total)) return null;
+  const d = distanceSplit(b);
+  if (!d) return null;
+  const totalKm = d.deadheadKm + d.loadedKm;
+  if (!(totalKm > 0)) return null;
+  return Math.round((b.total / totalKm) * 100) / 100;
 }
 
 /** Compute an offer's price from the vehicle profile + the two distance legs + the (already clamped) M. Every
@@ -61,10 +103,14 @@ export function computeFreightPrice(input: { baseFee: number; ratePerKm: number;
   const baseFee = round2(num(input.baseFee));
   const ratePerKm = num(input.ratePerKm);
   const multiplier = num(input.multiplier);
-  const distanceKm = round2(Math.max(0, num(input.deadheadKm)) + Math.max(0, num(input.tripKm)));
+  // FB0a — keep the halves as well as the sum. Each is sanitised and floored the same way the total always
+  // was, so deadheadKm + loadedKm === distanceKm holds for every input, including the defensive ones.
+  const deadheadKm = round2(Math.max(0, num(input.deadheadKm)));
+  const loadedKm = round2(Math.max(0, num(input.tripKm)));
+  const distanceKm = round2(deadheadKm + loadedKm);
   const effectiveRate = Math.round(ratePerKm * multiplier * 1000) / 1000;
   const total = round2(baseFee + distanceKm * effectiveRate);
-  return { baseFee, distanceKm, ratePerKm, multiplier, effectiveRate, total };
+  return { baseFee, distanceKm, deadheadKm, loadedKm, ratePerKm, multiplier, effectiveRate, total };
 }
 
 /** What the SHIPPER pays = the driver's earning + the platform fee (the same 2% daughter-co margin the

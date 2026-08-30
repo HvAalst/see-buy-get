@@ -1,4 +1,4 @@
-import { clampMultiplier, computeFreightPrice, freightMultiplier, shipperCharge } from './pricing';
+import { clampMultiplier, computeFreightPrice, distanceSplit, earningsPerKm, freightMultiplier, shipperCharge, type PriceBreakdown } from './pricing';
 import { withPlatformFee } from './pudo.config';
 
 describe('freight pricing (S34)', () => {
@@ -89,6 +89,77 @@ describe('freight pricing (S34)', () => {
       expect(Number.isFinite(b.distanceKm)).toBe(true);
       expect(Number.isFinite(b.effectiveRate)).toBe(true);
       expect(b.total).toBe(0);
+    });
+
+    // FB0a — the two halves survive the computation instead of being summed away.
+    it('keeps the deadhead and loaded halves, and they reconstruct the billed distance', () => {
+      const b = computeFreightPrice({ baseFee: 5, ratePerKm: 0.4, deadheadKm: 3, tripKm: 7, multiplier: 1 });
+      expect(b.deadheadKm).toBe(3);
+      expect(b.loadedKm).toBe(7);
+      expect((b.deadheadKm as number) + (b.loadedKm as number)).toBe(b.distanceKm);
+    });
+
+    it('splits the same way the total is guarded — the halves still sum to the billed distance', () => {
+      // Negative and non-finite legs are floored/sanitised INDIVIDUALLY, so the invariant cannot be broken by
+      // a bad geo leg: whatever goes in, deadheadKm + loadedKm === distanceKm.
+      for (const input of [
+        { deadheadKm: -3, tripKm: 7 },
+        { deadheadKm: 3, tripKm: -7 },
+        { deadheadKm: Number.POSITIVE_INFINITY, tripKm: Number.NaN },
+        { deadheadKm: undefined as never, tripKm: 4.25 },
+      ]) {
+        const b = computeFreightPrice({ baseFee: 5, ratePerKm: 0.4, multiplier: 1, ...input });
+        expect((b.deadheadKm as number) + (b.loadedKm as number)).toBe(b.distanceKm);
+        expect(b.deadheadKm).toBeGreaterThanOrEqual(0);
+        expect(b.loadedKm).toBeGreaterThanOrEqual(0);
+      }
+    });
+
+    it('prices on the total distance only — moving km between the halves never changes the money', () => {
+      // The split is INFORMATION, not a new price term. If it ever moved the total it would be a repricing.
+      const a = computeFreightPrice({ baseFee: 5, ratePerKm: 0.4, deadheadKm: 9, tripKm: 1, multiplier: 1.2 });
+      const b = computeFreightPrice({ baseFee: 5, ratePerKm: 0.4, deadheadKm: 1, tripKm: 9, multiplier: 1.2 });
+      expect(a.total).toBe(b.total);
+    });
+  });
+
+  describe('distanceSplit', () => {
+    it('returns the split when it is there', () => {
+      const b = computeFreightPrice({ baseFee: 5, ratePerKm: 0.4, deadheadKm: 3, tripKm: 7, multiplier: 1 });
+      expect(distanceSplit(b)).toEqual({ deadheadKm: 3, loadedKm: 7 });
+    });
+
+    it('returns null for a breakdown locked before the split existed — it never invents one', () => {
+      // A price locked pre-FB0a knows only the sum. Deriving a split from it would fabricate the exact figure
+      // an operator decides on, so the caller must be told there is none and show "—".
+      const legacy: PriceBreakdown = { baseFee: 5, distanceKm: 10, ratePerKm: 0.4, multiplier: 1, effectiveRate: 0.4, total: 9 };
+      expect(distanceSplit(legacy)).toBeNull();
+      expect(distanceSplit(undefined)).toBeNull();
+      expect(distanceSplit({ deadheadKm: 3, loadedKm: undefined })).toBeNull(); // half a split is not a split
+    });
+  });
+
+  describe('earningsPerKm', () => {
+    it('divides the earning by the TOTAL km, empty run included', () => {
+      // 5 + 10×0.4 = 9 over 10 km. The deadhead is in the denominator on purpose: a long haul reached by a
+      // long empty run is a worse job than a short one at the door, and only the total says so.
+      const b = computeFreightPrice({ baseFee: 5, ratePerKm: 0.4, deadheadKm: 3, tripKm: 7, multiplier: 1 });
+      expect(earningsPerKm(b)).toBe(0.9);
+    });
+
+    it('ranks a near load above a far one that pays the same', () => {
+      const near = computeFreightPrice({ baseFee: 10, ratePerKm: 0, deadheadKm: 2, tripKm: 8, multiplier: 1 });
+      const far = computeFreightPrice({ baseFee: 10, ratePerKm: 0, deadheadKm: 90, tripKm: 8, multiplier: 1 });
+      expect(near.total).toBe(far.total); // same money…
+      expect(earningsPerKm(near) as number).toBeGreaterThan(earningsPerKm(far) as number); // …not the same job
+    });
+
+    it('is null rather than a fabricated score when it cannot be computed', () => {
+      const legacy: PriceBreakdown = { baseFee: 5, distanceKm: 10, ratePerKm: 0.4, multiplier: 1, effectiveRate: 0.4, total: 9 };
+      expect(earningsPerKm(legacy)).toBeNull(); // no split
+      expect(earningsPerKm(undefined)).toBeNull();
+      // A zero-distance job would divide by zero; it sorts as unsortable, never to the top.
+      expect(earningsPerKm(computeFreightPrice({ baseFee: 5, ratePerKm: 0.4, deadheadKm: 0, tripKm: 0, multiplier: 1 }))).toBeNull();
     });
   });
 

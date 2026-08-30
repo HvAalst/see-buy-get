@@ -232,6 +232,21 @@ describe('freight pricing (S34)', () => {
     expect(priceBreakdownLines(undefined, t)).toEqual([]);
   });
 
+  it('FB0a: shows how much of the distance is run empty when the price carries the split', () => {
+    const split = priceBreakdownLines({ ...price, deadheadKm: 9, loadedKm: 3 }, t);
+    expect(split[2]).toBe('of which 9 km empty to the pickup, 3 km loaded');
+    // The split is informational — it sits under the distance line and moves no money.
+    expect(split[1]).toBe('12 km at 0.575 per km');
+  });
+
+  it('FB0a: says nothing about the split on an older price that has none — it never guesses one', () => {
+    // `price` predates the split. Deriving "12 km loaded, 0 empty" would be the most misleading line on the
+    // card: it is exactly the figure the driver is judging the job on.
+    expect(priceBreakdownLines(price, t).some((l) => l.includes('empty'))).toBe(false);
+    // Half a split is not a split.
+    expect(priceBreakdownLines({ ...price, deadheadKm: 9 }, t).some((l) => l.includes('empty'))).toBe(false);
+  });
+
   it('adds the earning to the spoken offer only when the load is priced', () => {
     const base = { message: 'Ready.', weightKg: 200, destLabel: 'Site', detourKm: 3 };
     expect(offerSpoken({ ...base, price }, t)).toContain('You earn 16.90');

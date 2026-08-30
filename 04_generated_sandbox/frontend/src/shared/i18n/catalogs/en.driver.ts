@@ -322,6 +322,7 @@ export const enDriver = {
   'driver.logic.offerSpokenEarn': '{base} You earn {amount}.',
   'driver.logic.baseFee': 'Base fee {amount}',
   'driver.logic.distanceAt': '{km} km at {rate} per km',
+  'driver.logic.distanceSplit': 'of which {empty} km empty to the pickup, {loaded} km loaded',
   'driver.logic.busyRate': 'Busy-time rate: {pct}% more per km',
   'driver.logic.quietRate': 'Quiet-time rate: {pct}% less per km',
   'driver.logic.hubLabel': '{name} (hub)',

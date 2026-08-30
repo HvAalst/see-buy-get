@@ -129,6 +129,10 @@ export interface SafetyItem {
 export interface PriceBreakdown {
   baseFee: number;
   distanceKm: number;
+  /** FB0a — the two halves of distanceKm. Absent on a price locked before the split existed; show nothing
+   *  rather than deriving one, since any derivation would invent the figure the driver is judging the job on. */
+  deadheadKm?: number;
+  loadedKm?: number;
   ratePerKm: number;
   multiplier: number;
   effectiveRate: number;

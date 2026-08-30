@@ -15,7 +15,7 @@ import { CargoNature, Equipment, VehicleCapability } from './cargo.types';
 import { VendorService } from './vendor.service';
 import { RatingService, belowFloor } from './rating.service';
 import { WalletGateService } from './wallet-gate.service';
-import { clampMultiplier, computeFreightPrice, freightMultiplier, shipperCharge, type PriceBreakdown } from './pricing';
+import { clampMultiplier, computeFreightPrice, distanceSplit, freightMultiplier, shipperCharge, type PriceBreakdown } from './pricing';
 import { isTempBreach, loadSafetyItems, missingKeys, requiredLoadKeys, requiredUnloadKeys, tempBand, unloadSafetyItems } from './heavy-cargo';
 import { MediaService } from './media.service';
 import { MarketPulseStore } from './market-pulse.store';
@@ -633,11 +633,17 @@ export class DispatchService {
       // (defaults resolved for a legacy vehicle) and the multiplier now, over the distance the offer was priced
       // on (deadhead + haul).
       const profile = this.pricingProfile(vehicle);
+      // FB0a — carry the offer's deadhead/loaded SPLIT into the lock, not just its sum. This breakdown is the
+      // durable one (it is stamped onto the freight below and is what any later market series reads), so
+      // re-deriving it as "deadheadKm = the whole distance, tripKm = 0" would persist a load whose every
+      // kilometre looks like empty running. The total is identical either way — only the labelling was wrong.
+      // An offer minted before FB0a has no split; it falls back to the old shape and prices to the same total.
+      const offerSplit = distanceSplit(offer.price);
       const breakdown = computeFreightPrice({
         baseFee: profile.baseFee,
         ratePerKm: profile.ratePerKm,
-        deadheadKm: offer.price?.distanceKm ?? 0,
-        tripKm: 0,
+        deadheadKm: offerSplit ? offerSplit.deadheadKm : offer.price?.distanceKm ?? 0,
+        tripKm: offerSplit ? offerSplit.loadedKm : 0,
         // S34b — lock against the market at the pickup's zone AT THIS INSTANT (a rule set since the offer, or a
         // shifted pulse, is honoured here); the corridor clamp still guarantees the driver's floor and ceiling.
         multiplier: freightMultiplier(new Date(now), { min: profile.min, max: profile.max }, this.market.factorFor(f.pickupLocation, now)),
