@@ -586,3 +586,28 @@
   flex: 1 1 0;
   min-width: 0;
 }
+
+/* ------------------------------------------------- FB2b: freight we posted, prices we answer -- */
+
+/* The mode/waiting pills under a posted load. */
+.freight__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+/* Take-it / no-thanks sit side by side: they are one decision with two answers, and stacking them makes
+   the refusal look like an afterthought. Both keep the 48px floor — this is tapped across a counter. */
+.freight__acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+/* A decided price stays readable — a shop holding out for a better number needs to see what it already
+   turned down. Dimmed, never hidden, and never so faint it cannot be read across a counter. */
+.row--muted {
+  opacity: 0.72;
+}

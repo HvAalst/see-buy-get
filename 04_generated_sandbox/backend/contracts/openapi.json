@@ -9261,9 +9261,29 @@
         }
       }
     },
+    "/v1/sbg/dispatch/posted": {
+      "get": {
+        "operationId": "Sbg.postedFreight",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostedFreightResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/dispatch/freight/{id}/proposals": {
       "post": {
         "operationId": "Sbg.proposeForFreight",
+        "summary": "",
+        "description": "A driver names their price for a load posted 'negotiate'. Reserves nothing — the poster's accept claims it.",
         "parameters": [
           {
             "name": "id",
@@ -13804,6 +13824,13 @@
       "BookFreightDto": {
         "type": "object",
         "properties": {
+          "commitMode": {
+            "type": "string",
+            "enum": [
+              "instant",
+              "negotiate"
+            ]
+          },
           "agentDid": {
             "type": "string"
           },
@@ -16470,6 +16497,86 @@
         "required": [
           "items",
           "total"
+        ]
+      },
+      "PostedFreightRow": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "scheduled",
+              "available",
+              "claimed",
+              "in_transit",
+              "delivered"
+            ]
+          },
+          "commitMode": {
+            "type": "string",
+            "enum": [
+              "instant",
+              "negotiate"
+            ]
+          },
+          "freightId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "destLabel": {
+            "type": "string"
+          },
+          "weightKg": {
+            "type": "number"
+          },
+          "maxSpend": {
+            "type": "number",
+            "description": "The cash cap the customer agreed — what a price is judged against."
+          },
+          "scheduledPickupAt": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "openProposals": {
+            "type": "number",
+            "description": "How many prices are waiting for an answer. The whole reason this row is on a screen."
+          },
+          "agreedPrice": {
+            "type": "number",
+            "description": "Set once the load is taken, so the poster sees the outcome without a second call."
+          }
+        },
+        "required": [
+          "status",
+          "commitMode",
+          "freightId",
+          "code",
+          "description",
+          "destLabel",
+          "weightKg",
+          "createdAt",
+          "openProposals"
+        ]
+      },
+      "PostedFreightResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PostedFreightRow"
+            }
+          }
+        },
+        "required": [
+          "items"
         ]
       },
       "ProposeFreightDto": {

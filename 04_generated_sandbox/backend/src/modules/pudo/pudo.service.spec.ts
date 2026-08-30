@@ -3360,6 +3360,48 @@ describe('PUDO Light', () => {
   const negotiable = (extra: Record<string, unknown> = {}) =>
     dispatch.registerFreight({ description: 'Awkward load', pickupLocation: pickupPt, pickupLabel: 'Depot', destLabel: 'Site', destLocation: { lat: -1.15, lng: 36.8 }, weightKg: 400, bulk: false, dimensionsCm: [120, 100, 80], commitMode: 'negotiate', ...extra });
 
+  it('FB2b: a poster sees THEIR loads and the prices waiting — and nobody else’s', () => {
+    // Scoped at the source, not by filtering the public list. A screen that filters someone else's data has
+    // already received it (the register epic's data-firewall lesson).
+    const a = negotiator('PA');
+    const mine = negotiable({ postedByDid: 'did:agent:mine' });
+    const theirs = negotiable({ postedByDid: 'did:agent:theirs' });
+    dispatch.propose({ freightId: mine.freightId, driverDid: a.did, from: pickupPt, price: 90 });
+
+    const rows = dispatch.postedBy('did:agent:mine');
+    expect(rows.map((r) => r.freightId)).toEqual([mine.freightId]);
+    expect(rows[0].openProposals).toBe(1);
+    expect(dispatch.postedBy('did:agent:theirs')[0].freightId).toBe(theirs.freightId);
+    expect(dispatch.postedBy('did:agent:theirs')[0].openProposals).toBe(0);
+    // An unknown poster gets nothing, not everything.
+    expect(dispatch.postedBy('')).toEqual([]);
+    expect(dispatch.postedBy('did:agent:nobody')).toEqual([]);
+  });
+
+  it('FB2b: the poster’s row carries no identifiers that join the load to a person', () => {
+    // It exists to answer prices, so it holds none of the joins a tracking view would need.
+    const f = negotiable({ postedByDid: 'did:agent:mine', buyerMobile: '+254700111222' });
+    const [row] = dispatch.postedBy('did:agent:mine');
+    expect(dispatch.listFreight().find((x) => x.freightId === f.freightId)!.buyerPhoneHash).toBeTruthy();
+    expect(row).not.toHaveProperty('buyerPhoneHash');
+    expect(row).not.toHaveProperty('trackingKey');
+    expect(row).not.toHaveProperty('claimedBy');
+  });
+
+  it('FB2b: the count follows the negotiation — decided prices stop waiting', () => {
+    const a = negotiator('PB');
+    const b = negotiator('PC');
+    const f = negotiable({ postedByDid: 'did:agent:mine' });
+    const pa = dispatch.propose({ freightId: f.freightId, driverDid: a.did, from: pickupPt, price: 70 });
+    dispatch.propose({ freightId: f.freightId, driverDid: b.did, from: pickupPt, price: 95 });
+    expect(dispatch.postedBy('did:agent:mine')[0].openProposals).toBe(2);
+    dispatch.acceptProposal(pa.proposalId);
+    const [after] = dispatch.postedBy('did:agent:mine');
+    expect(after.openProposals).toBe(0); // one accepted, the other superseded
+    expect(after.status).toBe('claimed');
+    expect(after.agreedPrice).toBe(70); // the outcome, without a second call
+  });
+
   it('FB0c: a load posted for negotiation is agreed on a price, and the acceptance is what claims it', () => {
     const d = negotiator('NG');
     const f = negotiable();

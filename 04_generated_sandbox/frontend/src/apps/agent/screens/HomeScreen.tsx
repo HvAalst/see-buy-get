@@ -23,6 +23,9 @@ const JOBS: Array<{ screen: Screen; icon: IconName; titleKey: MessageKey; subKey
   { screen: 'void', icon: 'refresh', titleKey: 'agent.void.title', subKey: 'agent.home.jobVoidSub' },
   { screen: 'rates', icon: 'scale', titleKey: 'agent.rates.title', subKey: 'agent.home.jobRatesSub' },
   { screen: 'consignments', icon: 'bag', titleKey: 'agent.consignments.title', subKey: 'agent.home.jobConsignmentsSub' },
+  // FB2b — answering a driver's price is occasional, not part of the daily counter loop, so it lives here
+  // as a job rather than taking a fifth slot in the bottom nav. The badge above carries the urgency.
+  { screen: 'freight', icon: 'truck', titleKey: 'agent.freight.title', subKey: 'agent.home.jobFreightSub' },
 ];
 
 const DAYS: Array<{ key: Weekday; labelKey: MessageKey }> = [

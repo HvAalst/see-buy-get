@@ -41,7 +41,35 @@ import type {
   ShelfGrid,
 } from './types';
 
-export type Screen = 'home' | 'accept' | 'handover' | 'bag' | 'release' | 'collect' | 'receivebag' | 'rates' | 'void' | 'records' | 'consignments' | 'shelf';
+export type Screen = 'home' | 'accept' | 'handover' | 'bag' | 'release' | 'collect' | 'receivebag' | 'rates' | 'void' | 'records' | 'consignments' | 'shelf' | 'freight';
+
+/** FB2b — one of the shop's posted loads, plus the prices waiting on it. */
+export interface PostedFreight {
+  freightId: string;
+  code: string;
+  description: string;
+  destLabel: string;
+  weightKg: number;
+  status: string;
+  commitMode: 'instant' | 'negotiate';
+  maxSpend?: number;
+  scheduledPickupAt?: string;
+  createdAt: string;
+  openProposals: number;
+  agreedPrice?: number;
+}
+
+export interface FreightPrice {
+  proposalId: string;
+  freightId: string;
+  driverDid: string;
+  price: number;
+  note?: string;
+  deadheadKm: number;
+  loadedKm: number;
+  status: 'open' | 'accepted' | 'declined' | 'withdrawn' | 'superseded';
+  createdAt: string;
+}
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
 
 /* --- R4 registers: the shop's parcel history + earnings, server-side searched / filtered / paged --- */
@@ -96,6 +124,13 @@ export interface AgentState {
    *  normal case — direct-to-Addis alongside one for the local hub), plus the bags already open here. */
   bagPlan: { groups: BagGroup[]; bags: OpenBag[]; staging?: BagStaging };
   bagPlanState: 'idle' | 'loading' | 'ready' | 'error';
+  /** FB2b — the loads this shop posted, and the prices waiting on the one being looked at. */
+  posted: PostedFreight[];
+  postedState: 'idle' | 'loading' | 'ready' | 'error';
+  /** Which posted load's prices are open. Null = the list. */
+  pricesFor: string | null;
+  prices: FreightPrice[];
+  pricesState: 'idle' | 'loading' | 'ready' | 'error';
   /** The bag being packed right now. `missed` is the server's verdict at the last seal attempt —
    *  parcels for that destination still on the shelf. `scan` + `lastAdded` are the scanning loop: what is
    *  in the field, and what went in last (spoken back, so the counter never has to hunt the list). */
@@ -188,6 +223,11 @@ const INITIAL: AgentState = {
   shopParcelsState: 'idle',
   bagPlan: { groups: [], bags: [] },
   bagPlanState: 'idle',
+  posted: [],
+  postedState: 'idle',
+  pricesFor: null,
+  prices: [],
+  pricesState: 'idle',
   bag: null,
   rates: null,
   ratesState: 'idle',
@@ -650,6 +690,39 @@ export function useAgentApp() {
     setState((s) => ({ ...s, shelf: narrow<ShelfGrid>(r.data), shelfState: 'ready', shelfError: null }));
   }, [client, did]);
 
+  /* ------------------------------------------ FB2b: answering prices on our own loads */
+  // Declared above go() because go() opens the screen that needs them — a loader referenced before it is
+  // defined is a TDZ crash the moment that tab is tapped, not a type-only complaint.
+
+  const loadPosted = useCallback(async () => {
+    if (!client) return;
+    setState((s) => ({ ...s, postedState: s.postedState === 'ready' ? s.postedState : 'loading' }));
+    const r = await client.api.postedFreight();
+    if (r.error) {
+      setState((s) => ({ ...s, postedState: 'error' }));
+      return fail(r.error);
+    }
+    const page = narrow<{ items?: PostedFreight[] }>(r.data);
+    setState((s) => ({ ...s, posted: page.items ?? [], postedState: 'ready' }));
+  }, [client, fail]);
+
+  const openPrices = useCallback(
+    async (freightId: string | null) => {
+      setState((s) => ({ ...s, pricesFor: freightId, prices: freightId ? s.prices : [], pricesState: freightId ? 'loading' : 'idle' }));
+      if (!client || !freightId) return;
+      const r = await client.api.freightProposals(freightId);
+      if (r.error) {
+        setState((s) => ({ ...s, pricesState: 'error' }));
+        return fail(r.error);
+      }
+      const page = narrow<{ items?: FreightPrice[] }>(r.data);
+      // Guarded on the id still being the one asked for: a shop tapping through two loads quickly must not
+      // have the slower answer overwrite the newer one.
+      setState((s) => (s.pricesFor === freightId ? { ...s, prices: page.items ?? [], pricesState: 'ready' } : s));
+    },
+    [client, fail],
+  );
+
   const go = useCallback(
     (screen: Screen) => {
       setState((s) => ({
@@ -665,9 +738,10 @@ export function useAgentApp() {
       if (screen === 'rates') void loadRates();
       if (screen === 'accept') void loadAcceptPoints();
       if (screen === 'consignments') void loadConsignments();
+      if (screen === 'freight') void loadPosted();
       if (screen === 'shelf') void loadShelf();
     },
-    [loadShopParcels, loadBagPlan, loadRates, loadAcceptPoints, loadConsignments, loadShelf],
+    [loadShopParcels, loadBagPlan, loadRates, loadAcceptPoints, loadConsignments, loadShelf, loadPosted],
   );
 
   /* ---------------------------------------------------------------- forms */
@@ -1012,6 +1086,9 @@ export function useAgentApp() {
         scheduledPickupAt: plannedPickupIso(f),
         // Only meaningful for a planned load; omit it for an immediate one so the server keeps its default.
         allowEarlyClaim: f.freightWhen === 'planned' ? f.allowEarlyClaim : undefined,
+        // FB2b — sent only when chosen, so an ordinary booking keeps the server's default rather than
+        // restating it. Absent reads as 'instant', which is how every counter booking has behaved.
+        commitMode: f.negotiate ? 'negotiate' : undefined,
       });
       if (r.error) return fail(r.error);
       buzz();
@@ -1021,6 +1098,41 @@ export function useAgentApp() {
       await refresh();
     });
   }, [client, did, run, fail, pushToast, refresh]);
+
+  /**
+   * Take a price — which is what CLAIMS the load, not a separate confirmation step.
+   *
+   * The refusals are the point of this handler. A price above the customer's cash cap is refused by the
+   * server with BUDGET_EXCEEDED and the negotiation is left exactly as it was, so the shop can go back to the
+   * customer for more money and take the same price afterwards. Nothing is optimistically marked accepted:
+   * the driver may have de-coupled or filled up since naming it, and the server re-checks all of that.
+   */
+  const acceptPrice = useCallback(
+    async (p: FreightPrice) => {
+      if (!client) return;
+      await run(`accept-price:${p.proposalId}`, async () => {
+        const r = await client.api.acceptProposal(p.proposalId);
+        if (r.error) return fail(r.error);
+        buzz();
+        pushToast({ tone: 'ok', icon: 'truck', title: t('agent.freight.acceptedToast'), detail: t('agent.freight.acceptedToastDetail', { amount: p.price.toFixed(2) }) });
+        await Promise.all([loadPosted(), openPrices(p.freightId)]);
+      });
+    },
+    [client, run, fail, pushToast, t, loadPosted, openPrices],
+  );
+
+  const declinePrice = useCallback(
+    async (p: FreightPrice) => {
+      if (!client) return;
+      await run(`decline-price:${p.proposalId}`, async () => {
+        const r = await client.api.declineProposal(p.proposalId);
+        if (r.error) return fail(r.error);
+        // No toast: saying no to one price is a small, reversible-in-spirit act, and the list redraws to show it.
+        await Promise.all([loadPosted(), openPrices(p.freightId)]);
+      });
+    },
+    [client, run, fail, loadPosted, openPrices],
+  );
 
   /** F2 — dismiss the booked-freight receipt and return to the shop home. */
   const dismissBookedFreight = useCallback(() => setState((s) => ({ ...s, bookedFreight: null, screen: 'home' })), []);
@@ -1572,6 +1684,10 @@ export function useAgentApp() {
       dismissAcceptedLabel,
       submitBookFreight,
       dismissBookedFreight,
+      loadPosted,
+      openPrices,
+      acceptPrice,
+      declinePrice,
       loadConsignments,
       openConsignment,
       depositConsignment,

@@ -23,7 +23,7 @@ import { VehicleService } from './vehicle.service';
 import { DriverService } from './driver.service';
 import { FleetService } from './fleet.service';
 import { DispatchService } from './dispatch.service';
-import { FreightBoardResponse, FreightProposalsResponse } from './dispatch.types';
+import { FreightBoardResponse, FreightProposalsResponse, PostedFreightResponse } from './dispatch.types';
 import { MarketPulseService } from './market-pulse.service';
 import { CargoService } from './cargo.service';
 import { FleetManagerService } from './fleet-manager.service';
@@ -488,6 +488,7 @@ export class SbgController {
       originEquipment: origin.equipment,
       destEquipment: dest.equipment,
       postedByDid: agentDid, // FB0c — the booking shop negotiates for it, even though the cash settles off-platform
+      commitMode: dto.commitMode,
       buyerMobile: dto.customerMobile, // hashed on the freight (never the cleartext) so the customer can track it
       maxSpend: dto.budgetCap, // the cash cap → dispatch won't OFFER or let a driver CLAIM above it
       scheduledPickupAt: dto.scheduledPickupAt,
@@ -1768,6 +1769,17 @@ export class SbgController {
   }
 
   /* ------------------------------------------- FB0c: negotiate before commit -- */
+
+  /**
+   * FB2b — the loads this shop or vendor posted, each with how many prices are waiting for an answer.
+   *
+   * Scoped at the source, never by filtering the public list: an operator may name another party, everyone
+   * else is pinned to their own token.
+   */
+  @Get('dispatch/posted')
+  postedFreight(@Query('did') did: string | undefined, @Actor() actor: IntrospectionResult): PostedFreightResponse {
+    return { items: this.dispatch.postedBy(actingDid(actor, did)) };
+  }
 
   /** A driver names their price for a load posted 'negotiate'. Reserves nothing — the poster's accept claims it. */
   @Post('dispatch/freight/:id/proposals')

@@ -27,7 +27,7 @@ import { Router, ROUTER } from './router';
 import { DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NUDGE_RADIUS_KM, OFFER_TTL_MIN, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
-import { BoardRow, Claimable, ClaimableKind, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, Offer, RoutePlan } from './dispatch.types';
+import { BoardRow, Claimable, ClaimableKind, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, Offer, PostedFreightRow, RoutePlan } from './dispatch.types';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
 
 /**
@@ -905,6 +905,39 @@ export class DispatchService {
     };
     this.proposals.set(proposal.proposalId, proposal);
     return proposal;
+  }
+
+  /**
+   * FB2b — the loads THIS shop posted, newest first, each with how many prices are waiting.
+   *
+   * Owner-scoped at the source rather than by filtering the public list: a screen that filters someone
+   * else's data has already received it, and the register epic's data-firewall lesson was exactly this.
+   * Matches on postedByDid OR shipperDid — usually the same party, but a counter booking has a shop that
+   * posted it and no shipper at all, and a diverted vendor order has a shipper who never touched a counter.
+   */
+  postedBy(did: string): PostedFreightRow[] {
+    if (!did) return [];
+    const open = new Map<string, number>();
+    for (const p of this.proposals.values()) {
+      if (p.status === 'open') open.set(p.freightId, (open.get(p.freightId) ?? 0) + 1);
+    }
+    return [...this.freights.values()]
+      .filter((f) => f.postedByDid === did || f.shipperDid === did)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map((f) => ({
+        freightId: f.freightId,
+        code: f.code,
+        description: f.description,
+        destLabel: f.destLabel,
+        weightKg: f.weightKg,
+        status: f.status,
+        commitMode: commitModeOf(f),
+        maxSpend: f.maxSpend,
+        scheduledPickupAt: f.scheduledPickupAt,
+        createdAt: f.createdAt,
+        openProposals: open.get(f.freightId) ?? 0,
+        agreedPrice: f.lockedPrice,
+      }));
   }
 
   /** The proposals on a load, newest first. The poster's whole view of the negotiation. */

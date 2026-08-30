@@ -178,6 +178,10 @@ export interface AcceptForm {
   freightDate: string; // a datetime-local value (local time), when planned
   allowEarlyClaim: boolean; // planned: may a driver reserve it before its date (default true)
   customerMobile: string; // optional — the walk-in customer's phone (joins it to their "my shipments")
+  // FB2b — post the load for drivers to NAME A PRICE the counter then accepts, rather than the first fit
+  // truck taking it at the computed rate. The cash cap still binds: a price above what the customer agreed
+  // cannot be accepted, whoever named it.
+  negotiate: boolean;
 }
 
 export const EMPTY_ACCEPT: AcceptForm = {
@@ -198,6 +202,7 @@ export const EMPTY_ACCEPT: AcceptForm = {
   freightDate: '',
   allowEarlyClaim: true,
   customerMobile: '',
+  negotiate: false,
 };
 
 /** The smallest measurement we accept, in cm — 1 mm, so a thin item (a letter ~0.5 cm) is shippable.

@@ -4,6 +4,7 @@ import { useT } from '../../shared/i18n';
 import { AcceptScreen } from './screens/AcceptScreen';
 import { CollectScreen } from './screens/CollectScreen';
 import { ConsignmentsScreen } from './screens/ConsignmentsScreen';
+import { FreightScreen } from './screens/FreightScreen';
 import { BagScreen } from './screens/BagScreen';
 import { HandoverScreen } from './screens/HandoverScreen';
 import { HomeScreen } from './screens/HomeScreen';
@@ -125,6 +126,8 @@ function ScreenRouter({ screen, state, actions }: { screen: Screen; state: Agent
       return <RecordsScreen state={state} actions={actions} />;
     case 'shelf':
       return <ShelfScreen state={state} actions={actions} />;
+    case 'freight':
+      return <FreightScreen state={state} actions={actions} />;
     default:
       return <HomeScreen state={state} actions={actions} />;
   }

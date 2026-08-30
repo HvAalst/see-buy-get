@@ -295,6 +295,38 @@ export class FreightProposalsResponse {
   items: FreightProposal[];
 }
 
+/**
+ * FB2b — one of MY posted loads, as the shop that posted it sees it.
+ *
+ * A projection, not the raw Freight: the poster needs to decide, not to inspect. It deliberately carries no
+ * buyerPhoneHash, no trackingKey and no claimedBy — a screen that only answers prices has no business
+ * holding the identifiers that join a load to a person.
+ */
+export class PostedFreightRow {
+  freightId: string;
+  code: string;
+  description: string;
+  destLabel: string;
+  weightKg: number;
+  @ApiProperty({ enum: FREIGHT_STATUSES })
+  status: FreightStatus;
+  @ApiProperty({ enum: ['instant', 'negotiate'] })
+  commitMode: FreightCommitMode;
+  /** The cash cap the customer agreed — what a price is judged against. */
+  maxSpend?: number;
+  scheduledPickupAt?: string;
+  createdAt: string;
+  /** How many prices are waiting for an answer. The whole reason this row is on a screen. */
+  openProposals: number;
+  /** Set once the load is taken, so the poster sees the outcome without a second call. */
+  agreedPrice?: number;
+}
+
+export class PostedFreightResponse {
+  @ApiProperty({ type: [PostedFreightRow] })
+  items: PostedFreightRow[];
+}
+
 /** The buyer-facing, PII-free projection of a diverted freight job — the freight analogue of a
  *  ConsumerParcelView, shown in the buyer's "my shipments" so a diverted order never disappears. */
 export class FreightShipmentView {

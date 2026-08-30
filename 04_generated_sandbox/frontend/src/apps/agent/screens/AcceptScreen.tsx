@@ -467,6 +467,14 @@ function FreightBookingCard({ state, actions }: { state: AgentState; actions: Ag
         </>
       ) : null}
 
+      {/* FB2b — how the load is TAKEN, as against when it is picked up. An awkward walk-up is exactly the
+          case where the formula's price is worst and a driver's own number is best. */}
+      <label class="checkline" style="margin-top:12px">
+        <input type="checkbox" checked={f.negotiate} onChange={(e) => actions.setAccept({ negotiate: e.currentTarget.checked })} />
+        <span>{t('agent.accept.negotiate')}</span>
+      </label>
+      <p class="card__note">{t('agent.accept.negotiateNote')}</p>
+
       <div class="field" style="margin-top:12px">
         <label class="field__label" for="freight-phone">
           {t('agent.accept.customerPhone')}

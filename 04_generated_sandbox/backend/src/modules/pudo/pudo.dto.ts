@@ -875,6 +875,10 @@ export class BookFreightDto {
   @IsString() destPudoDid!: string; // a network PUDO — its coordinates + equipment drive routing, pricing and the site-gap advisory
   @IsOptional() @IsString() customerMobile?: string; // optional — the walk-in customer's phone (joins it to their "my shipments")
   @IsNumber() @Min(0.01) budgetCap!: number; // the cash cap the customer prepays → the freight's maxSpend ceiling
+  /** FB0c/FB2b — 'negotiate' posts the load for drivers to name a price the counter then accepts, instead of
+   *  the first fit truck taking it at the computed rate. The cash cap still binds either way: a price above
+   *  what the customer agreed cannot be accepted, whoever named it. */
+  @IsOptional() @IsIn(['instant', 'negotiate']) @ApiPropertyOptional({ enum: ['instant', 'negotiate'] }) commitMode?: 'instant' | 'negotiate';
   @IsOptional() @Matches(SCHEDULED_PICKUP_RE, { message: SCHEDULED_PICKUP_MSG }) scheduledPickupAt?: string; // absent = ship now; present = planned
   @IsOptional() @IsBoolean() allowEarlyClaim?: boolean; // planned only: may a driver reserve it before the date (default true)
 }

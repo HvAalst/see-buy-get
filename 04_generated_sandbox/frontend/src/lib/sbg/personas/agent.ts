@@ -157,7 +157,26 @@ export function createAgentApi(sbg: SbgClient) {
       budgetCap: number;
       scheduledPickupAt?: string;
       allowEarlyClaim?: boolean;
+      /** FB2b — 'negotiate' posts the load for drivers to name a price the counter then accepts, rather than
+       *  the first fit truck taking it at the computed rate. The cash cap binds either way. */
+      commitMode?: 'instant' | 'negotiate';
     }) => sbg.request((c) => c.POST('/v1/sbg/parcels/book-freight', { body })),
+
+    /** FB2b — the loads THIS shop posted, each with how many prices are waiting for an answer. Owner-scoped
+     *  server-side; the shop is pinned to its own token. */
+    postedFreight: () => sbg.request((c) => c.GET('/v1/sbg/dispatch/posted', {})),
+
+    /** FB2b — the prices offered on one of my loads, newest first. */
+    freightProposals: (freightId: string) =>
+      sbg.request((c) => c.GET('/v1/sbg/dispatch/freight/{id}/proposals', { params: { path: { id: freightId } } })),
+
+    /** FB2b — take a price. THIS is what claims the load; it is not a separate confirmation step. */
+    acceptProposal: (proposalId: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/dispatch/proposals/{id}/accept', { params: { path: { id: proposalId } } })),
+
+    /** FB2b — say no to one price. The load, and every other price on it, stay open. */
+    declineProposal: (proposalId: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/dispatch/proposals/{id}/decline', { params: { path: { id: proposalId } } })),
 
     /** F3 — open a consolidation LOT for a durable dry commodity (owner-scoped; the acting shop is the owner
      *  and its site becomes the freight's pickup). A perishable commodity is refused server-side. */
