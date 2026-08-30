@@ -24,7 +24,7 @@ function freight(over: Partial<Freight> = {}): Freight {
     destLocation: { lat: 1, lng: 0 }, // 100 km
     weightKg: 4000,
     fragile: false,
-    bulk: false,
+    packaging: 'palletised',
     cargoClass: 'P4',
     natureCode: 'GEN',
     requiredCapabilities: [],

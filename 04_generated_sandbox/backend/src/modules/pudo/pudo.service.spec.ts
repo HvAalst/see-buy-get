@@ -2309,7 +2309,10 @@ describe('PUDO Light', () => {
     expect(truck.plate).toBe('T-1');
     expect(truck.capacityKg).toBe(12_000);
     expect(truck.coldChain).toBe(true);
-    expect(truck.carriesBulk).toBe(true);
+    // FB5 — a reefer cannot take LOOSE goods, and carriesBulk now means only that. It read true until the
+    // subtype started deciding, because every truck CLASS defaults it true and the flag used to be read as
+    // "can carry sacks" — which is true of any truck, and is not what the matcher does with it.
+    expect(truck.carriesBulk).toBe(false);
     expect(truck.verified).toBe(true); // full registration + factory ID
   });
 
@@ -3069,9 +3072,11 @@ describe('PUDO Light', () => {
   it('completes the bulk-freight lifecycle (register → claim → pickup → deliver, capacity released)', () => {
     const d = drivers.register({ displayName: 'Tk', fullName: 'T', nationalId: 'FR-1', mobile: '+254fr1', licenceClasses: ['truck'], licenceNumber: 'L-FR', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
     drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' }); drivers.decideKyc(d.did, true);
-    const truck = vehicles.register({ plate: 'TK-1', vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 10_000, ownerName: 'T' });
+    // FB5 — loose cement is a TIPPER's load. It rode a flatbed here only because every truck was bulk-capable
+    // by class default; now the body has to match the packaging, which is the point of the slice.
+    const truck = vehicles.register({ plate: 'TK-1', vehicleClass: 'truck', truckSubtype: 'tipper', capacityKg: 10_000, ownerName: 'T' });
     fleet.couple(d.did, truck.vehicleId);
-    const f = dispatch.registerFreight({ description: 'Cement 5t', pickupLocation: { lat: -1.2, lng: 36.8 }, pickupLabel: 'Depot', destLabel: 'Site', weightKg: 5000, bulk: true });
+    const f = dispatch.registerFreight({ description: 'Cement 5t', pickupLocation: { lat: -1.2, lng: 36.8 }, pickupLabel: 'Depot', destLabel: 'Site', weightKg: 5000, packaging: 'loose' });
     const [offer] = dispatch.suggest(d.did, { from: { lat: -1.2, lng: 36.8 }, to: { lat: -1.25, lng: 36.85 } });
     dispatch.claim(offer.offerId);
     expect(dispatch.remainingCapacity(d.did)).toBe(5000); // 10000 − 5000 reserved
@@ -3098,7 +3103,7 @@ describe('PUDO Light', () => {
     const vendor = vendors.register({ name: 'PriceVendor' });
     vendors.topUp(vendor.vendorId, 500);
     const pickup = { lat: -1.2, lng: 36.8 };
-    const f = dispatch.registerFreight({ description: 'Machinery', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', destLocation: pickup, weightKg: 200, bulk: false, shipperDid: vendor.vendorId });
+    const f = dispatch.registerFreight({ description: 'Machinery', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', destLocation: pickup, weightKg: 200, packaging: 'palletised', shipperDid: vendor.vendorId });
 
     // Driver starts AT the pickup and the haul is zero-length → the price is the flat base fee only, at an
     // off-peak neutral multiplier. A fixed 11:00 clock keeps the multiplier deterministic (off-peak → 1.0).
@@ -3140,7 +3145,7 @@ describe('PUDO Light', () => {
     const start = { lat: -1.22, lng: 36.8 };
     const pickup = { lat: -1.2, lng: 36.8 };
     const dest = { lat: -1.15, lng: 36.8 };
-    const f = dispatch.registerFreight({ description: 'Machinery', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', destLocation: dest, weightKg: 200, bulk: false, shipperDid: vendor.vendorId });
+    const f = dispatch.registerFreight({ description: 'Machinery', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', destLocation: dest, weightKg: 200, packaging: 'palletised', shipperDid: vendor.vendorId });
 
     const noon = new Date('2026-07-22T11:00:00').getTime();
     const [offer] = dispatch.suggest(d.did, { from: start, to: dest }, noon);
@@ -3168,7 +3173,7 @@ describe('PUDO Light', () => {
       pickupLabel: 'Depot',
       destLabel: 'Site',
       weightKg: 400,
-      bulk: false,
+      packaging: 'palletised',
       dimensionsCm: [120, 100, 80],
     });
     // Until FB0b these dimensions were read to classify the cargo and then dropped on the floor.
@@ -3177,7 +3182,9 @@ describe('PUDO Light', () => {
   });
 
   it('FB0b: an unmeasured freight still gets a body, labelled as the weaker claim it is', () => {
-    const f = dispatch.registerFreight({ description: 'Sand', pickupLocation: { lat: -1.2, lng: 36.8 }, pickupLabel: 'Quarry', destLabel: 'Site', weightKg: 24_000 });
+    // FB5 — sand is stated LOOSE rather than left to the deployment default. Nothing about 24 t implies it:
+    // 24 t of bagged cement is a flatbed, and only the person at the quarry knows which this is.
+    const f = dispatch.registerFreight({ description: 'Sand', pickupLocation: { lat: -1.2, lng: 36.8 }, pickupLabel: 'Quarry', destLabel: 'Site', weightKg: 24_000, packaging: 'loose' });
     expect(f.dimensionsCm).toBeUndefined(); // loose bulk genuinely has no shape
     expect(f.bodyDerived).toEqual({ body: 'tipper', basis: 'weight-only' });
   });
@@ -3200,7 +3207,7 @@ describe('PUDO Light', () => {
       destLabel: 'Site',
       destLocation: pickup,
       weightKg: 400,
-      bulk: false,
+      packaging: 'palletised',
       dimensionsCm: [120, 100, 80],
       bodyHint: 'skeletal', // …and the truck is a flatbed. The pick disagrees with the vehicle AND the cargo.
     });
@@ -3216,11 +3223,11 @@ describe('PUDO Light', () => {
     // an operator can see it and argue with it. Enforcing it here, before any screen can show it, would drop
     // matching drivers with no explanation — invisible exclusion again. It gates at the board (FB1), not here.
     const pickup = { lat: -1.2, lng: 36.8 };
-    const f = dispatch.registerFreight({ description: 'Electronics', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', weightKg: 400, bulk: false, dimensionsCm: [120, 100, 80], excludedBodies: ['flatbed', 'dropside'] });
+    const f = dispatch.registerFreight({ description: 'Electronics', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', weightKg: 400, packaging: 'palletised', dimensionsCm: [120, 100, 80], excludedBodies: ['flatbed', 'dropside'] });
     expect(f.excludedBodies).toEqual(['flatbed', 'dropside']);
     // An empty list is not an exclusion — it is stored as absent, so "no preference" and "an empty preference"
     // cannot drift apart downstream.
-    const none = dispatch.registerFreight({ description: 'Electronics', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', weightKg: 400, bulk: false, excludedBodies: [] });
+    const none = dispatch.registerFreight({ description: 'Electronics', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', weightKg: 400, packaging: 'palletised', excludedBodies: [] });
     expect(none.excludedBodies).toBeUndefined();
   });
 
@@ -3236,8 +3243,8 @@ describe('PUDO Light', () => {
     fleet.couple(d.did, v.vehicleId);
 
     const here = { lat: -1.2, lng: 36.8 };
-    const takeable = dispatch.registerFreight({ description: 'Pallets', pickupLocation: here, pickupLabel: 'A', destLabel: 'B', destLocation: { lat: -1.15, lng: 36.8 }, weightKg: 400, bulk: false, dimensionsCm: [120, 100, 80] });
-    const tooHeavy = dispatch.registerFreight({ description: 'Girders', pickupLocation: here, pickupLabel: 'A', destLabel: 'B', destLocation: { lat: -1.15, lng: 36.8 }, weightKg: 26_000, bulk: false, dimensionsCm: [1400, 200, 150] });
+    const takeable = dispatch.registerFreight({ description: 'Pallets', pickupLocation: here, pickupLabel: 'A', destLabel: 'B', destLocation: { lat: -1.15, lng: 36.8 }, weightKg: 400, packaging: 'palletised', dimensionsCm: [120, 100, 80] });
+    const tooHeavy = dispatch.registerFreight({ description: 'Girders', pickupLocation: here, pickupLabel: 'A', destLabel: 'B', destLocation: { lat: -1.15, lng: 36.8 }, weightKg: 26_000, packaging: 'palletised', dimensionsCm: [1400, 200, 150] });
 
     const rows = dispatch.board({ driverDid: d.did, from: here });
     // BOTH are on the board.
@@ -3257,7 +3264,7 @@ describe('PUDO Light', () => {
 
     const here = { lat: -1.2, lng: 36.8 };
     const farAway = { lat: -1.9, lng: 36.8 }; // ~78 km south — far outside MAX_WORK_RADIUS_KM
-    const far = dispatch.registerFreight({ description: 'Far load', pickupLocation: farAway, pickupLabel: 'Far', destLabel: 'B', destLocation: { lat: -1.95, lng: 36.8 }, weightKg: 400, bulk: false });
+    const far = dispatch.registerFreight({ description: 'Far load', pickupLocation: farAway, pickupLabel: 'Far', destLabel: 'B', destLocation: { lat: -1.95, lng: 36.8 }, weightKg: 400, packaging: 'palletised' });
 
     // The push cannot see it, and should not: an interruption ought to be about something nearby.
     expect(dispatch.suggestNearby(d.did, here, MAX_WORK_RADIUS_KM).filter((o) => o.ref === far.freightId)).toHaveLength(0);
@@ -3275,8 +3282,8 @@ describe('PUDO Light', () => {
     const v = vehicles.register({ plate: 'BR-1', vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 10_000, ownerName: 'X', equipment: ['TLT'] });
     fleet.couple(d.did, v.vehicleId);
     const here = { lat: -1.2, lng: 36.8 };
-    const near = dispatch.registerFreight({ description: 'Near', pickupLocation: here, pickupLabel: 'A', destLabel: 'B', weightKg: 400, bulk: false });
-    const far = dispatch.registerFreight({ description: 'Far', pickupLocation: { lat: -1.9, lng: 36.8 }, pickupLabel: 'Far', destLabel: 'B', weightKg: 400, bulk: false });
+    const near = dispatch.registerFreight({ description: 'Near', pickupLocation: here, pickupLabel: 'A', destLabel: 'B', weightKg: 400, packaging: 'palletised' });
+    const far = dispatch.registerFreight({ description: 'Far', pickupLocation: { lat: -1.9, lng: 36.8 }, pickupLabel: 'Far', destLabel: 'B', weightKg: 400, packaging: 'palletised' });
 
     const all = dispatch.board({ driverDid: d.did, from: here }).map((r) => r.freightId);
     expect(all).toContain(near.freightId);
@@ -3296,8 +3303,8 @@ describe('PUDO Light', () => {
     const here = { lat: -1.2, lng: 36.8 };
     // Same haul, one at the door and one 78 km away. A flat base fee dominates, so the near one earns far more
     // per kilometre turned — which proximity sorting would also get right, but for the platform's reason.
-    const atDoor = dispatch.registerFreight({ description: 'At the door', pickupLocation: here, pickupLabel: 'A', destLabel: 'B', destLocation: { lat: -1.18, lng: 36.8 }, weightKg: 400, bulk: false });
-    const wayOut = dispatch.registerFreight({ description: 'Way out', pickupLocation: { lat: -1.9, lng: 36.8 }, pickupLabel: 'Far', destLabel: 'B', destLocation: { lat: -1.88, lng: 36.8 }, weightKg: 400, bulk: false });
+    const atDoor = dispatch.registerFreight({ description: 'At the door', pickupLocation: here, pickupLabel: 'A', destLabel: 'B', destLocation: { lat: -1.18, lng: 36.8 }, weightKg: 400, packaging: 'palletised' });
+    const wayOut = dispatch.registerFreight({ description: 'Way out', pickupLocation: { lat: -1.9, lng: 36.8 }, pickupLabel: 'Far', destLabel: 'B', destLocation: { lat: -1.88, lng: 36.8 }, weightKg: 400, packaging: 'palletised' });
 
     const rows = dispatch.board({ driverDid: d.did, from: here });
     expect(rows[0].freightId).toBe(atDoor.freightId);
@@ -3311,7 +3318,7 @@ describe('PUDO Light', () => {
     drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
     drivers.decideKyc(d.did, true);
     const here = { lat: -1.2, lng: 36.8 };
-    const f = dispatch.registerFreight({ description: 'Pallets', pickupLocation: here, pickupLabel: 'A', destLabel: 'B', weightKg: 400, bulk: false });
+    const f = dispatch.registerFreight({ description: 'Pallets', pickupLocation: here, pickupLabel: 'A', destLabel: 'B', weightKg: 400, packaging: 'palletised' });
     const row = dispatch.board({ driverDid: d.did, from: here }).find((r) => r.freightId === f.freightId)!;
     expect(row.price).toBeUndefined();
     expect(row.earningsPerKm ?? null).toBeNull();
@@ -3326,7 +3333,7 @@ describe('PUDO Light', () => {
     const v = vehicles.register({ plate: 'BN-1', vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 10_000, ownerName: 'X', equipment: ['TLT'] });
     fleet.couple(d.did, v.vehicleId);
     const here = { lat: -1.2, lng: 36.8 };
-    const f = dispatch.registerFreight({ description: 'Awkward', pickupLocation: here, pickupLabel: 'A', destLabel: 'B', weightKg: 400, bulk: false, commitMode: 'negotiate' });
+    const f = dispatch.registerFreight({ description: 'Awkward', pickupLocation: here, pickupLabel: 'A', destLabel: 'B', weightKg: 400, packaging: 'palletised', commitMode: 'negotiate' });
     expect(dispatch.suggest(d.did, { from: here, to: here }).filter((o) => o.ref === f.freightId)).toHaveLength(0);
     const row = dispatch.board({ driverDid: d.did, from: here }).find((r) => r.freightId === f.freightId)!;
     expect(row).toBeDefined();
@@ -3340,7 +3347,7 @@ describe('PUDO Light', () => {
     const v = vehicles.register({ plate: 'BC-1', vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 10_000, ownerName: 'X', equipment: ['TLT'], baseFee: 10, pricePerKm: 0.5 });
     fleet.couple(d.did, v.vehicleId);
     const here = { lat: -1.2, lng: 36.8 };
-    const f = dispatch.registerFreight({ description: 'Pallets', pickupLocation: here, pickupLabel: 'A', destLabel: 'B', destLocation: here, weightKg: 400, bulk: false });
+    const f = dispatch.registerFreight({ description: 'Pallets', pickupLocation: here, pickupLabel: 'A', destLabel: 'B', destLocation: here, weightKg: 400, packaging: 'palletised' });
     expect(dispatch.board({ driverDid: d.did, from: here }).some((r) => r.freightId === f.freightId)).toBe(true);
     const [offer] = dispatch.suggest(d.did, { from: here, to: here }).filter((o) => o.ref === f.freightId);
     dispatch.claim(offer.offerId);
@@ -3359,7 +3366,7 @@ describe('PUDO Light', () => {
   };
   const pickupPt = { lat: -1.2, lng: 36.8 };
   const negotiable = (extra: Record<string, unknown> = {}) =>
-    dispatch.registerFreight({ description: 'Awkward load', pickupLocation: pickupPt, pickupLabel: 'Depot', destLabel: 'Site', destLocation: { lat: -1.15, lng: 36.8 }, weightKg: 400, bulk: false, dimensionsCm: [120, 100, 80], commitMode: 'negotiate', ...extra });
+    dispatch.registerFreight({ description: 'Awkward load', pickupLocation: pickupPt, pickupLabel: 'Depot', destLabel: 'Site', destLocation: { lat: -1.15, lng: 36.8 }, weightKg: 400, packaging: 'palletised', dimensionsCm: [120, 100, 80], commitMode: 'negotiate', ...extra });
 
   /* --- FB3b: the public market --- */
 
@@ -3368,7 +3375,7 @@ describe('PUDO Light', () => {
     // is no vehicle whose rate card to price against — which strips the one number somebody deciding whether
     // to buy a truck came for. The public market prices at the network's default instead, and says so.
     const here = { lat: -1.2, lng: 36.8 };
-    const f = dispatch.registerFreight({ description: 'Pallets', pickupLocation: here, pickupLabel: 'Mama Njeri Shop', destLabel: 'Site', destLocation: { lat: -1.15, lng: 36.8 }, weightKg: 400, bulk: false, dimensionsCm: [120, 100, 80] });
+    const f = dispatch.registerFreight({ description: 'Pallets', pickupLocation: here, pickupLabel: 'Mama Njeri Shop', destLabel: 'Site', destLocation: { lat: -1.15, lng: 36.8 }, weightKg: 400, packaging: 'palletised', dimensionsCm: [120, 100, 80] });
     expect(f).toBeDefined();
 
     const rows = dispatch.publicMarket({ from: here });
@@ -3387,7 +3394,7 @@ describe('PUDO Light', () => {
     // A pin deliberately OFF the rounding grid, so the coarsening has something to do. (-1.2/36.8 sits
     // exactly on it, which would make the assertion below pass while proving nothing.)
     const here = { lat: -1.2137, lng: 36.8241 };
-    dispatch.registerFreight({ description: 'Three crates of copper cable', pickupLocation: here, pickupLabel: 'Mama Njeri Shop', destLabel: 'Site', destLocation: { lat: -1.15, lng: 36.8 }, weightKg: 400, bulk: false, dimensionsCm: [120, 100, 80] });
+    dispatch.registerFreight({ description: 'Three crates of copper cable', pickupLocation: here, pickupLabel: 'Mama Njeri Shop', destLabel: 'Site', destLocation: { lat: -1.15, lng: 36.8 }, weightKg: 400, packaging: 'palletised', dimensionsCm: [120, 100, 80] });
     const [row] = dispatch.publicMarket({ from: here });
 
     const serialised = JSON.stringify(row);
@@ -3409,11 +3416,11 @@ describe('PUDO Light', () => {
   it('FB3b: names a coarse TOWN, or says nothing rather than implying precision', () => {
     // "near Nairobi" said of a load 140 km away reads as precision and is not.
     const nairobi = { lat: -1.2864, lng: 36.8172 };
-    dispatch.registerFreight({ description: 'Pallets', pickupLocation: nairobi, pickupLabel: 'A', destLabel: 'B', destLocation: { lat: -1.15, lng: 36.8 }, weightKg: 400, bulk: false, dimensionsCm: [120, 100, 80] });
+    dispatch.registerFreight({ description: 'Pallets', pickupLocation: nairobi, pickupLabel: 'A', destLabel: 'B', destLocation: { lat: -1.15, lng: 36.8 }, weightKg: 400, packaging: 'palletised', dimensionsCm: [120, 100, 80] });
     expect(dispatch.publicMarket({ from: nairobi })[0].area).toBeTruthy();
 
     const middleOfNowhere = { lat: 2.5, lng: 40.9 }; // far from every gazetteer entry
-    dispatch.registerFreight({ description: 'Pallets', pickupLocation: middleOfNowhere, pickupLabel: 'A', destLabel: 'B', destLocation: middleOfNowhere, weightKg: 400, bulk: false, dimensionsCm: [120, 100, 80] });
+    dispatch.registerFreight({ description: 'Pallets', pickupLocation: middleOfNowhere, pickupLabel: 'A', destLabel: 'B', destLocation: middleOfNowhere, weightKg: 400, packaging: 'palletised', dimensionsCm: [120, 100, 80] });
     const remote = dispatch.publicMarket({ from: middleOfNowhere, radiusKm: 5 })[0];
     expect(remote.area).toBeUndefined(); // no name is better than a wrong one
     expect(remote.deadheadKm).toBeDefined(); // the distance still answers
@@ -3431,7 +3438,7 @@ describe('PUDO Light', () => {
   it('FB3b: the radius is the CALLER’s, with no clamp — anywhere, from anywhere', () => {
     const here = { lat: -1.2, lng: 36.8 };
     const farAway = { lat: -1.9, lng: 36.8 }; // ~78 km south, far outside MAX_WORK_RADIUS_KM
-    dispatch.registerFreight({ description: 'Pallets', pickupLocation: farAway, pickupLabel: 'A', destLabel: 'B', destLocation: farAway, weightKg: 400, bulk: false, dimensionsCm: [120, 100, 80] });
+    dispatch.registerFreight({ description: 'Pallets', pickupLocation: farAway, pickupLabel: 'A', destLabel: 'B', destLocation: farAway, weightKg: 400, packaging: 'palletised', dimensionsCm: [120, 100, 80] });
 
     // Narrow, and it is gone; wide, and it is there. The 15 km number never enters into it.
     expect(dispatch.publicMarket({ from: here, radiusKm: 20 }).some((r) => r.deadheadKm > 50)).toBe(false);
@@ -3448,7 +3455,7 @@ describe('PUDO Light', () => {
     // change the body of every haul they had ever done.
     const d = negotiator('CARRY');
     const pickup = { lat: -1.2, lng: 36.8 };
-    const f = dispatch.registerFreight({ description: 'Pallets', pickupLocation: pickup, pickupLabel: 'A', destLabel: 'B', destLocation: { lat: -1.15, lng: 36.8 }, weightKg: 400, bulk: false, dimensionsCm: [120, 100, 80] });
+    const f = dispatch.registerFreight({ description: 'Pallets', pickupLocation: pickup, pickupLabel: 'A', destLabel: 'B', destLocation: { lat: -1.15, lng: 36.8 }, weightKg: 400, packaging: 'palletised', dimensionsCm: [120, 100, 80] });
     const [offer] = dispatch.suggest(d.did, { from: pickup, to: pickup }).filter((o) => o.ref === f.freightId);
     dispatch.claim(offer.offerId);
 
@@ -3460,7 +3467,7 @@ describe('PUDO Light', () => {
   it('FB4: scopes the series by where the LOAD is, so anyone can ask about anywhere', () => {
     const nairobi = { lat: -1.2, lng: 36.8 };
     const farAway = { lat: -1.9, lng: 36.8 }; // ~78 km south
-    dispatch.registerFreight({ description: 'Pallets', pickupLocation: farAway, pickupLabel: 'A', destLabel: 'B', destLocation: farAway, weightKg: 400, bulk: false, dimensionsCm: [120, 100, 80] });
+    dispatch.registerFreight({ description: 'Pallets', pickupLocation: farAway, pickupLabel: 'A', destLabel: 'B', destLocation: farAway, weightKg: 400, packaging: 'palletised', dimensionsCm: [120, 100, 80] });
 
     const window = { since: 0, until: Date.now() + 1000 };
     const near = dispatch.marketSeries({ ...window, from: nairobi, radiusKm: 20 });
@@ -3481,7 +3488,7 @@ describe('PUDO Light', () => {
     // the row "the shipper has ruled out your body type", so refusing the claim only honours what was said.
     const d = negotiator('XB');
     const pickup = { lat: -1.2, lng: 36.8 };
-    const f = dispatch.registerFreight({ description: 'Electronics', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', destLocation: pickup, weightKg: 400, bulk: false, dimensionsCm: [120, 100, 80], excludedBodies: ['flatbed'] });
+    const f = dispatch.registerFreight({ description: 'Electronics', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', destLocation: pickup, weightKg: 400, packaging: 'palletised', dimensionsCm: [120, 100, 80], excludedBodies: ['flatbed'] });
     const [offer] = dispatch.suggest(d.did, { from: pickup, to: pickup }).filter((o) => o.ref === f.freightId);
     expect(offer).toBeDefined(); // still OFFERED — the exclusion is a preference, not a capability
     expect(() => dispatch.claim(offer.offerId)).toThrow(/ruled out your body type/);
@@ -3493,7 +3500,7 @@ describe('PUDO Light', () => {
     // 26 t: divisible is two ordinary trips on an open deck, indivisible is a low-loader and a permit. No
     // measurement implies it — only the person standing at the load knows.
     const pickup = { lat: -1.2, lng: 36.8 };
-    const base = { pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', weightKg: 26_000, bulk: false, dimensionsCm: [400, 200, 150] as [number, number, number] };
+    const base = { pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', weightKg: 26_000, packaging: 'palletised' as const, dimensionsCm: [400, 200, 150] as [number, number, number] };
     expect(dispatch.registerFreight({ ...base, description: 'Splittable' }).bodyDerived!.body).toBe('flatbed');
     expect(dispatch.registerFreight({ ...base, description: 'One piece', indivisible: true }).bodyDerived!.body).toBe('lowboy');
   });
@@ -3576,7 +3583,7 @@ describe('PUDO Light', () => {
 
   it('FB0c: an INSTANT load still behaves exactly as before — nothing was made to negotiate that was not asked to', () => {
     const d = negotiator('NI');
-    const f = dispatch.registerFreight({ description: 'Normal', pickupLocation: pickupPt, pickupLabel: 'Depot', destLabel: 'Site', destLocation: pickupPt, weightKg: 400, bulk: false });
+    const f = dispatch.registerFreight({ description: 'Normal', pickupLocation: pickupPt, pickupLabel: 'Depot', destLabel: 'Site', destLocation: pickupPt, weightKg: 400, packaging: 'palletised' });
     expect(f.commitMode).toBeUndefined(); // stored only when chosen — absent READS as instant
     const [offer] = dispatch.suggest(d.did, { from: pickupPt, to: pickupPt }).filter((o) => o.ref === f.freightId);
     expect(offer).toBeDefined();
@@ -3689,7 +3696,7 @@ describe('PUDO Light', () => {
     vendors.topUp(vendor.vendorId, 500);
     const start = vendors.balanceOf(vendor.vendorId);
     const pickup = { lat: -1.2, lng: 36.8 };
-    const f = dispatch.registerFreight({ description: 'Machinery', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', destLocation: pickup, weightKg: 200, bulk: false, shipperDid: vendor.vendorId });
+    const f = dispatch.registerFreight({ description: 'Machinery', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', destLocation: pickup, weightKg: 200, packaging: 'palletised', shipperDid: vendor.vendorId });
     const noon = new Date('2026-07-22T11:00:00').getTime();
     const [offer] = dispatch.suggest(d.did, { from: pickup, to: pickup }, noon);
     expect(offer.price).toBeDefined();
@@ -3721,7 +3728,7 @@ describe('PUDO Light', () => {
     fleet.couple(d.did, truck.vehicleId);
     const vendor = vendors.register({ name: 'BrokeVendor' }); // balance 0 — never topped up
     const pickup = { lat: -1.2, lng: 36.8 };
-    const f = dispatch.registerFreight({ description: 'Machinery', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', destLocation: pickup, weightKg: 200, bulk: false, shipperDid: vendor.vendorId });
+    const f = dispatch.registerFreight({ description: 'Machinery', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', destLocation: pickup, weightKg: 200, packaging: 'palletised', shipperDid: vendor.vendorId });
     const noon = new Date('2026-07-22T11:00:00').getTime();
     const [offer] = dispatch.suggest(d.did, { from: pickup, to: pickup }, noon);
     dispatch.claim(offer.offerId, noon);
@@ -3740,7 +3747,7 @@ describe('PUDO Light', () => {
     const truck = vehicles.register({ plate: 'BL-1', vehicleClass: 'truck', truckSubtype: 'tipper', capacityKg: 10_000, ownerName: 'X', baseFee: 8, pricePerKm: 0.4 });
     fleet.couple(d.did, truck.vehicleId);
     const pickup = { lat: -1.2, lng: 36.8 };
-    const f = dispatch.registerFreight({ description: 'Sand 5t', pickupLocation: pickup, pickupLabel: 'Quarry', destLabel: 'Site', destLocation: pickup, weightKg: 5000, bulk: true }); // no shipperDid
+    const f = dispatch.registerFreight({ description: 'Sand 5t', pickupLocation: pickup, pickupLabel: 'Quarry', destLabel: 'Site', destLocation: pickup, weightKg: 5000, packaging: 'loose' }); // no shipperDid
 
     const noon = new Date('2026-07-22T11:00:00').getTime();
     const [offer] = dispatch.suggest(d.did, { from: pickup, to: pickup }, noon);
@@ -3772,6 +3779,17 @@ describe('PUDO Light', () => {
     return d;
   };
 
+  // FB5 — a flatbed carrying its own forklift: the operator the user described, and the vehicle a BAGGED load
+  // actually needs. A tipper cannot take sacks (nothing lifts them); a bare flatbed cannot either.
+  const coupleFlatbedWithForklift = (tag: string, bounds: { min: number; max: number }, baseFee = 10) => {
+    const d = drivers.register({ displayName: tag, fullName: tag, nationalId: 'ID-' + tag, mobile: '+2547' + tag, licenceClasses: ['truck'], licenceNumber: 'L-' + tag, licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const v = vehicles.register({ plate: 'KA-' + tag, vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 20_000, equipment: ['FLT'], ownerName: 'X', baseFee, pricePerKm: 0.5, minMultiplier: bounds.min, maxMultiplier: bounds.max });
+    fleet.couple(d.did, v.vehicleId);
+    return d;
+  };
+
   // S33b — a refrigerated truck (coldChain) carrying a tail-lift, so it can be offered a discrete cold-chain (FOP) freight.
   const coupleReefer = (tag: string) => {
     const d = drivers.register({ displayName: tag, fullName: tag, nationalId: 'ID-' + tag, mobile: '+2547' + tag, licenceClasses: ['truck'], licenceNumber: 'L-' + tag, licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
@@ -3786,7 +3804,7 @@ describe('PUDO Light', () => {
     const pickup = { lat: -1.2, lng: 36.8 };
     const dest = { lat: -1.22, lng: 36.82 };
     // 5 open loads in one cell, no vehicles reporting a position there → pressure 5 → factor clampRaw(2.0).
-    for (let i = 0; i < 5; i++) dispatch.registerFreight({ description: `Sand ${i}`, pickupLocation: pickup, pickupLabel: 'Quarry', destLabel: 'Site', destLocation: dest, weightKg: 1000, bulk: true });
+    for (let i = 0; i < 5; i++) dispatch.registerFreight({ description: `Sand ${i}`, pickupLocation: pickup, pickupLabel: 'Quarry', destLabel: 'Site', destLocation: dest, weightKg: 1000, packaging: 'loose' });
     const noon = new Date('2026-07-22T11:00:00').getTime();
     marketPulse.recompute(noon);
     expect(marketStore.factorFor(pickup, noon)).toBe(2);
@@ -3809,7 +3827,7 @@ describe('PUDO Light', () => {
     const dest = { lat: -1.22, lng: 36.82 };
     const noon = new Date('2026-07-22T11:00:00').getTime();
     const tomorrow = new Date(noon + 24 * 3_600_000).toISOString();
-    const f = dispatch.registerFreight({ description: 'Teff to Merkato', pickupLocation: pickup, pickupLabel: 'Coop', destLabel: 'Merkato', destLocation: dest, weightKg: 5000, bulk: true, scheduledPickupAt: tomorrow }, noon);
+    const f = dispatch.registerFreight({ description: 'Teff to Merkato', pickupLocation: pickup, pickupLabel: 'Coop', destLabel: 'Merkato', destLocation: dest, weightKg: 5000, packaging: 'loose', scheduledPickupAt: tomorrow }, noon);
     expect(f.status).toBe('scheduled');
     expect(f.allowEarlyClaim).toBe(true); // default
 
@@ -3829,7 +3847,7 @@ describe('PUDO Light', () => {
     const pickup = { lat: -1.2, lng: 36.8 };
     const dest = { lat: -1.22, lng: 36.82 };
     const t0 = new Date('2026-07-22T11:00:00').getTime();
-    const f = dispatch.registerFreight({ description: 'Held', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: dest, weightKg: 1000, bulk: true, scheduledPickupAt: new Date(t0 + 3_600_000).toISOString(), allowEarlyClaim: false }, t0);
+    const f = dispatch.registerFreight({ description: 'Held', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: dest, weightKg: 1000, packaging: 'loose', scheduledPickupAt: new Date(t0 + 3_600_000).toISOString(), allowEarlyClaim: false }, t0);
     expect(f.status).toBe('scheduled');
     const driver = coupleTipper('F1H', { min: 0.8, max: 1.5 });
     expect(dispatch.suggest(driver.did, { from: pickup, to: dest }, t0).some((o) => o.ref === f.freightId)).toBe(false); // not offered before due
@@ -3844,7 +3862,7 @@ describe('PUDO Light', () => {
     const due = t0 + 24 * 3_600_000;
     const vendor = vendors.register({ name: 'CoopShipper' });
     vendors.topUp(vendor.vendorId, 500);
-    const f = dispatch.registerFreight({ description: 'Reserved', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 1000, bulk: true, shipperDid: vendor.vendorId, scheduledPickupAt: new Date(due).toISOString() }, t0);
+    const f = dispatch.registerFreight({ description: 'Reserved', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 1000, packaging: 'loose', shipperDid: vendor.vendorId, scheduledPickupAt: new Date(due).toISOString() }, t0);
     const driver = coupleTipper('F1N', { min: 0.8, max: 1.5 });
     const before = vendors.balanceOf(vendor.vendorId);
     const [offer] = dispatch.suggest(driver.did, { from: pickup, to: pickup }, t0).filter((o) => o.ref === f.freightId);
@@ -3864,7 +3882,7 @@ describe('PUDO Light', () => {
     const due = t0 + 24 * 3_600_000;
     const vendor = vendors.register({ name: 'CoopShipper2' });
     vendors.topUp(vendor.vendorId, 500);
-    const f = dispatch.registerFreight({ description: 'Reserved', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 1000, bulk: true, shipperDid: vendor.vendorId, scheduledPickupAt: new Date(due).toISOString() }, t0);
+    const f = dispatch.registerFreight({ description: 'Reserved', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 1000, packaging: 'loose', shipperDid: vendor.vendorId, scheduledPickupAt: new Date(due).toISOString() }, t0);
 
     // First driver reserves early, then no-shows → released + rebated, and the now-past date is cleared.
     const d1 = coupleTipper('F1R1', { min: 0.8, max: 1.5 });
@@ -3905,7 +3923,7 @@ describe('PUDO Light', () => {
     const vendor = vendors.register({ name: 'CoopShipper3' });
     vendors.topUp(vendor.vendorId, 500);
     // Held off the market (no early claim), then promoted at its date — the promotion keeps the pickup date.
-    const f = dispatch.registerFreight({ description: 'Held', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 1000, bulk: true, shipperDid: vendor.vendorId, scheduledPickupAt: new Date(due).toISOString(), allowEarlyClaim: false }, t0);
+    const f = dispatch.registerFreight({ description: 'Held', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 1000, packaging: 'loose', shipperDid: vendor.vendorId, scheduledPickupAt: new Date(due).toISOString(), allowEarlyClaim: false }, t0);
     dispatch.publishReadyFreight(due + 1); // → 'available' (scheduledPickupAt still set)
 
     // A driver claims it well after the date + the 12h grace (it sat unclaimed on the market a while).
@@ -3923,17 +3941,17 @@ describe('PUDO Light', () => {
   it('F1: an unparseable schedule is refused (fail-closed); a past date ships now; a future date is canonicalised', () => {
     const pickup = { lat: -1.2, lng: 36.8 };
     const t0 = new Date('2026-07-22T11:00:00').getTime();
-    expect(() => dispatch.registerFreight({ description: 'Bad', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', weightKg: 1000, bulk: true, scheduledPickupAt: 'not-a-date' }, t0)).toThrow();
-    const past = dispatch.registerFreight({ description: 'Now', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', weightKg: 1000, bulk: true, scheduledPickupAt: new Date(t0 - 3_600_000).toISOString() }, t0);
+    expect(() => dispatch.registerFreight({ description: 'Bad', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', weightKg: 1000, packaging: 'loose', scheduledPickupAt: 'not-a-date' }, t0)).toThrow();
+    const past = dispatch.registerFreight({ description: 'Now', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', weightKg: 1000, packaging: 'loose', scheduledPickupAt: new Date(t0 - 3_600_000).toISOString() }, t0);
     expect(past.status).toBe('available');
     expect(past.scheduledPickupAt).toBeUndefined();
-    const future = dispatch.registerFreight({ description: 'Later', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', weightKg: 1000, bulk: true, scheduledPickupAt: '2026-07-25T09:00:00.000Z' }, t0);
+    const future = dispatch.registerFreight({ description: 'Later', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', weightKg: 1000, packaging: 'loose', scheduledPickupAt: '2026-07-25T09:00:00.000Z' }, t0);
     expect(future.scheduledPickupAt).toBe('2026-07-25T09:00:00.000Z'); // canonical UTC
   });
 
   it('S34b: a thin zone below the demand threshold does not surge', () => {
     const pickup = { lat: -1.35, lng: 36.95 };
-    for (let i = 0; i < 2; i++) dispatch.registerFreight({ description: `L${i}`, pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: { lat: -1.36, lng: 36.96 }, weightKg: 1000, bulk: true });
+    for (let i = 0; i < 2; i++) dispatch.registerFreight({ description: `L${i}`, pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: { lat: -1.36, lng: 36.96 }, weightKg: 1000, packaging: 'loose' });
     const noon = new Date('2026-07-22T11:00:00').getTime();
     const cells = marketPulse.recompute(noon);
     expect(cells.find((c) => c.demand === 2)?.organicFactor).toBe(1); // 2 < MARKET_MIN_DEMAND (3) → neutral
@@ -3943,7 +3961,7 @@ describe('PUDO Light', () => {
   it('S34b: an operator surge rule overrides organic pricing, clamped to the band + the corridor', () => {
     const pickup = { lat: -1.5, lng: 36.6 };
     const dest = { lat: -1.52, lng: 36.62 };
-    dispatch.registerFreight({ description: 'One load', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: dest, weightKg: 1000, bulk: true });
+    dispatch.registerFreight({ description: 'One load', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: dest, weightKg: 1000, packaging: 'loose' });
     const noon = new Date('2026-07-22T11:00:00').getTime();
     const cell = marketPulse.cellFor(pickup);
     // A lone load would be neutral, but the operator declares a festival surge.
@@ -3959,7 +3977,7 @@ describe('PUDO Light', () => {
 
   it('S34b: the watchtower reflects a lapsed surge rule at once (no stale baked factor)', () => {
     const pickup = { lat: -1.6, lng: 36.5 };
-    dispatch.registerFreight({ description: 'L', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: { lat: -1.62, lng: 36.52 }, weightKg: 1000, bulk: true });
+    dispatch.registerFreight({ description: 'L', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: { lat: -1.62, lng: 36.52 }, weightKg: 1000, packaging: 'loose' });
     const t0 = new Date('2026-07-22T11:00:00Z').getTime();
     const cell = marketPulse.cellFor(pickup);
     // A rule that lapses in 60s; setSurgeRule recomputes, baking factor 1.8 into the snapshot cell.
@@ -3978,7 +3996,7 @@ describe('PUDO Light', () => {
 
   it('S34b: the operator market-pulse endpoints recompute and return the insight', () => {
     const pickup = { lat: -1.2, lng: 36.8 };
-    for (let i = 0; i < 4; i++) dispatch.registerFreight({ description: `F${i}`, pickupLocation: pickup, pickupLabel: 'Q', destLabel: 'S', destLocation: { lat: -1.22, lng: 36.82 }, weightKg: 1000, bulk: true });
+    for (let i = 0; i < 4; i++) dispatch.registerFreight({ description: `F${i}`, pickupLocation: pickup, pickupLabel: 'Q', destLabel: 'S', destLocation: { lat: -1.22, lng: 36.82 }, weightKg: 1000, packaging: 'loose' });
     const out = controller.recomputeMarketPulse();
     expect(out.cells.length).toBeGreaterThan(0);
     const insight = controller.marketPulse();
@@ -3993,7 +4011,7 @@ describe('PUDO Light', () => {
   it('S34c: a shipper budget hides an over-budget freight offer; a cheaper vehicle still gets it', () => {
     const pickup = { lat: -1.7, lng: 36.4 };
     const noon = new Date('2026-07-22T11:00:00Z').getTime();
-    const f = dispatch.registerFreight({ description: 'Cargo', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 1000, bulk: true, maxSpend: 10 });
+    const f = dispatch.registerFreight({ description: 'Cargo', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 1000, packaging: 'loose', maxSpend: 10 });
     expect(f.maxSpend).toBe(10);
     const pricey = coupleTipper('EXP', { min: 0.8, max: 1.5 }, 10); // charge 10.2 > 10 → over budget
     expect(dispatch.suggest(pricey.did, { from: pickup, to: pickup }, noon).map((o) => o.ref)).not.toContain(f.freightId);
@@ -4004,7 +4022,7 @@ describe('PUDO Light', () => {
   it('S34c: claim refuses an over-budget freight (re-coupled to a pricier vehicle) and leaves it available', () => {
     const pickup = { lat: -1.71, lng: 36.41 };
     const noon = new Date('2026-07-22T11:00:00Z').getTime();
-    const f = dispatch.registerFreight({ description: 'Cargo', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 1000, bulk: true, maxSpend: 6 });
+    const f = dispatch.registerFreight({ description: 'Cargo', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 1000, packaging: 'loose', maxSpend: 6 });
     const d = drivers.register({ displayName: 'RC', fullName: 'R', nationalId: 'ID-RC', mobile: '+254772000', licenceClasses: ['truck'], licenceNumber: 'L-RC', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
     drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
     drivers.decideKyc(d.did, true);
@@ -4022,7 +4040,7 @@ describe('PUDO Light', () => {
   it('S34c: a driver min-earn filter hides freight paying less than the floor', () => {
     const pickup = { lat: -1.72, lng: 36.42 };
     const noon = new Date('2026-07-22T11:00:00Z').getTime();
-    const f = dispatch.registerFreight({ description: 'Cargo', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 1000, bulk: true });
+    const f = dispatch.registerFreight({ description: 'Cargo', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 1000, packaging: 'loose' });
     const d = coupleTipper('ME', { min: 0.8, max: 1.5 }, 10); // earns 10
     expect(dispatch.suggest(d.did, { from: pickup, to: pickup }, noon, 20).map((o) => o.ref)).not.toContain(f.freightId); // floor 20 > 10 → hidden
     expect(dispatch.suggest(d.did, { from: pickup, to: pickup }, noon, 5).map((o) => o.ref)).toContain(f.freightId); // floor 5 < 10 → shown
@@ -4040,7 +4058,7 @@ describe('PUDO Light', () => {
 
   it('S34c: a zero/negative budget means NO cap (never a load nobody can move)', () => {
     const pickup = { lat: -1.73, lng: 36.43 };
-    const base = { description: 'C', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 1000, bulk: true } as const;
+    const base = { description: 'C', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 1000, packaging: 'loose' } as const;
     expect(dispatch.registerFreight({ ...base, maxSpend: 0 }).maxSpend).toBeUndefined();
     expect(dispatch.registerFreight({ ...base, maxSpend: -5 }).maxSpend).toBeUndefined();
     expect(vendors.register({ name: 'ZeroCap', shippingPolicy: { maxTransportSpend: 0 } }).shippingPolicy.maxTransportSpend).toBeUndefined();
@@ -4057,7 +4075,7 @@ describe('PUDO Light', () => {
   it('S33: pickup is refused until the load-safety checklist is complete AND a securement photo is attached', () => {
     const pickup = { lat: -1.8, lng: 36.3 };
     const d = coupleTipper('SG', { min: 0.8, max: 1.5 });
-    const f = dispatch.registerFreight({ description: 'Pallets', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, bulk: true });
+    const f = dispatch.registerFreight({ description: 'Pallets', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, packaging: 'loose' });
     claimFreight(d.did, pickup, f.freightId);
 
     expect(() => dispatch.pickupFreight(f.freightId, d.did)).toThrow(/checklist/i); // nothing confirmed
@@ -4074,7 +4092,7 @@ describe('PUDO Light', () => {
   it('S33: delivery is refused until the unload checklist is complete; then it stamps the report and still pays', () => {
     const pickup = { lat: -1.81, lng: 36.31 };
     const d = coupleTipper('UN', { min: 0.8, max: 1.5 });
-    const f = dispatch.registerFreight({ description: 'Pallets', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, bulk: true });
+    const f = dispatch.registerFreight({ description: 'Pallets', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, packaging: 'loose' });
     claimFreight(d.did, pickup, f.freightId);
     pickupOk(f, d.did);
     expect(() => dispatch.deliverFreight(f.freightId, d.did)).toThrow(/checklist/i);
@@ -4087,7 +4105,7 @@ describe('PUDO Light', () => {
   it('S33: a claimed freight carries its cargo model + the exact checklists to the driver', () => {
     const pickup = { lat: -1.82, lng: 36.32 };
     const d = coupleTipper('CL', { min: 0.8, max: 1.5 });
-    const f = dispatch.registerFreight({ description: 'Cement', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, bulk: true });
+    const f = dispatch.registerFreight({ description: 'Cement', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, packaging: 'loose' });
     claimFreight(d.did, pickup, f.freightId);
     const claim = dispatch.claimsFor(d.did).find((c) => c.ref === f.freightId)!;
     expect(claim.cargoClass).toBe('P4'); // 200 kg
@@ -4098,7 +4116,7 @@ describe('PUDO Light', () => {
   it('S33: the securement photo is linked to the freight at pickup and its retention clock anchored at delivery', () => {
     const pickup = { lat: -1.83, lng: 36.33 };
     const d = coupleTipper('MD', { min: 0.8, max: 1.5 });
-    const f = dispatch.registerFreight({ description: 'Cement', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, bulk: true });
+    const f = dispatch.registerFreight({ description: 'Cement', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, packaging: 'loose' });
     claimFreight(d.did, pickup, f.freightId);
     const adoptSpy = jest.spyOn(media, 'adopt');
     const anchorSpy = jest.spyOn(media, 'anchorFreightTerminal');
@@ -4113,7 +4131,7 @@ describe('PUDO Light', () => {
   it('S33: a securement id the driver does NOT own is never laundered onto the freight (S29 guard)', () => {
     const pickup = { lat: -1.84, lng: 36.34 };
     const d = coupleTipper('LN', { min: 0.8, max: 1.5 });
-    const f = dispatch.registerFreight({ description: 'Cement', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, bulk: true });
+    const f = dispatch.registerFreight({ description: 'Cement', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, packaging: 'loose' });
     claimFreight(d.did, pickup, f.freightId);
     // Another actor's media (a 1×1 PNG in the dispute-evidence bin). The driver passes ITS id as the securement.
     const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
@@ -4129,7 +4147,7 @@ describe('PUDO Light', () => {
   it('S33b: a cold-chain freight logs temperatures; an out-of-band reading breaches it (sticky) + flags the tower', () => {
     const pickup = { lat: -1.9, lng: 36.2 };
     const d = coupleReefer('CC');
-    const f = dispatch.registerFreight({ description: 'Vaccines', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, bulk: false, natureCode: 'FOP' });
+    const f = dispatch.registerFreight({ description: 'Vaccines', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, packaging: 'palletised', natureCode: 'FOP' });
     claimFreight(d.did, pickup, f.freightId);
     pickupOk(f, d.did); // → in_transit
 
@@ -4151,7 +4169,7 @@ describe('PUDO Light', () => {
   it('S33b: recordTemp is refused off in_transit, for a non-cold-chain freight, and by another driver', () => {
     const cold = { lat: -1.91, lng: 36.21 };
     const dr = coupleReefer('RF');
-    const cf = dispatch.registerFreight({ description: 'Dairy', pickupLocation: cold, pickupLabel: 'D', destLabel: 'S', destLocation: cold, weightKg: 200, bulk: false, natureCode: 'FOP' });
+    const cf = dispatch.registerFreight({ description: 'Dairy', pickupLocation: cold, pickupLabel: 'D', destLabel: 'S', destLocation: cold, weightKg: 200, packaging: 'palletised', natureCode: 'FOP' });
     claimFreight(dr.did, cold, cf.freightId);
     expect(() => dispatch.recordTemp(cf.freightId, 5, dr.did)).toThrow(/expected in_transit/i); // claimed, not moving yet
     pickupOk(cf, dr.did);
@@ -4159,7 +4177,7 @@ describe('PUDO Light', () => {
 
     const warm = { lat: -1.95, lng: 36.25 };
     const dt = coupleTipper('WM', { min: 0.8, max: 1.5 });
-    const wf = dispatch.registerFreight({ description: 'Gravel', pickupLocation: warm, pickupLabel: 'D', destLabel: 'S', destLocation: warm, weightKg: 200, bulk: true, natureCode: 'GEN' });
+    const wf = dispatch.registerFreight({ description: 'Gravel', pickupLocation: warm, pickupLabel: 'D', destLabel: 'S', destLocation: warm, weightKg: 200, packaging: 'loose', natureCode: 'GEN' });
     claimFreight(dt.did, warm, wf.freightId);
     pickupOk(wf, dt.did);
     expect(() => dispatch.recordTemp(wf.freightId, 5, dt.did)).toThrow(/temperature-controlled/i); // GEN → no band
@@ -4168,7 +4186,7 @@ describe('PUDO Light', () => {
   it('S33b: a claimed cold-chain freight shows the driver its safe band + last reading; a plain freight shows none', () => {
     const pickup = { lat: -1.93, lng: 36.23 };
     const d = coupleReefer('BD');
-    const f = dispatch.registerFreight({ description: 'Meat', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, bulk: false, natureCode: 'FOP' });
+    const f = dispatch.registerFreight({ description: 'Meat', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, packaging: 'palletised', natureCode: 'FOP' });
     claimFreight(d.did, pickup, f.freightId);
     pickupOk(f, d.did);
     dispatch.recordTemp(f.freightId, 6, d.did);
@@ -4189,10 +4207,10 @@ describe('PUDO Light', () => {
   });
 
   it('S32: registered freight gets a cargo model — class + required capability + equipment (discrete vs bulk)', () => {
-    const pallet = dispatch.registerFreight({ description: 'Tiles', pickupLocation: { lat: -1.2, lng: 36.8 }, pickupLabel: 'D', destLabel: 'S', weightKg: 200, bulk: false });
+    const pallet = dispatch.registerFreight({ description: 'Tiles', pickupLocation: { lat: -1.2, lng: 36.8 }, pickupLabel: 'D', destLabel: 'S', weightKg: 200, packaging: 'palletised' });
     expect(pallet.cargoClass).toBe('P4'); // 200 kg
     expect(pallet.requiredEquipment.length).toBeGreaterThan(0); // discrete → needs handling gear
-    const bulk = dispatch.registerFreight({ description: 'Cement 5t', pickupLocation: { lat: -1.2, lng: 36.8 }, pickupLabel: 'D', destLabel: 'S', weightKg: 5000, bulk: true, natureCode: 'HAZ-DUST' });
+    const bulk = dispatch.registerFreight({ description: 'Cement 5t', pickupLocation: { lat: -1.2, lng: 36.8 }, pickupLabel: 'D', destLabel: 'S', weightKg: 5000, packaging: 'loose', natureCode: 'HAZ-DUST' });
     expect(bulk.requiredEquipment).toEqual([]); // loose bulk self-loads (tipper/silo) → no handling equipment
     expect(bulk.natureCode).toBe('HAZ-DUST');
   });
@@ -4208,7 +4226,7 @@ describe('PUDO Light', () => {
     };
     const equipped = mkTruck('EQP', ['TLT']); // a tail-lift can handle a P4 load
     const bare = mkTruck('BAR', []); // MAN only — no lifting gear
-    const pallet = dispatch.registerFreight({ description: 'Machinery', pickupLocation: { lat: -1.2, lng: 36.8 }, pickupLabel: 'D', destLabel: 'S', destLocation: { lat: -1.25, lng: 36.85 }, weightKg: 200, bulk: false });
+    const pallet = dispatch.registerFreight({ description: 'Machinery', pickupLocation: { lat: -1.2, lng: 36.8 }, pickupLabel: 'D', destLabel: 'S', destLocation: { lat: -1.25, lng: 36.85 }, weightKg: 200, packaging: 'palletised' });
     expect(pallet.requiredEquipment).toContain('TLT');
 
     const route = { from: { lat: -1.2, lng: 36.8 }, to: { lat: -1.25, lng: 36.85 } };
@@ -4368,7 +4386,13 @@ describe('PUDO Light', () => {
     expect(full.deposits.length).toBe(3);
 
     const f = dispatch.listFreight().find((x) => x.freightId === full.freightId)!;
-    expect(f.bulk).toBe(true); // loose durable commodity → tipper/hopper, no handling equipment
+    // FB5 — the correction this slice exists for. A co-op lot is deposited in SACKS, and it was posted
+    // `bulk: true` on the reasoning that a durable commodity self-loads. It does not: sacks are lifted. The
+    // old stamp told every member's lot it needed NO handling equipment, which is the "you would need a
+    // forklift" signal going silent on the load that needs it most.
+    expect(f.packaging).toBe('bagged');
+    expect(f.bulk).toBe(false); // bulk now means LOOSE, and sacks are not loose
+    expect(f.requiredEquipment.length).toBeGreaterThan(0); // something has to lift them
     expect(f.weightKg).toBe(1100);
     expect(f.natureCode).toBe('FOD');
     expect(f.pickupLabel).toBe(owner.shopName); // the coop's site is the pickup
@@ -4720,7 +4744,10 @@ describe('PUDO Light', () => {
       { natureCode: 'FOD', pickupLabel: 'Co-op store', pickupLocation: shed, destLabel: 'Merkato', destLocation: { lat: owner.location.lat + 3, lng: owner.location.lng + 3 }, targetKg: 1000 } as never,
       { role: 'pudo', did: owner.did } as never,
     );
-    const truck = coupleTipper('fore', { min: 0.8, max: 1.5 });
+    // FB5 — the vehicle that actually carries a co-op lot: the user's flatbed with its own forklift (kooiaap).
+    // A tipper was the fixture while a lot posted as loose bulk; sacks need something that lifts them, and a
+    // driver planning around a filling lot must be the driver who can take it when it fills.
+    const truck = coupleFlatbedWithForklift('fore', { min: 0.8, max: 1.5 });
     const route = { from: owner.location, to: { lat: owner.location.lat + 3, lng: owner.location.lng + 3 } };
 
     // An EMPTY lot is an intention, not a load — nothing to plan around.
@@ -4860,7 +4887,7 @@ describe('PUDO Light', () => {
     const pickup = { lat: -1.2, lng: 36.8 };
     const dest = { lat: -1.25, lng: 36.85 };
     const d = coupleTipper('R4', { min: 0.8, max: 1.5 });
-    const f = dispatch.registerFreight({ description: 'Cement', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: dest, weightKg: 100, bulk: true });
+    const f = dispatch.registerFreight({ description: 'Cement', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: dest, weightKg: 100, packaging: 'loose' });
 
     // Cold-start: one bad rating does NOT bar — the driver still sees + can grab freight.
     rating.rateDriver({ driverDid: d.did, byAgentDid: 'a1', stars: 1 });
@@ -4892,7 +4919,7 @@ describe('PUDO Light', () => {
     drivers.decideKyc(d.did, true);
     const tipper = vehicles.register({ plate: 'BT-1', vehicleClass: 'truck', truckSubtype: 'tipper', capacityKg: 10_000, ownerName: 'X' }); // carriesBulk true
     const van = vehicles.register({ plate: 'VN-9', vehicleClass: 'van', ownerName: 'X' }); // carriesBulk false
-    const f = dispatch.registerFreight({ description: 'Cement', pickupLocation: { lat: -1.2, lng: 36.8 }, pickupLabel: 'D', destLabel: 'S', destLocation: { lat: -1.25, lng: 36.85 }, weightKg: 100, bulk: true });
+    const f = dispatch.registerFreight({ description: 'Cement', pickupLocation: { lat: -1.2, lng: 36.8 }, pickupLabel: 'D', destLabel: 'S', destLocation: { lat: -1.25, lng: 36.85 }, weightKg: 100, packaging: 'loose' });
 
     fleet.couple(d.did, tipper.vehicleId);
     const [offer] = dispatch.suggest(d.did, { from: { lat: -1.2, lng: 36.8 }, to: { lat: -1.25, lng: 36.85 } });
@@ -4908,13 +4935,13 @@ describe('PUDO Light', () => {
   it('S32c: flags a SITE equipment gap for discrete heavy freight — advisory, per end', () => {
     const base = { description: 'Pallet', pickupLocation: { lat: -1.2, lng: 36.8 }, pickupLabel: 'D', destLabel: 'S' } as const;
     // A P4 discrete load needs a qualifying piece (HTR/PLT/TLT/RMP) at EACH end.
-    const gapAtDest = dispatch.registerFreight({ ...base, weightKg: 200, bulk: false, originEquipment: ['MAN', 'PLT'], destEquipment: ['MAN'] });
+    const gapAtDest = dispatch.registerFreight({ ...base, weightKg: 200, packaging: 'palletised', originEquipment: ['MAN', 'PLT'], destEquipment: ['MAN'] });
     expect(gapAtDest.equipmentGaps).toEqual(['dest']); // origin has a pallet jack, destination only manual
-    const equipped = dispatch.registerFreight({ ...base, weightKg: 200, bulk: false, originEquipment: ['MAN', 'TLT'], destEquipment: ['MAN', 'RMP'] });
+    const equipped = dispatch.registerFreight({ ...base, weightKg: 200, packaging: 'palletised', originEquipment: ['MAN', 'TLT'], destEquipment: ['MAN', 'RMP'] });
     expect(equipped.equipmentGaps).toEqual([]); // both ends carry a P4-qualifying piece (tail-lift / ramp)
-    const bulk = dispatch.registerFreight({ ...base, weightKg: 5000, bulk: true, originEquipment: ['MAN'], destEquipment: ['MAN'] });
+    const bulk = dispatch.registerFreight({ ...base, weightKg: 5000, packaging: 'loose', originEquipment: ['MAN'], destEquipment: ['MAN'] });
     expect(bulk.equipmentGaps).toEqual([]); // loose bulk self-loads → no handling gear → no gap
-    const unknown = dispatch.registerFreight({ ...base, weightKg: 200, bulk: false }); // a geo-only bulletin freight
+    const unknown = dispatch.registerFreight({ ...base, weightKg: 200, packaging: 'palletised' }); // a geo-only bulletin freight
     expect(unknown.equipmentGaps).toEqual([]); // site equipment unknown → nothing to flag
   });
 

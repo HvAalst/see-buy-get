@@ -164,6 +164,11 @@ export function createAgentApi(sbg: SbgClient) {
        *  open deck versus a low-loader) and what the shop thinks it needs (advisory, never matched on). */
       indivisible?: boolean;
       bodyHint?: 'flatbed' | 'box' | 'curtain_side' | 'refrigerated' | 'tipper' | 'lowboy' | 'skeletal';
+      /** FB5 — how the goods are PACKED, which is what decides the body and whether anything has to lift
+       *  them. Absent falls back to the DEPLOYMENT's default (sacks here, loose in a European deployment),
+       *  so the counter always sends it: a default is a guess about the region, this is a fact about the
+       *  load. `bulk` is derived from it server-side and is never sent. */
+      packaging?: 'loose' | 'bagged' | 'palletised' | 'drummed' | 'baled' | 'ibc' | 'piece';
       /** FB2d — bodies the CUSTOMER rules out. Unlike the hint above this one BINDS: a driver on an excluded
        *  body still sees the load on the board, marked with the shipper's refusal, and is refused the claim. */
       excludedBodies?: ('flatbed' | 'box' | 'curtain_side' | 'refrigerated' | 'tipper' | 'lowboy' | 'skeletal')[];

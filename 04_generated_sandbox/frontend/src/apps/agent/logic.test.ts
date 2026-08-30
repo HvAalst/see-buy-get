@@ -16,6 +16,8 @@ import {
   DURABLE_NATURES,
   excludedBodiesValue,
   gateNotice,
+  PACKAGING_OPTIONS,
+  packagingValue,
   gridDims,
   parseBudget,
   plannedPickupIso,
@@ -176,18 +178,43 @@ describe('book freight (F2)', () => {
     expect(Number.isNaN(Date.parse(iso!))).toBe(false);
   });
 
-  it('bookFreightMissing gates dims, destination, a positive cash cap, and a future planned date', () => {
-    const base = { ...EMPTY_ACCEPT, dims, destPudoDid: 'did:agent:b', budgetCap: '40' };
+  it('bookFreightMissing gates dims, destination, a positive cash cap, packaging, and a future planned date', () => {
+    const base = { ...EMPTY_ACCEPT, dims, destPudoDid: 'did:agent:b', budgetCap: '40', packaging: 'bagged' as const };
     expect(bookFreightMissing({ ...EMPTY_ACCEPT }, now, t)).toContain('Measure');
     expect(bookFreightMissing({ ...EMPTY_ACCEPT, dims }, now, t)).toContain('going');
     expect(bookFreightMissing({ ...EMPTY_ACCEPT, dims, destPudoDid: 'did:agent:b' }, now, t)).toContain('cash budget');
     expect(bookFreightMissing({ ...base, budgetCap: '0' }, now, t)).toContain('cash budget'); // a zero cap is no cap
+    // FB5 — packaging is REQUIRED, unlike the body hint. Unanswered, the server would fall back to the
+    // deployment default and stamp a body from it, turning a question nobody asked into a recorded fact.
+    expect(bookFreightMissing({ ...base, packaging: '' }, now, t)).toContain('packed');
     // A ship-now booking with all fields is complete (no sticker, no photo — freight isn't shelved).
     expect(bookFreightMissing({ ...base, freightWhen: 'now' }, now, t)).toBeNull();
     // Planned needs a real, FUTURE date.
     expect(bookFreightMissing({ ...base, freightWhen: 'planned', freightDate: '' }, now, t)).toContain('planned pickup date');
     expect(bookFreightMissing({ ...base, freightWhen: 'planned', freightDate: '2026-08-09T09:00' }, now, t)).toContain('future'); // a past date
     expect(bookFreightMissing({ ...base, freightWhen: 'planned', freightDate: '2026-08-20T09:00' }, now, t)).toBeNull();
+  });
+});
+
+describe('how the load is packed (FB5)', () => {
+  it('treats "Choose…" as an ABSENT answer, not an empty one', () => {
+    // Same rule as the body hint: sending '' would post a packaging nobody named. The difference is that
+    // this form refuses to submit until it IS named, because the fallback here is not "no opinion recorded"
+    // — it is the deployment default silently deciding the body and the handling kit.
+    expect(packagingValue('')).toBeUndefined();
+    expect(packagingValue('bagged')).toBe('bagged');
+    expect(packagingValue('loose')).toBe('loose');
+  });
+
+  it('starts a fresh booking with nothing assumed', () => {
+    expect(EMPTY_ACCEPT.packaging).toBe('');
+  });
+
+  it('offers every packaging the API accepts, headed by the unanswered one', () => {
+    // Unlike the body picker this list is NOT trimmed: each of these lifts and secures differently, and a
+    // clerk can tell them apart by sight — there is no expertise here for a short list to protect them from.
+    expect(PACKAGING_OPTIONS[0].value).toBe('');
+    expect(PACKAGING_OPTIONS.slice(1).map((p) => p.value)).toEqual(['bagged', 'palletised', 'loose', 'drummed', 'baled', 'ibc', 'piece']);
   });
 });
 

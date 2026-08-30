@@ -1,6 +1,7 @@
-import { Button, Card, Chip, CodeCard, ErrorNote, GlanceNumber, Icon, Note, PlaceMap, Pill, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
+import { Button, Card, Chip, CodeCard, ErrorNote, GlanceNumber, Icon, Note, OptionPicker, PlaceMap, Pill, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
+import { agentConfig } from '../api';
 import { useT, type Translate } from '../../../shared/i18n';
-import { BODY_HINTS, EXCLUDABLE_BODIES, NATURES, acceptMissing, bookFreightMissing, chooseBodyHint, parcelStatusWord, pointDistance, selectablePoints, sizeMeta, toggleExcludedBody, type BodyHint } from '../logic';
+import { BODY_HINTS, EXCLUDABLE_BODIES, NATURES, PACKAGING_HELP, acceptMissing, bookFreightMissing, chooseBodyHint, parcelStatusWord, pointDistance, selectablePoints, sizeMeta, toggleExcludedBody, type BodyHint, type PackagingChoice } from '../logic';
 import type { NetworkPoint } from '../types';
 import type { AgentActions, AgentState } from '../useAgentApp';
 import { PhotoField } from './PhotoField';
@@ -184,13 +185,17 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
       </Card>
 
       <Card label={t('agent.accept.whatsInside')}>
-        <select class="select" value={f.natureCode} onChange={(e) => actions.setAccept({ natureCode: e.currentTarget.value as typeof f.natureCode })}>
-          {NATURES.map((n) => (
-            <option key={n.key} value={n.key}>
-              {t(n.labelKey)}
-            </option>
-          ))}
-        </select>
+        {/* No field label of its own — the Card is already headed "What's inside?", so the picker takes that
+            as its title and the sheet asks the same question back. */}
+        <OptionPicker
+          topic="nature"
+          title={t('agent.accept.whatsInside')}
+          options={NATURES.map((n) => ({ key: n.key, label: t(n.labelKey), detail: t(n.detailKey) }))}
+          value={f.natureCode}
+          onChange={(key) => actions.setAccept({ natureCode: key as typeof f.natureCode })}
+          placeholder={t('agent.accept.whatsInside')}
+          config={agentConfig()}
+        />
         <p class="card__note">{t('agent.accept.natureNote')}</p>
       </Card>
 
@@ -487,6 +492,32 @@ function FreightBookingCard({ state, actions }: { state: AgentState; actions: Ag
         </>
       ) : null}
 
+      {/* FB5 — how it is PACKED, asked FIRST because it is the only one of these the clerk can simply see,
+          and because the two questions below read differently once it is answered. Sacks and pallets are the
+          same goods and not the same job: one is worked on and off an open deck, the other is forklifted into
+          something that shuts, and only one of them needs nothing at all to lift it. */}
+      <div class="field" style="margin-top:12px">
+        <span class="field__label" id="freight-packaging-label">
+          {t('agent.accept.packaging')}
+        </span>
+        {/* Chosen by LOOKING. The sheet shows all seven with their pictures, the chosen one ticked — which is
+            both halves of the rule at once: everything side by side while you decide, your own answer marked
+            once you have. The cast is safe by construction: every key is a PACKAGING_OPTIONS value, and that
+            list is the literal set the API's own enum is matched against. */}
+        <OptionPicker
+          id="freight-packaging"
+          labelledBy="freight-packaging-label"
+          topic="packaging"
+          title={t('agent.accept.packaging')}
+          options={PACKAGING_HELP.map((p) => ({ key: p.value, label: t(p.labelKey as 'agent.accept.packBagged'), detail: t(p.detailKey as 'agent.accept.packBaggedWhy') }))}
+          value={f.packaging}
+          onChange={(key) => actions.setAccept({ packaging: key as PackagingChoice })}
+          placeholder={t('agent.accept.packagingChoose')}
+          config={agentConfig()}
+        />
+      </div>
+      <p class="card__note">{t('agent.accept.packagingNote')}</p>
+
       {/* FB2c — the two facts a tape measure cannot supply, asked of the one person standing at the load.
           `indivisible` is not cosmetic: at this weight it is the difference between two ordinary trips on an
           open deck and a low-loader with a permit. */}
@@ -497,18 +528,25 @@ function FreightBookingCard({ state, actions }: { state: AgentState; actions: Ag
       <p class="card__note">{t('agent.accept.indivisibleNote')}</p>
 
       <div class="field" style="margin-top:12px">
-        <label class="field__label" for="freight-body">
+        <span class="field__label" id="freight-body-label">
           {t('agent.accept.bodyHint')}
-        </label>
-        {/* The cast is safe by construction: every option below is a BODY_HINTS value, and BODY_HINTS is the
-            literal list the API's own enum is matched against. */}
-        <select id="freight-body" class="input" value={f.bodyHint} onInput={(e) => actions.setAccept(chooseBodyHint(f, e.currentTarget.value as BodyHint))}>
-          {BODY_HINTS.map((b) => (
-            <option key={b.value} value={b.value}>
-              {t(b.labelKey as 'agent.accept.bodyAny')}
-            </option>
-          ))}
-        </select>
+        </span>
+        {/* Bodies are the case the pictures were made for: a clerk who could not name a curtain-side knows one
+            on sight. Note this list keeps "I don't know" as a ROW rather than as the placeholder — here it is
+            a real and often correct answer (the hint is advisory, and no opinion is the honest one), not the
+            absence of one. The cast is safe by construction: every key is a BODY_HINTS value, and BODY_HINTS
+            is the literal list the API's own enum is matched against. */}
+        <OptionPicker
+          id="freight-body"
+          labelledBy="freight-body-label"
+          topic="body"
+          title={t('agent.accept.bodyHint')}
+          options={BODY_HINTS.map((b) => ({ key: b.value, label: t(b.labelKey as 'agent.accept.bodyAny'), detail: t(b.detailKey as 'agent.accept.bodyFlatbedWhy') }))}
+          value={f.bodyHint}
+          onChange={(key) => actions.setAccept(chooseBodyHint(f, key as BodyHint))}
+          placeholder={t('agent.accept.bodyAny')}
+          config={agentConfig()}
+        />
       </div>
       <p class="card__note">{t('agent.accept.bodyHintNote')}</p>
 

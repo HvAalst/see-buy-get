@@ -133,7 +133,11 @@ export class ConsignmentService {
         destLocation: lot.destLocation,
         weightKg: lot.weightKg,
         natureCode: lot.natureCode,
-        bulk: true,
+        // FB5 — a co-op lot is deposited in SACKS, not poured. It was set `bulk: true` on the reasoning that
+        // a durable commodity self-loads, which is exactly the conflation this slice removes: sacks of maize
+        // are lifted by hand or forklift, and calling them loose told every member's lot it needed no
+        // handling equipment and wanted a tipper.
+        packaging: 'bagged',
         maxSpend: lot.maxSpend,
         // shipperDid intentionally omitted — off-platform cash settlement (the F2 model): no wallet is billed.
       },

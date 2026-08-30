@@ -159,6 +159,35 @@ export const enFleet = {
   'fleet.vehicles.saveRate': 'Save the new rate',
   'fleet.vehicles.keepRate': 'Keep it as it is',
 
+  // The truck bodies, one sentence each — what you would recognise in a yard, not what a catalogue calls it.
+  // The LABELS come from the server (it owns the catalogue); only these descriptions live here.
+  'fleet.body.flatbedWhy': 'A flat open deck, no sides and no roof. Loaded from the side or lifted on from above, then strapped and sheeted.',
+  'fleet.body.dropsideWhy': 'A flat deck with low sides that drop down flat. Loads like a flatbed but holds loose goods in.',
+  'fleet.body.boxWhy': 'A closed box with doors at the back. Dry, lockable, loaded by forklift or tail-lift.',
+  'fleet.body.curtain_sideWhy': 'A box whose sides are heavy curtains that slide back. Dry like a box, but loadable along its whole length.',
+  'fleet.body.refrigeratedWhy': 'An insulated box with a cooling unit on the front. Holds a set temperature the whole way.',
+  'fleet.body.insulatedWhy': 'An insulated box with no cooling unit. Slows temperature change; it cannot hold a cold chain on its own.',
+  'fleet.body.tipperWhy': 'An open tub that lifts at the front and tips its load out of the back. Sand, gravel, spoil.',
+  'fleet.body.cement_mixerWhy': 'A turning drum that keeps wet concrete moving so it does not set on the way.',
+  'fleet.body.grain_hopperWhy': 'A sealed hopper that discharges grain through gates underneath, by gravity or auger.',
+  'fleet.body.bulk_tankerWhy': 'A sealed silo for powder — cement, flour, lime. Blown out under air pressure and never opened to the weather.',
+  'fleet.body.tankerWhy': 'A tank for liquids, filled and emptied by pump. General duty, not food-grade.',
+  'fleet.body.food_tankerWhy': 'A food-grade tank, certified and cleaned to carry milk, oil, juice or liquid sugar. It may carry nothing else.',
+  'fleet.body.fuel_tankerWhy': 'A certified tank for fuel and flammable liquid, with the compartments and earthing that requires.',
+  'fleet.body.water_bowserWhy': 'A water tank, usually with its own pump and hose. Site water, dust control, supply.',
+  'fleet.body.hazmatWhy': 'A body certified for dangerous goods — chemicals, corrosives — with the placards and papers to match.',
+  'fleet.body.car_carrierWhy': 'A multi-deck frame with ramps for driving vehicles on and off.',
+  'fleet.body.livestockWhy': 'A ventilated body with decks and ramps for live animals.',
+  'fleet.body.skeletalWhy': 'A bare steel frame that a shipping container twist-locks onto. It carries the container, never loose goods.',
+  'fleet.body.container_selfloaderWhy': 'A skeletal with its own cranes at each end, so it lifts a container off itself. No yard equipment needed.',
+  'fleet.body.craneWhy': 'A flat deck with a crane arm behind the cab. Loads and unloads itself, anywhere.',
+  'fleet.body.lowboyWhy': 'A trailer that sits very low between its wheels, so a tall machine still clears the bridges. One heavy piece that cannot be split.',
+  'fleet.body.loggingWhy': 'Bolsters and stakes for logs or long timber, usually with its own crane.',
+  'fleet.body.tow_recoveryWhy': 'A bed or boom for lifting and moving broken-down or damaged vehicles.',
+  'fleet.body.refuseWhy': 'A compactor body for waste collection.',
+  'fleet.body.unknownWhy': 'A truck body in the network catalogue.',
+  'fleet.vehicles.pickBodySheet': 'Which body is it? Look for the one that matches the truck.',
+
   // Load/unload equipment labels (logic.ts EQUIPMENT_KEYS → equipmentOptions).
   'fleet.equipment.htr': 'Hand truck / sack barrow',
   'fleet.equipment.plt': 'Pallet jack',
@@ -167,6 +196,15 @@ export const enFleet = {
   'fleet.equipment.crn': 'Crane / Hiab',
   'fleet.equipment.rmp': 'Loading ramp',
   'fleet.equipment.str': 'Slings / straps',
+  // The sentence beside each picture in the equipment help sheet. Declaring these is what makes a vehicle
+  // eligible for a load, so each one says what it LETS YOU TAKE rather than only what it is.
+  'fleet.equipment.htrWhy': 'A two-wheeled barrow for walking boxes and sacks off the deck. The minimum for a load one person can tilt.',
+  'fleet.equipment.pltWhy': 'A manual jack that slides under a pallet and lifts it just clear of the floor. Moves pallets on level ground — it cannot lift them onto a deck.',
+  'fleet.equipment.tltWhy': 'A hydraulic platform at the back that lowers to the ground and lifts back up. Turns any closed body into one that can load a pallet without a forklift on site.',
+  'fleet.equipment.fltWhy': 'A forklift carried with the truck (a mounted "kooiaap") or available at both ends. What lets you take pallets, drums and IBCs where the site has nothing.',
+  'fleet.equipment.crnWhy': 'A crane arm on the truck. Lifts heavy or awkward single pieces on and off from above, with no yard equipment at all.',
+  'fleet.equipment.rmpWhy': 'Ramps to drive or roll a load up onto the deck. For anything with wheels — vehicles, machinery, drums.',
+  'fleet.equipment.strWhy': 'Slings, straps and chains for securing a load down. Required for heavy freight, and what a securement photo shows.',
 
   // logic.ts sentence builders (each takes `t` and returns the finished string).
   'fleet.logic.vMissingPlate': 'Type the number plate.',

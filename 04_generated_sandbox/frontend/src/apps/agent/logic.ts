@@ -105,17 +105,17 @@ const SIZE_KEYS: Record<ParcelSize, { labelKey: MessageKey; hintKey: MessageKey 
 /** The commodity's primary cargo nature (S30). Plain-language labels for a low-literacy counter; the code
  *  drives the backend compatibility matrix (e.g. cement powder never rides with fresh food). GEN is default. */
 export type CargoNature = 'GEN' | 'FOD' | 'FOP' | 'HAZ-CHEM' | 'HAZ-DUST' | 'HAZ-BIO' | 'HAZ-FLAM' | 'FRG' | 'ODR' | 'HUM';
-export const NATURES: Array<{ key: CargoNature; labelKey: MessageKey }> = [
-  { key: 'GEN', labelKey: 'agent.nature.gen' },
-  { key: 'FOD', labelKey: 'agent.nature.fod' },
-  { key: 'FOP', labelKey: 'agent.nature.fop' },
-  { key: 'FRG', labelKey: 'agent.nature.frg' },
-  { key: 'ODR', labelKey: 'agent.nature.odr' },
-  { key: 'HUM', labelKey: 'agent.nature.hum' },
-  { key: 'HAZ-CHEM', labelKey: 'agent.nature.hazChem' },
-  { key: 'HAZ-DUST', labelKey: 'agent.nature.hazDust' },
-  { key: 'HAZ-BIO', labelKey: 'agent.nature.hazBio' },
-  { key: 'HAZ-FLAM', labelKey: 'agent.nature.hazFlam' },
+export const NATURES: Array<{ key: CargoNature; labelKey: MessageKey; detailKey: MessageKey }> = [
+  { key: 'GEN', labelKey: 'agent.nature.gen', detailKey: 'agent.nature.genWhy' },
+  { key: 'FOD', labelKey: 'agent.nature.fod', detailKey: 'agent.nature.fodWhy' },
+  { key: 'FOP', labelKey: 'agent.nature.fop', detailKey: 'agent.nature.fopWhy' },
+  { key: 'FRG', labelKey: 'agent.nature.frg', detailKey: 'agent.nature.frgWhy' },
+  { key: 'ODR', labelKey: 'agent.nature.odr', detailKey: 'agent.nature.odrWhy' },
+  { key: 'HUM', labelKey: 'agent.nature.hum', detailKey: 'agent.nature.humWhy' },
+  { key: 'HAZ-CHEM', labelKey: 'agent.nature.hazChem', detailKey: 'agent.nature.hazChemWhy' },
+  { key: 'HAZ-DUST', labelKey: 'agent.nature.hazDust', detailKey: 'agent.nature.hazDustWhy' },
+  { key: 'HAZ-BIO', labelKey: 'agent.nature.hazBio', detailKey: 'agent.nature.hazBioWhy' },
+  { key: 'HAZ-FLAM', labelKey: 'agent.nature.hazFlam', detailKey: 'agent.nature.hazFlamWhy' },
 ];
 
 /** Plain words for a cargo nature code (falls back to the raw code for an unknown one). */
@@ -188,11 +188,57 @@ export interface AcceptForm {
   // skeletal from a flatbed, and a binding wrong pick would exclude the operator who could have carried it).
   indivisible: boolean;
   bodyHint: BodyHint; // '' = no opinion
+  // FB5 — how it is PACKED. Asked outright and required, because it is the one thing here the clerk can see
+  // rather than judge, and the one whose default silently decides both the body and what has to lift it.
+  packaging: PackagingChoice; // '' = not yet answered, which blocks the booking
   // FB2d — the bodies the CUSTOMER rules out. The opposite direction of travel from `bodyHint`, and a
   // different kind of fact: the hint is the shop's guess at what would work and binds nothing, while this is
   // the shipper's own refusal and binds a claim. At a counter the walk-in customer IS the shipper, so it is
   // theirs to say and the clerk's only to record. Empty = they ruled out nothing, which is the normal case.
   excludedBodies: ExcludedBody[];
+}
+
+/**
+ * FB5 — how the goods are PRESENTED for handling, which is the fact that decides the body and the kit.
+ *
+ * Unlike the body hint below, this is an OBSERVATION, not a guess: the clerk is looking at the load, and
+ * "sacks or pallets?" is answerable by anyone who can see it. That is why it is asked here at all — the same
+ * commodity is handled completely differently from place to place (sugar is poured into a food-grade tanker
+ * in Holland and stacked in sacks on a flatbed in Kenya), so no rule keyed on WHAT it is can get both right.
+ *
+ * All seven the API accepts, because each one lifts and secures differently and the clerk can tell them
+ * apart by sight — this is not the body picker's problem, where twenty-five options invite a confident
+ * wrong answer.
+ */
+export const PACKAGING_OPTIONS = [
+  { value: '', labelKey: 'agent.accept.packagingChoose', detailKey: 'agent.accept.packagingChoose' },
+  { value: 'bagged', labelKey: 'agent.accept.packBagged', detailKey: 'agent.accept.packBaggedWhy' },
+  { value: 'palletised', labelKey: 'agent.accept.packPalletised', detailKey: 'agent.accept.packPalletisedWhy' },
+  { value: 'loose', labelKey: 'agent.accept.packLoose', detailKey: 'agent.accept.packLooseWhy' },
+  { value: 'drummed', labelKey: 'agent.accept.packDrummed', detailKey: 'agent.accept.packDrummedWhy' },
+  { value: 'baled', labelKey: 'agent.accept.packBaled', detailKey: 'agent.accept.packBaledWhy' },
+  { value: 'ibc', labelKey: 'agent.accept.packIbc', detailKey: 'agent.accept.packIbcWhy' },
+  { value: 'piece', labelKey: 'agent.accept.packPiece', detailKey: 'agent.accept.packPieceWhy' },
+] as const;
+
+/** The real packagings, in picker order — what the help sheet illustrates. "Choose…" is not a packaging. */
+export const PACKAGING_HELP = PACKAGING_OPTIONS.filter(
+  (p): p is (typeof PACKAGING_OPTIONS)[number] & { value: Packaging } => p.value !== '',
+);
+
+/** The picker's values as literals — so a packaging this form offers can never drift from one the API takes. */
+export type PackagingChoice = (typeof PACKAGING_OPTIONS)[number]['value'];
+
+/** A real packaging — every option except the "choose…" that heads the list. */
+export type Packaging = Exclude<PackagingChoice, ''>;
+
+/**
+ * REQUIRED, unlike the body hint: an unanswered hint is honest ("I don't know what body it needs"), but an
+ * unanswered packaging silently falls back to the deployment default and STAMPS a body on the load. Getting
+ * it wrong is not cosmetic — it is what told eighteen tonnes of sacks it needed no handling equipment.
+ */
+export function packagingValue(p: PackagingChoice): Packaging | undefined {
+  return p === '' ? undefined : p;
 }
 
 /**
@@ -203,14 +249,14 @@ export interface AcceptForm {
  * opinion" was the honest one. Anything not here is left blank and derived from the load's own facts.
  */
 export const BODY_HINTS = [
-  { value: '', labelKey: 'agent.accept.bodyAny' },
-  { value: 'flatbed', labelKey: 'agent.accept.bodyFlatbed' },
-  { value: 'box', labelKey: 'agent.accept.bodyBox' },
-  { value: 'curtain_side', labelKey: 'agent.accept.bodyCurtain' },
-  { value: 'refrigerated', labelKey: 'agent.accept.bodyReefer' },
-  { value: 'tipper', labelKey: 'agent.accept.bodyTipper' },
-  { value: 'lowboy', labelKey: 'agent.accept.bodyLowboy' },
-  { value: 'skeletal', labelKey: 'agent.accept.bodyContainer' },
+  { value: '', labelKey: 'agent.accept.bodyAny', detailKey: 'agent.accept.bodyAnyWhy' },
+  { value: 'flatbed', labelKey: 'agent.accept.bodyFlatbed', detailKey: 'agent.accept.bodyFlatbedWhy' },
+  { value: 'box', labelKey: 'agent.accept.bodyBox', detailKey: 'agent.accept.bodyBoxWhy' },
+  { value: 'curtain_side', labelKey: 'agent.accept.bodyCurtain', detailKey: 'agent.accept.bodyCurtainWhy' },
+  { value: 'refrigerated', labelKey: 'agent.accept.bodyReefer', detailKey: 'agent.accept.bodyReeferWhy' },
+  { value: 'tipper', labelKey: 'agent.accept.bodyTipper', detailKey: 'agent.accept.bodyTipperWhy' },
+  { value: 'lowboy', labelKey: 'agent.accept.bodyLowboy', detailKey: 'agent.accept.bodyLowboyWhy' },
+  { value: 'skeletal', labelKey: 'agent.accept.bodyContainer', detailKey: 'agent.accept.bodyContainerWhy' },
 ] as const;
 
 /** The picker's values as literals — so a body this form offers can never drift from one the API accepts. */
@@ -275,6 +321,7 @@ export const EMPTY_ACCEPT: AcceptForm = {
   negotiate: false,
   indivisible: false,
   bodyHint: '',
+  packaging: '', // asked, never assumed — a fresh booking has no answer yet
   excludedBodies: [],
 };
 
@@ -370,6 +417,10 @@ export function bookFreightMissing(f: AcceptForm, now: number, t: Translate): st
   if (!parseDims(f.dims)) return t('agent.logic.freightMeasure');
   if (!f.destPudoDid) return t('agent.logic.acceptPickDest');
   if (parseBudget(f.budgetCap) == null) return t('agent.logic.freightBudget');
+  // FB5 — the one freight fact this form REFUSES to guess. Left unanswered the server falls back to the
+  // deployment default and stamps a body from it, so an unasked question becomes a recorded claim about a
+  // load nobody looked at. The clerk is looking at it.
+  if (!packagingValue(f.packaging)) return t('agent.logic.freightPackaging');
   if (f.freightWhen === 'planned') {
     const at = Date.parse(f.freightDate);
     if (!f.freightDate || Number.isNaN(at)) return t('agent.logic.freightPlannedDate');

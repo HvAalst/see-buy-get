@@ -49,19 +49,25 @@ export interface VehicleForm {
 /** Load/unload equipment a fleet manager can declare (S32). Mirrors the backend EQUIPMENT tuple; plain
  *  labels for the console. 'MAN' is implicit (every vehicle can do manual handling) so it is not listed. */
 export type Equipment = 'HTR' | 'PLT' | 'FLT' | 'TLT' | 'CRN' | 'RMP' | 'STR';
-const EQUIPMENT_KEYS: Array<{ key: Equipment; labelKey: MessageKey }> = [
-  { key: 'HTR', labelKey: 'fleet.equipment.htr' },
-  { key: 'PLT', labelKey: 'fleet.equipment.plt' },
-  { key: 'TLT', labelKey: 'fleet.equipment.tlt' },
-  { key: 'FLT', labelKey: 'fleet.equipment.flt' },
-  { key: 'CRN', labelKey: 'fleet.equipment.crn' },
-  { key: 'RMP', labelKey: 'fleet.equipment.rmp' },
-  { key: 'STR', labelKey: 'fleet.equipment.str' },
+const EQUIPMENT_KEYS: Array<{ key: Equipment; labelKey: MessageKey; detailKey: MessageKey }> = [
+  { key: 'HTR', labelKey: 'fleet.equipment.htr', detailKey: 'fleet.equipment.htrWhy' },
+  { key: 'PLT', labelKey: 'fleet.equipment.plt', detailKey: 'fleet.equipment.pltWhy' },
+  { key: 'TLT', labelKey: 'fleet.equipment.tlt', detailKey: 'fleet.equipment.tltWhy' },
+  { key: 'FLT', labelKey: 'fleet.equipment.flt', detailKey: 'fleet.equipment.fltWhy' },
+  { key: 'CRN', labelKey: 'fleet.equipment.crn', detailKey: 'fleet.equipment.crnWhy' },
+  { key: 'RMP', labelKey: 'fleet.equipment.rmp', detailKey: 'fleet.equipment.rmpWhy' },
+  { key: 'STR', labelKey: 'fleet.equipment.str', detailKey: 'fleet.equipment.strWhy' },
 ];
 
 /** The declarable equipment options with their plain-words labels resolved in the active locale. */
 export function equipmentOptions(t: Translate): Array<{ key: Equipment; label: string }> {
   return EQUIPMENT_KEYS.map((e) => ({ key: e.key, label: t(e.labelKey) }));
+}
+
+/** The same options with the sentence each picture is captioned by, for the help sheet. Kept beside the
+ *  labels so a new piece of equipment cannot be added to one list and forgotten in the other. */
+export function equipmentHelp(t: Translate): Array<{ key: Equipment; label: string; detail: string }> {
+  return EQUIPMENT_KEYS.map((e) => ({ key: e.key, label: t(e.labelKey), detail: t(e.detailKey) }));
 }
 
 export const EMPTY_VEHICLE: VehicleForm = {
@@ -211,6 +217,29 @@ export function driverAction(d: Pick<DriverRow, 'status' | 'registry'>): DriverA
   if (d.status === 'DRAFT' && d.registry === 'heavy') return 'submit-kyc';
   if (d.status === 'KYC_PENDING') return 'awaiting-glos';
   return 'none';
+}
+
+/**
+ * The truck bodies as the look-and-choose picker needs them: the server's label, our sentence, and the
+ * capability line the form already showed underneath.
+ *
+ * The LABELS come from the server because it owns the catalogue — a body added there must not need a
+ * frontend release to become choosable. Only the descriptions live in the catalog, and an id we have no
+ * sentence for falls back to a neutral one rather than rendering a raw key: a new body should look
+ * unexplained, not broken.
+ */
+export function bodyPickerOptions(subtypes: SubtypeRow[], t: Translate): Array<{ key: string; label: string; detail: string; meta?: string }> {
+  return subtypes.map((s) => {
+    const key = `fleet.body.${s.id}Why` as MessageKey;
+    const detail = t(key);
+    return {
+      key: s.id,
+      label: s.label,
+      // t() returns the key itself when there is no entry — that is the signal to fall back.
+      detail: detail === key ? t('fleet.body.unknownWhy') : detail,
+      meta: subtypeLine(s, t) ?? undefined,
+    };
+  });
 }
 
 export function subtypeLine(sub: SubtypeRow | undefined, t: Translate): string | null {

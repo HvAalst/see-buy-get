@@ -1,3 +1,4 @@
+import { isPackaging, type Packaging } from './packaging';
 // PUDO Light economic + operational constants (Compendium Ch 14–17). Hard-coding these here is a
 // placeholder for the admin-editable config service the playbook mandates (Risk #55).
 
@@ -200,3 +201,18 @@ export const GHOST_BUS_H = 6; // On_Bus too long
 export const MDP_DWELL_H = 12; // At_MDP (awaiting sort/load) too long
 export const CONNECTIVITY_LOSS_H = 2; // agent no-ping
 export const AGENT_ONLINE_H = 1; // counted "online" if pinged within this window
+
+/**
+ * FB5 — how a load is assumed to be PACKED when nobody says.
+ *
+ * A deployment setting, not a network constant, and that is the whole point (user, 2026-08-30): a tonne of
+ * sugar is ordinarily poured into a food-grade bulk trailer in Holland and stacked in sacks on a flatbed in
+ * Kenya. Neither is "the" default — each is the default WHERE IT IS. `bagged` is right for this deployment;
+ * a European one sets GLOS_DEFAULT_PACKAGING=loose and gets tankers where this one gets flatbeds.
+ *
+ * It is a fallback for API callers only. Every screen that mints freight ASKS, because the person standing
+ * at the load is the one who knows, and a default that is usually right is still wrong for the load in front
+ * of them. An unrecognised value falls back rather than throwing: a typo in a deployment's environment must
+ * not take the whole freight path down.
+ */
+export const DEFAULT_PACKAGING: Packaging = isPackaging(process.env.GLOS_DEFAULT_PACKAGING) ? process.env.GLOS_DEFAULT_PACKAGING : 'bagged';

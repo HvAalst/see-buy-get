@@ -1882,3 +1882,133 @@
   color: var(--tx);
   font-weight: 700;
 }
+
+/* One option inside a help sheet: its picture, its name, its sentence. The picture leads because it is the
+   fastest thing to read, and it is optional — the row collapses to text alone when no admin has curated one
+   (or when the fetch failed), which must look deliberate rather than broken. */
+.opthelp {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--bd-soft);
+}
+.opthelp:last-child {
+  border-bottom: 0;
+}
+/* A fixed box so a column of rows stays aligned whether or not each one has a picture, and so a tall or
+   wide drawing cannot push the words off the screen. `contain` crops nothing — a diagram cut in half is
+   worse than a small one. */
+.opthelp__img {
+  width: 96px;
+  height: 72px;
+  flex: none;
+  object-fit: contain;
+  border-radius: var(--r-ctl);
+  background: var(--panel);
+}
+.opthelp__text {
+  min-width: 0; /* lets a long sentence wrap instead of stretching the flex row */
+}
+.opthelp__label {
+  margin: 0 0 2px;
+  font-weight: 700;
+  color: var(--tx);
+}
+.opthelp .opthelp__detail {
+  margin: 0;
+  font-size: 14px;
+  color: var(--tx2);
+}
+
+/* --- OptionPicker: a choice made by LOOKING, not by reading a dropdown ------------------------------ */
+
+/* The closed control. Deliberately shaped like the .input/.select beside it — it stands in for a native
+   select, so it must not read as a button that does something else. */
+.optpick {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 10px 12px;
+  border: 1px solid var(--bd);
+  border-radius: var(--r-ctl);
+  background: var(--card);
+  color: var(--tx);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.optpick__value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* An unmade choice reads as a prompt, not as a value. */
+.optpick__value--empty {
+  color: var(--tx3);
+}
+
+.optpick__list {
+  display: flex;
+  flex-direction: column;
+}
+/* Each option is a full-width row and clears the 48px target on its own — a list of 25 is exactly where a
+   cramped hit area costs somebody three wrong taps. */
+.optpick__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 10px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--bd-soft);
+  border-radius: var(--r-ctl);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.optpick__row:last-child {
+  border-bottom: 0;
+}
+.optpick__row:hover {
+  background: var(--panel);
+}
+/* The active choice: a tint and a tick, both orange. Never a filled orange row — orange marks what IS
+   chosen, it does not shout for a tap. */
+.optpick__row--on {
+  background: var(--org-light);
+}
+.optpick__tick {
+  color: var(--org);
+  flex: none;
+}
+/* Keeps a not-yet-illustrated row the same shape as an illustrated one. */
+.optpick__noimg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 72px;
+  flex: none;
+  border-radius: var(--r-ctl);
+  background: var(--panel);
+  color: var(--tx3);
+}
+.optpick__row .opthelp__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.optpick__meta {
+  font-size: 13px;
+  color: var(--tx3);
+}

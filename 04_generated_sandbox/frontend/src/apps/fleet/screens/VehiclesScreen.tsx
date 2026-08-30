@@ -1,9 +1,10 @@
 import { useRef, useState } from 'preact/hooks';
-import { AuthImage, Button, Card, ErrorNote, Icon, Pill, QrBlock, ReadAloud, Sheet } from '../../../shared/ui';
+import { AuthImage, Button, Card, ErrorNote, Icon, OptionInfo, OptionPicker, Pill, QrBlock, ReadAloud, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { qrPayload } from '../../../shared/qr';
 import type { MediaKind } from '../../../lib/sbg/personas/media';
-import { equipmentOptions, subtypeLine, vehicleMissing } from '../logic';
+import { fleetConfig } from '../api';
+import { bodyPickerOptions, equipmentHelp, equipmentOptions, subtypeLine, vehicleMissing } from '../logic';
 import { VEHICLE_CLASSES, type VehicleRow } from '../types';
 import type { FleetActions, FleetState } from '../useFleetApp';
 
@@ -122,17 +123,24 @@ export function VehiclesScreen({ state, actions }: VehiclesScreenProps) {
           </div>
           {isTruck ? (
             <div class="field">
-              <label class="field__label" for="v-sub">
+              <span class="field__label" id="v-sub-label">
                 {t('fleet.vehicles.truckBody')}
-              </label>
-              <select id="v-sub" class="select" value={f.truckSubtype} onChange={(e) => actions.setVForm({ truckSubtype: e.currentTarget.value })}>
-                <option value="">{t('fleet.vehicles.pickBody')}</option>
-                {state.subtypes.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
+              </span>
+              {/* Twenty-five bodies is not a dropdown (user, 2026-08-30). A native select shows one line of
+                  jargon at a time and cannot carry a picture — and the whole difficulty is that people
+                  RECOGNISE a curtain-side without being able to name one. So the picker IS the help sheet:
+                  you choose by looking, and it filters once the list is long. */}
+              <OptionPicker
+                id="v-sub"
+                labelledBy="v-sub-label"
+                topic="body"
+                title={t('fleet.vehicles.pickBodySheet')}
+                options={bodyPickerOptions(state.subtypes, t)}
+                value={f.truckSubtype}
+                onChange={(key) => actions.setVForm({ truckSubtype: key })}
+                placeholder={t('fleet.vehicles.pickBody')}
+                config={fleetConfig()}
+              />
             </div>
           ) : (
             <div class="field">
@@ -150,7 +158,13 @@ export function VehiclesScreen({ state, actions }: VehiclesScreenProps) {
         {subLine ? <p class="hint" style="margin-top:8px">{subLine}</p> : null}
         {isTruck ? (
           <div class="field" style="margin-top:12px">
-            <span class="field__label">{t('fleet.vehicles.equipmentLabel')}</span>
+            {/* Equipment is ticked, not chosen — there is no single selection and no "not sure", so the
+                sheet always shows all seven. That is the right answer here anyway: a manager deciding what
+                their truck carries is comparing across the list, not checking one word. */}
+            <p class="info-row">
+              <span class="field__label">{t('fleet.vehicles.equipmentLabel')}</span>
+              <OptionInfo topic="equipment" title={t('fleet.vehicles.equipmentLabel')} config={fleetConfig()} options={equipmentHelp(t)} />
+            </p>
             <div class="chips">
               {equipmentOptions(t).map((eq) => {
                 const on = f.equipment.includes(eq.key);

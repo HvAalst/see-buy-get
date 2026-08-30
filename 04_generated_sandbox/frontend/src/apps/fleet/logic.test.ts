@@ -3,6 +3,7 @@ import { t } from '../../shared/i18n'; // English is the base catalog, so the re
 import {
   EMPTY_DRIVER,
   EMPTY_VEHICLE,
+  bodyPickerOptions,
   driverAction,
   driverMissing,
   freeDrivers,
@@ -149,5 +150,26 @@ describe('views', () => {
       'Refrigerated box: about 2500 kg · cold-chain',
     );
     expect(subtypeLine(undefined, t)).toBeNull();
+  });
+
+  describe('the look-and-choose body picker', () => {
+    it('takes the LABEL from the server and the sentence from the catalog', () => {
+      // The server owns the body catalogue, so a body added there becomes choosable with no frontend
+      // release. Only the description lives here.
+      const [row] = bodyPickerOptions([{ id: 'curtain_side', label: 'Curtain-side (tautliner)', capacityKg: 12000 }], t);
+      expect(row.key).toBe('curtain_side');
+      expect(row.label).toBe('Curtain-side (tautliner)'); // the server's word, not ours
+      expect(row.detail).toContain('curtains that slide back');
+      expect(row.meta).toContain('12000 kg'); // the capability line the form already showed
+    });
+
+    it('falls back to a neutral sentence for a body it has no words for', () => {
+      // t() returns the key itself when there is no entry. Rendering `fleet.body.hovercraftWhy` at a fleet
+      // manager would make a NEW body look broken rather than merely unexplained — and the server is
+      // allowed to grow the catalogue without us.
+      const [row] = bodyPickerOptions([{ id: 'hovercraft', label: 'Hovercraft', capacityKg: 900 }], t);
+      expect(row.detail).toBe(t('fleet.body.unknownWhy'));
+      expect(row.detail).not.toContain('fleet.body');
+    });
   });
 });

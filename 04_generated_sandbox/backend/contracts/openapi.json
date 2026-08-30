@@ -10772,6 +10772,131 @@
         }
       }
     },
+    "/v1/sbg/help/{topic}": {
+      "get": {
+        "operationId": "Help.topic",
+        "summary": "",
+        "description": "Every option of one vocabulary, with the picture where one is curated.\n\nThe whole topic in one request, deliberately: a picker needs all of it to render, and the \"not sure\"\nsheet shows every option side by side. One request per option would make that sheet a waterfall on the\nexact connection least able to afford it.",
+        "parameters": [
+          {
+            "name": "topic",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/help/{topic}/{key}/image": {
+      "get": {
+        "operationId": "Help.image",
+        "summary": "",
+        "description": "One option's illustration bytes.\n\nPUBLIC and immutable-cacheable: the URL carries the blob id as `?v=`, so a replaced picture is a new URL\nand the old one can be cached hard without ever going stale. nosniff because these bytes are served to\na browser — the upload path already refuses anything whose magic number is not a real raster image.",
+        "parameters": [
+          {
+            "name": "topic",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "put": {
+        "operationId": "Help.put",
+        "summary": "",
+        "description": "Set or replace one option's illustration. Operator-only — see the class note.",
+        "parameters": [
+          {
+            "name": "topic",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutHelpImageDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "delete": {
+        "operationId": "Help.remove",
+        "summary": "",
+        "description": "Remove one option's illustration. The option stays; its sheet falls back to text alone.",
+        "parameters": [
+          {
+            "name": "topic",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/notifications/vapid-public-key": {
       "get": {
         "operationId": "Notifications.vapidPublicKey",
@@ -13950,6 +14075,19 @@
               "negotiate"
             ]
           },
+          "packaging": {
+            "type": "string",
+            "description": "FB5 — how the goods are PACKED, which decides the body and what has to lift it. Omitted falls back to\n the DEPLOYMENT's default (sacks here, loose in a European deployment), never to a network-wide guess.",
+            "enum": [
+              "loose",
+              "bagged",
+              "palletised",
+              "drummed",
+              "baled",
+              "ibc",
+              "piece"
+            ]
+          },
           "excludedBodies": {
             "type": "array",
             "description": "FB2d — bodies the SHIPPER rules out. At a counter the walk-in customer IS the shipper, so this is their\n call to make and the clerk's job only to record it. A PREFERENCE, not a limit of any vehicle: the board\n shows it as the shipper's choice, and it binds a claim only because the driver was told first.",
@@ -15918,6 +16056,19 @@
       "RegisterFreightDto": {
         "type": "object",
         "properties": {
+          "packaging": {
+            "type": "string",
+            "description": "FB5 — how the goods are PACKED, which decides the body and what has to lift it. Omitted falls back to\n the DEPLOYMENT's default (sacks here, loose in a European deployment), never to a network-wide guess.",
+            "enum": [
+              "loose",
+              "bagged",
+              "palletised",
+              "drummed",
+              "baled",
+              "ibc",
+              "piece"
+            ]
+          },
           "excludedBodies": {
             "type": "array",
             "description": "Bodies the SHIPPER rules out (theft risk, an insurer's wording, a customer's requirement). A stated\n preference, not a physical constraint, and the board presents it as one.",
@@ -16267,6 +16418,19 @@
               ]
             }
           },
+          "packaging": {
+            "type": "string",
+            "description": "FB5 — how the goods are PRESENTED for handling, which is what decides the body and the kit.\n\nRecorded per consignment rather than inferred from the commodity, because the same commodity is handled\ncompletely differently from place to place (user, 2026-08-30): sugar is poured into a food-grade bulk\ntrailer in Holland and stacked in sacks on a flatbed in Kenya. A rule keyed on \"is it sugar\" gets one of\nthose two wrong wherever it is deployed.",
+            "enum": [
+              "loose",
+              "bagged",
+              "palletised",
+              "drummed",
+              "baled",
+              "ibc",
+              "piece"
+            ]
+          },
           "cargoClass": {
             "type": "string",
             "enum": [
@@ -16368,7 +16532,8 @@
             "type": "boolean"
           },
           "bulk": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "DERIVED from packaging (`loose`), and kept because vehicle matching is written against it.\n\nIt used to be the stored truth and it meant two opposite things — \"loose, it tips or augers\" in the body\nderivation, \"sugar/cement bags\" in the vehicle spec. It now has exactly one meaning, the loose one, which\nis what `Vehicle.carriesBulk` and the board's NO_BULK_BODY blocker already assumed."
           },
           "requiredCapabilities": {
             "type": "array",
@@ -17687,6 +17852,17 @@
         },
         "required": [
           "kind",
+          "dataUrl"
+        ]
+      },
+      "PutHelpImageDto": {
+        "type": "object",
+        "properties": {
+          "dataUrl": {
+            "type": "string"
+          }
+        },
+        "required": [
           "dataUrl"
         ]
       },

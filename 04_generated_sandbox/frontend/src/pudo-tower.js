@@ -8,7 +8,18 @@ import { el, mount } from './components/index.js';
 const API = window.GLOS_API || 'http://localhost:3000/v1';
 const root = document.getElementById('pudo-tower');
 
-const state = { dashboard: null, agents: [], finance: null, flags: [], kycQueue: [], heatmap: null, mdps: [], totes: [], lookup: null, msg: null, loading: true };
+const state = { dashboard: null, agents: [], finance: null, flags: [], kycQueue: [], heatmap: null, mdps: [], totes: [], lookup: null, msg: null, loading: true, help: null, helpTopic: 'packaging', helpBusy: null };
+
+// The four vocabularies a person has to CHOOSE from, and whose options are recognised rather than known.
+// The labels here are the operator's own words for the topic; the option keys come from the server, which
+// reads them off the canonical lists — so this console can never offer to illustrate an option that no
+// longer exists.
+const HELP_TOPICS = [
+  { key: 'packaging', label: 'Packaging', hint: 'how a load is presented — decides the body and the kit' },
+  { key: 'body', label: 'Truck bodies', hint: 'what turns up to carry it' },
+  { key: 'equipment', label: 'Handling equipment', hint: 'what lifts it on and off' },
+  { key: 'nature', label: 'Cargo nature', hint: 'what is inside — drives mixing rules and cold chain' },
+];
 
 let token = null;
 async function getToken() {
@@ -32,9 +43,100 @@ async function post(path, body) {
   return data;
 }
 
+async function send(path, method, body) {
+  const t = await getToken();
+  const res = await fetch(`${API}/sbg${path}`, { method, headers: { Authorization: `Bearer ${t}`, ...(body ? { 'content-type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Error ${res.status}`);
+  return data;
+}
+
+/**
+ * A chosen file, downscaled in the browser to a small JPEG data URL.
+ *
+ * Downscaling HERE rather than server-side is the same bargain the rest of the product makes with images:
+ * the illustration is fetched by every clerk on every booking, over connections paid for by the megabyte,
+ * so it is worth being strict at the one moment somebody is sitting at a desk on wifi. 512px is generous
+ * for a 96px thumbnail on a phone and still sharp on a large screen.
+ */
+function fileToDataUrl(file, maxPx = 512) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Could not read that file'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('That file is not an image'));
+      img.onload = () => {
+        const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        // A white ground: a transparent PNG flattened to JPEG would otherwise come out on black, which is
+        // exactly wrong for a line drawing of a truck.
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
+      };
+      img.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function loadHelp(topic) {
+  state.help = await api(`/help/${topic}`);
+}
+
+async function setHelpImage(topic, key, file) {
+  state.helpBusy = `${topic}:${key}`;
+  state.msg = null;
+  render();
+  try {
+    const dataUrl = await fileToDataUrl(file);
+    await send(`/help/${topic}/${key}/image`, 'PUT', { dataUrl });
+    await loadHelp(topic);
+    state.msg = { type: 'ok', text: `Illustration saved for ${key}.` };
+  } catch (e) {
+    state.msg = { type: 'err', text: String(e.message || e) };
+  }
+  state.helpBusy = null;
+  render();
+}
+
+async function clearHelpImage(topic, key) {
+  state.helpBusy = `${topic}:${key}`;
+  state.msg = null;
+  render();
+  try {
+    await send(`/help/${topic}/${key}/image`, 'DELETE');
+    await loadHelp(topic);
+    state.msg = { type: 'ok', text: `Illustration removed for ${key}.` };
+  } catch (e) {
+    state.msg = { type: 'err', text: String(e.message || e) };
+  }
+  state.helpBusy = null;
+  render();
+}
+
+async function selectHelpTopic(topic) {
+  state.helpTopic = topic;
+  state.help = null;
+  render();
+  try {
+    await loadHelp(topic);
+  } catch (e) {
+    state.msg = { type: 'err', text: String(e.message || e) };
+  }
+  render();
+}
+
 async function loadAll() {
   try {
-    [state.dashboard, state.agents, state.finance, state.flags, state.kycQueue, state.heatmap, state.mdps, state.totes] = await Promise.all([api('/dashboard'), api('/agents'), api('/finance'), api('/flags'), api('/agents/kyc-queue'), api('/heatmap'), api('/mdps'), api('/totes')]);
+    [state.dashboard, state.agents, state.finance, state.flags, state.kycQueue, state.heatmap, state.mdps, state.totes, state.help] = await Promise.all([api('/dashboard'), api('/agents'), api('/finance'), api('/flags'), api('/agents/kyc-queue'), api('/heatmap'), api('/mdps'), api('/totes'), api(`/help/${state.helpTopic}`)]);
     state.msg = null;
   } catch (e) {
     const m = String(e.message || e);
@@ -272,6 +374,74 @@ function supportPanel() {
   return el('div', { className: 'pt__panel' }, children);
 }
 
+/**
+ * The illustration library — a picture for every option a person has to choose between.
+ *
+ * It lives in the operator console because a drawing of "a flatbed" is a claim about what trucks look like
+ * HERE, and the deployment is what knows: the vehicle that means flatbed in Nakuru is not the one a European
+ * catalogue shows. The network ships the vocabulary; the operator supplies the local truth.
+ *
+ * The grid deliberately shows EVERY option, illustrated or not — the empty slots are the to-do list, and an
+ * option with no picture is a normal state (its sheet simply falls back to the words).
+ */
+function helpPanel() {
+  const topics = el('div', { className: 'pt__btns', style: { marginBottom: '12px', flexWrap: 'wrap' } }, HELP_TOPICS.map((tp) =>
+    el('button', {
+      className: 'pt__btn',
+      // The operator's own convention for "this is the current one" — orange marks the ACTIVE CHOICE.
+      style: tp.key === state.helpTopic ? { background: 'var(--org, #e8760a)', borderColor: 'var(--org, #e8760a)', color: '#fff' } : {},
+      attrs: { 'aria-pressed': String(tp.key === state.helpTopic) },
+      text: tp.label,
+      onClick: () => void selectHelpTopic(tp.key),
+    })));
+
+  const active = HELP_TOPICS.find((tp) => tp.key === state.helpTopic);
+  const options = state.help?.options || [];
+  const done = options.filter((o) => o.imageUrl).length;
+
+  let body;
+  if (!state.help) {
+    body = el('div', { className: 'pt__empty', text: 'Loading illustrations…' });
+  } else if (!options.length) {
+    body = el('div', { className: 'pt__empty', text: 'This vocabulary has no options.' });
+  } else {
+    body = el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(180px,1fr))', gap: '12px' } }, options.map((o) => {
+      const busy = state.helpBusy === `${state.helpTopic}:${o.key}`;
+      // A hidden file input driven by a real button: the native control cannot be styled to the console's
+      // language, and an operator should not be looking at a browser's default widget here.
+      const picker = el('input', { attrs: { type: 'file', accept: 'image/*', style: 'display:none' } });
+      picker.addEventListener('change', () => {
+        const file = picker.files && picker.files[0];
+        if (file) void setHelpImage(state.helpTopic, o.key, file);
+        picker.value = ''; // so choosing the SAME file twice still fires a change
+      });
+      const frame = o.imageUrl
+        ? el('img', { attrs: { src: `${API.replace(/\/v1$/, '')}${o.imageUrl}`, alt: o.key, loading: 'lazy' }, style: { width: '100%', height: '110px', objectFit: 'contain', background: '#fff', borderRadius: '6px' } })
+        : el('div', { style: { width: '100%', height: '110px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed var(--line, #33455a)', borderRadius: '6px', color: 'var(--muted)' }, text: 'no picture' });
+      return el('div', { className: 'pt__panel', style: { padding: '10px', margin: '0' } }, [
+        frame,
+        el('div', { className: 'pt__mono', style: { margin: '8px 0 2px', fontWeight: '700' }, text: o.key }),
+        el('div', { className: 'pt__flag-d', style: { minHeight: '16px' }, text: o.updatedAt ? `updated ${fmtTime(o.updatedAt)}` : 'not illustrated' }),
+        el('div', { className: 'pt__btns', style: { marginTop: '8px' } }, [
+          picker,
+          el('button', { className: 'pt__btn', attrs: busy ? { disabled: 'disabled' } : {}, text: busy ? 'Saving…' : o.imageUrl ? 'Replace' : 'Upload', onClick: () => picker.click() }),
+          ...(o.imageUrl ? [el('button', { className: 'pt__btn', attrs: busy ? { disabled: 'disabled' } : {}, text: 'Remove', onClick: () => void clearHelpImage(state.helpTopic, o.key) })] : []),
+        ]),
+      ]);
+    }));
+  }
+
+  return el('div', { className: 'pt__panel' }, [
+    el('div', { className: 'pt__panel-h' }, [
+      el('h2', { className: 'pt__panel-title', text: 'Option illustrations' }),
+      el('span', { className: 'pt__panel-hint', text: state.help ? `${done}/${options.length} illustrated · ${active?.hint || ''}` : active?.hint || '' }),
+    ]),
+    topics,
+    body,
+    el('div', { className: 'pt__flag-d', style: { marginTop: '10px' }, text: 'Shown behind the ⓘ on every picker that asks for these. Pictures are scaled down here before upload; the wording lives in the app translations, not here.' }),
+  ]);
+}
+
 function render() {
   const parts = [topBar()];
   // Tone-aware: a successful reissue must not be shouted in the same red as a failure.
@@ -283,7 +453,7 @@ function render() {
   parts.push(kpis());
   parts.push(el('div', { className: 'pt__grid' }, [
     el('div', {}, [heatmapPanel(), agentsPanel(), mdpPanel()]),
-    el('div', {}, [kycPanel(), flagsPanel(), financePanel(), supportPanel()]),
+    el('div', {}, [kycPanel(), flagsPanel(), financePanel(), supportPanel(), helpPanel()]),
   ]));
   mount(root, parts);
 }

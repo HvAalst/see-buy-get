@@ -19,6 +19,7 @@ import { clampMultiplier, computeFreightPrice, distanceSplit, earningsPerKm, fre
 import { canonicalBody, bodyOf, excludedByShipper } from './freight-body';
 import { blockersFor, takeable } from './freight-board';
 import { nearestPlace } from './geo-gazetteer';
+import { isPackaging, selfLoading, type Packaging } from './packaging';
 import { buildSeries } from './market-series';
 import { TruckSubtype } from './fleet.config';
 import { isTempBreach, loadSafetyItems, missingKeys, requiredLoadKeys, requiredUnloadKeys, tempBand, unloadSafetyItems } from './heavy-cargo';
@@ -26,7 +27,7 @@ import { MediaService } from './media.service';
 import { MarketPulseStore } from './market-pulse.store';
 import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, toteCapacityOf, VEHICLE_SPEC } from './fleet.config';
 import { Router, ROUTER } from './router';
-import { DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NUDGE_RADIUS_KM, OFFER_TTL_MIN, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
+import { DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NUDGE_RADIUS_KM, OFFER_TTL_MIN, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
 import { BoardRow, Claimable, ClaimableKind, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, MarketRow, MarketSeries, Offer, PostedFreightRow, RoutePlan } from './dispatch.types';
@@ -263,7 +264,7 @@ export class DispatchService {
     return { code: t.code, status: t.status };
   }
 
-  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean }, now: number = Date.now()): Freight {
+  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean }, now: number = Date.now()): Freight {
     this.freightSeq += 1;
     // A future pickup date parks the load for later; a past/absent date ships now. A supplied-but-unparseable
     // date is a CALLER ERROR — fail closed (never silently ship-now what was meant to be scheduled). Store the
@@ -281,13 +282,22 @@ export class DispatchService {
     // drives the required equipment, the primary nature drives the required vehicle capability.
     const natureCode: CargoNature = input.natureCode ?? 'GEN';
     const cargoClass = this.cargo.classify({ kg: input.weightKg, dimsCm: input.dimensionsCm });
-    const bulk = input.bulk ?? true; // bulk cargo by default (sugar/cement) → trucks
-    const requiredEquipment = bulk ? [] : this.cargo.requiredEquipment(cargoClass);
+    // FB5 — how the load is PACKED, which decides both the body and whether anything has to lift it. Falls
+    // back to the DEPLOYMENT's default rather than a hard-coded one: the ordinary way to send a tonne of
+    // sugar is loose in Rotterdam and in sacks in Nakuru, and neither is "the" default for the network.
+    const packaging = isPackaging(input.packaging) ? input.packaging : DEFAULT_PACKAGING;
+    // `bulk` now means exactly one thing — loose — which is what the vehicle flag and the board's
+    // NO_BULK_BODY blocker have always assumed. It is derived, never asked for.
+    const bulk = selfLoading(packaging);
+    // THE FIX THAT IS NOT ABOUT ANALYTICS: only loose goods load and discharge themselves. Bagged cement was
+    // reporting that it needed NO handling equipment — the "you would need a forklift" signal going silent on
+    // eighteen tonnes of sacks, which is the load that needs it most.
+    const requiredEquipment = selfLoading(packaging) ? [] : this.cargo.requiredEquipment(cargoClass);
     const requiredCapabilities = this.cargo.requiredCapabilities([natureCode]);
     // FB0b — conclude which BODY this load needs, and stamp the conclusion. Derived from the load's own facts,
     // never from the minter's hint: the hint is advisory by decision, and a market series built on a shop
     // clerk's guess at "skeletal vs flatbed" would not be worth selling.
-    const bodyDerived = canonicalBody({ requiredCapabilities, bulk, weightKg: input.weightKg, dimensionsCm: input.dimensionsCm, indivisible: input.indivisible });
+    const bodyDerived = canonicalBody({ requiredCapabilities, packaging, natureCode, weightKg: input.weightKg, dimensionsCm: input.dimensionsCm, indivisible: input.indivisible });
     // S32c: flag ends whose site cannot HANDLE this cargo — a site needs at least one qualifying piece of the
     // required equipment (any-of). Only checked when the site's manifest is known (a diverted order → its
     // PUDOs); a bulletin freight with only geo labels leaves both ends unknown → no gap flagged.
@@ -321,6 +331,7 @@ export class DispatchService {
       postedByDid: input.postedByDid,
       fragile: input.fragile ?? false,
       bulk,
+      packaging,
       cargoClass,
       natureCode,
       requiredCapabilities,

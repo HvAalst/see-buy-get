@@ -45,10 +45,15 @@ export const TRUCK_SUBTYPE_CATALOG = {
   cement_mixer: { label: 'Concrete mixer', capacityKg: 12000, bulk: true },
   grain_hopper: { label: 'Grain hopper', capacityKg: 22000, bulk: true },
   bulk_tanker: { label: 'Dry-bulk tanker (cement/flour)', capacityKg: 22000, bulk: true },
-  tanker: { label: 'Tanker (liquids)', capacityKg: 20000, liquid: true },
-  food_tanker: { label: 'Food-grade tanker', capacityKg: 18000, liquid: true },
-  fuel_tanker: { label: 'Fuel tanker', capacityKg: 20000, liquid: true, hazmat: true },
-  water_bowser: { label: 'Water bowser', capacityKg: 16000, liquid: true },
+  // FB5 — the tank bodies carry LOOSE goods too: pumped rather than tipped or blown, but never packaged and
+  // never lifted. They were marked `liquid` only, which was harmless while every truck class defaulted
+  // carriesBulk true — and became a hole the moment the subtype started deciding, because looseBody() sends
+  // loose food to `food_tanker` and loose flammables to `fuel_tanker`. Unmarked, the one body built for the
+  // load was the one body blocked from it.
+  tanker: { label: 'Tanker (liquids)', capacityKg: 20000, liquid: true, bulk: true },
+  food_tanker: { label: 'Food-grade tanker', capacityKg: 18000, liquid: true, bulk: true },
+  fuel_tanker: { label: 'Fuel tanker', capacityKg: 20000, liquid: true, hazmat: true, bulk: true },
+  water_bowser: { label: 'Water bowser', capacityKg: 16000, liquid: true, bulk: true },
   hazmat: { label: 'Hazmat / chemical', capacityKg: 18000, hazmat: true },
   car_carrier: { label: 'Car carrier', capacityKg: 10000, oversized: true, equipment: ['RMP'] },
   livestock: { label: 'Livestock', capacityKg: 12000, equipment: ['RMP'] },
@@ -76,7 +81,11 @@ export interface VehicleClassSpec {
   defaultTotes: number;
   maxParcelKg: number; // largest single parcel this class may carry
   allowsFragile: boolean; // a bike/motorcycle may not carry fragile items
-  carriesBulk: boolean; // bulk cargo (sugar/cement bags) — trucks only
+  // FB5 — LOOSE dry bulk: poured, blown or tipped. The comment here used to read "sugar/cement bags", which
+  // is the opposite handling regime and the source of the whole confusion: sacks are lifted off a deck, loose
+  // goods are never touched. Vehicle.carriesBulk and the board's NO_BULK_BODY blocker both already meant
+  // loose; only this line disagreed, and it is what justified the class fallback in vehicle.service.
+  carriesBulk: boolean;
   defaultBaseFee: number; // S34 — flag-down / loading fee (deadhead + load time), scaled to the class
   role: string;
 }

@@ -57,14 +57,20 @@ export class ForthcomingService {
    * The lots filling up along a driver's declared route.
    *
    * Same geometry as the offer list (detour + minutes from the route start), so "near your route" means one
-   * thing in this app and not two. Same fitness rules as a claim, applied to the lot as it stands TODAY: a
-   * lot is bulk cargo, its commodity may demand a capability, and a driver should not be shown a load their
-   * vehicle could not carry even if it stopped filling now. Never throws — an uncoupled driver simply has
-   * no vehicle to plan with, and this sits beside a list that has already said so.
+   * thing in this app and not two. Same fitness rules as a claim, applied to the lot as it stands TODAY: its
+   * commodity may demand a capability, and a driver should not be shown a load their vehicle could not carry
+   * even if it stopped filling now. Never throws — an uncoupled driver simply has no vehicle to plan with,
+   * and this sits beside a list that has already said so.
+   *
+   * FB5 removed a `carriesBulk` gate here. It rested on "a lot is bulk cargo", which was never true of a
+   * consignment lot: members deposit SACKS, and ConsignmentService posts the full lot as `bagged`. The gate
+   * therefore showed the filling lot to tippers — which cannot take sacks — and hid it from the flatbed with
+   * a forklift that ends up carrying it. Capacity and capability still apply; packaging is not yet knowable
+   * while a lot fills, so nothing here pretends to judge it.
    */
   nearRoute(driverDid: string, route: RoutePlan, now: number = Date.now()): ExpectedLoad[] {
     const vehicle = this.fleet.vehicleForDriver(driverDid);
-    if (!vehicle || !vehicle.carriesBulk) return [];
+    if (!vehicle) return [];
 
     return this.consignments
       .list({ status: 'open' })

@@ -3,6 +3,7 @@ import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { DRIVER_ISSUES, DriverIssue } from './rating.service';
 import { TRUCK_SUBTYPES } from './fleet.config';
+import { PACKAGING, type Packaging } from './packaging';
 import { MEDIA_KINDS, MediaKind } from './media.types';
 import { CARGO_NATURES, CargoNature, EQUIPMENT, Equipment } from './cargo.types';
 
@@ -158,6 +159,12 @@ export class UploadMediaDto {
   @IsIn(MEDIA_KINDS) kind!: MediaKind;
   @IsString() dataUrl!: string; // data:image/jpeg;base64,…
   @IsOptional() @IsString() thumbDataUrl?: string; // a small thumbnail for the media grid
+}
+
+/** The illustration an SBG admin curates for one option of a choosable vocabulary. Topic and key ride in the
+ *  path (and are validated against the canonical lists), so the body carries only the picture. */
+export class PutHelpImageDto {
+  @IsString() dataUrl!: string; // data:image/jpeg;base64,…  — validated for real raster bytes on decode
 }
 
 export class ArriveDto {
@@ -839,6 +846,9 @@ export class RegisterFreightDto {
   /** The minter's own body pick — ADVISORY. Recorded and shown, never used to match: a wrong pick would
    *  silently exclude the operator who could have taken the load. */
   @IsOptional() @IsIn(TRUCK_SUBTYPES) bodyHint?: string;
+  /** FB5 — how the goods are PACKED, which decides the body and what has to lift it. Omitted falls back to
+   *  the DEPLOYMENT's default (sacks here, loose in a European deployment), never to a network-wide guess. */
+  @IsOptional() @IsIn(PACKAGING) @ApiPropertyOptional({ enum: PACKAGING }) packaging?: Packaging;
   /** Bodies the SHIPPER rules out (theft risk, an insurer's wording, a customer's requirement). A stated
    *  preference, not a physical constraint, and the board presents it as one. */
   @IsOptional() @IsArray() @IsIn([...TRUCK_SUBTYPES], { each: true }) @ApiPropertyOptional({ enum: TRUCK_SUBTYPES, isArray: true }) excludedBodies?: string[];
@@ -889,6 +899,9 @@ export class BookFreightDto {
    *  matched on, because a clerk cannot reliably tell a skeletal from a flatbed and a binding wrong pick
    *  would exclude the one operator who could have carried it. */
   @IsOptional() @IsIn(TRUCK_SUBTYPES) bodyHint?: string;
+  /** FB5 — how the goods are PACKED, which decides the body and what has to lift it. Omitted falls back to
+   *  the DEPLOYMENT's default (sacks here, loose in a European deployment), never to a network-wide guess. */
+  @IsOptional() @IsIn(PACKAGING) @ApiPropertyOptional({ enum: PACKAGING }) packaging?: Packaging;
   /** FB2d — bodies the SHIPPER rules out. At a counter the walk-in customer IS the shipper, so this is their
    *  call to make and the clerk's job only to record it. A PREFERENCE, not a limit of any vehicle: the board
    *  shows it as the shipper's choice, and it binds a claim only because the driver was told first. */

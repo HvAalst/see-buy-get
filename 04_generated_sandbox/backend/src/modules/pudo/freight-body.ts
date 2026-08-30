@@ -15,8 +15,9 @@
 // It follows the precedent already in cargo.types: NATURE_CAPABILITY does not store "needs a reefer", it
 // stores FOP and derives cold-chain.
 
-import { VehicleCapability } from './cargo.types';
+import { CargoNature, VehicleCapability } from './cargo.types';
 import { TruckSubtype } from './fleet.config';
+import { bodyForPackaging, packagingOf, type Packaging } from './packaging';
 // BodyBasis/DerivedBody live in dispatch.types because they are WIRE types — they ride on a Freight, and the
 // OpenAPI emitter only introspects the *.types.ts files. Declared here, DerivedBody emitted as an empty
 // object and every client would have seen `{}` where the body is. The dependency runs one way only:
@@ -33,10 +34,13 @@ import { BodyBasis, DerivedBody } from './dispatch.types';
 export const BODY_BECAUSE: Record<string, string> = {
   refrigerated: 'the cargo needs an unbroken cold chain',
   hazmat: 'the cargo is hazardous and needs a certified body',
-  tipper: 'loose bulk — it tips or augers, it does not sit on a deck',
+  tipper: 'loose and poured — it tips out, it does not sit on a deck',
+  bulk_tanker: 'loose powder — it is blown out under air pressure, never opened to the weather',
+  food_tanker: 'loose food in bulk — a food-grade tank that may carry nothing else',
+  fuel_tanker: 'loose flammable liquid — a certified fuel tank',
   lowboy: 'one indivisible piece too large to split — it has to start lower down',
   flatbed: 'too large or too heavy for a closed body — it loads from the side or above',
-  box: 'palletised general cargo — a closed body is enough',
+  box: 'a closed body is enough, and keeps it dry',
 };
 
 // A box/dry-van body is the cheap default for palletised general cargo, and these are the points at which a
@@ -62,14 +66,24 @@ const LOWBOY_MIN_LENGTH_CM = 1_200;
  * The ladder is ordered by what CONSTRAINS hardest, so the first rung that fires wins:
  *   1. cold chain   — an insulated box is not a preference, the cargo spoils without it
  *   2. hazmat       — a certified body, likewise not negotiable
- *   3. loose bulk   — self-loading via tipping/silo; no handling gear, but it must not be a flat deck
+ *   3. LOOSE        — poured, blown or tipped. The discharge mechanism IS the body, so the commodity picks
+ *                     it: powder to a pneumatic silo, food-grade bulk to a food tanker, spoil to a tipper
  *   4. indivisible + very large/heavy — a low-loader, because it cannot be split to fit
- *   5. too big/heavy for a closed body — an open deck
- *   6. everything else — a dry van
+ *   5. too big/heavy for any closed body — an open deck, however it is packed
+ *   6. PACKAGED     — sacks and bales ride an open deck and are sheeted; pallets, drums and IBCs are
+ *                     forklift work into something that shuts
+ *
+ * FB5 rewrote rungs 3 and 6. They used to read one `bulk` boolean that meant "loose" here and "sacks" in
+ * fleet.config, which is how bagged cement — the ordinary African case — derived to a dump truck.
  */
 export function canonicalBody(load: {
   requiredCapabilities: VehicleCapability[];
-  bulk: boolean;
+  /** FB5 — how the goods are presented. Optional so a pre-FB5 record still resolves: it is read through
+   *  packagingOf(), which falls back to the old ambiguous `bulk` under the meaning its stamp was made with. */
+  packaging?: Packaging;
+  bulk?: boolean;
+  /** Only LOOSE goods let the commodity decide the body — its discharge mechanism IS the body. */
+  natureCode?: CargoNature;
   weightKg: number;
   dimensionsCm?: [number, number, number];
   indivisible?: boolean;
@@ -83,12 +97,21 @@ export function canonicalBody(load: {
 
   if (load.requiredCapabilities.includes('coldChain')) return { body: 'refrigerated', basis };
   if (load.requiredCapabilities.includes('hazmat')) return { body: 'hazmat', basis };
-  // Loose bulk (cement, sand, grain) self-loads and self-discharges. A tipper is the general dry-bulk body; a
-  // hopper or a bulk tanker is a commodity-specific refinement the freight record cannot yet distinguish.
-  if (load.bulk) return { body: 'tipper', basis };
+  // FB5 — PACKAGING, not the commodity, decides the rest. Sugar is sugar in Rotterdam and in Nakuru; what
+  // differs is whether it arrives poured into a food-grade silo or stacked in sacks, and only one of those
+  // wants a tanker. Loose is answered outright here because its discharge mechanism IS the body.
+  const packaging = packagingOf(load);
+  const nature = load.natureCode ?? 'GEN';
+  if (packaging === 'loose') return { body: bodyForPackaging('loose', nature) as TruckSubtype, basis };
+
+  // A single piece is decided by its measurements alone — the wrapping says nothing about a six-metre girder.
   if (load.indivisible && (kg > LOWBOY_MIN_KG || longest > LOWBOY_MIN_LENGTH_CM)) return { body: 'lowboy', basis };
-  if (kg > BOX_MAX_KG || longest > BOX_MAX_LENGTH_CM || tallest > BOX_MAX_HEIGHT_CM) return { body: 'flatbed', basis };
-  return { body: 'box', basis };
+  const oversize = kg > BOX_MAX_KG || longest > BOX_MAX_LENGTH_CM || tallest > BOX_MAX_HEIGHT_CM;
+  if (oversize) return { body: 'flatbed', basis }; // too big for any closed body, however it is packed
+
+  // Within a closed body's limits, the packaging decides open deck versus box: sacks and bales are worked on
+  // and off a deck and sheeted, pallets and drums and IBCs are forklift work into something that shuts.
+  return { body: bodyForPackaging(packaging, nature) ?? 'box', basis };
 }
 
 /**
@@ -103,7 +126,9 @@ export function canonicalBody(load: {
 export function bodyOf(f: {
   bodyDerived?: DerivedBody;
   requiredCapabilities: VehicleCapability[];
-  bulk: boolean;
+  packaging?: Packaging;
+  bulk?: boolean;
+  natureCode?: CargoNature;
   weightKg: number;
   dimensionsCm?: [number, number, number];
   indivisible?: boolean;

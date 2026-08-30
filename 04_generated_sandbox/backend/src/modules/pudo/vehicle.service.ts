@@ -78,7 +78,13 @@ export class VehicleService {
       maxParcelKg: spec.maxParcelKg,
       allowsFragile: spec.allowsFragile,
       coldChain: Boolean(sub?.coldChain),
-      carriesBulk: Boolean(sub?.bulk) || spec.carriesBulk,
+      // FB5 — the SUBTYPE decides, exactly as it does for coldChain/liquid/hazmat/oversized above and below.
+      // This line alone carried `|| spec.carriesBulk`, and every truck class defaults it true — so a box-body
+      // dry van declared it could take loose sand. The fallback was only ever defensible while the flag meant
+      // "can carry sacks", which is true of any truck; it means LOOSE, which is true of very few.
+      // A truck with no subtype declared keeps the old class default: we do not know its body, and stranding
+      // every vehicle registered before subtypes existed would be a worse answer than the one we had.
+      carriesBulk: sub ? Boolean(sub.bulk) : spec.carriesBulk,
       liquid: Boolean(sub?.liquid),
       hazmat: Boolean(sub?.hazmat),
       oversized: Boolean(sub?.oversized),

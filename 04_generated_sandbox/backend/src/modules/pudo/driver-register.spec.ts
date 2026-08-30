@@ -13,7 +13,7 @@ function freight(over: Partial<Freight>): Freight {
     destLabel: 'Karen',
     weightKg: 500,
     fragile: false,
-    bulk: true,
+    packaging: 'loose',
     cargoClass: 'P4',
     natureCode: 'GEN',
     requiredCapabilities: [],

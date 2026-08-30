@@ -6,6 +6,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { GeoPoint } from './pudo.types';
 import { CARGO_CLASS_CODES, CARGO_NATURES, CargoClass, CargoNature, EQUIPMENT, Equipment, VEHICLE_CAPABILITIES, VehicleCapability } from './cargo.types';
 import { TRUCK_SUBTYPES, TruckSubtype, VEHICLE_CLASSES, VehicleClass } from './fleet.config';
+import { PACKAGING, type Packaging } from './packaging';
 
 /**
  * FB0b — how much the body derivation actually had to work with. Carried alongside the answer because the
@@ -102,7 +103,24 @@ export class Freight {
    *  freight, which is derived live and reports itself as weight-only. */
   bodyDerived?: DerivedBody;
   fragile: boolean;
-  bulk: boolean; // requires a bulk-capable vehicle (truck)
+  /**
+   * FB5 — how the goods are PRESENTED for handling, which is what decides the body and the kit.
+   *
+   * Recorded per consignment rather than inferred from the commodity, because the same commodity is handled
+   * completely differently from place to place (user, 2026-08-30): sugar is poured into a food-grade bulk
+   * trailer in Holland and stacked in sacks on a flatbed in Kenya. A rule keyed on "is it sugar" gets one of
+   * those two wrong wherever it is deployed.
+   */
+  @ApiPropertyOptional({ enum: PACKAGING })
+  packaging?: Packaging;
+  /**
+   * DERIVED from packaging (`loose`), and kept because vehicle matching is written against it.
+   *
+   * It used to be the stored truth and it meant two opposite things — "loose, it tips or augers" in the body
+   * derivation, "sugar/cement bags" in the vehicle spec. It now has exactly one meaning, the loose one, which
+   * is what `Vehicle.carriesBulk` and the board's NO_BULK_BODY blocker already assumed.
+   */
+  bulk: boolean;
   // S32 — the freight's cargo model, so it matches vehicles like a tote does: class (drives required
   // equipment), primary nature (drives required vehicle capability), and the resolved requirements a
   // claiming vehicle must satisfy. `shipperDid` links the originator (a vendor whose P4+ order was diverted).

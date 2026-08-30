@@ -482,7 +482,10 @@ export class SbgController {
       dimensionsCm: dimsCm,
       natureCode: dto.natureCode,
       fragile: dto.fragile,
-      bulk: false, // a walk-up dedicated load is DISCRETE/palletised — it needs real handling equipment, not a tipper
+      // FB5 — the clerk is asked outright, because they are the one looking at it. Absent falls back to the
+      // DEPLOYMENT default rather than to 'palletised': a walk-up in Nakuru arrives in sacks far more often
+      // than on a pallet, and that is a fact about where the counter is, not about walk-ups.
+      packaging: dto.packaging,
       // shipperDid intentionally omitted: a cash counter booking settles OFF-PLATFORM (paidStatus 'unpaid'), so
       // no wallet is billed — the customer's cash cap is the money, held by the agent (the F2 model the user chose).
       originEquipment: origin.equipment,
@@ -1091,7 +1094,9 @@ export class SbgController {
         dimensionsCm: dimsCm,
         natureCode: dto.natureCode,
         fragile: dto.fragile,
-        bulk: false, // a diverted e-commerce order is DISCRETE/palletised, so it needs real handling equipment
+        // FB5 — a diverted e-commerce order really is palletised: it was picked and packed in a warehouse,
+        // which is the one origin where that is known rather than assumed. Stated, not defaulted.
+        packaging: 'palletised',
         shipperDid: dto.vendorId,
         // S32c: the freight's ends ARE these PUDOs — check they can actually HANDLE the cargo (a small shop
         // with only manual handling can't take a pallet), flagging a gap advisory for a Local Admin to resolve.

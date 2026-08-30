@@ -16,7 +16,7 @@ import type { IconName } from '../../shared/ui/Icon';
 import { agentConfig, clearDid, createAgentClient, purgeAgentTokens, readDid, readEmail, saveDid, saveEmail } from './api';
 import { signal } from '../../shared/feedback';
 import { triggerDownload } from '../../shared/download';
-import { bodyHintValue, bookFreightMissing, EMPTY_ACCEPT, excludedBodiesValue, otpValid, parseBudget, parseDims, plannedPickupIso, type AcceptForm, type DimsForm } from './logic';
+import { bodyHintValue, bookFreightMissing, EMPTY_ACCEPT, excludedBodiesValue, otpValid, packagingValue, parseBudget, parseDims, plannedPickupIso, type AcceptForm, type DimsForm } from './logic';
 import type { GeoPoint } from '../../shared/geo';
 import type {
   AgentLedgerRow,
@@ -1099,6 +1099,10 @@ export function useAgentApp() {
         // absence of an answer here, and sending them would dress a default up as an observation.
         indivisible: f.indivisible || undefined,
         bodyHint: bodyHintValue(f.bodyHint),
+        // FB5 — always present: bookFreightMissing() blocks the button until it is answered, so reaching here
+        // means the clerk said it. Sent explicitly rather than left to the server's deployment default,
+        // because a default is a guess about the region and this is a fact about the load.
+        packaging: packagingValue(f.packaging),
         // FB2d — likewise absent when the customer ruled nothing out, which is the ordinary case. An empty
         // array would post a shipper preference nobody expressed, and this one REFUSES claims.
         excludedBodies: excludedBodiesValue(f.excludedBodies),

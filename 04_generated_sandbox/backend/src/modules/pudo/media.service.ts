@@ -2,6 +2,7 @@ import { Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy } from '@ne
 import { createHash, randomBytes } from 'crypto';
 import { GlosError } from '../../foundation/http/glos-error';
 import { BlobStore, FsBlobStore } from '../../foundation/media/blob-store';
+import { decodeImage } from '../../foundation/media/decode-image';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import {
   KIND_RETENTION,
@@ -267,32 +268,9 @@ export class MediaService implements OnApplicationBootstrap, OnModuleDestroy {
     }
   }
 
+  /** Decode + validate one uploaded image. The rules themselves live in foundation/media/decode-image, so
+   *  this service and the help-illustration registry cannot disagree about what an image is. */
   private decode(dataUrl: string, opts: { maxBytes?: number } = {}): { contentType: string; bytes: Buffer } {
-    const m = DATA_URL_RE.exec((dataUrl ?? '').trim());
-    if (!m) throw new GlosError('INVALID_INPUT', 'Expected a base64 image data URL');
-    const contentType = m[1].toLowerCase();
-    if (!MEDIA_CONTENT_TYPES.includes(contentType as (typeof MEDIA_CONTENT_TYPES)[number])) {
-      throw new GlosError('UNSUPPORTED_MEDIA', `Unsupported image type ${contentType} — use JPEG, PNG or WebP`);
-    }
-    const bytes = Buffer.from(m[2], 'base64');
-    if (bytes.length === 0) throw new GlosError('INVALID_INPUT', 'The image is empty');
-    if (bytes.length > (opts.maxBytes ?? MEDIA_MAX_BYTES)) {
-      throw new GlosError('MEDIA_TOO_LARGE', 'The image is too large — it should be downscaled before upload');
-    }
-    // Trust the BYTES, not the caller-declared type: verify the magic number matches, so SVG/script bytes
-    // cannot be stored under a declared image/jpeg (the allowlist alone only blocks the declared SVG type).
-    if (!MediaService.signatureMatches(contentType, bytes)) {
-      throw new GlosError('UNSUPPORTED_MEDIA', 'That is not a real JPEG, PNG or WebP image');
-    }
-    return { contentType, bytes };
-  }
-
-  /** Does the leading signature match the declared type? JPEG FFD8FF · PNG 89504E47 · WebP RIFF….WEBP. */
-  private static signatureMatches(contentType: string, b: Buffer): boolean {
-    if (b.length < 12) return false;
-    if (contentType === 'image/jpeg') return b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
-    if (contentType === 'image/png') return b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47;
-    if (contentType === 'image/webp') return b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP';
-    return false;
+    return decodeImage(dataUrl, opts.maxBytes ?? MEDIA_MAX_BYTES);
   }
 }

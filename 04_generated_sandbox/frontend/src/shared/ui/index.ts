@@ -22,6 +22,8 @@ export { LanguageSwitcher } from './LanguageSwitcher';
 export { ErrorNote, Note, errorSentence, type ErrorNoteProps, type NoteProps } from './ErrorNote';
 export { Icon, type IconName, type IconProps } from './Icon';
 export { Info, type InfoProps } from './Info';
+export { OptionInfo, type OptionHelpItem, type OptionInfoProps } from './OptionInfo';
+export { OptionPicker, type OptionPickerProps, type PickerOption } from './OptionPicker';
 export { NotificationBell, type NotificationBellProps } from './NotificationBell';
 export { OpenInMaps, type OpenInMapsProps } from './OpenInMaps';
 export { ShopDetailSheet, type ShopDetailSheetProps } from './ShopDetailSheet';

@@ -27,6 +27,9 @@ export const en = {
   // Shared controls the whole network reuses.
   'common.readAloud': 'Read this screen aloud',
   'common.whatIsThis': 'What is this? {title}',
+  // The look-and-choose picker (OptionPicker), used wherever a list is too long or too visual for a dropdown.
+  'common.searchOptions': 'Search the list…',
+  'common.noMatches': 'Nothing in this list matches that.',
   'common.stop': 'Stop',
   'common.retry': 'Try again',
   'common.cancel': 'Cancel',
