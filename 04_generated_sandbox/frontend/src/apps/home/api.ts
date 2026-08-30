@@ -128,6 +128,49 @@ export function fetchMarket(at: { lat: number; lng: number }, radiusKm?: number)
   return publicRequest<MarketView>(homeConfig(), `/v1/sbg/market?${q.toString()}`);
 }
 
+/** One body's two lines in the market series. Mirrors backend BodySeries. */
+export interface BodySeries {
+  body: string;
+  offeredLoads: number;
+  offeredKm: number;
+  offeredMeasured: number;
+  movedLoads: number;
+  movedKm: number;
+  deadheadKm: number;
+}
+
+export interface MarketSeriesView {
+  from: string;
+  to: string;
+  bodies: BodySeries[];
+  totals: {
+    offeredLoads: number;
+    offeredKm: number;
+    movedLoads: number;
+    movedKm: number;
+    deadheadKm: number;
+    unmetLoads: number;
+    unmetKm: number;
+  };
+}
+
+/**
+ * The market series — kilometres of each body asked for, against kilometres actually moved.
+ *
+ * The point is optional, unlike the board's: "how much flatbed work is there on this network" is a real
+ * question with no natural centre, and it has to stay askable without naming a city.
+ */
+export function fetchMarketSeries(at: { lat: number; lng: number } | null, radiusKm?: number): Promise<Result<MarketSeriesView>> {
+  const q = new URLSearchParams();
+  if (at) {
+    q.set('lat', String(at.lat));
+    q.set('lng', String(at.lng));
+  }
+  if (radiusKm != null) q.set('radiusKm', String(radiusKm));
+  const qs = q.toString();
+  return publicRequest<MarketSeriesView>(homeConfig(), `/v1/sbg/market/series${qs ? `?${qs}` : ''}`);
+}
+
 export interface GeocodeView {
   location: { lat: number; lng: number };
   confidence: 'exact' | 'approx' | 'fallback';

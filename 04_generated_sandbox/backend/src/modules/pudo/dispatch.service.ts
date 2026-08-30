@@ -19,6 +19,7 @@ import { clampMultiplier, computeFreightPrice, distanceSplit, earningsPerKm, fre
 import { canonicalBody, bodyOf, excludedByShipper } from './freight-body';
 import { blockersFor, takeable } from './freight-board';
 import { nearestPlace } from './geo-gazetteer';
+import { buildSeries } from './market-series';
 import { TruckSubtype } from './fleet.config';
 import { isTempBreach, loadSafetyItems, missingKeys, requiredLoadKeys, requiredUnloadKeys, tempBand, unloadSafetyItems } from './heavy-cargo';
 import { MediaService } from './media.service';
@@ -28,7 +29,7 @@ import { Router, ROUTER } from './router';
 import { DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NUDGE_RADIUS_KM, OFFER_TTL_MIN, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
-import { BoardRow, Claimable, ClaimableKind, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, MarketRow, Offer, PostedFreightRow, RoutePlan } from './dispatch.types';
+import { BoardRow, Claimable, ClaimableKind, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, MarketRow, MarketSeries, Offer, PostedFreightRow, RoutePlan } from './dispatch.types';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
 
 /**
@@ -396,6 +397,9 @@ export class DispatchService {
         f.status = 'available';
         f.scheduledPickupAt = undefined; // its date has passed — it's now a plain ship-now load: no stale gate, no 'scheduled' timeline, and this loop skips it forever after (so it can never no-show-release twice)
         f.claimedBy = undefined;
+        // FB4a — and the body that never actually carried it. A released no-show must leave no trace in the
+        // moved series: it was offered and not taken, which is precisely the gap the series exists to show.
+        f.carriedBy = undefined;
         f.claimedAt = undefined;
         f.lockedPrice = undefined;
         f.priceBreakdown = undefined;
@@ -773,6 +777,11 @@ export class DispatchService {
     }
     f.status = 'claimed';
     f.claimedBy = driverDid;
+    // FB4a — and WHAT took it, frozen here for the same reason the price is. Only the driver was recorded, so
+    // "km moved by container chassis" could only be answered from what that driver is coupled to today: sell
+    // the flatbed, buy a box van, and every haul you ever did silently changes body. A series that rewrites
+    // its own history is not a series, and this one is meant to be invested against.
+    f.carriedBy = { vehicleClass: vehicle.vehicleClass, truckSubtype: vehicle.truckSubtype as TruckSubtype | undefined };
     f.claimedAt = new Date(now).toISOString(); // stamp the injected clock — the no-show deadline is anchored to this
     f.priceBreakdown = breakdown;
     f.lockedPrice = earning;
@@ -957,6 +966,23 @@ export class DispatchService {
     // page is read to decide where the good corridors are, and proximity sorting would answer a question
     // nobody browsing a market from another country is asking.
     return rows.sort((a, b) => (b.indicativePerKm ?? -1) - (a.indicativePerKm ?? -1) || a.deadheadKm - b.deadheadKm);
+  }
+
+  /**
+   * FB4 — the market series around a point: what was asked for, against what moved.
+   *
+   * Geography is applied to the LOAD's own pickup, not to anybody's vehicle, so the same question can be
+   * asked about a city nobody involved has ever been to. Omit the radius and it is the whole network — which
+   * is the honest default for "how much flatbed work is there", a question with no natural centre.
+   *
+   * The window is the caller's, and it is echoed back in the answer: a kilometre count means nothing without
+   * the period it accrued over, and "yearly km" is a rate a reader has to be able to check.
+   */
+  marketSeries(input: { from?: GeoPoint; radiusKm?: number; since: number; until: number }): MarketSeries {
+    const radius = input.radiusKm != null && Number.isFinite(input.radiusKm) && input.radiusKm > 0 ? input.radiusKm : undefined;
+    const near = (f: Freight) => !input.from || radius == null || this.router.roadKm(input.from, f.pickupLocation) <= radius;
+    const scoped = [...this.freights.values()].filter(near);
+    return buildSeries(scoped, { from: input.since, to: input.until }, (a, b) => this.router.roadKm(a, b));
   }
 
   /* ------------------------------------------------- FB0c: negotiate before commit -- */

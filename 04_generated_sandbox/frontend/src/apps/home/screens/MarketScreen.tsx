@@ -1,6 +1,6 @@
 import { Button, Card, ErrorNote, Icon, Note, Pill, ReadAloud } from '../../../shared/ui';
-import { useT, type Translate } from '../../../shared/i18n';
-import { bodyWords, marketShape, marketWhere, marketWork } from '../logic';
+import { formatDate, useT, type Translate } from '../../../shared/i18n';
+import { bodyWords, emptyRunPct, isThin, km, marketShape, marketWhere, marketWork, measuredPct, servedPct } from '../logic';
 import type { MarketRow } from '../api';
 import { MARKET_REACHES, type HomeActions, type HomeState, type MarketReach } from '../useHomeApp';
 
@@ -63,9 +63,23 @@ export function MarketScreen({ state, actions }: MarketScreenProps) {
 
       <Reach value={state.marketReach} onChange={actions.setMarketReach} />
 
+      {/* FB4 — two halves of one question, over the same place and reach. Today's open loads answer "is
+          there work here now"; the series answers "is there a market here", which is what somebody deciding
+          what to buy, or where to live, is actually asking. Click-only → group + aria-pressed, not a tablist. */}
+      <div class="mkt__views" role="group" aria-label={t('home.market.viewAria')}>
+        <button type="button" class="mkt__view-btn" aria-pressed={state.marketView === 'loads'} onClick={() => actions.setMarketView('loads')}>
+          {t('home.market.viewLoads')}
+        </button>
+        <button type="button" class="mkt__view-btn" aria-pressed={state.marketView === 'series'} onClick={() => actions.setMarketView('series')}>
+          {t('home.market.viewSeries')}
+        </button>
+      </div>
+
       {state.error ? <ErrorNote error={state.error} /> : null}
 
-      {busy ? (
+      {state.marketView === 'series' ? (
+        <Series state={state} />
+      ) : busy ? (
         <p class="scr__lede" aria-live="polite">
           {t('common.loading')}
         </p>
@@ -102,6 +116,112 @@ export function MarketScreen({ state, actions }: MarketScreenProps) {
       <div class="scr__foot">
         <ReadAloud text={() => spoken(rows, shape, t)} label={t('home.readAloud')} />
       </div>
+    </div>
+  );
+}
+
+/**
+ * FB4 — the series: kilometres asked for, against kilometres actually moved, by truck body.
+ *
+ * This is the table somebody buys a truck on the strength of, so every number on it is chaperoned. A body
+ * with a handful of loads is marked THIN rather than hidden, because the count is itself the information. A
+ * percentage is only shown where it means something — "0% of nothing was served" is not a finding. And the
+ * empty-run share sits beside the moved figure, never inside it: a market whose fleet turns a third of its
+ * wheels empty is a different proposition from one that does not.
+ */
+function Series({ state }: { state: HomeState }) {
+  const t = useT();
+  const s = state.series;
+  // A post-mount loader has not run on first paint; treating 'idle' as loading avoids a flash of "no data"
+  // over a request that is about to answer.
+  if (state.seriesState === 'idle' || state.seriesState === 'loading') {
+    return (
+      <p class="scr__lede" aria-live="polite">
+        {t('common.loading')}
+      </p>
+    );
+  }
+  if (!s || state.seriesState === 'error') {
+    return (
+      <Card title={t('home.market.seriesErrTitle')} tone="soft">
+        <p class="card__note">{t('home.market.seriesErrLede')}</p>
+      </Card>
+    );
+  }
+  if (!s.totals.offeredLoads && !s.totals.movedLoads) {
+    return (
+      <Card title={t('home.market.seriesEmptyTitle')} tone="soft">
+        <p class="card__note">{t('home.market.seriesEmptyLede')}</p>
+      </Card>
+    );
+  }
+
+  const measured = measuredPct(s.totals, s.bodies);
+  const empty = emptyRunPct(s.totals);
+
+  return (
+    <>
+      <p class="mkt__window">{t('home.market.window', { from: formatDate(s.from), to: formatDate(s.to) })}</p>
+
+      <div class="mkt__totals">
+        <Total label={t('home.market.totalOffered')} value={km(s.totals.offeredKm)} sub={t('home.market.loadsN', { n: s.totals.offeredLoads })} />
+        <Total label={t('home.market.totalMoved')} value={km(s.totals.movedKm)} sub={t('home.market.loadsN', { n: s.totals.movedLoads })} />
+        <Total label={t('home.market.totalUnmet')} value={km(s.totals.unmetKm)} sub={t('home.market.loadsN', { n: s.totals.unmetLoads })} />
+      </div>
+
+      {/* The two caveats that decide how much weight the table above can bear. Both stated, always — a
+          reader who takes these numbers away should take the qualifications with them. */}
+      <div class="mkt__caveats">
+        {empty != null ? <p class="card__note">{t('home.market.emptyRun', { pct: empty, km: km(s.totals.deadheadKm) })}</p> : null}
+        {measured != null ? <p class="card__note">{measured === 100 ? t('home.market.allMeasured') : t('home.market.someMeasured', { pct: measured })}</p> : null}
+      </div>
+
+      <div class="mkt__table" role="table" aria-label={t('home.market.tableAria')}>
+        <div class="mkt__tr mkt__tr--head" role="row">
+          <span class="mkt__th" role="columnheader">
+            {t('home.market.colBody')}
+          </span>
+          <span class="mkt__th mkt__th--n" role="columnheader">
+            {t('home.market.colOffered')}
+          </span>
+          <span class="mkt__th mkt__th--n" role="columnheader">
+            {t('home.market.colMoved')}
+          </span>
+        </div>
+        {s.bodies.map((b) => {
+          const served = servedPct(b);
+          return (
+            <div key={b.body} class="mkt__tr" role="row">
+              <span class="mkt__td" role="cell">
+                <b>{b.body === 'unknown' ? t('home.market.bodyUnrecorded') : bodyWords(b.body, t)}</b>
+                {isThin(b) ? <span class="mkt__thin">{t('home.market.thin')}</span> : null}
+                {served != null && !isThin(b) ? <span class="mkt__served">{t('home.market.served', { pct: served })}</span> : null}
+              </span>
+              <span class="mkt__td mkt__td--n" role="cell">
+                {km(b.offeredKm)}
+                <span class="mkt__sub">{t('home.market.loadsN', { n: b.offeredLoads })}</span>
+              </span>
+              <span class="mkt__td mkt__td--n" role="cell">
+                {km(b.movedKm)}
+                <span class="mkt__sub">{t('home.market.loadsN', { n: b.movedLoads })}</span>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <p class="card__note">{t('home.market.seriesFoot')}</p>
+    </>
+  );
+}
+
+/** One headline figure. Kilometres large, the load count under it — a km number with no n beside it invites
+ *  somebody to read a fluke as a trend. */
+function Total({ label, value, sub }: { label: string; value: string; sub: string }) {
+  return (
+    <div class="mkt__total">
+      <span class="mkt__total-lbl">{label}</span>
+      <b class="mkt__total-val">{value}</b>
+      <span class="mkt__total-sub">{sub}</span>
     </div>
   );
 }

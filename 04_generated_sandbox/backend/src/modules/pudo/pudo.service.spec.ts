@@ -3440,6 +3440,41 @@ describe('PUDO Light', () => {
     expect(wide!.deadheadKm).toBeGreaterThan(MAX_WORK_RADIUS_KM);
   });
 
+  /* --- FB4: the market series --- */
+
+  it('FB4: stamps WHAT CARRIED a load at claim, so the series cannot be rewritten later', () => {
+    // Only claimedBy was ever recorded. "Km moved by container chassis in 2026" could then only be answered
+    // from what that driver is coupled to TODAY — so selling a flatbed and buying a box van would silently
+    // change the body of every haul they had ever done.
+    const d = negotiator('CARRY');
+    const pickup = { lat: -1.2, lng: 36.8 };
+    const f = dispatch.registerFreight({ description: 'Pallets', pickupLocation: pickup, pickupLabel: 'A', destLabel: 'B', destLocation: { lat: -1.15, lng: 36.8 }, weightKg: 400, bulk: false, dimensionsCm: [120, 100, 80] });
+    const [offer] = dispatch.suggest(d.did, { from: pickup, to: pickup }).filter((o) => o.ref === f.freightId);
+    dispatch.claim(offer.offerId);
+
+    const claimed = dispatch.listFreight().find((x) => x.freightId === f.freightId)!;
+    expect(claimed.carriedBy).toEqual({ vehicleClass: 'truck', truckSubtype: 'flatbed' });
+    expect(dispatch.marketSeries({ since: 0, until: Date.now() + 1000 }).bodies.find((b) => b.body === 'flatbed')!.movedLoads).toBeGreaterThan(0);
+  });
+
+  it('FB4: scopes the series by where the LOAD is, so anyone can ask about anywhere', () => {
+    const nairobi = { lat: -1.2, lng: 36.8 };
+    const farAway = { lat: -1.9, lng: 36.8 }; // ~78 km south
+    dispatch.registerFreight({ description: 'Pallets', pickupLocation: farAway, pickupLabel: 'A', destLabel: 'B', destLocation: farAway, weightKg: 400, bulk: false, dimensionsCm: [120, 100, 80] });
+
+    const window = { since: 0, until: Date.now() + 1000 };
+    const near = dispatch.marketSeries({ ...window, from: nairobi, radiusKm: 20 });
+    const wide = dispatch.marketSeries({ ...window, from: nairobi, radiusKm: 500 });
+    expect(wide.totals.offeredLoads).toBeGreaterThan(near.totals.offeredLoads);
+    // And with no point at all, the whole network — a question with no natural centre must stay askable.
+    expect(dispatch.marketSeries(window).totals.offeredLoads).toBeGreaterThanOrEqual(wide.totals.offeredLoads);
+  });
+
+  it('FB4: the series endpoint is PUBLIC, and refuses a period that ends before it starts', () => {
+    expect(Reflect.getMetadata(IS_PUBLIC_KEY, SbgController.prototype.marketSeries)).toBe(true);
+    expect(() => controller.marketSeries({ since: '2026-06-01T00:00:00.000Z', until: '2026-01-01T00:00:00.000Z' } as never)).toThrow(/start before it ends/);
+  });
+
   it('FB2c: a shipper exclusion now BINDS at claim — because the board can finally explain it', () => {
     // Stored since FB0b and deliberately unenforced while no screen could show it: dropping a qualifying
     // driver with no reason given is the invisible exclusion the board exists to remove. Now the board marks

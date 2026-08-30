@@ -181,3 +181,147 @@
   text-transform: uppercase;
   color: var(--tx2);
 }
+
+/* ------------------------------------------- FB4: the market over time -- */
+
+.mkt__views {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.mkt__view-btn {
+  min-height: var(--tap);
+  padding: 0 16px;
+  border-radius: var(--r-ctl);
+  border: 1px solid var(--bd-soft);
+  background: var(--card);
+  color: var(--navy);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.mkt__view-btn[aria-pressed='true'] {
+  border-color: var(--org);
+  color: var(--org);
+  background: var(--org-light);
+}
+
+.mkt__window {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--tx2);
+}
+
+/* The three headline figures. They wrap to one per line on a narrow phone rather than shrinking the numbers
+   — these are read and written down, so legibility beats fitting them on one row. */
+.mkt__totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.mkt__total {
+  flex: 1 1 12ch;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px;
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-ctl);
+  background: var(--card);
+}
+
+.mkt__total-lbl {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--tx2);
+}
+
+.mkt__total-val {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--navy);
+  font-variant-numeric: tabular-nums;
+}
+
+.mkt__total-sub {
+  font-size: 13px;
+  color: var(--tx2);
+}
+
+.mkt__caveats {
+  margin: 12px 0 4px;
+}
+
+/* A table built from rows rather than <table>, so it reflows on a phone without a horizontal scroller. */
+.mkt__table {
+  margin-top: 14px;
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-ctl);
+  overflow: hidden;
+}
+
+.mkt__tr {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 12px;
+  border-top: 1px solid var(--bd-soft);
+}
+
+.mkt__tr:first-child {
+  border-top: 0;
+}
+
+.mkt__tr--head {
+  background: var(--bg-soft, transparent);
+}
+
+.mkt__th,
+.mkt__td {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.mkt__th {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--tx2);
+}
+
+/* Figures right-aligned and tabular so two rows can be compared down the column at a glance — the whole
+   point of the table is the gap between the two numbers. */
+.mkt__th--n,
+.mkt__td--n {
+  flex: 0 0 8ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.mkt__td {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 15px;
+  color: var(--navy);
+}
+
+.mkt__sub,
+.mkt__served,
+.mkt__thin {
+  font-size: 12px;
+  color: var(--tx2);
+}
+
+/* A body with too few loads to read as a market is marked, not hidden — the count is the information. */
+.mkt__thin {
+  font-style: italic;
+}

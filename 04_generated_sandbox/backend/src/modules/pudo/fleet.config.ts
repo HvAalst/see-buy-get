@@ -11,7 +11,9 @@
 import { ParcelSize } from './pudo.types';
 import { Equipment } from './cargo.types';
 
-export type VehicleClass = 'bike' | 'motorcycle' | 'tuktuk' | 'car' | 'van' | 'bus' | 'truck';
+/** The runtime half of VehicleClass, so a class the API publishes cannot drift from one the code knows. */
+export const VEHICLE_CLASSES = ['bike', 'motorcycle', 'tuktuk', 'car', 'van', 'bus', 'truck'] as const;
+export type VehicleClass = (typeof VEHICLE_CLASSES)[number];
 
 /**
  * A truck "comes in many forms" — an extensive body/handling taxonomy (Ch 19), because heavy freight

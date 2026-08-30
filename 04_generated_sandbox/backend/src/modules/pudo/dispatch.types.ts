@@ -5,7 +5,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { GeoPoint } from './pudo.types';
 import { CARGO_CLASS_CODES, CARGO_NATURES, CargoClass, CargoNature, EQUIPMENT, Equipment, VEHICLE_CAPABILITIES, VehicleCapability } from './cargo.types';
-import { TRUCK_SUBTYPES, TruckSubtype } from './fleet.config';
+import { TRUCK_SUBTYPES, TruckSubtype, VEHICLE_CLASSES, VehicleClass } from './fleet.config';
 
 /**
  * FB0b — how much the body derivation actually had to work with. Carried alongside the answer because the
@@ -180,7 +180,29 @@ export class Freight {
   @ApiProperty({ enum: FREIGHT_STATUSES })
   status: FreightStatus;
   claimedBy?: string;
+  /**
+   * FB4a — what actually CARRIED it, stamped at claim. The mirror of `bodyDerived`: that one records the body
+   * the load needed, this one the body that turned up.
+   *
+   * Frozen for exactly the reason the derived body and the price are frozen. Only `claimedBy` was ever
+   * recorded, so "kilometres moved by container chassis in 2026" could only be answered by looking up what
+   * that driver is coupled to TODAY — and a driver who sells a flatbed and buys a box van would silently
+   * rewrite every haul they have ever done. A market series that changes retroactively is not a series.
+   *
+   * Absent on a load claimed before FB4a, and on one whose claimer had no truck subtype (a van or a bus).
+   * Such a haul is counted as UNKNOWN in the analytics, never attributed to a body by inference.
+   */
+  carriedBy?: CarriedBody;
   createdAt: string;
+}
+
+/** FB4a — the vehicle that took a load, as much of it as the market series needs. */
+export class CarriedBody {
+  @ApiProperty({ enum: VEHICLE_CLASSES })
+  vehicleClass: VehicleClass;
+  /** The truck body. Absent for a vehicle class that has no subtype — a van is a van. */
+  @ApiPropertyOptional({ enum: TRUCK_SUBTYPES })
+  truckSubtype?: TruckSubtype;
 }
 
 /* ------------------------------------------------------ FB1: the open board -- */
@@ -302,6 +324,56 @@ export class MarketRow {
   indicativeTotal?: number;
   /** Indicative earnings per TOTAL kilometre, empty run included. Null when it cannot be computed. */
   indicativePerKm?: number | null;
+}
+
+/**
+ * FB4 — one truck body's two lines in the market series: what shippers asked for, against what moved.
+ *
+ * `body` is a truck subtype, or the literal 'unknown' for kilometres we decline to attribute — a load whose
+ * body was never derived, or a haul whose carrier was never recorded. A bucket named 'unknown' is a true
+ * statement about our records; spreading those kilometres across the real bodies would be a false one.
+ */
+export class BodySeries {
+  @ApiProperty({ enum: [...TRUCK_SUBTYPES, 'unknown'] })
+  body: TruckSubtype | 'unknown';
+  /** Loads POSTED in the window whose derived body is this one. */
+  offeredLoads: number;
+  /** Their LOADED kilometres — pickup → dropoff. Work asked for; empty running is never in here. */
+  offeredKm: number;
+  /** How many of those had a MEASURED body rather than one guessed from weight. The rest still count; they
+   *  are a softer claim, and a reader investing against this is entitled to know the difference. */
+  offeredMeasured: number;
+  /** Loads CLAIMED in the window and carried by a vehicle of this body. */
+  movedLoads: number;
+  /** Their loaded kilometres. THE number — "km of containers moved". */
+  movedKm: number;
+  /** The empty run to reach that work. Beside movedKm, never inside it: a market whose fleet turns 40% of its
+   *  wheels empty is a different investment from one that does not, and only a separate figure says so. */
+  deadheadKm: number;
+}
+
+/** Totals across every body, so the headline does not have to be assembled from the table. */
+export class MarketSeriesTotals {
+  offeredLoads: number;
+  offeredKm: number;
+  movedLoads: number;
+  movedKm: number;
+  deadheadKm: number;
+  /** Loads posted in the window that NOTHING ever claimed — demand the fleet did not meet. The gap between
+   *  this and the moved figures is the sentence somebody deciding what to buy is actually paying for. */
+  unmetLoads: number;
+  unmetKm: number;
+}
+
+/** FB4 — the market series. The response of the analytics endpoint, and the moat. */
+export class MarketSeries {
+  /** The window these figures cover, echoed as ISO instants. A kilometre count means nothing without the
+   *  period it accrued over, and "yearly km" is a rate a reader has to be able to check for themselves. */
+  from: string;
+  to: string;
+  @ApiProperty({ type: [BodySeries] })
+  bodies: BodySeries[];
+  totals: MarketSeriesTotals;
 }
 
 /** The public market's response. Named for the same reason FreightBoardResponse is. */

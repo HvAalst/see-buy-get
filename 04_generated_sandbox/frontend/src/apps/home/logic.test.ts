@@ -5,16 +5,21 @@ import {
   ROLES,
   bodyWords,
   codeLooksValid,
+  emptyRunPct,
+  isThin,
+  km,
   joinSpoken,
   marketShape,
   marketWhere,
   marketWork,
+  measuredPct,
   nextStep,
   normalizePhone,
   phoneLooksValid,
   prevStep,
   roleById,
   roleMeta,
+  servedPct,
   signupBody,
   stepBlocker,
   stepsFor,
@@ -230,5 +235,57 @@ describe('reading the public market (FB3b)', () => {
     const shape = marketShape([{ bodyDerived: { body: 'flatbed' } }, {}]);
     expect(shape.total).toBe(2);
     expect(shape.bodies).toEqual([{ body: 'flatbed', n: 1 }]);
+  });
+});
+
+describe('reading the market series (FB4)', () => {
+  const body = (over: Partial<{ offeredLoads: number; offeredKm: number; offeredMeasured: number; movedLoads: number; movedKm: number; deadheadKm: number }> = {}) => ({
+    offeredLoads: 10,
+    offeredKm: 1000,
+    offeredMeasured: 10,
+    movedLoads: 8,
+    movedKm: 800,
+    deadheadKm: 200,
+    ...over,
+  });
+
+  it('rounds kilometres to something a person can read off a screen and repeat', () => {
+    expect(km(48213.7)).toBe((48214).toLocaleString());
+    expect(km(0)).toBe('0');
+    expect(km(undefined)).toBe('0');
+  });
+
+  it('says what share of the work asked for actually moved', () => {
+    expect(servedPct(body({ offeredKm: 1000, movedKm: 250 }))).toBe(25);
+  });
+
+  it('refuses to compute a share of nothing', () => {
+    // 0 km moved out of 0 km offered is not "0% served" — it is no market, and a zero there would invent a
+    // shortfall out of an empty row.
+    expect(servedPct(body({ offeredKm: 0, movedKm: 0 }))).toBeNull();
+    expect(servedPct(body({ offeredKm: 0, movedKm: 40 }))).toBeNull();
+  });
+
+  it('marks a handful of loads as too few to read as a market', () => {
+    // The rateBand rule applied to bodies: a median of one vehicle is not a market, and a percentage off two
+    // loads says less than nothing because it looks like a measurement.
+    expect(isThin(body({ offeredLoads: 1, movedLoads: 1 }))).toBe(true);
+    expect(isThin(body({ offeredLoads: 3, movedLoads: 2 }))).toBe(false); // 5 is the floor
+    expect(isThin(body({ offeredLoads: 10, movedLoads: 8 }))).toBe(false);
+  });
+
+  it('reports how much of the series rests on a MEASURED body rather than a guess', () => {
+    expect(measuredPct({ offeredLoads: 10 }, [{ offeredMeasured: 5 }, { offeredMeasured: 2 }])).toBe(70);
+    expect(measuredPct({ offeredLoads: 4 }, [{ offeredMeasured: 4 }])).toBe(100);
+    // No loads, no claim to qualify.
+    expect(measuredPct({ offeredLoads: 0 }, [])).toBeNull();
+  });
+
+  it('reports the empty-run share out of every kilometre TURNED, not just the loaded ones', () => {
+    // 800 loaded + 200 empty = 1000 turned, of which a fifth was empty.
+    expect(emptyRunPct({ movedKm: 800, deadheadKm: 200 })).toBe(20);
+    expect(emptyRunPct({ movedKm: 0, deadheadKm: 0 })).toBeNull();
+    // All deadhead and nothing delivered is a real, and damning, 100%.
+    expect(emptyRunPct({ movedKm: 0, deadheadKm: 120 })).toBe(100);
   });
 });

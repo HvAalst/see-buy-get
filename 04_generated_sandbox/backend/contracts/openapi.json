@@ -9312,6 +9312,74 @@
         }
       }
     },
+    "/v1/sbg/market/series": {
+      "get": {
+        "operationId": "Sbg.marketSeries",
+        "summary": "",
+        "description": "FB4 — the market series: kilometres of each body ASKED FOR, against kilometres actually MOVED.\n\n for the same reason the market board is, and more so. The list of open loads is a snapshot\nanybody could assemble by watching; this is the shape of a market over time, and it is the thing nobody\nelse can hold, because it needs both halves — what shippers needed, and what the fleet that exists could\nactually take. Giving it away is the moat, not a leak of one (user, 2026-08-30: entrepreneurs should get\nthat data from us, and that is how we become irreplaceable).\n\nNothing here identifies a load, a shipper or a driver: it is counts and kilometres, bucketed by truck\nbody. That is what lets an aggregate be public where the individual rows behind it are coarsened.",
+        "parameters": [
+          {
+            "name": "lat",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": -90,
+              "maximum": 90,
+              "type": "number"
+            }
+          },
+          {
+            "name": "lng",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": -180,
+              "maximum": 180,
+              "type": "number"
+            }
+          },
+          {
+            "name": "radiusKm",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "since",
+            "required": false,
+            "in": "query",
+            "description": "Window start, ISO. Defaults to twelve months back — the \"yearly km\" the series is asked for in.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "until",
+            "required": false,
+            "in": "query",
+            "description": "Window end, ISO. Defaults to now.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketSeries"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/dispatch/posted": {
       "get": {
         "operationId": "Sbg.postedFreight",
@@ -16074,6 +16142,56 @@
           "total"
         ]
       },
+      "CarriedBody": {
+        "type": "object",
+        "properties": {
+          "vehicleClass": {
+            "type": "string",
+            "enum": [
+              "bike",
+              "motorcycle",
+              "tuktuk",
+              "car",
+              "van",
+              "bus",
+              "truck"
+            ]
+          },
+          "truckSubtype": {
+            "type": "string",
+            "description": "The truck body. Absent for a vehicle class that has no subtype — a van is a van.",
+            "enum": [
+              "flatbed",
+              "dropside",
+              "box",
+              "curtain_side",
+              "refrigerated",
+              "insulated",
+              "tipper",
+              "cement_mixer",
+              "grain_hopper",
+              "bulk_tanker",
+              "tanker",
+              "food_tanker",
+              "fuel_tanker",
+              "water_bowser",
+              "hazmat",
+              "car_carrier",
+              "livestock",
+              "skeletal",
+              "container_selfloader",
+              "crane",
+              "lowboy",
+              "logging",
+              "tow_recovery",
+              "refuse"
+            ]
+          }
+        },
+        "required": [
+          "vehicleClass"
+        ]
+      },
       "Freight": {
         "type": "object",
         "properties": {
@@ -16372,6 +16490,14 @@
           },
           "claimedBy": {
             "type": "string"
+          },
+          "carriedBy": {
+            "description": "FB4a — what actually CARRIED it, stamped at claim. The mirror of `bodyDerived`: that one records the body\nthe load needed, this one the body that turned up.\n\nFrozen for exactly the reason the derived body and the price are frozen. Only `claimedBy` was ever\nrecorded, so \"kilometres moved by container chassis in 2026\" could only be answered by looking up what\nthat driver is coupled to TODAY — and a driver who sells a flatbed and buys a box van would silently\nrewrite every haul they have ever done. A market series that changes retroactively is not a series.\n\nAbsent on a load claimed before FB4a, and on one whose claimer had no truck subtype (a van or a bus).\nSuch a haul is counted as UNKNOWN in the analytics, never attributed to a body by inference.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CarriedBody"
+              }
+            ]
           },
           "createdAt": {
             "type": "string"
@@ -16751,6 +16877,137 @@
           "items",
           "total",
           "basis"
+        ]
+      },
+      "BodySeries": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string",
+            "enum": [
+              "flatbed",
+              "dropside",
+              "box",
+              "curtain_side",
+              "refrigerated",
+              "insulated",
+              "tipper",
+              "cement_mixer",
+              "grain_hopper",
+              "bulk_tanker",
+              "tanker",
+              "food_tanker",
+              "fuel_tanker",
+              "water_bowser",
+              "hazmat",
+              "car_carrier",
+              "livestock",
+              "skeletal",
+              "container_selfloader",
+              "crane",
+              "lowboy",
+              "logging",
+              "tow_recovery",
+              "refuse",
+              "unknown"
+            ]
+          },
+          "offeredLoads": {
+            "type": "number",
+            "description": "Loads POSTED in the window whose derived body is this one."
+          },
+          "offeredKm": {
+            "type": "number",
+            "description": "Their LOADED kilometres — pickup → dropoff. Work asked for; empty running is never in here."
+          },
+          "offeredMeasured": {
+            "type": "number",
+            "description": "How many of those had a MEASURED body rather than one guessed from weight. The rest still count; they\n are a softer claim, and a reader investing against this is entitled to know the difference."
+          },
+          "movedLoads": {
+            "type": "number",
+            "description": "Loads CLAIMED in the window and carried by a vehicle of this body."
+          },
+          "movedKm": {
+            "type": "number",
+            "description": "Their loaded kilometres. THE number — \"km of containers moved\"."
+          },
+          "deadheadKm": {
+            "type": "number",
+            "description": "The empty run to reach that work. Beside movedKm, never inside it: a market whose fleet turns 40% of its\n wheels empty is a different investment from one that does not, and only a separate figure says so."
+          }
+        },
+        "required": [
+          "body",
+          "offeredLoads",
+          "offeredKm",
+          "offeredMeasured",
+          "movedLoads",
+          "movedKm",
+          "deadheadKm"
+        ]
+      },
+      "MarketSeriesTotals": {
+        "type": "object",
+        "properties": {
+          "offeredLoads": {
+            "type": "number"
+          },
+          "offeredKm": {
+            "type": "number"
+          },
+          "movedLoads": {
+            "type": "number"
+          },
+          "movedKm": {
+            "type": "number"
+          },
+          "deadheadKm": {
+            "type": "number"
+          },
+          "unmetLoads": {
+            "type": "number",
+            "description": "Loads posted in the window that NOTHING ever claimed — demand the fleet did not meet. The gap between\n this and the moved figures is the sentence somebody deciding what to buy is actually paying for."
+          },
+          "unmetKm": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "offeredLoads",
+          "offeredKm",
+          "movedLoads",
+          "movedKm",
+          "deadheadKm",
+          "unmetLoads",
+          "unmetKm"
+        ]
+      },
+      "MarketSeries": {
+        "type": "object",
+        "properties": {
+          "bodies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BodySeries"
+            }
+          },
+          "from": {
+            "type": "string",
+            "description": "The window these figures cover, echoed as ISO instants. A kilometre count means nothing without the\n period it accrued over, and \"yearly km\" is a rate a reader has to be able to check for themselves."
+          },
+          "to": {
+            "type": "string"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/MarketSeriesTotals"
+          }
+        },
+        "required": [
+          "bodies",
+          "from",
+          "to",
+          "totals"
         ]
       },
       "PostedFreightRow": {

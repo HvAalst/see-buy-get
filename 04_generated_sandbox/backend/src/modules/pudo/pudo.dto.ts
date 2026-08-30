@@ -927,6 +927,23 @@ export class MarketQueryDto {
   @IsOptional() @IsNumber() @Type(() => Number) @Min(1) radiusKm?: number;
 }
 
+/**
+ * FB4 — the market series query. Where, how far around it, and over what period.
+ *
+ * The point is OPTIONAL here, unlike on the market board: "how much flatbed work is there on this network"
+ * is a real question with no natural centre, and forcing a caller to name a city to ask it would make the
+ * whole-network answer unreachable.
+ */
+export class MarketSeriesQueryDto {
+  @IsOptional() @IsNumber() @Type(() => Number) @Min(-90) @Max(90) lat?: number;
+  @IsOptional() @IsNumber() @Type(() => Number) @Min(-180) @Max(180) lng?: number;
+  @IsOptional() @IsNumber() @Type(() => Number) @Min(1) radiusKm?: number;
+  /** Window start, ISO. Defaults to twelve months back — the "yearly km" the series is asked for in. */
+  @IsOptional() @IsDateString() since?: string;
+  /** Window end, ISO. Defaults to now. */
+  @IsOptional() @IsDateString() until?: string;
+}
+
 /** FB0c — a driver's price for a load posted 'negotiate'. It reserves nothing; the poster's acceptance is
  *  what claims the load. */
 export class ProposeFreightDto {

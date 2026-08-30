@@ -5,10 +5,12 @@ import {
   deviceMarker,
   fetchCountries,
   fetchMarket,
+  fetchMarketSeries,
   fetchPoints,
   geocode,
   handOff,
   type MarketRow,
+  type MarketSeriesView,
   registerStore,
   requestCode,
   signup,
@@ -56,6 +58,10 @@ export interface HomeState {
   marketState: 'idle' | 'locating' | 'loading' | 'ready' | 'error';
   /** The server's own word for what the prices mean. Rendered, never paraphrased. */
   marketBasis: string | null;
+  /** FB4 — which half of the market is on screen: today's open loads, or the series over time. */
+  marketView: 'loads' | 'series';
+  series: MarketSeriesView | null;
+  seriesState: 'idle' | 'loading' | 'ready' | 'error';
 }
 
 const INITIAL: HomeState = {
@@ -79,6 +85,9 @@ const INITIAL: HomeState = {
   market: [],
   marketState: 'idle',
   marketBasis: null,
+  marketView: 'loads',
+  series: null,
+  seriesState: 'idle',
 };
 
 /**
@@ -90,6 +99,7 @@ export function useHomeApp() {
   /** FB3b — which look owns the screen. A slow answer for "Nairobi" must not overwrite a fast one for
    *  "Kaapstad" typed after it; the market is read by someone trying several places in a row. */
   const marketEpoch = useRef(0);
+  const seriesEpoch = useRef(0);
   const stateRef = useRef(state);
   useEffect(() => {
     stateRef.current = state;
@@ -307,9 +317,45 @@ export function useHomeApp() {
     [readMarket],
   );
 
+  /**
+   * FB4 — read the series for wherever the market view is currently pointed.
+   *
+   * Deliberately fetched over the SAME place and reach the loads list is showing, so switching between the
+   * two halves never silently changes the question being answered. With no place chosen the series is still
+   * available — it is the whole network then, which is a real answer rather than a missing one.
+   */
+  const loadSeries = useCallback(async () => {
+    const epoch = ++seriesEpoch.current;
+    setState((s) => ({ ...s, seriesState: 'loading' }));
+    const at = stateRef.current.marketAt;
+    const r = await fetchMarketSeries(at, at ? (stateRef.current.marketReach ?? undefined) : undefined);
+    if (epoch !== seriesEpoch.current) return;
+    if (r.error) {
+      setState((s) => ({ ...s, seriesState: 'error', error: r.error }));
+      return;
+    }
+    setState((s) => ({ ...s, series: r.data ?? null, seriesState: 'ready', error: null }));
+  }, []);
+
+  /** Switch halves. */
+  const setMarketView = useCallback((marketView: 'loads' | 'series') => setState((s) => ({ ...s, marketView })), []);
+
+  /**
+   * The series follows whatever the market view is pointed at — on arrival, and whenever the place or the
+   * reach moves underneath it.
+   *
+   * One effect rather than a call chained onto each control, so there is exactly one rule to hold: the table
+   * on screen always describes the place named above it. A cached table left behind by an earlier place
+   * would be read as this one's, and this is the screen people take numbers away from.
+   */
+  useEffect(() => {
+    if (state.marketView === 'series') void loadSeries();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.marketView, state.marketAt, state.marketReach]);
+
   return {
     state,
-    actions: { go, startJoin, setForm, back, sendCode, confirmCode, advance, submit, restart, loadPoints, setMarketQuery, lookUpMarket, setMarketReach },
+    actions: { go, startJoin, setForm, back, sendCode, confirmCode, advance, submit, restart, loadPoints, setMarketQuery, lookUpMarket, setMarketReach, setMarketView, loadSeries },
   };
 }
 

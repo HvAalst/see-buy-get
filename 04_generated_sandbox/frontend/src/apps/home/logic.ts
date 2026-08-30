@@ -331,6 +331,58 @@ export function marketWhere(row: { area?: string; destArea?: string }, t: Transl
   return t('home.market.whereUnknown');
 }
 
+/* ----------------------------------------------- FB4: reading the series -- */
+
+/** A whole number of kilometres with thousands separated. The series deals in tens of thousands; a raw
+ *  `48213.7` is not a figure anybody reads off a screen and repeats correctly. */
+export function km(n: number | undefined): string {
+  return Math.round(n ?? 0).toLocaleString();
+}
+
+/**
+ * How much of the work asked for in a body actually moved, as a percentage — or null when the question does
+ * not apply.
+ *
+ * Null when nothing was offered: 0 km moved out of 0 km offered is not "0% served", it is no market at all,
+ * and rendering a zero there invents a shortfall out of an empty row.
+ */
+export function servedPct(row: { offeredKm: number; movedKm: number }): number | null {
+  if (!(row.offeredKm > 0)) return null;
+  return Math.round((row.movedKm / row.offeredKm) * 100);
+}
+
+/**
+ * Is this row worth reading as a market, or is it a handful of loads?
+ *
+ * The rateBand rule, applied to bodies: a median of one vehicle is not a market. A body with two loads
+ * against it says almost nothing, and a percentage computed off two loads says less than nothing because it
+ * looks like a measurement. Marked rather than hidden — the count is itself information.
+ */
+export const THIN_MARKET_LOADS = 5;
+export function isThin(row: { offeredLoads: number; movedLoads: number }): boolean {
+  return row.offeredLoads + row.movedLoads < THIN_MARKET_LOADS;
+}
+
+/**
+ * How much of the offered series rests on a MEASURED body rather than one guessed from weight, as a
+ * percentage. Null when nothing was offered.
+ *
+ * Surfaced because a table built mostly on guesses is a different object from one built on measurements, and
+ * only one of them is worth an investment decision.
+ */
+export function measuredPct(totals: { offeredLoads: number }, bodies: Array<{ offeredMeasured: number }>): number | null {
+  if (!(totals.offeredLoads > 0)) return null;
+  const measured = bodies.reduce((n, b) => n + b.offeredMeasured, 0);
+  return Math.round((measured / totals.offeredLoads) * 100);
+}
+
+/** The share of all kilometres turned that were run EMPTY. Null when nothing turned at all. */
+export function emptyRunPct(totals: { movedKm: number; deadheadKm: number }): number | null {
+  const turned = totals.movedKm + totals.deadheadKm;
+  if (!(turned > 0)) return null;
+  return Math.round((totals.deadheadKm / turned) * 100);
+}
+
 /**
  * What the market looks like in one sentence — the answer to "should I move here", not to "what is on row 4".
  *
