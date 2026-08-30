@@ -345,6 +345,22 @@ export const enAgent = {
   'agent.accept.earlyClaim': 'Let a driver reserve it before the day — useful when trucks are scarce',
 
   // FB2b — posting for negotiation, and answering the prices that come back.
+  // FB2c — the two facts only the counter can supply.
+  'agent.accept.indivisible': 'This cannot be split into smaller loads',
+  'agent.accept.indivisibleNote': 'One piece that has to travel whole — a machine, a tank, a beam. It changes what kind of truck is needed, and measuring cannot tell us.',
+  'agent.accept.bodyHint': 'What kind of truck do you think it needs?',
+  'agent.accept.bodyHintNote': 'Only if you know. We work it out from the size and weight either way, and your answer never stops a suitable truck taking it.',
+  'agent.accept.bodyAny': "I don't know",
+  'agent.accept.bodyFlatbed': 'Open flatbed',
+  'agent.accept.bodyBox': 'Closed box van',
+  'agent.accept.bodyCurtain': 'Curtain-side',
+  'agent.accept.bodyReefer': 'Refrigerated',
+  'agent.accept.bodyTipper': 'Tipper',
+  'agent.accept.bodyLowboy': 'Low-loader',
+  'agent.accept.bodyContainer': 'Container chassis',
+  'agent.accept.derivedBody': 'We will look for {body}',
+  'agent.accept.derivedBodyGuess': 'We will look for {body}, worked out from the weight alone',
+
   'agent.accept.negotiate': 'Let drivers name their own price',
   'agent.accept.negotiateNote': 'Instead of the first suitable truck taking it at our rate, drivers send you a price and you pick one. Slower, and usually cheaper for an awkward load. The cash budget still applies.',
   'agent.nav.freight': 'Freight',

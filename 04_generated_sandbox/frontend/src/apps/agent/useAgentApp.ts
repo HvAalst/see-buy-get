@@ -16,7 +16,7 @@ import type { IconName } from '../../shared/ui/Icon';
 import { agentConfig, clearDid, createAgentClient, purgeAgentTokens, readDid, readEmail, saveDid, saveEmail } from './api';
 import { signal } from '../../shared/feedback';
 import { triggerDownload } from '../../shared/download';
-import { bookFreightMissing, EMPTY_ACCEPT, otpValid, parseBudget, parseDims, plannedPickupIso, type AcceptForm, type DimsForm } from './logic';
+import { bodyHintValue, bookFreightMissing, EMPTY_ACCEPT, otpValid, parseBudget, parseDims, plannedPickupIso, type AcceptForm, type DimsForm } from './logic';
 import type { GeoPoint } from '../../shared/geo';
 import type {
   AgentLedgerRow,
@@ -188,6 +188,9 @@ export interface AgentState {
     cargoClass: string;
     equipmentGaps?: Array<'origin' | 'dest'>;
     maxSpend?: number;
+    /** FB2c — what the system concluded the load needs, and how strong that claim is. Shown back on the
+     *  receipt so the derivation is visible to the person who supplied the facts it ran on. */
+    bodyDerived?: { body: string; basis: 'measured' | 'weight-only' };
   } | null;
   /** PG4 — the scanned sticker resolved to an EXISTING parcel (a pre-minted send, a store order, or an
    *  in-use sticker); null/idle = a fresh sticker → the walk-up form. */
@@ -1089,6 +1092,10 @@ export function useAgentApp() {
         // FB2b — sent only when chosen, so an ordinary booking keeps the server's default rather than
         // restating it. Absent reads as 'instant', which is how every counter booking has behaved.
         commitMode: f.negotiate ? 'negotiate' : undefined,
+        // FB2c — sent only when the clerk actually said something. `false` and "no opinion" are both the
+        // absence of an answer here, and sending them would dress a default up as an observation.
+        indivisible: f.indivisible || undefined,
+        bodyHint: bodyHintValue(f.bodyHint),
       });
       if (r.error) return fail(r.error);
       buzz();

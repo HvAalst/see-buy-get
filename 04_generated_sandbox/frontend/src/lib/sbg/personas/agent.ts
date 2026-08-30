@@ -160,6 +160,10 @@ export function createAgentApi(sbg: SbgClient) {
       /** FB2b — 'negotiate' posts the load for drivers to name a price the counter then accepts, rather than
        *  the first fit truck taking it at the computed rate. The cash cap binds either way. */
       commitMode?: 'instant' | 'negotiate';
+      /** FB2c — the two facts only the counter can supply: whether the load can be split (which decides an
+       *  open deck versus a low-loader) and what the shop thinks it needs (advisory, never matched on). */
+      indivisible?: boolean;
+      bodyHint?: 'flatbed' | 'box' | 'curtain_side' | 'refrigerated' | 'tipper' | 'lowboy' | 'skeletal';
     }) => sbg.request((c) => c.POST('/v1/sbg/parcels/book-freight', { body })),
 
     /** FB2b — the loads THIS shop posted, each with how many prices are waiting for an answer. Owner-scoped

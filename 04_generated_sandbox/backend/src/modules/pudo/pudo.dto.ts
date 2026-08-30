@@ -881,6 +881,14 @@ export class BookFreightDto {
   @IsOptional() @IsIn(['instant', 'negotiate']) @ApiPropertyOptional({ enum: ['instant', 'negotiate'] }) commitMode?: 'instant' | 'negotiate';
   @IsOptional() @Matches(SCHEDULED_PICKUP_RE, { message: SCHEDULED_PICKUP_MSG }) scheduledPickupAt?: string; // absent = ship now; present = planned
   @IsOptional() @IsBoolean() allowEarlyClaim?: boolean; // planned only: may a driver reserve it before the date (default true)
+  /** FB2c — can the load be split into two smaller ones? The counter is the one place someone is standing in
+   *  front of the thing, so it is the one place this can honestly be answered — and it is the fact that flips
+   *  a heavy load from an open deck to a low-loader, which no measurement implies. */
+  @IsOptional() @IsBoolean() indivisible?: boolean;
+  /** FB2c — what the shop THINKS the load needs. ADVISORY by decision: recorded, shown and counted, never
+   *  matched on, because a clerk cannot reliably tell a skeletal from a flatbed and a binding wrong pick
+   *  would exclude the one operator who could have carried it. */
+  @IsOptional() @IsIn(TRUCK_SUBTYPES) bodyHint?: string;
 }
 
 /** S32b — a driver advancing a claimed freight (pickup/deliver). driverDid is the claimer, verified against

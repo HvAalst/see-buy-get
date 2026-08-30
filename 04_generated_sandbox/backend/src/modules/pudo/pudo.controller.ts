@@ -489,6 +489,10 @@ export class SbgController {
       destEquipment: dest.equipment,
       postedByDid: agentDid, // FB0c — the booking shop negotiates for it, even though the cash settles off-platform
       commitMode: dto.commitMode,
+      // FB2c — the two facts only a person standing at the load can supply. They reach canonicalBody() inside
+      // registerFreight, so the body stamped on this load is derived from what the counter actually saw.
+      indivisible: dto.indivisible,
+      bodyHint: dto.bodyHint as never,
       buyerMobile: dto.customerMobile, // hashed on the freight (never the cleartext) so the customer can track it
       maxSpend: dto.budgetCap, // the cash cap → dispatch won't OFFER or let a driver CLAIM above it
       scheduledPickupAt: dto.scheduledPickupAt,

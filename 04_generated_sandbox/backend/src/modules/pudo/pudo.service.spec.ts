@@ -3360,6 +3360,29 @@ describe('PUDO Light', () => {
   const negotiable = (extra: Record<string, unknown> = {}) =>
     dispatch.registerFreight({ description: 'Awkward load', pickupLocation: pickupPt, pickupLabel: 'Depot', destLabel: 'Site', destLocation: { lat: -1.15, lng: 36.8 }, weightKg: 400, bulk: false, dimensionsCm: [120, 100, 80], commitMode: 'negotiate', ...extra });
 
+  it('FB2c: a shipper exclusion now BINDS at claim — because the board can finally explain it', () => {
+    // Stored since FB0b and deliberately unenforced while no screen could show it: dropping a qualifying
+    // driver with no reason given is the invisible exclusion the board exists to remove. Now the board marks
+    // the row "the shipper has ruled out your body type", so refusing the claim only honours what was said.
+    const d = negotiator('XB');
+    const pickup = { lat: -1.2, lng: 36.8 };
+    const f = dispatch.registerFreight({ description: 'Electronics', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', destLocation: pickup, weightKg: 400, bulk: false, dimensionsCm: [120, 100, 80], excludedBodies: ['flatbed'] });
+    const [offer] = dispatch.suggest(d.did, { from: pickup, to: pickup }).filter((o) => o.ref === f.freightId);
+    expect(offer).toBeDefined(); // still OFFERED — the exclusion is a preference, not a capability
+    expect(() => dispatch.claim(offer.offerId)).toThrow(/ruled out your body type/);
+    // Refused before any mutation: the load stays open for a body the shipper does accept.
+    expect(dispatch.listFreight().find((x) => x.freightId === f.freightId)!.status).toBe('available');
+  });
+
+  it('FB2c: the counter’s indivisible answer is what makes a heavy load a low-loader job', () => {
+    // 26 t: divisible is two ordinary trips on an open deck, indivisible is a low-loader and a permit. No
+    // measurement implies it — only the person standing at the load knows.
+    const pickup = { lat: -1.2, lng: 36.8 };
+    const base = { pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', weightKg: 26_000, bulk: false, dimensionsCm: [400, 200, 150] as [number, number, number] };
+    expect(dispatch.registerFreight({ ...base, description: 'Splittable' }).bodyDerived!.body).toBe('flatbed');
+    expect(dispatch.registerFreight({ ...base, description: 'One piece', indivisible: true }).bodyDerived!.body).toBe('lowboy');
+  });
+
   it('FB2b: a poster sees THEIR loads and the prices waiting — and nobody else’s', () => {
     // Scoped at the source, not by filtering the public list. A screen that filters someone else's data has
     // already received it (the register epic's data-firewall lesson).

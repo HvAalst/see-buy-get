@@ -1,6 +1,6 @@
 import { Button, Card, CodeCard, ErrorNote, GlanceNumber, Icon, Note, PlaceMap, Pill, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
 import { useT, type Translate } from '../../../shared/i18n';
-import { NATURES, acceptMissing, bookFreightMissing, parcelStatusWord, pointDistance, selectablePoints, sizeMeta } from '../logic';
+import { BODY_HINTS, NATURES, acceptMissing, bookFreightMissing, parcelStatusWord, pointDistance, selectablePoints, sizeMeta, type BodyHint } from '../logic';
 import type { NetworkPoint } from '../types';
 import type { AgentActions, AgentState } from '../useAgentApp';
 import { PhotoField } from './PhotoField';
@@ -329,6 +329,15 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
             {state.bookedFreight.maxSpend != null ? (
               <p class="hint">{t('agent.accept.freightCollect', { amount: state.bookedFreight.maxSpend.toFixed(2) })}</p>
             ) : null}
+            {/* FB2c — hand the conclusion back to the person who supplied the facts it ran on. It is also the
+                only place a clerk finds out that skipping the measurements left us guessing from weight. */}
+            {state.bookedFreight.bodyDerived ? (
+              <p class="hint">
+                {state.bookedFreight.bodyDerived.basis === 'measured'
+                  ? t('agent.accept.derivedBody', { body: state.bookedFreight.bodyDerived.body.replace('_', ' ') })
+                  : t('agent.accept.derivedBodyGuess', { body: state.bookedFreight.bodyDerived.body.replace('_', ' ') })}
+              </p>
+            ) : null}
             {state.bookedFreight.equipmentGaps?.length ? (
               <Note tone="warn" icon="warning" title={t('agent.accept.liftTitle')} detail={freightGapDetail(state.bookedFreight.equipmentGaps, t)} />
             ) : null}
@@ -466,6 +475,31 @@ function FreightBookingCard({ state, actions }: { state: AgentState; actions: Ag
           </label>
         </>
       ) : null}
+
+      {/* FB2c — the two facts a tape measure cannot supply, asked of the one person standing at the load.
+          `indivisible` is not cosmetic: at this weight it is the difference between two ordinary trips on an
+          open deck and a low-loader with a permit. */}
+      <label class="checkline" style="margin-top:12px">
+        <input type="checkbox" checked={f.indivisible} onChange={(e) => actions.setAccept({ indivisible: e.currentTarget.checked })} />
+        <span>{t('agent.accept.indivisible')}</span>
+      </label>
+      <p class="card__note">{t('agent.accept.indivisibleNote')}</p>
+
+      <div class="field" style="margin-top:12px">
+        <label class="field__label" for="freight-body">
+          {t('agent.accept.bodyHint')}
+        </label>
+        {/* The cast is safe by construction: every option below is a BODY_HINTS value, and BODY_HINTS is the
+            literal list the API's own enum is matched against. */}
+        <select id="freight-body" class="input" value={f.bodyHint} onInput={(e) => actions.setAccept({ bodyHint: e.currentTarget.value as BodyHint })}>
+          {BODY_HINTS.map((b) => (
+            <option key={b.value} value={b.value}>
+              {t(b.labelKey as 'agent.accept.bodyAny')}
+            </option>
+          ))}
+        </select>
+      </div>
+      <p class="card__note">{t('agent.accept.bodyHintNote')}</p>
 
       {/* FB2b — how the load is TAKEN, as against when it is picked up. An awkward walk-up is exactly the
           case where the formula's price is worst and a driver's own number is best. */}

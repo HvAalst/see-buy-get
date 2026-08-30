@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n'; // English is the base catalog, so the real `t` yields the English literals
 import {
+  BODY_HINTS,
   EMPTY_ACCEPT,
   VOID_WINDOW_MS,
   acceptMissing,
+  bodyHintValue,
   bookFreightMissing,
   canAccept,
   consignmentProgress,
@@ -329,5 +331,31 @@ describe('shelf', () => {
     expect(gridDims(slots)).toEqual({ rows: 3, cols: 5 });
     expect(gridDims([])).toBeNull();
     expect(gridDims(undefined)).toBeNull();
+  });
+});
+
+describe('the counter’s freight facts (FB2c)', () => {
+  it('treats "I don’t know" as an ABSENT hint, not an empty one', () => {
+    // Sending '' would record a body nobody named, and it would then be counted in the market series as if a
+    // clerk had asserted it. The whole value of the hint is that it is only there when someone meant it.
+    expect(bodyHintValue('')).toBeUndefined();
+    expect(bodyHintValue('flatbed')).toBe('flatbed');
+    expect(bodyHintValue('lowboy')).toBe('lowboy');
+  });
+
+  it('offers a SHORT list of bodies a shop clerk would recognise', () => {
+    // Not the full 25-body catalogue: a picker with twenty-five options invites a confident wrong answer
+    // where "I don't know" was the honest one, and a wrong hint is worse than none.
+    expect(BODY_HINTS.length).toBeLessThanOrEqual(9);
+    expect(BODY_HINTS[0].value).toBe(''); // the honest default comes first
+    // Every offered value must be one the API's enum accepts, or the form would post a body it rejects.
+    for (const b of BODY_HINTS) expect(['', 'flatbed', 'box', 'curtain_side', 'refrigerated', 'tipper', 'lowboy', 'skeletal']).toContain(b.value);
+  });
+
+  it('starts a fresh booking with no opinion and nothing declared indivisible', () => {
+    // Both default to the absence of an answer. A form that opened with "cannot be split" ticked would put
+    // loads on low-loaders because nobody looked at the checkbox.
+    expect(EMPTY_ACCEPT.indivisible).toBe(false);
+    expect(EMPTY_ACCEPT.bodyHint).toBe('');
   });
 });

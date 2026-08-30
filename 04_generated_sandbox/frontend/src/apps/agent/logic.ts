@@ -182,6 +182,38 @@ export interface AcceptForm {
   // truck taking it at the computed rate. The cash cap still binds: a price above what the customer agreed
   // cannot be accepted, whoever named it.
   negotiate: boolean;
+  // FB2c — the two facts only a person standing at the load can supply, and that no measurement implies.
+  // `indivisible` is the one that flips a heavy load from an open deck to a low-loader; `bodyHint` is what
+  // the shop thinks it needs, recorded and shown but never matched on (a clerk cannot reliably tell a
+  // skeletal from a flatbed, and a binding wrong pick would exclude the operator who could have carried it).
+  indivisible: boolean;
+  bodyHint: BodyHint; // '' = no opinion
+}
+
+/**
+ * The truck bodies a counter can sensibly name, with words a shop clerk would use.
+ *
+ * A deliberate SHORT list, not the full 25-body catalogue: this is an advisory hint from someone who has a
+ * crate in front of them, and a picker with twenty-five options invites a confident wrong answer where "no
+ * opinion" was the honest one. Anything not here is left blank and derived from the load's own facts.
+ */
+export const BODY_HINTS = [
+  { value: '', labelKey: 'agent.accept.bodyAny' },
+  { value: 'flatbed', labelKey: 'agent.accept.bodyFlatbed' },
+  { value: 'box', labelKey: 'agent.accept.bodyBox' },
+  { value: 'curtain_side', labelKey: 'agent.accept.bodyCurtain' },
+  { value: 'refrigerated', labelKey: 'agent.accept.bodyReefer' },
+  { value: 'tipper', labelKey: 'agent.accept.bodyTipper' },
+  { value: 'lowboy', labelKey: 'agent.accept.bodyLowboy' },
+  { value: 'skeletal', labelKey: 'agent.accept.bodyContainer' },
+] as const;
+
+/** The picker's values as literals — so a body this form offers can never drift from one the API accepts. */
+export type BodyHint = (typeof BODY_HINTS)[number]['value'];
+
+/** "No opinion" is an ABSENT hint, not an empty one: sending '' would record a body nobody named. */
+export function bodyHintValue(hint: BodyHint): Exclude<BodyHint, ''> | undefined {
+  return hint === '' ? undefined : hint;
 }
 
 export const EMPTY_ACCEPT: AcceptForm = {
@@ -203,6 +235,8 @@ export const EMPTY_ACCEPT: AcceptForm = {
   allowEarlyClaim: true,
   customerMobile: '',
   negotiate: false,
+  indivisible: false,
+  bodyHint: '',
 };
 
 /** The smallest measurement we accept, in cm — 1 mm, so a thin item (a letter ~0.5 cm) is shippable.

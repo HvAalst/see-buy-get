@@ -13875,6 +13875,39 @@
           },
           "allowEarlyClaim": {
             "type": "boolean"
+          },
+          "indivisible": {
+            "type": "boolean"
+          },
+          "bodyHint": {
+            "type": "string",
+            "description": "FB2c — what the shop THINKS the load needs. ADVISORY by decision: recorded, shown and counted, never\n matched on, because a clerk cannot reliably tell a skeletal from a flatbed and a binding wrong pick\n would exclude the one operator who could have carried it.",
+            "enum": [
+              "flatbed",
+              "dropside",
+              "box",
+              "curtain_side",
+              "refrigerated",
+              "insulated",
+              "tipper",
+              "cement_mixer",
+              "grain_hopper",
+              "bulk_tanker",
+              "tanker",
+              "food_tanker",
+              "fuel_tanker",
+              "water_bowser",
+              "hazmat",
+              "car_carrier",
+              "livestock",
+              "skeletal",
+              "container_selfloader",
+              "crane",
+              "lowboy",
+              "logging",
+              "tow_recovery",
+              "refuse"
+            ]
           }
         },
         "required": [

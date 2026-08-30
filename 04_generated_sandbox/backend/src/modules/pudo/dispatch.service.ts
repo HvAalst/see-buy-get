@@ -16,7 +16,7 @@ import { VendorService } from './vendor.service';
 import { RatingService, belowFloor } from './rating.service';
 import { WalletGateService } from './wallet-gate.service';
 import { clampMultiplier, computeFreightPrice, distanceSplit, earningsPerKm, freightMultiplier, shipperCharge, type PriceBreakdown } from './pricing';
-import { canonicalBody, bodyOf } from './freight-body';
+import { canonicalBody, bodyOf, excludedByShipper } from './freight-body';
 import { blockersFor, takeable } from './freight-board';
 import { TruckSubtype } from './fleet.config';
 import { isTempBreach, loadSafetyItems, missingKeys, requiredLoadKeys, requiredUnloadKeys, tempBand, unloadSafetyItems } from './heavy-cargo';
@@ -715,6 +715,14 @@ export class DispatchService {
     // REP4 — bar a below-floor driver from CLAIMING freight (defence-in-depth behind suggest's withholding, and
     // it also catches a stale offer claimed after the driver dropped below the floor). Recoverable; cold-start safe.
     if (belowFloor(this.ratings.driverRating(driverDid))) throw new GlosError('REPUTATION_BELOW_FLOOR', 'Your rating is below the network minimum — freight is paused until it recovers. Keep delivering to bring it back up.');
+    // FB2c — the shipper's own exclusion now BINDS, deliberately only from the moment the board can explain
+    // it. Enforcing it while no screen could show it would have dropped qualifying drivers with no reason
+    // given, which is the invisible exclusion the whole board exists to remove; enforcing it here, where the
+    // board has already marked the row "the shipper has ruled out your body type", is just honouring what the
+    // driver was told. The mirror-at-claim rule (S31): what filters a load must also refuse it.
+    if (vehicle.truckSubtype && excludedByShipper(vehicle.truckSubtype, f.excludedBodies)) {
+      throw new GlosError('BODY_EXCLUDED', 'The shipper has ruled out your body type for this load — it is their choice, not a limit of your vehicle');
+    }
     // S34 — compute the price to LOCK. The market can surge afterwards and the driver can edit their profile,
     // but what is agreed at this instant never changes. Recompute against THIS vehicle's current profile
     // (defaults resolved for a legacy vehicle) and the multiplier now, over the two legs.
