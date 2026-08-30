@@ -7,6 +7,13 @@
 // keeping the clamp-to-bounds contract. All pure functions here so the pricing is trivially testable.
 
 import { withPlatformFee } from './pudo.config';
+// PriceBreakdown is declared in dispatch.types because it is a WIRE type — it rides on an Offer and on a
+// Freight, and the OpenAPI emitter only introspects the *.types.ts files. Declared here it emitted as a bare
+// typeless object, so every generated client saw `price: object` and no screen could read a term off it. The
+// dependency runs one way: dispatch.types knows nothing about this module.
+import { PriceBreakdown } from './dispatch.types';
+
+export { PriceBreakdown };
 
 /** Sanity bounds for a declared multiplier — never below a small floor, never a runaway ceiling. */
 export function clampMultiplier(m: number): number {
@@ -39,30 +46,6 @@ export function freightMultiplier(now: Date, bounds: { min: number; max: number 
   const lo = Number.isFinite(bounds.min) ? bounds.min : 1;
   const hi = Number.isFinite(bounds.max) ? bounds.max : 1;
   return Math.min(hi, Math.max(lo, m));
-}
-
-/** The transparent price breakdown shown on an offer card — every term the driver can see and trust. */
-export interface PriceBreakdown {
-  baseFee: number; // B — the flag-down / loading fee
-  distanceKm: number; // D — deadhead + haul. The BILLED distance; the price is computed on this and only this.
-  /**
-   * FB0a — the two halves of D, kept apart instead of summed away.
-   *
-   * They add up to distanceKm and change no money: the price has always been charged on the total, and still
-   * is. What was missing is the question an operator with a fixed asset actually asks — "how far do I run
-   * EMPTY to earn this?" — which a single collapsed number cannot answer. Loaded km is also the only honest
-   * denominator for a market series: an empty kilometre is cost, not work done.
-   *
-   * OPTIONAL because a breakdown is DURABLE — it is locked onto a freight at claim and outlives this slice.
-   * A price locked before FB0a has no split, and there is no way to recover one from the total (any division
-   * would be invention). Read them through `distanceSplit()`, which returns null rather than guessing.
-   */
-  deadheadKm?: number; // the empty run: where the vehicle is now → the pickup
-  loadedKm?: number; // the paid run: pickup → dropoff
-  ratePerKm: number; // R_base
-  multiplier: number; // M — already clamped to the driver's bounds
-  effectiveRate: number; // R_base × M
-  total: number; // B + D × effectiveRate — the driver's earning (the offer price)
 }
 
 /**

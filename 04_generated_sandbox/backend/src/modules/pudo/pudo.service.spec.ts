@@ -3223,6 +3223,129 @@ describe('PUDO Light', () => {
     expect(none.excludedBodies).toBeUndefined();
   });
 
+  /* --- FB1: the open board --- */
+
+  it('FB1: SHOWS EVERYTHING — a load the driver cannot take is marked, never removed', () => {
+    // The decision the whole feature rests on. Hiding a job because it needs a forklift denies an operator the
+    // one thing that tells them what to buy next.
+    const d = drivers.register({ displayName: 'BD', fullName: 'B', nationalId: 'ID-BD', mobile: '+254771001', licenceClasses: ['truck'], licenceNumber: 'L-BD', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const v = vehicles.register({ plate: 'BD-1', vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 10_000, ownerName: 'X', equipment: ['TLT'], baseFee: 10, pricePerKm: 0.5 });
+    fleet.couple(d.did, v.vehicleId);
+
+    const here = { lat: -1.2, lng: 36.8 };
+    const takeable = dispatch.registerFreight({ description: 'Pallets', pickupLocation: here, pickupLabel: 'A', destLabel: 'B', destLocation: { lat: -1.15, lng: 36.8 }, weightKg: 400, bulk: false, dimensionsCm: [120, 100, 80] });
+    const tooHeavy = dispatch.registerFreight({ description: 'Girders', pickupLocation: here, pickupLabel: 'A', destLabel: 'B', destLocation: { lat: -1.15, lng: 36.8 }, weightKg: 26_000, bulk: false, dimensionsCm: [1400, 200, 150] });
+
+    const rows = dispatch.board({ driverDid: d.did, from: here });
+    // BOTH are on the board.
+    expect(rows.map((r) => r.freightId).sort()).toEqual([takeable.freightId, tooHeavy.freightId].sort());
+    const heavy = rows.find((r) => r.freightId === tooHeavy.freightId)!;
+    expect(heavy.canTake).toBe(false);
+    expect(heavy.blockers.map((b) => b.code)).toContain('OVER_VEHICLE_CAPACITY');
+    expect(rows.find((r) => r.freightId === takeable.freightId)!.canTake).toBe(true);
+  });
+
+  it('FB1: no 15 km clamp — the board answers “is it worth 80 km empty?”, which the push cannot even ask', () => {
+    const d = drivers.register({ displayName: 'BF', fullName: 'B', nationalId: 'ID-BF', mobile: '+254771002', licenceClasses: ['truck'], licenceNumber: 'L-BF', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const v = vehicles.register({ plate: 'BF-1', vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 10_000, ownerName: 'X', equipment: ['TLT'], baseFee: 10, pricePerKm: 0.5 });
+    fleet.couple(d.did, v.vehicleId);
+
+    const here = { lat: -1.2, lng: 36.8 };
+    const farAway = { lat: -1.9, lng: 36.8 }; // ~78 km south — far outside MAX_WORK_RADIUS_KM
+    const far = dispatch.registerFreight({ description: 'Far load', pickupLocation: farAway, pickupLabel: 'Far', destLabel: 'B', destLocation: { lat: -1.95, lng: 36.8 }, weightKg: 400, bulk: false });
+
+    // The push cannot see it, and should not: an interruption ought to be about something nearby.
+    expect(dispatch.suggestNearby(d.did, here, MAX_WORK_RADIUS_KM).filter((o) => o.ref === far.freightId)).toHaveLength(0);
+    // The board can, and reports the empty run honestly.
+    const row = dispatch.board({ driverDid: d.did, from: here }).find((r) => r.freightId === far.freightId)!;
+    expect(row).toBeDefined();
+    expect(row.deadheadKm).toBeGreaterThan(MAX_WORK_RADIUS_KM);
+    expect(row.deadheadKm + row.loadedKm).toBeCloseTo(row.totalKm, 5);
+  });
+
+  it('FB1: the radius is the OPERATOR’s — absent means the whole market', () => {
+    const d = drivers.register({ displayName: 'BR', fullName: 'B', nationalId: 'ID-BR', mobile: '+254771003', licenceClasses: ['truck'], licenceNumber: 'L-BR', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const v = vehicles.register({ plate: 'BR-1', vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 10_000, ownerName: 'X', equipment: ['TLT'] });
+    fleet.couple(d.did, v.vehicleId);
+    const here = { lat: -1.2, lng: 36.8 };
+    const near = dispatch.registerFreight({ description: 'Near', pickupLocation: here, pickupLabel: 'A', destLabel: 'B', weightKg: 400, bulk: false });
+    const far = dispatch.registerFreight({ description: 'Far', pickupLocation: { lat: -1.9, lng: 36.8 }, pickupLabel: 'Far', destLabel: 'B', weightKg: 400, bulk: false });
+
+    const all = dispatch.board({ driverDid: d.did, from: here }).map((r) => r.freightId);
+    expect(all).toContain(near.freightId);
+    expect(all).toContain(far.freightId);
+    // Narrowed by the operator, the far one drops out — their choice, not ours.
+    const narrow = dispatch.board({ driverDid: d.did, from: here, radiusKm: 20 }).map((r) => r.freightId);
+    expect(narrow).toContain(near.freightId);
+    expect(narrow).not.toContain(far.freightId);
+  });
+
+  it('FB1: sorted by earnings per TOTAL km, empty run included', () => {
+    const d = drivers.register({ displayName: 'BS', fullName: 'B', nationalId: 'ID-BS', mobile: '+254771004', licenceClasses: ['truck'], licenceNumber: 'L-BS', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const v = vehicles.register({ plate: 'BS-1', vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 10_000, ownerName: 'X', equipment: ['TLT'], baseFee: 100, pricePerKm: 0.1 });
+    fleet.couple(d.did, v.vehicleId);
+    const here = { lat: -1.2, lng: 36.8 };
+    // Same haul, one at the door and one 78 km away. A flat base fee dominates, so the near one earns far more
+    // per kilometre turned — which proximity sorting would also get right, but for the platform's reason.
+    const atDoor = dispatch.registerFreight({ description: 'At the door', pickupLocation: here, pickupLabel: 'A', destLabel: 'B', destLocation: { lat: -1.18, lng: 36.8 }, weightKg: 400, bulk: false });
+    const wayOut = dispatch.registerFreight({ description: 'Way out', pickupLocation: { lat: -1.9, lng: 36.8 }, pickupLabel: 'Far', destLabel: 'B', destLocation: { lat: -1.88, lng: 36.8 }, weightKg: 400, bulk: false });
+
+    const rows = dispatch.board({ driverDid: d.did, from: here });
+    expect(rows[0].freightId).toBe(atDoor.freightId);
+    expect(rows[0].earningsPerKm!).toBeGreaterThan(rows.find((r) => r.freightId === wayOut.freightId)!.earningsPerKm!);
+  });
+
+  it('FB1: an uncoupled operator still sees the market — priced at nothing, and told why', () => {
+    // A fabricated rate would be the single most misleading number on the screen, so there is none: no price,
+    // no sort score, and one honest reason.
+    const d = drivers.register({ displayName: 'BU', fullName: 'B', nationalId: 'ID-BU', mobile: '+254771005', licenceClasses: ['truck'], licenceNumber: 'L-BU', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const here = { lat: -1.2, lng: 36.8 };
+    const f = dispatch.registerFreight({ description: 'Pallets', pickupLocation: here, pickupLabel: 'A', destLabel: 'B', weightKg: 400, bulk: false });
+    const row = dispatch.board({ driverDid: d.did, from: here }).find((r) => r.freightId === f.freightId)!;
+    expect(row.price).toBeUndefined();
+    expect(row.earningsPerKm ?? null).toBeNull();
+    expect(row.canTake).toBe(false);
+    expect(row.blockers.map((b) => b.code)).toEqual(['NO_VEHICLE']);
+  });
+
+  it('FB1: negotiate loads live HERE — the board is why they are kept out of the push', () => {
+    const d = drivers.register({ displayName: 'BN', fullName: 'B', nationalId: 'ID-BN', mobile: '+254771006', licenceClasses: ['truck'], licenceNumber: 'L-BN', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const v = vehicles.register({ plate: 'BN-1', vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 10_000, ownerName: 'X', equipment: ['TLT'] });
+    fleet.couple(d.did, v.vehicleId);
+    const here = { lat: -1.2, lng: 36.8 };
+    const f = dispatch.registerFreight({ description: 'Awkward', pickupLocation: here, pickupLabel: 'A', destLabel: 'B', weightKg: 400, bulk: false, commitMode: 'negotiate' });
+    expect(dispatch.suggest(d.did, { from: here, to: here }).filter((o) => o.ref === f.freightId)).toHaveLength(0);
+    const row = dispatch.board({ driverDid: d.did, from: here }).find((r) => r.freightId === f.freightId)!;
+    expect(row).toBeDefined();
+    expect(row.commitMode).toBe('negotiate'); // …so the screen can offer "send them your price" instead of Claim
+  });
+
+  it('FB1: a claimed load is gone from the market — "show everything" is not "show history"', () => {
+    const d = drivers.register({ displayName: 'BC', fullName: 'B', nationalId: 'ID-BC', mobile: '+254771007', licenceClasses: ['truck'], licenceNumber: 'L-BC', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const v = vehicles.register({ plate: 'BC-1', vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 10_000, ownerName: 'X', equipment: ['TLT'], baseFee: 10, pricePerKm: 0.5 });
+    fleet.couple(d.did, v.vehicleId);
+    const here = { lat: -1.2, lng: 36.8 };
+    const f = dispatch.registerFreight({ description: 'Pallets', pickupLocation: here, pickupLabel: 'A', destLabel: 'B', destLocation: here, weightKg: 400, bulk: false });
+    expect(dispatch.board({ driverDid: d.did, from: here }).some((r) => r.freightId === f.freightId)).toBe(true);
+    const [offer] = dispatch.suggest(d.did, { from: here, to: here }).filter((o) => o.ref === f.freightId);
+    dispatch.claim(offer.offerId);
+    expect(dispatch.board({ driverDid: d.did, from: here }).some((r) => r.freightId === f.freightId)).toBe(false);
+  });
+
   /* --- FB0c: negotiate before commit --- */
 
   const negotiator = (tag: string) => {

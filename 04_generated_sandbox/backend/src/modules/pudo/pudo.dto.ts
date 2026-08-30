@@ -883,6 +883,21 @@ export class BookFreightDto {
  *  the freight's claimedBy so only the driver who claimed it may advance it.
  *  S33 — plus the safety gate: `confirmed` are the checklist item keys the driver ticked (load at pickup,
  *  unload at delivery) and `securementPhotoId` the uploaded mediaId of the secured load (pickup only). */
+/**
+ * FB1 — the open board's query. Note what is NOT here: no minEarn, no maxWeight, no body filter. Every one of
+ * those would REMOVE a row, and the board's whole purpose is that a load you cannot take still appears, marked
+ * with why. Narrowing happens on the client, over a complete answer.
+ */
+export class FreightBoardQueryDto {
+  @IsNumber() @Type(() => Number) @Min(-90) @Max(90) lat!: number;
+  @IsNumber() @Type(() => Number) @Min(-180) @Max(180) lng!: number;
+  /** The OPERATOR's own reach, in km. Omit for the whole market — there is no platform clamp here: 15 km is
+   *  right for a lock-screen interruption and wrong for a haulier asking "is it worth 80 km empty?". */
+  @IsOptional() @IsNumber() @Type(() => Number) @Min(1) radiusKm?: number;
+  /** Whose vehicle to judge against. A driver is pinned to their own; only an operator may name another. */
+  @IsOptional() @IsString() driverDid?: string;
+}
+
 /** FB0c — a driver's price for a load posted 'negotiate'. It reserves nothing; the poster's acceptance is
  *  what claims the load. */
 export class ProposeFreightDto {

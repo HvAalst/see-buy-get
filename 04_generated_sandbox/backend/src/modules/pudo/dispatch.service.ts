@@ -15,8 +15,9 @@ import { CargoNature, Equipment, VehicleCapability } from './cargo.types';
 import { VendorService } from './vendor.service';
 import { RatingService, belowFloor } from './rating.service';
 import { WalletGateService } from './wallet-gate.service';
-import { clampMultiplier, computeFreightPrice, distanceSplit, freightMultiplier, shipperCharge, type PriceBreakdown } from './pricing';
-import { canonicalBody } from './freight-body';
+import { clampMultiplier, computeFreightPrice, distanceSplit, earningsPerKm, freightMultiplier, shipperCharge, type PriceBreakdown } from './pricing';
+import { canonicalBody, bodyOf } from './freight-body';
+import { blockersFor, takeable } from './freight-board';
 import { TruckSubtype } from './fleet.config';
 import { isTempBreach, loadSafetyItems, missingKeys, requiredLoadKeys, requiredUnloadKeys, tempBand, unloadSafetyItems } from './heavy-cargo';
 import { MediaService } from './media.service';
@@ -26,7 +27,7 @@ import { Router, ROUTER } from './router';
 import { DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NUDGE_RADIUS_KM, OFFER_TTL_MIN, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
-import { Claimable, ClaimableKind, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, Offer, RoutePlan } from './dispatch.types';
+import { BoardRow, Claimable, ClaimableKind, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, Offer, RoutePlan } from './dispatch.types';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
 
 /**
@@ -38,6 +39,12 @@ import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
  */
 export function commitModeOf(f: { commitMode?: FreightCommitMode }): FreightCommitMode {
   return f.commitMode === 'negotiate' ? 'negotiate' : 'instant';
+}
+
+/** Distances the board shows are read by a person, not settled against — one decimal is the honest precision
+ *  for a road estimate, and it keeps deadhead + loaded === total instead of drifting by a rounding crumb. */
+function round1(km: number): number {
+  return Number.isFinite(km) ? Math.round(km * 10) / 10 : 0;
 }
 
 /* --------------------- driver jobs + earnings register (R5) — a driver's freight hauls -------------- */
@@ -752,6 +759,104 @@ export class DispatchService {
     }
     this.freights.set(f.freightId, f);
     return f;
+  }
+
+  /* ------------------------------------------------------------ FB1: the open board -- */
+
+  /**
+   * The whole market, from where the operator is standing — with every load they cannot take MARKED, not removed.
+   *
+   * This is the other relationship to the market. Being offered work suits an opportunistic rider, where the
+   * platform's curation is a favour; SHOPPING for work suits a fixed asset with fixed costs, where the whole
+   * skill is repositioning — taking the marginal load because it puts you where the good one is. A push model
+   * cannot serve the second, because relevance is exactly what the operator is trying to decide for themselves.
+   *
+   * So none of the filters that shape suggest()/offerNear() apply here:
+   *  - NO 15 km clamp. That number is right for an interruption and wrong for browsing, which is not an
+   *    interruption. The radius here is the OPERATOR's, and omitting it means the whole market.
+   *  - NO detour or minutes-away cap, no minEarn filter, no maxSpend filter. Those decide whether to bother
+   *    someone; here the operator is already looking, and every one of them becomes a marked row instead.
+   *  - Negotiate loads are IN. They are deliberately kept out of the push offers precisely so they can live here.
+   *
+   * A claimed load is genuinely gone and is not shown: "show everything" means every load in the market, not
+   * every load that ever existed.
+   */
+  board(input: { driverDid?: string; from: GeoPoint; radiusKm?: number }, now: number = Date.now()): BoardRow[] {
+    this.publishReady(now);
+    this.publishReadyFreight(now);
+    const vehicle = input.driverDid ? this.fleet.vehicleForDriver(input.driverDid) ?? null : null;
+    const profile = vehicle ? this.pricingProfile(vehicle) : null;
+    const remainingKg = input.driverDid ? this.remainingCapacity(input.driverDid) : 0;
+    const ratingBelowFloor = input.driverDid ? belowFloor(this.ratings.driverRating(input.driverDid)) : false;
+    // A radius is the operator narrowing the market. Absent, or non-positive, means they have not narrowed it.
+    const radius = input.radiusKm != null && Number.isFinite(input.radiusKm) && input.radiusKm > 0 ? input.radiusKm : undefined;
+
+    const rows: BoardRow[] = [];
+    for (const f of this.freights.values()) {
+      if (!(f.status === 'available' || (f.status === 'scheduled' && f.allowEarlyClaim))) continue;
+      const deadheadKm = round1(this.router.roadKm(input.from, f.pickupLocation));
+      if (radius != null && deadheadKm > radius) continue;
+      const loadedKm = round1(f.destLocation ? this.router.roadKm(f.pickupLocation, f.destLocation) : 0);
+
+      // Priced against THIS operator's vehicle — the same B + D·R·M the offer would carry, so what the board
+      // shows and what a claim locks cannot disagree. Without a vehicle there is no rate to price on, and a
+      // fabricated one would be the single most misleading number on the screen.
+      const price = profile
+        ? computeFreightPrice({
+            baseFee: profile.baseFee,
+            ratePerKm: profile.ratePerKm,
+            deadheadKm,
+            tripKm: loadedKm,
+            multiplier: freightMultiplier(new Date(now), { min: profile.min, max: profile.max }, this.market.factorFor(f.pickupLocation, now)),
+          })
+        : undefined;
+      const blockers = blockersFor(
+        {
+          weightKg: f.weightKg,
+          fragile: f.fragile,
+          bulk: f.bulk,
+          requiredCapabilities: f.requiredCapabilities ?? [],
+          requiredEquipment: f.requiredEquipment ?? [],
+          excludedBodies: f.excludedBodies,
+          maxSpend: f.maxSpend,
+          derivedBody: bodyOf(f).body,
+          indivisible: f.indivisible,
+        },
+        vehicle,
+        { remainingKg, ratingBelowFloor, indicativeCharge: price ? shipperCharge(price.total) : undefined },
+      );
+      rows.push({
+        freightId: f.freightId,
+        code: f.code,
+        description: f.description,
+        pickupLabel: f.pickupLabel,
+        pickupLocation: f.pickupLocation,
+        destLabel: f.destLabel,
+        destLocation: f.destLocation,
+        weightKg: f.weightKg,
+        cargoClass: f.cargoClass,
+        natureCode: f.natureCode,
+        dimensionsCm: f.dimensionsCm,
+        indivisible: f.indivisible,
+        bodyDerived: bodyOf(f),
+        bodyHint: f.bodyHint,
+        commitMode: commitModeOf(f),
+        scheduledPickupAt: f.scheduledPickupAt,
+        deadheadKm,
+        loadedKm,
+        totalKm: round1(deadheadKm + loadedKm),
+        price,
+        earningsPerKm: earningsPerKm(price),
+        canTake: takeable(blockers),
+        blockers,
+      });
+    }
+
+    // Sorted by what the money is worth per kilometre TURNED, empty run included — a 200 km haul reached by
+    // 180 km of deadhead is a worse job than a 40 km haul at the door, and proximity sorting answers the
+    // platform's question rather than the operator's. Rows with no computable rate sink rather than float:
+    // an unsortable row must never lead the board. Nearest first among them, as the only honest fallback.
+    return rows.sort((a, b) => (b.earningsPerKm ?? -1) - (a.earningsPerKm ?? -1) || a.deadheadKm - b.deadheadKm);
   }
 
   /* ------------------------------------------------- FB0c: negotiate before commit -- */

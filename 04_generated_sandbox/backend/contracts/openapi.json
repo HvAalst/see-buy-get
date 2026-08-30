@@ -9201,6 +9201,66 @@
         }
       }
     },
+    "/v1/sbg/dispatch/board": {
+      "get": {
+        "operationId": "Sbg.freightBoard",
+        "summary": "",
+        "description": "FB1 — the open freight board: the whole market from where the operator is standing.\n\nEvery load an operator cannot take comes back MARKED rather than removed, because the loads you cannot\ntake are the ones that tell you what to buy. `radiusKm` is the OPERATOR's own filter — omit it and the\nanswer is the entire market, with no 15 km clamp anywhere near it (that number governs interruptions,\nand browsing is not an interruption).",
+        "parameters": [
+          {
+            "name": "lat",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "minimum": -90,
+              "maximum": 90,
+              "type": "number"
+            }
+          },
+          {
+            "name": "lng",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "minimum": -180,
+              "maximum": 180,
+              "type": "number"
+            }
+          },
+          {
+            "name": "radiusKm",
+            "required": false,
+            "in": "query",
+            "description": "The OPERATOR's own reach, in km. Omit for the whole market — there is no platform clamp here: 15 km is\n right for a lock-screen interruption and wrong for a haulier asking \"is it worth 80 km empty?\".",
+            "schema": {
+              "minimum": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "driverDid",
+            "required": false,
+            "in": "query",
+            "description": "Whose vehicle to judge against. A driver is pinned to their own; only an operator may name another.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FreightBoardResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/dispatch/freight/{id}/proposals": {
       "post": {
         "operationId": "Sbg.proposeForFreight",
@@ -9253,7 +9313,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FreightProposalsResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -15860,6 +15927,43 @@
           "basis"
         ]
       },
+      "PriceBreakdown": {
+        "type": "object",
+        "properties": {
+          "baseFee": {
+            "type": "number"
+          },
+          "distanceKm": {
+            "type": "number"
+          },
+          "deadheadKm": {
+            "type": "number"
+          },
+          "loadedKm": {
+            "type": "number"
+          },
+          "ratePerKm": {
+            "type": "number"
+          },
+          "multiplier": {
+            "type": "number"
+          },
+          "effectiveRate": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "baseFee",
+          "distanceKm",
+          "ratePerKm",
+          "multiplier",
+          "effectiveRate",
+          "total"
+        ]
+      },
       "Freight": {
         "type": "object",
         "properties": {
@@ -16059,7 +16163,7 @@
             "type": "number"
           },
           "priceBreakdown": {
-            "type": "object"
+            "$ref": "#/components/schemas/PriceBreakdown"
           },
           "lockedAt": {
             "type": "string"
@@ -16158,6 +16262,216 @@
           "createdAt"
         ]
       },
+      "BoardBlocker": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "legal",
+              "physical",
+              "resolvable",
+              "preference",
+              "unknown"
+            ]
+          },
+          "code": {
+            "type": "string",
+            "description": "Stable machine code — a screen switches on this, never on the message."
+          },
+          "message": {
+            "type": "string",
+            "description": "The English sentence. Not yet translated; the codes exist so it can be, without moving the logic."
+          }
+        },
+        "required": [
+          "kind",
+          "code",
+          "message"
+        ]
+      },
+      "BoardRow": {
+        "type": "object",
+        "properties": {
+          "cargoClass": {
+            "type": "string",
+            "enum": [
+              "P0",
+              "P1",
+              "P2",
+              "P3",
+              "P4",
+              "P5",
+              "P6"
+            ]
+          },
+          "natureCode": {
+            "type": "string",
+            "enum": [
+              "GEN",
+              "FOD",
+              "FOP",
+              "HAZ-CHEM",
+              "HAZ-DUST",
+              "HAZ-BIO",
+              "HAZ-FLAM",
+              "FRG",
+              "ODR",
+              "HUM"
+            ]
+          },
+          "dimensionsCm": {
+            "minItems": 3,
+            "maxItems": 3,
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "bodyHint": {
+            "type": "string",
+            "enum": [
+              "flatbed",
+              "dropside",
+              "box",
+              "curtain_side",
+              "refrigerated",
+              "insulated",
+              "tipper",
+              "cement_mixer",
+              "grain_hopper",
+              "bulk_tanker",
+              "tanker",
+              "food_tanker",
+              "fuel_tanker",
+              "water_bowser",
+              "hazmat",
+              "car_carrier",
+              "livestock",
+              "skeletal",
+              "container_selfloader",
+              "crane",
+              "lowboy",
+              "logging",
+              "tow_recovery",
+              "refuse"
+            ]
+          },
+          "commitMode": {
+            "type": "string",
+            "enum": [
+              "instant",
+              "negotiate"
+            ]
+          },
+          "freightId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "pickupLabel": {
+            "type": "string"
+          },
+          "pickupLocation": {
+            "$ref": "#/components/schemas/GeoPoint"
+          },
+          "destLabel": {
+            "type": "string"
+          },
+          "destLocation": {
+            "$ref": "#/components/schemas/GeoPoint"
+          },
+          "weightKg": {
+            "type": "number"
+          },
+          "indivisible": {
+            "type": "boolean"
+          },
+          "bodyDerived": {
+            "description": "What body the load needs, and how strong that claim is (measured, or guessed from weight alone).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DerivedBody"
+              }
+            ]
+          },
+          "scheduledPickupAt": {
+            "type": "string"
+          },
+          "deadheadKm": {
+            "type": "number",
+            "description": "The empty run to reach it, the paid run, and their sum — the numbers the whole decision turns on."
+          },
+          "loadedKm": {
+            "type": "number"
+          },
+          "totalKm": {
+            "type": "number"
+          },
+          "price": {
+            "description": "Indicative, priced against THIS driver's vehicle. Absent when they are not coupled to one.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PriceBreakdown"
+              }
+            ]
+          },
+          "earningsPerKm": {
+            "type": "number",
+            "nullable": true,
+            "description": "Earnings per TOTAL kilometre, empty run included — the board's sort key. Null when it cannot be computed\n (no vehicle, or a zero-distance job): an unsortable row is shown as unsortable, never floated to the top."
+          },
+          "canTake": {
+            "type": "boolean",
+            "description": "True when nothing but an 'unknown' stands in the way."
+          },
+          "blockers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BoardBlocker"
+            }
+          }
+        },
+        "required": [
+          "cargoClass",
+          "natureCode",
+          "commitMode",
+          "freightId",
+          "code",
+          "description",
+          "pickupLabel",
+          "pickupLocation",
+          "destLabel",
+          "weightKg",
+          "deadheadKm",
+          "loadedKm",
+          "totalKm",
+          "canTake",
+          "blockers"
+        ]
+      },
+      "FreightBoardResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BoardRow"
+            }
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ]
+      },
       "ProposeFreightDto": {
         "type": "object",
         "properties": {
@@ -16235,6 +16549,20 @@
           "deadheadKm",
           "loadedKm",
           "createdAt"
+        ]
+      },
+      "FreightProposalsResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FreightProposal"
+            }
+          }
+        },
+        "required": [
+          "items"
         ]
       },
       "WithdrawProposalDto": {
@@ -16505,8 +16833,12 @@
             "type": "string"
           },
           "price": {
-            "type": "object",
-            "description": "S34 — the priced offer: the driver's earning + the transparent B + D·R·M breakdown. Freight only; a\n tote offer stays unpriced (totes settle on the pre-paid parcel model)."
+            "description": "S34 — the priced offer: the driver's earning + the transparent B + D·R·M breakdown. Freight only; a\n tote offer stays unpriced (totes settle on the pre-paid parcel model).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PriceBreakdown"
+              }
+            ]
           },
           "createdAt": {
             "type": "string"

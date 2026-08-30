@@ -23,8 +23,31 @@ export class DerivedBody {
   @ApiProperty({ enum: ['measured', 'weight-only'] })
   basis: BodyBasis;
 }
-import { PriceBreakdown } from './pricing';
 import { SafetyItem, TempBand, TempReading } from './heavy-cargo';
+
+/** The transparent price breakdown shown on an offer card — every term the driver can see and trust. */
+export class PriceBreakdown {
+  baseFee: number; // B — the flag-down / loading fee
+  distanceKm: number; // D — deadhead + haul. The BILLED distance; the price is computed on this and only this.
+  /**
+   * FB0a — the two halves of D, kept apart instead of summed away.
+   *
+   * They add up to distanceKm and change no money: the price has always been charged on the total, and still
+   * is. What was missing is the question an operator with a fixed asset actually asks — "how far do I run
+   * EMPTY to earn this?" — which a single collapsed number cannot answer. Loaded km is also the only honest
+   * denominator for a market series: an empty kilometre is cost, not work done.
+   *
+   * OPTIONAL because a breakdown is DURABLE — it is locked onto a freight at claim and outlives this slice.
+   * A price locked before FB0a has no split, and there is no way to recover one from the total (any division
+   * would be invention). Read them through `distanceSplit()`, which returns null rather than guessing.
+   */
+  deadheadKm?: number; // the empty run: where the vehicle is now → the pickup
+  loadedKm?: number; // the paid run: pickup → dropoff
+  ratePerKm: number; // R_base
+  multiplier: number; // M — already clamped to the driver's bounds
+  effectiveRate: number; // R_base × M
+  total: number; // B + D × effectiveRate — the driver's earning (the offer price)
+}
 
 export class RoutePlan {
   from: GeoPoint;
@@ -159,6 +182,78 @@ export class Freight {
   createdAt: string;
 }
 
+/* ------------------------------------------------------ FB1: the open board -- */
+
+/**
+ * FB1 — what KIND of "no" this is. The board shows every load and marks the ones an operator cannot take,
+ * so each reason has to say what sort of obstacle it is; an untyped board is a grey wall.
+ *
+ * 'unknown' is not a refusal. It is the system declining to pretend it checked something it cannot check —
+ * bridge clearances and axle limits, which no data exists for. Absence of a report is not clearance.
+ */
+export const BLOCKER_KINDS = ['legal', 'physical', 'resolvable', 'preference', 'unknown'] as const;
+export type BlockerKind = (typeof BLOCKER_KINDS)[number];
+
+export class BoardBlocker {
+  @ApiProperty({ enum: BLOCKER_KINDS })
+  kind: BlockerKind;
+  /** Stable machine code — a screen switches on this, never on the message. */
+  code: string;
+  /** The English sentence. Not yet translated; the codes exist so it can be, without moving the logic. */
+  message: string;
+}
+
+/** FB1 — one load as the board shows it: the market's facts, this driver's price, and every reason why not. */
+export class BoardRow {
+  freightId: string;
+  code: string;
+  description: string;
+  pickupLabel: string;
+  pickupLocation: GeoPoint;
+  destLabel: string;
+  destLocation?: GeoPoint;
+  weightKg: number;
+  @ApiProperty({ enum: CARGO_CLASS_CODES })
+  cargoClass: CargoClass;
+  @ApiProperty({ enum: CARGO_NATURES })
+  natureCode: CargoNature;
+  @ApiPropertyOptional({ type: [Number], minItems: 3, maxItems: 3 })
+  dimensionsCm?: [number, number, number];
+  indivisible?: boolean;
+  /** What body the load needs, and how strong that claim is (measured, or guessed from weight alone). */
+  bodyDerived?: DerivedBody;
+  @ApiPropertyOptional({ enum: TRUCK_SUBTYPES })
+  bodyHint?: TruckSubtype;
+  @ApiProperty({ enum: ['instant', 'negotiate'] })
+  commitMode: FreightCommitMode;
+  scheduledPickupAt?: string;
+  /** The empty run to reach it, the paid run, and their sum — the numbers the whole decision turns on. */
+  deadheadKm: number;
+  loadedKm: number;
+  totalKm: number;
+  /** Indicative, priced against THIS driver's vehicle. Absent when they are not coupled to one. */
+  price?: PriceBreakdown;
+  /** Earnings per TOTAL kilometre, empty run included — the board's sort key. Null when it cannot be computed
+   *  (no vehicle, or a zero-distance job): an unsortable row is shown as unsortable, never floated to the top. */
+  earningsPerKm?: number | null;
+  /** True when nothing but an 'unknown' stands in the way. */
+  canTake: boolean;
+  blockers: BoardBlocker[];
+}
+
+/**
+ * The board's response, NAMED rather than returned as an inline `{ items, total }`.
+ *
+ * An anonymous response object emits into the contract as an untyped blob: BoardRow and BoardBlocker never
+ * appear at all, and the generated client hands a screen `unknown` for every row. Same family as the
+ * inline-Array<{}> false-circular already on record — if a shape crosses the wire, it needs a name.
+ */
+export class FreightBoardResponse {
+  @ApiProperty({ type: [BoardRow] })
+  items: BoardRow[];
+  total: number;
+}
+
 /** FB0c — how a load is taken: at the computed price, or at one agreed first. */
 export type FreightCommitMode = 'instant' | 'negotiate';
 
@@ -192,6 +287,12 @@ export class FreightProposal {
   status: ProposalStatus;
   createdAt: string;
   decidedAt?: string;
+}
+
+/** Named for the same reason as FreightBoardResponse — an inline `{ items }` puts nothing in the contract. */
+export class FreightProposalsResponse {
+  @ApiProperty({ type: [FreightProposal] })
+  items: FreightProposal[];
 }
 
 /** The buyer-facing, PII-free projection of a diverted freight job — the freight analogue of a
