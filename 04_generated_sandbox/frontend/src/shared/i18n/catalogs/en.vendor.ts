@@ -101,6 +101,17 @@ export const enVendor = {
   'vendor.paid.unpaid': 'Unpaid',
 
   // The two price cards (priceCards).
+  // The info bubble on the price step. The two cards are a CEILING and a COMMITMENT — a distinction
+  // "Fastest" and "Cheapest" cannot carry, and one a store is entitled to understand before it picks.
+  'vendor.price.explainTitle': 'Why two prices?',
+  'vendor.price.explainFastest':
+    'holds the highest rate any carrier on this route charges, so the first one passing can take it without asking anyone. You are billed that amount now — and once it is delivered, whatever the carrier who actually moved it charges less than that comes back to your balance.',
+  'vendor.price.explainCheapest':
+    'commits the route to the lowest rate instead. You settle exactly this amount and nothing comes back, but it waits for a carrier at that price.',
+  'vendor.price.explainEither':
+    'Either way the shops and hubs on the route are paid the fees they publish, and neither price changes after you pick it.',
+  'vendor.price.explainAloud':
+    'Fastest holds the highest rate so any carrier can take it, and refunds what it did not cost. Cheapest commits the lowest rate and waits for a carrier at that price.',
   'vendor.price.cheapest': 'Cheapest',
   'vendor.price.cheapestSub': 'Waits for the lowest-price bus',
   'vendor.price.fastest': 'Fastest',

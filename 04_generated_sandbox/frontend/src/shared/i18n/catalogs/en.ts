@@ -26,6 +26,7 @@ export const en = {
 
   // Shared controls the whole network reuses.
   'common.readAloud': 'Read this screen aloud',
+  'common.whatIsThis': 'What is this? {title}',
   'common.stop': 'Stop',
   'common.retry': 'Try again',
   'common.cancel': 'Cancel',

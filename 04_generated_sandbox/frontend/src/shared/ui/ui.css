@@ -1832,3 +1832,53 @@
   align-items: flex-start;
   gap: 2px;
 }
+
+/* ---------------------------------------------------------------- info bubble -- */
+/* The little i beside a label that needs a sentence a label has no room for. It is a real
+   control, so it clears the 48px touch floor like everything else here — the GLYPH is small
+   because it is a footnote, the TARGET is not because a thumb is a thumb. */
+.info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap);
+  height: var(--tap);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--tx3);
+  cursor: pointer;
+  flex: none;
+}
+.info:hover {
+  color: var(--tx);
+  background: var(--panel);
+}
+.info svg {
+  width: 20px;
+  height: 20px;
+}
+/* A heading and its i on one line, without the 48px target inflating the row. */
+.info-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0;
+}
+.info-row > :first-child {
+  margin: 0;
+}
+.info__body p {
+  margin: 0 0 12px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--tx2);
+}
+.info__body p:last-of-type {
+  margin-bottom: 16px;
+}
+.info__body b {
+  color: var(--tx);
+  font-weight: 700;
+}

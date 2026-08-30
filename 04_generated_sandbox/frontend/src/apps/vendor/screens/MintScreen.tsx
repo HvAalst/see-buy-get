@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { Button, Card, Checklist, CodeCard, ErrorNote, Icon, Note, PlaceMap, Pill, ReadAloud, ShopDetailSheet } from '../../../shared/ui';
+import { Button, Card, Checklist, CodeCard, ErrorNote, Icon, Info, Note, PlaceMap, Pill, ReadAloud, ShopDetailSheet } from '../../../shared/ui';
 import { useT, type Translate } from '../../../shared/i18n';
 import { fromPlaceWords } from '../../../shared/placewords';
 import { distanceLabel, haversineKm } from '../../../shared/geo';
@@ -391,7 +391,22 @@ function PriceStep({ state, actions }: MintScreenProps) {
   return (
     <div class="scr">
       <StepDots at={4} />
-      <h1 class="scr__title">{t('vendor.mint.priceTitle')}</h1>
+      <div class="info-row">
+        <h1 class="scr__title">{t('vendor.mint.priceTitle')}</h1>
+        {/* The two prices are a CEILING and a COMMITMENT, which "Fastest" and "Cheapest" cannot say in
+            one word each. The explanation belongs a tap away rather than crammed under the buttons. */}
+        <Info title={t('vendor.price.explainTitle')} aloud={t('vendor.price.explainAloud')}>
+          {/* The bubble names the SAME two words the buttons show, so a reader can map one to the other
+              without translating between two vocabularies. */}
+          <p>
+            <b>{t('vendor.price.fastest')}</b> {t('vendor.price.explainFastest')}
+          </p>
+          <p>
+            <b>{t('vendor.price.cheapest')}</b> {t('vendor.price.explainCheapest')}
+          </p>
+          <p>{t('vendor.price.explainEither')}</p>
+        </Info>
+      </div>
       <p class="scr__lede">{t('vendor.mint.priceLede')}</p>
 
       {state.quoteState === 'loading' ? <p class="hint">{t('vendor.mint.workingJourney')}</p> : null}
