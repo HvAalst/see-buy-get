@@ -3,15 +3,18 @@ import { t } from '../../shared/i18n'; // English is the base catalog, so the re
 import {
   BODY_HINTS,
   EMPTY_ACCEPT,
+  EXCLUDABLE_BODIES,
   VOID_WINDOW_MS,
   acceptMissing,
   bodyHintValue,
   bookFreightMissing,
   canAccept,
+  chooseBodyHint,
   consignmentProgress,
   destinationZones,
   DRIVER_ISSUE_LABELS,
   DURABLE_NATURES,
+  excludedBodiesValue,
   gateNotice,
   gridDims,
   parseBudget,
@@ -29,9 +32,11 @@ import {
   selectablePoints,
   sizeMeta,
   statusNotice,
+  toggleExcludedBody,
   voidCountdownLabel,
   voidRemainingMs,
   voidableParcels,
+  type AcceptForm,
 } from './logic';
 import type { AgentView, Benchmark, CorridorRow, GateView, NetworkPoint, ParcelView } from './types';
 
@@ -357,5 +362,52 @@ describe('the counter’s freight facts (FB2c)', () => {
     // loads on low-loaders because nobody looked at the checkbox.
     expect(EMPTY_ACCEPT.indivisible).toBe(false);
     expect(EMPTY_ACCEPT.bodyHint).toBe('');
+  });
+});
+
+describe('the customer’s excluded bodies (FB2d)', () => {
+  const form = (over: Partial<AcceptForm> = {}): AcceptForm => ({ ...EMPTY_ACCEPT, ...over });
+
+  it('starts a fresh booking with nothing ruled out, and sends nothing when nothing is', () => {
+    // The ordinary walk-up has no exclusions at all. An empty array would post a shipper preference the
+    // shipper never expressed — and this one REFUSES claims, so inventing it costs a driver a load.
+    expect(EMPTY_ACCEPT.excludedBodies).toEqual([]);
+    expect(excludedBodiesValue([])).toBeUndefined();
+    expect(excludedBodiesValue(['flatbed'])).toEqual(['flatbed']);
+  });
+
+  it('cannot rule out "I don’t know", and offers exactly the bodies the hint picker does', () => {
+    expect(EXCLUDABLE_BODIES.map((b) => b.value)).toEqual(BODY_HINTS.slice(1).map((b) => b.value));
+    for (const b of EXCLUDABLE_BODIES) expect(b.value).not.toBe('');
+  });
+
+  it('toggles one body on and off again', () => {
+    const on = toggleExcludedBody(form(), 'flatbed');
+    expect(on.excludedBodies).toEqual(['flatbed']);
+    expect(toggleExcludedBody(form(on), 'flatbed').excludedBodies).toEqual([]);
+  });
+
+  it('posts exclusions in the picker’s order, not the order they were tapped', () => {
+    // Two clerks recording the same three refusals must produce the same freight, or the market series
+    // counts them as different shapes of demand.
+    let f = form();
+    for (const b of ['tipper', 'flatbed', 'box'] as const) f = form(toggleExcludedBody(f, b));
+    expect(f.excludedBodies).toEqual(['flatbed', 'box', 'tipper']);
+  });
+
+  it('lets the NEWEST answer win when the hint and an exclusion collide', () => {
+    // A load cannot both be the kind that needs a flatbed and one the customer refuses to put on a flatbed.
+    // The person is standing there revising what they said; silently keeping the older word argues with them.
+    const excludedAfterHint = toggleExcludedBody(form({ bodyHint: 'flatbed' }), 'flatbed');
+    expect(excludedAfterHint).toEqual({ excludedBodies: ['flatbed'], bodyHint: '' });
+
+    const hintAfterExcluded = chooseBodyHint(form({ excludedBodies: ['flatbed', 'box'] }), 'flatbed');
+    expect(hintAfterExcluded).toEqual({ excludedBodies: ['box'], bodyHint: 'flatbed' });
+  });
+
+  it('leaves an unrelated hint alone when a different body is ruled out', () => {
+    expect(toggleExcludedBody(form({ bodyHint: 'lowboy' }), 'flatbed')).toEqual({ excludedBodies: ['flatbed'], bodyHint: 'lowboy' });
+    // And clearing the hint back to "I don't know" never disturbs the exclusions.
+    expect(chooseBodyHint(form({ excludedBodies: ['flatbed'], bodyHint: 'lowboy' }), '')).toEqual({ excludedBodies: ['flatbed'], bodyHint: '' });
   });
 });

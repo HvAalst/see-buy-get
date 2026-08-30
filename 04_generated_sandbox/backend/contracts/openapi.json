@@ -13831,6 +13831,39 @@
               "negotiate"
             ]
           },
+          "excludedBodies": {
+            "type": "array",
+            "description": "FB2d — bodies the SHIPPER rules out. At a counter the walk-in customer IS the shipper, so this is their\n call to make and the clerk's job only to record it. A PREFERENCE, not a limit of any vehicle: the board\n shows it as the shipper's choice, and it binds a claim only because the driver was told first.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "flatbed",
+                "dropside",
+                "box",
+                "curtain_side",
+                "refrigerated",
+                "insulated",
+                "tipper",
+                "cement_mixer",
+                "grain_hopper",
+                "bulk_tanker",
+                "tanker",
+                "food_tanker",
+                "fuel_tanker",
+                "water_bowser",
+                "hazmat",
+                "car_carrier",
+                "livestock",
+                "skeletal",
+                "container_selfloader",
+                "crane",
+                "lowboy",
+                "logging",
+                "tow_recovery",
+                "refuse"
+              ]
+            }
+          },
           "agentDid": {
             "type": "string"
           },
@@ -14864,14 +14897,6 @@
         "properties": {
           "issues": {
             "type": "array",
-            "enum": [
-              "LATE_PICKUP",
-              "LATE_ARRIVAL",
-              "KEPT_OVERNIGHT",
-              "AFTER_HOURS",
-              "EQUIPMENT_FAILURE",
-              "ROUGH_HANDLING"
-            ],
             "items": {
               "type": "string",
               "enum": [
@@ -15777,32 +15802,6 @@
           "excludedBodies": {
             "type": "array",
             "description": "Bodies the SHIPPER rules out (theft risk, an insurer's wording, a customer's requirement). A stated\n preference, not a physical constraint, and the board presents it as one.",
-            "enum": [
-              "flatbed",
-              "dropside",
-              "box",
-              "curtain_side",
-              "refrigerated",
-              "insulated",
-              "tipper",
-              "cement_mixer",
-              "grain_hopper",
-              "bulk_tanker",
-              "tanker",
-              "food_tanker",
-              "fuel_tanker",
-              "water_bowser",
-              "hazmat",
-              "car_carrier",
-              "livestock",
-              "skeletal",
-              "container_selfloader",
-              "crane",
-              "lowboy",
-              "logging",
-              "tow_recovery",
-              "refuse"
-            ],
             "items": {
               "type": "string",
               "enum": [
@@ -16066,6 +16065,39 @@
               "refuse"
             ]
           },
+          "excludedBodies": {
+            "type": "array",
+            "description": "Bodies the SHIPPER rules out — theft risk, an insurer's wording, a customer's requirement. A PREFERENCE,\n and typed as one: the board says \"the shipper ruled out open bodies\", never dressing it up as physics.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "flatbed",
+                "dropside",
+                "box",
+                "curtain_side",
+                "refrigerated",
+                "insulated",
+                "tipper",
+                "cement_mixer",
+                "grain_hopper",
+                "bulk_tanker",
+                "tanker",
+                "food_tanker",
+                "fuel_tanker",
+                "water_bowser",
+                "hazmat",
+                "car_carrier",
+                "livestock",
+                "skeletal",
+                "container_selfloader",
+                "crane",
+                "lowboy",
+                "logging",
+                "tow_recovery",
+                "refuse"
+              ]
+            }
+          },
           "cargoClass": {
             "type": "string",
             "enum": [
@@ -16154,13 +16186,6 @@
           "indivisible": {
             "type": "boolean",
             "description": "Can the load be split into two smaller ones? The single most decision-changing fact about anything\n oversize: a divisible 30 t is two ordinary trips, an indivisible 30 t is a low-loader and a permit."
-          },
-          "excludedBodies": {
-            "description": "Bodies the SHIPPER rules out — theft risk, an insurer's wording, a customer's requirement. A PREFERENCE,\n and typed as one: the board says \"the shipper ruled out open bodies\", never dressing it up as physics.",
-            "type": "array",
-            "items": {
-              "type": "object"
-            }
           },
           "bodyDerived": {
             "description": "FB0b — the body this load canonically needs, STAMPED at registration (and the basis it was derived on).\n Frozen rather than computed on read for the same reason a price is frozen at claim: \"kilometres of\n flatbed offered in 2026\" must not change when someone tunes a threshold in 2027. Absent on a pre-FB0b\n freight, which is derived live and reports itself as weight-only.",

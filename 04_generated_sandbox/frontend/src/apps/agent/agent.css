@@ -611,3 +611,13 @@
 .row--muted {
   opacity: 0.72;
 }
+
+/* ------------------------------------------------- FB2d: the bodies the customer rules out -- */
+
+/* A wrapping row of toggle chips. Every chip is a full 34px tap target on its own line if it has to be —
+   this is answered by a clerk with a customer waiting, not by someone aiming a mouse. */
+.chiprow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

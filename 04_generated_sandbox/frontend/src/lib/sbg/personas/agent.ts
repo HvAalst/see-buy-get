@@ -164,6 +164,9 @@ export function createAgentApi(sbg: SbgClient) {
        *  open deck versus a low-loader) and what the shop thinks it needs (advisory, never matched on). */
       indivisible?: boolean;
       bodyHint?: 'flatbed' | 'box' | 'curtain_side' | 'refrigerated' | 'tipper' | 'lowboy' | 'skeletal';
+      /** FB2d — bodies the CUSTOMER rules out. Unlike the hint above this one BINDS: a driver on an excluded
+       *  body still sees the load on the board, marked with the shipper's refusal, and is refused the claim. */
+      excludedBodies?: ('flatbed' | 'box' | 'curtain_side' | 'refrigerated' | 'tipper' | 'lowboy' | 'skeletal')[];
     }) => sbg.request((c) => c.POST('/v1/sbg/parcels/book-freight', { body })),
 
     /** FB2b — the loads THIS shop posted, each with how many prices are waiting for an answer. Owner-scoped

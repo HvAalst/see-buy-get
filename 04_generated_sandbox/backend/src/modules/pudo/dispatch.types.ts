@@ -94,6 +94,7 @@ export class Freight {
   bodyHint?: TruckSubtype;
   /** Bodies the SHIPPER rules out — theft risk, an insurer's wording, a customer's requirement. A PREFERENCE,
    *  and typed as one: the board says "the shipper ruled out open bodies", never dressing it up as physics. */
+  @ApiPropertyOptional({ enum: TRUCK_SUBTYPES, isArray: true })
   excludedBodies?: TruckSubtype[];
   /** FB0b — the body this load canonically needs, STAMPED at registration (and the basis it was derived on).
    *  Frozen rather than computed on read for the same reason a price is frozen at claim: "kilometres of

@@ -4156,6 +4156,38 @@ describe('PUDO Light', () => {
     expect(agents.balance(origin.did)).toBeCloseTo(balBefore, 2); // the agent's parcel-sized wallet was NOT charged a truck haul
   });
 
+  it('FB2d: the counter records the CUSTOMER’s refusal, and it reaches the claim', () => {
+    // At a counter the walk-in customer IS the shipper, so the exclusion is theirs to make and the clerk's
+    // only to record. Until now nothing could carry it in: the exclusion has been storable since FB0b and
+    // binding since FB2c, but no screen asked the one person entitled to answer.
+    const origin = onboardAgent('Exclusion Shop', 'NorthTown', 50);
+    const dest = onboardAgent('Exclusion Dest', 'NorthTown', 0);
+    const res: any = controller.bookFreight(
+      { dimensionsCm: { l: 120, w: 100, h: 100 }, weightKg: 200, destPudoDid: dest.did, budgetCap: 40, excludedBodies: ['flatbed'] } as never,
+      { role: 'pudo', did: origin.did } as never,
+    );
+    expect(dispatch.listFreight().find((x) => x.freightId === res.freightId)!.excludedBodies).toEqual(['flatbed']);
+
+    const d = drivers.register({ displayName: 'FB2D', fullName: 'FB2D', nationalId: 'ID-FB2D', mobile: '+2547FB2D', licenceClasses: ['truck'], licenceNumber: 'L-FB2D', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const v = vehicles.register({ plate: 'V-FB2D', vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 10_000, ownerName: 'X', equipment: ['TLT'] });
+    fleet.couple(d.did, v.vehicleId);
+    const [offer] = dispatch.suggest(d.did, { from: origin.location, to: dest.location }).filter((o) => o.ref === res.freightId);
+    expect(offer).toBeDefined(); // still OFFERED — a preference is shown and argued with, never hidden
+    expect(() => dispatch.claim(offer.offerId)).toThrow(/ruled out your body type/);
+    expect(dispatch.listFreight().find((x) => x.freightId === res.freightId)!.status).toBe('available');
+  });
+
+  it('FB2d: ruling nothing out stores no preference at all', () => {
+    // "The customer did not mind" and "the customer ruled out an empty list of bodies" must not become the
+    // same record, or the market series would count a refusal nobody made.
+    const origin = onboardAgent('No-Exclusion Shop', 'NorthTown', 50);
+    const dest = onboardAgent('No-Exclusion Dest', 'NorthTown', 0);
+    const res: any = controller.bookFreight({ dimensionsCm: { l: 120, w: 100, h: 100 }, weightKg: 200, destPudoDid: dest.did, budgetCap: 40, excludedBodies: [] } as never, { role: 'pudo', did: origin.did } as never);
+    expect(dispatch.listFreight().find((x) => x.freightId === res.freightId)!.excludedBodies).toBeUndefined();
+  });
+
   it('F2: a bus-sized load is refused as freight — take it in as a normal parcel', () => {
     const origin = onboardAgent('Small Shop', 'NorthTown', 50);
     const dest = onboardAgent('Other Shop', 'NorthTown', 0);

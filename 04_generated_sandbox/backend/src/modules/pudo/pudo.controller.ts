@@ -493,6 +493,7 @@ export class SbgController {
       // registerFreight, so the body stamped on this load is derived from what the counter actually saw.
       indivisible: dto.indivisible,
       bodyHint: dto.bodyHint as never,
+      excludedBodies: dto.excludedBodies as never,
       buyerMobile: dto.customerMobile, // hashed on the freight (never the cleartext) so the customer can track it
       maxSpend: dto.budgetCap, // the cash cap → dispatch won't OFFER or let a driver CLAIM above it
       scheduledPickupAt: dto.scheduledPickupAt,

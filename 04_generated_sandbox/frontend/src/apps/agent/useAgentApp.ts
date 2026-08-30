@@ -16,7 +16,7 @@ import type { IconName } from '../../shared/ui/Icon';
 import { agentConfig, clearDid, createAgentClient, purgeAgentTokens, readDid, readEmail, saveDid, saveEmail } from './api';
 import { signal } from '../../shared/feedback';
 import { triggerDownload } from '../../shared/download';
-import { bodyHintValue, bookFreightMissing, EMPTY_ACCEPT, otpValid, parseBudget, parseDims, plannedPickupIso, type AcceptForm, type DimsForm } from './logic';
+import { bodyHintValue, bookFreightMissing, EMPTY_ACCEPT, excludedBodiesValue, otpValid, parseBudget, parseDims, plannedPickupIso, type AcceptForm, type DimsForm } from './logic';
 import type { GeoPoint } from '../../shared/geo';
 import type {
   AgentLedgerRow,
@@ -191,6 +191,9 @@ export interface AgentState {
     /** FB2c — what the system concluded the load needs, and how strong that claim is. Shown back on the
      *  receipt so the derivation is visible to the person who supplied the facts it ran on. */
     bodyDerived?: { body: string; basis: 'measured' | 'weight-only' };
+    /** FB2d — read back from the SERVER's copy of the load, not the form: what the customer's refusal
+     *  actually became is the only version that will refuse a driver. */
+    excludedBodies?: string[];
   } | null;
   /** PG4 — the scanned sticker resolved to an EXISTING parcel (a pre-minted send, a store order, or an
    *  in-use sticker); null/idle = a fresh sticker → the walk-up form. */
@@ -1096,6 +1099,9 @@ export function useAgentApp() {
         // absence of an answer here, and sending them would dress a default up as an observation.
         indivisible: f.indivisible || undefined,
         bodyHint: bodyHintValue(f.bodyHint),
+        // FB2d — likewise absent when the customer ruled nothing out, which is the ordinary case. An empty
+        // array would post a shipper preference nobody expressed, and this one REFUSES claims.
+        excludedBodies: excludedBodiesValue(f.excludedBodies),
       });
       if (r.error) return fail(r.error);
       buzz();

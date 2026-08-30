@@ -1,6 +1,6 @@
-import { Button, Card, CodeCard, ErrorNote, GlanceNumber, Icon, Note, PlaceMap, Pill, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
+import { Button, Card, Chip, CodeCard, ErrorNote, GlanceNumber, Icon, Note, PlaceMap, Pill, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
 import { useT, type Translate } from '../../../shared/i18n';
-import { BODY_HINTS, NATURES, acceptMissing, bookFreightMissing, parcelStatusWord, pointDistance, selectablePoints, sizeMeta, type BodyHint } from '../logic';
+import { BODY_HINTS, EXCLUDABLE_BODIES, NATURES, acceptMissing, bookFreightMissing, chooseBodyHint, parcelStatusWord, pointDistance, selectablePoints, sizeMeta, toggleExcludedBody, type BodyHint } from '../logic';
 import type { NetworkPoint } from '../types';
 import type { AgentActions, AgentState } from '../useAgentApp';
 import { PhotoField } from './PhotoField';
@@ -30,6 +30,13 @@ function freightGapDetail(gaps: Array<'origin' | 'dest'>, t: Translate): string 
   const there = gaps.includes('dest');
   const where = here && there ? t('agent.accept.gapBoth') : here ? t('agent.accept.gapHere') : t('agent.accept.gapThere');
   return t('agent.accept.gapDetail', { where });
+}
+
+/** FB2d — the clerk's own word for a body where the short picker has one, the API's made readable where it
+ *  does not. The receipt reads the SERVER's copy of the load, so it must stay legible if that list widens. */
+function bodyLabel(value: string, t: Translate): string {
+  const known = BODY_HINTS.find((b) => b.value === value);
+  return known ? t(known.labelKey as 'agent.accept.bodyAny') : value.replace(/_/g, ' ');
 }
 
 /**
@@ -338,6 +345,10 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
                   : t('agent.accept.derivedBodyGuess', { body: state.bookedFreight.bodyDerived.body.replace('_', ' ') })}
               </p>
             ) : null}
+            {/* FB2d — what the customer's refusal actually became. Worth its own line on the receipt because
+                it is the one recorded fact that will TURN A DRIVER AWAY, and the customer should be told the
+                shop wrote it down before it does. */}
+            {state.bookedFreight.excludedBodies?.length ? <p class="hint">{t('agent.accept.excludedRecorded', { bodies: state.bookedFreight.excludedBodies.map((b) => bodyLabel(b, t)).join(', ') })}</p> : null}
             {state.bookedFreight.equipmentGaps?.length ? (
               <Note tone="warn" icon="warning" title={t('agent.accept.liftTitle')} detail={freightGapDetail(state.bookedFreight.equipmentGaps, t)} />
             ) : null}
@@ -491,7 +502,7 @@ function FreightBookingCard({ state, actions }: { state: AgentState; actions: Ag
         </label>
         {/* The cast is safe by construction: every option below is a BODY_HINTS value, and BODY_HINTS is the
             literal list the API's own enum is matched against. */}
-        <select id="freight-body" class="input" value={f.bodyHint} onInput={(e) => actions.setAccept({ bodyHint: e.currentTarget.value as BodyHint })}>
+        <select id="freight-body" class="input" value={f.bodyHint} onInput={(e) => actions.setAccept(chooseBodyHint(f, e.currentTarget.value as BodyHint))}>
           {BODY_HINTS.map((b) => (
             <option key={b.value} value={b.value}>
               {t(b.labelKey as 'agent.accept.bodyAny')}
@@ -500,6 +511,21 @@ function FreightBookingCard({ state, actions }: { state: AgentState; actions: Ag
         </select>
       </div>
       <p class="card__note">{t('agent.accept.bodyHintNote')}</p>
+
+      {/* FB2d — the shipper's own refusals, which is a different question from the one above and asked of a
+          different person: the clerk GUESSES what would work, the customer DECIDES what they will not have.
+          This one binds a claim, so it is worth the row of chips rather than being folded into the hint. */}
+      <div class="field" style="margin-top:12px">
+        <span class="field__label" id="freight-exclude">
+          {t('agent.accept.excludedBodies')}
+        </span>
+        <div class="chiprow" role="group" aria-labelledby="freight-exclude">
+          {EXCLUDABLE_BODIES.map((b) => (
+            <Chip key={b.value} label={t(b.labelKey as 'agent.accept.bodyAny')} active={f.excludedBodies.includes(b.value)} onClick={() => actions.setAccept(toggleExcludedBody(f, b.value))} />
+          ))}
+        </div>
+      </div>
+      <p class="card__note">{t('agent.accept.excludedBodiesNote')}</p>
 
       {/* FB2b — how the load is TAKEN, as against when it is picked up. An awkward walk-up is exactly the
           case where the formula's price is worst and a driver's own number is best. */}

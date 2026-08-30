@@ -358,6 +358,12 @@ export const enAgent = {
   'agent.accept.bodyTipper': 'Tipper',
   'agent.accept.bodyLowboy': 'Low-loader',
   'agent.accept.bodyContainer': 'Container chassis',
+  // FB2d — the customer's own refusals, which bind where the hint above does not.
+  'agent.accept.excludedBodies': 'Is there any truck the customer will not accept?',
+  'agent.accept.excludedBodiesNote': 'Only if they say so — most customers do not mind. Drivers on these trucks will still see the load and will be told it is the customer’s choice, but they cannot take it.',
+  // Worded as what was RECORDED, not as what is hidden: the load still shows on every driver's board, marked
+  // with the customer's choice. Only taking it is refused.
+  'agent.accept.excludedRecorded': 'The customer ruled out: {bodies}',
   'agent.accept.derivedBody': 'We will look for {body}',
   'agent.accept.derivedBodyGuess': 'We will look for {body}, worked out from the weight alone',
 

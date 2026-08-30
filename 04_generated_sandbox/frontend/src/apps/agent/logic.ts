@@ -188,6 +188,11 @@ export interface AcceptForm {
   // skeletal from a flatbed, and a binding wrong pick would exclude the operator who could have carried it).
   indivisible: boolean;
   bodyHint: BodyHint; // '' = no opinion
+  // FB2d — the bodies the CUSTOMER rules out. The opposite direction of travel from `bodyHint`, and a
+  // different kind of fact: the hint is the shop's guess at what would work and binds nothing, while this is
+  // the shipper's own refusal and binds a claim. At a counter the walk-in customer IS the shipper, so it is
+  // theirs to say and the clerk's only to record. Empty = they ruled out nothing, which is the normal case.
+  excludedBodies: ExcludedBody[];
 }
 
 /**
@@ -211,9 +216,42 @@ export const BODY_HINTS = [
 /** The picker's values as literals — so a body this form offers can never drift from one the API accepts. */
 export type BodyHint = (typeof BODY_HINTS)[number]['value'];
 
+/** A real body — every BODY_HINTS value except the "I don't know" that heads the list. */
+export type ExcludedBody = Exclude<BodyHint, ''>;
+
+/** The same short list as the hint picker, minus "I don't know" — you cannot rule out not knowing. */
+export const EXCLUDABLE_BODIES = BODY_HINTS.filter((b): b is (typeof BODY_HINTS)[number] & { value: ExcludedBody } => b.value !== '');
+
 /** "No opinion" is an ABSENT hint, not an empty one: sending '' would record a body nobody named. */
-export function bodyHintValue(hint: BodyHint): Exclude<BodyHint, ''> | undefined {
+export function bodyHintValue(hint: BodyHint): ExcludedBody | undefined {
   return hint === '' ? undefined : hint;
+}
+
+/** Likewise: ruling nothing out is an ABSENT list, not an empty one. An empty array would post a shipper
+ *  preference that the shipper never expressed. */
+export function excludedBodiesValue(bodies: ExcludedBody[]): ExcludedBody[] | undefined {
+  return bodies.length ? bodies : undefined;
+}
+
+/**
+ * Add or remove one body from the customer's exclusions — and keep the two body questions from contradicting.
+ *
+ * A load cannot both be the kind that needs a flatbed and be one the customer refuses to put on a flatbed.
+ * When the two collide the NEWEST answer wins in either direction, because the person is standing there
+ * revising what they said; a form that silently discarded their latest word would be arguing with them.
+ *
+ * Order follows EXCLUDABLE_BODIES, not the order they were tapped, so the same three refusals always read and
+ * post the same way.
+ */
+export function toggleExcludedBody(form: AcceptForm, body: ExcludedBody): Pick<AcceptForm, 'excludedBodies' | 'bodyHint'> {
+  const on = form.excludedBodies.includes(body);
+  const next = EXCLUDABLE_BODIES.map((b) => b.value).filter((v) => (v === body ? !on : form.excludedBodies.includes(v)));
+  return { excludedBodies: next, bodyHint: !on && form.bodyHint === body ? '' : form.bodyHint };
+}
+
+/** Naming the body it needs withdraws any refusal of that same body — the other half of the rule above. */
+export function chooseBodyHint(form: AcceptForm, hint: BodyHint): Pick<AcceptForm, 'excludedBodies' | 'bodyHint'> {
+  return { bodyHint: hint, excludedBodies: form.excludedBodies.filter((b) => b !== hint) };
 }
 
 export const EMPTY_ACCEPT: AcceptForm = {
@@ -237,6 +275,7 @@ export const EMPTY_ACCEPT: AcceptForm = {
   negotiate: false,
   indivisible: false,
   bodyHint: '',
+  excludedBodies: [],
 };
 
 /** The smallest measurement we accept, in cm — 1 mm, so a thin item (a letter ~0.5 cm) is shippable.

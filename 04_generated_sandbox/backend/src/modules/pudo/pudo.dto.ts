@@ -889,6 +889,10 @@ export class BookFreightDto {
    *  matched on, because a clerk cannot reliably tell a skeletal from a flatbed and a binding wrong pick
    *  would exclude the one operator who could have carried it. */
   @IsOptional() @IsIn(TRUCK_SUBTYPES) bodyHint?: string;
+  /** FB2d — bodies the SHIPPER rules out. At a counter the walk-in customer IS the shipper, so this is their
+   *  call to make and the clerk's job only to record it. A PREFERENCE, not a limit of any vehicle: the board
+   *  shows it as the shipper's choice, and it binds a claim only because the driver was told first. */
+  @IsOptional() @IsArray() @IsIn([...TRUCK_SUBTYPES], { each: true }) @ApiPropertyOptional({ enum: TRUCK_SUBTYPES, isArray: true }) excludedBodies?: string[];
 }
 
 /** S32b — a driver advancing a claimed freight (pickup/deliver). driverDid is the claimer, verified against
