@@ -1,4 +1,5 @@
 import { GeoPoint } from './pudo.types';
+import { haversineKm } from './geo';
 
 /**
  * Offline gazetteer — REAL coordinates for the places this network actually runs in: Nairobi and its
@@ -183,4 +184,28 @@ export function lookupPlace(query: string): GazetteerMatch | null {
   const pool = specifics.length ? specifics : hits;
   pool.sort((a, b) => b.pos - a.pos); // rightmost token = the address's town
   return { entry: pool[0].entry, kind: 'contains' };
+}
+
+/**
+ * FB3b — the coarse name for a point: the nearest gazetteer place, if one is near enough to mean anything.
+ *
+ * The public market board names WHERE a load is without publishing where it is. A shop's own label is an
+ * address and a business name; "near Thika" is a market fact. The distinction matters because the public
+ * list is a standing, anonymous inventory of valuable goods with dates against them, and a town is all an
+ * operator sizing up a corridor ever needed.
+ *
+ * Returns null beyond `withinKm` rather than reaching for a far-off name: "near Nairobi" said of a load 140
+ * km away is worse than saying nothing, because it reads as precision and is not.
+ */
+export function nearestPlace(point: GeoPoint, withinKm = 60): { name: string; km: number } | null {
+  let best: { name: string; km: number; broad: boolean } | null = null;
+  for (const entry of GAZETTEER) {
+    const km = haversineKm(point, entry.location);
+    if (km > withinKm) continue;
+    const broad = entry.broad ?? false;
+    // Nearest wins, and an equally-near BROAD container beats the neighbourhood inside it: at the same
+    // distance "Nairobi" is the safer word to publish than the estate, and coarser is the whole point here.
+    if (!best || km < best.km || (km === best.km && broad && !best.broad)) best = { name: entry.name, km, broad };
+  }
+  return best ? { name: best.name, km: best.km } : null;
 }

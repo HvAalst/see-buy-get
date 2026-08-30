@@ -84,6 +84,61 @@ export function fetchCountries(): Promise<Result<OperatingCountry[]>> {
   return publicRequest<OperatingCountry[]>(homeConfig(), '/v1/sbg/countries');
 }
 
+/* ------------------------------------------------------- FB3b: the market -- */
+
+/** One load as the public market publishes it. Mirrors backend MarketRow — note what is NOT here: no
+ *  freight id, no code, no shop name, no description, and no exact pin. */
+export interface MarketRow {
+  area?: string;
+  destArea?: string;
+  pickupAbout: { lat: number; lng: number };
+  weightKg: number;
+  cargoClass: string;
+  natureCode: string;
+  indivisible?: boolean;
+  bodyDerived?: { body: string; basis: 'measured' | 'weight-only' };
+  requiredEquipment?: string[];
+  requiredCapabilities?: string[];
+  deadheadKm: number;
+  loadedKm: number;
+  totalKm: number;
+  scheduledPickupAt?: string;
+  indicativeTotal?: number;
+  indicativePerKm?: number | null;
+}
+
+export interface MarketView {
+  items: MarketRow[];
+  total: number;
+  /** The server saying, in the payload, that these prices are not offers. Carried through rather than
+   *  dropped, so a screen cannot render the money without stepping over the word. */
+  basis?: string;
+}
+
+/**
+ * The freight market around a point, to a caller with no account.
+ *
+ * The one endpoint in this app that is not part of joining. It is here because it is the only app that
+ * serves strangers, and the people who most need to know what moves on a corridor are the ones who do not
+ * yet own a truck to move it with.
+ */
+export function fetchMarket(at: { lat: number; lng: number }, radiusKm?: number): Promise<Result<MarketView>> {
+  const q = new URLSearchParams({ lat: String(at.lat), lng: String(at.lng) });
+  if (radiusKm != null) q.set('radiusKm', String(radiusKm));
+  return publicRequest<MarketView>(homeConfig(), `/v1/sbg/market?${q.toString()}`);
+}
+
+export interface GeocodeView {
+  location: { lat: number; lng: number };
+  confidence: 'exact' | 'approx' | 'fallback';
+  matched?: string;
+}
+
+/** Resolve a typed place — the same public gazetteer the rest of the network geocodes against. */
+export function geocode(q: string): Promise<Result<GeocodeView>> {
+  return publicRequest<GeocodeView>(homeConfig(), `/v1/sbg/geocode?q=${encodeURIComponent(q)}`);
+}
+
 /* ---------------------------------------------------------------- handoff -- */
 
 /**

@@ -298,3 +298,56 @@ export function joinSpoken(role: RoleSpec, step: JoinStep, t: Translate): string
       return t('home.join.spoken.done');
   }
 }
+
+/* ------------------------------------------------- FB3b: reading the market -- */
+
+/** A truck body's catalogue name in words a reader outside the trade would use. Falls back to the raw
+ *  subtype, made readable, so a body added to the catalogue later still renders as something. */
+export function bodyWords(body: string | undefined, t: Translate): string {
+  if (!body) return t('home.market.bodyUnknown');
+  const key = `home.market.body.${body}` as MessageKey;
+  const word = t(key);
+  return word === key ? body.replace(/_/g, ' ') : word;
+}
+
+/**
+ * The one line under a row: what the work is, in the order the decision is made.
+ *
+ * Body first, because that is the whole question the page answers — "is there work here for a flatbed?"
+ * is not answered by knowing the tonnage. A body GUESSED from weight alone says so: an investment thesis
+ * built on a derivation nobody measured deserves to know it was a derivation.
+ */
+export function marketWork(row: { weightKg: number; bodyDerived?: { body: string; basis: string } }, t: Translate): string {
+  const body = bodyWords(row.bodyDerived?.body, t);
+  const kg = Math.round(row.weightKg);
+  return row.bodyDerived?.basis === 'weight-only' ? t('home.market.workGuessed', { body, kg }) : t('home.market.work', { body, kg });
+}
+
+/** The corridor in towns — "Thika → Mombasa", or one end, or neither. Never an address at either end. */
+export function marketWhere(row: { area?: string; destArea?: string }, t: Translate): string {
+  if (row.area && row.destArea) return t('home.market.corridor', { from: row.area, to: row.destArea });
+  if (row.area) return t('home.market.fromOnly', { from: row.area });
+  if (row.destArea) return t('home.market.toOnly', { to: row.destArea });
+  return t('home.market.whereUnknown');
+}
+
+/**
+ * What the market looks like in one sentence — the answer to "should I move here", not to "what is on row 4".
+ *
+ * Counts DISTINCT bodies rather than listing every load, because the shape of demand is the finding: eleven
+ * loads that all want a flatbed is a different market from eleven that want eleven different trucks, and a
+ * list read top to bottom never shows that.
+ */
+export function marketShape(rows: Array<{ bodyDerived?: { body: string } }>): { bodies: Array<{ body: string; n: number }>; total: number } {
+  const counts = new Map<string, number>();
+  for (const r of rows) {
+    const body = r.bodyDerived?.body;
+    if (!body) continue;
+    counts.set(body, (counts.get(body) ?? 0) + 1);
+  }
+  const bodies = [...counts.entries()]
+    .map(([body, n]) => ({ body, n }))
+    // Commonest first, then alphabetically so equal counts do not reorder between two reads of the same market.
+    .sort((a, b) => b.n - a.n || a.body.localeCompare(b.body));
+  return { bodies, total: rows.length };
+}

@@ -9261,6 +9261,57 @@
         }
       }
     },
+    "/v1/sbg/market": {
+      "get": {
+        "operationId": "Sbg.publicMarket",
+        "summary": "",
+        "description": "FB3b — the open market, to anyone at all.\n\n@Public, and that is the feature. The people who most need to know what freight moves on a corridor are\nthe ones who do not yet own a truck to move it with: an operator deciding what body to buy, someone\nweighing up a move to another city (user, 2026-08-30). Requiring an account to answer that would put the\ndata behind exactly the door that keeps it from the people it is for.\n\nWhat is published is the WORK — bodies needed, equipment, weights, both distances, indicative money.\nWhat is not is WHERE any single load sits: a town, a pin rounded to about 5 km, and no code, shop name\nor description. Prices are the network's default rate card, and the response says so in `basis` rather\nthan leaving a client free to render them as offers.",
+        "parameters": [
+          {
+            "name": "lat",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "minimum": -90,
+              "maximum": 90,
+              "type": "number"
+            }
+          },
+          {
+            "name": "lng",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "minimum": -180,
+              "maximum": 180,
+              "type": "number"
+            }
+          },
+          {
+            "name": "radiusKm",
+            "required": false,
+            "in": "query",
+            "description": "How far the caller cares to look, in km. Omit for the whole market.",
+            "schema": {
+              "minimum": 1,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/dispatch/posted": {
       "get": {
         "operationId": "Sbg.postedFreight",
@@ -16555,6 +16606,151 @@
         "required": [
           "items",
           "total"
+        ]
+      },
+      "MarketRow": {
+        "type": "object",
+        "properties": {
+          "cargoClass": {
+            "type": "string",
+            "enum": [
+              "P0",
+              "P1",
+              "P2",
+              "P3",
+              "P4",
+              "P5",
+              "P6"
+            ]
+          },
+          "natureCode": {
+            "type": "string",
+            "enum": [
+              "GEN",
+              "FOD",
+              "FOP",
+              "HAZ-CHEM",
+              "HAZ-DUST",
+              "HAZ-BIO",
+              "HAZ-FLAM",
+              "FRG",
+              "ODR",
+              "HUM"
+            ]
+          },
+          "requiredEquipment": {
+            "type": "array",
+            "description": "Kit a vehicle must have to load and unload it — the other half of the investment question.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "MAN",
+                "HTR",
+                "PLT",
+                "FLT",
+                "TLT",
+                "CRN",
+                "RMP",
+                "STR"
+              ]
+            }
+          },
+          "requiredCapabilities": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "coldChain",
+                "hazmat",
+                "carriesBulk",
+                "allowsFragile"
+              ]
+            }
+          },
+          "area": {
+            "type": "string",
+            "description": "Coarse: the nearest town we know, not the pickup's own label. Absent where nothing is near enough\n to name honestly — a distance with no name beats a name that implies precision we do not have."
+          },
+          "destArea": {
+            "type": "string",
+            "description": "Likewise for the far end: what corridor this load runs, in towns."
+          },
+          "pickupAbout": {
+            "description": "Rounded to ~0.05° (≈5 km) so the market can be mapped without a load being met at its gate.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GeoPoint"
+              }
+            ]
+          },
+          "weightKg": {
+            "type": "number"
+          },
+          "indivisible": {
+            "type": "boolean"
+          },
+          "bodyDerived": {
+            "description": "The body this load needs and how strong that claim is. THE field the whole page exists for: it is what\n turns \"there is work here\" into \"there is work here for a flatbed\".",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DerivedBody"
+              }
+            ]
+          },
+          "deadheadKm": {
+            "type": "number",
+            "description": "From the point the caller asked about — their question, not ours."
+          },
+          "loadedKm": {
+            "type": "number"
+          },
+          "totalKm": {
+            "type": "number"
+          },
+          "scheduledPickupAt": {
+            "type": "string"
+          },
+          "indicativeTotal": {
+            "type": "number",
+            "description": "INDICATIVE ONLY, and named so. Computed at the network's default rate for a typical vehicle, because\n an anonymous caller has no vehicle whose rate card we could price against. What an actual operator\n earns is their own rate on their own corridor — this is the market's shape, not an offer."
+          },
+          "indicativePerKm": {
+            "type": "number",
+            "nullable": true,
+            "description": "Indicative earnings per TOTAL kilometre, empty run included. Null when it cannot be computed."
+          }
+        },
+        "required": [
+          "cargoClass",
+          "natureCode",
+          "pickupAbout",
+          "weightKg",
+          "deadheadKm",
+          "loadedKm",
+          "totalKm"
+        ]
+      },
+      "MarketResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MarketRow"
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "basis": {
+            "type": "string",
+            "description": "Said in the payload, not just in the docs: every price here is the network default applied to this\n load, so a client cannot render these numbers as an offer without stepping over the word."
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "basis"
         ]
       },
       "PostedFreightRow": {

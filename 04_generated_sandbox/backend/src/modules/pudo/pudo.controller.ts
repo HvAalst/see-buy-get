@@ -23,7 +23,7 @@ import { VehicleService } from './vehicle.service';
 import { DriverService } from './driver.service';
 import { FleetService } from './fleet.service';
 import { DispatchService } from './dispatch.service';
-import { FreightBoardResponse, FreightProposalsResponse, PostedFreightResponse } from './dispatch.types';
+import { FreightBoardResponse, FreightProposalsResponse, MarketResponse, PostedFreightResponse } from './dispatch.types';
 import { MarketPulseService } from './market-pulse.service';
 import { CargoService } from './cargo.service';
 import { FleetManagerService } from './fleet-manager.service';
@@ -31,7 +31,7 @@ import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
-import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityFeeDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
+import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityFeeDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
 import { classifySize, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { BooksService } from '../../foundation/books/books.service';
@@ -1771,6 +1771,26 @@ export class SbgController {
     const driverDid = actor?.role === 'operator' ? q.driverDid : (q.driverDid ?? actor?.did);
     const items = this.dispatch.board({ driverDid, from: { lat: Number(q.lat), lng: Number(q.lng) }, radiusKm: q.radiusKm });
     return { items, total: items.length };
+  }
+
+  /**
+   * FB3b — the open market, to anyone at all.
+   *
+   * @Public, and that is the feature. The people who most need to know what freight moves on a corridor are
+   * the ones who do not yet own a truck to move it with: an operator deciding what body to buy, someone
+   * weighing up a move to another city (user, 2026-08-30). Requiring an account to answer that would put the
+   * data behind exactly the door that keeps it from the people it is for.
+   *
+   * What is published is the WORK — bodies needed, equipment, weights, both distances, indicative money.
+   * What is not is WHERE any single load sits: a town, a pin rounded to about 5 km, and no code, shop name
+   * or description. Prices are the network's default rate card, and the response says so in `basis` rather
+   * than leaving a client free to render them as offers.
+   */
+  @Public()
+  @Get('market')
+  publicMarket(@Query() q: MarketQueryDto): MarketResponse {
+    const items = this.dispatch.publicMarket({ from: { lat: Number(q.lat), lng: Number(q.lng) }, radiusKm: q.radiusKm });
+    return { items, total: items.length, basis: 'indicative-network-default' };
   }
 
   /* ------------------------------------------- FB0c: negotiate before commit -- */

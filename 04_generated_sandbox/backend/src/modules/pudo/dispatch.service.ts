@@ -18,6 +18,7 @@ import { WalletGateService } from './wallet-gate.service';
 import { clampMultiplier, computeFreightPrice, distanceSplit, earningsPerKm, freightMultiplier, shipperCharge, type PriceBreakdown } from './pricing';
 import { canonicalBody, bodyOf, excludedByShipper } from './freight-body';
 import { blockersFor, takeable } from './freight-board';
+import { nearestPlace } from './geo-gazetteer';
 import { TruckSubtype } from './fleet.config';
 import { isTempBreach, loadSafetyItems, missingKeys, requiredLoadKeys, requiredUnloadKeys, tempBand, unloadSafetyItems } from './heavy-cargo';
 import { MediaService } from './media.service';
@@ -27,7 +28,7 @@ import { Router, ROUTER } from './router';
 import { DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NUDGE_RADIUS_KM, OFFER_TTL_MIN, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
-import { BoardRow, Claimable, ClaimableKind, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, Offer, PostedFreightRow, RoutePlan } from './dispatch.types';
+import { BoardRow, Claimable, ClaimableKind, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, MarketRow, Offer, PostedFreightRow, RoutePlan } from './dispatch.types';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
 
 /**
@@ -45,6 +46,31 @@ export function commitModeOf(f: { commitMode?: FreightCommitMode }): FreightComm
  *  for a road estimate, and it keeps deadhead + loaded === total instead of drifting by a rounding crumb. */
 function round1(km: number): number {
   return Number.isFinite(km) ? Math.round(km * 10) / 10 : 0;
+}
+
+/**
+ * FB3b — the rate card the PUBLIC market is priced on.
+ *
+ * Every price a driver sees is computed against their own vehicle's baseFee, per-km rate and multiplier
+ * corridor. A caller with no account has no such card, and the choice is between showing no money at all
+ * and showing the network's own defaults. The defaults win, but only because they are LABELLED: the
+ * response carries `basis: 'indicative-network-default'`, and the page says it in words.
+ *
+ * Deliberately not a per-body rate table. The system holds no evidence that a flatbed's cost per kilometre
+ * differs from a box body's, and inventing one would put a fabricated number under a page whose entire
+ * purpose is to be the honest source somebody invests against.
+ */
+const REFERENCE_PROFILE = {
+  baseFee: VEHICLE_SPEC.truck.defaultBaseFee,
+  ratePerKm: DEFAULT_PRICE_PER_KM,
+  min: DEFAULT_MIN_MULTIPLIER,
+  max: DEFAULT_MAX_MULTIPLIER,
+};
+
+/** Round a pin to ~0.05° (≈5 km) — enough to map the market, not enough to meet a load at its gate. */
+function coarsePoint(p: GeoPoint): GeoPoint {
+  const snap = (n: number) => Math.round(n / 0.05) * 0.05;
+  return { lat: Number(snap(p.lat).toFixed(3)), lng: Number(snap(p.lng).toFixed(3)) };
 }
 
 /* --------------------- driver jobs + earnings register (R5) — a driver's freight hauls -------------- */
@@ -865,6 +891,72 @@ export class DispatchService {
     // platform's question rather than the operator's. Rows with no computable rate sink rather than float:
     // an unsortable row must never lead the board. Nearest first among them, as the only honest fallback.
     return rows.sort((a, b) => (b.earningsPerKm ?? -1) - (a.earningsPerKm ?? -1) || a.deadheadKm - b.deadheadKm);
+  }
+
+  /**
+   * FB3b — the market as a stranger sees it: no account, no vehicle, no session.
+   *
+   * A different question from board()'s, which is why it is a different method and a different row rather
+   * than a filtered one. board() answers "can I take this", and needs a vehicle to judge against. This
+   * answers "what work is there here, and what would I need to do it" — the question asked by someone
+   * deciding whether to buy a flatbed, or whether the corridor they are thinking of moving to has a market
+   * worth moving for. User, 2026-08-30: not just a driver, also someone planning to live and work abroad.
+   *
+   * Two things follow, and they pull in opposite directions.
+   *
+   * The WORK is published in full — weight, body needed, equipment, both distances, the money — because that
+   * is the data an entrepreneur cannot get anywhere else and the whole reason the network should give it
+   * away. The LOAD is not located: a coarse town, a pin rounded to about 5 km, and no code, label or
+   * description at all. A public board that named the shop would be a standing, anonymous, searchable
+   * inventory of valuable goods with dates against them, and nothing about the investment question needs it.
+   *
+   * Money is INDICATIVE and says so in the payload. Every price on the driver's board is computed against
+   * that driver's own rate card; an anonymous caller has none, so this uses the network's defaults for a
+   * typical vehicle. It is the same computeFreightPrice the offer uses — the same arithmetic, a different
+   * rate card — so the public figure and a real offer can never diverge in method, only in whose rate it is.
+   */
+  publicMarket(input: { from: GeoPoint; radiusKm?: number }, now: number = Date.now()): MarketRow[] {
+    this.publishReady(now);
+    this.publishReadyFreight(now);
+    const radius = input.radiusKm != null && Number.isFinite(input.radiusKm) && input.radiusKm > 0 ? input.radiusKm : undefined;
+
+    const rows: MarketRow[] = [];
+    for (const f of this.freights.values()) {
+      if (!(f.status === 'available' || (f.status === 'scheduled' && f.allowEarlyClaim))) continue;
+      const deadheadKm = round1(this.router.roadKm(input.from, f.pickupLocation));
+      if (radius != null && deadheadKm > radius) continue;
+      const loadedKm = round1(f.destLocation ? this.router.roadKm(f.pickupLocation, f.destLocation) : 0);
+      const price = computeFreightPrice({
+        baseFee: REFERENCE_PROFILE.baseFee,
+        ratePerKm: REFERENCE_PROFILE.ratePerKm,
+        deadheadKm,
+        tripKm: loadedKm,
+        multiplier: freightMultiplier(new Date(now), { min: REFERENCE_PROFILE.min, max: REFERENCE_PROFILE.max }, this.market.factorFor(f.pickupLocation, now)),
+      });
+      rows.push({
+        area: nearestPlace(f.pickupLocation)?.name,
+        destArea: f.destLocation ? nearestPlace(f.destLocation)?.name : undefined,
+        pickupAbout: coarsePoint(f.pickupLocation),
+        weightKg: f.weightKg,
+        cargoClass: f.cargoClass,
+        natureCode: f.natureCode,
+        indivisible: f.indivisible,
+        bodyDerived: bodyOf(f),
+        requiredEquipment: f.requiredEquipment?.length ? f.requiredEquipment : undefined,
+        requiredCapabilities: f.requiredCapabilities?.length ? f.requiredCapabilities : undefined,
+        deadheadKm,
+        loadedKm,
+        totalKm: round1(deadheadKm + loadedKm),
+        scheduledPickupAt: f.scheduledPickupAt,
+        indicativeTotal: price.total,
+        indicativePerKm: earningsPerKm(price),
+      });
+    }
+
+    // Sorted exactly as the driver's board is — by what the work is worth per kilometre TURNED. The public
+    // page is read to decide where the good corridors are, and proximity sorting would answer a question
+    // nobody browsing a market from another country is asking.
+    return rows.sort((a, b) => (b.indicativePerKm ?? -1) - (a.indicativePerKm ?? -1) || a.deadheadKm - b.deadheadKm);
   }
 
   /* ------------------------------------------------- FB0c: negotiate before commit -- */

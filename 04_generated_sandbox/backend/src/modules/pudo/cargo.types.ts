@@ -38,8 +38,12 @@ export type Equipment = (typeof EQUIPMENT)[number];
 export type Compatibility = 'OK' | 'SEGREGATE' | 'INCOMPATIBLE';
 
 /** A boolean handling capability a Vehicle already carries (derived from its truck subtype). A cargo nature
- *  can require one — the enforcement side of the currently-dead vehicle flags. */
-export type VehicleCapability = 'coldChain' | 'hazmat' | 'carriesBulk' | 'allowsFragile';
+ *  can require one — the enforcement side of the currently-dead vehicle flags.
+ *
+ *  The list is the runtime half of the type, so a capability the API publishes can never drift from one the
+ *  code knows about (`satisfies` pins them together in both directions). */
+export const VEHICLE_CAPABILITIES = ['coldChain', 'hazmat', 'carriesBulk', 'allowsFragile'] as const;
+export type VehicleCapability = (typeof VEHICLE_CAPABILITIES)[number];
 
 export interface CargoClassSpec {
   cargoClass: CargoClass;

@@ -53,6 +53,20 @@ export function WelcomeScreen({ actions }: WelcomeScreenProps) {
             <Icon name="chevronRight" size={22} />
           </span>
         </a>
+        {/* FB3b — offered to a visitor who has not decided anything yet, which is the point: the market is
+            what you read BEFORE you know whether you want an account. */}
+        <button type="button" class="row" onClick={() => actions.go('market')}>
+          <span class="row__ic">
+            <Icon name="truck" size={24} />
+          </span>
+          <span class="row__body">
+            <span class="row__t">{t('home.welcome.marketTitle')}</span>
+            <span class="row__s">{t('home.welcome.marketSub')}</span>
+          </span>
+          <span class="row__end">
+            <Icon name="chevronRight" size={22} />
+          </span>
+        </button>
         <button type="button" class="row" onClick={() => actions.go('signin')}>
           <span class="row__ic">
             <Icon name="key" size={24} />

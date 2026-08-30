@@ -2,6 +2,7 @@ import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { Icon, TopBar } from '../../shared/ui';
 import { useT } from '../../shared/i18n';
 import { JoinScreen } from './screens/JoinScreen';
+import { MarketScreen } from './screens/MarketScreen';
 import { RolesScreen } from './screens/RolesScreen';
 import { SignInScreen } from './screens/SignInScreen';
 import { WelcomeScreen } from './screens/WelcomeScreen';
@@ -23,11 +24,13 @@ export function App() {
   const subtitle =
     state.screen === 'join' && state.role
       ? t('home.subtitle.joining', { role: roleMeta(state.role, t).labelLower })
-      : state.screen === 'roles'
-        ? t('home.subtitle.roles')
-        : state.screen === 'signin'
-          ? t('home.subtitle.signin')
-          : t('home.subtitle.welcome');
+      : state.screen === 'market'
+        ? t('home.subtitle.market')
+        : state.screen === 'roles'
+          ? t('home.subtitle.roles')
+          : state.screen === 'signin'
+            ? t('home.subtitle.signin')
+            : t('home.subtitle.welcome');
 
   return (
     <div class="app">
@@ -52,6 +55,7 @@ export function App() {
       />
 
       <main class="app__scroll app__scroll--nonav">
+        {state.screen === 'market' ? <MarketScreen state={state} actions={actions} /> : null}
         {state.screen === 'roles' ? <RolesScreen actions={actions} /> : null}
         {state.screen === 'join' ? <JoinScreen state={state} actions={actions} /> : null}
         {state.screen === 'signin' ? <SignInScreen actions={actions} /> : null}

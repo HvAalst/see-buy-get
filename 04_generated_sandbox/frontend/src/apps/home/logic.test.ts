@@ -3,8 +3,12 @@ import { t } from '../../shared/i18n'; // English is the base catalog, so the re
 import {
   EMPTY_JOIN,
   ROLES,
+  bodyWords,
   codeLooksValid,
   joinSpoken,
+  marketShape,
+  marketWhere,
+  marketWork,
   nextStep,
   normalizePhone,
   phoneLooksValid,
@@ -167,5 +171,64 @@ describe('speaking', () => {
     for (const step of stepsFor('signup')) {
       expect(joinSpoken(role('pudo'), step, t).length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('reading the public market (FB3b)', () => {
+  const row = (over: Partial<Parameters<typeof marketWork>[0]> & { area?: string; destArea?: string } = {}) => ({
+    weightKg: 400,
+    bodyDerived: { body: 'flatbed', basis: 'measured' as const },
+    ...over,
+  });
+
+  it('names the body in words a reader outside the trade would use', () => {
+    expect(bodyWords('flatbed', t)).toBe('Open flatbed');
+    expect(bodyWords('skeletal', t)).toBe('Container chassis');
+    // A body added to the catalogue but not yet to the catalog still renders as something readable.
+    expect(bodyWords('quantum_hauler', t)).toBe('quantum hauler');
+    expect(bodyWords(undefined, t)).toBe('Truck');
+  });
+
+  it('leads a row with the BODY, because that is the question the page answers', () => {
+    expect(marketWork(row(), t)).toBe('Open flatbed · 400 kg');
+  });
+
+  it('says out loud when a body was guessed from weight alone', () => {
+    // An investment thesis built on a derivation nobody measured deserves to know it was a derivation.
+    const guessed = marketWork(row({ bodyDerived: { body: 'flatbed', basis: 'weight-only' } }), t);
+    expect(guessed).toContain('worked out from the weight alone');
+  });
+
+  it('gives the corridor in TOWNS, and degrades rather than inventing one', () => {
+    expect(marketWhere({ area: 'Thika', destArea: 'Mombasa' }, t)).toBe('Thika → Mombasa');
+    expect(marketWhere({ area: 'Thika' }, t)).toBe('From Thika');
+    expect(marketWhere({ destArea: 'Mombasa' }, t)).toBe('To Mombasa');
+    expect(marketWhere({}, t)).toBe('Away from any town we know');
+  });
+
+  it('counts DISTINCT bodies — the shape of demand, which a list read top to bottom never shows', () => {
+    const shape = marketShape([
+      { bodyDerived: { body: 'flatbed' } },
+      { bodyDerived: { body: 'box' } },
+      { bodyDerived: { body: 'flatbed' } },
+      { bodyDerived: { body: 'flatbed' } },
+    ]);
+    expect(shape.total).toBe(4);
+    expect(shape.bodies).toEqual([
+      { body: 'flatbed', n: 3 },
+      { body: 'box', n: 1 },
+    ]);
+  });
+
+  it('orders equal counts stably, so two reads of one market do not disagree', () => {
+    const shape = marketShape([{ bodyDerived: { body: 'tipper' } }, { bodyDerived: { body: 'box' } }]);
+    expect(shape.bodies.map((b) => b.body)).toEqual(['box', 'tipper']);
+  });
+
+  it('counts a load with no derived body in the total but not against any body', () => {
+    // Dropping it from the total would understate the market; inventing a body for it would misstate its shape.
+    const shape = marketShape([{ bodyDerived: { body: 'flatbed' } }, {}]);
+    expect(shape.total).toBe(2);
+    expect(shape.bodies).toEqual([{ body: 'flatbed', n: 1 }]);
   });
 });

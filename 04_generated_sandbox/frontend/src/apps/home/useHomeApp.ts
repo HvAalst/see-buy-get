@@ -4,8 +4,11 @@ import type { SbgError } from '../../lib/sbg';
 import {
   deviceMarker,
   fetchCountries,
+  fetchMarket,
   fetchPoints,
+  geocode,
   handOff,
+  type MarketRow,
   registerStore,
   requestCode,
   signup,
@@ -17,7 +20,11 @@ import {
 } from './api';
 import { EMPTY_JOIN, nextStep, normalizePhone, prevStep, roleById, signupBody, stepBlocker, type JoinForm, type JoinStep, type RoleSpec } from './logic';
 
-export type Screen = 'welcome' | 'roles' | 'join' | 'signin';
+export type Screen = 'welcome' | 'roles' | 'join' | 'signin' | 'market';
+
+/** FB3b — how far the visitor cares to look. `null` IS a choice: the whole market. */
+export type MarketReach = number | null;
+export const MARKET_REACHES: MarketReach[] = [25, 100, 300, null];
 
 export interface HomeState {
   screen: Screen;
@@ -36,6 +43,19 @@ export interface HomeState {
   store: VendorRegisteredView | null;
   error: SbgError | null;
   busy: string | null;
+  /* --- FB3b: the public freight market --- */
+  /** What the visitor typed. Kept verbatim so the heading can say the name THEY used, not the gazetteer's. */
+  marketQuery: string;
+  /** Where the market is measured from. Null until a place resolves — nothing is fetched before that,
+   *  because there is no sensible default point for a visitor who could be on any continent. */
+  marketAt: { lat: number; lng: number } | null;
+  /** The place the geocoder actually matched, when it differs from what was typed. */
+  marketPlace: string | null;
+  marketReach: MarketReach;
+  market: MarketRow[];
+  marketState: 'idle' | 'locating' | 'loading' | 'ready' | 'error';
+  /** The server's own word for what the prices mean. Rendered, never paraphrased. */
+  marketBasis: string | null;
 }
 
 const INITIAL: HomeState = {
@@ -52,6 +72,13 @@ const INITIAL: HomeState = {
   store: null,
   error: null,
   busy: null,
+  marketQuery: '',
+  marketAt: null,
+  marketPlace: null,
+  marketReach: null, // the whole market, until the visitor narrows it
+  market: [],
+  marketState: 'idle',
+  marketBasis: null,
 };
 
 /**
@@ -60,6 +87,9 @@ const INITIAL: HomeState = {
  */
 export function useHomeApp() {
   const [state, setState] = useState<HomeState>(INITIAL);
+  /** FB3b — which look owns the screen. A slow answer for "Nairobi" must not overwrite a fast one for
+   *  "Kaapstad" typed after it; the market is read by someone trying several places in a row. */
+  const marketEpoch = useRef(0);
   const stateRef = useRef(state);
   useEffect(() => {
     stateRef.current = state;
@@ -228,9 +258,58 @@ export function useHomeApp() {
     setState((s) => ({ ...INITIAL, points: s.points, pointsState: s.pointsState }));
   }, []);
 
+  /* ------------------------------------------------------- FB3b: the market -- */
+
+  const setMarketQuery = useCallback((marketQuery: string) => setState((s) => ({ ...s, marketQuery })), []);
+
+  /** Read the market around a point. Kept separate from the lookup so changing the reach does not re-geocode
+   *  a name that has already resolved — and so a market fetch cannot silently move the pin under the reader. */
+  const readMarket = useCallback(async (at: { lat: number; lng: number }, reach: MarketReach) => {
+    const epoch = ++marketEpoch.current;
+    setState((s) => ({ ...s, marketState: 'loading', marketAt: at, marketReach: reach }));
+    const r = await fetchMarket(at, reach ?? undefined);
+    if (epoch !== marketEpoch.current) return; // a later look already owns the screen
+    if (r.error) {
+      setState((s) => ({ ...s, marketState: 'error', error: r.error }));
+      return;
+    }
+    setState((s) => ({ ...s, market: r.data?.items ?? [], marketBasis: r.data?.basis ?? null, marketState: 'ready', error: null }));
+  }, []);
+
+  /** Resolve what the visitor typed, then read the market there. A name that cannot be placed leaves the
+   *  previous answer alone rather than blanking it: they are mid-search, not looking at nothing. */
+  const lookUpMarket = useCallback(async () => {
+    const q = stateRef.current.marketQuery.trim();
+    if (!q) return;
+    const epoch = ++marketEpoch.current;
+    setState((s) => ({ ...s, marketState: 'locating', error: null }));
+    const r = await geocode(q);
+    if (epoch !== marketEpoch.current) return;
+    if (r.error || !r.data?.location) {
+      setState((s) => ({ ...s, marketState: 'error', error: r.error ?? null }));
+      return;
+    }
+    setState((s) => ({ ...s, marketPlace: r.data!.matched ?? null }));
+    await readMarket(r.data.location, stateRef.current.marketReach);
+  }, [readMarket]);
+
+  /** Change the reach over a place already found. Does nothing until there is one — there is no default
+   *  point for a visitor who could be on any continent, and guessing one would answer the wrong question. */
+  const setMarketReach = useCallback(
+    (reach: MarketReach) => {
+      const at = stateRef.current.marketAt;
+      if (!at) {
+        setState((s) => ({ ...s, marketReach: reach }));
+        return;
+      }
+      void readMarket(at, reach);
+    },
+    [readMarket],
+  );
+
   return {
     state,
-    actions: { go, startJoin, setForm, back, sendCode, confirmCode, advance, submit, restart, loadPoints },
+    actions: { go, startJoin, setForm, back, sendCode, confirmCode, advance, submit, restart, loadPoints, setMarketQuery, lookUpMarket, setMarketReach },
   };
 }
 

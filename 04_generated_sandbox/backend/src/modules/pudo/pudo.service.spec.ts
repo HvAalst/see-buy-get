@@ -9,6 +9,7 @@ import { MAX_WORK_RADIUS_KM, OTP_MAX_ATTEMPTS, TRADE_CREDIT_LIMIT, TRADE_CREDIT_
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
 import { CargoService } from './cargo.service';
 import { SbgController } from './pudo.controller';
+import { IS_PUBLIC_KEY } from '../../foundation/auth/public.decorator';
 import { IdentityController } from './identity.controller';
 import { MediaService } from './media.service';
 import { MonitorService } from './monitor.service';
@@ -3359,6 +3360,85 @@ describe('PUDO Light', () => {
   const pickupPt = { lat: -1.2, lng: 36.8 };
   const negotiable = (extra: Record<string, unknown> = {}) =>
     dispatch.registerFreight({ description: 'Awkward load', pickupLocation: pickupPt, pickupLabel: 'Depot', destLabel: 'Site', destLocation: { lat: -1.15, lng: 36.8 }, weightKg: 400, bulk: false, dimensionsCm: [120, 100, 80], commitMode: 'negotiate', ...extra });
+
+  /* --- FB3b: the public market --- */
+
+  it('FB3b: answers a caller with no account and no vehicle — with money on every row', () => {
+    // The whole point. board() gives an anonymous caller a price of `undefined` on every row, because there
+    // is no vehicle whose rate card to price against — which strips the one number somebody deciding whether
+    // to buy a truck came for. The public market prices at the network's default instead, and says so.
+    const here = { lat: -1.2, lng: 36.8 };
+    const f = dispatch.registerFreight({ description: 'Pallets', pickupLocation: here, pickupLabel: 'Mama Njeri Shop', destLabel: 'Site', destLocation: { lat: -1.15, lng: 36.8 }, weightKg: 400, bulk: false, dimensionsCm: [120, 100, 80] });
+    expect(f).toBeDefined();
+
+    const rows = dispatch.publicMarket({ from: here });
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) {
+      expect(r.indicativeTotal).toBeGreaterThan(0);
+      expect(r.bodyDerived?.body).toBeTruthy(); // "there is work here FOR A FLATBED" is the answer being sold
+    }
+    // Against the same load the signed-out board says nothing about money at all.
+    expect(dispatch.board({ from: here }).every((r) => r.price === undefined)).toBe(true);
+  });
+
+  it('FB3b: publishes the WORK and withholds the LOAD’s address', () => {
+    // A public list naming the shop would be a standing, anonymous inventory of valuable goods with dates
+    // against them. A town and a distance answer the market question without being that.
+    // A pin deliberately OFF the rounding grid, so the coarsening has something to do. (-1.2/36.8 sits
+    // exactly on it, which would make the assertion below pass while proving nothing.)
+    const here = { lat: -1.2137, lng: 36.8241 };
+    dispatch.registerFreight({ description: 'Three crates of copper cable', pickupLocation: here, pickupLabel: 'Mama Njeri Shop', destLabel: 'Site', destLocation: { lat: -1.15, lng: 36.8 }, weightKg: 400, bulk: false, dimensionsCm: [120, 100, 80] });
+    const [row] = dispatch.publicMarket({ from: here });
+
+    const serialised = JSON.stringify(row);
+    expect(serialised).not.toContain('Mama Njeri Shop'); // no shop name
+    expect(serialised).not.toContain('copper cable'); // no description of the goods
+    expect(serialised).not.toMatch(/FRT-/); // no code to quote at a counter
+    expect(row).not.toHaveProperty('freightId');
+    expect(row).not.toHaveProperty('pickupLocation'); // the exact pin never leaves
+
+    // The pin it DOES carry is rounded to a ~5 km grid — mappable, not meetable.
+    expect(row.pickupAbout).not.toEqual(here);
+    expect(row.pickupAbout).toEqual({ lat: -1.2, lng: 36.8 });
+    for (const n of [row.pickupAbout.lat, row.pickupAbout.lng]) expect(Math.abs(Math.round(n / 0.05) * 0.05 - n)).toBeLessThan(1e-9);
+    // …and the work itself is all there.
+    expect(row.weightKg).toBe(400);
+    expect(row.totalKm).toBeGreaterThan(0);
+  });
+
+  it('FB3b: names a coarse TOWN, or says nothing rather than implying precision', () => {
+    // "near Nairobi" said of a load 140 km away reads as precision and is not.
+    const nairobi = { lat: -1.2864, lng: 36.8172 };
+    dispatch.registerFreight({ description: 'Pallets', pickupLocation: nairobi, pickupLabel: 'A', destLabel: 'B', destLocation: { lat: -1.15, lng: 36.8 }, weightKg: 400, bulk: false, dimensionsCm: [120, 100, 80] });
+    expect(dispatch.publicMarket({ from: nairobi })[0].area).toBeTruthy();
+
+    const middleOfNowhere = { lat: 2.5, lng: 40.9 }; // far from every gazetteer entry
+    dispatch.registerFreight({ description: 'Pallets', pickupLocation: middleOfNowhere, pickupLabel: 'A', destLabel: 'B', destLocation: middleOfNowhere, weightKg: 400, bulk: false, dimensionsCm: [120, 100, 80] });
+    const remote = dispatch.publicMarket({ from: middleOfNowhere, radiusKm: 5 })[0];
+    expect(remote.area).toBeUndefined(); // no name is better than a wrong one
+    expect(remote.deadheadKm).toBeDefined(); // the distance still answers
+  });
+
+  it('FB3b: the market endpoint is PUBLIC and the driver board is not', () => {
+    // The whole slice fails silently if this decorator is ever lost: the page would 401 for exactly the
+    // people it exists for, and every test that calls the method directly would still pass. Asserted as
+    // metadata rather than through HTTP because that is where the mistake would actually be made.
+    expect(Reflect.getMetadata(IS_PUBLIC_KEY, SbgController.prototype.publicMarket)).toBe(true);
+    // And its opposite: the full board, which carries exact pins, shop names and codes, stays behind a token.
+    expect(Reflect.getMetadata(IS_PUBLIC_KEY, SbgController.prototype.freightBoard)).toBeUndefined();
+  });
+
+  it('FB3b: the radius is the CALLER’s, with no clamp — anywhere, from anywhere', () => {
+    const here = { lat: -1.2, lng: 36.8 };
+    const farAway = { lat: -1.9, lng: 36.8 }; // ~78 km south, far outside MAX_WORK_RADIUS_KM
+    dispatch.registerFreight({ description: 'Pallets', pickupLocation: farAway, pickupLabel: 'A', destLabel: 'B', destLocation: farAway, weightKg: 400, bulk: false, dimensionsCm: [120, 100, 80] });
+
+    // Narrow, and it is gone; wide, and it is there. The 15 km number never enters into it.
+    expect(dispatch.publicMarket({ from: here, radiusKm: 20 }).some((r) => r.deadheadKm > 50)).toBe(false);
+    const wide = dispatch.publicMarket({ from: here, radiusKm: 200 }).find((r) => r.deadheadKm > 50);
+    expect(wide).toBeDefined();
+    expect(wide!.deadheadKm).toBeGreaterThan(MAX_WORK_RADIUS_KM);
+  });
 
   it('FB2c: a shipper exclusion now BINDS at claim — because the board can finally explain it', () => {
     // Stored since FB0b and deliberately unenforced while no screen could show it: dropping a qualifying

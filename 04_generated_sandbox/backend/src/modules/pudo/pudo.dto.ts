@@ -914,6 +914,19 @@ export class FreightBoardQueryDto {
   @IsOptional() @IsString() driverDid?: string;
 }
 
+/**
+ * FB3b — the PUBLIC market's query. Anyone, anywhere, about anywhere.
+ *
+ * The same two knobs as the board and no third: a point and the caller's own reach. There is deliberately no
+ * `driverDid` — this endpoint judges nothing against anybody, which is exactly what lets it be public.
+ */
+export class MarketQueryDto {
+  @IsNumber() @Type(() => Number) @Min(-90) @Max(90) lat!: number;
+  @IsNumber() @Type(() => Number) @Min(-180) @Max(180) lng!: number;
+  /** How far the caller cares to look, in km. Omit for the whole market. */
+  @IsOptional() @IsNumber() @Type(() => Number) @Min(1) radiusKm?: number;
+}
+
 /** FB0c — a driver's price for a load posted 'negotiate'. It reserves nothing; the poster's acceptance is
  *  what claims the load. */
 export class ProposeFreightDto {

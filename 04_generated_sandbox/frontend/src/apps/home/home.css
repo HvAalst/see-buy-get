@@ -82,3 +82,102 @@
   word-break: break-all;
   user-select: all;
 }
+
+/* ---------------------------------------- FB3b: the public freight market -- */
+
+/* The find row. On a phone the field and the button stack; on a laptop — where this page is most likely to
+   be read, by somebody researching rather than driving — they sit on one line. */
+.mkt__find {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.mkt__find .field {
+  flex: 1 1 16ch;
+  min-width: 0;
+}
+
+.mkt__reach {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.mkt__reach-lbl {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.mkt__reach-set {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mkt__reach-btn {
+  min-height: var(--tap);
+  padding: 0 16px;
+  border-radius: var(--r-ctl);
+  border: 1px solid var(--bd-soft);
+  background: var(--card);
+  color: var(--navy);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mkt__reach-btn[aria-pressed='true'] {
+  border-color: var(--org);
+  color: var(--org);
+  background: var(--org-light);
+}
+
+/* The shape of demand — counted bodies, wrapping. */
+.mkt__bodies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.mkt__list {
+  margin-top: 14px;
+}
+
+.mkt__row {
+  align-items: flex-start;
+}
+
+.mkt__money {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  text-align: right;
+}
+
+.mkt__amount {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--navy);
+}
+
+.mkt__perkm {
+  font-size: 13px;
+  color: var(--tx2);
+}
+
+/* The word that keeps a default rate from reading as an offer. Small, but never absent: it rides with every
+   figure on the page, not just the note above the list. */
+.mkt__indicative {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tx2);
+}

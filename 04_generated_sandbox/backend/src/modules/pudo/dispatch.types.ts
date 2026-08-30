@@ -4,7 +4,7 @@
 
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { GeoPoint } from './pudo.types';
-import { CARGO_CLASS_CODES, CARGO_NATURES, CargoClass, CargoNature, Equipment, VehicleCapability } from './cargo.types';
+import { CARGO_CLASS_CODES, CARGO_NATURES, CargoClass, CargoNature, EQUIPMENT, Equipment, VEHICLE_CAPABILITIES, VehicleCapability } from './cargo.types';
 import { TRUCK_SUBTYPES, TruckSubtype } from './fleet.config';
 
 /**
@@ -253,6 +253,65 @@ export class FreightBoardResponse {
   @ApiProperty({ type: [BoardRow] })
   items: BoardRow[];
   total: number;
+}
+
+/**
+ * FB3b — one load as the PUBLIC market shows it, to a caller with no account and no vehicle.
+ *
+ * A deliberately different shape from BoardRow, not a filtered one. The two answer different questions:
+ * BoardRow answers "can I take this", which needs a vehicle to judge against; this answers "what work
+ * exists here, and what would I need to do it" — which is the question someone deciding whether to buy a
+ * truck, or move to a city, is actually asking.
+ *
+ * What is MISSING is the design. No code, no description, no shop name and no exact pin: the public list
+ * is a standing, anonymous, searchable inventory of valuable goods with pickup dates against them, and an
+ * address on it serves nobody who is deciding where to invest. A town and a distance say everything the
+ * market question needs. Everything about the WORK stays — weight, body, distances, money — because that
+ * is the half we are here to publish.
+ */
+export class MarketRow {
+  /** Coarse: the nearest town we know, not the pickup's own label. Absent where nothing is near enough
+   *  to name honestly — a distance with no name beats a name that implies precision we do not have. */
+  area?: string;
+  /** Likewise for the far end: what corridor this load runs, in towns. */
+  destArea?: string;
+  /** Rounded to ~0.05° (≈5 km) so the market can be mapped without a load being met at its gate. */
+  pickupAbout: GeoPoint;
+  weightKg: number;
+  @ApiProperty({ enum: CARGO_CLASS_CODES })
+  cargoClass: CargoClass;
+  @ApiProperty({ enum: CARGO_NATURES })
+  natureCode: CargoNature;
+  indivisible?: boolean;
+  /** The body this load needs and how strong that claim is. THE field the whole page exists for: it is what
+   *  turns "there is work here" into "there is work here for a flatbed". */
+  bodyDerived?: DerivedBody;
+  /** Kit a vehicle must have to load and unload it — the other half of the investment question. */
+  @ApiPropertyOptional({ enum: EQUIPMENT, isArray: true })
+  requiredEquipment?: Equipment[];
+  @ApiPropertyOptional({ enum: VEHICLE_CAPABILITIES, isArray: true })
+  requiredCapabilities?: VehicleCapability[];
+  /** From the point the caller asked about — their question, not ours. */
+  deadheadKm: number;
+  loadedKm: number;
+  totalKm: number;
+  scheduledPickupAt?: string;
+  /** INDICATIVE ONLY, and named so. Computed at the network's default rate for a typical vehicle, because
+   *  an anonymous caller has no vehicle whose rate card we could price against. What an actual operator
+   *  earns is their own rate on their own corridor — this is the market's shape, not an offer. */
+  indicativeTotal?: number;
+  /** Indicative earnings per TOTAL kilometre, empty run included. Null when it cannot be computed. */
+  indicativePerKm?: number | null;
+}
+
+/** The public market's response. Named for the same reason FreightBoardResponse is. */
+export class MarketResponse {
+  @ApiProperty({ type: [MarketRow] })
+  items: MarketRow[];
+  total: number;
+  /** Said in the payload, not just in the docs: every price here is the network default applied to this
+   *  load, so a client cannot render these numbers as an offer without stepping over the word. */
+  basis: 'indicative-network-default';
 }
 
 /** FB0c — how a load is taken: at the computed price, or at one agreed first. */
