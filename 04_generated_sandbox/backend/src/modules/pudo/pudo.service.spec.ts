@@ -3223,6 +3223,153 @@ describe('PUDO Light', () => {
     expect(none.excludedBodies).toBeUndefined();
   });
 
+  /* --- FB0c: negotiate before commit --- */
+
+  const negotiator = (tag: string) => {
+    const d = drivers.register({ displayName: tag, fullName: tag, nationalId: `ID-${tag}`, mobile: `+2547709${tag}`, licenceClasses: ['truck'], licenceNumber: `L-${tag}`, licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const v = vehicles.register({ plate: `${tag}-1`, vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 10_000, ownerName: 'X', equipment: ['TLT'], baseFee: 10, pricePerKm: 0.5 });
+    fleet.couple(d.did, v.vehicleId);
+    return d;
+  };
+  const pickupPt = { lat: -1.2, lng: 36.8 };
+  const negotiable = (extra: Record<string, unknown> = {}) =>
+    dispatch.registerFreight({ description: 'Awkward load', pickupLocation: pickupPt, pickupLabel: 'Depot', destLabel: 'Site', destLocation: { lat: -1.15, lng: 36.8 }, weightKg: 400, bulk: false, dimensionsCm: [120, 100, 80], commitMode: 'negotiate', ...extra });
+
+  it('FB0c: a load posted for negotiation is agreed on a price, and the acceptance is what claims it', () => {
+    const d = negotiator('NG');
+    const f = negotiable();
+    expect(f.commitMode).toBe('negotiate');
+
+    const p = dispatch.propose({ freightId: f.freightId, driverDid: d.did, from: { lat: -1.22, lng: 36.8 }, price: 85, note: 'Empty-running past your gate' });
+    expect(p.status).toBe('open');
+    // A proposal reserves NOTHING — the shipper is shopping, and a bid that quietly held the load would be a
+    // claim by another name.
+    expect(dispatch.listFreight().find((x) => x.freightId === f.freightId)!.status).toBe('available');
+
+    const { freight } = dispatch.acceptProposal(p.proposalId);
+    expect(freight.status).toBe('claimed');
+    expect(freight.claimedBy).toBe(d.did);
+    expect(freight.lockedPrice).toBe(85); // the agreed number, not the computed one
+    expect(freight.priceOrigin).toBe('negotiated');
+    // The computed breakdown is kept for its DISTANCES — the market series reads them, and they are real even
+    // though the price was not computed from them.
+    expect(freight.priceBreakdown!.deadheadKm).toBeGreaterThan(0);
+    expect(freight.priceBreakdown!.loadedKm).toBeGreaterThan(0);
+    expect(freight.priceBreakdown!.total).not.toBe(85);
+    expect(dispatch.proposalsFor(f.freightId)[0].status).toBe('accepted');
+  });
+
+  it('FB0c: a negotiate load cannot be claimed over the counter, and is never PUSHED at anyone', () => {
+    const d = negotiator('NP');
+    const f = negotiable();
+    // It is not offered: a push is one decision with a Claim button, and an unsettled price cannot answer it.
+    expect(dispatch.suggest(d.did, { from: pickupPt, to: pickupPt }).filter((o) => o.ref === f.freightId)).toHaveLength(0);
+    expect(dispatch.suggestNearby(d.did, pickupPt, 10).filter((o) => o.ref === f.freightId)).toHaveLength(0);
+    // …and it is not hidden either: it is on the freight list, where the board reads from.
+    expect(dispatch.listFreight().some((x) => x.freightId === f.freightId)).toBe(true);
+  });
+
+  it('FB0c: an INSTANT load still behaves exactly as before — nothing was made to negotiate that was not asked to', () => {
+    const d = negotiator('NI');
+    const f = dispatch.registerFreight({ description: 'Normal', pickupLocation: pickupPt, pickupLabel: 'Depot', destLabel: 'Site', destLocation: pickupPt, weightKg: 400, bulk: false });
+    expect(f.commitMode).toBeUndefined(); // stored only when chosen — absent READS as instant
+    const [offer] = dispatch.suggest(d.did, { from: pickupPt, to: pickupPt }).filter((o) => o.ref === f.freightId);
+    expect(offer).toBeDefined();
+    dispatch.claim(offer.offerId);
+    const claimed = dispatch.listFreight().find((x) => x.freightId === f.freightId)!;
+    expect(claimed.status).toBe('claimed');
+    expect(claimed.priceOrigin).toBe('computed');
+    expect(claimed.lockedPrice).toBe(claimed.priceBreakdown!.total);
+    // And proposing on it is refused — there is nothing to negotiate.
+    expect(() => dispatch.propose({ freightId: f.freightId, driverDid: d.did, from: pickupPt, price: 50 })).toThrow(/claim it instead/);
+  });
+
+  it('FB0c: one live proposal per driver — a new price REPLACES the old one', () => {
+    const d = negotiator('NR');
+    const f = negotiable();
+    const first = dispatch.propose({ freightId: f.freightId, driverDid: d.did, from: pickupPt, price: 90 });
+    const second = dispatch.propose({ freightId: f.freightId, driverDid: d.did, from: pickupPt, price: 75 });
+    const mine = dispatch.proposalsFor(f.freightId).filter((p) => p.driverDid === d.did);
+    expect(mine.filter((p) => p.status === 'open')).toHaveLength(1);
+    expect(mine.find((p) => p.proposalId === first.proposalId)!.status).toBe('withdrawn');
+    expect(mine.find((p) => p.proposalId === second.proposalId)!.status).toBe('open');
+  });
+
+  it('FB0c: accepting one price supersedes the rest — nobody is left bidding on a load that is gone', () => {
+    const a = negotiator('NA');
+    const b = negotiator('NB');
+    const f = negotiable();
+    const pa = dispatch.propose({ freightId: f.freightId, driverDid: a.did, from: pickupPt, price: 70 });
+    const pb = dispatch.propose({ freightId: f.freightId, driverDid: b.did, from: pickupPt, price: 95 });
+    dispatch.acceptProposal(pa.proposalId);
+    // 'superseded' is deliberately not 'declined': nobody judged this number.
+    expect(dispatch.proposalsFor(f.freightId).find((p) => p.proposalId === pb.proposalId)!.status).toBe('superseded');
+  });
+
+  it('FB0c: declining one price leaves the load and every other price open', () => {
+    const a = negotiator('ND');
+    const b = negotiator('NE');
+    const f = negotiable();
+    const pa = dispatch.propose({ freightId: f.freightId, driverDid: a.did, from: pickupPt, price: 200 });
+    const pb = dispatch.propose({ freightId: f.freightId, driverDid: b.did, from: pickupPt, price: 80 });
+    dispatch.declineProposal(pa.proposalId);
+    expect(dispatch.proposalsFor(f.freightId).find((p) => p.proposalId === pb.proposalId)!.status).toBe('open');
+    expect(dispatch.listFreight().find((x) => x.freightId === f.freightId)!.status).toBe('available');
+    dispatch.acceptProposal(pb.proposalId); // …and the negotiation can still conclude
+    expect(dispatch.listFreight().find((x) => x.freightId === f.freightId)!.lockedPrice).toBe(80);
+  });
+
+  it('FB0c: a driver can withdraw their own price, and only their own', () => {
+    const a = negotiator('NW');
+    const b = negotiator('NX');
+    const f = negotiable();
+    const pa = dispatch.propose({ freightId: f.freightId, driverDid: a.did, from: pickupPt, price: 60 });
+    expect(() => dispatch.withdrawProposal(pa.proposalId, b.did)).toThrow(/not yours/);
+    expect(dispatch.withdrawProposal(pa.proposalId, a.did).status).toBe('withdrawn');
+    expect(() => dispatch.acceptProposal(pa.proposalId)).toThrow(/withdrawn/); // and it cannot be taken after
+  });
+
+  it('FB0c: the shipper’s budget binds a NEGOTIATED price too — and the proposal survives to be accepted later', () => {
+    const d = negotiator('NM');
+    const f = negotiable({ maxSpend: 50 });
+    const p = dispatch.propose({ freightId: f.freightId, driverDid: d.did, from: pickupPt, price: 200 });
+    // Agreeing above the cap would commit a haul nobody has the money for.
+    expect(() => dispatch.acceptProposal(p.proposalId)).toThrow(/budget/i);
+    // Nothing was mutated: the load is still open and the price is still on the table, so the shipper can
+    // raise the cap and take it. A refused acceptance must not destroy the negotiation.
+    expect(dispatch.listFreight().find((x) => x.freightId === f.freightId)!.status).toBe('available');
+    expect(dispatch.proposalsFor(f.freightId)[0].status).toBe('open');
+  });
+
+  it('FB0c: acceptance re-checks the world as it is NOW — a de-coupled driver cannot be bound to an old price', () => {
+    // A proposal is an offer to treat with a shelf life, not a reservation. The S31 mirror-at-claim lesson:
+    // a second route to the same mutation must re-run every gate the first one does.
+    const d = negotiator('NC');
+    const f = negotiable();
+    const p = dispatch.propose({ freightId: f.freightId, driverDid: d.did, from: pickupPt, price: 85 });
+    fleet.uncouple(d.did);
+    expect(() => dispatch.acceptProposal(p.proposalId)).toThrow(/coupled/i);
+    expect(dispatch.listFreight().find((x) => x.freightId === f.freightId)!.status).toBe('available');
+  });
+
+  it('FB0c: a driver with no vehicle cannot propose at all — a shipper never reads a bid they cannot take', () => {
+    const d = drivers.register({ displayName: 'NV', fullName: 'NV', nationalId: 'ID-NV', mobile: '+254770NV', licenceClasses: ['truck'], licenceNumber: 'L-NV', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const f = negotiable();
+    expect(() => dispatch.propose({ freightId: f.freightId, driverDid: d.did, from: pickupPt, price: 85 })).toThrow(/couple/i);
+  });
+
+  it('FB0c: a price must be a real number above zero', () => {
+    const d = negotiator('NZ');
+    const f = negotiable();
+    for (const price of [0, -10, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => dispatch.propose({ freightId: f.freightId, driverDid: d.did, from: pickupPt, price })).toThrow(/above zero/);
+    }
+  });
+
   it('S34: a legacy vehicle with no pricing profile prices at its class default — never NaN into money', () => {
     const d = drivers.register({ displayName: 'LG', fullName: 'L', nationalId: 'ID-LG', mobile: '+254770999', licenceClasses: ['truck'], licenceNumber: 'L-LG', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
     drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });

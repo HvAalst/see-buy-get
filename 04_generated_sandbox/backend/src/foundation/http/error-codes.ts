@@ -70,6 +70,7 @@ export const ERROR_CODES = {
   CARGO_INCOMPATIBLE: { status: 400, title: 'These goods cannot travel together' },
   VEHICLE_MISSING_CAPABILITY: { status: 400, title: 'This vehicle cannot carry this cargo' },
   BUDGET_EXCEEDED: { status: 400, title: "The price exceeds the shipper's budget" },
+  NEGOTIATION_REQUIRED: { status: 400, title: 'This load is posted for negotiation' },
   PRICE_CHANGED: { status: 409, title: 'The price changed — please review the new price' },
   SAFETY_CHECK_INCOMPLETE: { status: 400, title: 'The safety checklist is not complete' },
   SECUREMENT_PHOTO_REQUIRED: { status: 400, title: 'A photo of the secured load is required' },

@@ -842,6 +842,11 @@ export class RegisterFreightDto {
   /** Bodies the SHIPPER rules out (theft risk, an insurer's wording, a customer's requirement). A stated
    *  preference, not a physical constraint, and the board presents it as one. */
   @IsOptional() @IsArray() @IsIn([...TRUCK_SUBTYPES], { each: true }) @ApiPropertyOptional({ enum: TRUCK_SUBTYPES, isArray: true }) excludedBodies?: string[];
+  /** FB0c — 'negotiate' posts the load for a price to be agreed BEFORE anyone commits: drivers send their
+   *  number, the poster accepts one, and only that acceptance claims it. Absent = 'instant', the behaviour
+   *  every load has had until now. A negotiate load is deliberately kept out of the push offers and nudges,
+   *  which exist to be answered with a single Claim tap. */
+  @IsOptional() @IsIn(['instant', 'negotiate']) @ApiPropertyOptional({ enum: ['instant', 'negotiate'] }) commitMode?: 'instant' | 'negotiate';
   @IsOptional() @IsBoolean() fragile?: boolean;
   @IsOptional() @IsBoolean() bulk?: boolean;
   /** S32 — the freight's primary cargo nature (default GEN); drives the required vehicle capability. */
@@ -878,6 +883,25 @@ export class BookFreightDto {
  *  the freight's claimedBy so only the driver who claimed it may advance it.
  *  S33 — plus the safety gate: `confirmed` are the checklist item keys the driver ticked (load at pickup,
  *  unload at delivery) and `securementPhotoId` the uploaded mediaId of the secured load (pickup only). */
+/** FB0c — a driver's price for a load posted 'negotiate'. It reserves nothing; the poster's acceptance is
+ *  what claims the load. */
+export class ProposeFreightDto {
+  @IsOptional() @IsString() driverDid?: string; // operator-override only; a driver is pinned to their token
+  /** Where the driver is proposing FROM. Required, not optional: the accepted haul records this as its real
+   *  deadhead, and defaulting an unknown empty run to zero would flatter every negotiated job in the market
+   *  series — the one thing FB0a exists to prevent. */
+  @IsDefined() @ValidateNested() @Type(() => GeoDto) from!: GeoDto;
+  /** The DRIVER's earning being asked for (not the shipper's all-in charge). */
+  @IsNumber() @Min(0.01) price!: number;
+  /** The case for the number, in the driver's own words. */
+  @IsOptional() @IsString() note?: string;
+}
+
+/** FB0c — a driver withdrawing their own proposal. */
+export class WithdrawProposalDto {
+  @IsOptional() @IsString() driverDid?: string; // operator-override only
+}
+
 export class FreightActionDto {
   @IsOptional() @IsString() driverDid?: string;
   @IsOptional() @IsArray() @IsString({ each: true }) confirmed?: string[];

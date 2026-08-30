@@ -9201,6 +9201,153 @@
         }
       }
     },
+    "/v1/sbg/dispatch/freight/{id}/proposals": {
+      "post": {
+        "operationId": "Sbg.proposeForFreight",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposeFreightDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FreightProposal"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "Sbg.listFreightProposals",
+        "summary": "",
+        "description": "The prices offered on a load. Restricted to the side that can act on them — the poster, or an operator.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/dispatch/proposals/{id}/accept": {
+      "post": {
+        "operationId": "Sbg.acceptFreightProposal",
+        "summary": "",
+        "description": "The poster takes a price — and that acceptance is what claims the load.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/dispatch/proposals/{id}/decline": {
+      "post": {
+        "operationId": "Sbg.declineFreightProposal",
+        "summary": "",
+        "description": "The poster says no to one price. The load, and every other proposal on it, stay open.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FreightProposal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/dispatch/proposals/{id}/withdraw": {
+      "post": {
+        "operationId": "Sbg.withdrawFreightProposal",
+        "summary": "",
+        "description": "A driver pulls back their own price.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WithdrawProposalDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FreightProposal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/dispatch/freight/{id}/pickup": {
       "post": {
         "operationId": "Sbg.freightPickup",
@@ -15559,6 +15706,14 @@
               ]
             }
           },
+          "commitMode": {
+            "type": "string",
+            "description": "FB0c — 'negotiate' posts the load for a price to be agreed BEFORE anyone commits: drivers send their\n number, the poster accepts one, and only that acceptance claims it. Absent = 'instant', the behaviour\n every load has had until now. A negotiate load is deliberately kept out of the push offers and nudges,\n which exist to be answered with a single Claim tap.",
+            "enum": [
+              "instant",
+              "negotiate"
+            ]
+          },
           "description": {
             "type": "string"
           },
@@ -15717,6 +15872,97 @@
               "type": "number"
             }
           },
+          "bodyHint": {
+            "type": "string",
+            "description": "The minter's own body pick. ADVISORY — shown, compared and counted, NEVER used to filter (user, 2026-08-30).\n A shop clerk booking a walk-up cannot reliably tell a skeletal from a flatbed, and a binding wrong pick\n would invisibly exclude the one operator who could have taken the load. Where it disagrees with the\n derived body, that disagreement is itself a market signal worth reporting.",
+            "enum": [
+              "flatbed",
+              "dropside",
+              "box",
+              "curtain_side",
+              "refrigerated",
+              "insulated",
+              "tipper",
+              "cement_mixer",
+              "grain_hopper",
+              "bulk_tanker",
+              "tanker",
+              "food_tanker",
+              "fuel_tanker",
+              "water_bowser",
+              "hazmat",
+              "car_carrier",
+              "livestock",
+              "skeletal",
+              "container_selfloader",
+              "crane",
+              "lowboy",
+              "logging",
+              "tow_recovery",
+              "refuse"
+            ]
+          },
+          "cargoClass": {
+            "type": "string",
+            "enum": [
+              "P0",
+              "P1",
+              "P2",
+              "P3",
+              "P4",
+              "P5",
+              "P6"
+            ]
+          },
+          "natureCode": {
+            "type": "string",
+            "enum": [
+              "GEN",
+              "FOD",
+              "FOP",
+              "HAZ-CHEM",
+              "HAZ-DUST",
+              "HAZ-BIO",
+              "HAZ-FLAM",
+              "FRG",
+              "ODR",
+              "HUM"
+            ]
+          },
+          "priceOrigin": {
+            "type": "string",
+            "description": "FB0c — where lockedPrice came from. 'computed' (or absent, for anything locked before FB0c) means it IS\n priceBreakdown.total. 'negotiated' means two parties agreed a number, so lockedPrice is authoritative and\n may differ from the breakdown — which is kept anyway, because its distances are real and are what the\n market series reads. Every money path already reads lockedPrice; nothing bills off the breakdown.",
+            "enum": [
+              "computed",
+              "negotiated"
+            ]
+          },
+          "paidStatus": {
+            "type": "string",
+            "enum": [
+              "unpaid",
+              "billed",
+              "billing_failed"
+            ]
+          },
+          "commitMode": {
+            "type": "string",
+            "description": "FB0c — how this load may be taken. 'instant' (the default, and what every pre-FB0c load is read as) means\n a fit driver claims it at the computed price. 'negotiate' means the minter wants to agree a price first:\n drivers PROPOSE, the poster accepts one, and only that acceptance claims the load.",
+            "enum": [
+              "instant",
+              "negotiate"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "scheduled",
+              "available",
+              "claimed",
+              "in_transit",
+              "delivered"
+            ]
+          },
           "freightId": {
             "type": "string"
           },
@@ -15745,10 +15991,6 @@
             "type": "boolean",
             "description": "Can the load be split into two smaller ones? The single most decision-changing fact about anything\n oversize: a divisible 30 t is two ordinary trips, an indivisible 30 t is a low-loader and a permit."
           },
-          "bodyHint": {
-            "type": "object",
-            "description": "The minter's own body pick. ADVISORY — shown, compared and counted, NEVER used to filter (user, 2026-08-30).\n A shop clerk booking a walk-up cannot reliably tell a skeletal from a flatbed, and a binding wrong pick\n would invisibly exclude the one operator who could have taken the load. Where it disagrees with the\n derived body, that disagreement is itself a market signal worth reporting."
-          },
           "excludedBodies": {
             "description": "Bodies the SHIPPER rules out — theft risk, an insurer's wording, a customer's requirement. A PREFERENCE,\n and typed as one: the board says \"the shipper ruled out open bodies\", never dressing it up as physics.",
             "type": "array",
@@ -15769,12 +16011,6 @@
           },
           "bulk": {
             "type": "boolean"
-          },
-          "cargoClass": {
-            "type": "object"
-          },
-          "natureCode": {
-            "type": "object"
           },
           "requiredCapabilities": {
             "type": "array",
@@ -15827,9 +16063,6 @@
           },
           "lockedAt": {
             "type": "string"
-          },
-          "paidStatus": {
-            "type": "object"
           },
           "driverPaid": {
             "type": "boolean"
@@ -15893,8 +16126,9 @@
           "allowEarlyClaim": {
             "type": "boolean"
           },
-          "status": {
-            "type": "object"
+          "postedByDid": {
+            "type": "string",
+            "description": "FB0c — who posted the load, and therefore who negotiates for it. Distinct from shipperDid, which is who\n PAYS: a counter booking deliberately has no shipperDid (the customer's cash settles off-platform) yet\n still has a shop that must be able to answer a proposal. Absent for a bulletin freight → operators only."
           },
           "claimedBy": {
             "type": "string"
@@ -15904,6 +16138,9 @@
           }
         },
         "required": [
+          "cargoClass",
+          "natureCode",
+          "status",
           "freightId",
           "code",
           "description",
@@ -15913,16 +16150,100 @@
           "weightKg",
           "fragile",
           "bulk",
-          "cargoClass",
-          "natureCode",
           "requiredCapabilities",
           "requiredEquipment",
           "equipmentGaps",
           "loadSafety",
           "unloadReport",
-          "status",
           "createdAt"
         ]
+      },
+      "ProposeFreightDto": {
+        "type": "object",
+        "properties": {
+          "driverDid": {
+            "type": "string"
+          },
+          "from": {
+            "$ref": "#/components/schemas/GeoDto"
+          },
+          "price": {
+            "type": "number",
+            "description": "The DRIVER's earning being asked for (not the shipper's all-in charge).",
+            "minimum": 0.01
+          },
+          "note": {
+            "type": "string",
+            "description": "The case for the number, in the driver's own words."
+          }
+        },
+        "required": [
+          "from",
+          "price"
+        ]
+      },
+      "FreightProposal": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "accepted",
+              "declined",
+              "withdrawn",
+              "superseded"
+            ]
+          },
+          "proposalId": {
+            "type": "string"
+          },
+          "freightId": {
+            "type": "string"
+          },
+          "driverDid": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number",
+            "description": "The DRIVER's earning they are asking for — the same quantity as lockedPrice, not the shipper's charge."
+          },
+          "note": {
+            "type": "string",
+            "description": "The driver's case for the number, in their own words (\"I'm empty-running past your gate on Thursday\")."
+          },
+          "deadheadKm": {
+            "type": "number",
+            "description": "The two legs AS AT the proposal, from the position the driver proposed from. Carried so the accepted\n haul records a real deadhead/loaded split rather than one invented at acceptance time."
+          },
+          "loadedKm": {
+            "type": "number"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "decidedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "proposalId",
+          "freightId",
+          "driverDid",
+          "price",
+          "deadheadKm",
+          "loadedKm",
+          "createdAt"
+        ]
+      },
+      "WithdrawProposalDto": {
+        "type": "object",
+        "properties": {
+          "driverDid": {
+            "type": "string"
+          }
+        }
       },
       "FreightActionDto": {
         "type": "object",

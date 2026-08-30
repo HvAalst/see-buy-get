@@ -7,7 +7,8 @@
 
 /** Cargo class by weight + dimensions. P0–P1 flow the PUDO pipeline, P2–P3 the MDP pipeline, P4+ require
  *  dedicated transport (they can never enter a tote or a chaos shelf). */
-export type CargoClass = 'P0' | 'P1' | 'P2' | 'P3' | 'P4' | 'P5' | 'P6';
+export const CARGO_CLASS_CODES = ['P0', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6'] as const;
+export type CargoClass = (typeof CARGO_CLASS_CODES)[number];
 
 /** The handling lane a class is eligible for. */
 export type CargoLane = 'pudo' | 'mdp' | 'dedicated';

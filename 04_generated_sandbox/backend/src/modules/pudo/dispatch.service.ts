@@ -26,8 +26,19 @@ import { Router, ROUTER } from './router';
 import { DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NUDGE_RADIUS_KM, OFFER_TTL_MIN, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
-import { Claimable, ClaimableKind, Freight, FreightShipmentView, FreightStatus, Offer, RoutePlan } from './dispatch.types';
+import { Claimable, ClaimableKind, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, Offer, RoutePlan } from './dispatch.types';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
+
+/**
+ * FB0c — how a load may be taken, defaulted ON READ.
+ *
+ * Every freight registered before FB0c has no commitMode, and there is exactly one safe reading of that:
+ * 'instant', which is how those loads have always behaved. Defaulting the other way would freeze the whole
+ * existing marketplace behind a negotiation nobody was asked to have.
+ */
+export function commitModeOf(f: { commitMode?: FreightCommitMode }): FreightCommitMode {
+  return f.commitMode === 'negotiate' ? 'negotiate' : 'instant';
+}
 
 /* --------------------- driver jobs + earnings register (R5) — a driver's freight hauls -------------- */
 
@@ -136,6 +147,9 @@ export class DispatchService {
   // so — unlike the ephemeral offer bulletin — it must survive a restart.
   private readonly freights = new PersistentMap<string, Freight>('pudo-freights');
   private readonly offers = new Map<string, Offer>();
+  // FB0c — durable like the freight it negotiates over, and for the same reason: a price a driver named is a
+  // commercial position the shipper is weighing, not a bulletin entry that may quietly vanish on a restart.
+  private readonly proposals = new PersistentMap<string, FreightProposal>('pudo-freight-proposals');
   /** Live "decline this one offer" capabilities (see mintDeclineToken). In-memory like the offers they answer. */
   private readonly declineTokens = new Map<string, { offerId: string; expiresAt: number }>();
   private freightSeq = 0;
@@ -215,7 +229,7 @@ export class DispatchService {
     return { code: t.code, status: t.status };
   }
 
-  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean }, now: number = Date.now()): Freight {
+  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean }, now: number = Date.now()): Freight {
     this.freightSeq += 1;
     // A future pickup date parks the load for later; a past/absent date ships now. A supplied-but-unparseable
     // date is a CALLER ERROR — fail closed (never silently ship-now what was meant to be scheduled). Store the
@@ -265,6 +279,12 @@ export class DispatchService {
       bodyHint: input.bodyHint,
       excludedBodies: input.excludedBodies?.length ? input.excludedBodies : undefined,
       bodyDerived,
+      // FB0c — 'negotiate' means the minter wants to agree a price before anyone commits. Stored only when it
+      // is actually chosen: absent reads as 'instant', which is how every load has always behaved.
+      commitMode: input.commitMode === 'negotiate' ? 'negotiate' : undefined,
+      // Who NEGOTIATES for the load — not necessarily who pays. A counter booking has no shipperDid at all
+      // (the customer's cash settles off-platform) and still needs a shop that can answer a proposal.
+      postedByDid: input.postedByDid,
       fragile: input.fragile ?? false,
       bulk,
       cargoClass,
@@ -639,57 +659,29 @@ export class DispatchService {
     if (offer.kind === 'tote') this.totes.markClaimed(offer.ref, offer.driverDid);
     else {
       const f = this.requireFreight(offer.ref);
-      // Claimable when live ('available') OR when it's a scheduled load the shipper opened to early reservation.
-      if (!(f.status === 'available' || (f.status === 'scheduled' && f.allowEarlyClaim))) throw new GlosError('INVALID_STATE', `Freight is ${f.status}`);
-      // REP4 — bar a below-floor driver from CLAIMING freight (defence-in-depth behind suggest's withholding, and
-      // it also catches a stale offer claimed after the driver dropped below the floor). Recoverable; cold-start safe.
-      if (belowFloor(this.ratings.driverRating(offer.driverDid))) throw new GlosError('REPUTATION_BELOW_FLOOR', 'Your rating is below the network minimum — freight is paused until it recovers. Keep delivering to bring it back up.');
-      // S34 — compute the price to LOCK. The market can surge afterwards and the driver can edit their profile,
-      // but what is agreed at this instant never changes. Recompute against THIS vehicle's current profile
-      // (defaults resolved for a legacy vehicle) and the multiplier now, over the distance the offer was priced
-      // on (deadhead + haul).
-      const profile = this.pricingProfile(vehicle);
+      // FB0c — a load the minter posted for negotiation cannot be taken over the counter. The whole point of
+      // marking it is that the price is not settled, so an instant claim would take it at a number nobody
+      // agreed to. Refused BEFORE any mutation, and the driver is told what to do instead.
+      if (commitModeOf(f) === 'negotiate') {
+        throw new GlosError('NEGOTIATION_REQUIRED', 'This load is posted for negotiation — send the shipper your price instead of claiming it');
+      }
       // FB0a — carry the offer's deadhead/loaded SPLIT into the lock, not just its sum. This breakdown is the
-      // durable one (it is stamped onto the freight below and is what any later market series reads), so
-      // re-deriving it as "deadheadKm = the whole distance, tripKm = 0" would persist a load whose every
-      // kilometre looks like empty running. The total is identical either way — only the labelling was wrong.
-      // An offer minted before FB0a has no split; it falls back to the old shape and prices to the same total.
+      // durable one (it is stamped onto the freight and is what any later market series reads), so re-deriving
+      // it as "deadheadKm = the whole distance, tripKm = 0" would persist a load whose every kilometre looks
+      // like empty running. The total is identical either way — only the labelling was wrong. An offer minted
+      // before FB0a has no split; it falls back to the old shape and prices to the same total.
       const offerSplit = distanceSplit(offer.price);
-      const breakdown = computeFreightPrice({
-        baseFee: profile.baseFee,
-        ratePerKm: profile.ratePerKm,
-        deadheadKm: offerSplit ? offerSplit.deadheadKm : offer.price?.distanceKm ?? 0,
-        tripKm: offerSplit ? offerSplit.loadedKm : 0,
-        // S34b — lock against the market at the pickup's zone AT THIS INSTANT (a rule set since the offer, or a
-        // shifted pulse, is honoured here); the corridor clamp still guarantees the driver's floor and ceiling.
-        multiplier: freightMultiplier(new Date(now), { min: profile.min, max: profile.max }, this.market.factorFor(f.pickupLocation, now)),
-      });
-      // S34c — the shipper's budget gate, checked BEFORE any mutation so a refused claim leaves the freight
-      // untouched and available. suggest() already skips over-budget offers; this re-check catches a driver who
-      // re-coupled to a pricier vehicle (or a surge) after the offer was made (the S31 mirror-at-claim lesson).
-      if (f.maxSpend != null && shipperCharge(breakdown.total) > f.maxSpend) {
-        throw new GlosError('BUDGET_EXCEEDED', "This load's price now exceeds the shipper's budget — it stays open for a cheaper vehicle or a cooler market");
-      }
-      f.status = 'claimed';
-      f.claimedBy = offer.driverDid;
-      f.claimedAt = new Date(now).toISOString(); // stamp the injected clock — the no-show deadline is anchored to this
-      f.priceBreakdown = breakdown;
-      f.lockedPrice = breakdown.total;
-      f.lockedAt = f.claimedAt;
-      f.driverPaid = false;
-      // Settle the shipper: a diverted vendor order (shipperDid = the vendor) is billed its earning + the
-      // platform fee from its prepaid balance. THREE distinct states, so an uncollected debt is never silent:
-      //  - 'billed'         a known shipper whose prepaid balance covered the charge;
-      //  - 'billing_failed' a known shipper whose balance fell SHORT — a real debt for a Local Admin to collect;
-      //  - 'unpaid'         a bulletin freight with no shipper, settled off-platform (the intended default).
-      // The driver is still paid on delivery in every case — labour done is owed regardless of shipper collection.
-      if (f.shipperDid && this.vendors.has(f.shipperDid)) {
-        const { paid } = this.vendors.billShipment(f.shipperDid, f.freightId, shipperCharge(breakdown.total));
-        f.paidStatus = paid ? 'billed' : 'billing_failed';
-      } else {
-        f.paidStatus = 'unpaid';
-      }
-      this.freights.set(f.freightId, f);
+      this.lockFreightToDriver(
+        f,
+        offer.driverDid,
+        vehicle,
+        {
+          deadheadKm: offerSplit ? offerSplit.deadheadKm : offer.price?.distanceKm ?? 0,
+          loadedKm: offerSplit ? offerSplit.loadedKm : 0,
+        },
+        undefined,
+        now,
+      );
     }
 
     offer.status = 'claimed';
@@ -697,6 +689,206 @@ export class DispatchService {
     for (const o of this.offers.values()) if (o.ref === offer.ref && o.offerId !== offer.offerId && o.status === 'pending') o.status = 'ignored';
     void this.events.publish(GlosEvent.Pudo.LoadClaimed, { offerId, driverDid: offer.driverDid, kind: offer.kind, ref: offer.ref, weightKg: offer.weightKg }, { source: 'pudo' }).catch(() => undefined);
     return offer;
+  }
+
+  /**
+   * Commit a freight to a driver: gate it, price it, stamp it, settle the shipper.
+   *
+   * The ONE place a freight becomes claimed, shared by the instant claim and by accepting a proposal. They
+   * must not drift: every gate the counter path applies — status, reputation floor, the shipper's budget —
+   * has to apply just as hard when a poster accepts a price, and the S31 mirror-at-claim lesson is exactly
+   * that a second route to the same mutation grows its own holes if it is written twice.
+   *
+   * `agreedPrice` set (FB0c) means the number was NEGOTIATED, so it becomes the locked price and the computed
+   * breakdown is kept only for its terms and its real distances.
+   */
+  private lockFreightToDriver(f: Freight, driverDid: string, vehicle: Vehicle, legs: { deadheadKm: number; loadedKm: number }, agreedPrice: number | undefined, now: number): Freight {
+    // Claimable when live ('available') OR when it's a scheduled load the shipper opened to early reservation.
+    if (!(f.status === 'available' || (f.status === 'scheduled' && f.allowEarlyClaim))) throw new GlosError('INVALID_STATE', `Freight is ${f.status}`);
+    // REP4 — bar a below-floor driver from CLAIMING freight (defence-in-depth behind suggest's withholding, and
+    // it also catches a stale offer claimed after the driver dropped below the floor). Recoverable; cold-start safe.
+    if (belowFloor(this.ratings.driverRating(driverDid))) throw new GlosError('REPUTATION_BELOW_FLOOR', 'Your rating is below the network minimum — freight is paused until it recovers. Keep delivering to bring it back up.');
+    // S34 — compute the price to LOCK. The market can surge afterwards and the driver can edit their profile,
+    // but what is agreed at this instant never changes. Recompute against THIS vehicle's current profile
+    // (defaults resolved for a legacy vehicle) and the multiplier now, over the two legs.
+    const profile = this.pricingProfile(vehicle);
+    const breakdown = computeFreightPrice({
+      baseFee: profile.baseFee,
+      ratePerKm: profile.ratePerKm,
+      deadheadKm: legs.deadheadKm,
+      tripKm: legs.loadedKm,
+      // S34b — lock against the market at the pickup's zone AT THIS INSTANT (a rule set since the offer, or a
+      // shifted pulse, is honoured here); the corridor clamp still guarantees the driver's floor and ceiling.
+      multiplier: freightMultiplier(new Date(now), { min: profile.min, max: profile.max }, this.market.factorFor(f.pickupLocation, now)),
+    });
+    const earning = agreedPrice ?? breakdown.total;
+    // S34c — the shipper's budget gate, checked BEFORE any mutation so a refused claim leaves the freight
+    // untouched and available. suggest() already skips over-budget offers; this re-check catches a driver who
+    // re-coupled to a pricier vehicle (or a surge) after the offer was made (the S31 mirror-at-claim lesson).
+    // FB0c — it binds a NEGOTIATED price just as hard: agreeing above the budget would commit a haul nobody
+    // has the money for. The proposal stays open, so the shipper can raise the cap and accept it then.
+    if (f.maxSpend != null && shipperCharge(earning) > f.maxSpend) {
+      throw new GlosError('BUDGET_EXCEEDED', "This load's price now exceeds the shipper's budget — it stays open for a cheaper vehicle or a cooler market");
+    }
+    f.status = 'claimed';
+    f.claimedBy = driverDid;
+    f.claimedAt = new Date(now).toISOString(); // stamp the injected clock — the no-show deadline is anchored to this
+    f.priceBreakdown = breakdown;
+    f.lockedPrice = earning;
+    f.priceOrigin = agreedPrice == null ? 'computed' : 'negotiated';
+    f.lockedAt = f.claimedAt;
+    f.driverPaid = false;
+    // Settle the shipper: a diverted vendor order (shipperDid = the vendor) is billed its earning + the
+    // platform fee from its prepaid balance. THREE distinct states, so an uncollected debt is never silent:
+    //  - 'billed'         a known shipper whose prepaid balance covered the charge;
+    //  - 'billing_failed' a known shipper whose balance fell SHORT — a real debt for a Local Admin to collect;
+    //  - 'unpaid'         a bulletin freight with no shipper, settled off-platform (the intended default).
+    // The driver is still paid on delivery in every case — labour done is owed regardless of shipper collection.
+    if (f.shipperDid && this.vendors.has(f.shipperDid)) {
+      const { paid } = this.vendors.billShipment(f.shipperDid, f.freightId, shipperCharge(earning));
+      f.paidStatus = paid ? 'billed' : 'billing_failed';
+    } else {
+      f.paidStatus = 'unpaid';
+    }
+    this.freights.set(f.freightId, f);
+    return f;
+  }
+
+  /* ------------------------------------------------- FB0c: negotiate before commit -- */
+
+  /**
+   * A driver's price for a load posted 'negotiate'.
+   *
+   * A proposal reserves NOTHING. The load stays open to every other driver and to every other proposal until
+   * a poster accepts one — which is the honest reading of "negotiate": the shipper is shopping, and a
+   * proposal that quietly held the load would turn the first bid into a claim by another name.
+   *
+   * `from` is required rather than optional so the accepted haul records a REAL deadhead. Defaulting an
+   * unknown empty run to zero would flatter every negotiated job in the market series (FB0a's rule: never
+   * invent a split), and the driver's app already reports its position.
+   */
+  propose(input: { freightId: string; driverDid: string; from: GeoPoint; price: number; note?: string }, now: number = Date.now()): FreightProposal {
+    const f = this.requireFreight(input.freightId);
+    if (commitModeOf(f) !== 'negotiate') throw new GlosError('INVALID_STATE', 'This load is taken at the offered price — claim it instead of proposing one');
+    if (!(f.status === 'available' || (f.status === 'scheduled' && f.allowEarlyClaim))) throw new GlosError('INVALID_STATE', `Freight is ${f.status}`);
+    if (!Number.isFinite(input.price) || input.price <= 0) throw new GlosError('INVALID_INPUT', 'Name a price above zero');
+    // Gate the driver the same way the board does, so a proposal cannot be made by someone who could never be
+    // accepted — a shipper reading bids they are not allowed to take is worse than an empty list.
+    const vehicle = this.fleet.vehicleForDriver(input.driverDid);
+    if (!vehicle) throw new GlosError('NOT_COUPLED', 'Couple to a vehicle before offering to carry a load');
+    if (belowFloor(this.ratings.driverRating(input.driverDid))) throw new GlosError('REPUTATION_BELOW_FLOOR', 'Your rating is below the network minimum — freight is paused until it recovers.');
+
+    // One live proposal per driver per load: a driver changing their mind REPLACES their number rather than
+    // stacking a second one, so a poster never has to guess which of two bids from the same person is current.
+    for (const p of this.proposals.values()) {
+      if (p.freightId === f.freightId && p.driverDid === input.driverDid && p.status === 'open') {
+        p.status = 'withdrawn';
+        p.decidedAt = new Date(now).toISOString();
+        this.proposals.set(p.proposalId, p);
+      }
+    }
+    const proposal: FreightProposal = {
+      proposalId: `prp_${randomBytes(5).toString('hex')}`,
+      freightId: f.freightId,
+      driverDid: input.driverDid,
+      price: Math.round(input.price * 100) / 100,
+      note: input.note,
+      deadheadKm: this.router.roadKm(input.from, f.pickupLocation),
+      loadedKm: f.destLocation ? this.router.roadKm(f.pickupLocation, f.destLocation) : 0,
+      status: 'open',
+      createdAt: new Date(now).toISOString(),
+    };
+    this.proposals.set(proposal.proposalId, proposal);
+    return proposal;
+  }
+
+  /** The proposals on a load, newest first. The poster's whole view of the negotiation. */
+  proposalsFor(freightId: string): FreightProposal[] {
+    return [...this.proposals.values()].filter((p) => p.freightId === freightId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  /** A driver pulls their own price back — before a poster acts on a number they no longer mean. */
+  withdrawProposal(proposalId: string, driverDid: string, now: number = Date.now()): FreightProposal {
+    const p = this.requireProposal(proposalId);
+    if (p.driverDid !== driverDid) throw new GlosError('FORBIDDEN', 'That proposal is not yours');
+    if (p.status !== 'open') throw new GlosError('INVALID_STATE', `Proposal is ${p.status}`);
+    p.status = 'withdrawn';
+    p.decidedAt = new Date(now).toISOString();
+    this.proposals.set(p.proposalId, p);
+    return p;
+  }
+
+  /** The poster says no to one price without closing the negotiation — the load and the others stay open. */
+  declineProposal(proposalId: string, now: number = Date.now()): FreightProposal {
+    const p = this.requireProposal(proposalId);
+    if (p.status !== 'open') throw new GlosError('INVALID_STATE', `Proposal is ${p.status}`);
+    p.status = 'declined';
+    p.decidedAt = new Date(now).toISOString();
+    this.proposals.set(p.proposalId, p);
+    return p;
+  }
+
+  /**
+   * The poster takes a price — and THAT is what claims the load.
+   *
+   * Everything is re-checked against the world as it is now, not as it was when the price was named: the
+   * driver may have de-coupled, re-coupled to an unsuitable vehicle, filled their capacity, or dropped below
+   * the rating floor since. A proposal is an offer to treat with a shelf life, not a reservation.
+   */
+  acceptProposal(proposalId: string, now: number = Date.now()): { proposal: FreightProposal; freight: Freight } {
+    const p = this.requireProposal(proposalId);
+    if (p.status !== 'open') throw new GlosError('INVALID_STATE', `Proposal is ${p.status}`);
+    const f = this.requireFreight(p.freightId);
+    const vehicle = this.fleet.vehicleForDriver(p.driverDid);
+    if (!vehicle) throw new GlosError('NOT_COUPLED', 'That driver is no longer coupled to a vehicle');
+    if (f.weightKg > this.remainingCapacity(p.driverDid)) throw new GlosError('CAPACITY_EXCEEDED', 'That driver no longer has capacity for this load');
+    // S31/S32 — the same capability/equipment re-check the counter claim does. Coupling is re-assignable, so
+    // what held when the price was named may not hold now.
+    const need = this.loadRequirements('freight', f.freightId);
+    if (
+      need.capabilities.some((cap) => !vehicle[cap]) ||
+      !DispatchService.hasEquipmentFor(vehicle, need.equipment) ||
+      (need.bulk && !vehicle.carriesBulk) ||
+      (need.fragile && !vehicle.allowsFragile)
+    ) {
+      throw new GlosError('VEHICLE_MISSING_CAPABILITY', "That driver's current vehicle lacks a capability or equipment this load requires");
+    }
+
+    // The commit runs first: if it throws (budget, status, rating) nothing is marked accepted and the
+    // negotiation is left exactly as it was, so the poster can raise a cap and try the same price again.
+    const freight = this.lockFreightToDriver(f, p.driverDid, vehicle, { deadheadKm: p.deadheadKm, loadedKm: p.loadedKm }, p.price, now);
+    const at = new Date(now).toISOString();
+    p.status = 'accepted';
+    p.decidedAt = at;
+    this.proposals.set(p.proposalId, p);
+    // Everyone else's price is now moot — say so explicitly rather than leaving open proposals against a load
+    // that is gone. 'superseded' is a distinct outcome from 'declined': nobody judged these numbers.
+    for (const other of this.proposals.values()) {
+      if (other.freightId === f.freightId && other.proposalId !== p.proposalId && other.status === 'open') {
+        other.status = 'superseded';
+        other.decidedAt = at;
+        this.proposals.set(other.proposalId, other);
+      }
+    }
+    // Retire any live counter-offers on the same load, exactly as an instant claim does.
+    for (const o of this.offers.values()) if (o.ref === f.freightId && o.status === 'pending') o.status = 'ignored';
+    void this.events.publish(GlosEvent.Pudo.LoadClaimed, { driverDid: p.driverDid, kind: 'freight', ref: f.freightId, weightKg: f.weightKg }, { source: 'pudo' }).catch(() => undefined);
+    return { proposal: p, freight };
+  }
+
+  /** Lookups the controller needs to authorise a negotiation before it acts. Read-only. */
+  requireProposalPublic(proposalId: string): FreightProposal {
+    return this.requireProposal(proposalId);
+  }
+
+  requireFreightPublic(freightId: string): Freight {
+    return this.requireFreight(freightId);
+  }
+
+  private requireProposal(proposalId: string): FreightProposal {
+    const p = this.proposals.get(proposalId);
+    if (!p) throw new GlosError('NOT_FOUND', 'Proposal not found');
+    return p;
   }
 
   ignore(offerId: string): Offer {
@@ -912,7 +1104,14 @@ export class DispatchService {
   private availableLoads(): Claimable[] {
     const totes = this.totes.list({ status: 'available' }).map((t) => this.wrapTote(t.code)).filter((c): c is Claimable => c != null);
     // 'available' loads, PLUS a scheduled load the shipper lets drivers reserve ahead of its date (early claim).
-    const freight = [...this.freights.values()].filter((f) => f.status === 'available' || (f.status === 'scheduled' && f.allowEarlyClaim)).map((f) => this.wrapFreight(f));
+    // FB0c — but never a load posted for NEGOTIATION. Everything downstream of here is a push: an offer card, a
+    // lock-screen nudge, one decision and a Claim button. A load whose price is not settled cannot answer that
+    // button, so pushing it would be an interruption that dead-ends. It is not hidden — it is on the freight
+    // list and on the board, where the action is "send them your price" and the negotiation can actually happen.
+    const freight = [...this.freights.values()]
+      .filter((f) => f.status === 'available' || (f.status === 'scheduled' && f.allowEarlyClaim))
+      .filter((f) => commitModeOf(f) === 'instant')
+      .map((f) => this.wrapFreight(f));
     return [...totes, ...freight];
   }
 

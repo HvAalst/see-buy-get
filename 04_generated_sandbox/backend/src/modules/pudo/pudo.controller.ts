@@ -30,7 +30,7 @@ import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
-import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityFeeDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
+import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityFeeDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
 import { classifySize, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { BooksService } from '../../foundation/books/books.service';
@@ -486,6 +486,7 @@ export class SbgController {
       // no wallet is billed — the customer's cash cap is the money, held by the agent (the F2 model the user chose).
       originEquipment: origin.equipment,
       destEquipment: dest.equipment,
+      postedByDid: agentDid, // FB0c — the booking shop negotiates for it, even though the cash settles off-platform
       buyerMobile: dto.customerMobile, // hashed on the freight (never the cleartext) so the customer can track it
       maxSpend: dto.budgetCap, // the cash cap → dispatch won't OFFER or let a driver CLAIM above it
       scheduledPickupAt: dto.scheduledPickupAt,
@@ -1735,16 +1736,67 @@ export class SbgController {
 
   /** Register a bulk freight job (trucks only) into the same marketplace as totes. */
   @Post('dispatch/freight')
-  registerFreight(@Body() dto: RegisterFreightDto) {
+  registerFreight(@Body() dto: RegisterFreightDto, @Actor() actor: IntrospectionResult) {
     // FB0b — the DTO carries dimensions as {l,w,h} (the shape every other measured route uses); the service
     // takes the orientation-free tuple. Convert here, as createInbound/accept already do.
     const dimensionsCm: [number, number, number] | undefined = dto.dimensionsCm ? [dto.dimensionsCm.l, dto.dimensionsCm.w, dto.dimensionsCm.h] : undefined;
-    return this.dispatch.registerFreight({ ...dto, dimensionsCm, bodyHint: dto.bodyHint as never, excludedBodies: dto.excludedBodies as never });
+    // FB0c — whoever posted it is who negotiates for it. Read straight off the actor rather than through
+    // actingDid: a bulletin freight posted with no identity legitimately has no owner, and must not 403 here.
+    return this.dispatch.registerFreight({ ...dto, dimensionsCm, bodyHint: dto.bodyHint as never, excludedBodies: dto.excludedBodies as never, postedByDid: actor?.did });
   }
 
   @Get('dispatch/freight')
   listFreight(@Query('status') status?: string) {
     return this.dispatch.listFreight({ status: status as never });
+  }
+
+  /* ------------------------------------------- FB0c: negotiate before commit -- */
+
+  /** A driver names their price for a load posted 'negotiate'. Reserves nothing — the poster's accept claims it. */
+  @Post('dispatch/freight/:id/proposals')
+  proposeForFreight(@Param('id') id: string, @Body() dto: ProposeFreightDto, @Actor() actor: IntrospectionResult) {
+    return this.dispatch.propose({ freightId: id, driverDid: actingDid(actor, dto.driverDid), from: dto.from, price: dto.price, note: dto.note });
+  }
+
+  /** The prices offered on a load. Restricted to the side that can act on them — the poster, or an operator. */
+  @Get('dispatch/freight/:id/proposals')
+  listFreightProposals(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    this.requireNegotiator(id, actor);
+    return { items: this.dispatch.proposalsFor(id) };
+  }
+
+  /** The poster takes a price — and that acceptance is what claims the load. */
+  @Post('dispatch/proposals/:id/accept')
+  acceptFreightProposal(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    this.requireNegotiator(this.dispatch.requireProposalPublic(id).freightId, actor);
+    return this.dispatch.acceptProposal(id);
+  }
+
+  /** The poster says no to one price. The load, and every other proposal on it, stay open. */
+  @Post('dispatch/proposals/:id/decline')
+  declineFreightProposal(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    this.requireNegotiator(this.dispatch.requireProposalPublic(id).freightId, actor);
+    return this.dispatch.declineProposal(id);
+  }
+
+  /** A driver pulls back their own price. */
+  @Post('dispatch/proposals/:id/withdraw')
+  withdrawFreightProposal(@Param('id') id: string, @Body() dto: WithdrawProposalDto, @Actor() actor: IntrospectionResult) {
+    return this.dispatch.withdrawProposal(id, actingDid(actor, dto.driverDid));
+  }
+
+  /**
+   * Only the side that POSTED a load may read or answer the prices offered on it (or an operator).
+   *
+   * postedByDid first, then shipperDid: they are usually the same party but not always — a counter booking
+   * has a shop that posted it and no shipper at all, because the customer's cash settles off-platform. A
+   * bulletin freight has neither, and is an operator matter until someone owns it.
+   */
+  private requireNegotiator(freightId: string, actor: IntrospectionResult): void {
+    if (actor?.role === 'operator') return;
+    const f = this.dispatch.requireFreightPublic(freightId);
+    const owner = f.postedByDid ?? f.shipperDid;
+    if (!owner || !actor?.did || actor.did !== owner) throw new GlosError('FORBIDDEN', 'Only the shipper who posted this load can answer the prices offered on it');
   }
 
   /** Bulk freight pickup (claimed → in_transit). driverDid (the claimer) is verified against claimedBy. */

@@ -4,7 +4,7 @@
 
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { GeoPoint } from './pudo.types';
-import { CargoClass, CargoNature, Equipment, VehicleCapability } from './cargo.types';
+import { CARGO_CLASS_CODES, CARGO_NATURES, CargoClass, CargoNature, Equipment, VehicleCapability } from './cargo.types';
 import { TRUCK_SUBTYPES, TruckSubtype } from './fleet.config';
 
 /**
@@ -35,7 +35,8 @@ export class RoutePlan {
 export type ClaimableKind = 'tote' | 'freight';
 // 'scheduled' — booked for a FUTURE pickup date; held out of the driver marketplace until due, then
 // promoted to 'available' (the freight analogue of a tote that isn't full/aged yet).
-export type FreightStatus = 'scheduled' | 'available' | 'claimed' | 'in_transit' | 'delivered';
+export const FREIGHT_STATUSES = ['scheduled', 'available', 'claimed', 'in_transit', 'delivered'] as const;
+export type FreightStatus = (typeof FREIGHT_STATUSES)[number];
 
 /** A bulk/dedicated freight job (sugar/cement, or a P4+ order diverted out of the PUDO network) — trucks
  *  only, never via MDP. Same marketplace as totes. */
@@ -66,6 +67,7 @@ export class Freight {
    *  A shop clerk booking a walk-up cannot reliably tell a skeletal from a flatbed, and a binding wrong pick
    *  would invisibly exclude the one operator who could have taken the load. Where it disagrees with the
    *  derived body, that disagreement is itself a market signal worth reporting. */
+  @ApiPropertyOptional({ enum: TRUCK_SUBTYPES })
   bodyHint?: TruckSubtype;
   /** Bodies the SHIPPER rules out — theft risk, an insurer's wording, a customer's requirement. A PREFERENCE,
    *  and typed as one: the board says "the shipper ruled out open bodies", never dressing it up as physics. */
@@ -80,7 +82,13 @@ export class Freight {
   // S32 — the freight's cargo model, so it matches vehicles like a tote does: class (drives required
   // equipment), primary nature (drives required vehicle capability), and the resolved requirements a
   // claiming vehicle must satisfy. `shipperDid` links the originator (a vendor whose P4+ order was diverted).
+  // These three enums predate FB0c and were emitting into the contract as bare, typeless objects: a string
+  // UNION has no runtime type for the emitter to read, so every generated client saw `cargoClass: object`.
+  // Named here (with status and paidStatus below) because the board is about to be built against this
+  // contract, and a screen cannot switch on a field whose values the types do not know.
+  @ApiProperty({ enum: CARGO_CLASS_CODES })
   cargoClass: CargoClass;
+  @ApiProperty({ enum: CARGO_NATURES })
   natureCode: CargoNature;
   requiredCapabilities: VehicleCapability[];
   requiredEquipment: Equipment[];
@@ -110,7 +118,14 @@ export class Freight {
   // collect | 'unpaid' bulletin freight settled off-platform); driverPaid tracks the driver payout at delivery.
   lockedPrice?: number;
   priceBreakdown?: PriceBreakdown;
+  /** FB0c — where lockedPrice came from. 'computed' (or absent, for anything locked before FB0c) means it IS
+   *  priceBreakdown.total. 'negotiated' means two parties agreed a number, so lockedPrice is authoritative and
+   *  may differ from the breakdown — which is kept anyway, because its distances are real and are what the
+   *  market series reads. Every money path already reads lockedPrice; nothing bills off the breakdown. */
+  @ApiPropertyOptional({ enum: ['computed', 'negotiated'] })
+  priceOrigin?: 'computed' | 'negotiated';
   lockedAt?: string;
+  @ApiPropertyOptional({ enum: ['unpaid', 'billed', 'billing_failed'] })
   paidStatus?: 'unpaid' | 'billed' | 'billing_failed';
   driverPaid?: boolean;
   // S33 — the heavy-cargo safety gate. loadSafety is stamped at pickup (the confirmed checklist keys + the
@@ -129,9 +144,54 @@ export class Freight {
   // (it shows in the marketplace + pings now, so a scarce truck can commit early); false → it stays hidden
   // until due. Ignored for a ship-now load.
   allowEarlyClaim?: boolean;
+  /** FB0c — how this load may be taken. 'instant' (the default, and what every pre-FB0c load is read as) means
+   *  a fit driver claims it at the computed price. 'negotiate' means the minter wants to agree a price first:
+   *  drivers PROPOSE, the poster accepts one, and only that acceptance claims the load. */
+  @ApiPropertyOptional({ enum: ['instant', 'negotiate'] })
+  commitMode?: FreightCommitMode;
+  /** FB0c — who posted the load, and therefore who negotiates for it. Distinct from shipperDid, which is who
+   *  PAYS: a counter booking deliberately has no shipperDid (the customer's cash settles off-platform) yet
+   *  still has a shop that must be able to answer a proposal. Absent for a bulletin freight → operators only. */
+  postedByDid?: string;
+  @ApiProperty({ enum: FREIGHT_STATUSES })
   status: FreightStatus;
   claimedBy?: string;
   createdAt: string;
+}
+
+/** FB0c — how a load is taken: at the computed price, or at one agreed first. */
+export type FreightCommitMode = 'instant' | 'negotiate';
+
+export type ProposalStatus =
+  | 'open' // awaiting the poster's answer
+  | 'accepted' // the poster took it — this proposal claimed the load
+  | 'declined' // the poster said no to this one specifically
+  | 'withdrawn' // the driver pulled it
+  | 'superseded'; // another proposal on the same load was accepted
+
+/**
+ * FB0c — a driver's offer to carry a load for a stated price.
+ *
+ * The counterpart of a claim, for loads the minter marked 'negotiate'. A proposal binds nobody: it is an
+ * offer to treat, and the load stays available to everyone (including to instant-claim, if it is not a
+ * negotiate load) until a poster accepts one.
+ */
+export class FreightProposal {
+  proposalId: string;
+  freightId: string;
+  driverDid: string;
+  /** The DRIVER's earning they are asking for — the same quantity as lockedPrice, not the shipper's charge. */
+  price: number;
+  /** The driver's case for the number, in their own words ("I'm empty-running past your gate on Thursday"). */
+  note?: string;
+  /** The two legs AS AT the proposal, from the position the driver proposed from. Carried so the accepted
+   *  haul records a real deadhead/loaded split rather than one invented at acceptance time. */
+  deadheadKm: number;
+  loadedKm: number;
+  @ApiProperty({ enum: ['open', 'accepted', 'declined', 'withdrawn', 'superseded'] })
+  status: ProposalStatus;
+  createdAt: string;
+  decidedAt?: string;
 }
 
 /** The buyer-facing, PII-free projection of a diverted freight job — the freight analogue of a
