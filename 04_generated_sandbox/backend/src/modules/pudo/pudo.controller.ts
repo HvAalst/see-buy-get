@@ -1736,7 +1736,10 @@ export class SbgController {
   /** Register a bulk freight job (trucks only) into the same marketplace as totes. */
   @Post('dispatch/freight')
   registerFreight(@Body() dto: RegisterFreightDto) {
-    return this.dispatch.registerFreight(dto);
+    // FB0b — the DTO carries dimensions as {l,w,h} (the shape every other measured route uses); the service
+    // takes the orientation-free tuple. Convert here, as createInbound/accept already do.
+    const dimensionsCm: [number, number, number] | undefined = dto.dimensionsCm ? [dto.dimensionsCm.l, dto.dimensionsCm.w, dto.dimensionsCm.h] : undefined;
+    return this.dispatch.registerFreight({ ...dto, dimensionsCm, bodyHint: dto.bodyHint as never, excludedBodies: dto.excludedBodies as never });
   }
 
   @Get('dispatch/freight')

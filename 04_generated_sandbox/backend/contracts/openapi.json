@@ -15500,6 +15500,65 @@
       "RegisterFreightDto": {
         "type": "object",
         "properties": {
+          "excludedBodies": {
+            "type": "array",
+            "description": "Bodies the SHIPPER rules out (theft risk, an insurer's wording, a customer's requirement). A stated\n preference, not a physical constraint, and the board presents it as one.",
+            "enum": [
+              "flatbed",
+              "dropside",
+              "box",
+              "curtain_side",
+              "refrigerated",
+              "insulated",
+              "tipper",
+              "cement_mixer",
+              "grain_hopper",
+              "bulk_tanker",
+              "tanker",
+              "food_tanker",
+              "fuel_tanker",
+              "water_bowser",
+              "hazmat",
+              "car_carrier",
+              "livestock",
+              "skeletal",
+              "container_selfloader",
+              "crane",
+              "lowboy",
+              "logging",
+              "tow_recovery",
+              "refuse"
+            ],
+            "items": {
+              "type": "string",
+              "enum": [
+                "flatbed",
+                "dropside",
+                "box",
+                "curtain_side",
+                "refrigerated",
+                "insulated",
+                "tipper",
+                "cement_mixer",
+                "grain_hopper",
+                "bulk_tanker",
+                "tanker",
+                "food_tanker",
+                "fuel_tanker",
+                "water_bowser",
+                "hazmat",
+                "car_carrier",
+                "livestock",
+                "skeletal",
+                "container_selfloader",
+                "crane",
+                "lowboy",
+                "logging",
+                "tow_recovery",
+                "refuse"
+              ]
+            }
+          },
           "description": {
             "type": "string"
           },
@@ -15518,6 +15577,48 @@
           "weightKg": {
             "type": "number",
             "minimum": 1
+          },
+          "dimensionsCm": {
+            "description": "FB0b — the load's measurements. Optional: loose bulk genuinely has none (a tipper-load of sand has a\n weight and no shape), and a bulletin freight may be posted before anyone has measured it. Supplied, they\n are STORED — until FB0b they were read to classify the cargo and then discarded, which is why nothing\n downstream could answer \"does this fit a flatbed rather than a box body\".",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DimensionsDto"
+              }
+            ]
+          },
+          "indivisible": {
+            "type": "boolean",
+            "description": "Can it be split into two smaller loads? A divisible 30 t is two ordinary trips; an indivisible 30 t is a\n low-loader and a permit."
+          },
+          "bodyHint": {
+            "type": "string",
+            "description": "The minter's own body pick — ADVISORY. Recorded and shown, never used to match: a wrong pick would\n silently exclude the operator who could have taken the load.",
+            "enum": [
+              "flatbed",
+              "dropside",
+              "box",
+              "curtain_side",
+              "refrigerated",
+              "insulated",
+              "tipper",
+              "cement_mixer",
+              "grain_hopper",
+              "bulk_tanker",
+              "tanker",
+              "food_tanker",
+              "fuel_tanker",
+              "water_bowser",
+              "hazmat",
+              "car_carrier",
+              "livestock",
+              "skeletal",
+              "container_selfloader",
+              "crane",
+              "lowboy",
+              "logging",
+              "tow_recovery",
+              "refuse"
+            ]
           },
           "fragile": {
             "type": "boolean"
@@ -15559,9 +15660,63 @@
           "weightKg"
         ]
       },
+      "DerivedBody": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string",
+            "enum": [
+              "flatbed",
+              "dropside",
+              "box",
+              "curtain_side",
+              "refrigerated",
+              "insulated",
+              "tipper",
+              "cement_mixer",
+              "grain_hopper",
+              "bulk_tanker",
+              "tanker",
+              "food_tanker",
+              "fuel_tanker",
+              "water_bowser",
+              "hazmat",
+              "car_carrier",
+              "livestock",
+              "skeletal",
+              "container_selfloader",
+              "crane",
+              "lowboy",
+              "logging",
+              "tow_recovery",
+              "refuse"
+            ]
+          },
+          "basis": {
+            "type": "string",
+            "enum": [
+              "measured",
+              "weight-only"
+            ]
+          }
+        },
+        "required": [
+          "body",
+          "basis"
+        ]
+      },
       "Freight": {
         "type": "object",
         "properties": {
+          "dimensionsCm": {
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Length, width, height in cm (orientation-free)",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
           "freightId": {
             "type": "string"
           },
@@ -15585,6 +15740,29 @@
           },
           "weightKg": {
             "type": "number"
+          },
+          "indivisible": {
+            "type": "boolean",
+            "description": "Can the load be split into two smaller ones? The single most decision-changing fact about anything\n oversize: a divisible 30 t is two ordinary trips, an indivisible 30 t is a low-loader and a permit."
+          },
+          "bodyHint": {
+            "type": "object",
+            "description": "The minter's own body pick. ADVISORY — shown, compared and counted, NEVER used to filter (user, 2026-08-30).\n A shop clerk booking a walk-up cannot reliably tell a skeletal from a flatbed, and a binding wrong pick\n would invisibly exclude the one operator who could have taken the load. Where it disagrees with the\n derived body, that disagreement is itself a market signal worth reporting."
+          },
+          "excludedBodies": {
+            "description": "Bodies the SHIPPER rules out — theft risk, an insurer's wording, a customer's requirement. A PREFERENCE,\n and typed as one: the board says \"the shipper ruled out open bodies\", never dressing it up as physics.",
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "bodyDerived": {
+            "description": "FB0b — the body this load canonically needs, STAMPED at registration (and the basis it was derived on).\n Frozen rather than computed on read for the same reason a price is frozen at claim: \"kilometres of\n flatbed offered in 2026\" must not change when someone tunes a threshold in 2027. Absent on a pre-FB0b\n freight, which is derived live and reports itself as weight-only.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DerivedBody"
+              }
+            ]
           },
           "fragile": {
             "type": "boolean"

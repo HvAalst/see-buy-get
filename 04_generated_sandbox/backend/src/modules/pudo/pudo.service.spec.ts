@@ -3160,6 +3160,69 @@ describe('PUDO Light', () => {
     expect(claimed.lockedPrice).toBe(offer.price!.total); // and the money is unchanged by the relabelling
   });
 
+  it('FB0b: a registered freight KEEPS its measurements and carries the body it needs', () => {
+    const f = dispatch.registerFreight({
+      description: 'Palletised generator',
+      pickupLocation: { lat: -1.2, lng: 36.8 },
+      pickupLabel: 'Depot',
+      destLabel: 'Site',
+      weightKg: 400,
+      bulk: false,
+      dimensionsCm: [120, 100, 80],
+    });
+    // Until FB0b these dimensions were read to classify the cargo and then dropped on the floor.
+    expect(f.dimensionsCm).toEqual([120, 100, 80]);
+    expect(f.bodyDerived).toEqual({ body: 'box', basis: 'measured' });
+  });
+
+  it('FB0b: an unmeasured freight still gets a body, labelled as the weaker claim it is', () => {
+    const f = dispatch.registerFreight({ description: 'Sand', pickupLocation: { lat: -1.2, lng: 36.8 }, pickupLabel: 'Quarry', destLabel: 'Site', weightKg: 24_000 });
+    expect(f.dimensionsCm).toBeUndefined(); // loose bulk genuinely has no shape
+    expect(f.bodyDerived).toEqual({ body: 'tipper', basis: 'weight-only' });
+  });
+
+  it('FB0b: the minter’s body pick is ADVISORY — a mismatched vehicle is still offered the load', () => {
+    // The decision that makes the open board possible (user, 2026-08-30). A shop clerk cannot reliably tell a
+    // skeletal from a flatbed, and if their guess BOUND the matching, the one operator who could actually have
+    // taken the load would be excluded — invisibly, which is the exact failure the board exists to remove.
+    const d = drivers.register({ displayName: 'AD', fullName: 'A', nationalId: 'ID-AD', mobile: '+254770321', licenceClasses: ['truck'], licenceNumber: 'L-AD', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const truck = vehicles.register({ plate: 'AD-1', vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 10_000, ownerName: 'X', equipment: ['TLT'] });
+    fleet.couple(d.did, truck.vehicleId);
+
+    const pickup = { lat: -1.2, lng: 36.8 };
+    const f = dispatch.registerFreight({
+      description: 'Crate',
+      pickupLocation: pickup,
+      pickupLabel: 'Depot',
+      destLabel: 'Site',
+      destLocation: pickup,
+      weightKg: 400,
+      bulk: false,
+      dimensionsCm: [120, 100, 80],
+      bodyHint: 'skeletal', // …and the truck is a flatbed. The pick disagrees with the vehicle AND the cargo.
+    });
+    expect(f.bodyHint).toBe('skeletal'); // recorded — the disagreement is itself a market signal
+    expect(f.bodyDerived!.body).toBe('box'); // the derivation ignores the hint entirely
+
+    const offers = dispatch.suggest(d.did, { from: pickup, to: pickup }).filter((o) => o.ref === f.freightId);
+    expect(offers).toHaveLength(1); // the hint did not filter anybody out
+  });
+
+  it('FB0b: a shipper exclusion is STORED as a preference — and not yet silently enforced', () => {
+    // Deliberate sequencing. An exclusion belongs on the board as "the shipper ruled out open bodies", where
+    // an operator can see it and argue with it. Enforcing it here, before any screen can show it, would drop
+    // matching drivers with no explanation — invisible exclusion again. It gates at the board (FB1), not here.
+    const pickup = { lat: -1.2, lng: 36.8 };
+    const f = dispatch.registerFreight({ description: 'Electronics', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', weightKg: 400, bulk: false, dimensionsCm: [120, 100, 80], excludedBodies: ['flatbed', 'dropside'] });
+    expect(f.excludedBodies).toEqual(['flatbed', 'dropside']);
+    // An empty list is not an exclusion — it is stored as absent, so "no preference" and "an empty preference"
+    // cannot drift apart downstream.
+    const none = dispatch.registerFreight({ description: 'Electronics', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', weightKg: 400, bulk: false, excludedBodies: [] });
+    expect(none.excludedBodies).toBeUndefined();
+  });
+
   it('S34: a legacy vehicle with no pricing profile prices at its class default — never NaN into money', () => {
     const d = drivers.register({ displayName: 'LG', fullName: 'L', nationalId: 'ID-LG', mobile: '+254770999', licenceClasses: ['truck'], licenceNumber: 'L-LG', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
     drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });

@@ -2,8 +2,27 @@
 // A→B; the platform offers full/aged totes (and bulk freight) that sit near that route, sized to the
 // remaining capacity of the driver's coupled vehicle. The driver claims, ignores, or lets it lapse.
 
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { GeoPoint } from './pudo.types';
 import { CargoClass, CargoNature, Equipment, VehicleCapability } from './cargo.types';
+import { TRUCK_SUBTYPES, TruckSubtype } from './fleet.config';
+
+/**
+ * FB0b — how much the body derivation actually had to work with. Carried alongside the answer because the
+ * whole point of the market series is that someone invests real money on it, and "we measured this load" and
+ * "we guessed from its weight because nobody measured it" are not the same claim.
+ */
+export type BodyBasis =
+  | 'measured' // dimensions AND weight were recorded — the derivation saw the load
+  | 'weight-only'; // no dimensions on the record (a freight registered before FB0b, or a loose bulk load)
+
+/** The body a load canonically needs, and the strength of the claim. Derived in freight-body.ts. */
+export class DerivedBody {
+  @ApiProperty({ enum: TRUCK_SUBTYPES })
+  body: TruckSubtype;
+  @ApiProperty({ enum: ['measured', 'weight-only'] })
+  basis: BodyBasis;
+}
 import { PriceBreakdown } from './pricing';
 import { SafetyItem, TempBand, TempReading } from './heavy-cargo';
 
@@ -29,6 +48,33 @@ export class Freight {
   destLabel: string;
   destLocation?: GeoPoint;
   weightKg: number;
+  // FB0b — the load's own measured facts, KEPT this time. Dimensions were accepted at registration, used to
+  // classify the cargo, and then dropped on the floor, which is why "does this fit a flatbed rather than a box
+  // body" has never been answerable. Optional because loose bulk genuinely has no dimensions, and because a
+  // freight registered before FB0b has none — such a load derives its body from weight alone and SAYS SO
+  // (DerivedBody.basis), rather than being quietly counted as measured.
+  // The explicit @ApiPropertyOptional is load-bearing: @nestjs/swagger cannot read a fixed-length TUPLE type
+  // and reports it as a false circular dependency on this very property (the same failure mode as an inline
+  // Array<{}> response prop — see the S33b/DT notes). Describing it as a 3-number array fixes the emitter and
+  // documents the length the type already enforces.
+  @ApiPropertyOptional({ type: [Number], minItems: 3, maxItems: 3, description: 'Length, width, height in cm (orientation-free)' })
+  dimensionsCm?: [number, number, number];
+  /** Can the load be split into two smaller ones? The single most decision-changing fact about anything
+   *  oversize: a divisible 30 t is two ordinary trips, an indivisible 30 t is a low-loader and a permit. */
+  indivisible?: boolean;
+  /** The minter's own body pick. ADVISORY — shown, compared and counted, NEVER used to filter (user, 2026-08-30).
+   *  A shop clerk booking a walk-up cannot reliably tell a skeletal from a flatbed, and a binding wrong pick
+   *  would invisibly exclude the one operator who could have taken the load. Where it disagrees with the
+   *  derived body, that disagreement is itself a market signal worth reporting. */
+  bodyHint?: TruckSubtype;
+  /** Bodies the SHIPPER rules out — theft risk, an insurer's wording, a customer's requirement. A PREFERENCE,
+   *  and typed as one: the board says "the shipper ruled out open bodies", never dressing it up as physics. */
+  excludedBodies?: TruckSubtype[];
+  /** FB0b — the body this load canonically needs, STAMPED at registration (and the basis it was derived on).
+   *  Frozen rather than computed on read for the same reason a price is frozen at claim: "kilometres of
+   *  flatbed offered in 2026" must not change when someone tunes a threshold in 2027. Absent on a pre-FB0b
+   *  freight, which is derived live and reports itself as weight-only. */
+  bodyDerived?: DerivedBody;
   fragile: boolean;
   bulk: boolean; // requires a bulk-capable vehicle (truck)
   // S32 — the freight's cargo model, so it matches vehicles like a tote does: class (drives required

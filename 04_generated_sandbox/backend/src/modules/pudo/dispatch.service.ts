@@ -16,6 +16,8 @@ import { VendorService } from './vendor.service';
 import { RatingService, belowFloor } from './rating.service';
 import { WalletGateService } from './wallet-gate.service';
 import { clampMultiplier, computeFreightPrice, distanceSplit, freightMultiplier, shipperCharge, type PriceBreakdown } from './pricing';
+import { canonicalBody } from './freight-body';
+import { TruckSubtype } from './fleet.config';
 import { isTempBreach, loadSafetyItems, missingKeys, requiredLoadKeys, requiredUnloadKeys, tempBand, unloadSafetyItems } from './heavy-cargo';
 import { MediaService } from './media.service';
 import { MarketPulseStore } from './market-pulse.store';
@@ -213,7 +215,7 @@ export class DispatchService {
     return { code: t.code, status: t.status };
   }
 
-  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean }, now: number = Date.now()): Freight {
+  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean }, now: number = Date.now()): Freight {
     this.freightSeq += 1;
     // A future pickup date parks the load for later; a past/absent date ships now. A supplied-but-unparseable
     // date is a CALLER ERROR — fail closed (never silently ship-now what was meant to be scheduled). Store the
@@ -233,6 +235,11 @@ export class DispatchService {
     const cargoClass = this.cargo.classify({ kg: input.weightKg, dimsCm: input.dimensionsCm });
     const bulk = input.bulk ?? true; // bulk cargo by default (sugar/cement) → trucks
     const requiredEquipment = bulk ? [] : this.cargo.requiredEquipment(cargoClass);
+    const requiredCapabilities = this.cargo.requiredCapabilities([natureCode]);
+    // FB0b — conclude which BODY this load needs, and stamp the conclusion. Derived from the load's own facts,
+    // never from the minter's hint: the hint is advisory by decision, and a market series built on a shop
+    // clerk's guess at "skeletal vs flatbed" would not be worth selling.
+    const bodyDerived = canonicalBody({ requiredCapabilities, bulk, weightKg: input.weightKg, dimensionsCm: input.dimensionsCm, indivisible: input.indivisible });
     // S32c: flag ends whose site cannot HANDLE this cargo — a site needs at least one qualifying piece of the
     // required equipment (any-of). Only checked when the site's manifest is known (a diverted order → its
     // PUDOs); a bulletin freight with only geo labels leaves both ends unknown → no gap flagged.
@@ -249,11 +256,20 @@ export class DispatchService {
       destLabel: input.destLabel,
       destLocation: input.destLocation,
       weightKg: input.weightKg,
+      // FB0b — KEEP the measurements. They were already being taken (cargo.classify above reads them); they
+      // were simply never stored, so every downstream question about what body the load needs had to guess.
+      dimensionsCm: input.dimensionsCm,
+      indivisible: input.indivisible,
+      // ADVISORY only — never consulted by matching. Stored so the board can show what the shipper expects and
+      // the analytics can report where shippers ask for a different body than the cargo actually needs.
+      bodyHint: input.bodyHint,
+      excludedBodies: input.excludedBodies?.length ? input.excludedBodies : undefined,
+      bodyDerived,
       fragile: input.fragile ?? false,
       bulk,
       cargoClass,
       natureCode,
-      requiredCapabilities: this.cargo.requiredCapabilities([natureCode]),
+      requiredCapabilities,
       // Handling equipment is for DISCRETE/palletised cargo (a forklift/pallet-jack/crane). Loose BULK
       // (cement in a tipper, grain in a hopper) self-loads via silo/tipping, so it needs no handling gear —
       // its constraint is `carriesBulk` (checked in vehicleCanCarry), not a forklift.

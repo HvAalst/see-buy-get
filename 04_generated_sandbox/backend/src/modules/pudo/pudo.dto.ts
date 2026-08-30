@@ -828,6 +828,20 @@ export class RegisterFreightDto {
   @IsString() destLabel!: string;
   @IsOptional() @ValidateNested() @Type(() => GeoDto) destLocation?: GeoDto;
   @IsNumber() @Min(1) weightKg!: number;
+  /** FB0b — the load's measurements. Optional: loose bulk genuinely has none (a tipper-load of sand has a
+   *  weight and no shape), and a bulletin freight may be posted before anyone has measured it. Supplied, they
+   *  are STORED — until FB0b they were read to classify the cargo and then discarded, which is why nothing
+   *  downstream could answer "does this fit a flatbed rather than a box body". */
+  @IsOptional() @ValidateNested() @Type(() => DimensionsDto) dimensionsCm?: DimensionsDto;
+  /** Can it be split into two smaller loads? A divisible 30 t is two ordinary trips; an indivisible 30 t is a
+   *  low-loader and a permit. */
+  @IsOptional() @IsBoolean() indivisible?: boolean;
+  /** The minter's own body pick — ADVISORY. Recorded and shown, never used to match: a wrong pick would
+   *  silently exclude the operator who could have taken the load. */
+  @IsOptional() @IsIn(TRUCK_SUBTYPES) bodyHint?: string;
+  /** Bodies the SHIPPER rules out (theft risk, an insurer's wording, a customer's requirement). A stated
+   *  preference, not a physical constraint, and the board presents it as one. */
+  @IsOptional() @IsArray() @IsIn([...TRUCK_SUBTYPES], { each: true }) @ApiPropertyOptional({ enum: TRUCK_SUBTYPES, isArray: true }) excludedBodies?: string[];
   @IsOptional() @IsBoolean() fragile?: boolean;
   @IsOptional() @IsBoolean() bulk?: boolean;
   /** S32 — the freight's primary cargo nature (default GEN); drives the required vehicle capability. */
