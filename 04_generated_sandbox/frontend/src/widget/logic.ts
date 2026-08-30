@@ -25,14 +25,16 @@ export interface WidgetAttrs {
   size?: string | null;
 }
 
-/** Where the buyer said they want it. */
+/** Where the buyer said they want it — a country, and whatever they typed in the box. */
 export interface Destination {
   country: string;
-  area: string;
+  /** Their own words: an area we serve, or a street and a town. One box covers both. */
+  where: string;
 }
 
 export interface QuoteEndpointBody {
   pointId?: string;
+  address?: string;
   country?: string;
   area?: string;
 }
@@ -47,7 +49,7 @@ export interface QuoteRequestBody {
 
 /** The shape the public API answers with — the fields this widget reads, and no more. */
 export interface QuoteResponse {
-  to: { name: string; area: string; country: string; landmark?: string };
+  to: { name: string; area: string; country: string; landmark?: string; distanceKm?: number; matchedPlace?: string };
   parcel: { size: string; weightKg: number };
   price: { currency: string; amount: number; minimum: number };
   eta: { readyAt: string; hours: number; arrivesWhileOpen: boolean };
@@ -120,7 +122,10 @@ export function quoteRequest(attrs: WidgetAttrs, to: Destination): QuoteRequestB
   const size = (attrs.size ?? '').trim().toUpperCase();
   return {
     from: origin(attrs),
-    to: { country: to.country, area: to.area },
+    // Sent as an ADDRESS, whatever they wrote. The server places it, and falls back to reading it as the
+    // name of an area we serve — so "Kisumu" and "12 Oginga Odinga St, Kisumu" both work from one box,
+    // which is the only arrangement a person filling in a form should have to understand.
+    to: { country: to.country, address: to.where.trim() },
     ...(measured ? { dimensionsCm: { l: l!, w: w!, h: h! } } : {}),
     ...(num(attrs.weightKg) !== undefined ? { weightKg: num(attrs.weightKg)! } : {}),
     ...(!measured && (size === 'S' || size === 'M' || size === 'L') ? { size: size as 'S' | 'M' | 'L' } : {}),
@@ -142,6 +147,8 @@ export interface Strings {
   panelTitle: string;
   country: string;
   area: string;
+  areaHint: string;
+  notPlaced: string;
   choose: string;
   submit: string;
   working: string;
@@ -159,7 +166,9 @@ export const EN: Strings = {
   cta: 'Calculate your shipping fee',
   panelTitle: 'Where should we send it?',
   country: 'Country',
-  area: 'Area',
+  area: 'Town or address',
+  areaHint: 'A town, an area, or a street — whatever you would tell a friend.',
+  notPlaced: 'We could not find that place. Try the town on its own.',
   choose: 'Choose…',
   submit: 'Get the price',
   working: 'Working it out…',
@@ -222,9 +231,10 @@ export function readyLine(q: QuoteResponse, locale?: string): string {
   }
 }
 
-/** Where they would collect it, named the way they would look for it. */
+/** Where they would collect it, named the way they would look for it — and how far that is. */
 export function collectLine(q: QuoteResponse): string {
-  return [q.to.name, q.to.landmark, q.to.area].filter(Boolean).join(' · ');
+  const near = typeof q.to.distanceKm === 'number' ? `${q.to.distanceKm} km away` : undefined;
+  return [q.to.name, q.to.landmark, near ?? q.to.area].filter(Boolean).join(' · ');
 }
 
 /**
@@ -238,7 +248,9 @@ export function errorLine(problem: Problem | null, s: Strings): string {
   if (!problem) return s.offline;
   switch (problem.code) {
     case 'NOT_FOUND':
-      return 'We have no collection point there yet — try a nearby area.';
+      // The server says either "could not place that" or "no point there yet". Both mean the same thing to
+      // somebody standing at a checkout: the words they used did not get them anywhere, try different ones.
+      return /could not place/i.test(problem.detail ?? '') ? s.notPlaced : 'We have no collection point there yet — try a nearby area.';
     case 'NO_CAPACITY_AVAILABLE':
       return 'Every collection point there is full right now — try a nearby area.';
     case 'CARGO_REQUIRES_DEDICATED':

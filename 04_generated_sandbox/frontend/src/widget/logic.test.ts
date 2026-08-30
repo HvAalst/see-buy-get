@@ -62,33 +62,40 @@ describe('setting the widget up', () => {
 });
 
 describe('asking for a price', () => {
+  it('sends whatever the buyer typed as an ADDRESS, whether it is a street or a town', () => {
+    // One box covers both, because "Kisumu" and "12 Oginga Odinga St, Kisumu" should not feel like
+    // different products to whoever is filling it in. The server places it, or reads it as an area.
+    expect(quoteRequest(attrs(), { country: 'ET', where: '  Bole, Addis Ababa ' }).to).toEqual({ country: 'ET', address: 'Bole, Addis Ababa' });
+    expect(quoteRequest(attrs(), { country: 'KE', where: 'Kisumu' }).to).toEqual({ country: 'KE', address: 'Kisumu' });
+  });
+
   it('sends the measurements when it has them, and lets the API derive the tier', () => {
     // Sending dimensions AND a size and hoping they agree is how a quote and the shipment it becomes end
     // up different sizes — the API derives from measurements anyway, so `size` is dropped when they exist.
-    const body = quoteRequest(attrs({ lengthCm: '30', widthCm: '20', heightCm: '10', weightKg: '2', size: 'S' }), { country: 'KE', area: 'Kisumu' });
+    const body = quoteRequest(attrs({ lengthCm: '30', widthCm: '20', heightCm: '10', weightKg: '2', size: 'S' }), { country: 'KE', where: 'Kisumu' });
     expect(body).toEqual({
       from: { country: 'KE', area: 'Nairobi' },
-      to: { country: 'KE', area: 'Kisumu' },
+      to: { country: 'KE', address: 'Kisumu' },
       dimensionsCm: { l: 30, w: 20, h: 10 },
       weightKg: 2,
     });
   });
 
   it('falls back to a size tier when there are no measurements', () => {
-    const body = quoteRequest(attrs({ size: 'l' }), { country: 'KE', area: 'Kisumu' });
+    const body = quoteRequest(attrs({ size: 'l' }), { country: 'KE', where: 'Kisumu' });
     expect(body.size).toBe('L');
     expect(body.dimensionsCm).toBeUndefined();
   });
 
   it('ignores half-measurements and nonsense rather than sending them', () => {
-    const body = quoteRequest(attrs({ lengthCm: '30', widthCm: '20', weightKg: 'about two' }), { country: 'KE', area: 'Kisumu' });
+    const body = quoteRequest(attrs({ lengthCm: '30', widthCm: '20', weightKg: 'about two' }), { country: 'KE', where: 'Kisumu' });
     expect(body.dimensionsCm).toBeUndefined(); // two of three is not a box
     expect(body.weightKg).toBeUndefined();
     expect(body.size).toBeUndefined(); // and nothing invented in its place
   });
 
   it('prefers an exact collection point over an area when the merchant gave one', () => {
-    expect(quoteRequest(attrs({ fromPoint: 'did:glos:1' }), { country: 'KE', area: 'Kisumu' }).from).toEqual({ pointId: 'did:glos:1' });
+    expect(quoteRequest(attrs({ fromPoint: 'did:glos:1' }), { country: 'KE', where: 'Kisumu' }).from).toEqual({ pointId: 'did:glos:1' });
   });
 });
 
@@ -117,6 +124,17 @@ describe('showing the answer', () => {
   it('names the collection point the way somebody would look for it', () => {
     expect(collectLine(quote())).toBe('Kisumu Duka · by the market · Kisumu');
     expect(collectLine(quote({ to: { name: 'Duka', area: 'Kisumu', country: 'KE' } }))).toBe('Duka · Kisumu');
+  });
+
+  it('says how far it is when the buyer typed where they are', () => {
+    // "1.4 km away" answers the question they were actually asking. The area name only stands in when we
+    // have nothing better, which is when they picked from the list rather than typing.
+    expect(collectLine(quote({ to: { name: 'Duka', area: 'Kisumu', country: 'KE', distanceKm: 1.4 } }))).toBe('Duka · 1.4 km away');
+  });
+
+  it('tells a buyer their words did not land, rather than that a lookup failed', () => {
+    expect(errorLine({ code: 'NOT_FOUND', detail: 'We could not place “Nowhereville”' }, EN)).toBe(EN.notPlaced);
+    expect(errorLine({ code: 'NOT_FOUND', detail: 'No collection point did:glos:x' }, EN)).toMatch(/no collection point there yet/);
   });
 });
 

@@ -228,9 +228,26 @@
   come from the network directory at <code>GET /v1/sbg/network/points</code>.</p>
 <pre><code>{ "pointId": "did:glos:7f3a…" }</code></pre>
 
+  <h3>By address, in the buyer's own words</h3>
+  <p>What a person actually has. We place it and return the nearest collection point, with how far it is
+  and what we understood them to mean — so they can see we read them right.</p>
+<pre><code>{ "country": "ET", "address": "Bole, Addis Ababa" }
+
+→ "to": { "name": "Bambi's Super Market", "matchedPlace": "Bole", "distanceKm": 2.4, … }</code></pre>
+  <p><code>country</code> is optional and narrows the search. Text we cannot place gets one more chance as
+  the name of an area we serve, so “Kisumu” and “12 Oginga Odinga St, Kisumu” both work from one input.</p>
+
+  <div class="note warn">
+    <b>An address we cannot place is refused, not guessed at.</b>
+    You get <code>NOT_FOUND</code> with “we could not place …”. Sending somebody to a collection point
+    chosen by a hash of their own typo would be worse than telling them we did not understand. Coverage is
+    a real gazetteer for Kenya and Ethiopia — town and neighbourhood level, not street level.
+  </div>
+
   <h3>By country and area</h3>
-  <p>What a person actually knows. We pick the collection point with the most room, and the same ask gives
-  the same answer twice. Choosing one reserves nothing — it is where they <em>would</em> collect.</p>
+  <p>An area we already serve, named exactly. We pick the collection point with the most room, and the same
+  ask gives the same answer twice. Choosing one reserves nothing — it is where they <em>would</em>
+  collect.</p>
 <pre><code>{ "country": "KE", "area": "Kisumu" }</code></pre>
 
   <div class="note">
@@ -268,7 +285,7 @@
   <table>
     <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
     <tbody>
-      <tr><td>from · to</td><td>object</td><td class="desc">The resolved collection points: <code>pointId</code>, <code>name</code>, <code>area</code>, <code>country</code>, <code>landmark</code>, <code>location</code>, <code>openState</code>.</td></tr>
+      <tr><td>from · to</td><td>object</td><td class="desc">The resolved collection points: <code>pointId</code>, <code>name</code>, <code>area</code>, <code>country</code>, <code>landmark</code>, <code>location</code>, <code>openState</code> — plus <code>distanceKm</code> and <code>matchedPlace</code> when an address was typed.</td></tr>
       <tr><td>parcel</td><td>object</td><td class="desc">The <code>size</code> tier this was priced at, and the <code>weightKg</code> used.</td></tr>
       <tr><td>price.currency</td><td>string</td><td class="desc">ISO-4217. The selling company's money — see <a href="#borders">crossing a border</a>.</td></tr>
       <tr><td>price.amount</td><td>number</td><td class="desc">The ceiling. Show this one.</td></tr>
@@ -589,8 +606,9 @@
       merchant console.</li>
     <li><b>A media upload on this surface.</b> <code>contentPhotoRef</code> comes from the authenticated
       media endpoint.</li>
-    <li><b>Free-text destinations.</b> You name a point or an area, not “12 Biashara Street”. Place
-      look-up covers Kenya only today.</li>
+    <li><b>Street-level addresses.</b> The gazetteer places towns and neighbourhoods in Kenya and
+      Ethiopia, not house numbers, and knows no other country. A production deployment swaps in a live
+      geocoder behind the same interface.</li>
     <li><b>Translations for the button.</b> Its words are English until you replace them with
       <code>window.SBG_QUOTE_STRINGS</code>; it is not wired to the network's own translation catalogues.</li>
     <li><b>Minting from the button.</b> It quotes. Turning a quote into a shipment is still the

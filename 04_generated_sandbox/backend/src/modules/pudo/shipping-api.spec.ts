@@ -187,6 +187,56 @@ describe('the public shipping quote', () => {
     expect(() => shipping.quote({ from: { pointId: from.did }, to: { country: 'KE', area: 'Kisumu' }, size: 'M' })).toThrow(/no collection point in Kisumu/);
   });
 
+  describe('an address in the buyer’s own words', () => {
+    it('places what they typed and finds the nearest point, saying how it read them', () => {
+      const { to } = domesticPair();
+      const q = shipping.quote({ from: { country: 'KE', area: 'Nairobi' }, to: { address: '12 Oginga Odinga St, Kisumu' }, size: 'M' });
+      expect(q.to.pointId).toBe(to.did);
+      // Shown back, so a buyer can see we understood them — and how far they would actually be walking.
+      expect(q.to.matchedPlace).toBe('Kisumu');
+      expect(q.to.distanceKm).toBeGreaterThanOrEqual(0);
+    });
+
+    it('will not send somebody to a shop picked by a hash of their own typo', () => {
+      // The gazetteer answers an unknown address with a deterministic pseudo-point. That is right for a
+      // provisional pin and completely wrong for choosing where a stranger will walk to collect a parcel.
+      domesticPair();
+      expect(() => shipping.quote({ from: { country: 'KE', area: 'Nairobi' }, to: { address: 'Nowhereville, Atlantis' }, size: 'M' })).toThrow(/could not place/);
+    });
+
+    it('gives an unplaceable text one more chance as the name of an area we serve', () => {
+      // "Kisumu" and "12 Oginga Odinga St, Kisumu" should not feel like different products to whoever is
+      // filling in the box, so a single input covers both.
+      const { to } = domesticPair();
+      agents.setShelf(to.did, { rows: 3, cols: 3 });
+      const q = shipping.quote({ from: { country: 'KE', area: 'Nairobi' }, to: { country: 'KE', address: 'Kisumu' }, size: 'M' });
+      expect(q.to.pointId).toBe(to.did);
+    });
+
+    it('reaches across the border on a typed address, now that the gazetteer knows Ethiopia', () => {
+      shop('Nairobi CBD', 'Nairobi', NAIROBI);
+      const bambi = shop("Bambi's Super Market", 'AddisAbaba', ADDIS, 'ET');
+      corridors.addCorridor({ name: 'Nairobi–Addis', originZone: 'Nairobi', destZone: 'AddisAbaba' });
+
+      const q = shipping.quote({ from: { country: 'KE', area: 'Nairobi' }, to: { address: 'Bole, Addis Ababa' }, size: 'M' });
+      expect(q.to.pointId).toBe(bambi.did);
+      expect(q.to.matchedPlace).toBe('Bole');
+      expect(q.route.crossesBorder).toBe(true);
+    });
+
+    it('narrows to the country when one is given', () => {
+      // Two shops, one in each country, both near enough to argue about. The hint settles it.
+      shop('Nairobi CBD', 'Nairobi', NAIROBI);
+      shop('Moyale KE', 'Moyale', { lat: 3.52, lng: 39.05 });
+      const et = shop('Addis Duka', 'AddisAbaba', ADDIS, 'ET');
+      corridors.addCorridor({ name: 'Nairobi–Addis', originZone: 'Nairobi', destZone: 'AddisAbaba' });
+      corridors.addCorridor({ name: 'Nairobi–Moyale', originZone: 'Nairobi', destZone: 'Moyale' });
+
+      const q = shipping.quote({ from: { country: 'KE', area: 'Nairobi' }, to: { country: 'ET', address: 'Addis Ababa' }, size: 'M' });
+      expect(q.to.pointId).toBe(et.did);
+    });
+  });
+
   it('says what it needs rather than guessing', () => {
     domesticPair();
     expect(() => shipping.quote({ from: { country: 'KE' }, to: { country: 'KE', area: 'Kisumu' }, size: 'M' })).toThrow(/Say where to collect from/);

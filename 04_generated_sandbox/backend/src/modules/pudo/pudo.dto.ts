@@ -270,7 +270,9 @@ export class IssueApiKeyDto {
 export class QuoteEndpointDto {
   /** A collection point by its public id — exact, and what a merchant's checkout already holds. */
   @IsOptional() @IsString() pointId?: string;
-  /** …or a country and an area, which is what a person actually knows. */
+  /** …or where the person actually IS, in their own words: "Bole, Addis Ababa", "12 Biashara St, Kisumu". */
+  @IsOptional() @IsString() address?: string;
+  /** …or an area we already serve, named exactly. `country` narrows either of the two above. */
   @IsOptional() @IsString() country?: string;
   @IsOptional() @IsString() area?: string;
 }

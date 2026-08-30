@@ -48,7 +48,7 @@ button { font: inherit; cursor: pointer; }
   color: var(--sbg-accent, #4c46e0); font-weight: 600;
 }
 .cta:hover { background: color-mix(in srgb, var(--sbg-accent, #4c46e0) 8%, transparent); }
-.cta:focus-visible, select:focus-visible, .go:focus-visible, .link:focus-visible { outline: 2px solid var(--sbg-accent, #4c46e0); outline-offset: 2px; }
+.cta:focus-visible, select:focus-visible, .where:focus-visible, .go:focus-visible, .link:focus-visible { outline: 2px solid var(--sbg-accent, #4c46e0); outline-offset: 2px; }
 .panel {
   margin-top: 10px; padding: 16px; min-width: 260px; max-width: 340px;
   border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
@@ -58,7 +58,7 @@ button { font: inherit; cursor: pointer; }
 h3 { margin: 0 0 12px; font-size: 15px; font-weight: 600; }
 label { display: block; font-size: 12px; opacity: .7; margin: 10px 0 4px; }
 label:first-of-type { margin-top: 0; }
-select {
+select, .where {
   width: 100%; font: inherit; padding: 8px 10px; border-radius: var(--sbg-radius, 8px);
   border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
   background: transparent; color: inherit;
@@ -74,6 +74,7 @@ select {
 .sub { opacity: .7; font-size: 13px; margin-top: 2px; }
 .row { margin-top: 10px; font-size: 13px; }
 .row b { font-weight: 600; }
+.hint { margin: 6px 0 0; font-size: 12px; opacity: .6; }
 .flag { margin-top: 10px; font-size: 12px; opacity: .75; }
 .err { margin-top: 12px; font-size: 13px; color: #a33a3a; }
 .link { background: none; border: 0; padding: 0; color: var(--sbg-accent, #4c46e0); text-decoration: underline; font-size: 13px; }
@@ -137,8 +138,11 @@ class SbgShippingQuote extends HTMLElement {
   }
 
   private async submit(): Promise<void> {
-    const { country, area } = this.picked;
-    if (!country || !area || this.busy) return;
+    const typed = (this.root.getElementById?.('sbg-where') as HTMLInputElement | null)?.value ?? this.picked.where;
+    const country = this.picked.country;
+    const where = (typed ?? '').trim();
+    if (!country || !where || this.busy) return;
+    this.picked = { ...this.picked, where };
     this.busy = true;
     this.error = null;
     this.quote = null;
@@ -147,7 +151,7 @@ class SbgShippingQuote extends HTMLElement {
       const res = await fetch(`${apiBase(this.attrs(), BAKED_API)}/sbg/shipping/quotes`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', ...headers(this.attrs()) },
-        body: JSON.stringify(quoteRequest(this.attrs(), { country, area })),
+        body: JSON.stringify(quoteRequest(this.attrs(), { country, where })),
       });
       const body = (await res.json()) as QuoteResponse & Problem;
       if (!res.ok) {
@@ -214,18 +218,18 @@ class SbgShippingQuote extends HTMLElement {
       this.render();
     }));
 
+    // TYPE OR PICK, one box. The areas we serve are suggestions on a datalist, not a closed list, because
+    // a buyer knows their street and their town — not which of our zones contains them — and a dropdown of
+    // our own vocabulary makes them guess at ours. Unrecognised text is placed by the server; text that is
+    // an area name still works, so neither kind of answer is the wrong one to give.
     const areas = this.areas.find((a) => a.country === this.picked.country)?.areas ?? [];
-    p.append(this.select(this.s.area, areas, this.picked.area, (v) => {
-      this.picked = { ...this.picked, area: v };
-      this.quote = null;
-      this.render();
-    }, !this.picked.country));
+    p.append(this.whereBox(areas));
 
     const go = document.createElement('button');
     go.className = 'go';
     go.type = 'button';
     go.textContent = this.busy ? this.s.working : this.s.submit;
-    go.disabled = this.busy || !this.picked.country || !this.picked.area;
+    go.disabled = this.busy || !this.picked.country || !this.picked.where?.trim();
     go.addEventListener('click', () => void this.submit());
     p.append(go);
 
@@ -278,6 +282,46 @@ class SbgShippingQuote extends HTMLElement {
     const d = this.line(isError ? 'err' : 'sub', text);
     if (isError) d.setAttribute('role', 'status');
     return d;
+  }
+
+  /** The one box a buyer types where they are into, with the areas we serve offered as suggestions. */
+  private whereBox(areas: string[]): DocumentFragment {
+    const frag = document.createDocumentFragment();
+    const id = 'sbg-where';
+    const listId = 'sbg-where-list';
+    const l = document.createElement('label');
+    l.textContent = this.s.area;
+    l.htmlFor = id;
+    const input = document.createElement('input');
+    input.id = id;
+    input.className = 'where';
+    input.type = 'text';
+    input.autocomplete = 'address-level2';
+    input.disabled = !this.picked.country;
+    input.value = this.picked.where ?? '';
+    if (areas.length) input.setAttribute('list', listId);
+    // Re-render on CHANGE, not on every keystroke: rebuilding the panel under somebody's fingers would
+    // take the caret with it. The value is read back at submit either way.
+    input.addEventListener('change', () => {
+      this.picked = { ...this.picked, where: input.value };
+      this.quote = null;
+    });
+    frag.append(l, input);
+    if (areas.length) {
+      const list = document.createElement('datalist');
+      list.id = listId;
+      for (const a of areas) {
+        const opt = document.createElement('option');
+        opt.value = a;
+        list.append(opt);
+      }
+      frag.append(list);
+    }
+    const hint = document.createElement('p');
+    hint.className = 'hint';
+    hint.textContent = this.s.areaHint;
+    frag.append(hint);
+    return frag;
   }
 
   private select(label: string, options: string[], value: string | undefined, onPick: (v: string) => void, disabled = false): DocumentFragment {

@@ -16289,9 +16289,13 @@
             "type": "string",
             "description": "A collection point by its public id — exact, and what a merchant's checkout already holds."
           },
+          "address": {
+            "type": "string",
+            "description": "…or where the person actually IS, in their own words: \"Bole, Addis Ababa\", \"12 Biashara St, Kisumu\"."
+          },
           "country": {
             "type": "string",
-            "description": "…or a country and an area, which is what a person actually knows."
+            "description": "…or an area we already serve, named exactly. `country` narrows either of the two above."
           },
           "area": {
             "type": "string"

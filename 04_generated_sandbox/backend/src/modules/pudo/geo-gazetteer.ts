@@ -73,6 +73,30 @@ export const GAZETTEER: GazetteerEntry[] = [
   { name: 'Isiolo', location: { lat: 0.3546, lng: 37.5822 } },
   { name: 'Kitui', location: { lat: -1.3745, lng: 38.0106 } },
   { name: 'Lamu', location: { lat: -2.2717, lng: 40.902 } },
+  { name: 'Moyale', location: { lat: 3.5231, lng: 39.0553 }, aliases: ['moyale border'] },
+
+  // --- Ethiopia: the second country the network operates in ---
+  // Added when a buyer could first TYPE where they are rather than pick an area from a list. A gazetteer
+  // that only knows one country is not a limitation of the geocoder, it is a limitation of the answer:
+  // "we could not place that" for every Ethiopian address, on a network that quotes and ships to Ethiopia.
+  { name: 'Addis Ababa', location: { lat: 9.03, lng: 38.74 }, aliases: ['addis', 'addis abeba', 'finfinne'], broad: true },
+  { name: 'Bole', location: { lat: 8.995, lng: 38.789 } },
+  { name: 'Merkato', location: { lat: 9.0333, lng: 38.7333 }, aliases: ['mercato', 'addis ketema'] },
+  { name: 'Piassa', location: { lat: 9.0356, lng: 38.7519 }, aliases: ['piazza'] },
+  { name: 'Kirkos', location: { lat: 9.01, lng: 38.76 } },
+  { name: 'Yeka', location: { lat: 9.05, lng: 38.8 } },
+  { name: 'Kolfe', location: { lat: 9.02, lng: 38.69 }, aliases: ['kolfe keranio'] },
+  { name: 'Adama', location: { lat: 8.54, lng: 39.27 }, aliases: ['nazret', 'nazareth'] },
+  { name: 'Bishoftu', location: { lat: 8.75, lng: 38.98 }, aliases: ['debre zeit'] },
+  { name: 'Hawassa', location: { lat: 7.062, lng: 38.476 }, aliases: ['awassa'] },
+  { name: 'Shashamane', location: { lat: 7.2, lng: 38.6 } },
+  { name: 'Bahir Dar', location: { lat: 11.594, lng: 37.39 } },
+  { name: 'Gondar', location: { lat: 12.61, lng: 37.46 }, aliases: ['gonder'] },
+  { name: 'Mekelle', location: { lat: 13.4967, lng: 39.4753 }, aliases: ['mekele'] },
+  { name: 'Dire Dawa', location: { lat: 9.593, lng: 41.866 } },
+  { name: 'Jimma', location: { lat: 7.67, lng: 36.83 } },
+  { name: 'Dessie', location: { lat: 11.133, lng: 39.633 } },
+  { name: 'Debre Birhan', location: { lat: 9.68, lng: 39.53 } },
 ];
 
 /** Normalise a query for matching: lowercase, strip punctuation to spaces, collapse whitespace. */

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
 import { AgentService } from './agent.service';
 import { ShelfService } from './shelf.service';
@@ -12,6 +12,15 @@ import { BorderCrossing } from './country';
 import { ANONYMOUS, ApiKeyService, type Caller } from './api-key.service';
 import { classifySize, SIZE_WEIGHT_KG } from './pudo.config';
 import { Agent, ParcelSize } from './pudo.types';
+import { Geocoder, GEOCODER } from './geocoder';
+import { Router, ROUTER } from './router';
+
+/** A resolved end of a journey: the point, and — when an address was typed — how it was found. */
+interface Resolved {
+  agent: Agent;
+  distanceKm?: number;
+  matchedPlace?: string;
+}
 
 /**
  * The SHIPMENT SERVICE PROVIDER surface — a price a buyer can see before deciding to buy.
@@ -38,7 +47,12 @@ import { Agent, ParcelSize } from './pudo.types';
 export interface QuoteEndpoint {
   /** A collection point, by its public id. Exact, and what a merchant's checkout already holds. */
   pointId?: string;
-  /** …or a country and an area, and we find the point. */
+  /**
+   * …or where the person actually IS, in their own words: "Bole, Addis Ababa", "12 Biashara St, Kisumu",
+   * or just an area name. We place it and find the nearest collection point.
+   */
+  address?: string;
+  /** …or an area we already serve, named exactly. `country` narrows either of the two above. */
   country?: string;
   area?: string;
 }
@@ -51,6 +65,10 @@ export interface QuotedPoint {
   landmark?: string;
   location?: { lat: number; lng: number };
   openState: 'open' | 'closed';
+  /** How far this point is from the address that was typed. Absent when no address was given. */
+  distanceKm?: number;
+  /** What we understood the typed address to mean — shown back so a buyer can see we read them right. */
+  matchedPlace?: string;
 }
 
 /**
@@ -149,12 +167,14 @@ export class ShippingApiService {
     private readonly parcels: ParcelService,
     private readonly vendors: VendorService,
     private readonly quotes: QuoteBookService,
+    @Inject(GEOCODER) private readonly geocoder: Geocoder,
+    @Inject(ROUTER) private readonly router: Router,
   ) {}
 
   quote(input: { from: QuoteEndpoint; to: QuoteEndpoint; dimensionsCm?: { l: number; w: number; h: number }; weightKg?: number; size?: ParcelSize }, caller: Caller = ANONYMOUS): PublicQuote {
     const from = this.resolve(input.from, 'from');
     const to = this.resolve(input.to, 'to');
-    if (from.did === to.did) throw new GlosError('INVALID_INPUT', 'Collect from and send to are the same point — a shipment needs two ends');
+    if (from.agent.did === to.agent.did) throw new GlosError('INVALID_INPUT', 'Collect from and send to are the same point — a shipment needs two ends');
 
     // Derived from the measurements when they are given, exactly as every mint in the system does it, so a
     // quote and the shipment it becomes cannot disagree about what size the parcel was.
@@ -166,12 +186,12 @@ export class ShippingApiService {
     }
     const weightKg = input.weightKg ?? SIZE_WEIGHT_KG[size];
 
-    const { plan, quote } = this.routing.quoteWithPlan(from.did, to.did, size);
+    const { plan, quote } = this.routing.quoteWithPlan(from.agent.did, to.agent.did, size);
     // A price is only worth holding for somebody we can recognise when they come back to claim it. An
     // anonymous quote is a calculation; a keyed one is a promise, and that difference is the honest reason
     // a key is worth having.
     const held = caller.vendorId
-      ? this.quotes.hold({ vendorId: caller.vendorId, mode: caller.mode, quote, fromPointId: from.did, toPointId: to.did, size, weightKg, dimensionsCm: input.dimensionsCm })
+      ? this.quotes.hold({ vendorId: caller.vendorId, mode: caller.mode, quote, fromPointId: from.agent.did, toPointId: to.agent.did, size, weightKg, dimensionsCm: input.dimensionsCm })
       : undefined;
     return this.viewOf(quote, plan, from, to, size, weightKg, caller, held);
   }
@@ -186,8 +206,8 @@ export class ShippingApiService {
   private viewOf(
     quote: ShipmentQuote,
     plan: ReturnType<RoutingService['planJourney']>,
-    from: Agent,
-    to: Agent,
+    from: Resolved,
+    to: Resolved,
     size: ParcelSize,
     weightKg: number,
     caller: Caller,
@@ -363,9 +383,9 @@ export class ShippingApiService {
         throw new GlosError('NOT_FOUND', `The point this quote would ${side} is no longer taking parcels — ask for a new quote`, { quoteId: held.quoteId });
       }
     }
-    const from = this.agents.get(held.fromPointId);
-    const to = this.agents.get(held.toPointId);
-    const plan = this.routing.planJourney({ originAgentDid: from.did, destAgentDid: to.did, weightKg: held.weightKg });
+    const from = { agent: this.agents.get(held.fromPointId) };
+    const to = { agent: this.agents.get(held.toPointId) };
+    const plan = this.routing.planJourney({ originAgentDid: from.agent.did, destAgentDid: to.agent.did, weightKg: held.weightKg });
     // The ETA is recomputed and the PRICE is not, and that asymmetry is deliberate: an arrival time is a
     // prediction that should be as good as we can make it today, while a price is a promise made earlier.
     return this.viewOf(held.quote, plan, from, to, held.size as ParcelSize, held.weightKg, caller);
@@ -414,16 +434,20 @@ export class ShippingApiService {
    * ACTIVE only, at both ends and for the same reason: a quote names somewhere a person will actually stand,
    * and offering a shop that has not finished signing up is offering an appointment nobody will keep.
    */
-  private resolve(where: QuoteEndpoint, side: 'from' | 'to'): Agent {
+  private resolve(where: QuoteEndpoint, side: 'from' | 'to'): Resolved {
     const label = side === 'from' ? 'collect from' : 'send to';
     if (where?.pointId) {
       const agent = this.agents.list().find((a) => a.did === where.pointId);
       if (!agent) throw new GlosError('NOT_FOUND', `No collection point ${where.pointId} — check the network directory`);
       if (agent.status !== 'ACTIVE') throw new GlosError('NOT_FOUND', `${agent.shopName} is not taking parcels yet`);
-      return agent;
+      return { agent };
     }
+    // A typed address, which is what a person actually has. Tried BEFORE the area list, because somebody
+    // who wrote "Bole, Addis Ababa" has told us more than an area name would, and falling through to the
+    // list would throw that away.
+    if (where?.address?.trim()) return this.nearestTo(where.address.trim(), where.country, side);
     if (!where?.area?.trim()) {
-      throw new GlosError('FIELD_REQUIRED', `Say where to ${label}: a collection point, or a country and an area`);
+      throw new GlosError('FIELD_REQUIRED', `Say where to ${label}: a collection point, an address, or a country and an area`);
     }
     const country = requireCountryCode(where.country);
     const area = where.area.trim();
@@ -437,10 +461,54 @@ export class ShippingApiService {
       .map((a) => ({ a, free: side === 'to' ? this.shelf.available(a.did) : 0 }))
       .sort((x, y) => y.free - x.free || x.a.shopName.localeCompare(y.a.shopName))[0];
     if (side === 'to' && best.free <= 0) throw new GlosError('NO_CAPACITY_AVAILABLE', `Every collection point in ${area} is full right now`);
-    return best.a;
+    return { agent: best.a };
   }
 
-  private point(a: Agent): QuotedPoint {
+  /**
+   * Place what somebody typed, then find the collection point nearest to it.
+   *
+   * A FALLBACK geocode is refused rather than used. The gazetteer answers an address it does not know
+   * with a deterministic pseudo-point — stable and offline, which is right for putting a pin somewhere
+   * provisional, and completely wrong for choosing where a stranger will walk to collect a parcel.
+   * Sending somebody to a shop picked by a hash of their own typo is worse than telling them we did not
+   * understand, so this says so and suggests what would work.
+   *
+   * If the text is not a place we can locate, it gets ONE more chance as the name of an area we serve,
+   * because "Kisumu" is a reasonable thing to type and the two paths should not feel like different
+   * products to whoever is filling in the box.
+   */
+  private nearestTo(address: string, country: string | undefined, side: 'from' | 'to'): Resolved {
+    const placed = this.geocoder.geocode(address);
+    if (placed.confidence === 'fallback') {
+      if (this.areaExists(address, country)) return this.resolve({ country, area: address }, side);
+      throw new GlosError('NOT_FOUND', `We could not place “${address}”. Try the town or area, or pick a collection point.`, { address });
+    }
+    const wanted = country ? requireCountryCode(country) : undefined;
+    const candidates = this.agents
+      .list()
+      .filter((a) => a.status === 'ACTIVE' && (!wanted || this.agents.countryOf(a) === wanted))
+      .filter((a) => side !== 'to' || this.shelf.available(a.did) > 0)
+      .map((a) => ({ a, km: this.router.roadKm(placed.location, a.location) }))
+      .sort((x, y) => x.km - y.km || x.a.shopName.localeCompare(y.a.shopName));
+    if (!candidates.length) {
+      throw new GlosError('NO_CAPACITY_AVAILABLE', `We have no collection point with room near ${placed.matched ?? address} right now`, { address });
+    }
+    const best = candidates[0];
+    // The distance and the place we matched both travel back: a buyer who typed their street should be
+    // able to see that we read them correctly and how far they would actually be walking.
+    return { agent: best.a, distanceKm: Math.round(best.km * 10) / 10, matchedPlace: placed.matched };
+  }
+
+  /** Is this the name of an area we serve? The second chance a typed town gets before we give up on it. */
+  private areaExists(area: string, country?: string): boolean {
+    const wanted = country ? requireCountryCode(country) : undefined;
+    return this.agents
+      .list()
+      .some((a) => a.status === 'ACTIVE' && a.zone.toLowerCase() === area.trim().toLowerCase() && (!wanted || this.agents.countryOf(a) === wanted));
+  }
+
+  private point(resolved: Resolved): QuotedPoint {
+    const a = resolved.agent;
     return {
       pointId: a.did,
       name: a.shopName,
@@ -449,6 +517,8 @@ export class ShippingApiService {
       landmark: a.landmark,
       location: a.location,
       openState: a.openState,
+      ...(resolved.distanceKm !== undefined ? { distanceKm: resolved.distanceKm } : {}),
+      ...(resolved.matchedPlace ? { matchedPlace: resolved.matchedPlace } : {}),
     };
   }
 }

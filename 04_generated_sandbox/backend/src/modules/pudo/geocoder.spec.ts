@@ -55,13 +55,24 @@ describe('geo gazetteer (G1)', () => {
       expect(lookupPlace('   ')).toBeNull();
     });
 
-    it('every gazetteer entry has plausible Kenya coordinates', () => {
+    it('every gazetteer entry sits inside the countries the network operates in', () => {
+      // The box widened north when Ethiopia was added: the gazetteer's job is to cover where we actually
+      // run, and it grows one country at a time as the sisters do. A coordinate outside it is a typo — the
+      // failure this catches is a transposed lat/lng or a decimal point in the wrong place, not a border.
       for (const e of GAZETTEER) {
-        expect(e.location.lat).toBeGreaterThanOrEqual(-5);
-        expect(e.location.lat).toBeLessThanOrEqual(5.5);
-        expect(e.location.lng).toBeGreaterThanOrEqual(33.5);
-        expect(e.location.lng).toBeLessThanOrEqual(42);
+        expect(e.location.lat).toBeGreaterThanOrEqual(-5); // south of Mombasa
+        expect(e.location.lat).toBeLessThanOrEqual(15); // north of Mekelle
+        expect(e.location.lng).toBeGreaterThanOrEqual(33.5); // west of Bungoma
+        expect(e.location.lng).toBeLessThanOrEqual(43); // east of Dire Dawa
       }
+    });
+
+    it('places somewhere in each country the network operates in', () => {
+      // A gazetteer that only knows one country is not a limitation of the geocoder, it is a limitation of
+      // the answer: "we could not place that" for every Ethiopian address, on a network that ships there.
+      expect(lookupPlace('Addis Ababa')?.entry.name).toBe('Addis Ababa');
+      expect(lookupPlace('Bole, Addis Ababa')?.entry.name).toBe('Bole');
+      expect(lookupPlace('Kisumu')?.entry.name).toBe('Kisumu');
     });
   });
 
