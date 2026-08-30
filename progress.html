@@ -7,19 +7,19 @@
 <style>
   :root {
     --bg: #f7f7f5; --panel: #ffffff; --ink: #17181c; --muted: #6b6f76; --line: #e3e3df;
-    --accent: #4c46e0; --ship: #1c7c54; --now: #b4690e; --next: #3f6ea8; --gap: #a33a3a;
+    --accent: #4c46e0; --ship: #1c7c54; --now: #b4690e; --next: #3f6ea8; --gap: #a33a3a; --ui: #7a4fa3;
     --shadow: 0 1px 2px rgba(20,20,25,.06), 0 8px 24px rgba(20,20,25,.05);
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --bg: #121317; --panel: #1a1c21; --ink: #eceef2; --muted: #9aa0aa; --line: #2a2d34;
-      --accent: #8f8bff; --ship: #5cc08c; --now: #e0a44a; --next: #7fb0e8; --gap: #e07a7a;
+      --accent: #8f8bff; --ship: #5cc08c; --now: #e0a44a; --next: #7fb0e8; --gap: #e07a7a; --ui: #b98fdc;
       --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
     }
   }
   :root[data-theme="dark"] {
     --bg: #121317; --panel: #1a1c21; --ink: #eceef2; --muted: #9aa0aa; --line: #2a2d34;
-    --accent: #8f8bff; --ship: #5cc08c; --now: #e0a44a; --next: #7fb0e8; --gap: #e07a7a;
+    --accent: #8f8bff; --ship: #5cc08c; --now: #e0a44a; --next: #7fb0e8; --gap: #e07a7a; --ui: #b98fdc;
     --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
   }
   * { box-sizing: border-box; }
@@ -42,7 +42,7 @@
   .chip b { font-variant-numeric: tabular-nums; }
   .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
   .d-ship { background: var(--ship); } .d-now { background: var(--now); }
-  .d-next { background: var(--next); } .d-gap { background: var(--gap); }
+  .d-next { background: var(--next); } .d-gap { background: var(--gap); } .d-ui { background: var(--ui); }
 
   .tracks { display: grid; grid-template-columns: 1fr; gap: 28px; }
   @media (min-width: 900px) { .tracks { grid-template-columns: 1fr 1fr; gap: 32px; } }
@@ -60,7 +60,7 @@
   .ref { font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--muted); margin-top: 6px; word-break: break-word; }
   .state { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; margin-top: 6px; }
   .s-ship { color: var(--ship); } .s-now { color: var(--now); }
-  .s-next { color: var(--next); } .s-gap { color: var(--gap); }
+  .s-next { color: var(--next); } .s-gap { color: var(--gap); } .s-ui { color: var(--ui); }
 
   .found { margin-top: 32px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 22px; }
   .found h2 { margin: 0 0 6px; font-size: 18px; }
@@ -92,6 +92,7 @@
   <span class="chip"><span class="dot d-now"></span> in progress <b id="n-now">0</b></span>
   <span class="chip"><span class="dot d-next"></span> next <b id="n-next">0</b></span>
   <span class="chip"><span class="dot d-gap"></span> gap <b id="n-gap">0</b></span>
+  <span class="chip"><span class="dot d-ui"></span> works, no screen <b id="n-ui">0</b></span>
 </div>
 
 <div class="tracks" id="tracks"></div>
@@ -155,6 +156,10 @@ const DATA = {
     { state: 'shipped', t: 'A load now says what BODY it needs — and how sure we are', d: 'The vehicle has carried a truck subtype since S30; the freight only ever carried what equipment it needs to be handled. So the supply half of “flatbed offered against containers moved” was recorded and the demand half was not. Freight now KEEPS the dimensions it was already being measured on and discarding, plus whether the load can be split at all — the one fact that separates a permit and a low-loader from booking it twice. From those facts one body is derived, hardest constraint first: cold chain, then hazmat, then loose bulk, then indivisible-and-oversize, then too-big-for-a-closed-body. ONE load, ONE body — count a load toward every body that could carry it and every corridor shows demand for everything. The answer carries its own basis: MEASURED, or WEIGHT-ONLY when nobody measured it, because “we measured this” and “we guessed from the weight” are not the same claim to sell to someone buying a truck.', ref: 'FB0b · freight-body.ts canonicalBody' },
     { state: 'shipped', t: 'The minter’s body pick is advisory — and the shipper’s exclusion is a preference', d: 'A shop clerk booking a walk-up freight cannot reliably tell a skeletal from a flatbed, and a binding wrong pick would exclude the one operator who could have taken the load — invisibly, which is the exact failure the open board exists to remove. So the pick is recorded, shown and counted, and never used to match; where it disagrees with what the cargo actually needs, that disagreement is itself a market signal. The shipper’s own exclusions (no open bodies, for theft or an insurer’s wording) are stored separately and typed as a PREFERENCE, so the board can say who ruled it out and why rather than dressing it up as physics — a preference can be argued with, an axle limit cannot.', ref: 'FB0b · bodyHint advisory · excludedBodies' },
     { state: 'shipped', t: 'Negotiate before commit — a load can be posted for a price to be agreed', d: 'Until now a load was take-it-or-leave-it at the computed price. A minter can now post one for NEGOTIATION instead: drivers send their number with the case for it in their own words, the poster takes one, and that acceptance is what claims the load. It matters most for exactly the operator the board is being built for — the flatbed running empty past your gate on Thursday, who would take the marginal load at a number the formula never arrives at. A proposal reserves nothing: the load stays open to everyone until a price is accepted, because a bid that quietly held it would be a claim by another name. Accepting re-checks the world as it is NOW — a driver who has since de-coupled, filled up or dropped below the rating floor cannot be bound to an old number — and the shipper’s budget binds a negotiated price just as hard, with the proposal left open so the cap can be raised and the same price taken.', ref: 'FB0c · propose → accept · one live price per driver' },
+    { state: 'ui', t: 'Negotiate has no screen yet — three of them are missing', d: 'The negotiation works end to end over the API and there is nothing anyone can tap. It needs the minter’s “let drivers name a price” choice at post time; the driver’s propose screen; and the poster’s list of prices with accept, decline and the message when a price is over budget. The driver half has no natural home until the board exists — a negotiate load is deliberately kept out of the offers and nudges, so there is no screen it currently appears on — which is a reason to sequence it with the board, not a reason to forget it. Until then a load posted this way is one no driver can find in an app.', ref: 'FB0c backend ebf5e37 · screens land with FB2' },
+    { state: 'ui', t: 'Nothing lets a minter state what the load actually is', d: 'The freight record now keeps dimensions, whether the load can be split, the minter’s advisory body pick and the shipper’s excluded bodies — and no screen asks for any of them. So every load posted today is measured only where another flow happens to measure it, and the body it needs is derived from weight alone. The market series will read exactly as honestly as the intake screen lets someone be, which is the whole reason the answer carries a MEASURED / WEIGHT-ONLY basis.', ref: 'FB0b backend 8d0ed40' },
+    { state: 'ui', t: 'The vendor dock has been backend-complete for a while', d: 'A store’s own address as an outbound collection point — on the route, never in the fee stack, so the price carries no origin fee nobody earned. Complete in the backend, and no screen in the vendor app mentions it. Verified again 2026-08-30.', ref: 'd4403a1 · 175d080' },
+    { state: 'ui', t: 'And the board endpoint itself — the biggest of these', d: 'GET /dispatch/freight returns the whole market, essentially ungated, and NO frontend has ever called it. The data has been reachable the entire time; only the product decision was missing. That is FB1/FB2, and it closes most of this list at once.', ref: 'GET /v1/sbg/dispatch/freight' },
     { state: 'gap', t: 'One data gap still blocks the board', d: 'The work radius is clamped to 15 km, so the system cannot even express the question the board exists to answer: “is it worth 80 km empty to reach that?” The clamp is right for a lock-screen nudge — an interruption should be about something nearby — and wrong for browsing, which is not an interruption at all.', ref: 'MAX_WORK_RADIUS_KM = 15' },
     { state: 'next', t: 'The constraint map — drivers report the road, speed-camera style', d: 'Three of the four things that decide whether a truck can take a load are not facts about the load at all. Axle load is the load’s weight over THIS vehicle’s axles against THIS route’s bridges. Tunnel clearance is the load’s height plus the vehicle’s DECK height — a 4.0 m load is 5.2 m on a flatbed and 4.4 m on a lowboy, so “needs a lowboy” is a conclusion, never a declaration. Neither can be answered without road data that does not exist for the region, in any system or for sale. So the drivers build it: one tap from the cab marks a low bridge, a weight limit, a weighbridge, a washout, a checkpoint — and the next driver through confirms it. The fleet that uses the map makes the map, and nobody else will have it.', ref: 'COMMITTED 2026-08-30 · crowd-sourced, Waze model' },
     { state: 'next', t: 'And the rule that governs it: absence of a report is not clearance', d: 'A crowd report is a claim, not a survey, and the two directions are not symmetric. Wrongly believing in a low bridge costs a detour; wrongly believing one is gone kills someone. So one report is enough to start warning, while CLEARING a constraint needs corroboration or an authority — and time alone must never quietly clear one. Above all, an unreported road is UNKNOWN, never OK: any check the system cannot actually perform must say NOT CHECKED rather than pass. A board that tells a haulier a 5.2 m load is fine on a road with a 4.2 m tunnel is worse than a board that says nothing.', ref: 'the S30 no-silent-safety-gaps rule, applied to road data' },
@@ -172,15 +177,17 @@ const DATA = {
   ],
 };
 
-const LABEL = { ship: 'shipped', now: 'in progress', next: 'next', gap: 'gap' };
-const KEY = { shipped: 'ship', 'in progress': 'now', next: 'next', gap: 'gap' };
+// 'ui' — the capability works and nothing on any screen reaches it. Tracked in its own state rather than
+// filed under 'shipped', because a feature nobody can tap is not shipped (standing rule, 2026-08-30).
+const LABEL = { ship: 'shipped', now: 'in progress', next: 'next', gap: 'gap', ui: 'works, no screen' };
+const KEY = { shipped: 'ship', 'in progress': 'now', next: 'next', gap: 'gap', 'works, no screen': 'ui' };
 
 function stateKey(s) { return s === 'shipped' ? 'ship' : s === 'in progress' ? 'now' : s; }
 
 function render() {
   document.getElementById('stamp').textContent = 'updated ' + DATA.updated;
 
-  const counts = { ship: 0, now: 0, next: 0, gap: 0 };
+  const counts = { ship: 0, now: 0, next: 0, gap: 0, ui: 0 };
   const tracks = document.getElementById('tracks');
 
   for (const track of DATA.tracks) {
@@ -228,7 +235,7 @@ function render() {
     f.append(li);
   }
 
-  for (const k of ['ship', 'now', 'next', 'gap']) {
+  for (const k of ['ship', 'now', 'next', 'gap', 'ui']) {
     document.getElementById('n-' + k).textContent = String(counts[k] || 0);
   }
 }
