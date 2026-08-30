@@ -161,6 +161,48 @@ export interface Claimable {
   tempBreached?: boolean; // S33b — the chain has been broken
 }
 
+/**
+ * FB1 — what kind of "no" a board row carries. The screen groups and colours by this, never by the message.
+ *
+ * 'unknown' is not a refusal: it is the system saying it could not check something (bridge clearances, axle
+ * limits — no data exists) rather than pretending it did. A row whose only marks are 'unknown' is still
+ * takeable, because deciding otherwise would be the platform overruling the operator who drives the road.
+ */
+export type BlockerKind = 'legal' | 'physical' | 'resolvable' | 'preference' | 'unknown';
+
+export interface BoardBlocker {
+  kind: BlockerKind;
+  code: string;
+  message: string;
+}
+
+/** FB1 — one load on the open board: the market's facts, this vehicle's price, and every reason why not. */
+export interface BoardRow {
+  freightId: string;
+  code: string;
+  description: string;
+  pickupLabel: string;
+  pickupLocation?: { lat: number; lng: number };
+  destLabel: string;
+  weightKg: number;
+  cargoClass?: string;
+  natureCode?: string;
+  dimensionsCm?: number[];
+  indivisible?: boolean;
+  bodyDerived?: { body: string; basis: 'measured' | 'weight-only' };
+  bodyHint?: string;
+  commitMode: 'instant' | 'negotiate';
+  scheduledPickupAt?: string;
+  deadheadKm: number;
+  loadedKm: number;
+  totalKm: number;
+  price?: PriceBreakdown;
+  /** Earnings per TOTAL km, empty run included. Null when there is no vehicle to price against. */
+  earningsPerKm?: number | null;
+  canTake: boolean;
+  blockers: BoardBlocker[];
+}
+
 export interface ClaimsView {
   remainingCapacityKg: number;
   /** Bag spaces left in the hold — the capacity kilos cannot express (a bus's boot, not its scales). */

@@ -119,6 +119,25 @@ export function createDriverApi(sbg: SbgClient) {
     /** Decline an offer. */
     ignoreOffer: (offerId: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/offers/{id}/ignore', { params: { path: { id: offerId } } })),
 
+    /**
+     * FB1 — the open board: the whole market from where the operator is standing.
+     *
+     * `radiusKm` is the OPERATOR's own reach, and omitting it means the entire market — there is deliberately
+     * no platform clamp on this call, unlike the 15 km one that governs being interrupted. Every load comes
+     * back, including the ones this vehicle cannot take, each carrying its own typed reasons.
+     */
+    freightBoard: (at: { lat: number; lng: number }, radiusKm?: number) =>
+      sbg.request((c) => c.GET('/v1/sbg/dispatch/board', { params: { query: { lat: at.lat, lng: at.lng, ...(radiusKm != null ? { radiusKm } : {}) } } })),
+
+    /** FB0c — name a price for a load posted for negotiation. Reserves nothing: the shipper's acceptance is
+     *  what claims it, so the load stays open to everyone until then. */
+    proposeForFreight: (freightId: string, body: { from: { lat: number; lng: number }; price: number; note?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/proposals', { params: { path: { id: freightId } }, body })),
+
+    /** FB0c — pull back a price already named. */
+    withdrawProposal: (proposalId: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/dispatch/proposals/{id}/withdraw', { params: { path: { id: proposalId } }, body: {} })),
+
     /** Scan a released bag onto the vehicle. */
     loadBag: (code: string, driverBadgeId: string) =>
       sbg.request((c) => c.POST('/v1/sbg/totes/{code}/load', { params: { path: { code } }, body: { driverBadgeId } })),

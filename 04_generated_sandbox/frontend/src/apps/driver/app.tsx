@@ -1,6 +1,7 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { BottomNav, Button, Checklist, FeedbackFlash, Icon, NotificationBell, Pill, TopBar, type NavItem } from '../../shared/ui';
 import { useT } from '../../shared/i18n';
+import { BoardScreen } from './screens/BoardScreen';
 import { EarningsScreen } from './screens/EarningsScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { LoadsScreen } from './screens/LoadsScreen';
@@ -11,7 +12,7 @@ import { useDriverApp, type DriverActions, type DriverState, type Screen } from 
 import '../../shared/screens.css';
 import './driver.css';
 
-type Tab = 'home' | 'route' | 'loads' | 'earnings';
+type Tab = 'home' | 'route' | 'board' | 'loads' | 'earnings';
 
 export function App() {
   const t = useT();
@@ -37,9 +38,13 @@ export function App() {
   const onShift = state.session.active;
   const tab: Tab = state.screen === 'offers' ? 'route' : (state.screen as Tab);
 
+
   const tabs: NavItem<Tab>[] = [
     { key: 'home', label: t('driver.nav.home'), icon: 'truck' },
     { key: 'route', label: t('driver.nav.route'), icon: 'route', disabled: !onShift },
+    // FB2 — deliberately NOT gated on the shift. Deciding whether to buy a tail-lift, or whether this
+    // corridor is worth running at all, is a thing an operator does at the coffee table with the engine off.
+    { key: 'board', label: t('driver.nav.board'), icon: 'search' },
     { key: 'loads', label: t('driver.nav.loads'), icon: 'box', badge: state.claims.length || undefined, disabled: !onShift },
     { key: 'earnings', label: t('driver.nav.earnings'), icon: 'wallet' },
   ];
@@ -97,12 +102,15 @@ export function App() {
 function ScreenRouter({ screen, state, actions }: { screen: Screen; state: DriverState; actions: DriverActions }) {
   // A stale tab (or a restored PWA) can be pointing at an on-shift screen after the shift
   // ended — the legacy page rendered those against a null vehicle. Re-check every time.
-  // Earnings is exempt: a driver reviews their jobs + pay whether or not they're on shift.
-  if (!state.session.active && screen !== 'home' && screen !== 'earnings') return <HomeScreen state={state} actions={actions} />;
+  // Earnings is exempt: a driver reviews their jobs + pay whether or not they're on shift. So is the market
+  // board — shopping for work, and deciding what to buy next, is exactly what happens off shift.
+  if (!state.session.active && screen !== 'home' && screen !== 'earnings' && screen !== 'board') return <HomeScreen state={state} actions={actions} />;
 
   switch (screen) {
     case 'route':
       return <RouteScreen state={state} actions={actions} />;
+    case 'board':
+      return <BoardScreen state={state} actions={actions} />;
     case 'offers':
       return <OffersScreen state={state} actions={actions} />;
     case 'loads':

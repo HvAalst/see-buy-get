@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n'; // English is the base catalog, so the real `t` yields the English literals
 import {
+  blockerTone,
+  boardDistanceLine,
+  boardSummary,
   canLoadBag,
   canStartShift,
   capacitySubLine,
@@ -19,9 +22,10 @@ import {
   roundPrice,
   secondsLeft,
   shiftSummary,
+  unlocks,
   usedPercent,
 } from './logic';
-import type { Benchmark, PriceBreakdown } from './types';
+import type { Benchmark, BoardRow, PriceBreakdown } from './types';
 
 describe('usedPercent — the capacity bar', () => {
   it('reports the used share of capacity', () => {
@@ -247,6 +251,16 @@ describe('freight pricing (S34)', () => {
     expect(priceBreakdownLines({ ...price, deadheadKm: 9 }, t).some((l) => l.includes('empty'))).toBe(false);
   });
 
+  it('FB2: blocker tones group by KIND, so an unheard-of code still renders sensibly', () => {
+    expect(blockerTone('legal')).toBe('danger');
+    expect(blockerTone('physical')).toBe('danger');
+    expect(blockerTone('resolvable')).toBe('warn');
+    expect(blockerTone('preference')).toBe('info');
+    // Not danger: 'unknown' is us admitting we could not check a bridge, and painting that red would train
+    // an operator to ignore the one warning that could actually hurt them.
+    expect(blockerTone('unknown')).toBe('idle');
+  });
+
   it('adds the earning to the spoken offer only when the load is priced', () => {
     const base = { message: 'Ready.', weightKg: 200, destLabel: 'Site', detourKm: 3 };
     expect(offerSpoken({ ...base, price }, t)).toContain('You earn 16.90');
@@ -271,5 +285,84 @@ describe('freight pricing (S34)', () => {
     expect(lastReadingBreached([{ breach: true }, { breach: false }])).toBe(false);
     expect(lastReadingBreached([])).toBe(false);
     expect(lastReadingBreached(undefined)).toBe(false);
+  });
+});
+
+describe('the open board (FB2)', () => {
+  const row = (over: Partial<BoardRow> = {}): BoardRow => ({
+    freightId: `f${Math.random()}`,
+    code: 'FRT-001',
+    description: 'Pallets',
+    pickupLabel: 'Depot',
+    destLabel: 'Site',
+    weightKg: 400,
+    commitMode: 'instant',
+    deadheadKm: 5,
+    loadedKm: 20,
+    totalKm: 25,
+    canTake: false,
+    blockers: [],
+    ...over,
+  });
+  const priced = (total: number) => ({ baseFee: 10, distanceKm: 25, deadheadKm: 5, loadedKm: 20, ratePerKm: 0.5, multiplier: 1, effectiveRate: 0.5, total });
+  const equip = { kind: 'resolvable' as const, code: 'MISSING_EQUIPMENT', message: 'Needs a forklift' };
+  const heavy = { kind: 'physical' as const, code: 'OVER_VEHICLE_CAPACITY', message: '12000 kg over' };
+  const unchecked = { kind: 'unknown' as const, code: 'ROUTE_NOT_CHECKED', message: 'Bridges not known' };
+
+  it('counts what ONE change would open up, with what it would pay', () => {
+    // The whole reason a load you cannot take is on the screen: "a forklift opens 2 more loads worth 130".
+    const [u] = unlocks([
+      row({ blockers: [equip], price: priced(80) }),
+      row({ blockers: [equip], price: priced(50) }),
+      row({ canTake: true, blockers: [] }),
+    ]);
+    expect(u.code).toBe('MISSING_EQUIPMENT');
+    expect(u.loads).toBe(2);
+    expect(u.earnings).toBe(130);
+  });
+
+  it('IGNORES a load with two obstacles — buying one of them would unlock nothing', () => {
+    // The most expensive wrong number this screen could show: promising work an operator still cannot take.
+    expect(unlocks([row({ blockers: [equip, heavy], price: priced(80) })])).toEqual([]);
+  });
+
+  it('still counts a load whose only other mark is an unchecked route', () => {
+    // An unchecked bridge never blocked the load, so the forklift really is the one thing in the way.
+    const [u] = unlocks([row({ blockers: [equip, unchecked], price: priced(80) })]);
+    expect(u.code).toBe('MISSING_EQUIPMENT');
+    expect(u.loads).toBe(1);
+  });
+
+  it('never lists a PREFERENCE as something to buy', () => {
+    // "The shipper ruled out your body type" is somebody's choice. It belongs on the row, where it can be
+    // argued with — not in a list of purchases that would win more work.
+    const bs = [{ kind: 'preference' as const, code: 'BODY_EXCLUDED', message: 'Shipper ruled it out' }];
+    expect(unlocks([row({ blockers: bs, price: priced(80) })])).toEqual([]);
+  });
+
+  it('ranks by what the work is worth, not by how many rows it touches', () => {
+    const out = unlocks([
+      row({ blockers: [equip], price: priced(10) }),
+      row({ blockers: [equip], price: priced(10) }),
+      row({ blockers: [heavy], price: priced(400) }),
+    ]);
+    expect(out[0].code).toBe('OVER_VEHICLE_CAPACITY'); // 400 beats 2 × 10
+    expect(out[1].loads).toBe(2);
+  });
+
+  it('survives an unpriced board — no vehicle means no earnings, not NaN', () => {
+    const [u] = unlocks([row({ blockers: [equip] }), row({ blockers: [equip] })]);
+    expect(u.loads).toBe(2);
+    expect(u.earnings).toBe(0);
+  });
+
+  it('names the EMPTY run first — it is the number the decision turns on', () => {
+    const line = boardDistanceLine(row({ deadheadKm: 80, loadedKm: 12, totalKm: 92 }), t);
+    expect(line).toBe('80 km empty to reach it, 12 km loaded · 92 km in all');
+  });
+
+  it('summarises the board as takeable versus not', () => {
+    expect(boardSummary([], t)).toBe('Nothing is posted on the market right now.');
+    expect(boardSummary([row({ canTake: true }), row()], t)).toBe('2 loads on the market. 1 you can take, 1 you cannot yet.');
   });
 });

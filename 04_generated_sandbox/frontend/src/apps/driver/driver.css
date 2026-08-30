@@ -276,3 +276,150 @@
   flex: none;
   color: var(--dang);
 }
+
+/* ------------------------------------------------------------------ FB2: the open board -- */
+/* The market a haulier SHOPS, as against the deck the network pushes. A list, not a card deck: an
+   operator comparing eight loads needs them side by side, and a swipe-one-at-a-time deck is the wrong
+   instrument for a decision about which is worth the empty run. */
+
+.board__count {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  font-size: 15px;
+  color: var(--tx3);
+}
+
+.board__reach {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 4px 0 18px;
+}
+
+.board__reach-lbl {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.board__reach-set {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Each option is a real 48px target: this is read and tapped in a cab, sometimes with the engine running. */
+.board__reach-btn {
+  min-height: var(--tap);
+  padding: 0 16px;
+  border-radius: var(--r-ctl);
+  border: 1px solid var(--bd-soft);
+  background: var(--card);
+  color: var(--navy);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Orange marks the active choice, per the contract — it is a tick, never a call to action. */
+.board__reach-btn[aria-pressed='true'] {
+  border-color: var(--org);
+  color: var(--org);
+  background: var(--org-light);
+}
+
+.board__reach-note {
+  font-size: 14px;
+  color: var(--tx3);
+}
+
+.board__card {
+  background: var(--card);
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-card);
+  box-shadow: var(--sh-sm);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* A load that cannot be taken is DIMMED, never hidden and never greyed to illegibility: it is on the
+   screen precisely to be read, because it is the row that tells an operator what to buy next. */
+.board__card--blocked {
+  background: var(--panel);
+}
+
+.board__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.board__desc {
+  font-size: 17px;
+  line-height: 1.35;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--navy);
+}
+
+.board__rate {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--r-ctl);
+  background: var(--ok-light);
+  border: 1px solid var(--ok);
+  font-size: 16px;
+  color: var(--navy);
+}
+
+.board__rate-ic {
+  flex: none;
+  color: var(--ok);
+}
+
+.board__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.board__blockers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+}
+
+.board__can {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  color: var(--ok);
+}
+
+.board__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+/* From a tablet upward the board becomes two columns — the same layout language the large-screen manager
+   console will use, so the two are one screen at different widths rather than two screens to maintain.
+   Carried on its own class rather than a :has() on the list, because the phones this runs on include
+   WebViews that would silently drop the whole rule and leave the wide layout to chance. */
+@media (min-width: 760px) {
+  .board__list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+}

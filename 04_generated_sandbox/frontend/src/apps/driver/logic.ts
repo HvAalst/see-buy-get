@@ -7,7 +7,7 @@
  */
 
 import type { Translate } from '../../shared/i18n';
-import type { AgentRow, Benchmark, Claimable, DriverStatus, MdpRow, NodeOption, PriceBreakdown } from './types';
+import type { AgentRow, Benchmark, BlockerKind, BoardRow, Claimable, DriverStatus, MdpRow, NodeOption, PriceBreakdown } from './types';
 
 /* -------------------------------------------------------------- capacity -- */
 
@@ -241,6 +241,91 @@ export function priceBreakdownLines(price: PriceBreakdown | undefined, t: Transl
   if (price.multiplier > 1) lines.push(t('driver.logic.busyRate', { pct: Math.round((price.multiplier - 1) * 100) }));
   else if (price.multiplier < 1) lines.push(t('driver.logic.quietRate', { pct: Math.round((1 - price.multiplier) * 100) }));
   return lines;
+}
+
+/* ------------------------------------------------------------- the board -- */
+
+/**
+ * FB1 — the colour a blocker is shown in. Grouped by KIND, never by code, so a new reason from the server
+ * renders sensibly on an app that has never heard of it.
+ *
+ * 'unknown' is deliberately not a danger tone. It is not a refusal — it is the system admitting it could not
+ * check bridge clearances or axle limits, and painting that red would train an operator to ignore the one
+ * warning that could actually hurt them.
+ */
+export function blockerTone(kind: BlockerKind): 'danger' | 'warn' | 'info' | 'idle' {
+  switch (kind) {
+    case 'legal':
+      return 'danger';
+    case 'physical':
+      return 'danger';
+    case 'resolvable':
+      return 'warn';
+    case 'preference':
+      return 'info';
+    default:
+      return 'idle';
+  }
+}
+
+/** One change, and what taking it would open up. */
+export interface Unlock {
+  code: string;
+  kind: BlockerKind;
+  message: string;
+  /** How many loads ON THIS BOARD this single change would make takeable. */
+  loads: number;
+  /** What those loads would pay, at this vehicle's own rate. 0 when none of them could be priced. */
+  earnings: number;
+}
+
+/**
+ * WHAT WOULD UNLOCK MORE WORK — the reason the board shows loads you cannot take.
+ *
+ * "Information is a key for decision making and that is also true for investments. Entrepreneurs should get
+ * that data from us." A list of red rows is not that; "a forklift would open 7 more loads worth 12,400 on
+ * this board today" is.
+ *
+ * ONLY single-obstacle rows count. If a load needs both a forklift and twelve more tonnes, buying the
+ * forklift unlocks nothing, and counting it under both would promise an operator work they still could not
+ * take — the most expensive kind of wrong number this screen could show. 'unknown' marks are ignored in that
+ * test, because an unchecked route never blocked the load in the first place.
+ *
+ * Sorted by earnings, then by count: what is worth most comes first, since that is the decision being made.
+ */
+export function unlocks(rows: BoardRow[]): Unlock[] {
+  const found = new Map<string, Unlock>();
+  for (const row of rows) {
+    if (row.canTake) continue;
+    const real = row.blockers.filter((b) => b.kind !== 'unknown');
+    if (real.length !== 1) continue;
+    const [b] = real;
+    // A preference is somebody's choice, not a purchase. It stays on the row where an operator can argue with
+    // it, but it never appears as something to go and buy.
+    if (b.kind === 'preference') continue;
+    const at = found.get(b.code) ?? { code: b.code, kind: b.kind, message: b.message, loads: 0, earnings: 0 };
+    at.loads += 1;
+    at.earnings = Math.round((at.earnings + (row.price?.total ?? 0)) * 100) / 100;
+    found.set(b.code, at);
+  }
+  return [...found.values()].sort((a, b) => b.earnings - a.earnings || b.loads - a.loads);
+}
+
+/** A spoken summary of the board — what is takeable now, and what is being shown anyway. */
+export function boardSummary(rows: BoardRow[], t: Translate): string {
+  if (rows.length === 0) return t('driver.board.spokenEmpty');
+  const can = rows.filter((r) => r.canTake).length;
+  return t('driver.board.spoken', { total: rows.length, can, blocked: rows.length - can });
+}
+
+/**
+ * The distance line for a row: how far EMPTY, how far LOADED, and what that works out at per kilometre.
+ *
+ * The empty run is named first on purpose. It is the number a fixed-cost operator is actually deciding on,
+ * and the whole reason FB0a split it back out of the total.
+ */
+export function boardDistanceLine(row: BoardRow, t: Translate): string {
+  return t('driver.board.distance', { empty: row.deadheadKm, loaded: row.loadedKm, total: row.totalKm });
 }
 
 /* ----------------------------------------------------------------- loads -- */

@@ -5,6 +5,7 @@ import { createDriverClient, isMintSourced, isUnknownIdentity, narrow, purgeDriv
 import { adoptDidFromUrl, clearDid, saveDid, saveRadius, saveRoute, savedRadius, savedRoute } from './storage';
 import type {
   AgentRow,
+  BoardRow,
   ClaimsView,
   DriverJobRow,
   DriverJobsSummary,
@@ -32,7 +33,12 @@ import { triggerDownload } from '../../shared/download';
 import type { MediaKind } from '../../lib/sbg/personas/media';
 import type { DeclaredLegBody } from '../../lib/sbg/personas/driver';
 
-export type Screen = 'home' | 'route' | 'offers' | 'loads' | 'earnings';
+export type Screen = 'home' | 'route' | 'offers' | 'loads' | 'earnings' | 'board';
+
+/** FB1 — the operator's own reach on the board. `null` is not "no filter chosen yet": it IS the choice, and
+ *  it means the whole market. There is no platform clamp here; 15 km governs interruptions, not browsing. */
+export type BoardReach = number | null;
+export const BOARD_REACHES: BoardReach[] = [25, 100, 300, null];
 
 /* --- R5: the driver jobs + earnings register query --- */
 export interface JobsQuery {
@@ -90,6 +96,13 @@ export interface DriverState {
   jobsState: 'idle' | 'loading' | 'ready' | 'error';
   jobsQuery: JobsQuery;
   jobsSummary: DriverJobsSummary | null;
+  /** FB1 — the open board: the whole market, each row carrying why it can or cannot be taken. */
+  board: BoardRow[];
+  boardState: 'idle' | 'loading' | 'ready' | 'error';
+  /** The operator's own reach. null = the whole market, which is the default: we do not narrow it for them. */
+  boardReach: BoardReach;
+  /** Where the board was priced FROM. Null until a fix arrives — the board cannot be honest without one. */
+  boardFrom: { lat: number; lng: number } | null;
   /** Screen-level failure — rendered as an ErrorNote, never as a raw string. */
   error: SbgError | null;
   toasts: Toast[];
@@ -162,6 +175,10 @@ const INITIAL: DriverState = {
   jobsState: 'idle',
   jobsQuery: INITIAL_JOBS_QUERY,
   jobsSummary: null,
+  board: [],
+  boardState: 'idle',
+  boardReach: null, // the whole market until the operator says otherwise
+  boardFrom: null,
   error: null,
   toasts: [],
   busy: null,
@@ -590,13 +607,85 @@ export function useDriverApp() {
     void fetchJobsWith(stateRef.current.jobsQuery);
   }, [fetchJobsWith]);
 
+  /* ------------------------------------------------------------ the open board (FB1) */
+
+  const boardEpoch = useRef(0);
+  /**
+   * Load the market from where the operator is standing.
+   *
+   * The position is not optional garnish: every distance, every price and the whole sort order are relative
+   * to it, so without a fix there is nothing honest to show. A default pin would produce a board that looks
+   * complete and is wrong in every number — worse than an empty screen that says why.
+   */
+  const fetchBoard = useCallback(
+    async (reach: BoardReach) => {
+      if (!client) return;
+      const epoch = ++boardEpoch.current;
+      setState((s) => ({ ...s, boardState: s.boardState === 'ready' ? s.boardState : 'loading' }));
+      const at = await currentPosition();
+      if (epoch !== boardEpoch.current) return;
+      if (!at) {
+        setState((s) => ({ ...s, boardState: 'error', boardFrom: null }));
+        return;
+      }
+      const res = await client.api.freightBoard(at, reach ?? undefined);
+      if (epoch !== boardEpoch.current) return;
+      if (res.error) {
+        setState((s) => ({ ...s, boardState: 'error' }));
+        fail(res.error);
+        return;
+      }
+      const page = narrow<{ items?: BoardRow[] }>(res.data);
+      setState((s) => ({ ...s, board: page.items ?? [], boardState: 'ready', boardFrom: at }));
+    },
+    [client, fail],
+  );
+  const loadBoard = useCallback(() => {
+    void fetchBoard(stateRef.current.boardReach);
+  }, [fetchBoard]);
+  const setBoardReach = useCallback(
+    (reach: BoardReach) => {
+      setState((s) => ({ ...s, boardReach: reach, boardState: 'loading' }));
+      void fetchBoard(reach);
+    },
+    [fetchBoard],
+  );
+
+  /**
+   * FB0c — name a price for a load posted for negotiation.
+   *
+   * Proposing reserves nothing, so the board is NOT optimistically mutated: the row stays exactly where it
+   * is, available to everyone, because that is the truth until the shipper accepts. The board is reloaded
+   * afterwards for the same reason — the market may have moved while the driver was typing.
+   */
+  const proposePrice = useCallback(
+    async (row: BoardRow, price: number, note?: string) => {
+      if (!client) return false;
+      const from = stateRef.current.boardFrom;
+      if (!from) return false;
+      const key = `propose:${row.freightId}`;
+      setState((s) => ({ ...s, busy: key, error: null }));
+      const res = await client.api.proposeForFreight(row.freightId, { from, price, note: note || undefined });
+      setState((s) => ({ ...s, busy: null }));
+      if (res.error) {
+        fail(res.error);
+        return false;
+      }
+      pushToast({ tone: 'ok', icon: 'wallet', title: t('driver.board.proposeSent'), detail: row.code });
+      void fetchBoard(stateRef.current.boardReach);
+      return true;
+    },
+    [client, fail, fetchBoard, pushToast, t],
+  );
+
   const go = useCallback(
     (screen: Screen) => {
       setState((s) => ({ ...s, screen, error: null, form: screen === 'route' ? { ...s.form } : s.form }));
       if (screen === 'route') void loadNodes();
       if (screen === 'earnings') void fetchJobsWith(stateRef.current.jobsQuery);
+      if (screen === 'board') void fetchBoard(stateRef.current.boardReach);
     },
-    [loadNodes, fetchJobsWith],
+    [loadNodes, fetchJobsWith, fetchBoard],
   );
 
   const setForm = useCallback(
@@ -1005,6 +1094,9 @@ export function useDriverApp() {
       resumeWork,
       queryJobs,
       loadJobs,
+      loadBoard,
+      setBoardReach,
+      proposePrice,
       exportJobs,
       loadNodes,
       startShift,
