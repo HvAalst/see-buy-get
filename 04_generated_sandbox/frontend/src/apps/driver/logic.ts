@@ -7,6 +7,7 @@
  */
 
 import type { Translate } from '../../shared/i18n';
+import type { GeoPoint } from '../../shared/geo';
 import type { AgentRow, Benchmark, BlockerKind, BoardRow, Claimable, DriverStatus, MdpRow, NodeOption, PriceBreakdown } from './types';
 
 /* -------------------------------------------------------------- capacity -- */
@@ -199,6 +200,26 @@ export function offerSpoken(o: { message: string; weightKg: number; destLabel: s
 /** Plain money, two decimals, no symbol — the driver's local currency is set by their zone. */
 export function money(v: number | null | undefined): string {
   return (Number(v) || 0).toFixed(2);
+}
+
+/**
+ * FB3a — the point the board is read from.
+ *
+ * A chosen origin WINS over the device and never waits on it. The operator most likely to be browsing the
+ * market is the one indoors at a desk deciding where to work next, and making their answer about Mombasa
+ * depend on a satellite fix in Nairobi would fail the browse for exactly them.
+ *
+ * Returns null only when there is neither — and then the board must say so rather than guessing, because
+ * every distance, every price and the entire sort order are measured from this point.
+ */
+export function boardOriginPin(origin: { pin: GeoPoint | null } | null, device: GeoPoint | null): GeoPoint | null {
+  return origin?.pin ?? device ?? null;
+}
+
+/** Is the half-typed origin usable? Both halves or neither: a name nobody could place is not a point, and a
+ *  bare pin cannot be read back to the operator on the row above the list. */
+export function originReady(place: { label: string; pin: GeoPoint | null }): boolean {
+  return Boolean(place.pin && place.label.trim());
 }
 
 /**

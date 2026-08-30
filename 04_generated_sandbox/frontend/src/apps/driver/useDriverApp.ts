@@ -24,7 +24,7 @@ import type {
   SuggestView,
   VehicleView,
 } from './types';
-import { DEFAULT_WORK_RADIUS_KM, defaultWorkMode, lastReadingBreached, minEarnFilter, nodeOptions } from './logic';
+import { boardOriginPin, DEFAULT_WORK_RADIUS_KM, defaultWorkMode, lastReadingBreached, minEarnFilter, nodeOptions, originReady } from './logic';
 import { pinAfterRename, type GeoPoint, type PinSource } from '../../shared/geo';
 import { currentPosition, watchPosition } from '../../shared/position';
 import { t } from '../../shared/i18n';
@@ -101,8 +101,21 @@ export interface DriverState {
   boardState: 'idle' | 'loading' | 'ready' | 'error';
   /** The operator's own reach. null = the whole market, which is the default: we do not narrow it for them. */
   boardReach: BoardReach;
-  /** Where the board was priced FROM. Null until a fix arrives — the board cannot be honest without one. */
+  /** Where the board was priced FROM — the browsing origin, which is NOT necessarily where the driver is.
+   *  Null until one is available: the board cannot be honest without one, because every distance, price and
+   *  the whole sort order are relative to it. */
   boardFrom: { lat: number; lng: number } | null;
+  /**
+   * FB3a — the place the operator chose to look from. `null` means "wherever I am", which is the default.
+   *
+   * The board's whole subject is REPOSITIONING — take the marginal load because it puts you where the good
+   * one is — and an operator cannot ask that question about anywhere but their own doorstep while the origin
+   * is the GPS. Deciding whether to run to Mombasa happens at the coffee table in Nairobi.
+   */
+  boardOrigin: CustomPlace | null;
+  /** The half-typed place in the origin picker. Separate from `boardOrigin` so the board is not refetched
+   *  against a pin the operator is still moving. */
+  boardPlace: CustomPlace;
   /** Screen-level failure — rendered as an ErrorNote, never as a raw string. */
   error: SbgError | null;
   toasts: Toast[];
@@ -179,6 +192,8 @@ const INITIAL: DriverState = {
   boardState: 'idle',
   boardReach: null, // the whole market until the operator says otherwise
   boardFrom: null,
+  boardOrigin: null, // …and from where they are, until they say otherwise
+  boardPlace: { ...EMPTY_PLACE },
   error: null,
   toasts: [],
   busy: null,
@@ -622,7 +637,11 @@ export function useDriverApp() {
       if (!client) return;
       const epoch = ++boardEpoch.current;
       setState((s) => ({ ...s, boardState: s.boardState === 'ready' ? s.boardState : 'loading' }));
-      const at = await currentPosition();
+      // FB3a — a named origin is used AS GIVEN and never waits on the GPS. Asking the device where it is in
+      // order to answer a question about somewhere else would fail the browse for the one operator most
+      // likely to be indoors, at a desk, deciding where to work next.
+      const chosen = stateRef.current.boardOrigin;
+      const at = boardOriginPin(chosen, chosen?.pin ? null : await currentPosition());
       if (epoch !== boardEpoch.current) return;
       if (!at) {
         setState((s) => ({ ...s, boardState: 'error', boardFrom: null }));
@@ -651,18 +670,58 @@ export function useDriverApp() {
     [fetchBoard],
   );
 
+  /* --- FB3a: where the operator is looking from --- */
+
+  /** Edit the origin DRAFT. Renaming a pinned place carries the pin or drops it by the shared rule, so a
+   *  typo over a found name cannot leave the map pointing at the old town under the new one's label. */
+  const setBoardPlace = useCallback((patch: Partial<CustomPlace> & { from?: PinSource }) => {
+    setState((s) => {
+      const next: CustomPlace = { ...s.boardPlace, ...patch };
+      if (patch.label !== undefined && patch.pin === undefined) next.pin = pinAfterRename(s.boardPlace.pin, s.boardPlace.from);
+      return { ...s, boardPlace: next };
+    });
+  }, []);
+
+  /** Commit the draft and re-read the market from there. Needs both halves: a name nobody can place is not
+   *  an origin, and a pin with no name cannot be said back to the operator on the row above the list. */
+  const applyBoardOrigin = useCallback(() => {
+    const draft = stateRef.current.boardPlace;
+    if (!originReady(draft)) return false;
+    const origin: CustomPlace = { ...draft, label: draft.label.trim() };
+    setState((s) => ({ ...s, boardOrigin: origin, boardState: 'loading' }));
+    void fetchBoard(stateRef.current.boardReach);
+    return true;
+  }, [fetchBoard]);
+
+  /** Back to wherever the device is. The draft is kept: an operator toggling between home and a corridor
+   *  they are considering should not have to type the corridor's name twice. */
+  const useMyPosition = useCallback(() => {
+    setState((s) => ({ ...s, boardOrigin: null, boardState: 'loading' }));
+    void fetchBoard(stateRef.current.boardReach);
+  }, [fetchBoard]);
+
   /**
    * FB0c — name a price for a load posted for negotiation.
    *
    * Proposing reserves nothing, so the board is NOT optimistically mutated: the row stays exactly where it
    * is, available to everyone, because that is the truth until the shipper accepts. The board is reloaded
    * afterwards for the same reason — the market may have moved while the driver was typing.
+   *
+   * FB3a — `from` is asked of the DEVICE, never taken from the board's browsing origin. Since the operator
+   * can now look at Mombasa from Nairobi, the two have come apart: the origin says where they were LOOKING,
+   * and only the device says where they will actually drive from. Sending the browsed point would book a
+   * 480 km empty run as if it were nothing, understating the deadhead on the load and in the market series
+   * both — the exact "never invent a split" failure the loaded/deadhead work exists to prevent.
    */
   const proposePrice = useCallback(
     async (row: BoardRow, price: number, note?: string) => {
       if (!client) return false;
-      const from = stateRef.current.boardFrom;
-      if (!from) return false;
+      const from = await currentPosition();
+      if (!from) {
+        const err: SbgError = { code: 'FIELD_REQUIRED', status: 0, title: t('driver.board.proposeNeedsPosition'), detail: t('driver.board.proposeNeedsPositionWhy'), retryable: true };
+        fail(err);
+        return false;
+      }
       const key = `propose:${row.freightId}`;
       setState((s) => ({ ...s, busy: key, error: null }));
       const res = await client.api.proposeForFreight(row.freightId, { from, price, note: note || undefined });
@@ -1096,6 +1155,9 @@ export function useDriverApp() {
       loadJobs,
       loadBoard,
       setBoardReach,
+      setBoardPlace,
+      applyBoardOrigin,
+      useMyPosition,
       proposePrice,
       exportJobs,
       loadNodes,

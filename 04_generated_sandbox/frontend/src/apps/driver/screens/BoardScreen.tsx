@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks';
-import { Button, Card, ErrorNote, Icon, Note, OpenInMaps, Pill, ReadAloud, Sheet } from '../../../shared/ui';
-import { formatDate, useT } from '../../../shared/i18n';
-import { blockerTone, boardDistanceLine, boardSummary, money, unlocks } from '../logic';
+import { Button, Card, ErrorNote, Icon, Note, OpenInMaps, PlacePicker, Pill, ReadAloud, Sheet, type PlaceNote } from '../../../shared/ui';
+import { formatDate, useT, type Translate } from '../../../shared/i18n';
+import { blockerTone, boardDistanceLine, boardSummary, money, originReady, unlocks } from '../logic';
 import type { BoardRow } from '../types';
 import { BOARD_REACHES, type BoardReach, type DriverActions, type DriverState } from '../useDriverApp';
 
@@ -21,6 +21,7 @@ export interface BoardScreenProps {
 export function BoardScreen({ state, actions }: BoardScreenProps) {
   const t = useT();
   const [proposing, setProposing] = useState<BoardRow | null>(null);
+  const [picking, setPicking] = useState(false);
   const rows = state.board;
   const can = rows.filter((r) => r.canTake).length;
   const opportunities = unlocks(rows);
@@ -36,11 +37,13 @@ export function BoardScreen({ state, actions }: BoardScreenProps) {
 
       {state.error ? <ErrorNote error={state.error} /> : null}
 
+      <Origin state={state} actions={actions} onPick={() => setPicking(true)} />
       <Reach value={state.boardReach} onChange={actions.setBoardReach} />
 
-      {/* No position, no honest board: every distance, price and the whole sort order are relative to it. */}
+      {/* No position, no honest board: every distance, price and the whole sort order are relative to it.
+          FB3a — and now there is a way out of it that is not "go outside": name the place instead. */}
       {state.boardState === 'error' && !state.boardFrom ? (
-        <Note tone="warn" icon="pin" title={t('driver.board.noLocation')} />
+        <Note tone="warn" icon="pin" title={t('driver.board.noLocation')} detail={t('driver.board.noLocationFix')} />
       ) : null}
 
       {loading ? (
@@ -78,9 +81,84 @@ export function BoardScreen({ state, actions }: BoardScreenProps) {
         <ReadAloud text={() => boardSummary(rows, t)} />
       </div>
 
+      <OriginSheet state={state} actions={actions} open={picking} onClose={() => setPicking(false)} />
       <ProposeSheet row={proposing} state={state} actions={actions} onClose={() => setProposing(null)} />
     </div>
   );
+}
+
+/**
+ * FB3a — WHERE the operator is looking from, said out loud above the list.
+ *
+ * It has to be stated rather than assumed, because every distance and every price on the board below is
+ * measured from this point, and once it can be somewhere other than the device the two readings of "40 km
+ * away" come apart. A board that silently answered about Mombasa while the operator read it as "from here"
+ * would be worse than one that never let them ask.
+ */
+function Origin({ state, actions, onPick }: { state: DriverState; actions: DriverActions; onPick: () => void }) {
+  const t = useT();
+  const here = state.boardOrigin == null;
+  return (
+    <div class="board__origin">
+      <Icon name="pin" size={18} class="board__origin-ic" />
+      <p class="board__origin-txt">{here ? t('driver.board.originHere') : t('driver.board.originThere', { where: state.boardOrigin!.label })}</p>
+      <div class="board__origin-acts">
+        {/* Offered only when it would change something. "Use where I am" while already there is a button
+            that does nothing, which teaches an operator that the controls on this screen are decorative. */}
+        {here ? null : (
+          <button type="button" class="board__origin-btn" onClick={actions.useMyPosition}>
+            {t('driver.board.originHereBtn')}
+          </button>
+        )}
+        <button type="button" class="board__origin-btn" onClick={onPick}>
+          {here ? t('driver.board.originSet') : t('driver.board.originChange')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** The origin picker. A sheet rather than an inline field: it carries a map, and the board behind it is the
+ *  thing being changed — pushing the list down by a map's height on every visit would bury it. */
+function OriginSheet({ state, actions, open, onClose }: { state: DriverState; actions: DriverActions; open: boolean; onClose: () => void }) {
+  const t = useT();
+  const draft = state.boardPlace;
+  const ready = originReady(draft);
+  return (
+    <Sheet open={open} title={t('driver.board.originTitle')} onClose={onClose}>
+      <p class="card__note">{t('driver.board.originLede')}</p>
+      <PlacePicker
+        id="board-origin"
+        fieldLabel={t('driver.board.originLabel')}
+        placeholder={t('driver.board.originPh')}
+        mapLabel={t('driver.board.originMapLabel')}
+        findLabel={t('driver.route.findOnMap')}
+        label={draft.label}
+        pin={draft.pin}
+        reference={state.boardFrom}
+        onLabel={(label) => actions.setBoardPlace({ label })}
+        onPin={(pin, from) => actions.setBoardPlace({ pin, from })}
+        geocode={actions.geocodePlace}
+        noteText={(n) => originNote(t, n)}
+      />
+      <Button
+        disabled={!ready}
+        onClick={() => {
+          if (actions.applyBoardOrigin()) onClose();
+        }}
+      >
+        {t('driver.board.originApply')}
+      </Button>
+    </Sheet>
+  );
+}
+
+/** What a match MEANS here: not a road or a price, but which market you are about to be shown. */
+function originNote(t: Translate, note: PlaceNote): string {
+  if (note.kind === 'found') return note.confidence === 'exact' ? t('driver.board.originFound', { where: note.where }) : t('driver.board.originApprox', { where: note.where });
+  if (note.kind === 'notFound') return t('driver.board.originNotFound');
+  if (note.kind === 'pinned') return t('driver.board.originPinned');
+  return t('driver.board.originIdle');
 }
 
 /**

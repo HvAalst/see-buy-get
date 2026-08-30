@@ -291,6 +291,54 @@
   color: var(--tx3);
 }
 
+/* FB3a — the origin bar. It sits ABOVE the reach because it is the more consequential of the two: a wrong
+   reach shows too few loads, a wrong origin misprices every one of them. */
+.board__origin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  margin: 4px 0 12px;
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-ctl);
+  background: var(--card);
+}
+
+.board__origin-ic {
+  flex: none;
+  color: var(--org);
+}
+
+.board__origin-txt {
+  flex: 1 1 12ch;
+  min-width: 0;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.board__origin-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Underlined text, not a filled button: changing where you look is a cheap, reversible act, and giving it a
+   button's weight next to Claim would misprice the decision. Still a full tap target. */
+.board__origin-btn {
+  min-height: var(--tap);
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--org);
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .board__reach {
   display: flex;
   flex-direction: column;

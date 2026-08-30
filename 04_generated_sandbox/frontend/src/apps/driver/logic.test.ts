@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
+
 import { t } from '../../shared/i18n'; // English is the base catalog, so the real `t` yields the English literals
 import {
   blockerTone,
   boardDistanceLine,
+  boardOriginPin,
   boardSummary,
   canLoadBag,
   canStartShift,
@@ -17,6 +19,7 @@ import {
   nodeOptions,
   offerSpoken,
   offersSummary,
+  originReady,
   priceBreakdownLines,
   rateBand,
   roundPrice,
@@ -364,5 +367,36 @@ describe('the open board (FB2)', () => {
   it('summarises the board as takeable versus not', () => {
     expect(boardSummary([], t)).toBe('Nothing is posted on the market right now.');
     expect(boardSummary([row({ canTake: true }), row()], t)).toBe('2 loads on the market. 1 you can take, 1 you cannot yet.');
+  });
+});
+
+describe('where the board is read from (FB3a)', () => {
+  const nairobi = { lat: -1.29, lng: 36.82 };
+  const mombasa = { lat: -4.04, lng: 39.67 };
+
+  it('prefers the place the operator chose over the device', () => {
+    // The whole subject of the board is repositioning. An operator asking about Mombasa gets Mombasa, even
+    // while the phone in their hand is certain it is in Nairobi.
+    expect(boardOriginPin({ pin: mombasa }, nairobi)).toBe(mombasa);
+  });
+
+  it('falls back to the device when nothing was chosen', () => {
+    expect(boardOriginPin(null, nairobi)).toBe(nairobi);
+    // A chosen origin that never got a pin is not an origin — the device still answers.
+    expect(boardOriginPin({ pin: null }, nairobi)).toBe(nairobi);
+  });
+
+  it('returns nothing rather than guessing when there is neither', () => {
+    // Every distance, every price and the sort order are measured from this point. A default would misprice
+    // the entire screen and say nothing about it.
+    expect(boardOriginPin(null, null)).toBeNull();
+    expect(boardOriginPin({ pin: null }, null)).toBeNull();
+  });
+
+  it('needs both a name and a pin before a place can become the origin', () => {
+    expect(originReady({ label: 'Mombasa', pin: mombasa })).toBe(true);
+    expect(originReady({ label: 'Mombasa', pin: null })).toBe(false); // a name nobody could place
+    expect(originReady({ label: '   ', pin: mombasa })).toBe(false); // a pin nothing can call back
+    expect(originReady({ label: '', pin: null })).toBe(false);
   });
 });
