@@ -70,11 +70,24 @@ export interface HelpImage {
   updatedAt: string;
 }
 
+/**
+ * Where an option's picture came from.
+ *
+ * The apps do not care — they render `imageUrl` either way. The OPERATOR does: without this the tower
+ * cannot tell "nobody has drawn this" from "the network drew it", and Remove would be a button whose
+ * outcome an admin has to guess at (it reveals the house drawing again; it does not blank the option).
+ */
+export type HelpImageSource = 'deployment' | 'builtin';
+
 /** What a picker needs to render its help: which options have a picture, and where to get it. */
 export interface HelpOptionView {
   key: string;
-  /** Absent when no admin has uploaded one yet — the sheet then shows text alone, never a broken frame. */
+  /** Absent only when neither this deployment nor the house set has one — the sheet then shows text alone,
+   *  never a broken frame. */
   imageUrl?: string;
+  /** Absent exactly when `imageUrl` is. */
+  source?: HelpImageSource;
+  /** When the DEPLOYMENT last changed it. Never set for a house drawing, which has no local history. */
   updatedAt?: string;
 }
 

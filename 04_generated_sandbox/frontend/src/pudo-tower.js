@@ -398,6 +398,7 @@ function helpPanel() {
   const active = HELP_TOPICS.find((tp) => tp.key === state.helpTopic);
   const options = state.help?.options || [];
   const done = options.filter((o) => o.imageUrl).length;
+  const mine = options.filter((o) => o.source === 'deployment').length;
 
   let body;
   if (!state.help) {
@@ -418,14 +419,37 @@ function helpPanel() {
       const frame = o.imageUrl
         ? el('img', { attrs: { src: `${API.replace(/\/v1$/, '')}${o.imageUrl}`, alt: o.key, loading: 'lazy' }, style: { width: '100%', height: '110px', objectFit: 'contain', background: '#fff', borderRadius: '6px' } })
         : el('div', { style: { width: '100%', height: '110px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed var(--line, #33455a)', borderRadius: '6px', color: 'var(--muted)' }, text: 'no picture' });
+      // Three states, not two — and the difference decides what the buttons can honestly promise.
+      // A house drawing shipped with the build cannot be deleted from here, only overridden; an override
+      // CAN be taken back, and doing so reveals the house drawing again rather than blanking the option.
+      const ownsIt = o.source === 'deployment';
+      const provenance = ownsIt
+        ? `yours · ${fmtTime(o.updatedAt)}`
+        : o.imageUrl
+          ? 'the network’s drawing'
+          : 'not illustrated';
+
       return el('div', { className: 'pt__panel', style: { padding: '10px', margin: '0' } }, [
         frame,
         el('div', { className: 'pt__mono', style: { margin: '8px 0 2px', fontWeight: '700' }, text: o.key }),
-        el('div', { className: 'pt__flag-d', style: { minHeight: '16px' }, text: o.updatedAt ? `updated ${fmtTime(o.updatedAt)}` : 'not illustrated' }),
+        el('div', { className: 'pt__flag-d', style: { minHeight: '16px' }, text: provenance }),
         el('div', { className: 'pt__btns', style: { marginTop: '8px' } }, [
           picker,
-          el('button', { className: 'pt__btn', attrs: busy ? { disabled: 'disabled' } : {}, text: busy ? 'Saving…' : o.imageUrl ? 'Replace' : 'Upload', onClick: () => picker.click() }),
-          ...(o.imageUrl ? [el('button', { className: 'pt__btn', attrs: busy ? { disabled: 'disabled' } : {}, text: 'Remove', onClick: () => void clearHelpImage(state.helpTopic, o.key) })] : []),
+          el('button', {
+            className: 'pt__btn',
+            attrs: busy ? { disabled: 'disabled' } : {},
+            text: busy ? 'Saving…' : ownsIt ? 'Replace' : o.imageUrl ? 'Use your own' : 'Upload',
+            onClick: () => picker.click(),
+          }),
+          // Offered only where there is something of the operator's OWN to undo.
+          ...(ownsIt
+            ? [el('button', {
+                className: 'pt__btn',
+                attrs: busy ? { disabled: 'disabled' } : {},
+                text: 'Revert',
+                onClick: () => void clearHelpImage(state.helpTopic, o.key),
+              })]
+            : []),
         ]),
       ]);
     }));
@@ -434,11 +458,11 @@ function helpPanel() {
   return el('div', { className: 'pt__panel' }, [
     el('div', { className: 'pt__panel-h' }, [
       el('h2', { className: 'pt__panel-title', text: 'Option illustrations' }),
-      el('span', { className: 'pt__panel-hint', text: state.help ? `${done}/${options.length} illustrated · ${active?.hint || ''}` : active?.hint || '' }),
+      el('span', { className: 'pt__panel-hint', text: state.help ? `${done}/${options.length} illustrated · ${mine} yours · ${active?.hint || ''}` : active?.hint || '' }),
     ]),
     topics,
     body,
-    el('div', { className: 'pt__flag-d', style: { marginTop: '10px' }, text: 'Shown behind the ⓘ on every picker that asks for these. Pictures are scaled down here before upload; the wording lives in the app translations, not here.' }),
+    el('div', { className: 'pt__flag-d', style: { marginTop: '10px' }, text: 'Shown on every picker that asks for these. The network ships a drawing for each one; upload your own wherever it does not match what arrives at your counters, and Revert puts the network’s back. Pictures are scaled down here before upload; the wording lives in the app translations, not here.' }),
   ]);
 }
 

@@ -429,7 +429,7 @@
 .sheet__backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(11, 31, 92, 0.34);
+  background: rgba(0, 9, 99, 0.34); /* the brand navy (0 9 99), matching --navy */
   z-index: 60;
   animation: sbg-fade 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
 }

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" width="160" height="120">
+  <!-- seebuyget · packaging · palletised
+       Ink #000963 · second plane #FFB98C · the point #FB6200 · context #AFAFB0
+
+       The PALLET carries the orange, because the pallet is what makes this answer true — the
+       cartons above it would look the same stacked on a floor. It also puts the orange at the
+       bottom of the frame here and in the middle of the frame on `bagged`, which is what makes
+       the two read apart at a glance in a scrolling list.
+
+       Same ground line and same baseline as every other drawing in this topic; a pallet load
+       stands taller than a sack, and is drawn taller. -->
+  <g fill="none" stroke="#000963" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
+
+    <!-- the ground everything in this topic stands on -->
+    <path d="M12 104 H148" stroke="#AFAFB0" />
+
+    <!-- the load: cartons, set back a little as they go up -->
+    <g fill="#FFB98C">
+      <rect x="42" y="62" width="76" height="26" rx="2" />
+      <rect x="50" y="40" width="60" height="22" rx="2" />
+    </g>
+    <!-- carton seams — enough to read as several boxes, not one crate -->
+    <path d="M80 62 V88 M80 40 V62" />
+
+    <!-- the pallet: the whole reason this option is not simply "boxes" -->
+    <g fill="#FB6200">
+      <rect x="34" y="88" width="92" height="8" rx="1" />
+      <rect x="36" y="96" width="14" height="8" rx="1" />
+      <rect x="73" y="96" width="14" height="8" rx="1" />
+      <rect x="110" y="96" width="14" height="8" rx="1" />
+    </g>
+  </g>
+</svg>

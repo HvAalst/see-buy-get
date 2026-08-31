@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" width="160" height="120">
+  <!-- seebuyget · packaging · bagged
+       Ink #000963 · second plane #FFB98C · the point #FB6200 · context #AFAFB0
+
+       The sacks ARE the option, so the sacks carry the orange.
+       The back row is the same size as the front and sits HIGHER, not smaller: that is what a
+       second row actually looks like, and it keeps one stroke weight across the whole set
+       (a scaled group would thin its own outline and break the family). -->
+  <g fill="none" stroke="#000963" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
+
+    <!-- the ground everything in this topic stands on -->
+    <path d="M12 104 H148" stroke="#AFAFB0" />
+
+    <!-- back row — the receding mass -->
+    <g fill="#FFB98C">
+      <path d="M47 90 c-2-16 3-28 11-33 l1-6 q5-3 10 0 l1 6 c8 5 13 17 11 33 z" transform="translate(17,0)" />
+      <path d="M47 90 c-2-16 3-28 11-33 l1-6 q5-3 10 0 l1 6 c8 5 13 17 11 33 z" transform="translate(50,0)" />
+    </g>
+
+    <!-- front row — sacks, and the reason the answer is "in sacks" -->
+    <g fill="#FB6200">
+      <path d="M30 104 c-2-16 3-28 11-33 l1-6 q5-3 10 0 l1 6 c8 5 13 17 11 33 z" />
+      <path d="M30 104 c-2-16 3-28 11-33 l1-6 q5-3 10 0 l1 6 c8 5 13 17 11 33 z" transform="translate(33,0)" />
+      <path d="M30 104 c-2-16 3-28 11-33 l1-6 q5-3 10 0 l1 6 c8 5 13 17 11 33 z" transform="translate(66,0)" />
+    </g>
+  </g>
+</svg>

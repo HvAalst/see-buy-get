@@ -11,8 +11,12 @@ export type HelpTopic = 'packaging' | 'body' | 'equipment' | 'nature';
 
 export interface HelpOption {
   key: string;
-  /** A path on the API, absent until an admin curates one. Resolve with helpImageSrc(). */
+  /** A path on the API, absent only when neither this deployment nor the shipped house set has a drawing.
+   *  Resolve with helpImageSrc(). */
   imageUrl?: string;
+  /** Which layer answered. Carried for completeness and deliberately IGNORED by the apps — a clerk has no
+   *  use for knowing who drew the picture, and only the operator console acts on it. */
+  source?: 'deployment' | 'builtin';
   updatedAt?: string;
 }
 

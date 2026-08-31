@@ -19,14 +19,21 @@
 @import '@fontsource/inter/latin-800.css';
 
 :root {
-  /* --- brand ---------------------------------------------------------- */
-  --navy: #0b1f5c;          /* headlines + primary text */
-  --blue: #4c46e0;          /* THE one action + links */
+  /* --- brand ----------------------------------------------------------
+     Aligned to brand/README.md — where the identity and the interface name the same colour, the
+     BRAND value wins: there is no near-miss orange and no second navy. --blue is the one colour
+     here the identity does NOT have, and that is deliberate and documented: an interface has to say
+     "you can touch this", the identity supplies only "this one is chosen", and those two must never
+     be the same colour. Orange is therefore a STATE and never a call to action. */
+  --navy: #000963;          /* Deep Navy — headlines + primary text */
+  --blue: #4c46e0;          /* Interface only. THE one action + links. Never in identity or illustration. */
   --blue-dark: #3a34c4;
   --blue-light: #ecebfc;
   --blue-soft: #f5f5fe;
-  --org: #ff6200;           /* ONLY the ✓ tick / active indicator */
+  --org: #fb6200;           /* Bright Orange — ONLY the ✓ tick / active indicator */
   --org-light: #fff1e8;
+  --sand: #ffb98c;          /* 45% tint of Bright Orange. Illustration + chart tint; not a UI colour. */
+  --signal: #afafb0;        /* Signal Grey. Context and disabled; not a text colour. */
 
   /* --- surfaces ------------------------------------------------------- */
   --bg: #ffffff;
@@ -49,8 +56,10 @@
   --dang: #dc2626;
 
   /* --- elevation ------------------------------------------------------ */
-  --sh-sm: 0 2px 8px rgba(11, 31, 92, 0.05);
-  --sh-lg: 0 14px 36px rgba(11, 31, 92, 0.16);
+  /* Tinted with the brand navy (0 9 99), so a shadow reads as this palette's own shade rather than
+     a generic grey drop. Kept in sync with --navy by hand — rgba() cannot take a hex custom property. */
+  --sh-sm: 0 2px 8px rgba(0, 9, 99, 0.06);
+  --sh-lg: 0 14px 36px rgba(0, 9, 99, 0.18);
 
   /* --- geometry ------------------------------------------------------- */
   --r-ctl: 9px;             /* controls */

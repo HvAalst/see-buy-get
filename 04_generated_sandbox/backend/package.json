@@ -14,7 +14,8 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "seed:demo": "node scripts/seed-demo.mjs"
+    "seed:demo": "node scripts/seed-demo.mjs",
+    "sync:illustrations": "node scripts/sync-illustrations.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.0",

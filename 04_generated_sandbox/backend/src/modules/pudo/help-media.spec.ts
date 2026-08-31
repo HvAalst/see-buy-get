@@ -35,7 +35,10 @@ describe('help illustrations (admin-curated)', () => {
     // absence. Returning only what has a picture would hide options from the person choosing between them.
     const view = help.topic('packaging');
     expect(view.options.map((o) => o.key)).toEqual([...PACKAGING]);
-    expect(view.options.every((o) => o.imageUrl === undefined)).toBe(true);
+    // Some arrive illustrated by the shipped house set; the rest are the slots still to draw. Both are
+    // listed, which is the assertion — a topic where nothing was drawn yet must still offer all seven.
+    expect(view.options.some((o) => o.imageUrl === undefined)).toBe(true);
+    expect(view.options.every((o) => o.source !== 'deployment')).toBe(true); // nothing uploaded here yet
   });
 
   it('serves a curated picture at a URL that changes when the picture does', () => {
@@ -83,6 +86,55 @@ describe('help illustrations (admin-curated)', () => {
     expect(help.remove('equipment', 'FLT')).toEqual({ removed: false }); // deleting nothing is not an error
     expect(help.topic('equipment').options.map((o) => o.key)).toEqual([...EQUIPMENT]);
     expect(() => help.image('equipment', 'FLT')).toThrow(/No illustration/);
+  });
+
+  describe('the house set behind a deployment’s own uploads', () => {
+    it('serves a shipped drawing where nobody has uploaded one, marked as the network’s', () => {
+      // The whole point of the fallback: a fresh deployment is illustrated on day one, and the operator can
+      // still see which pictures are theirs and which arrived with the build.
+      const view = help.topic('packaging').options;
+      const bagged = view.find((o) => o.key === 'bagged')!;
+      expect(bagged.imageUrl).toContain('/v1/sbg/help/packaging/bagged/image?v=');
+      expect(bagged.source).toBe('builtin');
+      expect(bagged.updatedAt).toBeUndefined(); // a house drawing has no local history to report
+      expect(help.image('packaging', 'bagged').contentType).toBe('image/svg+xml');
+    });
+
+    it('an upload WINS over the house drawing, and says so', () => {
+      help.put({ topic: 'packaging', key: 'bagged', dataUrl: PNG, actor: 'ops' });
+      const bagged = help.topic('packaging').options.find((o) => o.key === 'bagged')!;
+      expect(bagged.source).toBe('deployment');
+      expect(bagged.updatedAt).toBeTruthy();
+      expect(help.image('packaging', 'bagged').contentType).toBe('image/png'); // theirs, not ours
+    });
+
+    it('removing an upload REVEALS the house drawing rather than blanking the option', () => {
+      // The operator needs this to be true and predictable: Remove is an undo, not a delete. Nothing an
+      // operator does can reach the house set, which ships read-only with the build.
+      help.put({ topic: 'packaging', key: 'palletised', dataUrl: PNG, actor: 'ops' });
+      expect(help.topic('packaging').options.find((o) => o.key === 'palletised')!.source).toBe('deployment');
+      help.remove('packaging', 'palletised');
+      const after = help.topic('packaging').options.find((o) => o.key === 'palletised')!;
+      expect(after.source).toBe('builtin');
+      expect(help.image('packaging', 'palletised').contentType).toBe('image/svg+xml');
+    });
+
+    it('an option with neither layer is still returned, with no picture', () => {
+      // Undrawn is a normal state, not an absence: the picker still has to offer the option, and its sheet
+      // falls back to the words.
+      const loose = help.topic('packaging').options.find((o) => o.key === 'loose')!;
+      expect(loose.imageUrl).toBeUndefined();
+      expect(loose.source).toBeUndefined();
+      expect(() => help.image('packaging', 'loose')).toThrow(/No illustration/);
+    });
+
+    it('the two layers get different cache-busting versions', () => {
+      // A content hash for the shipped drawing, the blob id for an upload — either way the URL changes when
+      // the picture does, which is what lets the bytes be cached hard.
+      const before = help.topic('packaging').options.find((o) => o.key === 'bagged')!.imageUrl;
+      help.put({ topic: 'packaging', key: 'bagged', dataUrl: PNG, actor: 'ops' });
+      expect(help.topic('packaging').options.find((o) => o.key === 'bagged')!.imageUrl).not.toBe(before);
+    });
   });
 
   it('caps a help picture well below a delivery photo', () => {

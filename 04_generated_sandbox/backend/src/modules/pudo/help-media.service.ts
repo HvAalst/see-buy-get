@@ -4,6 +4,7 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { BlobStore, FsBlobStore } from '../../foundation/media/blob-store';
 import { decodeImage } from '../../foundation/media/decode-image';
 import { PersistentMap } from '../../foundation/store/persistent-map';
+import { loadBuiltins, readBuiltin } from './help-builtins';
 import { HELP_IMAGE_MAX_BYTES, HELP_TOPIC_KEYS, HelpImage, HelpTopic, HelpTopicView, isHelpKey } from './help.types';
 
 /**
@@ -16,44 +17,66 @@ import { HELP_IMAGE_MAX_BYTES, HELP_TOPIC_KEYS, HelpImage, HelpTopic, HelpTopicV
  */
 @Injectable()
 export class HelpMediaService {
-  // Durable: which option has which picture. The bytes live in the blob store beside it.
+  // Durable: which option this DEPLOYMENT has its own picture for. The bytes live in the blob store beside it.
   private readonly images = new PersistentMap<string, HelpImage>('pudo-help-images');
   private readonly blobs: BlobStore = new FsBlobStore();
+
+  /**
+   * The house set, scanned once at construction.
+   *
+   * Read from disk at startup rather than per request: these files ship with the build and cannot change
+   * under a running process, and a picker sheet should not pay a filesystem walk to open.
+   */
+  private readonly builtins = loadBuiltins();
 
   private static id(topic: HelpTopic, key: string): string {
     return `${topic}:${key}`;
   }
 
   /**
-   * Every option of a topic, each with its picture if one has been curated.
+   * Every option of a topic, each with its picture and where that picture came from.
    *
-   * Returns the FULL vocabulary, not just the illustrated part — an option with no picture is a normal
-   * state (nobody has drawn it yet), and the caller needs to know it exists in order to offer it. It is also
-   * exactly what the admin grid renders: the empty slots ARE the to-do list.
+   * Two layers resolve here, and this is the only place that knows there are two: the deployment's own
+   * upload wins, the house set fills in behind it, and an option with neither is still returned so the
+   * caller can offer it. The apps render `imageUrl` and never learn which layer answered.
+   *
+   * Returns the FULL vocabulary rather than only the illustrated part — the admin grid renders exactly
+   * this, and the un-illustrated slots ARE its to-do list.
    */
   topic(topic: HelpTopic): HelpTopicView {
     return {
       topic,
       options: HELP_TOPIC_KEYS[topic].map((key) => {
-        const img = this.images.get(HelpMediaService.id(topic, key));
+        const own = this.images.get(HelpMediaService.id(topic, key));
+        const house = this.builtins.get(HelpMediaService.id(topic, key));
+        // Cache-busted either way — by the blob id, which rotates on every replace, or by the house
+        // drawing's content hash. An admin who fixes a wrong picture must not be overruled for a month by
+        // every phone that already cached the old one under the same URL.
+        const version = own?.blobId ?? house?.version;
+        if (!version) return { key };
         return {
           key,
-          // Cache-busted by the blob id, which is rotated on every replace: an admin who fixes a wrong
-          // picture must not have the old one served back from a phone's cache for the next month.
-          imageUrl: img ? `/v1/sbg/help/${topic}/${key}/image?v=${img.blobId}` : undefined,
-          updatedAt: img?.updatedAt,
+          imageUrl: `/v1/sbg/help/${topic}/${key}/image?v=${version}`,
+          source: own ? ('deployment' as const) : ('builtin' as const),
+          updatedAt: own?.updatedAt, // a house drawing has no local history to report
         };
       }),
     };
   }
 
-  /** The bytes behind one option's picture. Throws NOT_FOUND when nothing has been curated for it. */
+  /** The bytes behind one option's picture — the deployment's if it has one, otherwise the house set's. */
   image(topic: HelpTopic, key: string): { bytes: Buffer; contentType: string } {
-    const img = this.images.get(HelpMediaService.id(topic, key));
-    if (!img) throw new GlosError('NOT_FOUND', 'No illustration has been set for this option');
-    const bytes = this.blobs.get(img.blobId);
-    if (!bytes) throw new GlosError('NOT_FOUND', 'The illustration bytes are unavailable');
-    return { bytes, contentType: img.contentType };
+    const own = this.images.get(HelpMediaService.id(topic, key));
+    if (own) {
+      const bytes = this.blobs.get(own.blobId);
+      if (bytes) return { bytes, contentType: own.contentType };
+      // The record survived but its bytes did not. Fall through to the house drawing rather than 404 —
+      // a picture that exists is better than the right error.
+    }
+    const house = this.builtins.get(HelpMediaService.id(topic, key));
+    const bytes = house ? readBuiltin(house) : undefined;
+    if (!house || !bytes) throw new GlosError('NOT_FOUND', 'No illustration has been set for this option');
+    return { bytes, contentType: house.contentType };
   }
 
   /**
@@ -88,7 +111,12 @@ export class HelpMediaService {
     return next;
   }
 
-  /** Remove an option's illustration. The option itself remains; its sheet falls back to text alone. */
+  /**
+   * Remove THIS DEPLOYMENT's illustration for an option.
+   *
+   * It reverts to the house drawing where there is one, and to text alone where there is not — it never
+   * deletes the option, and it cannot touch the house set, which is shipped read-only with the build.
+   */
   remove(topic: HelpTopic, key: string): { removed: boolean } {
     const id = HelpMediaService.id(topic, key);
     const img = this.images.get(id);
