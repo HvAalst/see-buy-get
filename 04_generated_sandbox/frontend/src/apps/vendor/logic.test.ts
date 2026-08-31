@@ -4,6 +4,7 @@ import {
   EMPTY_MINT,
   ORDER_CSV_HEADERS,
   dimsComplete,
+  dockBlockers,
   fromHandoff,
   handoffLine,
   mintMissing,
@@ -15,6 +16,7 @@ import {
   paidWord,
   policyLine,
   priceCards,
+  stagingTone,
 } from './logic';
 import type { CheckoutRow, NetworkPoint, OrderRow, OriginOption, QuoteView } from './types';
 
@@ -45,6 +47,35 @@ const quote = (locked = 4.4, flexible = 6.6): QuoteView => ({
   size: 'M',
   locked: { transport: 2, base: 4, total: locked },
   flexible: { transport: 4, base: 6, total: flexible },
+});
+
+describe('the store’s own dock', () => {
+  const ok = { label: 'Njiro warehouse, gate 2', zone: 'NorthTown', point: { lat: -1.2, lng: 36.8 }, bays: '2' };
+
+  it('gates on a name, a zone, a pin and real floor room, in the order the form asks', () => {
+    expect(dockBlockers({ ...ok, label: '  ' }, t)).toContain('name');
+    expect(dockBlockers({ ...ok, zone: '' }, t)).toContain('zone');
+    expect(dockBlockers({ ...ok, point: null }, t)).toContain('pin');
+    expect(dockBlockers(ok, t)).toBeNull();
+  });
+
+  it('treats a typed 0 bays as a WRONG answer, not a missing one', () => {
+    // `!bays` would let a typed zero fall through as "unset" and post a dock with no floor at all — which
+    // the server would then refuse every bag on, with nothing on screen explaining why.
+    expect(dockBlockers({ ...ok, bays: '0' }, t)).toContain('at least one');
+    expect(dockBlockers({ ...ok, bays: '' }, t)).toContain('at least one');
+    expect(dockBlockers({ ...ok, bays: 'two' }, t)).toContain('at least one');
+    expect(dockBlockers({ ...ok, bays: '-3' }, t)).toContain('at least one');
+    expect(dockBlockers({ ...ok, bays: '1' }, t)).toBeNull();
+  });
+
+  it('warns only when the floor is genuinely FULL, never merely busy', () => {
+    // A store with two bays is at 50% the moment it opens one bag. Colouring that as a problem would teach
+    // them to ignore the colour on the day it matters.
+    expect(stagingTone({ capacity: 2, used: 1, free: 1 })).toBe('ok');
+    expect(stagingTone({ capacity: 2, used: 2, free: 0 })).toBe('warn');
+    expect(stagingTone({ capacity: 1, used: 0, free: 1 })).toBe('ok');
+  });
 });
 
 describe('policy', () => {

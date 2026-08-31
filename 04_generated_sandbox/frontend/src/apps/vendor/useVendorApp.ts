@@ -18,6 +18,7 @@ import type {
   ApiKeyRow,
   CallbackRow,
   CheckoutRow,
+  DockPlan,
   IssuedKey,
   LedgerSummary,
   MintView,
@@ -32,7 +33,7 @@ import type {
   VendorView,
 } from './types';
 
-export type Screen = 'orders' | 'mint' | 'books' | 'store';
+export type Screen = 'orders' | 'mint' | 'books' | 'dock' | 'store';
 export type MintStep = 'source' | 'parcel' | 'dest' | 'origin' | 'price' | 'label';
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
 
@@ -128,6 +129,12 @@ export interface VendorState {
   /** A key the moment it was minted — the ONE time a secret is on screen, and it is gone when dismissed. */
   issuedKey: IssuedKey | null;
   storeState: 'idle' | 'loading' | 'ready';
+  /** The dock's work list. Null until fetched, and null again for a store with no dock — the screen reads
+   *  `vendor.collection` to tell those two apart, never this. */
+  dock: DockPlan | null;
+  /** A post-mount loader: 'idle' is treated as 'loading' by the screen, so the empty state never flashes
+   *  before the first response (the register epic's lesson). */
+  dockState: 'idle' | 'loading' | 'ready' | 'error';
   points: NetworkPoint[];
   pointsState: 'idle' | 'loading' | 'ready' | 'error';
   originOptions: OriginOption[] | null;
@@ -169,6 +176,8 @@ const INITIAL: VendorState = {
   apiKeys: [],
   issuedKey: null,
   storeState: 'idle',
+  dock: null,
+  dockState: 'idle',
   points: [],
   pointsState: 'idle',
   originOptions: null,
@@ -503,6 +512,30 @@ export function useVendorApp() {
     if (setR.error) fail(setR.error);
   }, [client, creds, fail]);
 
+  /* -------------------------------------------------------------- the dock */
+
+  /**
+   * The dock's work list.
+   *
+   * Only fetched for a store that HAS a dock: the endpoint 404s otherwise, and a store that has never
+   * asked for one should be offered the idea rather than shown an error about it.
+   */
+  const loadDock = useCallback(async () => {
+    if (!client || !creds) return;
+    if (!stateRef.current.vendor?.collection) {
+      setState((s) => ({ ...s, dock: null, dockState: 'ready' }));
+      return;
+    }
+    setState((s) => ({ ...s, dockState: 'loading' }));
+    const r = await client.api.dockPlan(creds.vendorId);
+    if (r.error) {
+      setState((s) => ({ ...s, dockState: 'error' }));
+      fail(r.error);
+      return;
+    }
+    setState((s) => ({ ...s, dock: narrow<DockPlan>(r.data) ?? null, dockState: 'ready' }));
+  }, [client, creds, fail]);
+
   const go = useCallback(
     (screen: Screen) => {
       setState((s) => ({ ...s, screen, error: null }));
@@ -513,8 +546,9 @@ export function useVendorApp() {
       }
       if (screen === 'orders') void refresh();
       if (screen === 'books') void fetchLedgerWith(stateRef.current.ledgerQuery);
+      if (screen === 'dock') void loadDock();
     },
-    [loadStore, refresh, fetchLedgerWith],
+    [loadStore, refresh, fetchLedgerWith, loadDock],
   );
 
   /* ----------------------------------------------------------------- mint */
@@ -624,6 +658,76 @@ export function useVendorApp() {
       setState((s) => (s.busy === key ? { ...s, busy: null } : s));
     }
   }, []);
+
+  /* ------------------------------------------------- the dock's own actions */
+  // Below `run` because every one of them takes the single-flight lock. `loadDock` sits further up, with
+  // the other loaders, because `go` has to reach it.
+
+  /** Enable the dock, then immediately load its (empty) plan so the screen lands on the real thing. */
+  const enableDock = useCallback(
+    async (input: { label: string; zone: string; location: { lat: number; lng: number }; bays?: number }) => {
+      if (!client || !creds) return;
+      await run('dock-enable', async () => {
+        const r = await client.api.setCollectionPoint(creds.vendorId, input);
+        if (r.error) return fail(r.error);
+        setState((s) => ({ ...s, vendor: narrow<VendorView>(r.data) ?? s.vendor }));
+        await loadDock();
+        pushToast({ tone: 'ok', icon: 'home', title: t('vendor.dock.enabled'), detail: input.label });
+      });
+    },
+    [client, creds, run, fail, loadDock, pushToast, t],
+  );
+
+  /** Stop collecting here. Bags a driver has already accepted stay with that driver — said out loud on the
+   *  screen, because it is the one consequence a store cannot undo from here. */
+  const disableDock = useCallback(async () => {
+    if (!client || !creds) return;
+    await run('dock-disable', async () => {
+      const r = await client.api.clearCollectionPoint(creds.vendorId);
+      if (r.error) return fail(r.error);
+      setState((s) => ({ ...s, vendor: narrow<VendorView>(r.data) ?? s.vendor, dock: null, dockState: 'ready' }));
+      pushToast({ tone: 'info', icon: 'home', title: t('vendor.dock.disabled') });
+    });
+  }, [client, creds, run, fail, pushToast, t]);
+
+  const openDockBag = useCallback(
+    async (destZone: string) => {
+      if (!client || !creds) return;
+      await run(`dock-open-${destZone}`, async () => {
+        const r = await client.api.openDockBag(creds.vendorId, destZone);
+        if (r.error) return fail(r.error); // includes STAGING_FULL, a real limit that should read as one
+        await loadDock();
+      });
+    },
+    [client, creds, run, fail, loadDock],
+  );
+
+  const fillDockBag = useCallback(
+    async (code: string, parcelId: string) => {
+      if (!client || !creds) return;
+      await run(`dock-fill-${parcelId}`, async () => {
+        const r = await client.api.fillDockBag(creds.vendorId, code, parcelId);
+        if (r.error) return fail(r.error);
+        await loadDock();
+      });
+    },
+    [client, creds, run, fail, loadDock],
+  );
+
+  /** Sealing is the store's own act and nothing else does it: closing the bag is what tells drivers near
+   *  the dock there is something to collect. */
+  const sealDockBag = useCallback(
+    async (code: string, opts: { acknowledgeShortShip?: boolean; shortShipReason?: string } = {}) => {
+      if (!client || !creds) return;
+      await run(`dock-seal-${code}`, async () => {
+        const r = await client.api.sealDockBag(creds.vendorId, code, opts);
+        if (r.error) return fail(r.error);
+        await loadDock();
+        pushToast({ tone: 'ok', icon: 'truck', title: t('vendor.dock.sealed'), detail: code });
+      });
+    },
+    [client, creds, run, fail, loadDock, pushToast, t],
+  );
 
   const submitMint = useCallback(async () => {
     if (!client || !creds) return;
@@ -882,6 +986,12 @@ export function useVendorApp() {
       savePolicy,
       saveCallback,
       loadPoints,
+      loadDock,
+      enableDock,
+      disableDock,
+      openDockBag,
+      fillDockBag,
+      sealDockBag,
       pushToast,
       dismissToast,
     },

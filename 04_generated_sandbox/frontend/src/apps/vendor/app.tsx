@@ -3,6 +3,7 @@ import { BottomNav, Button, Checklist, Icon, Pill, TopBar, type NavItem } from '
 import { useT } from '../../shared/i18n';
 import { money } from './logic';
 import { BooksScreen } from './screens/BooksScreen';
+import { DockScreen } from './screens/DockScreen';
 import { MintScreen } from './screens/MintScreen';
 import { OrdersScreen } from './screens/OrdersScreen';
 import { SignInScreen } from './screens/SignInScreen';
@@ -36,6 +37,9 @@ export function App() {
     { key: 'orders', label: t('vendor.nav.orders'), icon: 'box', badge: state.checkouts.length || undefined },
     { key: 'mint', label: t('vendor.nav.ship'), icon: 'send' },
     { key: 'books', label: t('vendor.nav.books'), icon: 'wallet' },
+    // Shown to every store, including those with no dock — the capability has been complete and invisible,
+    // and a tab a merchant can find is the only way they learn it exists. Its empty state is the pitch.
+    { key: 'dock', label: t('vendor.nav.dock'), icon: 'truck', badge: state.dock?.staging.used || undefined },
     { key: 'store', label: t('vendor.nav.store'), icon: 'home' },
   ];
 
@@ -89,6 +93,8 @@ function ScreenRouter({ screen, state, actions }: { screen: Screen; state: Vendo
       return <MintScreen state={state} actions={actions} />;
     case 'books':
       return <BooksScreen state={state} actions={actions} />;
+    case 'dock':
+      return <DockScreen state={state} actions={actions} />;
     case 'store':
       return <StoreScreen state={state} actions={actions} />;
     default:

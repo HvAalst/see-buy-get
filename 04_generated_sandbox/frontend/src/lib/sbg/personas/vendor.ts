@@ -142,6 +142,39 @@ export function createVendorApi(sbg: SbgClient) {
     /** The HMAC-signed status-callback outbox. */
     callbacks: (vendorId: string) => sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/callbacks', { params: { path: { id: vendorId } } })),
 
+    /* --- the store's own dock: a driver collects HERE, and the goods are handled once ---------------
+       Outbound only, and deliberately not a PUDO: no shelf, no release, never a destination, and no
+       intake fee, because nobody takes in a box its own owner packed. The dock is a place on the route,
+       never a stop in the fee stack. */
+
+    /** Turn the store's own address into a place the network collects from. `bays` is how many sealed
+     *  bags can stand waiting on the floor — the dock refuses to open more than it has room for. */
+    setCollectionPoint: (
+      vendorId: string,
+      body: { label: string; zone: string; country?: string; location: { lat: number; lng: number }; bays?: number },
+    ) => sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/collection-point', { params: { path: { id: vendorId } }, body })),
+
+    /** Stop collecting here. Bags already claimed stay with the drivers who claimed them. */
+    clearCollectionPoint: (vendorId: string) =>
+      sbg.request((c) => c.DELETE('/v1/sbg/vendors/{id}/collection-point', { params: { path: { id: vendorId } } })),
+
+    /** What this dock should be bagging: paid parcels grouped by destination, the bags already open,
+     *  and how much floor is left. */
+    dockPlan: (vendorId: string) => sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/dock', { params: { path: { id: vendorId } } })),
+
+    /** Open a bag for one destination. Refused once the floor is full — a real constraint, not advice. */
+    openDockBag: (vendorId: string, destZone: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/dock/bags', { params: { path: { id: vendorId } }, body: { destZone } })),
+
+    /** Put one parcel in the bag. */
+    fillDockBag: (vendorId: string, code: string, parcelId: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/dock/bags/{code}/fill', { params: { path: { id: vendorId, code } }, body: { parcelId } })),
+
+    /** Close it. The store's seal is what PUBLISHES the bag — it is the moment drivers near the dock are
+     *  told there is something to collect, so it is never done on the store's behalf. */
+    sealDockBag: (vendorId: string, code: string, body: { acknowledgeShortShip?: boolean; shortShipReason?: string } = {}) =>
+      sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/dock/bags/{code}/seal', { params: { path: { id: vendorId, code } }, body })),
+
     /** Quote one origin→destination journey (for the confirm step's price cards). */
     quote: (originDid: string, destDid: string, size: string) =>
       sbg.request((c) => c.GET('/v1/sbg/quote', { params: { query: { origin: originDid, dest: destDid, size } } })),

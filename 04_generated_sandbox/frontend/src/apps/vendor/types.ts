@@ -22,6 +22,22 @@ export interface ShippingPolicy {
   maxTransportSpend?: number; // S34c — the store's per-shipment dedicated-freight spend cap (undefined = no cap)
 }
 
+/**
+ * The store's own dock — a place the network collects FROM.
+ *
+ * Outbound only, and deliberately not a PUDO: no shelf, no release, never somewhere a parcel is sent, and
+ * no intake fee, because nobody takes in a box its own owner packed. It is a place on the route, never a
+ * stop in the fee stack, which is why enabling one does not change a single price.
+ */
+export interface CollectionPointView {
+  label: string; // what a driver reads on the offer: "Njiro warehouse, gate 2"
+  zone: string;
+  country?: string; // absent = the store's own; a warehouse abroad says so
+  location: { lat: number; lng: number }; // the loading door, which is not always the storefront pin
+  bays: number; // floor room for sealed bags waiting to be collected
+  enabledAt: string;
+}
+
 export interface VendorView {
   vendorId: string;
   did: string;
@@ -29,10 +45,20 @@ export interface VendorView {
   callbackUrl?: string;
   location?: { lat: number; lng: number };
   address?: string;
+  /** Their own dock, if they have asked for one. Absent = they drop off at a PUDO like everyone else. */
+  collection?: CollectionPointView;
   country: string;
   balance: number;
   shippingPolicy: ShippingPolicy;
   createdAt: string;
+}
+
+/** What the dock should be bagging right now: paid parcels grouped by where they are going, the bags
+ *  already open, and how much floor is left. Mirrors DockService.plan(). */
+export interface DockPlan {
+  groups: Array<{ key: string; label: string; parcelIds: string[]; openBagCode?: string }>;
+  bags: Array<{ code: string; destinationLabel?: string; parcelIds: string[]; parcels: number; fillPct: number; status: string }>;
+  staging: { capacity: number; used: number; free: number };
 }
 
 /** vendors/login → the public record plus the actor token the console carries. */

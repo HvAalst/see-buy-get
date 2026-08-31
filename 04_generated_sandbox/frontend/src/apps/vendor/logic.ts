@@ -15,6 +15,38 @@ export function money(v: number | null | undefined): string {
   return (Number(v) || 0).toFixed(2);
 }
 
+/* ------------------------------------------------------------------- dock -- */
+
+/**
+ * What still blocks enabling the store's own dock, in the order the form asks it.
+ *
+ * The pin is required rather than defaulted to the storefront, because the two are genuinely different
+ * places — a driver sent to the shop window of a warehouse whose gate is on the next street has made a
+ * wasted trip, and the whole point of a dock is saving one.
+ */
+export function dockBlockers(
+  f: { label: string; zone: string; point: { lat: number; lng: number } | null; bays: string },
+  t: Translate,
+): string | null {
+  if (!f.label.trim()) return t('vendor.logic.dockLabel');
+  if (!f.zone.trim()) return t('vendor.logic.dockZone');
+  if (!f.point) return t('vendor.logic.dockPin');
+  const bays = Number(f.bays);
+  // Not `!bays`: a typed 0 is a real answer and a wrong one, and it must not fall through as "unset".
+  if (!Number.isFinite(bays) || bays < 1) return t('vendor.logic.dockBays');
+  return null;
+}
+
+/**
+ * How full the dock floor is reading right now.
+ *
+ * Warn only when it is genuinely FULL, never merely busy: a store with two bays is at 50% the moment it
+ * opens one bag, and colouring that as a problem would teach them to ignore the colour.
+ */
+export function stagingTone(s: { capacity: number; used: number; free: number }): 'ok' | 'warn' {
+  return s.free <= 0 ? 'warn' : 'ok';
+}
+
 /* ----------------------------------------------------------------- policy -- */
 
 /** The split policy in plain words — what the BUYER pays at checkout. */

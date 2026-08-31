@@ -8,6 +8,35 @@
   letter-spacing: 0.04em;
 }
 
+/* ------------------------------------------------------------------ dock -- */
+
+/* The dock's work rows: a destination or a bag on the left, the one action on the right. Deliberately not
+   a table — a merchant on a phone in a stockroom reads a stack of rows, not columns. */
+.dockrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--bd-soft);
+}
+.dockrow:last-of-type {
+  border-bottom: 0;
+}
+.dockrow__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.dockrow__label {
+  font-weight: 700;
+}
+.dockrow__sub {
+  font-size: 14px;
+  color: var(--tx2);
+}
+
 /* ----------------------------------------------------------- credentials -- */
 
 .cred {
