@@ -8785,6 +8785,45 @@
         }
       }
     },
+    "/v1/sbg/fleet/drivers/{did}/derived-leg": {
+      "post": {
+        "operationId": "Sbg.setDerivedLeg",
+        "summary": "",
+        "description": "Switch off (or back on) the road we worked out from a load the driver took.\n\nA switch rather than a question. Taking a load already said where they are going, so asking again — in\na vehicle, at the moment they are least able to answer — would spend an interruption on something we\nalready know. This is the way back for the driver who was only doing that one bag as a favour.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DerivedLegDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Assignment"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/drivers/{did}/legs": {
       "get": {
         "operationId": "Sbg.driverLegs",
@@ -15993,6 +16032,10 @@
             "type": "string",
             "description": "New offers are SNOOZED until this instant (absent = taking work).\n\nA rider needs this far more than a line-haul driver does: lunch, a fare of their own, a puncture, the\nlast hour of a long day. It stops NEW work only — everything already claimed is still theirs to carry,\nhand over and deliver, because snoozing offers is not going off shift. It lives on the coupling, so\nending the shift ends it: nobody discovers tomorrow morning that they are still snoozed."
           },
+          "derivedLegOff": {
+            "type": "boolean",
+            "description": "The driver has switched OFF the road we worked out from the load they took.\n\nOne decision, honoured for the rest of the shift. Without it, turning it off would clear a road that\nthe very next claim puts straight back — which is not a switch, it is an argument. Like the snooze\nbeside it, it lives on the coupling, so ending the shift ends it."
+          },
           "status": {
             "type": "object"
           },
@@ -16035,6 +16078,17 @@
             ]
           }
         }
+      },
+      "DerivedLegDto": {
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "on"
+        ]
       },
       "DeclareAreaDto": {
         "type": "object",

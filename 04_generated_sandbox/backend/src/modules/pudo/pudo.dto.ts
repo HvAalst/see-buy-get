@@ -764,6 +764,12 @@ export class OpenDockBagDto {
   @IsString() destZone!: string;
 }
 
+/** Turn the worked-out road on or off. `on: false` also clears it — leaving it in place while promising it
+ *  is off would be the worst of both. */
+export class DerivedLegDto {
+  @IsBoolean() on!: boolean;
+}
+
 /** Hold new offers. Omitted `minutes` = until the driver resumes (bounded by the shift either way). */
 export class SnoozeDto {
   @IsOptional() @IsNumber() @Min(1) minutes?: number;

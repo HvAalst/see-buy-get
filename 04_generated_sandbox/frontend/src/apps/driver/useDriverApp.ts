@@ -829,6 +829,26 @@ export function useDriverApp() {
     [client, did, run, fail, pushToast, refresh],
   );
 
+  /**
+   * Switch off (or back on) the road worked out from a load the driver took.
+   *
+   * A switch rather than a prompt, and off is honoured for the shift: without that, turning it off would
+   * clear a road the very next claim puts straight back, which is an argument rather than a control.
+   */
+  const setDerivedLeg = useCallback(
+    async (on: boolean) => {
+      if (!client || !did) return;
+      await run('derived-leg', async () => {
+        const r = await client.api.setDerivedLeg(did, on);
+        if (r.error) return fail(r.error);
+        buzz();
+        pushToast({ tone: 'ok', icon: 'route', title: on ? t('driver.toast.derivedLegOn') : t('driver.toast.derivedLegOff') });
+        await refresh();
+      });
+    },
+    [client, did, run, fail, pushToast, refresh],
+  );
+
   /** Take work again, now. Always available — a snooze must never be a state you cannot leave. */
   const resumeWork = useCallback(async () => {
     if (!client || !did) return;
@@ -1151,6 +1171,7 @@ export function useDriverApp() {
       findNearby,
       snoozeWork,
       resumeWork,
+      setDerivedLeg,
       queryJobs,
       loadJobs,
       loadBoard,

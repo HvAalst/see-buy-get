@@ -190,7 +190,29 @@ function WorkCard({ state, actions }: HomeScreenProps) {
             ? t('driver.home.legLine', { from: work.fromLabel, to: work.toLabel })
             : t('driver.home.headingUnset')}
       </p>
-      <p class="card__note">{work ? t('driver.home.headingNote') : t('driver.home.headingUnsetNote')}</p>
+      {/* Whose road this is. An inference shown as the driver's own decision is a lie about who chose, so a
+          road we worked out says so and carries its own way out — a switch, not a question, because taking
+          the load already answered the question and asking again in a moving vehicle spends an
+          interruption on something we know. */}
+      <p class="card__note">
+        {work?.kind === 'leg' && work.source === 'derived'
+          ? t('driver.home.headingDerivedNote')
+          : work
+            ? t('driver.home.headingNote')
+            : t('driver.home.headingUnsetNote')}
+      </p>
+      {work?.kind === 'leg' && work.source === 'derived' ? (
+        <Button variant="outline" chevron={false} full={false} busy={state.busy === 'derived-leg'} onClick={() => void actions.setDerivedLeg(false)}>
+          {t('driver.home.headingDerivedOff')}
+        </Button>
+      ) : null}
+      {/* The way back, for a driver who switched it off and changed their mind. Only shown once it IS off,
+          so it is never a control looking for a problem. */}
+      {state.session.assignment?.derivedLegOff ? (
+        <Button variant="link" full={false} busy={state.busy === 'derived-leg'} onClick={() => void actions.setDerivedLeg(true)}>
+          {t('driver.home.headingDerivedOn')}
+        </Button>
+      ) : null}
       <Button variant="link" full={false} onClick={() => actions.go('route')}>
         {work ? t('driver.home.headingChange') : t('driver.home.headingSet')}
       </Button>

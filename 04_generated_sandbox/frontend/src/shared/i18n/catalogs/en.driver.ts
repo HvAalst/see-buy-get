@@ -242,6 +242,12 @@ export const enDriver = {
   'driver.offers.metaDetour': 'Detour',
   'driver.offers.metaAbout': '· about',
   'driver.offers.metaAway': 'away',
+  // The road we worked out from a load the driver took — said as OURS, with its own way out.
+  'driver.home.headingDerivedNote': 'We worked this out from the load you took. We are showing you work along it.',
+  'driver.home.headingDerivedOff': 'Don’t use my load as my road',
+  'driver.home.headingDerivedOn': 'Use my load as my road again',
+  'driver.toast.derivedLegOff': 'We’ll stop guessing your road',
+  'driver.toast.derivedLegOn': 'Your next load will set your road',
   // What the job costs in TIME — the unit a driver spends, and the only one they can justify to passengers.
   'driver.offers.metaCollect': '+{min} min to collect',
   'driver.offers.metaDeliver': '+{min} min to drop',

@@ -749,6 +749,19 @@ export class DispatchService {
     }
 
     offer.status = 'claimed';
+    // TAKING A LOAD IS SAYING WHERE YOU ARE GOING. Both ends are known at this instant — the pickup, and
+    // now the drop — and until this the network threw that away and went on matching a driver who had just
+    // committed to a road against nothing at all. It never overrides what a driver said themselves, and it
+    // is marked as ours so the app can say so and offer to switch it off; the whole of that restraint lives
+    // in deriveLegFromLoad.
+    if (offer.destLocation) {
+      this.fleet.deriveLegFromLoad(offer.driverDid, {
+        fromLabel: offer.pickupLabel,
+        from: offer.pickupLocation,
+        toLabel: offer.destLabel,
+        to: offer.destLocation,
+      });
+    }
     // Retire the competing offers for the same load.
     for (const o of this.offers.values()) if (o.ref === offer.ref && o.offerId !== offer.offerId && o.status === 'pending') o.status = 'ignored';
     void this.events.publish(GlosEvent.Pudo.LoadClaimed, { offerId, driverDid: offer.driverDid, kind: offer.kind, ref: offer.ref, weightKg: offer.weightKg }, { source: 'pudo' }).catch(() => undefined);

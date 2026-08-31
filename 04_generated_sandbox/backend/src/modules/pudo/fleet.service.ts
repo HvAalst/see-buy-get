@@ -170,6 +170,45 @@ export class FleetService {
     return active;
   }
 
+  /**
+   * Take the road implied by a load the driver just accepted — but only where they have not said one
+   * themselves, and only if they have not switched this off.
+   *
+   * Claiming a load is a statement about where you are going, and the network used to discard it: a driver
+   * who had just committed to carry a bag to Karen went on being matched against nothing, and the loads
+   * sitting on that same road stayed invisible. This is the inference, and it is deliberately timid.
+   *
+   * It NEVER overrides a declaration. A driver who said "Nakuru" this morning and then carries a bag two
+   * streets has not changed their mind, and quietly rewriting their road with something we worked out would
+   * be the app arguing with the person driving. Same restraint for an area: a rider working a patch has
+   * chosen a shape this cannot improve on.
+   *
+   * Returns whether it took, so the caller can tell the driver what just happened.
+   */
+  deriveLegFromLoad(driverDid: string, leg: LegInput): boolean {
+    const active = this.activeForDriver(driverDid);
+    if (!active || active.derivedLegOff) return false;
+    if (active.work) return false; // they have already said — theirs wins, always
+    active.work = { ...this.normalizeLeg(leg), source: 'derived' };
+    // Deliberately NOT remembered in the leg history: that list is roads a driver chose and may want to
+    // re-run, and seeding it with our own guesses would make their own history less useful every trip.
+    return true;
+  }
+
+  /**
+   * Switch off a road we worked out (or let it back on).
+   *
+   * Off also clears the derived road itself — leaving it in place while promising it is off would be the
+   * worst of both. A road the DRIVER declared is untouched: this is not the control for that.
+   */
+  setDerivedLeg(driverDid: string, on: boolean): Assignment {
+    const active = this.activeForDriver(driverDid);
+    if (!active) throw new GlosError('NOT_COUPLED', 'You are not on shift');
+    active.derivedLegOff = !on;
+    if (!on && active.work?.kind === 'leg' && active.work.source === 'derived') active.work = undefined;
+    return active;
+  }
+
   /** How this driver takes work on the shift they are on, if they have said. */
   workFor(driverDid: string): DeclaredWork | undefined {
     return this.activeForDriver(driverDid)?.work;
@@ -230,7 +269,9 @@ export class FleetService {
         throw new GlosError('INVALID_INPUT', 'A leg needs a point for each end — name it and place it on the map');
       }
     }
-    return { kind: 'leg', fromLabel, from: { lat: leg.from.lat, lng: leg.from.lng }, toLabel, to: { lat: leg.to.lat, lng: leg.to.lng }, declaredAt: new Date().toISOString() };
+    // 'declared' unless a caller overrides it — the safe default, because a road nobody marked is a road
+    // somebody said, and the app must never present its own guess as the driver's word.
+    return { kind: 'leg', fromLabel, from: { lat: leg.from.lat, lng: leg.from.lng }, toLabel, to: { lat: leg.to.lat, lng: leg.to.lng }, declaredAt: new Date().toISOString(), source: 'declared' };
   }
 
   /** Keep the leg at the head of this driver's history, deduped by its two ends (the same road, re-run). */

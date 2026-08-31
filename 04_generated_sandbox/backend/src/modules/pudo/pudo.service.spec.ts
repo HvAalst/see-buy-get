@@ -2280,7 +2280,8 @@ describe('PUDO Light', () => {
     const bagRun = (tag: string, opts: { destinationNodeId: string; parcels?: number } = { destinationNodeId: '' }) => {
       const origin = onboardAgent(`Haul Origin ${tag}`, 'NorthTown', 50);
       const d = drivers.register({ displayName: `H${tag}`, fullName: `H ${tag}`, nationalId: `DRV-HAUL-${tag}`, mobile: `+2549111${tag}`, licenceClasses: ['bike'] });
-      const bike = vehicles.register({ plate: `HV-${tag}`, vehicleClass: 'bike', ownerName: 'H', pricePerKm: 0.1 });
+      // Room for more than one bag, so a test can have the same driver claim twice.
+      const bike = vehicles.register({ plate: `HV-${tag}`, vehicleClass: 'bike', ownerName: 'H', pricePerKm: 0.1, toteCapacity: 4 });
       fleet.couple(d.did, bike.vehicleId);
       const bag = totes.register(origin.did);
       totes.assign(bag.code, opts.destinationNodeId, 'Somewhere');
@@ -2425,6 +2426,82 @@ describe('PUDO Light', () => {
 
       expect(offerNear.detourKm).toBe(offerFar.detourKm); // the old figure cannot tell them apart…
       expect(offerFar.deliverMin!).toBeGreaterThan(offerNear.deliverMin!); // …and the new one can
+    });
+
+    describe('taking a load says where you are going', () => {
+      const claimBagTo = (tag: string) => {
+        const dest = onboardAgent(`Derive Dest ${tag}`, 'SouthTown', 50); agents.setLocation(dest.did, { lat: -1.35, lng: 36.95 });
+        const { origin, d, bag } = bagRun(tag, { destinationNodeId: dest.did });
+        const [offer] = dispatch.suggest(d.did, { from: origin.location, to: dest.location }).filter((o) => o.ref === bag.code);
+        return { dest, origin, d, bag, offer };
+      };
+
+      it('derives the road from the load, and marks it as OURS', () => {
+        // Both ends are known the instant a bag is claimed, and the network used to discard that — leaving a
+        // driver who had just committed to a road matched against nothing.
+        const { d, offer } = claimBagTo('X1');
+        expect(fleet.workFor(d.did)).toBeUndefined(); // nothing said, nothing derived, yet
+        dispatch.claim(offer.offerId);
+        const work = fleet.workFor(d.did);
+        expect(work?.kind).toBe('leg');
+        // Named exactly as the load named its ends, so the road the app talks about and the job the driver
+        // took are recognisably the same thing.
+        expect(work).toMatchObject({ fromLabel: offer.pickupLabel, toLabel: offer.destLabel, source: 'derived' });
+      });
+
+      it('NEVER overrides a road the driver declared themselves', () => {
+        // The restraint that matters. Someone who said "Nakuru" this morning and then carries a bag two
+        // streets has not changed their mind, and rewriting their road with our guess is the app arguing
+        // with the person driving.
+        const { d, offer } = claimBagTo('X2');
+        fleet.declareLeg(d.did, { fromLabel: 'Town', from: { lat: -1.2, lng: 36.8 }, toLabel: 'Nakuru', to: { lat: -0.3, lng: 36.07 } });
+        dispatch.claim(offer.offerId);
+        expect(fleet.workFor(d.did)).toMatchObject({ toLabel: 'Nakuru', source: 'declared' });
+      });
+
+      it('leaves a rider’s declared PATCH alone too', () => {
+        // A rider working a district has chosen a shape this cannot improve on — turning it into a road
+        // would make every load two streets away read as further off than it is.
+        const { d, offer } = claimBagTo('X3');
+        fleet.declareArea(d.did, 5);
+        dispatch.claim(offer.offerId);
+        expect(fleet.workFor(d.did)?.kind).toBe('area');
+      });
+
+      /** Another bag at the same shop for the same road — so the SAME driver can claim twice. */
+      const anotherBag = (tag: string, origin: { did: string; location: { lat: number; lng: number } }, dest: { did: string; shopName: string }, d: { did: string }) => {
+        const bag = totes.register(origin.did);
+        totes.assign(bag.code, dest.did, dest.shopName);
+        parcels.accept({ agentDid: origin.did, parcelId: `DERIVE-${tag}`, size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+        mdps.fillTote(bag.code, `DERIVE-${tag}`);
+        dispatch.release(bag.code);
+        return dispatch.suggest(d.did, { from: origin.location, to: { lat: -1.35, lng: 36.95 } }).find((o) => o.ref === bag.code)!;
+      };
+
+      it('switching it off clears it AND keeps it off for the shift', () => {
+        // One decision, honoured. Without the second half, turning it off would clear a road that the very
+        // next claim puts straight back — which is not a switch, it is an argument.
+        const { d, origin, dest, offer } = claimBagTo('X4');
+        dispatch.claim(offer.offerId);
+        expect(fleet.workFor(d.did)).toBeDefined();
+
+        fleet.setDerivedLeg(d.did, false);
+        expect(fleet.workFor(d.did)).toBeUndefined();
+
+        dispatch.claim(anotherBag('X4b', origin, dest, d).offerId); // the same driver takes another
+        expect(fleet.workFor(d.did)).toBeUndefined(); // still off — it did not creep back
+      });
+
+      it('switching it back on lets the NEXT load speak again', () => {
+        const { d, origin, dest, offer } = claimBagTo('X6');
+        dispatch.claim(offer.offerId);
+        fleet.setDerivedLeg(d.did, false);
+        fleet.setDerivedLeg(d.did, true);
+        expect(fleet.workFor(d.did)).toBeUndefined(); // the cleared road does not return on its own…
+
+        dispatch.claim(anotherBag('X6b', origin, dest, d).offerId);
+        expect(fleet.workFor(d.did)).toMatchObject({ source: 'derived' }); // …but the next load speaks
+      });
     });
 
     it('a released claim releases its price too', () => {

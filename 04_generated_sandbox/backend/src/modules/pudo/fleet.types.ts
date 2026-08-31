@@ -170,6 +170,17 @@ export class DeclaredLeg {
   toLabel: string;
   to: GeoPoint;
   declaredAt: string;
+  /**
+   * Who decided this road — the driver, or us.
+   *
+   * Taking a load IS a statement about where you are going: the pickup and the drop are both known the
+   * moment a bag is claimed, and until now the network threw that away and went on matching a driver
+   * against nothing. `derived` is that inference, and it is marked because the app must be able to say so
+   * out loud and offer to switch it off. An inference presented as a declaration is a lie about who chose.
+   *
+   * Absent on every leg declared before this existed, which reads correctly: a driver said it.
+   */
+  source?: 'declared' | 'derived';
 }
 
 /**
@@ -210,6 +221,14 @@ export class Assignment {
    * ending the shift ends it: nobody discovers tomorrow morning that they are still snoozed.
    */
   snoozedUntil?: string;
+  /**
+   * The driver has switched OFF the road we worked out from the load they took.
+   *
+   * One decision, honoured for the rest of the shift. Without it, turning it off would clear a road that
+   * the very next claim puts straight back — which is not a switch, it is an argument. Like the snooze
+   * beside it, it lives on the coupling, so ending the shift ends it.
+   */
+  derivedLegOff?: boolean;
   status: AssignmentStatus;
   startedAt: string;
   endedAt?: string;

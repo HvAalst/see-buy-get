@@ -101,6 +101,11 @@ export function createDriverApi(sbg: SbgClient) {
     /** Take work again, now. */
     resumeWork: (did: string) => sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/resume', { params: { path: { did } } })),
 
+    /** Switch off (or back on) the road the network works out from a load the driver takes. Off also clears
+     *  that road and is honoured for the rest of the shift — a switch, not an argument with the next claim. */
+    setDerivedLeg: (did: string, on: boolean) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/derived-leg', { params: { path: { did } }, body: { on } })),
+
     /** Declare the patch this rider works: "loads within this many km of me". */
     declareArea: (did: string, radiusKm: number) =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/area', { params: { path: { did } }, body: { radiusKm } })),

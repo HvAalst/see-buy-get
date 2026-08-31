@@ -98,6 +98,9 @@ export interface DeclaredLegView {
   toLabel: string;
   to: { lat: number; lng: number };
   declaredAt: string;
+  /** Who decided this road. 'derived' means WE worked it out from a load the driver took — which the screen
+   *  has to say out loud, because presenting our inference as their decision is a lie about who chose. */
+  source?: 'declared' | 'derived';
 }
 
 export interface AssignmentView {
@@ -108,6 +111,9 @@ export interface AssignmentView {
   work?: DeclaredLegView | { kind: 'area'; radiusKm: number; declaredAt: string };
   /** New offers are held until this instant. Absent = taking work. */
   snoozedUntil?: string;
+  /** The driver has switched off the road we work out from the loads they take. One decision, held for
+   *  the shift — so turning it off is a switch rather than an argument with the next claim. */
+  derivedLegOff?: boolean;
   startedAt: string;
 }
 
