@@ -242,6 +242,9 @@ export const enDriver = {
   'driver.offers.metaDetour': 'Detour',
   'driver.offers.metaAbout': '· about',
   'driver.offers.metaAway': 'away',
+  // What the job costs in TIME — the unit a driver spends, and the only one they can justify to passengers.
+  'driver.offers.metaCollect': '+{min} min to collect',
+  'driver.offers.metaDeliver': '+{min} min to drop',
   // A bag only: what the pay is made of, and what the slot in the hold is being spent on.
   'driver.offers.metaInside': 'Inside',
   'driver.offers.parcelOne': '1 parcel',
@@ -323,7 +326,11 @@ export const enDriver = {
   'driver.logic.gone': 'Gone',
   'driver.logic.secLeft': '{seconds} sec left',
   'driver.logic.minLeft': '{min} min left',
+  // Spoken in minutes rather than kilometres, for the same reason the card leads with them: a driver hears
+  // "nine extra minutes" and knows immediately whether it fits the day.
   'driver.logic.offerSpokenBase': '{message} {kg} kilograms to {dest}. {detour} kilometres extra driving.',
+  'driver.logic.offerSpokenTime': '{base} {collect} extra minutes to collect it, and {deliver} more to drop it.',
+  'driver.logic.offerSpokenTimeCollect': '{base} {collect} extra minutes to collect it.',
   'driver.logic.offerSpokenEarn': '{base} You earn {amount}.',
   // Phrased so it survives the singular: "There are 1 parcel" is what the obvious wording produces.
   'driver.logic.offerSpokenInside': '{base} The bag holds {inside}.',

@@ -228,16 +228,18 @@ describe('NotificationDispatcher — rule 2: driver "load near you" (N3)', () =>
   });
 
   it('interrupts a MOVING driver with one load, all of it decidable from the banner', async () => {
-    const offer = { offerId: 'ofr_1', kind: 'tote', ref: 'BAG-9', pickupLabel: 'Mama Njeri Shop', destLabel: 'Addis', weightKg: 12, detourKm: 2, minutesAway: 6 };
+    const offer = { offerId: 'ofr_1', kind: 'tote', ref: 'BAG-9', pickupLabel: 'Mama Njeri Shop', destLabel: 'Addis', weightKg: 12, detourKm: 2, minutesAway: 6, earn: 3.68, collectMin: 4, deliverMin: 11 };
     const { events, notifications } = harness({ offerNear: () => offer });
 
     await events.publish(GlosEvent.Pudo.DriverMoved, { driverDid: 'd-1', location: at(0, 0) });
     const inbox = notifications.inboxFor('d-1');
     expect(inbox).toHaveLength(1);
-    // Everything the decision needs: what, where to, how far off the road, what it pays, where to collect.
-    expect(inbox[0].title).toBe('Bag to Addis · 6 min away');
-    expect(inbox[0].body).toContain('12 kg · 2 km off your road · you earn');
-    expect(inbox[0].body).toContain('Waiting at Mama Njeri Shop');
+    // The three things a driver decides on at the wheel, in that order: what it pays, what it costs them to
+    // go and get it, and what carrying it then costs on top. Kilometres are an abstraction here — minutes
+    // are what a driver spends and the only unit they can justify to a bus full of passengers.
+    expect(inbox[0].title).toBe('Bag to Addis · you earn KES 3.68');
+    expect(inbox[0].body).toContain('+4 min to collect · +11 min to drop');
+    expect(inbox[0].body).toContain('12 kg · waiting at Mama Njeri Shop');
     expect(inbox[0].link).toBe('/?offer=ofr_1'); // one tap → that one card
     expect(inbox[0].data).toMatchObject({ offerId: 'ofr_1', declineToken: 'decline-token' });
   });

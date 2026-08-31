@@ -17646,6 +17646,14 @@
           "destLabel": {
             "type": "string"
           },
+          "destLocation": {
+            "description": "Where the load is going, as a place — so a driver can see and navigate the whole leg rather than only\n the trip to the pickup. Absent when the destination cannot be resolved to a coordinate.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GeoPoint"
+              }
+            ]
+          },
           "weightKg": {
             "type": "number"
           },
@@ -17653,6 +17661,13 @@
             "type": "number"
           },
           "minutesAway": {
+            "type": "number"
+          },
+          "collectMin": {
+            "type": "number",
+            "description": "WHAT THIS JOB COSTS THE DRIVER, IN MINUTES — the two figures a decision at the wheel is actually made\non, and the pair `detourKm` could never give.\n\n`collectMin` is the extra time to go and get it. `deliverMin` is the extra time that CARRYING it then\ncosts, on top of that — because a pickup next door whose destination is an hour the wrong way is not a\nsmall job, and a kilometre figure computed over the pickup alone said it was.\n\nTime rather than distance because that is the unit a driver spends and the only one they can explain\nto anybody else: a bus driver cannot justify eight kilometres to a bus full of passengers, but \"this\ncosts you six minutes\" is a sentence everybody in the vehicle understands.\n\nBoth are measured against the road the driver DECLARED, so they are genuinely extra. With no declared\nroad there is nothing to be extra to, and they report the plain travel time instead — which is the\nhonest reading: when you have no plan, all of it is extra.\n\n`deliverMin` is absent when the destination cannot be placed. Never guessed: a made-up minute is worse\nthan a missing one, because this is the number somebody agrees to."
+          },
+          "deliverMin": {
             "type": "number"
           },
           "message": {

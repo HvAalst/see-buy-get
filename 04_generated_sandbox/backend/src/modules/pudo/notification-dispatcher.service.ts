@@ -247,10 +247,20 @@ export class NotificationDispatcher implements OnModuleInit {
       // on it has to be the number they get.
       const earn = `${NETWORK_CURRENCY} ${(offer.earn ?? offer.price?.total ?? TOTE_LOAD_FEE).toFixed(2)}`;
       const what = offer.kind === 'tote' ? 'Bag' : 'Load';
+      // What it costs, in the unit a driver spends. Kilometres are an abstraction at the wheel — and a
+      // driver carrying passengers cannot justify eight kilometres to a bus, while "six minutes" is a
+      // sentence everybody aboard understands. Two figures because they are two different commitments: the
+      // detour to go and get it, and the time that carrying it then costs on top.
+      const cost =
+        offer.collectMin == null
+          ? `${offer.minutesAway} min away` // an offer minted before the time figures existed
+          : offer.deliverMin != null
+            ? `+${offer.collectMin} min to collect · +${offer.deliverMin} min to drop`
+            : `+${offer.collectMin} min to collect`; // a destination we could not place — say less, not more
       await this.notifications.notify(driverDid, {
         kind: 'load_nearby',
-        title: `${what} to ${offer.destLabel} · ${offer.minutesAway} min away`,
-        body: `${offer.weightKg} kg · ${offer.detourKm} km off your road · you earn ${earn}\nWaiting at ${offer.pickupLabel}`,
+        title: `${what} to ${offer.destLabel} · you earn ${earn}`,
+        body: `${cost}\n${offer.weightKg} kg · waiting at ${offer.pickupLabel}`,
         link: `/?offer=${offer.offerId}`, // one tap → that one card, with the claim button on it
         tag: `load:${offer.ref}`,
         // Two buttons is what a phone gives us, and two is what the decision has. "Not now" carries a

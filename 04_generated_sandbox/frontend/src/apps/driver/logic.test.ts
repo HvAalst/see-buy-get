@@ -283,6 +283,17 @@ describe('freight pricing (S34)', () => {
     expect(offerSpoken(base, t)).not.toContain('The bag holds');
   });
 
+  it('speaks the cost in MINUTES, split into collecting and carrying', () => {
+    // A driver hears "nine extra minutes" and knows at once whether it fits the day; kilometres have to be
+    // converted first, and cannot be justified to a vehicle full of passengers at all.
+    const base = { message: 'Ready.', weightKg: 200, destLabel: 'Site', detourKm: 3, earn: 3.68 };
+    const spoken = offerSpoken({ ...base, collectMin: 4, deliverMin: 11 }, t);
+    expect(spoken).toContain('4 extra minutes to collect it, and 11 more to drop it');
+    // A destination we could not place says less rather than guessing at the second figure.
+    expect(offerSpoken({ ...base, collectMin: 4 }, t)).toContain('4 extra minutes to collect it.');
+    expect(offerSpoken({ ...base, collectMin: 4 }, t)).not.toContain('more to drop');
+  });
+
   it('minEarnFilter keeps only a finite POSITIVE floor — everything else means "show all"', () => {
     expect(minEarnFilter('20')).toBe(20);
     expect(minEarnFilter('12.5')).toBe(12.5);

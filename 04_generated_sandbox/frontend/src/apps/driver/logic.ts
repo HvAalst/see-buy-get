@@ -196,14 +196,25 @@ export function countdownLabel(seconds: number, t: Translate): string {
  * driver who listens rather than reads — the whole reason this exists — heard every figure except the one
  * on the bags they were being offered.
  */
-export function offerSpoken(o: { message: string; weightKg: number; destLabel: string; detourKm: number; earn?: number; parcels?: number }, t: Translate): string {
+export function offerSpoken(
+  o: { message: string; weightKg: number; destLabel: string; detourKm: number; earn?: number; parcels?: number; collectMin?: number; deliverMin?: number },
+  t: Translate,
+): string {
   const base = t('driver.logic.offerSpokenBase', { message: o.message, kg: o.weightKg, dest: o.destLabel, detour: o.detourKm });
   const withEarn = o.earn != null ? t('driver.logic.offerSpokenEarn', { base, amount: money(o.earn) }) : base;
+  // The time cost is spoken too, and for the same reason the card leads with it: a driver hears "nine extra
+  // minutes" and knows at once whether it fits the day, where kilometres need converting first.
+  const withTime =
+    o.collectMin == null
+      ? withEarn
+      : o.deliverMin != null
+        ? t('driver.logic.offerSpokenTime', { base: withEarn, collect: o.collectMin, deliver: o.deliverMin })
+        : t('driver.logic.offerSpokenTimeCollect', { base: withEarn, collect: o.collectMin });
   // A bag's contents are spoken too — the ear should get the same facts as the eye, and how many parcels
   // are in a bag is what the unloading at the far end will actually be.
-  if (o.parcels == null) return withEarn;
+  if (o.parcels == null) return withTime;
   const inside = t(o.parcels === 1 ? 'driver.offers.parcelOne' : 'driver.offers.parcelMany', { count: o.parcels });
-  return t('driver.logic.offerSpokenInside', { base: withEarn, inside });
+  return t('driver.logic.offerSpokenInside', { base: withTime, inside });
 }
 
 /* ---------------------------------------------------------------- pricing -- */

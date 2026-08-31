@@ -231,9 +231,17 @@ export interface OfferView {
   pickupLabel: string;
   pickupLocation?: { lat: number; lng: number };
   destLabel: string;
+  /** Where it is going, as a place. A bag used to carry only a name here, so a driver could be navigated to
+   *  the pickup and then left to work out the rest. Absent when the destination cannot be resolved. */
+  destLocation?: { lat: number; lng: number };
   weightKg: number;
   detourKm: number;
   minutesAway: number;
+  /** What the job costs in MINUTES — extra time to go and collect it, and the extra that carrying it then
+   *  costs on top. The unit a driver actually spends, and the only one they can explain to a vehicle full
+   *  of passengers. `deliverMin` is absent when the destination could not be placed. */
+  collectMin?: number;
+  deliverMin?: number;
   /** Server-composed sentence — already plain language, show it verbatim. */
   message: string;
   /** S34 — the freight offer's price + transparent breakdown (absent on a bag offer, which has no B + D·R·M). */

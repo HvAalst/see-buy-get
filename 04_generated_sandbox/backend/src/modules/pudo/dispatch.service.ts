@@ -508,7 +508,7 @@ export class DispatchService {
         if (load.maxSpend != null && shipperCharge(price.total) > load.maxSpend) continue;
         if (floor != null && price.total < floor) continue;
       }
-      out.push(this.makeOffer(driverDid, load, { detour, minutesAway, price, ratePerKm: profile.ratePerKm, now }));
+      out.push(this.makeOffer(driverDid, load, { detour, minutesAway, price, ratePerKm: profile.ratePerKm, time: this.timeCost(vehicle, route, load), now }));
     }
     return out;
   }
@@ -526,7 +526,11 @@ export class DispatchService {
    * touched: anything already claimed. Snoozing offers is not going off shift, and a driver holding a bag
    * must still be able to hand it over, load it and deliver it.
    */
-  private makeOffer(driverDid: string, load: Claimable, ctx: { detour: number; minutesAway: number; price?: PriceBreakdown; ratePerKm: number; now: number }): Offer {
+  private makeOffer(
+    driverDid: string,
+    load: Claimable,
+    ctx: { detour: number; minutesAway: number; price?: PriceBreakdown; ratePerKm: number; time?: { collectMin: number; deliverMin?: number }; now: number },
+  ): Offer {
     const { detour, minutesAway, price, now } = ctx;
     const earn = this.expectedEarn(load, price, ctx.ratePerKm);
     const existing = [...this.offers.values()].find((o) => o.driverDid === driverDid && o.ref === load.ref && o.status === 'pending' && new Date(o.expiresAt).getTime() > now);
@@ -539,6 +543,9 @@ export class DispatchService {
       pickupLabel: load.pickupLabel,
       pickupLocation: load.pickupLocation,
       destLabel: load.destLabel,
+      destLocation: load.destLocation,
+      collectMin: ctx.time?.collectMin,
+      deliverMin: ctx.time?.deliverMin,
       weightKg: load.weightKg,
       detourKm: detour,
       minutesAway,
@@ -612,7 +619,8 @@ export class DispatchService {
         if (load.maxSpend != null && shipperCharge(price.total) > load.maxSpend) continue;
         if (floor != null && price.total < floor) continue;
       }
-      out.push(this.makeOffer(driverDid, load, { detour: Math.round(km * 10) / 10, minutesAway: this.minutes(from, load.pickupLocation), price, ratePerKm: profile.ratePerKm, now }));
+      // No declared road here — this is the "near me" search, where there is no "on the way" to be extra to.
+      out.push(this.makeOffer(driverDid, load, { detour: Math.round(km * 10) / 10, minutesAway: this.minutes(from, load.pickupLocation), price, ratePerKm: profile.ratePerKm, time: this.timeCost(vehicle, { from }, load), now }));
     }
     return out;
   }
@@ -649,7 +657,7 @@ export class DispatchService {
     // The shipper's budget still binds — an interruption offering a price nobody will pay is worse than silence.
     if (price && load.kind === 'freight' && load.maxSpend != null && shipperCharge(price.total) > load.maxSpend) return null;
 
-    return this.makeOffer(driverDid, load, { detour: Math.round(best.km * 10) / 10, minutesAway: this.minutes(point, load.pickupLocation), price, ratePerKm: profile.ratePerKm, now });
+    return this.makeOffer(driverDid, load, { detour: Math.round(best.km * 10) / 10, minutesAway: this.minutes(point, load.pickupLocation), price, ratePerKm: profile.ratePerKm, time: this.timeCost(vehicle, { from: point }, load), now });
   }
 
   /* --- declining from the lock screen --- */
@@ -1401,6 +1409,11 @@ export class DispatchService {
   private wrapTote(code: string): Claimable | null {
     const t = this.totes.byCodeMaybe(code);
     if (!t) return null;
+    // A bag has always known where it is going by NAME and never as a place. That gap is why "is this on my
+    // way?" could be asked of a freight and not of a bag, why a driver could navigate to the pickup but not
+    // through to the drop, and why the haul had to resolve the destination separately to price it. Resolved
+    // through the one function that knows what a destination can be — a node, or the hub serving a zone.
+    const dest = this.destinationPlace(t);
     // A loaded (in-transit) tote sits on the bus — fall back to an "on board" label so it still shows
     // among the driver's loads. Available/claimed totes resolve to their PUDO/MDP pickup point.
     const place = this.pickupPlace(t.locationId) ?? { loc: { lat: 0, lng: 0 }, label: 'on board' };
@@ -1414,6 +1427,9 @@ export class DispatchService {
       pickupLocation: place.loc,
       pickupLabel: place.label,
       destLabel: t.destinationLabel || 'destination',
+      // Absent when the destination cannot be placed — never a guess, because a coordinate is about to be
+      // used for distances and directions.
+      destLocation: dest?.loc,
       weightKg: t.weightKg,
       // What the bag's pay is made of, and what tells a whole slot's worth from a fifth of one.
       parcels: t.parcels.length,
@@ -1567,6 +1583,44 @@ export class DispatchService {
   private lockToteHaul(code: string, vehicle: Vehicle): void {
     const haul = this.haulFor(code, this.pricingProfile(vehicle).ratePerKm);
     if (haul) this.totes.lockHaul(code, { ...haul, lockedAt: new Date().toISOString() });
+  }
+
+  /**
+   * The two figures a driver actually decides on: the extra minutes to COLLECT a load, and the extra
+   * minutes that DELIVERING it then costs on top.
+   *
+   * Measured against the road they declared, so both are genuinely additional:
+   *
+   *   collect = (here→pickup) + (pickup→road end) − (here→road end)
+   *   deliver = (pickup→drop) + (drop→road end) − (pickup→road end)
+   *
+   * The two sum to the whole diversion, and splitting them is what makes the offer honest. `detourKm` has
+   * always treated a load as a single via-point, which silently priced the DESTINATION at zero: a pickup
+   * next door whose drop is an hour the wrong way reported a two-kilometre detour. The first line above is
+   * that same old figure; the second is the part that was missing.
+   *
+   * With no declared road (`to` absent — a rider working a patch, where there is no "on the way") there is
+   * nothing for the time to be extra TO, so each leg reports its plain travel time. That is the honest
+   * reading rather than a special case: with no plan, all of it is extra.
+   *
+   * At the vehicle's own speed, because a bike and a truck do not spend the same minutes on the same road.
+   */
+  private timeCost(
+    vehicle: Vehicle,
+    route: { from: GeoPoint; to?: GeoPoint },
+    load: Claimable,
+  ): { collectMin: number; deliverMin?: number } {
+    const speed = VEHICLE_SPEED_KMH[vehicle.vehicleClass === 'truck' ? 'truck' : 'bus'];
+    const eta = (a: GeoPoint, b: GeoPoint) => this.router.etaMinutes(a, b, speed);
+    const drop = load.destLocation;
+    const end = route.to;
+    if (!end) {
+      return { collectMin: eta(route.from, load.pickupLocation), deliverMin: drop ? eta(load.pickupLocation, drop) : undefined };
+    }
+    const collect = Math.max(0, eta(route.from, load.pickupLocation) + eta(load.pickupLocation, end) - eta(route.from, end));
+    if (!drop) return { collectMin: collect };
+    const deliver = Math.max(0, eta(load.pickupLocation, drop) + eta(drop, end) - eta(load.pickupLocation, end));
+    return { collectMin: collect, deliverMin: deliver };
   }
 
   private minutes(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {

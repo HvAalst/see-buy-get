@@ -225,6 +225,19 @@ function OfferCard({ offer, now }: { offer: OfferView; now: number }) {
             {t('driver.offers.metaTo')} <b>{offer.destLabel}</b>
           </span>
         </p>
+        {/* What it costs, in the unit a driver spends. Two figures because they are two commitments: the
+            detour to go and get it, and the time carrying it then costs on top. The kilometres stay, one
+            line down and secondary — the money is paid on them, so they must be visible, but they are not
+            what the decision is made on. */}
+        {offer.collectMin != null ? (
+          <p class="meta">
+            <Icon name="clock" size={21} class="meta__ic" />
+            <span>
+              {t('driver.offers.metaCollect', { min: offer.collectMin })}
+              {offer.deliverMin != null ? <> · {t('driver.offers.metaDeliver', { min: offer.deliverMin })}</> : null}
+            </span>
+          </p>
+        ) : null}
         <p class="meta">
           <Icon name="route" size={21} class="meta__ic" />
           <span>
@@ -252,9 +265,13 @@ function OfferCard({ offer, now }: { offer: OfferView; now: number }) {
         ))}
       </div>
 
-      {/* G3 — mobile-first: hand the pickup coordinate straight to the phone's maps app for turn-by-turn. */}
+      {/* G3 — mobile-first: hand the coordinates straight to the phone's maps app for turn-by-turn. Both
+          ends now, where the far one is known: the pickup is the next thing a driver does, but the drop is
+          how they judge whether the job fits the rest of the day — and a bag could not answer that until
+          its destination stopped being only a name. */}
       <div class="offer__nav">
         <OpenInMaps point={offer.pickupLocation} label={t('driver.navigateTo', { label: offer.pickupLabel })} />
+        {offer.destLocation ? <OpenInMaps point={offer.destLocation} label={t('driver.navigateTo', { label: offer.destLabel })} /> : null}
       </div>
     </article>
   );

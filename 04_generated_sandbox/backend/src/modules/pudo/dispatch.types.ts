@@ -508,8 +508,14 @@ export class Claimable {
   pickupLocation: GeoPoint;
   pickupLabel: string;
   destLabel: string;
-  /** S34 — the haul destination coordinate, when known (freight sets it), so pricing can compute the
-   *  pickup→dropoff leg. A tote carries only a dest label, so this stays undefined for totes. */
+  /**
+   * The haul destination as a PLACE, so pricing and routing can work the pickup→dropoff leg.
+   *
+   * Freight has always set it. A bag now does too: it addresses itself to a node or to a zone, and both
+   * resolve — a zone to the hub that serves it, which is genuinely where such a bag is driven. Still
+   * absent where neither resolves, because a coordinate here becomes a distance and a direction, and a
+   * guessed one would be worse than none.
+   */
   destLocation?: GeoPoint;
   weightKg: number;
   fragile: boolean;
@@ -567,9 +573,33 @@ export class Offer {
   pickupLabel: string;
   pickupLocation: GeoPoint;
   destLabel: string;
+  /** Where the load is going, as a place — so a driver can see and navigate the whole leg rather than only
+   *  the trip to the pickup. Absent when the destination cannot be resolved to a coordinate. */
+  destLocation?: GeoPoint;
   weightKg: number;
   detourKm: number;
   minutesAway: number;
+  /**
+   * WHAT THIS JOB COSTS THE DRIVER, IN MINUTES — the two figures a decision at the wheel is actually made
+   * on, and the pair `detourKm` could never give.
+   *
+   * `collectMin` is the extra time to go and get it. `deliverMin` is the extra time that CARRYING it then
+   * costs, on top of that — because a pickup next door whose destination is an hour the wrong way is not a
+   * small job, and a kilometre figure computed over the pickup alone said it was.
+   *
+   * Time rather than distance because that is the unit a driver spends and the only one they can explain
+   * to anybody else: a bus driver cannot justify eight kilometres to a bus full of passengers, but "this
+   * costs you six minutes" is a sentence everybody in the vehicle understands.
+   *
+   * Both are measured against the road the driver DECLARED, so they are genuinely extra. With no declared
+   * road there is nothing to be extra to, and they report the plain travel time instead — which is the
+   * honest reading: when you have no plan, all of it is extra.
+   *
+   * `deliverMin` is absent when the destination cannot be placed. Never guessed: a made-up minute is worse
+   * than a missing one, because this is the number somebody agrees to.
+   */
+  collectMin?: number;
+  deliverMin?: number;
   message: string;
   /** S34 — the priced offer: the driver's earning + the transparent B + D·R·M breakdown. FREIGHT ONLY —
    *  a bag has no B + D·R·M, so read `earn` for the figure that covers both kinds. */

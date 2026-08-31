@@ -2383,6 +2383,50 @@ describe('PUDO Light', () => {
       expect(offer.earn).toBe(offer.price!.total); // …and its earning is still the priced total
     });
 
+    it('a bag now knows where it is going as a PLACE, not only as a name', () => {
+      // The gap that made "is this on my way?" answerable for a freight and not for a bag — and left a
+      // driver navigated to the pickup and then abandoned. It is also what the road price is measured over.
+      const dest = onboardAgent('Haul Dest G', 'SouthTown', 50); agents.setLocation(dest.did, { lat: -1.35, lng: 36.95 });
+      const { origin, d, bag } = bagRun('G', { destinationNodeId: dest.did });
+      const [offer] = dispatch.suggest(d.did, { from: origin.location, to: dest.location }).filter((o) => o.ref === bag.code);
+      expect(offer.destLocation).toEqual(dest.location);
+    });
+
+    it('leaves the destination unplaced rather than guessing at one', () => {
+      // A coordinate here becomes a distance and a direction. A zone centroid would look like an answer and
+      // would not be one, so an unresolvable destination stays absent and every consumer can see that.
+      const { origin, d, bag } = bagRun('H', { destinationNodeId: 'zone-nobody-serves' });
+      const [offer] = dispatch.suggest(d.did, { from: origin.location, to: { lat: -1.3, lng: 36.9 } }).filter((o) => o.ref === bag.code);
+      expect(offer.destLocation).toBeUndefined();
+    });
+
+    it('costs the driver in MINUTES, split into collecting it and then carrying it', () => {
+      // Time is what a driver spends, and the only unit they can justify to a vehicle full of passengers.
+      const dest = onboardAgent('Haul Dest T', 'SouthTown', 50); agents.setLocation(dest.did, { lat: -1.35, lng: 36.95 });
+      const { origin, d, bag } = bagRun('T', { destinationNodeId: dest.did });
+      // A road that ends where the driver was already going — near the pickup, far from the drop.
+      const [offer] = dispatch.suggest(d.did, { from: origin.location, to: { lat: -1.21, lng: 36.81 } }).filter((o) => o.ref === bag.code);
+      expect(offer.collectMin).toBeGreaterThanOrEqual(0);
+      expect(offer.deliverMin).toBeGreaterThan(0); // the drop is well off this road, and it must SAY so
+    });
+
+    it('counts the DESTINATION, which the kilometre figure never did', () => {
+      // The defect this exposes: detourKm treats a load as a single via-point, so a pickup on the doorstep
+      // whose drop is far the wrong way reported a tiny detour. Two bags collected from the same doorstep,
+      // going opposite ways, were indistinguishable on the old figure.
+      const near = onboardAgent('Drop Near', 'NorthTown', 50); agents.setLocation(near.did, { lat: -1.205, lng: 36.805 });
+      const far = onboardAgent('Drop Far', 'SouthTown', 50); agents.setLocation(far.did, { lat: -1.9, lng: 37.6 });
+      const a = bagRun('N', { destinationNodeId: near.did });
+      const b = bagRun('F2', { destinationNodeId: far.did });
+      const road = { from: a.origin.location, to: { lat: -1.21, lng: 36.81 } };
+
+      const [offerNear] = dispatch.suggest(a.d.did, road).filter((o) => o.ref === a.bag.code);
+      const [offerFar] = dispatch.suggest(b.d.did, { from: b.origin.location, to: road.to }).filter((o) => o.ref === b.bag.code);
+
+      expect(offerNear.detourKm).toBe(offerFar.detourKm); // the old figure cannot tell them apart…
+      expect(offerFar.deliverMin!).toBeGreaterThan(offerNear.deliverMin!); // …and the new one can
+    });
+
     it('a released claim releases its price too', () => {
       // The next driver's vehicle, distance and the bag's contents may all differ, so their number must be
       // struck fresh rather than inherited from somebody who walked away.
