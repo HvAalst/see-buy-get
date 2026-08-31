@@ -1,11 +1,11 @@
-import { Test } from '@nestjs/testing';
+﻿import { Test } from '@nestjs/testing';
 import { AgentService } from './agent.service';
 import { GazetteerGeocoder, GEOCODER } from './geocoder';
 import { HeuristicRouter, ROUTER } from './router';
 import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
 import { ParcelService, birthplaceOf, custodianOf, custodyAt, labelDate, ownershipOf } from './parcel.service';
-import { MAX_WORK_RADIUS_KM, OTP_MAX_ATTEMPTS, TRADE_CREDIT_LIMIT, TRADE_CREDIT_PARCELS, WHOLESALE } from './pudo.config';
+import { MAX_WORK_RADIUS_KM, OTP_MAX_ATTEMPTS, TOTE_LOAD_FEE, TRADE_CREDIT_LIMIT, TRADE_CREDIT_PARCELS, WHOLESALE } from './pudo.config';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
 import { CargoService } from './cargo.service';
 import { SbgController } from './pudo.controller';
@@ -2273,6 +2273,127 @@ describe('PUDO Light', () => {
     expect(() => dispatch.claim(offer.offerId)).toThrow(/capability|coldChain/i);
     expect(totes.requireByCode(bag.code).status).toBe('available'); // never reserved to an incapable driver
     expect(totes.requireByCode(bag.code).claimedBy).toBeUndefined();
+  });
+
+  describe('a bag is paid for the road it travels, not a flat fee', () => {
+    /** A courier with a KNOWN per-km rate, and a bag from `origin` addressed to `dest`. */
+    const bagRun = (tag: string, opts: { destinationNodeId: string; parcels?: number } = { destinationNodeId: '' }) => {
+      const origin = onboardAgent(`Haul Origin ${tag}`, 'NorthTown', 50);
+      const d = drivers.register({ displayName: `H${tag}`, fullName: `H ${tag}`, nationalId: `DRV-HAUL-${tag}`, mobile: `+2549111${tag}`, licenceClasses: ['bike'] });
+      const bike = vehicles.register({ plate: `HV-${tag}`, vehicleClass: 'bike', ownerName: 'H', pricePerKm: 0.1 });
+      fleet.couple(d.did, bike.vehicleId);
+      const bag = totes.register(origin.did);
+      totes.assign(bag.code, opts.destinationNodeId, 'Somewhere');
+      for (let i = 0; i < (opts.parcels ?? 1); i += 1) {
+        const pid = `HAUL-${tag}-${i}`;
+        parcels.accept({ agentDid: origin.did, parcelId: pid, size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+        mdps.fillTote(bag.code, pid);
+      }
+      dispatch.release(bag.code);
+      return { origin, d, bag };
+    };
+
+    it('locks the road price at CLAIM, from the distance, the vehicle’s own rate and what is in the bag', () => {
+      // Locked here for the same reason a freight's price is: the driver agreed to the job whose distance
+      // and contents were what they were at that moment.
+      const dest = onboardAgent('Haul Dest A', 'SouthTown', 50); agents.setLocation(dest.did, { lat: -1.35, lng: 36.95 });
+      const { origin, d, bag } = bagRun('A', { destinationNodeId: dest.did, parcels: 2 });
+      const [offer] = dispatch.suggest(d.did, { from: origin.location, to: dest.location }).filter((o) => o.ref === bag.code);
+      dispatch.claim(offer.offerId);
+
+      const haul = totes.requireByCode(bag.code).haul!;
+      expect(haul.basis).toBe('measured');
+      expect(haul.ratePerKm).toBe(0.1); // the CARRYING vehicle's own advertised rate, not a network default
+      expect(haul.units).toBe(2); // two mediums = two medium-equivalents, the buyers' own basis
+      expect(haul.tripKm).toBeGreaterThan(0);
+      expect(haul.road).toBeCloseTo(haul.tripKm * 0.1 * 2, 2);
+    });
+
+    it('pays the handling on LOAD and the road on ARRIVAL — a journey not yet made is not owed', () => {
+      const dest = onboardAgent('Haul Dest B', 'SouthTown', 50); agents.setLocation(dest.did, { lat: -1.35, lng: 36.95 });
+      const { origin, d, bag } = bagRun('B', { destinationNodeId: dest.did });
+      const [offer] = dispatch.suggest(d.did, { from: origin.location, to: dest.location }).filter((o) => o.ref === bag.code);
+      dispatch.claim(offer.offerId);
+      const road = totes.requireByCode(bag.code).haul!.road;
+
+      mdps.loadBag(bag.code, drivers.get(d.did).badgeId!);
+      const afterLoad = gate.entries({ type: 'DRIVER_PAYOUT' }).filter((e) => e.reference === d.did);
+      expect(afterLoad).toHaveLength(1);
+      expect(afterLoad[0].amount).toBe(TOTE_LOAD_FEE); // the scan is real work and is earned on the spot
+
+      mdps.deliverBag(dest.did, bag.code);
+      const afterArrival = gate.entries({ type: 'DRIVER_PAYOUT' }).filter((e) => e.reference === d.did);
+      expect(afterArrival).toHaveLength(2);
+      // Asserted as a SET — the ledger reads newest-first, and which end of it the road lands on is not
+      // what this test is about.
+      expect(afterArrival.map((e) => e.amount).sort((a, b) => a - b)).toEqual([TOTE_LOAD_FEE, road].sort((a, b) => a - b));
+      expect(road).toBeGreaterThan(TOTE_LOAD_FEE); // the point: the road is worth more than the fifty cents
+    });
+
+    it('records an unplaceable destination rather than inventing a distance', () => {
+      // A zone nothing serves. The bag still moves and the driver is still paid to handle it, but nobody
+      // guesses at a road — and `basis` is what lets an operator SEE that, instead of it rounding to zero.
+      const { origin, d, bag } = bagRun('C', { destinationNodeId: 'zone-nobody-serves' });
+      const [offer] = dispatch.suggest(d.did, { from: origin.location, to: { lat: -1.3, lng: 36.9 } }).filter((o) => o.ref === bag.code);
+      dispatch.claim(offer.offerId);
+      const haul = totes.requireByCode(bag.code).haul!;
+      expect(haul.basis).toBe('unresolved');
+      expect(haul.road).toBe(0);
+    });
+
+    it('tells the driver what a bag pays BEFORE they agree to it, and pays exactly that', () => {
+      // The consent surface. A bag offer used to carry no price at all, and every screen fell back to the
+      // flat loading fee — true while that was the whole of a bag's pay, and an understatement the moment
+      // the road entered it. A driver comparing "Bag · 0.50" against a priced freight would never take one.
+      const dest = onboardAgent('Haul Dest E', 'SouthTown', 50); agents.setLocation(dest.did, { lat: -1.35, lng: 36.95 });
+      const { origin, d, bag } = bagRun('E', { destinationNodeId: dest.did, parcels: 2 });
+      const [offer] = dispatch.suggest(d.did, { from: origin.location, to: dest.location }).filter((o) => o.ref === bag.code);
+
+      expect(offer.earn).toBeGreaterThan(TOTE_LOAD_FEE); // not the flat fee any more
+      dispatch.claim(offer.offerId);
+      mdps.loadBag(bag.code, drivers.get(d.did).badgeId!);
+      mdps.deliverBag(dest.did, bag.code);
+
+      // What was promised is what arrives: the offer's figure equals the sum of the two ledger lines.
+      const paid = gate.entries({ type: 'DRIVER_PAYOUT' }).filter((e) => e.reference === d.did).reduce((s, e) => s + e.amount, 0);
+      expect(Math.round(paid * 100) / 100).toBe(offer.earn);
+    });
+
+    it('shows what the pay is MADE of — how many parcels, and how full the bag is', () => {
+      // A figure with nothing behind it is a figure taken on trust. These two are also the only way to tell
+      // a bag worth a whole slot in the hold from one worth a fifth of it, which is the real decision when
+      // there are two spaces left and the day is not over.
+      const dest = onboardAgent('Haul Dest F', 'SouthTown', 50); agents.setLocation(dest.did, { lat: -1.35, lng: 36.95 });
+      const { origin, d, bag } = bagRun('F', { destinationNodeId: dest.did, parcels: 3 });
+      const [offer] = dispatch.suggest(d.did, { from: origin.location, to: dest.location }).filter((o) => o.ref === bag.code);
+      expect(offer.parcels).toBe(3);
+      expect(offer.fillPct).toBe(totes.fillPct(totes.requireByCode(bag.code))); // the bag's own figure, not a re-derivation
+      expect(offer.fillPct).toBeGreaterThan(0);
+    });
+
+    it('a freight offer carries no bag fill — it is not a bag', () => {
+      // The fields are bag-only on purpose. A freight showing "0 parcels · 0% full" would be a screen
+      // inventing a fact about a load that has no such property.
+      const d = negotiator('PF');
+      const pickup = { lat: -1.2, lng: 36.8 };
+      const f = dispatch.registerFreight({ description: 'Steel', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', destLocation: pickup, weightKg: 400, packaging: 'palletised', dimensionsCm: [120, 100, 80] });
+      const [offer] = dispatch.suggest(d.did, { from: pickup, to: pickup }).filter((o) => o.ref === f.freightId);
+      expect(offer.parcels).toBeUndefined();
+      expect(offer.fillPct).toBeUndefined();
+      expect(offer.earn).toBe(offer.price!.total); // …and its earning is still the priced total
+    });
+
+    it('a released claim releases its price too', () => {
+      // The next driver's vehicle, distance and the bag's contents may all differ, so their number must be
+      // struck fresh rather than inherited from somebody who walked away.
+      const dest = onboardAgent('Haul Dest D', 'SouthTown', 50); agents.setLocation(dest.did, { lat: -1.35, lng: 36.95 });
+      const { origin, d, bag } = bagRun('D', { destinationNodeId: dest.did });
+      const [offer] = dispatch.suggest(d.did, { from: origin.location, to: dest.location }).filter((o) => o.ref === bag.code);
+      dispatch.claim(offer.offerId);
+      expect(totes.requireByCode(bag.code).haul).toBeDefined();
+      totes.unclaim(bag.code);
+      expect(totes.requireByCode(bag.code).haul).toBeUndefined();
+    });
   });
 
   it('onboards a bike courier on the light registry — ACTIVE immediately with a badge (Ch 19)', () => {

@@ -121,16 +121,47 @@ export const MARKET_RAW_MAX = 2.0; // …and ceiling — the market never asks f
 export const MARKET_SUPPLY_STALE_MIN = 30; // a driver's GPS older than this no longer counts as live supply
 export const MARKET_RECOMPUTE_MS = 120_000; // recompute the whole-map pulse every 2 minutes
 
-// Heavier parcels occupy more of a vehicle — scale the per-km transport by size so a heavy isn't priced
-// like a letter (keeps the per-km rate the provider advertises, multiplied by how much room it takes).
-export const SIZE_TRANSPORT_FACTOR: Record<ParcelSize, number> = { S: 0.4, M: 1, L: 1.6, HEAVY: 3 };
-
 // MDP tote-bag capacity (Compendium Ch 17 — Main Distribution Point sorting).
 // A tote holds at most BAG_CAPACITY_UNITS of "fill". Per-size fill is tuned so the three field rules
 // land exactly: 50 letters + 1 medium = 10, 10 mediums = 10, and a single >20 kg parcel = 10 (it
 // fills a bag on its own — nothing shares with a heavy). Bulk goods never enter a tote (truck-direct).
 export const BAG_CAPACITY_UNITS = 10;
 export const SIZE_UNITS: Record<ParcelSize, number> = { S: 0.18, M: 1, L: 2, HEAVY: 10 };
+
+/**
+ * How much of a vehicle a parcel takes, as a multiplier on the per-km rate — DERIVED from SIZE_UNITS.
+ *
+ * It used to be its own table, `{ S: 0.4, M: 1, L: 1.6, HEAVY: 3 }`, and the two disagreed about the same
+ * physical fact. A HEAVY consumes a whole bag (10 of 10 units — nothing shares with a heavy) and was
+ * charged for three mediums' worth of road. The bag it denies to everything else was a cost the network
+ * silently absorbed on every heavy parcel it moved, and small parcels were paying for it: an S takes 1.8%
+ * of a bag and was charged 40% of a medium.
+ *
+ * So there is now ONE statement of how much room a parcel takes, and transport is allocated by the same
+ * share that consumes the scarce thing. Transport is bought BY THE BAG, so a parcel's share of a bag is
+ * exactly its share of that bag's cost — which is the standard volumetric allocation, with SIZE_UNITS as
+ * the dimensional weight and BAG_CAPACITY_UNITS as the tote's.
+ *
+ * Normalised to M = 1 so the reference size's price is unchanged and the rest move around it. The effect
+ * is a REDISTRIBUTION, not a rise: S 0.4 → 0.18, M 1 → 1, L 1.6 → 2, HEAVY 3 → 10.
+ *
+ * ONE HONEST CAVEAT. `SIZE_UNITS.HEAVY = 10` is not purely a measurement — it encodes the handling POLICY
+ * that a heavy travels alone. That policy is what justifies charging a heavy for the whole bag, so if the
+ * policy ever changes (heavies allowed to share), this factor must follow it down. They are one fact now,
+ * which is the point: it cannot drift again without someone noticing.
+ */
+export const SIZE_TRANSPORT_FACTOR: Record<ParcelSize, number> = {
+  S: round2(SIZE_UNITS.S / SIZE_UNITS.M),
+  M: round2(SIZE_UNITS.M / SIZE_UNITS.M),
+  L: round2(SIZE_UNITS.L / SIZE_UNITS.M),
+  HEAVY: round2(SIZE_UNITS.HEAVY / SIZE_UNITS.M),
+};
+
+/** A parcel's share of one tote — the allocation key for anything bought by the bag and consumed by the
+ *  parcel. `SIZE_TRANSPORT_FACTOR` is this same ratio expressed against a medium instead of a whole bag. */
+export function bagShare(size: ParcelSize): number {
+  return SIZE_UNITS[size] / BAG_CAPACITY_UNITS;
+}
 export const TOTE_CODE_PREFIX = 'BAG';
 
 // How many bags a shop can have STANDING ON ITS FLOOR at once — the other capacity, and until now the

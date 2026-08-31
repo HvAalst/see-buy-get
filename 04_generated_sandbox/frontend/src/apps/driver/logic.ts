@@ -189,10 +189,21 @@ export function countdownLabel(seconds: number, t: Translate): string {
   return t('driver.logic.minLeft', { min: Math.floor(seconds / 60) });
 }
 
-/** Detour, weight, time and (for freight) the earning in one plain sentence for the read-aloud summary. */
-export function offerSpoken(o: { message: string; weightKg: number; destLabel: string; detourKm: number; price?: PriceBreakdown }, t: Translate): string {
+/**
+ * Detour, weight, time and the earning in one plain sentence for the read-aloud summary.
+ *
+ * Reads `earn`, which covers a bag as well as a freight. It used to read the freight-only price, so a
+ * driver who listens rather than reads — the whole reason this exists — heard every figure except the one
+ * on the bags they were being offered.
+ */
+export function offerSpoken(o: { message: string; weightKg: number; destLabel: string; detourKm: number; earn?: number; parcels?: number }, t: Translate): string {
   const base = t('driver.logic.offerSpokenBase', { message: o.message, kg: o.weightKg, dest: o.destLabel, detour: o.detourKm });
-  return o.price ? t('driver.logic.offerSpokenEarn', { base, amount: money(o.price.total) }) : base;
+  const withEarn = o.earn != null ? t('driver.logic.offerSpokenEarn', { base, amount: money(o.earn) }) : base;
+  // A bag's contents are spoken too — the ear should get the same facts as the eye, and how many parcels
+  // are in a bag is what the unloading at the far end will actually be.
+  if (o.parcels == null) return withEarn;
+  const inside = t(o.parcels === 1 ? 'driver.offers.parcelOne' : 'driver.offers.parcelMany', { count: o.parcels });
+  return t('driver.logic.offerSpokenInside', { base: withEarn, inside });
 }
 
 /* ---------------------------------------------------------------- pricing -- */

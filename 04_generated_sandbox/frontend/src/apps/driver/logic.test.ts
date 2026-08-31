@@ -264,10 +264,23 @@ describe('freight pricing (S34)', () => {
     expect(blockerTone('unknown')).toBe('idle');
   });
 
-  it('adds the earning to the spoken offer only when the load is priced', () => {
+  it('speaks the earning for EITHER kind of load, and stays quiet when there is no figure', () => {
+    // Reads `earn`, which a bag has too. It used to read the freight-only price, so a driver who listens
+    // rather than reads heard every figure except the one on the bags they were being offered.
     const base = { message: 'Ready.', weightKg: 200, destLabel: 'Site', detourKm: 3 };
-    expect(offerSpoken({ ...base, price }, t)).toContain('You earn 16.90');
-    expect(offerSpoken(base, t)).not.toContain('You earn');
+    expect(offerSpoken({ ...base, earn: price.total }, t)).toContain('You earn 16.90');
+    expect(offerSpoken({ ...base, earn: 3.68 }, t)).toContain('You earn 3.68'); // a bag: handling + road
+    expect(offerSpoken(base, t)).not.toContain('You earn'); // uncoupled — nothing to price against
+  });
+
+  it('speaks what is IN a bag, and says nothing about contents for a freight', () => {
+    // The ear gets the same facts as the eye. How many parcels are in a bag is what the unloading at the
+    // far end will actually be — and a freight has no such property to report.
+    const base = { message: 'Ready.', weightKg: 200, destLabel: 'Site', detourKm: 3, earn: 3.68 };
+    expect(offerSpoken({ ...base, parcels: 4 }, t)).toContain('The bag holds 4 parcels.');
+    // …and it has to survive the singular, which "There are 1 parcel" would not.
+    expect(offerSpoken({ ...base, parcels: 1 }, t)).toContain('The bag holds 1 parcel.');
+    expect(offerSpoken(base, t)).not.toContain('The bag holds');
   });
 
   it('minEarnFilter keeps only a finite POSITIVE floor — everything else means "show all"', () => {

@@ -96,6 +96,37 @@ export function computeFreightPrice(input: { baseFee: number; ratePerKm: number;
   return { baseFee, distanceKm, deadheadKm, loadedKm, ratePerKm, multiplier, effectiveRate, total };
 }
 
+/**
+ * What carrying a BAG is worth, over and above the handling fee for scanning it aboard.
+ *
+ * The tote path used to pay a driver a flat `TOTE_LOAD_FEE` and nothing else — the same fifty cents for two
+ * kilometres and for sixty, for a bag holding one parcel and for a bag holding twelve. Meanwhile the buyers
+ * inside that bag were each charged `km × rate × their size factor`. Revenue was measured per kilometre and
+ * per unit of room; payment was measured in neither. This closes that.
+ *
+ * `units` is the bag's fill in MEDIUM-EQUIVALENTS (`Tote.unitsUsed`, summed from SIZE_UNITS with M = 1) —
+ * deliberately the SAME basis the quote charged on, so for the first time the two sides of the transaction
+ * are denominated in one unit and can be compared.
+ *
+ * PAID FOR WHAT IS CARRIED, NOT FOR THE SLOT. A half-full bag pays half, and that is right rather than
+ * harsh: this is belly freight in a vehicle that was going anyway, so the marginal cost of the empty space
+ * is near zero — and paying a full-bag rate for air would spend a 2% margin on a shortfall that is often
+ * 50%. The empty space is an opportunity cost only if somebody else wanted it, and the answer to that is to
+ * fill the trip, not to subsidise the emptiness.
+ *
+ * No market multiplier, unlike freight: surge deliberately does not reach parcels, and a bag is parcels.
+ */
+export function computeToteHaul(input: { ratePerKm: number; tripKm: number; units: number }): { tripKm: number; ratePerKm: number; units: number; road: number } {
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const num = (n: number) => (Number.isFinite(n) ? n : 0);
+  // Money into a ledger: every input is sanitised to a finite, non-negative number FIRST. An unresolvable
+  // leg arrives here as 0 km and correctly earns nothing extra, rather than propagating a NaN into a payout.
+  const tripKm = round2(Math.max(0, num(input.tripKm)));
+  const ratePerKm = num(input.ratePerKm);
+  const units = round2(Math.max(0, num(input.units)));
+  return { tripKm, ratePerKm, units, road: round2(tripKm * Math.max(0, ratePerKm) * units) };
+}
+
 /** What the SHIPPER pays = the driver's earning + the platform fee (the same 2% daughter-co margin the
  *  parcel side applies via withPlatformFee). The driver receives `driverTotal`; the platform keeps the fee. */
 export function shipperCharge(driverTotal: number): number {

@@ -242,6 +242,11 @@ export const enDriver = {
   'driver.offers.metaDetour': 'Detour',
   'driver.offers.metaAbout': '· about',
   'driver.offers.metaAway': 'away',
+  // A bag only: what the pay is made of, and what the slot in the hold is being spent on.
+  'driver.offers.metaInside': 'Inside',
+  'driver.offers.parcelOne': '1 parcel',
+  'driver.offers.parcelMany': '{count} parcels',
+  'driver.offers.metaFull': '{pct}% full',
 
   // Earnings screen (jobs + earnings register).
   'driver.earn.earned': 'Earned',
@@ -320,6 +325,8 @@ export const enDriver = {
   'driver.logic.minLeft': '{min} min left',
   'driver.logic.offerSpokenBase': '{message} {kg} kilograms to {dest}. {detour} kilometres extra driving.',
   'driver.logic.offerSpokenEarn': '{base} You earn {amount}.',
+  // Phrased so it survives the singular: "There are 1 parcel" is what the obvious wording produces.
+  'driver.logic.offerSpokenInside': '{base} The bag holds {inside}.',
   'driver.logic.baseFee': 'Base fee {amount}',
   'driver.logic.distanceAt': '{km} km at {rate} per km',
   'driver.logic.distanceSplit': 'of which {empty} km empty to the pickup, {loaded} km loaded',

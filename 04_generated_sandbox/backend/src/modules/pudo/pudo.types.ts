@@ -262,6 +262,34 @@ export class Tote {
   sealPromptedFor?: 'full' | 'max_wait';
   /** When the shop closed it. The record that the completeness gate ran, distinct from being published. */
   sealedAt?: string;
+  /**
+   * What carrying this bag is worth, LOCKED AT CLAIM — the tote analogue of a freight's `lockedPrice`.
+   *
+   * Locked rather than computed at delivery for the same reason freight locks: the driver agreed to a job
+   * whose distance and contents were what they were at that moment. A parcel added after they claimed, or a
+   * destination re-pointed by a re-sort, must not silently rewrite what they are owed either way.
+   *
+   * Absent on a bag nobody claimed through the marketplace (it can still be loaded), and on every record
+   * written before this existed — both settle on the handling fee alone, and `basis` says which.
+   */
+  haul?: ToteHaul;
+}
+
+/** The road half of a bag's pay: what it was worth, and what that figure was computed from. */
+export class ToteHaul {
+  tripKm: number;
+  ratePerKm: number; // the carrying vehicle's OWN advertised rate — the fuel-pump model, as everywhere else
+  units: number; // the bag's fill in medium-equivalents, the same basis the buyers were charged on
+  road: number; // tripKm × ratePerKm × units
+  /**
+   * How much the figure can be trusted:
+   *  - 'measured'   — both ends resolved to real coordinates
+   *  - 'unresolved' — the destination could not be placed, so the road is 0 and only handling is paid.
+   *    Recorded rather than hidden: a driver being paid nothing for a real journey is a thing an operator
+   *    must be able to SEE, not a silent rounding to zero.
+   */
+  basis: 'measured' | 'unresolved';
+  lockedAt: string;
 }
 
 export type ConsignmentStatus = 'open' | 'posted';
@@ -565,6 +593,11 @@ export class Parcel {
   /** The margin RATE this parcel was priced at, stamped at mint. The sister can turn its knob at any
    *  time; a parcel in transit must settle on the rate its price was quoted with, not on today's. */
   platformFeePct?: number;
+  /** The SIZE FACTOR its transport was quoted at, stamped at mint for the same reason. A network constant
+   *  today, but one that will be retuned — and the flexible rebate recomputes the real cost at delivery,
+   *  so an unstamped factor would re-price parcels already sold. Absent on records written before this
+   *  field existed; read it through ParcelService.transportFactorOf, which falls back to the constant. */
+  transportFactor?: number;
   shipmentCost?: number; // what the vendor is billed prepaid (nodeFees + transport + platform fee)
   /** The money every figure above is in — the SELLING sister's, stamped at mint. Absent on records
    *  written before prices named their unit; read it through ParcelService.currencyOf. */

@@ -241,7 +241,11 @@ export class NotificationDispatcher implements OnModuleInit {
 
       // Everything needed to decide, in the two lines a lock screen will actually show: what and where to,
       // how far off the road, what it pays, and where to collect it.
-      const earn = offer.price ? `${NETWORK_CURRENCY} ${offer.price.total.toFixed(2)}` : `${NETWORK_CURRENCY} ${TOTE_LOAD_FEE.toFixed(2)}`;
+      // The offer's OWN figure for both kinds. This used to fall back to the flat loading fee for a bag,
+      // which was true while that was all a bag paid — and became an understatement the moment a bag
+      // started earning for the road as well. A lock screen is where somebody agrees to a job; the number
+      // on it has to be the number they get.
+      const earn = `${NETWORK_CURRENCY} ${(offer.earn ?? offer.price?.total ?? TOTE_LOAD_FEE).toFixed(2)}`;
       const what = offer.kind === 'tote' ? 'Bag' : 'Load';
       await this.notifications.notify(driverDid, {
         kind: 'load_nearby',

@@ -236,8 +236,15 @@ export interface OfferView {
   minutesAway: number;
   /** Server-composed sentence — already plain language, show it verbatim. */
   message: string;
-  /** S34 — the freight offer's price + transparent breakdown (absent on a tote offer). */
+  /** S34 — the freight offer's price + transparent breakdown (absent on a bag offer, which has no B + D·R·M). */
   price?: PriceBreakdown;
+  /** What this job pays, all in — for BOTH kinds. Freight: the same as `price.total`. A bag: the handling
+   *  fee plus the road. Read this for the headline figure; `price` is only the freight breakdown behind it. */
+  earn?: number;
+  /** BAGS ONLY — what that earning is made of, and what separates a bag worth a whole slot in the hold
+   *  from one worth a fifth of it. */
+  parcels?: number;
+  fillPct?: number;
   createdAt: string;
   expiresAt: string;
   status: string;

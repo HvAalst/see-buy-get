@@ -1,5 +1,92 @@
-import { clampMultiplier, computeFreightPrice, distanceSplit, earningsPerKm, freightMultiplier, shipperCharge, type PriceBreakdown } from './pricing';
-import { withPlatformFee } from './pudo.config';
+import { clampMultiplier, computeFreightPrice, computeToteHaul, distanceSplit, earningsPerKm, freightMultiplier, shipperCharge, type PriceBreakdown } from './pricing';
+import { BAG_CAPACITY_UNITS, SIZE_TRANSPORT_FACTOR, SIZE_UNITS, bagShare, withPlatformFee } from './pudo.config';
+import { ParcelService } from './parcel.service';
+
+describe('how much room a parcel takes — ONE fact, two expressions', () => {
+  it('derives the transport factor from the bag units, so the two can never disagree again', () => {
+    // They were separate tables and they DID disagree: a HEAVY consumed a whole bag (10 of 10 units) and
+    // was charged three mediums' worth of road. This test is the reason that cannot come back — edit
+    // either table and it fails until both mean the same thing.
+    for (const size of ['S', 'M', 'L', 'HEAVY'] as const) {
+      expect(SIZE_TRANSPORT_FACTOR[size]).toBeCloseTo(SIZE_UNITS[size] / SIZE_UNITS.M, 5);
+    }
+  });
+
+  it('leaves the reference size alone and moves the rest around it', () => {
+    // A REDISTRIBUTION, not a rise. Small parcels were subsidising heavy ones.
+    expect(SIZE_TRANSPORT_FACTOR.M).toBe(1); // was 1
+    expect(SIZE_TRANSPORT_FACTOR.S).toBe(0.18); // was 0.4 — an S takes 1.8% of a bag, not 40% of a medium
+    expect(SIZE_TRANSPORT_FACTOR.L).toBe(2); // was 1.6
+    expect(SIZE_TRANSPORT_FACTOR.HEAVY).toBe(10); // was 3 — it denies the bag to everything else
+  });
+
+  it('charges a heavy for the whole bag, because it travels alone', () => {
+    // The policy ("nothing shares with a heavy") is what justifies the price. If that policy ever changes,
+    // this assertion is what forces the factor down with it.
+    expect(SIZE_UNITS.HEAVY).toBe(BAG_CAPACITY_UNITS);
+    expect(bagShare('HEAVY')).toBe(1);
+  });
+
+  it('a bag full of any one size is exactly one bag', () => {
+    expect(bagShare('M') * 10).toBeCloseTo(1, 5);
+    expect(bagShare('L') * 5).toBeCloseTo(1, 5);
+  });
+});
+
+describe('what carrying a bag is worth', () => {
+  it('prices the road by distance × the vehicle’s own rate × what is actually in the bag', () => {
+    // The three things the flat 50c ignored. `units` is medium-equivalents — the SAME basis the buyers
+    // inside the bag were charged on, so the two sides of the transaction are finally in one unit.
+    expect(computeToteHaul({ ratePerKm: 0.08, tripKm: 40, units: 10 }).road).toBe(32);
+    expect(computeToteHaul({ ratePerKm: 0.08, tripKm: 2, units: 10 }).road).toBe(1.6);
+  });
+
+  it('pays a half-full bag half — it is carrying half', () => {
+    // Right rather than harsh: this is belly freight in a vehicle that was going anyway, so the empty space
+    // costs the driver almost nothing. Paying a full-bag rate for air would spend a 2% margin covering a
+    // shortfall that is routinely 50%. The answer to the emptiness is to fill the trip, not to subsidise it.
+    const full = computeToteHaul({ ratePerKm: 0.08, tripKm: 40, units: 10 }).road;
+    const half = computeToteHaul({ ratePerKm: 0.08, tripKm: 40, units: 5 }).road;
+    expect(half).toBe(full / 2);
+  });
+
+  it('earns nothing extra for an unresolvable journey rather than a NaN', () => {
+    // An unplaceable destination arrives here as 0 km. This is money going into a ledger, so every input is
+    // sanitised first and a broken figure resolves to zero instead of propagating.
+    expect(computeToteHaul({ ratePerKm: 0.08, tripKm: 0, units: 10 }).road).toBe(0);
+    expect(computeToteHaul({ ratePerKm: Number.NaN, tripKm: 40, units: 10 }).road).toBe(0);
+    expect(computeToteHaul({ ratePerKm: 0.08, tripKm: Number.POSITIVE_INFINITY, units: 10 }).road).toBe(0);
+    expect(computeToteHaul({ ratePerKm: -0.5, tripKm: 40, units: 10 }).road).toBe(0);
+    expect(computeToteHaul({ ratePerKm: 0.08, tripKm: -40, units: 10 }).road).toBe(0);
+  });
+
+  it('is distance-sensitive, which is the whole point', () => {
+    // The defect this closes: sixty kilometres and two paid exactly the same fifty cents.
+    const near = computeToteHaul({ ratePerKm: 0.08, tripKm: 2, units: 10 }).road;
+    const far = computeToteHaul({ ratePerKm: 0.08, tripKm: 60, units: 10 }).road;
+    expect(far).toBeGreaterThan(near * 25);
+  });
+});
+
+describe('the factor a parcel was SOLD at (durability)', () => {
+  it('uses the stamped factor, not today’s constant', () => {
+    // The flexible rebate recomputes a parcel's real cost at DELIVERY. Retuning the network constant while
+    // a parcel is in the air would otherwise rewrite a price the customer already agreed to.
+    expect(ParcelService.transportFactorOf({ size: 'M', transportFactor: 1.6 })).toBe(1.6);
+  });
+
+  it('falls back to the constant for a record written before the field existed', () => {
+    expect(ParcelService.transportFactorOf({ size: 'HEAVY', transportFactor: undefined })).toBe(SIZE_TRANSPORT_FACTOR.HEAVY);
+  });
+
+  it('refuses a corrupt stamp rather than pricing transport at zero', () => {
+    // `?? ` would accept a stored 0 and make the road free. A zero is never a real answer here — it is a
+    // damaged record, and the constant is a better guess than free.
+    expect(ParcelService.transportFactorOf({ size: 'M', transportFactor: 0 })).toBe(SIZE_TRANSPORT_FACTOR.M);
+    expect(ParcelService.transportFactorOf({ size: 'M', transportFactor: Number.NaN })).toBe(SIZE_TRANSPORT_FACTOR.M);
+    expect(ParcelService.transportFactorOf({ size: 'M', transportFactor: -2 })).toBe(SIZE_TRANSPORT_FACTOR.M);
+  });
+});
 
 describe('freight pricing (S34)', () => {
   describe('clampMultiplier', () => {

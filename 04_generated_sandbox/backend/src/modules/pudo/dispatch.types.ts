@@ -519,6 +519,16 @@ export class Claimable {
   status?: string;
   /** F1 — a booked-for-later freight's pickup date, so the driver's offer reads "reserve now, pick up on <date>". */
   scheduledPickupAt?: string;
+  /**
+   * BAGS ONLY — how many parcels are inside, and how full it is against a bag's capacity.
+   *
+   * What the pay is made OF. A bag now earns for the road AND for what it carries, so a driver shown only a
+   * figure has to take it on trust; these two are the reason it is that figure. The fill is also the only
+   * way to tell a bag worth a whole slot from one worth a fifth of it, which is the decision when the hold
+   * has two spaces left and the day is not over.
+   */
+  parcels?: number;
+  fillPct?: number;
   /** S31 — vehicle capabilities this load's cargo requires (a tote's perishable/hazardous parcels →
    *  cold chain / hazmat). A vehicle lacking any is not offered the load. */
   requiredCapabilities?: VehicleCapability[];
@@ -561,9 +571,24 @@ export class Offer {
   detourKm: number;
   minutesAway: number;
   message: string;
-  /** S34 — the priced offer: the driver's earning + the transparent B + D·R·M breakdown. Freight only; a
-   *  tote offer stays unpriced (totes settle on the pre-paid parcel model). */
+  /** S34 — the priced offer: the driver's earning + the transparent B + D·R·M breakdown. FREIGHT ONLY —
+   *  a bag has no B + D·R·M, so read `earn` for the figure that covers both kinds. */
   price?: PriceBreakdown;
+  /**
+   * WHAT THIS JOB PAYS, all in — the one number the driver is agreeing to, for either kind of load.
+   *
+   * Freight: the same figure as `price.total`. A bag: the handling fee plus the road it will travel.
+   *
+   * It exists because a bag's pay stopped being a constant. Every surface used to hard-code the flat
+   * loading fee, which was true then and became a LIE the moment distance and contents entered the
+   * arithmetic — understating a real job on the very screen where somebody says yes to it. Indicative
+   * here, against this driver's current vehicle; locked at claim, exactly as a freight's price is.
+   */
+  earn?: number;
+  /** BAGS ONLY — what the earning is made of: how many parcels are inside, and how full the bag is. See
+   *  Claimable.parcels for why a figure without them is a figure taken on trust. */
+  parcels?: number;
+  fillPct?: number;
   createdAt: string;
   expiresAt: string;
   status: OfferStatus;

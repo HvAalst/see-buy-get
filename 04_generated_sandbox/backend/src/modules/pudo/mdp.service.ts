@@ -383,7 +383,9 @@ export class MdpService {
     const mdp = this.require(mdpId);
     const before = this.totes.requireByCode(code);
     if (!before.parcels.length) throw new GlosError('BAG_EMPTY', `Bag ${code} is already empty`);
+    const carrier = before.claimedBy; // captured before empty() clears it, as deliverBag does
     const { parcels } = this.totes.empty(code, mdpId);
+    this.payHaul(before, carrier);
     for (const parcelId of parcels) {
       const p = this.parcels.setTransit(parcelId, 'At_MDP', mdp.name, `dropped at ${mdp.name} · awaiting sort`, undefined);
       p.atMdpId = mdpId; // scope the inbound queue to this hub
@@ -412,8 +414,26 @@ export class MdpService {
       delivered.push(parcelId);
     }
     this.totes.empty(code, agentDid); // free the tote + release the driver's reserved capacity
+    this.payHaul(tote, driverDid);
     void this.events.publish(GlosEvent.Pudo.BagDelivered, { code, agentDid, delivered: delivered.length }, { source: 'pudo' }).catch(() => undefined);
     return { code, agentDid, delivered, driverDid };
+  }
+
+  /**
+   * Pay the road, once the road has been driven.
+   *
+   * Deliberately settled on ARRIVAL rather than at load, unlike the handling fee beside it. `TOTE_LOAD_FEE`
+   * pays for the act of scanning a bag aboard and is earned the moment it happens; this pays for a journey,
+   * and a journey that has not happened yet is not owed. The flat fifty cents was small enough that nobody
+   * had to care where it was paid — a distance-priced haul is not.
+   *
+   * Silent where there is nothing to pay: a bag loaded without ever being claimed through the marketplace
+   * carries no locked price, and an unresolvable destination locked a road of 0. Both are visible on the
+   * bag's own `haul.basis` rather than inferred from an absent ledger line.
+   */
+  private payHaul(tote: Tote, driverDid?: string): void {
+    if (!driverDid || !tote.haul || !(tote.haul.road > 0)) return;
+    this.gate.driverPayout(driverDid, tote.haul.road);
   }
 
   /**

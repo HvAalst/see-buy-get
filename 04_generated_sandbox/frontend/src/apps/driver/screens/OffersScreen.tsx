@@ -126,7 +126,7 @@ export function OffersScreen({ state, actions }: OffersScreenProps) {
             <p class="t-body">{active.message}</p>
             <Checklist
               items={[
-                ...(active.price ? [t('driver.offers.earnAbout', { amount: money(active.price.total) })] : []),
+                ...(active.earn != null ? [t('driver.offers.earnAbout', { amount: money(active.earn) })] : []),
                 t('driver.offers.fits', { kg: active.weightKg }),
                 t('driver.offers.detour', { km: active.detourKm }),
                 t('driver.offers.dropAt', { dest: active.destLabel }),
@@ -199,12 +199,15 @@ function OfferCard({ offer, now }: { offer: OfferView; now: number }) {
       {/* Server-composed sentence — already plain language, shown verbatim. */}
       <p class="offer__msg">{offer.message}</p>
 
-      {/* S34 — a freight offer leads with what the driver EARNS, then the transparent breakdown behind it. */}
-      {offer.price ? (
+      {/* Every offer leads with what the driver EARNS — a bag as well as a freight. A bag used to show no
+          figure at all here, which was survivable only while its pay was a fixed fifty cents; now that it
+          varies with the distance and what is inside, a card with no number is a card asking somebody to
+          agree to a price nobody told them. The transparent breakdown below is still freight-only. */}
+      {offer.earn != null ? (
         <div class="offer__pay">
           <Icon name="wallet" size={24} class="offer__pay-ic" />
           <span class="offer__pay-amt">
-            {t('driver.offers.youEarnLead')} <b>{money(offer.price.total)}</b>
+            {t('driver.offers.youEarnLead')} <b>{money(offer.earn)}</b>
           </span>
         </div>
       ) : null}
@@ -228,6 +231,19 @@ function OfferCard({ offer, now }: { offer: OfferView; now: number }) {
             {t('driver.offers.metaDetour')} <b>{offer.detourKm} km</b> {t('driver.offers.metaAbout')} <b>{offer.minutesAway} min</b> {t('driver.offers.metaAway')}
           </span>
         </p>
+        {/* A bag only: what the money above is made of, and what a slot in the hold is being spent on. A
+            near-empty bag still costs a whole space, so a driver with two left should be able to see that
+            before they agree rather than when they open it. */}
+        {offer.parcels != null ? (
+          <p class="meta">
+            <Icon name="box" size={21} class="meta__ic" />
+            <span>
+              {t('driver.offers.metaInside')}{' '}
+              <b>{t(offer.parcels === 1 ? 'driver.offers.parcelOne' : 'driver.offers.parcelMany', { count: offer.parcels })}</b>
+              {offer.fillPct != null ? <> · {t('driver.offers.metaFull', { pct: offer.fillPct })}</> : null}
+            </span>
+          </p>
+        ) : null}
         {priceBreakdownLines(offer.price, t).map((line) => (
           <p class="meta" key={line}>
             <Icon name="check" size={21} class="meta__ic" />

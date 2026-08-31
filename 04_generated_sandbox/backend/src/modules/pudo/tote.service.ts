@@ -3,7 +3,7 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { randomBytes } from 'crypto';
 import { BAG_CAPACITY_UNITS, SIZE_UNITS, SIZE_WEIGHT_KG, TOTE_CODE_PREFIX } from './pudo.config';
-import { ParcelSize, Tote } from './pudo.types';
+import { ParcelSize, Tote, ToteHaul } from './pudo.types';
 
 /**
  * ToteService — the reusable tote-bag pool used at MDP hubs (and for the PUDO→MDP leg). A tote is a
@@ -121,11 +121,22 @@ export class ToteService {
     return this.save(tote);
   }
 
+  /** Stamp what carrying this bag is worth, at the moment it is claimed. See Tote.haul for why it is
+   *  locked rather than computed on arrival. */
+  lockHaul(code: string, haul: ToteHaul): Tote {
+    const tote = this.requireByCode(code);
+    tote.haul = haul;
+    return this.save(tote);
+  }
+
   /** Release a claim back to the marketplace (driver dropped it / no-show). */
   unclaim(code: string): Tote {
     const tote = this.requireByCode(code);
     if (tote.status !== 'claimed') throw new GlosError('INVALID_STATE', `Bag ${code} is ${tote.status}, not claimed`);
     tote.status = 'available';
+    // The price was struck for the driver who is walking away from it. The next claimer's vehicle, distance
+    // and the bag's contents may all differ, so their price must be struck fresh rather than inherited.
+    tote.haul = undefined;
     tote.claimedBy = undefined;
     return this.save(tote);
   }

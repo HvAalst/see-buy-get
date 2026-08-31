@@ -13951,6 +13951,10 @@
           "platformFeePct": {
             "type": "number"
           },
+          "transportFactor": {
+            "type": "number",
+            "description": "The SIZE FACTOR its transport was quoted at, stamped at mint for the same reason. A network constant\n today, but one that will be retuned — and the flexible rebate recomputes the real cost at delivery,\n so an unstamped factor would re-price parcels already sold. Absent on records written before this\n field existed; read it through ParcelService.transportFactorOf, which falls back to the constant."
+          },
           "shipmentCost": {
             "type": "number"
           },
@@ -14598,6 +14602,37 @@
           "destZone"
         ]
       },
+      "ToteHaul": {
+        "type": "object",
+        "properties": {
+          "tripKm": {
+            "type": "number"
+          },
+          "ratePerKm": {
+            "type": "number"
+          },
+          "units": {
+            "type": "number"
+          },
+          "road": {
+            "type": "number"
+          },
+          "basis": {
+            "type": "object"
+          },
+          "lockedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "tripKm",
+          "ratePerKm",
+          "units",
+          "road",
+          "basis",
+          "lockedAt"
+        ]
+      },
       "Tote": {
         "type": "object",
         "properties": {
@@ -14650,6 +14685,14 @@
           "sealedAt": {
             "type": "string",
             "description": "When the shop closed it. The record that the completeness gate ran, distinct from being published."
+          },
+          "haul": {
+            "description": "What carrying this bag is worth, LOCKED AT CLAIM — the tote analogue of a freight's `lockedPrice`.\n\nLocked rather than computed at delivery for the same reason freight locks: the driver agreed to a job\nwhose distance and contents were what they were at that moment. A parcel added after they claimed, or a\ndestination re-pointed by a re-sort, must not silently rewrite what they are owed either way.\n\nAbsent on a bag nobody claimed through the marketplace (it can still be loaded), and on every record\nwritten before this existed — both settle on the handling fee alone, and `basis` says which.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ToteHaul"
+              }
+            ]
           }
         },
         "required": [
@@ -17616,12 +17659,23 @@
             "type": "string"
           },
           "price": {
-            "description": "S34 — the priced offer: the driver's earning + the transparent B + D·R·M breakdown. Freight only; a\n tote offer stays unpriced (totes settle on the pre-paid parcel model).",
+            "description": "S34 — the priced offer: the driver's earning + the transparent B + D·R·M breakdown. FREIGHT ONLY —\n a bag has no B + D·R·M, so read `earn` for the figure that covers both kinds.",
             "allOf": [
               {
                 "$ref": "#/components/schemas/PriceBreakdown"
               }
             ]
+          },
+          "earn": {
+            "type": "number",
+            "description": "WHAT THIS JOB PAYS, all in — the one number the driver is agreeing to, for either kind of load.\n\nFreight: the same figure as `price.total`. A bag: the handling fee plus the road it will travel.\n\nIt exists because a bag's pay stopped being a constant. Every surface used to hard-code the flat\nloading fee, which was true then and became a LIE the moment distance and contents entered the\narithmetic — understating a real job on the very screen where somebody says yes to it. Indicative\nhere, against this driver's current vehicle; locked at claim, exactly as a freight's price is."
+          },
+          "parcels": {
+            "type": "number",
+            "description": "BAGS ONLY — what the earning is made of: how many parcels are inside, and how full the bag is. See\n Claimable.parcels for why a figure without them is a figure taken on trust."
+          },
+          "fillPct": {
+            "type": "number"
           },
           "createdAt": {
             "type": "string"

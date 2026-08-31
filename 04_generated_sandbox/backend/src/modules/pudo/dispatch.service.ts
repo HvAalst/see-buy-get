@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+﻿import { Inject, Injectable } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
 import { randomBytes } from 'crypto';
 import { EventBus } from '../../foundation/events/event-bus.service';
@@ -7,7 +7,7 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
 import { AgentService } from './agent.service';
 import { MdpService } from './mdp.service';
 import { ToteService } from './tote.service';
-import { GeoPoint, Tote } from './pudo.types';
+import { GeoPoint, Tote, ToteHaul } from './pudo.types';
 import { haversineKm } from './geo';
 import { FleetService } from './fleet.service';
 import { CargoService } from './cargo.service';
@@ -15,7 +15,7 @@ import { CargoNature, Equipment, VehicleCapability } from './cargo.types';
 import { VendorService } from './vendor.service';
 import { RatingService, belowFloor } from './rating.service';
 import { WalletGateService } from './wallet-gate.service';
-import { clampMultiplier, computeFreightPrice, distanceSplit, earningsPerKm, freightMultiplier, shipperCharge, type PriceBreakdown } from './pricing';
+import { clampMultiplier, computeFreightPrice, computeToteHaul, distanceSplit, earningsPerKm, freightMultiplier, shipperCharge, type PriceBreakdown } from './pricing';
 import { canonicalBody, bodyOf, excludedByShipper } from './freight-body';
 import { blockersFor, takeable } from './freight-board';
 import { nearestPlace } from './geo-gazetteer';
@@ -27,7 +27,7 @@ import { MediaService } from './media.service';
 import { MarketPulseStore } from './market-pulse.store';
 import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, toteCapacityOf, VEHICLE_SPEC } from './fleet.config';
 import { Router, ROUTER } from './router';
-import { DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NUDGE_RADIUS_KM, OFFER_TTL_MIN, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
+import { DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NUDGE_RADIUS_KM, OFFER_TTL_MIN, TOTE_LOAD_FEE, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
 import { BoardRow, Claimable, ClaimableKind, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, MarketRow, MarketSeries, Offer, PostedFreightRow, RoutePlan } from './dispatch.types';
@@ -508,7 +508,7 @@ export class DispatchService {
         if (load.maxSpend != null && shipperCharge(price.total) > load.maxSpend) continue;
         if (floor != null && price.total < floor) continue;
       }
-      out.push(this.makeOffer(driverDid, load, { detour, minutesAway, price, now }));
+      out.push(this.makeOffer(driverDid, load, { detour, minutesAway, price, ratePerKm: profile.ratePerKm, now }));
     }
     return out;
   }
@@ -526,8 +526,9 @@ export class DispatchService {
    * touched: anything already claimed. Snoozing offers is not going off shift, and a driver holding a bag
    * must still be able to hand it over, load it and deliver it.
    */
-  private makeOffer(driverDid: string, load: Claimable, ctx: { detour: number; minutesAway: number; price?: PriceBreakdown; now: number }): Offer {
+  private makeOffer(driverDid: string, load: Claimable, ctx: { detour: number; minutesAway: number; price?: PriceBreakdown; ratePerKm: number; now: number }): Offer {
     const { detour, minutesAway, price, now } = ctx;
+    const earn = this.expectedEarn(load, price, ctx.ratePerKm);
     const existing = [...this.offers.values()].find((o) => o.driverDid === driverDid && o.ref === load.ref && o.status === 'pending' && new Date(o.expiresAt).getTime() > now);
     if (existing) return existing;
     const offer: Offer = {
@@ -543,6 +544,9 @@ export class DispatchService {
       minutesAway,
       message: `≈${minutesAway} min from ${load.pickupLabel}: a ${load.weightKg} kg shipment to ${load.destLabel} is ready. Claim it?`,
       price,
+      earn,
+      parcels: load.parcels,
+      fillPct: load.fillPct,
       createdAt: new Date(now).toISOString(),
       expiresAt: new Date(now + OFFER_TTL_MIN * 60_000).toISOString(),
       status: 'pending',
@@ -608,7 +612,7 @@ export class DispatchService {
         if (load.maxSpend != null && shipperCharge(price.total) > load.maxSpend) continue;
         if (floor != null && price.total < floor) continue;
       }
-      out.push(this.makeOffer(driverDid, load, { detour: Math.round(km * 10) / 10, minutesAway: this.minutes(from, load.pickupLocation), price, now }));
+      out.push(this.makeOffer(driverDid, load, { detour: Math.round(km * 10) / 10, minutesAway: this.minutes(from, load.pickupLocation), price, ratePerKm: profile.ratePerKm, now }));
     }
     return out;
   }
@@ -645,7 +649,7 @@ export class DispatchService {
     // The shipper's budget still binds — an interruption offering a price nobody will pay is worse than silence.
     if (price && load.kind === 'freight' && load.maxSpend != null && shipperCharge(price.total) > load.maxSpend) return null;
 
-    return this.makeOffer(driverDid, load, { detour: Math.round(best.km * 10) / 10, minutesAway: this.minutes(point, load.pickupLocation), price, now });
+    return this.makeOffer(driverDid, load, { detour: Math.round(best.km * 10) / 10, minutesAway: this.minutes(point, load.pickupLocation), price, ratePerKm: profile.ratePerKm, now });
   }
 
   /* --- declining from the lock screen --- */
@@ -704,8 +708,12 @@ export class DispatchService {
       throw new GlosError('VEHICLE_MISSING_CAPABILITY', 'Your current vehicle lacks a capability or equipment this load requires — re-couple to a suitable vehicle');
     }
 
-    if (offer.kind === 'tote') this.totes.markClaimed(offer.ref, offer.driverDid);
-    else {
+    if (offer.kind === 'tote') {
+      this.totes.markClaimed(offer.ref, offer.driverDid);
+      // A bag's road is priced HERE, exactly as a freight's is below, and for the same reason: the driver
+      // agreed to the job whose distance and contents were what they were at this moment.
+      this.lockToteHaul(offer.ref, vehicle);
+    } else {
       const f = this.requireFreight(offer.ref);
       // FB0c — a load the minter posted for negotiation cannot be taken over the counter. The whole point of
       // marking it is that the price is not settled, so an instant claim would take it at a number nobody
@@ -1399,7 +1407,22 @@ export class DispatchService {
     const fragile = false; // totes are not individually flagged fragile here; parcel rules apply at load
     // S31: surface the capabilities the bag's cargo needs (perishable → cold chain, hazardous → hazmat) so a
     // vehicle that lacks one is never offered the tote — the offer would only dead-end at loadBag otherwise.
-    return { kind: 'tote', ref: t.code, code: t.code, pickupLocation: place.loc, pickupLabel: place.label, destLabel: t.destinationLabel || 'destination', weightKg: t.weightKg, fragile, bulk: false, status: t.status, requiredCapabilities: this.mdps.toteRequiredCapabilities(t) };
+    return {
+      kind: 'tote',
+      ref: t.code,
+      code: t.code,
+      pickupLocation: place.loc,
+      pickupLabel: place.label,
+      destLabel: t.destinationLabel || 'destination',
+      weightKg: t.weightKg,
+      // What the bag's pay is made of, and what tells a whole slot's worth from a fifth of one.
+      parcels: t.parcels.length,
+      fillPct: this.totes.fillPct(t),
+      fragile,
+      bulk: false,
+      status: t.status,
+      requiredCapabilities: this.mdps.toteRequiredCapabilities(t),
+    };
   }
 
   /**
@@ -1482,6 +1505,68 @@ export class DispatchService {
     const vendor = this.vendors.byDid(locationId);
     if (vendor?.collection) return { loc: vendor.collection.location, label: vendor.collection.label };
     return null;
+  }
+
+  /**
+   * Where a bag's DESTINATION is, on the ground.
+   *
+   * `destinationNodeId` is documented as "a PUDO did or an MDP id", and for a hub-sorted bag it is. But the
+   * two bags that START a journey — a shop's and a vendor dock's — address themselves to a ZONE, which is a
+   * name and not a place. So resolve a real node first, and fall back to the hub that SERVES that zone,
+   * which is genuinely where such a bag is driven.
+   *
+   * Null when neither resolves. Nothing is invented — a zone centroid would be a number that looks like a
+   * distance and is not one, and this figure is about to be paid to somebody.
+   */
+  private destinationPlace(tote: { destinationNodeId?: string }): { loc: { lat: number; lng: number }; label: string } | null {
+    const id = tote.destinationNodeId;
+    if (!id) return null;
+    const node = this.pickupPlace(id); // a real node — an MDP, a shop, or a dock
+    if (node) return node;
+    const hub = this.mdps.mdpForZone(id); // …or the hub that serves the zone the bag names
+    return hub ? { loc: hub.location, label: hub.name } : null;
+  }
+
+  /**
+   * What the road on this bag is worth at a given per-km rate.
+   *
+   * ONE computation, used to SHOW the driver a number on the offer and to LOCK it at claim, because those
+   * two must agree. A driver told one figure on a lock screen and paid another has been misled, and two
+   * copies of this arithmetic is exactly how that happens.
+   */
+  private haulFor(code: string, ratePerKm: number): Omit<ToteHaul, 'lockedAt'> | null {
+    const tote = this.totes.byCodeMaybe(code);
+    if (!tote) return null;
+    const from = this.pickupPlace(tote.locationId);
+    const to = this.destinationPlace(tote);
+    const resolved = Boolean(from && to);
+    const haul = computeToteHaul({ ratePerKm, tripKm: resolved ? this.router.roadKm(from!.loc, to!.loc) : 0, units: tote.unitsUsed });
+    return { ...haul, basis: resolved ? 'measured' : 'unresolved' };
+  }
+
+  /**
+   * What this job pays the driver, all in — the number they are agreeing to when they tap Claim.
+   *
+   * Freight: the priced total. A bag: the handling fee for scanning it aboard PLUS the road. Before the road
+   * existed, a bag's pay was a constant and every surface could hard-code it; now it varies with distance
+   * and contents, so it has to be carried on the offer or the driver is consenting to a number nobody
+   * showed them.
+   */
+  private expectedEarn(load: Claimable, price: PriceBreakdown | undefined, ratePerKm: number): number | undefined {
+    if (load.kind === 'freight') return price?.total;
+    const haul = this.haulFor(load.ref, ratePerKm);
+    return haul ? Math.round((TOTE_LOAD_FEE + haul.road) * 100) / 100 : undefined;
+  }
+
+  /**
+   * Price the road for a claimed bag and stamp it. See `ToteHaul` for why it is locked here.
+   *
+   * The rate is the CARRYING VEHICLE'S OWN advertised per-km — the same fuel-pump model the quote used to
+   * price the parcels inside it, so the two sides are struck at one rate rather than two.
+   */
+  private lockToteHaul(code: string, vehicle: Vehicle): void {
+    const haul = this.haulFor(code, this.pricingProfile(vehicle).ratePerKm);
+    if (haul) this.totes.lockHaul(code, { ...haul, lockedAt: new Date().toISOString() });
   }
 
   private minutes(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {

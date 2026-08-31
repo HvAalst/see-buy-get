@@ -1083,6 +1083,11 @@ export class ParcelService implements OnApplicationBootstrap {
       transportCost: chosen.transport,
       platformFee,
       platformFeePct: quote.platformFeePct, // the rate quoted, locked to this parcel
+      // …and the size factor the transport was quoted at, for exactly the same reason. It is a network
+      // constant today, but it is one somebody will retune — and the flexible rebate RE-COMPUTES this
+      // parcel's real cost at delivery. Unstamped, retuning it would silently re-price every parcel
+      // already sold and in the air, which is the one thing this whole block exists to prevent.
+      transportFactor: quote.transportFactor,
       // What the price IS, and — where the route crossed a currency line — the rates it was struck at.
       // Same reason as the margin rate above: a promise is made at a moment, and the rate behind it moves.
       currency: quote.currency,
@@ -1190,6 +1195,11 @@ export class ParcelService implements OnApplicationBootstrap {
       transportCost: chosen.transport,
       platformFee: Math.round((chosen.total - chosen.base) * 100) / 100,
       platformFeePct: quote.platformFeePct, // the rate quoted, locked to this parcel
+      // …and the size factor the transport was quoted at, for exactly the same reason. It is a network
+      // constant today, but it is one somebody will retune — and the flexible rebate RE-COMPUTES this
+      // parcel's real cost at delivery. Unstamped, retuning it would silently re-price every parcel
+      // already sold and in the air, which is the one thing this whole block exists to prevent.
+      transportFactor: quote.transportFactor,
       currency: quote.currency, // the cash the shop will take at the counter is in a named money
       fx: quote.fx,
       sellerEntityId: quote.sellerEntityId,
@@ -1454,6 +1464,20 @@ export class ParcelService implements OnApplicationBootstrap {
   }
 
   /**
+   * The size factor this parcel's transport was priced at.
+   *
+   * Stamped at mint; a record written before the field existed falls back to today's constant, which is
+   * the honest answer for it — that parcel WAS quoted at whatever the constant then said, and the constant
+   * is the only version of that number we still have.
+   */
+  static transportFactorOf(parcel: Pick<Parcel, 'size' | 'transportFactor'>): number {
+    const stamped = parcel.transportFactor;
+    // Not `?? `: a stored 0 or a non-finite value would poison the price, and a zero-cost transport is
+    // never a real answer — it is a corrupted record, and the constant is a better guess than free.
+    return typeof stamped === 'number' && Number.isFinite(stamped) && stamped > 0 ? stamped : SIZE_TRANSPORT_FACTOR[parcel.size];
+  }
+
+  /**
    * Close out a flexible shipment: the vendor reserved the ceiling, but the carrier that actually moved it
    * may have been cheaper. Refund (ceiling − actual) to the vendor's balance — GLOS keeps only the 2%.
    */
@@ -1461,10 +1485,14 @@ export class ParcelService implements OnApplicationBootstrap {
     if (parcel.routeMode !== 'flexible' || !parcel.vendorId || parcel.rebate != null) return;
     if (parcel.ceilingCost == null || parcel.nodeFees == null || parcel.routeKm == null) return;
     const perKm = parcel.actualPerKm ?? this.vehicles.priceRange().min;
-    // The rate the parcel was MINTED at, never today's. A sister may turn its margin knob while this
-    // parcel is in transit; settling against the new rate would quietly rewrite a price the customer
-    // already agreed to. A parcel from before the knob existed falls back to the network default.
-    const actual = withPlatformFee(Math.round((parcel.nodeFees + parcel.routeKm * perKm * SIZE_TRANSPORT_FACTOR[parcel.size]) * 100) / 100, parcel.platformFeePct);
+    // The rates the parcel was MINTED at, never today's — the margin knob AND the size factor both. A
+    // sister may turn the first while this parcel is in transit and the network may retune the second;
+    // settling against either new number would quietly rewrite a price the customer already agreed to.
+    // A parcel from before a field existed falls back to the network default.
+    const actual = withPlatformFee(
+      Math.round((parcel.nodeFees + parcel.routeKm * perKm * ParcelService.transportFactorOf(parcel)) * 100) / 100,
+      parcel.platformFeePct,
+    );
     parcel.actualCost = actual;
     const rebate = Math.round(Math.max(0, parcel.ceilingCost - actual) * 100) / 100;
     parcel.rebate = rebate;
