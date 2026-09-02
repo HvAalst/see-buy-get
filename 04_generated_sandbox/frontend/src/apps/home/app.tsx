@@ -21,6 +21,15 @@ export function App() {
   const sw = useRegisterSW();
   const [needRefresh] = sw.needRefresh;
 
+  /**
+   * A subtitle says WHERE YOU ARE. Every one below is a state — joining as a driver, browsing the
+   * market, signing in — and the welcome screen deliberately has none.
+   *
+   * It used to carry "Send · collect · earn", and that was the one screen it could not sit on: the
+   * welcome screen is where the mark and the name appear together, and a strapline underneath is a
+   * second voice saying the same thing less well. The identity introduces the product there; three
+   * words competing with it only blunt both.
+   */
   const subtitle =
     state.screen === 'join' && state.role
       ? t('home.subtitle.joining', { role: roleMeta(state.role, t).labelLower })
@@ -30,7 +39,7 @@ export function App() {
           ? t('home.subtitle.roles')
           : state.screen === 'signin'
             ? t('home.subtitle.signin')
-            : t('home.subtitle.welcome');
+            : undefined;
 
   return (
     <div class="app">

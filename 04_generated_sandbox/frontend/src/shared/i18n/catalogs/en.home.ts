@@ -13,7 +13,6 @@ export const enHome = {
   'home.subtitle.roles': 'Join the network',
   'home.subtitle.market': 'The open freight market',
   'home.subtitle.signin': 'Sign in',
-  'home.subtitle.welcome': 'Send · collect · earn',
 
   // Shared within Home (reused across screens).
   'home.readAloud': 'Read this aloud',
