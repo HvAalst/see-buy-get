@@ -11,6 +11,7 @@ import { SignInScreen } from './screens/SignInScreen';
 import { useDriverApp, type DriverActions, type DriverState, type Screen } from './useDriverApp';
 import '../../shared/screens.css';
 import './driver.css';
+import { driverWorkLine } from './logic';
 
 type Tab = 'home' | 'route' | 'board' | 'loads' | 'earnings';
 
@@ -53,7 +54,8 @@ export function App() {
     <div class="app">
       <TopBar
         title={t('driver.appTitle')}
-        subtitle={state.driver?.displayName}
+        subtitle={driverWorkLine(state.session, state.route, state.remainingTotes, t)}
+        subtitleHint={state.driver?.displayName}
         onBack={state.screen === 'home' ? undefined : () => actions.go('home')}
         backLabel={t('driver.backToVan')}
         end={

@@ -335,3 +335,24 @@ export function sortForPerson(list: ConsumerParcelView[]): ConsumerParcelView[] 
 export function isOffLadder(status: ParcelStatus): boolean {
   return ladderIndex(status) === -1;
 }
+
+/**
+ * THE LIVE LINE in the top bar — the parcel this person actually has in play.
+ *
+ * It replaced "See the price. Pay at the shop." — a tagline, and a tagline is the one thing that can
+ * never go here: it says the same words to somebody with nothing in play and to somebody whose parcel
+ * has been sitting at a shop for two days.
+ *
+ * Ready to collect comes first and alone, because it is the only line in this product that asks the
+ * reader to get up and go somewhere. Signed out, or with nothing moving, the bar says nothing at all
+ * — an empty line beats a sentence nobody needs.
+ */
+export function sendWorkLine(parcels: { sent: Array<{ status: string }>; received: Array<{ status: string }> } | null, t: Translate): string | undefined {
+  if (!parcels) return undefined;
+  const all = [...parcels.sent, ...parcels.received];
+  const ready = all.filter((p) => p.status === 'Ready_For_Pickup').length;
+  if (ready > 0) return ready === 1 ? t('send.bar.readyOne') : t('send.bar.readyMany', { count: ready });
+  const moving = all.filter((p) => p.status === 'At_PUDO' || p.status === 'On_Bus' || p.status === 'At_MDP').length;
+  if (moving > 0) return moving === 1 ? t('send.bar.movingOne') : t('send.bar.movingMany', { count: moving });
+  return undefined;
+}

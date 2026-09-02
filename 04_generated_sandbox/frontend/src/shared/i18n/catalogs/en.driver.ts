@@ -8,7 +8,12 @@
  */
 export const enDriver = {
   // Shell + shared within the driver app (reused across screens).
-  'driver.appTitle': 'SeeBuyGet Driver',
+  'driver.appTitle': 'Driver',
+  // The top bar's LIVE line — committed state only, never an incoming offer.
+  'driver.bar.offShift': 'Off shift',
+  'driver.bar.onShift': 'On shift',
+  'driver.bar.heading': 'To {place}',
+  'driver.bar.bagsFree': '{count} bags free',
   'driver.signinSubtitle': 'Sign in',
   'driver.nav.home': 'My van',
   'driver.nav.route': 'Find work',

@@ -253,3 +253,19 @@ export function ledgerRowsToCsv(rows: SettlementRow[]): string {
     rows.map((s) => [s.at, csvType(s.type), s.sign === '+' ? 'in' : 'out', s.sign === '+' ? s.amount : -s.amount, s.parcelId ?? '', s.note ?? '']),
   );
 }
+
+/**
+ * THE LIVE LINE in the top bar — the orders this store still has to deal with.
+ *
+ * It replaced the store's own name, which is fixed for the session. Unpaid comes first because it is
+ * the one that blocks: an unpaid order has no label and is not moving, and no amount of shipping
+ * activity fixes it.
+ */
+export function vendorWorkLine(stats: { unpaid?: number; active?: number } | null, t: Translate): string | undefined {
+  if (!stats) return undefined;
+  const bits = [
+    stats.unpaid ? t('vendor.bar.unpaid', { count: stats.unpaid }) : null,
+    stats.active ? t('vendor.bar.inFlight', { count: stats.active }) : null,
+  ].filter(Boolean);
+  return bits.length ? bits.join(' · ') : t('vendor.bar.clear');
+}

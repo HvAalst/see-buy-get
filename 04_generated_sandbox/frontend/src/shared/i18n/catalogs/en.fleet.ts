@@ -8,7 +8,11 @@
  */
 export const enFleet = {
   // Shell (app.tsx)
-  'fleet.appTitle': 'SeeBuyGet Fleet',
+  'fleet.appTitle': 'Fleet',
+  // The top bar's LIVE line — the same figure as the dashboard tile, from the same loaded data.
+  'fleet.bar.empty': 'No vehicles yet',
+  'fleet.bar.vehiclesOut': '{active} of {total} vehicles out',
+  'fleet.bar.driversOn': '{count} on shift',
   'fleet.signInSubtitle': 'Sign in',
   'fleet.backLabel': 'Back to the fleet',
   'fleet.update.aria': 'A new version is ready — update now',

@@ -5,7 +5,7 @@
  */
 export const enMdp = {
   // ---- shell / shared -------------------------------------------------------
-  'mdp.appTitle': 'SeeBuyGet Hub',
+  'mdp.appTitle': 'Hub',
   'mdp.appSubtitleSignin': 'Sign in',
   'mdp.backToHub': 'Back to my hub',
   'mdp.update.aria': 'A new version is ready — update now',

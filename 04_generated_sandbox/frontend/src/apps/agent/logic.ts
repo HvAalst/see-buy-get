@@ -607,3 +607,32 @@ export function agentLedgerTypeWord(type: string, t: Translate): string {
       return type;
   }
 }
+
+/**
+ * THE LIVE LINE in the top bar — what is on this counter right now.
+ *
+ * It replaced the shop's own name, which was fixed for the whole session and so spent the bar's one
+ * moving slot on the one thing that never moved. The name is still a hover away (TopBar's
+ * `subtitleHint`), where a name belongs: you look it up, you do not watch it.
+ *
+ * Reads the shop's ALREADY-LOADED parcels — no extra fetch for a header — and reports the two piles
+ * a shopkeeper actually has to clear: what is waiting to go on a bus, and what a customer is coming
+ * to collect. Closed comes first and alone, because a closed shop taking parcels is the problem.
+ */
+export function agentWorkLine(
+  agent: { openState?: string } | null,
+  parcels: Array<{ status: string }>,
+  t: Translate,
+): string | undefined {
+  if (!agent) return undefined;
+  if (agent.openState === 'closed') return t('agent.bar.closed');
+  const handOver = parcels.filter((p) => p.status === 'At_PUDO').length;
+  const collect = parcels.filter((p) => p.status === 'Ready_For_Pickup').length;
+  const bits = [
+    handOver > 0 ? t('agent.bar.handOver', { count: handOver }) : null,
+    collect > 0 ? t('agent.bar.collect', { count: collect }) : null,
+  ].filter(Boolean);
+  // An empty counter says so rather than showing an empty bar: "nothing waiting" is a real and
+  // welcome answer, and a blank line would read as "not loaded yet".
+  return bits.length ? bits.join(' · ') : t('agent.bar.clear');
+}

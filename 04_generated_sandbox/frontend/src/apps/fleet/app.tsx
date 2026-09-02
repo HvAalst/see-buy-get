@@ -9,6 +9,7 @@ import { VehiclesScreen } from './screens/VehiclesScreen';
 import { useFleetApp, type FleetActions, type FleetState, type Screen } from './useFleetApp';
 import '../../shared/screens.css';
 import './fleet.css';
+import { fleetWorkLine } from './logic';
 
 export function App() {
   const t = useT();
@@ -44,7 +45,8 @@ export function App() {
     <div class="app">
       <TopBar
         title={t('fleet.appTitle')}
-        subtitle={state.manager?.company}
+        subtitle={fleetWorkLine(state.dashboard, t)}
+        subtitleHint={state.manager?.company}
         onBack={state.screen === 'dash' ? undefined : () => actions.go('dash')}
         backLabel={t('fleet.backLabel')}
         end={

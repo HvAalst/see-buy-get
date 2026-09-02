@@ -267,3 +267,27 @@ export function dashboardSummary(d: { drivers: { onShift?: number; total?: numbe
     kg: d.cargo.totalKg ?? 0,
   });
 }
+
+/**
+ * THE LIVE LINE in the top bar — how much of this fleet is actually out.
+ *
+ * It replaced the company's name, which is fixed for the session and already on every screen a
+ * manager opens. Vehicles out is the number a fleet manager is answering for all day, and it is the
+ * one already on the dashboard — so this reads the SAME loaded figure rather than fetching its own,
+ * and the bar can never disagree with the tiles underneath it.
+ */
+export function fleetWorkLine(
+  dashboard: { vehicles?: { total?: number; active?: number }; drivers?: { onShift?: number } } | null,
+  t: Translate,
+): string | undefined {
+  if (!dashboard) return undefined;
+  const total = dashboard.vehicles?.total ?? 0;
+  const active = dashboard.vehicles?.active ?? 0;
+  const onShift = dashboard.drivers?.onShift ?? 0;
+  // A fleet with no vehicles yet is being SET UP, and telling it "0 of 0 out" is noise on the one
+  // screen where the real message is "add a vehicle".
+  if (total === 0) return t('fleet.bar.empty');
+  const bits = [t('fleet.bar.vehiclesOut', { active, total })];
+  if (onShift > 0) bits.push(t('fleet.bar.driversOn', { count: onShift }));
+  return bits.join(' · ');
+}

@@ -8,7 +8,12 @@
  */
 export const enAgent = {
   // Shared within the shop app (reused across screens).
-  'agent.appTitle': 'SeeBuyGet Agent',
+  'agent.appTitle': 'Agent',
+  // The top bar's LIVE line — the two piles a counter has to clear. Closed stands alone.
+  'agent.bar.closed': 'Closed — not taking parcels',
+  'agent.bar.handOver': '{count} to hand over',
+  'agent.bar.collect': '{count} to collect',
+  'agent.bar.clear': 'Nothing waiting',
   'agent.signInSubtitle': 'Sign in',
   'agent.backToShop': 'Back to my shop',
   'agent.open': 'Open',

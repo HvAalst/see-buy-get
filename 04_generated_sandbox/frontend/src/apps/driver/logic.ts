@@ -411,3 +411,30 @@ export function nodeOptions(mdps: MdpRow[] | null, agents: AgentRow[] | null, t:
     .map((a) => ({ id: a.did, label: a.shopName, lat: a.location!.lat, lng: a.location!.lng }));
   return [...hubs, ...shops];
 }
+
+/**
+ * THE LIVE LINE in the top bar — where this driver is going and what room is left.
+ *
+ * It replaced the driver's own name, which they already know. What actually changes across a shift is
+ * whether they are on it, the road they declared, and how much of the vehicle is still free.
+ *
+ * COMMITTED STATE ONLY. Waiting offers are deliberately absent: an offer is an incoming event, and a
+ * header that moves when one lands pulls a driver's eyes off the road and competes with the nudge —
+ * which this product restrains to one pop-up and one decision precisely so it stays interruptible on
+ * the driver's terms. The bar reports what they have agreed to, never what is being asked of them.
+ */
+export function driverWorkLine(
+  session: { active?: boolean } | null,
+  route: { toLabel?: string } | null,
+  remainingTotes: number | null,
+  t: Translate,
+): string | undefined {
+  if (!session?.active) return t('driver.bar.offShift');
+  const bits = [route?.toLabel ? t('driver.bar.heading', { place: route.toLabel }) : t('driver.bar.onShift')];
+  // Only when the hold is actually measured in bags. A vehicle with no bag capacity (or a figure we
+  // never received) says nothing rather than claiming "0 free", which reads as full.
+  if (typeof remainingTotes === 'number' && remainingTotes >= 0) {
+    bits.push(t('driver.bar.bagsFree', { count: remainingTotes }));
+  }
+  return bits.join(' · ');
+}

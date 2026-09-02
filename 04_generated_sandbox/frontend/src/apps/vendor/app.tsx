@@ -1,7 +1,7 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { BottomNav, Button, Checklist, Icon, Pill, TopBar, type NavItem } from '../../shared/ui';
 import { useT } from '../../shared/i18n';
-import { money } from './logic';
+import { money, vendorWorkLine } from './logic';
 import { BooksScreen } from './screens/BooksScreen';
 import { DockScreen } from './screens/DockScreen';
 import { MintScreen } from './screens/MintScreen';
@@ -47,7 +47,8 @@ export function App() {
     <div class="app">
       <TopBar
         title={t('vendor.appTitle')}
-        subtitle={state.vendor?.name}
+        subtitle={vendorWorkLine(state.orderStats, t)}
+        subtitleHint={state.vendor?.name}
         onBack={state.screen === 'orders' ? undefined : () => actions.go('orders')}
         backLabel={t('vendor.backToOrders')}
         end={

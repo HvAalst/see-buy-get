@@ -13,7 +13,11 @@
  */
 export const enVendor = {
   // Shell (app.tsx)
-  'vendor.appTitle': 'SeeBuyGet Vendor',
+  'vendor.appTitle': 'Vendor',
+  // The top bar's LIVE line — unpaid first, because unpaid is what blocks.
+  'vendor.bar.unpaid': '{count} unpaid',
+  'vendor.bar.inFlight': '{count} in flight',
+  'vendor.bar.clear': 'Nothing outstanding',
   'vendor.signInSubtitle': 'Sign in',
   'vendor.nav.orders': 'Orders',
   'vendor.nav.ship': 'Ship',

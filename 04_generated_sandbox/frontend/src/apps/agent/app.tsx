@@ -19,6 +19,7 @@ import { VoidScreen } from './screens/VoidScreen';
 import { useAgentApp, type AgentActions, type AgentState, type Screen } from './useAgentApp';
 import '../../shared/screens.css';
 import './agent.css';
+import { agentWorkLine } from './logic';
 
 type Tab = 'home' | 'accept' | 'release' | 'records';
 
@@ -57,7 +58,8 @@ export function App() {
     <div class="app">
       <TopBar
         title={t('agent.appTitle')}
-        subtitle={state.agent?.shopName}
+        subtitle={agentWorkLine(state.agent, state.shopParcels, t)}
+        subtitleHint={state.agent?.shopName}
         onBack={state.screen === 'home' ? undefined : () => actions.go('home')}
         backLabel={t('agent.backToShop')}
         end={

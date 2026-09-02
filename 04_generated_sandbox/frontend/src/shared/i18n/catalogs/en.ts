@@ -64,8 +64,13 @@ export const en = {
   // ======================================================================================================
 
   // Shell (app.tsx)
-  'send.appTitle': 'SeeBuyGet Send',
-  'send.appTagline': 'See the price. Pay at the shop.',
+  'send.appTitle': 'Send',
+  // The top bar's LIVE line. The old tagline lived here and said the same words to somebody with
+  // nothing in play as to somebody whose parcel has been waiting at a shop for two days.
+  'send.bar.readyOne': 'A parcel is ready to collect',
+  'send.bar.readyMany': '{count} parcels ready to collect',
+  'send.bar.movingOne': 'A parcel is on its way',
+  'send.bar.movingMany': '{count} parcels on their way',
   'send.nav.send': 'Send',
   'send.nav.track': 'Track',
   'send.nav.parcels': 'My parcels',

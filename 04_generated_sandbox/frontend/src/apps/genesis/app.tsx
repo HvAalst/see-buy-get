@@ -9,6 +9,7 @@ import { AccountScreen } from './screens/AccountScreen';
 import { useSendApp, type Screen, type SendActions, type SendState } from './useSendApp';
 import '../../shared/screens.css';
 import './send.css';
+import { sendWorkLine } from './logic';
 
 /**
  * The consumer shell. Send + Track are open to everyone — the first paint is still the first question,
@@ -32,7 +33,7 @@ export function App() {
     <div class="app">
       <TopBar
         title={t('send.appTitle')}
-        subtitle={t('send.appTagline')}
+        subtitle={sendWorkLine(state.parcels, t)}
         end={
           notifications || needRefresh ? (
             <>

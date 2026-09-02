@@ -1,7 +1,7 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { BottomNav, Button, Checklist, FeedbackFlash, Icon, Pill, TopBar, type NavItem } from '../../shared/ui';
 import { useT } from '../../shared/i18n';
-import { unsortedAt } from './logic';
+import { fillingBags, homeSummary, unsortedAt } from './logic';
 import { DropScreen } from './screens/DropScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { LoadScreen } from './screens/LoadScreen';
@@ -49,7 +49,10 @@ export function App() {
     <div class="app">
       <TopBar
         title={t('mdp.appTitle')}
-        subtitle={state.hub?.name}
+        // The SAME summary the home screen prints, from the same loaded data — the bar and the tiles
+        // under it can never report different numbers because there is only one computation.
+        subtitle={state.hub ? homeSummary(unsortedAt(state.inbound, state.hub.mdpId).length, fillingBags(state.totes).length, t) : undefined}
+        subtitleHint={state.hub?.name}
         onBack={state.screen === 'home' ? undefined : () => actions.go('home')}
         backLabel={t('mdp.backToHub')}
         end={
