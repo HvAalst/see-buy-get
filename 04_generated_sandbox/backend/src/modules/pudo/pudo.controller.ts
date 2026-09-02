@@ -31,7 +31,7 @@ import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
-import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DerivedLegDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityFeeDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
+import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DerivedLegDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityFeeDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
 import { classifySize, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { BooksService } from '../../foundation/books/books.service';
@@ -1380,6 +1380,46 @@ export class SbgController {
   @Get('flags')
   flags() {
     return this.monitor.flags();
+  }
+
+  /**
+   * The disputes waiting on a decision, oldest first — the case somebody has waited longest for is the
+   * one that most needs an answer.
+   *
+   * Everything an adjudicator needs is on the parcel already: the merchant's photo of the contents at
+   * mint, the drop-off photo, the delivery photo, and the claimant's photo of the problem, all held on
+   * a dispute-evidence clock so none of it is swept while the case is open.
+   */
+  @Roles('operator')
+  @Get('disputes')
+  disputes() {
+    return {
+      disputes: this.parcels.openDisputes().map((p) => ({
+        parcelId: p.parcelId,
+        raisedAt: p.dispute?.raisedAt,
+        origin: p.dispute?.origin ?? (p.buyerDisputeReason ? 'buyer' : 'counter'),
+        reason: p.dispute?.reason ?? p.buyerDisputeReason ?? p.disputeReason,
+        vendorId: p.vendorId,
+        // What the shipment was sold for — the only money figure this system currently knows about the
+        // parcel. It is NOT what the goods were worth, and an adjudicator must not read it as a cap.
+        shipmentCost: p.shipmentCost,
+        currency: p.currency,
+        evidence: [p.contentPhotoRef, p.dropoffPhotoRef, p.buyerPodPhotoRef, p.buyerDisputePhotoRef, p.disputePhotoRef].filter(Boolean),
+      })),
+    };
+  }
+
+  /**
+   * Decide one. Upheld, partly upheld, or rejected — and every one of them carries a note, because a
+   * person whose goods arrived broken is owed an explanation even when they are not owed money.
+   *
+   * An upheld award is paid to whoever CONTRACTED with the sister: the store for a merchant order, or a
+   * recorded off-platform payable for a walk-up sender who paid cash and has no account here.
+   */
+  @Roles('operator')
+  @Post('disputes/:parcelId/resolve')
+  resolveDispute(@Param('parcelId') parcelId: string, @Body() dto: ResolveDisputeDto) {
+    return this.parcels.resolveDispute(parcelId, dto);
   }
 
   /** PUDO coverage heatmap — points + density + open/closed counts (feeds journey-leg planning). */

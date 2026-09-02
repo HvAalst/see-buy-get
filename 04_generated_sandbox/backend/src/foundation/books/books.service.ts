@@ -131,6 +131,27 @@ export class BooksService {
     return this.balanceOf(this.accountIdFor(entityId, code, currency ?? entity.currency ?? '', counterparty));
   }
 
+  /**
+   * How an award of `amount` splits between what was provisioned for it and what it actually costs.
+   *
+   * A provision is a POOL, not a per-parcel envelope: the cost-of-risk layer is collected on every
+   * shipment precisely because nobody knows which one will break. So this reads the pool's balance and
+   * takes what is there, and the remainder is an expense the sister carries.
+   *
+   * The remainder is the number that matters. With every cost-of-risk knob at zero the pool is empty
+   * and every award lands wholly in `EXPENSE_CLAIMS` — which is exactly the reading somebody needs
+   * before setting that knob to anything other than a guess. Draining the pool into a negative balance
+   * instead would hide the same fact inside a liability that had quietly become an asset.
+   */
+  provisionSplit(entityId: string, amount: number): { fromProvision: number; fromExpense: number } {
+    const want = Math.max(0, Math.round((Number.isFinite(amount) ? amount : 0) * 100) / 100);
+    // Liabilities are negative by convention, so a funded provision reads negative; flip it to read
+    // "how much is set aside", and never let a pool that somehow went positive lend anything.
+    const available = Math.max(0, -this.balance(entityId, ACCOUNT_CODES.PROVISION_CLAIMS));
+    const fromProvision = Math.min(want, available);
+    return { fromProvision, fromExpense: Math.round((want - fromProvision) * 100) / 100 };
+  }
+
   /** Every account a sister holds, with its balance — the trial balance, in the ordinary sense. */
   trialBalance(entityId: string): Array<Account & { balance: number }> {
     return [...this.accounts.values()]
@@ -166,7 +187,17 @@ export class BooksService {
   coverage(entityId: string, currency?: string): { currency: string; held: number; lent: number; owed: number; cover: number } {
     const entity = this.entities.get(entityId);
     const ccy = currency ?? entity.currency ?? '';
-    const OWED: AccountCode[] = [ACCOUNT_CODES.DEPOSIT_AGENT, ACCOUNT_CODES.DEPOSIT_VENDOR, ACCOUNT_CODES.PAYABLE_PROVIDER, ACCOUNT_CODES.PAYABLE_TAX, ACCOUNT_CODES.PAYABLE_GROUP];
+    // An awarded claim is owed the same way a shop's float is: somebody is waiting for that money.
+    // The PROVISION is deliberately NOT here — it is money set aside against claims nobody has made
+    // yet, so counting it as owed would say the sister is short of cash it has not been asked for.
+    const OWED: AccountCode[] = [
+      ACCOUNT_CODES.DEPOSIT_AGENT,
+      ACCOUNT_CODES.DEPOSIT_VENDOR,
+      ACCOUNT_CODES.PAYABLE_PROVIDER,
+      ACCOUNT_CODES.PAYABLE_TAX,
+      ACCOUNT_CODES.PAYABLE_CLAIM,
+      ACCOUNT_CODES.PAYABLE_GROUP,
+    ];
     const mine = [...this.accounts.values()].filter((a) => a.entityId === entityId && a.currency === ccy);
     const sumMinor = (pick: (code: AccountCode) => boolean) => mine.filter((a) => pick(a.code)).reduce((s, a) => s + this.balanceMinorOf(a.accountId), 0);
     const heldMinor = sumMinor((c) => c === ACCOUNT_CODES.CASH_CUSTODY);

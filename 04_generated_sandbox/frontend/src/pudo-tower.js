@@ -8,7 +8,7 @@ import { el, mount } from './components/index.js';
 const API = window.GLOS_API || 'http://localhost:3000/v1';
 const root = document.getElementById('pudo-tower');
 
-const state = { dashboard: null, agents: [], finance: null, flags: [], kycQueue: [], heatmap: null, mdps: [], totes: [], lookup: null, msg: null, loading: true, help: null, helpTopic: 'packaging', helpBusy: null };
+const state = { dashboard: null, agents: [], finance: null, flags: [], kycQueue: [], heatmap: null, mdps: [], totes: [], lookup: null, msg: null, loading: true, help: null, helpTopic: 'packaging', helpBusy: null, disputes: [], disputeBusy: null, disputeForm: {} };
 
 // The four vocabularies a person has to CHOOSE from, and whose options are recognised rather than known.
 // The labels here are the operator's own words for the topic; the option keys come from the server, which
@@ -136,7 +136,8 @@ async function selectHelpTopic(topic) {
 
 async function loadAll() {
   try {
-    [state.dashboard, state.agents, state.finance, state.flags, state.kycQueue, state.heatmap, state.mdps, state.totes, state.help] = await Promise.all([api('/dashboard'), api('/agents'), api('/finance'), api('/flags'), api('/agents/kyc-queue'), api('/heatmap'), api('/mdps'), api('/totes'), api(`/help/${state.helpTopic}`)]);
+    [state.dashboard, state.agents, state.finance, state.flags, state.kycQueue, state.heatmap, state.mdps, state.totes, state.help, state.disputesRes] = await Promise.all([api('/dashboard'), api('/agents'), api('/finance'), api('/flags'), api('/agents/kyc-queue'), api('/heatmap'), api('/mdps'), api('/totes'), api(`/help/${state.helpTopic}`), api('/disputes')]);
+    state.disputes = state.disputesRes?.disputes || [];
     state.msg = null;
   } catch (e) {
     const m = String(e.message || e);
@@ -303,6 +304,118 @@ async function decideKyc(did, approve) {
   try { await post(`/agents/${did}/kyc-decision`, { approve, by: 'ops' }); state.loading = true; render(); loadAll(); }
   catch (e) { state.msg = { type: 'err', text: String(e.message || e) }; render(); }
 }
+
+/**
+ * The disputes queue — the one panel in this console where somebody is WAITING FOR AN ANSWER.
+ *
+ * Until this existed a person reported that their goods arrived broken and the parcel stopped there
+ * for good: Disputed was a terminal status with no adjudication anywhere in the code. So the panel is
+ * built around the decision rather than around the list — every row carries its evidence, a box for
+ * the reason, and the three buttons that end it.
+ *
+ * Oldest first, deliberately: the case somebody has waited longest for is the one that most needs an
+ * answer, and a queue sorted newest-first quietly buries exactly those.
+ */
+function disputesPanel() {
+  const q = state.disputes || [];
+  const rows = q.map((d) => {
+    const form = state.disputeForm[d.parcelId] || {};
+    const busy = state.disputeBusy === d.parcelId;
+    const waited = daysWaiting(d.raisedAt);
+    // Read from STATE at call time, not from the `form` captured when this row rendered. Spreading the
+    // captured copy would make each field overwrite the other: type an award, then a note, and the note's
+    // update would put back the empty award it had closed over — and the operator would watch a filled
+    // form submit as if it were blank.
+    const set = (patch) => {
+      state.disputeForm[d.parcelId] = { ...(state.disputeForm[d.parcelId] || {}), ...patch };
+    };
+    return el('div', { className: 'pt__flag', style: { borderLeftColor: waited >= 3 ? 'var(--danger)' : 'var(--warn, var(--slate))' } }, [
+      el('span', { className: 'pt__chip pt__chip--bad', text: d.origin === 'buyer' ? 'BUYER' : 'COUNTER' }),
+      el('div', {}, [
+        el('div', { className: 'pt__flag-t', text: `${d.parcelId}${waited != null ? ` · waiting ${waited} day${waited === 1 ? '' : 's'}` : ''}` }),
+        el('div', { className: 'pt__flag-d', text: d.reason || '—' }),
+        // What the SHIPMENT sold for. Stated because it is the only money figure the system knows about
+        // this parcel, and labelled because it is emphatically NOT what the goods were worth: there is no
+        // declared-value cover yet, so nothing here caps an award and an adjudicator must not read one.
+        el('div', { className: 'pt__flag-d', text: `Shipping sold for ${fmtMoney(d.shipmentCost)} ${d.currency || ''} — not a cap on the award` }),
+        el('div', { className: 'pt__flag-d pt__mono', text: `Evidence: ${(d.evidence || []).join(', ') || 'none attached'}` }),
+        // Built with attrs + a real listener rather than el()'s option bag: el() understands only
+        // className, text, onClick, attrs, dataset and style — so a "value", "placeholder" or "onInput"
+        // passed as an option is SILENTLY DROPPED, and you get a form that looks right and collects
+        // nothing. Neither of these helpers re-renders on a keystroke either: this console rebuilds its
+        // whole tree, and re-rendering mid-word would take the caret out of the operator's box.
+        el('div', { className: 'pt__btns', style: { marginTop: '8px', flexWrap: 'wrap', gap: '6px' } }, [
+          moneyInput(form.award, (v) => set({ award: v })),
+          noteInput(form.note, (v) => set({ note: v })),
+        ]),
+        el('div', { className: 'pt__btns', style: { marginTop: '6px' } }, [
+          el('button', { className: 'pt__btn', attrs: { disabled: busy }, style: { background: 'var(--success)', borderColor: 'var(--success)', color: '#fff' }, text: busy ? '…' : 'Uphold', onClick: () => decideDispute(d.parcelId, 'upheld') }),
+          el('button', { className: 'pt__btn', attrs: { disabled: busy }, text: busy ? '…' : 'Uphold in part', onClick: () => decideDispute(d.parcelId, 'partly_upheld') }),
+          el('button', { className: 'pt__btn', attrs: { disabled: busy }, style: { background: 'var(--danger)', borderColor: 'var(--danger)', color: '#fff' }, text: busy ? '…' : 'Reject', onClick: () => decideDispute(d.parcelId, 'rejected') }),
+        ]),
+      ]),
+    ]);
+  });
+  return el('div', { className: 'pt__panel' }, [
+    el('h2', { className: 'pt__panel-title', text: `Damage claims${q.length ? ` · ${q.length}` : ''}` }),
+    el('div', {}, rows.length ? rows : [el('div', { className: 'pt__empty', text: 'No open claims. Nobody is waiting on a decision.' })]),
+  ]);
+}
+
+/**
+ * A text box that reports what is typed into it WITHOUT re-rendering the console.
+ *
+ * This tower rebuilds its entire tree on `render()`, so calling it per keystroke would rip the caret
+ * out of the operator's hands mid-word. The value is pushed into `state` as it is typed and read back
+ * on the next legitimate render, which is the only thing the state is needed for.
+ */
+function liveInput(className, attrs, initial, onValue) {
+  const node = el('input', { className, attrs });
+  if (initial != null) node.value = String(initial);
+  node.addEventListener('input', () => onValue(node.value));
+  return node;
+}
+
+const moneyInput = (initial, onValue) =>
+  liveInput('pt__input', { type: 'number', min: '0', step: '0.01', placeholder: 'Award', style: 'width:110px' }, initial, onValue);
+
+const noteInput = (initial, onValue) =>
+  liveInput('pt__input', { placeholder: 'Why — the claimant is shown this', style: 'flex:1 1 260px' }, initial, onValue);
+
+/** Whole days a case has been open — the number that decides how loudly a row shouts. */
+function daysWaiting(raisedAt) {
+  const ms = Date.parse(raisedAt || '');
+  if (Number.isNaN(ms)) return null;
+  return Math.max(0, Math.floor((Date.now() - ms) / 86_400_000));
+}
+
+async function decideDispute(parcelId, decision) {
+  const form = state.disputeForm[parcelId] || {};
+  const note = String(form.note || '').trim();
+  // Checked here as well as on the server, because the server's refusal would cost a round trip to say
+  // the one thing the operator can see for themselves: a decision with no reason is not a decision.
+  if (!note) {
+    state.msg = { type: 'err', text: 'Every decision needs a reason — including a rejection. The claimant is shown it.' };
+    render();
+    return;
+  }
+  state.disputeBusy = parcelId;
+  state.msg = null;
+  render();
+  try {
+    const award = decision === 'rejected' ? undefined : Number(form.award);
+    await post(`/disputes/${parcelId}/resolve`, { decision, award, note, by: 'ops' });
+    state.disputeForm[parcelId] = {};
+    state.msg = { type: 'ok', text: `Claim on ${parcelId} ${decision === 'rejected' ? 'rejected' : 'upheld'}.` };
+    state.disputeBusy = null;
+    await loadAll();
+  } catch (e) {
+    state.msg = { type: 'err', text: String(e.message || e) };
+    state.disputeBusy = null;
+  }
+  render();
+}
+
 
 function flagsPanel() {
   const body = state.flags.length
@@ -477,7 +590,7 @@ function render() {
   parts.push(kpis());
   parts.push(el('div', { className: 'pt__grid' }, [
     el('div', {}, [heatmapPanel(), agentsPanel(), mdpPanel()]),
-    el('div', {}, [kycPanel(), flagsPanel(), financePanel(), supportPanel(), helpPanel()]),
+    el('div', {}, [disputesPanel(), kycPanel(), flagsPanel(), financePanel(), supportPanel(), helpPanel()]),
   ]));
   mount(root, parts);
 }

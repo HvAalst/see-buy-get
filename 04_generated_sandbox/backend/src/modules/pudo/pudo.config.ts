@@ -132,6 +132,15 @@ export const MAX_PLATFORM_FEE_PCT = 0.25;
  * tight bound would be this file having an opinion about somebody else's law. It exists only to catch the
  * one mistake that matters: `16` typed where `0.16` was meant, which would charge sixteen hundred percent.
  */
+/**
+ * A sanity bound on a damage award, not a policy.
+ *
+ * There is no declared-value cover in this system yet, so what the network is actually liable for when
+ * it breaks something is undefined — and this file is the wrong place to invent it. The ceiling exists
+ * only to catch a mistyped figure before it reaches the books; the real limit arrives with insurance.
+ */
+export const MAX_CLAIM_AWARD = 1_000_000;
+
 export const MIN_TAX_PCT = 0;
 export const MAX_TAX_PCT = 0.4;
 /** What tax is called when a sister has not said. Neutral because the real name is jurisdictional — VAT

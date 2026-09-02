@@ -156,6 +156,50 @@ export class CustomsDeclaration {
 export type ParcelSize = 'S' | 'M' | 'L' | 'HEAVY';
 export type ParcelStatus = 'Created' | 'At_PUDO' | 'On_Bus' | 'At_MDP' | 'Ready_For_Pickup' | 'Delivered' | 'Disputed' | 'Voided';
 
+/**
+ * How a dispute ended.
+ *
+ * Three outcomes and no more, because these are the only three a claimant can be told without
+ * weasling: we agree and here is the money, we agree in part and here is why, or we do not agree.
+ * "Under review forever" is not an outcome, and it was the only one available before this existed.
+ */
+export type DisputeDecision = 'upheld' | 'partly_upheld' | 'rejected';
+
+/** Where the goods were when the problem was reported — and so where the parcel returns to when the
+ *  case closes. A counter dispute is raised while the goods are still on the shop's shelf; a buyer
+ *  dispute after they have been handed over. Resolving must not teleport a parcel between the two. */
+export type DisputeOrigin = 'counter' | 'buyer';
+
+export class DisputeCase {
+  /** Open until an operator decides. This is the field that makes `Disputed` a queue rather than a grave. */
+  state: 'open' | 'resolved';
+  origin: DisputeOrigin;
+  /** The status the parcel held when the dispute was raised, restored when the case closes. Stored
+   *  rather than inferred: a rejected counter dispute must leave the parcel collectable again, and
+   *  guessing that from the origin would be one assumption away from stranding somebody's goods. */
+  fromStatus: ParcelStatus;
+  reason: string;
+  /** Who reported it — an agent DID at a counter, a person DID from the app. */
+  raisedBy: string;
+  raisedAt: string;
+  decision?: DisputeDecision;
+  /** What was awarded, in the parcel's own currency. Zero on a rejection, and zero is a real answer
+   *  that still gets recorded — a refusal a claimant can be shown beats a case that went quiet. */
+  award?: number;
+  /** The operator's reasoning. REQUIRED on every decision including a rejection: a person whose goods
+   *  arrived broken is owed an explanation even when they are not owed money. */
+  note?: string;
+  /** Who decided, and when. */
+  decidedBy?: string;
+  decidedAt?: string;
+  /** How the award was funded — what the provision covered, and what it cost beyond that. Stamped at
+   *  the decision so a later top-up of the provision cannot rewrite what a claim actually cost. */
+  funding?: { fromProvision: number; fromExpense: number };
+  /** Where the money went: a store's float, or a payable settled off-platform for somebody who paid
+   *  cash and has no account. Absent on a rejection. */
+  paidTo?: { kind: 'vendor' | 'off_platform'; id: string };
+}
+
 /** Where a parcel came into being: a shop counter, a store's own premises, or somebody's hands. */
 export type BirthplaceKind = 'counter' | 'store' | 'hand';
 
@@ -660,6 +704,18 @@ export class Parcel {
   buyerDisputePhotoRef?: string; // the receiver's photo of THE PROBLEM (dispute evidence, kept distinct)
   buyerDisputeReason?: string;
   buyerDisputedBy?: string; // the person DID that filed the dispute
+  /**
+   * The open or settled CASE behind a dispute — the thing `Disputed` never had.
+   *
+   * Until this existed, `Disputed` was a terminal status: a person reported that their goods arrived
+   * broken, the parcel stopped there, and nothing in the system could ever say what happened next. Not
+   * a missing feature so much as a missing ending — and the reason the cost-of-risk pricing layer had
+   * to stay at zero, because a provision you can never draw down is an accumulating fiction.
+   *
+   * Absent on every parcel that has never been disputed, and on disputes filed before this existed —
+   * those keep their `disputeReason` / `buyerDisputeReason` and read as open cases with no case file.
+   */
+  dispute?: DisputeCase;
   // S25 — handover completeness gate. Set when a waiting parcel was KNOWINGLY left behind at handover
   // (an acknowledged short-ship), so the control tower sees it immediately instead of waiting for the
   // 48 h stagnant window. Cleared the moment the parcel is finally loaded onto a bus.

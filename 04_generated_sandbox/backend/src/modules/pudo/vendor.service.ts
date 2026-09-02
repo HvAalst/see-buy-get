@@ -18,7 +18,7 @@ export interface VendorSettlement {
   id: string;
   vendorId: string;
   country: string;
-  type: 'TOP_UP' | 'BILLING' | 'REBATE';
+  type: 'TOP_UP' | 'BILLING' | 'REBATE' | 'CLAIM';
   sign: '+' | '-';
   amount: number;
   /** What the amount IS. Absent on rows written before the field existed — read it through
@@ -59,7 +59,7 @@ export interface VendorLedgerQuery {
 
 /** The merchant's word for an entry type — also the fourth thing the search matches. */
 export function ledgerTypeWord(type: VendorSettlement['type']): string {
-  return type === 'TOP_UP' ? 'Top-up' : type === 'BILLING' ? 'Shipment' : 'Rebate';
+  return type === 'TOP_UP' ? 'Top-up' : type === 'BILLING' ? 'Shipment' : type === 'CLAIM' ? 'Damage claim' : 'Rebate';
 }
 
 /** One row of the bookkeeping register (the entry itself — it carries no secret and no PII beyond the parcel id). */
@@ -307,6 +307,37 @@ export class VendorService {
     ]);
     this.book(vendor, 'REBATE', '+', amount, parcelId, note, entryId);
     return this.syncBalance(vendor);
+  }
+
+  /**
+   * Pay an upheld damage claim into the store's float.
+   *
+   * The store, and not the buyer, because the store is who we CONTRACTED with: it bought a shipment
+   * from the sister, and the sister failed to deliver what it was paid to deliver. The buyer's claim
+   * is against the merchant they bought from, exactly as it would be for goods broken on a shelf. That
+   * is the same counterparty discipline the rest of this ledger keeps, and it is the reason a claim
+   * cannot simply be pushed at whoever happens to be holding the damaged box.
+   *
+   * NOT a rebate. A rebate gives back a price that was never earned and reverses revenue; this is a
+   * cost the sister carries for having broken something, so it lands on the provision set aside for
+   * exactly that, and on claims expense for whatever the provision could not cover.
+   */
+  payClaim(vendorId: string, parcelId: string, amount: number, note: string): { fromProvision: number; fromExpense: number } {
+    const vendor = this.get(vendorId);
+    const value = Math.round((Number.isFinite(amount) ? amount : 0) * 100) / 100;
+    if (value <= 0) return { fromProvision: 0, fromExpense: 0 };
+    const entityId = this.entityIdOf(vendor);
+    const split = this.books.provisionSplit(entityId, value);
+    const entryId = this.post(vendor, 'claim', parcelId, [
+      // Debits: draw down what was set aside, and carry the rest as what this claim actually cost.
+      ...(split.fromProvision > 0 ? [{ code: ACCOUNT_CODES.PROVISION_CLAIMS, amount: split.fromProvision }] : []),
+      ...(split.fromExpense > 0 ? [{ code: ACCOUNT_CODES.EXPENSE_CLAIMS, amount: split.fromExpense }] : []),
+      // Credit: the store's float grows by the award — money it can spend on its next shipment.
+      { code: ACCOUNT_CODES.DEPOSIT_VENDOR, counterparty: vendorId, amount: -value },
+    ]);
+    this.book(vendor, 'CLAIM', '+', value, parcelId, note, entryId);
+    this.syncBalance(vendor);
+    return split;
   }
 
   /** Derived from the books — the store's float IS its deposit account, flipped for a human to read. */

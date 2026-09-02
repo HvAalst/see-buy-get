@@ -544,6 +544,22 @@ export class ReissueReleaseDto {
   @IsOptional() @IsString() by?: string;
 }
 
+/**
+ * An operator decision on a dispute.
+ *
+ * The note is REQUIRED on every outcome, rejections included. A claimant who is told no and given no
+ * reason has not been answered, they have been dismissed — and the note is the only part of a decision
+ * that reaches a human rather than a ledger.
+ */
+export class ResolveDisputeDto {
+  @IsIn(['upheld', 'partly_upheld', 'rejected']) @ApiPropertyOptional({ enum: ['upheld', 'partly_upheld', 'rejected'] }) decision!: 'upheld' | 'partly_upheld' | 'rejected';
+  /** In the parcel's own currency. Ignored on a rejection, required above zero on the other two. */
+  @IsOptional() @IsNumber() @Min(0) award?: number;
+  @IsString() note!: string;
+  /** The human behind the operator token, for the audit line a decision deserves. */
+  @IsOptional() @IsString() by?: string;
+}
+
 export class DisputeDto {
   @IsOptional() @IsString() agentDid?: string; // operator-override only; normal actors are pinned to their token
   @IsString() reason!: string;

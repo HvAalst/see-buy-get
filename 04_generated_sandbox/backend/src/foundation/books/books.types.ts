@@ -44,6 +44,28 @@ export const ACCOUNT_CODES = {
   RECEIVABLE_AGENT: 'receivable.agent',
   /** Tax collected on behalf of an authority. Never revenue, not for a moment. */
   PAYABLE_TAX: 'payable.tax',
+  /**
+   * Set aside out of the COST-OF-RISK layer to meet damage claims that have not happened yet.
+   *
+   * A liability, because it is money the sister has already been paid for a service it has not yet had
+   * to perform. It exists so that carrying risk shows up as a cost when the price is charged rather
+   * than as a shock when a claim lands.
+   *
+   * It is EMPTY today, deliberately: every sister's cost-of-risk knob is zero, so nothing accrues here
+   * yet and every award falls straight through to `EXPENSE_CLAIMS`. That is the useful order to build
+   * in — a few months of real claims expense is exactly the number somebody needs in order to set the
+   * knob to something other than a guess.
+   */
+  PROVISION_CLAIMS: 'provision.claims',
+  /** What a claim actually cost, beyond whatever had been provisioned for it. The number that says
+   *  whether the cost-of-risk layer is priced anywhere near right. */
+  EXPENSE_CLAIMS: 'expense.claims',
+  /**
+   * An award owed to a claimant we cannot simply credit — a walk-up sender who paid cash and has no
+   * account here. Settled off-platform, and visible until it is, because an award nobody can see is an
+   * award nobody pays.
+   */
+  PAYABLE_CLAIM: 'payable.claim',
   /** The mother's periodic licence fee, owed by a sister. */
   PAYABLE_GROUP: 'payable.group',
   /** Bilateral running balance with another sister; the counterparty entity is on the account. */
@@ -67,6 +89,9 @@ export const ACCOUNT_KIND: Record<AccountCode, AccountKind> = {
   [ACCOUNT_CODES.EXPENSE_PROVIDER_FEES]: 'expense',
   [ACCOUNT_CODES.RECEIVABLE_AGENT]: 'asset',
   [ACCOUNT_CODES.PAYABLE_TAX]: 'liability',
+  [ACCOUNT_CODES.PROVISION_CLAIMS]: 'liability',
+  [ACCOUNT_CODES.EXPENSE_CLAIMS]: 'expense',
+  [ACCOUNT_CODES.PAYABLE_CLAIM]: 'liability',
   [ACCOUNT_CODES.PAYABLE_GROUP]: 'liability',
   [ACCOUNT_CODES.INTERCOMPANY]: 'asset', // a receivable when positive, a payable when negative
   [ACCOUNT_CODES.REVENUE]: 'revenue',

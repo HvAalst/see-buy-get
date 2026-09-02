@@ -2078,6 +2078,154 @@ describe('PUDO Light', () => {
     expect(vendors.outboxFor(vendor.vendorId).some((c) => c.event === 'disputed')).toBe(true);
   });
 
+  describe('a dispute gets an ending', () => {
+    /** Let the delivery events settle before the receiver can act on the parcel. */
+    const settle = () => new Promise((r) => setImmediate(r));
+
+    /** A delivered vendor order with a receiver who reports a problem — the buyer-dispute path. */
+    async function disputedOrder(float = 200) {
+      const origin = onboardAgent('Claims Origin', 'NorthTown');
+      const dest = onboardAgent('Claims Dest', 'SouthTown');
+      const corridor = corridors.addCorridor({ name: 'C', originZone: 'NorthTown', destZone: 'SouthTown' });
+      const driver = corridors.addDriver({ driverDid: 'did:glos:claimd', name: 'D', corridorId: corridor.corridorId });
+      const vendor = vendors.register({ name: 'Claims Store' });
+      vendors.topUp(vendor.vendorId, float);
+      const buyer = '+254700931100';
+      const { parcel } = parcels.createInbound({
+        vendorId: vendor.vendorId, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: buyer,
+        size: 'M', contentPhotoRef: 'content.jpg', shippingPolicy: vendor.shippingPolicy,
+        quote: routing.quoteShipment(origin.did, dest.did, 'M'),
+      });
+      parcels.intakeInbound(parcel.parcelId, origin.did);
+      parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: [parcel.parcelId] });
+      parcels.shelve(parcel.parcelId, dest.did);
+      parcels.collectConfirm(parcel.parcelId, dest.did, parcel.collectionCode!);
+      await settle();
+      const rx = hashPhone(buyer);
+      parcels.buyerDispute(parcel.parcelId, rx, persons.ensurePerson(buyer).personDid, 'Arrived smashed', 'problem.jpg');
+      return { parcel, vendor, dest };
+    }
+
+    const ke = () => entities.requireForJurisdiction('KE').entityId;
+    const claimsExpense = () => books.balance(ke(), ACCOUNT_CODES.EXPENSE_CLAIMS) || 0;
+    const provision = () => -books.balance(ke(), ACCOUNT_CODES.PROVISION_CLAIMS) || 0;
+
+    it('opens a CASE, not just a status — and it names where the parcel came from', async () => {
+      const { parcel } = await disputedOrder();
+      const p = parcels.get(parcel.parcelId);
+      expect(p.status).toBe('Disputed');
+      // The thing Disputed never had: an open question with a record, and a way back to where it was.
+      expect(p.dispute).toMatchObject({ state: 'open', origin: 'buyer', fromStatus: 'Delivered', reason: 'Arrived smashed' });
+      expect(parcels.openDisputes().map((x) => x.parcelId)).toContain(parcel.parcelId);
+    });
+
+    it('pays an upheld claim to the STORE — the party that actually contracted with the sister', async () => {
+      // Not the buyer. The buyer's claim is against the merchant they bought from, exactly as it would
+      // be for goods broken on a shelf; ours is with the business that bought a shipment from us.
+      const { parcel, vendor } = await disputedOrder();
+      const before = vendors.balanceOf(vendor.vendorId);
+
+      const resolved = parcels.resolveDispute(parcel.parcelId, { decision: 'upheld', award: 40, note: 'Crushed in transit — our handling', by: 'ops-anna' });
+
+      expect(resolved.dispute).toMatchObject({ state: 'resolved', decision: 'upheld', award: 40, decidedBy: 'ops-anna' });
+      expect(resolved.dispute?.paidTo).toEqual({ kind: 'vendor', id: vendor.vendorId });
+      expect(Math.round((vendors.balanceOf(vendor.vendorId) - before) * 100) / 100).toBe(40);
+      expect(books.balances(ke()).balanced).toBe(true);
+    });
+
+    it('falls through to CLAIMS EXPENSE while the provision is empty — which is the number that prices the knob', async () => {
+      // Every sister's cost-of-risk is zero, so nothing has been set aside and every award is simply a
+      // cost. That reading is the point: it is what somebody needs before setting that knob to anything
+      // other than a guess. Draining a provision into a negative balance would hide the same fact.
+      const { parcel } = await disputedOrder();
+      expect(provision()).toBe(0);
+      parcels.resolveDispute(parcel.parcelId, { decision: 'upheld', award: 25, note: 'ours' });
+      expect(claimsExpense()).toBe(25);
+      expect(books.balances(ke()).balanced).toBe(true);
+    });
+
+    it('takes what the provision holds first, and expenses only the shortfall', async () => {
+      // The provision is a POOL, not a per-parcel envelope — cost of risk is collected on every shipment
+      // precisely because nobody knows which one will break.
+      const { parcel } = await disputedOrder();
+      books.post({
+        entityId: ke(), kind: 'provision-seed', ref: 'test',
+        lines: [{ code: ACCOUNT_CODES.CASH_CUSTODY, amount: 30 }, { code: ACCOUNT_CODES.PROVISION_CLAIMS, amount: -30 }],
+      });
+      expect(provision()).toBe(30);
+
+      parcels.resolveDispute(parcel.parcelId, { decision: 'partly_upheld', award: 50, note: 'half the goods survived' });
+
+      expect(parcels.get(parcel.parcelId).dispute?.funding).toEqual({ fromProvision: 30, fromExpense: 20 });
+      expect(provision()).toBe(0);
+      expect(claimsExpense()).toBe(20);
+      expect(books.balances(ke()).balanced).toBe(true);
+    });
+
+    it('closes a REJECTED case too, with its reason, and moves no money', async () => {
+      // A claimant told no and given no reason has not been answered, they have been dismissed.
+      const { parcel, vendor } = await disputedOrder();
+      const before = vendors.balanceOf(vendor.vendorId);
+      const resolved = parcels.resolveDispute(parcel.parcelId, { decision: 'rejected', award: 999, note: 'Delivery photo shows it intact at handover' });
+      expect(resolved.dispute).toMatchObject({ state: 'resolved', decision: 'rejected', award: 0 });
+      expect(resolved.dispute?.note).toContain('intact at handover');
+      expect(resolved.dispute?.paidTo).toBeUndefined();
+      expect(vendors.balanceOf(vendor.vendorId)).toBe(before); // the award on a rejection is ignored, not paid
+      expect(claimsExpense()).toBe(0);
+    });
+
+    it('returns the parcel to what it FACTUALLY IS, and drains the operator queue', async () => {
+      // Disputed was never a description of the goods — it described an open question. Once the question
+      // has an answer the parcel is what it always was: delivered.
+      const { parcel } = await disputedOrder();
+      parcels.resolveDispute(parcel.parcelId, { decision: 'rejected', note: 'no evidence of damage' });
+      expect(parcels.get(parcel.parcelId).status).toBe('Delivered');
+      expect(parcels.openDisputes().map((x) => x.parcelId)).not.toContain(parcel.parcelId);
+      // …and the case file survives the status going back, so the history is not rewritten.
+      expect(parcels.get(parcel.parcelId).dispute?.decision).toBe('rejected');
+    });
+
+    it('a rejected COUNTER dispute leaves the goods collectable, not stranded', async () => {
+      // The one place guessing the return status would strand somebody's parcel: a counter dispute is
+      // raised while the goods are still on the shelf, so rejecting it must hand them back to the queue.
+      const origin = onboardAgent('Counter Origin', 'NorthTown');
+      const dest = onboardAgent('Counter Dest', 'SouthTown');
+      const corridor = corridors.addCorridor({ name: 'CC', originZone: 'NorthTown', destZone: 'SouthTown' });
+      const driver = corridors.addDriver({ driverDid: 'did:glos:countd', name: 'CD', corridorId: corridor.corridorId });
+      const vendor = vendors.register({ name: 'Counter Store' });
+      vendors.topUp(vendor.vendorId, 200);
+      const { parcel } = parcels.createInbound({
+        vendorId: vendor.vendorId, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700111222',
+        size: 'S', contentPhotoRef: 'content.jpg', shippingPolicy: vendor.shippingPolicy,
+        quote: routing.quoteShipment(origin.did, dest.did, 'S'),
+      });
+      parcels.intakeInbound(parcel.parcelId, origin.did);
+      parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: [parcel.parcelId] });
+      parcels.shelve(parcel.parcelId, dest.did);
+      parcels.dispute(parcel.parcelId, dest.did, 'box crushed', 'proof.jpg');
+      expect(parcels.get(parcel.parcelId).dispute).toMatchObject({ origin: 'counter', fromStatus: 'Ready_For_Pickup' });
+
+      parcels.resolveDispute(parcel.parcelId, { decision: 'rejected', note: 'packaging scuffed, contents fine' });
+      expect(parcels.get(parcel.parcelId).status).toBe('Ready_For_Pickup');
+    });
+
+    it('refuses a decision with no reason, and an upheld claim that awards nothing', async () => {
+      const { parcel } = await disputedOrder();
+      expect(() => parcels.resolveDispute(parcel.parcelId, { decision: 'upheld', award: 10, note: '  ' })).toThrow(/reason the claimant can be shown/);
+      expect(() => parcels.resolveDispute(parcel.parcelId, { decision: 'upheld', award: 0, note: 'ok' })).toThrow(/reject it instead/);
+      // …and none of the refusals opened a hole: the case is untouched and still open.
+      expect(parcels.get(parcel.parcelId).dispute?.state).toBe('open');
+      expect(claimsExpense()).toBe(0);
+    });
+
+    it('cannot be decided twice', async () => {
+      const { parcel } = await disputedOrder();
+      parcels.resolveDispute(parcel.parcelId, { decision: 'upheld', award: 10, note: 'ours' });
+      expect(() => parcels.resolveDispute(parcel.parcelId, { decision: 'upheld', award: 10, note: 'again' })).toThrow(/expected Disputed/);
+      expect(claimsExpense()).toBe(10); // paid once
+    });
+  });
+
   it('enforces tote-bag capacity: 10 mediums, 50 letters + 1 medium, and a heavy fills a bag alone (Ch 17)', () => {
     const hub = mdps.register({ name: 'Cap MDP', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } });
 

@@ -294,6 +294,36 @@ export class WalletGateService {
     });
   }
 
+  /**
+   * Record an upheld claim for somebody the network cannot simply credit.
+   *
+   * A walk-up sender paid cash over a counter and has no account here, so there is nothing to pay INTO.
+   * The award becomes a payable that sits on the books, visibly, until an operator settles it in cash —
+   * the same shape as any other obligation the network owes and has not yet discharged.
+   *
+   * It deliberately does NOT invent a balance for that person. A wallet conjured to hold a refund would
+   * be an account nobody asked for, holding money nobody can spend here, and it would quietly make the
+   * network a place that keeps consumers' funds — which is the one thing the money model refuses to be.
+   */
+  recordClaimPayable(entityId: string, parcelId: string, amount: number, claimant: string): { fromProvision: number; fromExpense: number } {
+    const value = Math.round((Number.isFinite(amount) ? amount : 0) * 100) / 100;
+    if (value <= 0) return { fromProvision: 0, fromExpense: 0 };
+    const split = this.books.provisionSplit(entityId, value);
+    this.books.post({
+      entityId,
+      kind: 'claim',
+      ref: parcelId,
+      lines: [
+        ...(split.fromProvision > 0 ? [{ code: ACCOUNT_CODES.PROVISION_CLAIMS, amount: split.fromProvision }] : []),
+        ...(split.fromExpense > 0 ? [{ code: ACCOUNT_CODES.EXPENSE_CLAIMS, amount: split.fromExpense }] : []),
+        // Owed to this specific claimant, so "who is still waiting to be paid" is a balance rather than
+        // a search through journal memos.
+        { code: ACCOUNT_CODES.PAYABLE_CLAIM, counterparty: claimant, amount: -value },
+      ],
+    });
+    return split;
+  }
+
   /** The money a sister keeps its books in. */
   private currencyOf(entityId: string): string {
     const entity = this.entities.get(entityId);

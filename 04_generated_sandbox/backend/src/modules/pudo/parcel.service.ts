@@ -12,10 +12,10 @@ import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
 import { ShelfService } from './shelf.service';
 import { FleetService } from './fleet.service';
-import { DEFAULT_TAX_LABEL, HANDOVER_FEE, LABEL_TZ_OFFSET_MIN, LABOUR_FEE, NETWORK_CURRENCY, OTP_MAX_ATTEMPTS, PICKUP_FEE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, VOID_WINDOW_MS, WHOLESALE, classifySize, taxOn, withPlatformFee } from './pudo.config';
+import { DEFAULT_TAX_LABEL, HANDOVER_FEE, MAX_CLAIM_AWARD, LABEL_TZ_OFFSET_MIN, LABOUR_FEE, NETWORK_CURRENCY, OTP_MAX_ATTEMPTS, PICKUP_FEE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, VOID_WINDOW_MS, WHOLESALE, classifySize, taxOn, withPlatformFee } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import type { ResolvedTax } from '../../foundation/entity/entity.types';
-import { Birthplace, ConsumerParcelView, CustodyKind, CustodyLeg, Parcel, ParcelDirection, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy } from './pudo.types';
+import { Birthplace, ConsumerParcelView, CustodyKind, CustodyLeg, DisputeDecision, DisputeOrigin, Parcel, ParcelDirection, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy } from './pudo.types';
 import { VendorService } from './vendor.service';
 import { VehicleService } from './vehicle.service';
 import { MediaService } from './media.service';
@@ -574,6 +574,9 @@ export class ParcelService implements OnApplicationBootstrap {
     // The problem photo must be its OWN media, not the delivered-state PoD reused — else one image serves
     // two roles and its retention gets confused (S26). Force a distinct capture.
     if (photoRef === p.buyerPodPhotoRef) throw new GlosError('DISPUTE_INCOMPLETE', 'Take a new photo of the problem — not the delivery photo');
+    // The goods are already with the receiver here, so a closed case returns the parcel to Delivered —
+    // which is what it factually is, whatever the outcome of the claim about its condition.
+    p.dispute = { state: 'open', origin: 'buyer', fromStatus: p.status, reason, raisedBy: byDid, raisedAt: new Date().toISOString() };
     p.status = 'Disputed';
     p.buyerDisputeReason = reason;
     p.buyerDisputePhotoRef = photoRef; // the problem-photo gets its OWN durable home — never overwrites the PoD
@@ -1575,6 +1578,10 @@ export class ParcelService implements OnApplicationBootstrap {
     if (parcel.status !== 'Ready_For_Pickup') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
     if (parcel.destAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Dispute is raised at the destination PUDO');
     if (!reason?.trim() || !photoProofRef) throw new GlosError('DISPUTE_INCOMPLETE', 'A reason and a photo proof are required to dispute');
+    // The CASE opens before the status flips, and it remembers where the parcel was: these goods are
+    // still on this shop's shelf, so a rejected claim has to leave them collectable rather than
+    // stranding them in an exception state nobody can clear.
+    parcel.dispute = { state: 'open', origin: 'counter', fromStatus: parcel.status, reason, raisedBy: agentDid, raisedAt: new Date().toISOString() };
     parcel.status = 'Disputed';
     parcel.disputeReason = reason;
     parcel.disputePhotoRef = photoProofRef;
@@ -1583,6 +1590,88 @@ export class ParcelService implements OnApplicationBootstrap {
     this.media.holdParcelForDispute(parcel.parcelId);
     this.scan(parcel, 'Disputed', agentDid, `dispute · ${reason}`);
     void this.events.publish(GlosEvent.Pudo.ParcelDisputed, { parcelId, agentDid, reason, photoProofRef, vendorId: parcel.vendorId, externalOrderId: parcel.externalOrderId }, { source: 'pudo' }).catch(() => undefined);
+    return parcel;
+  }
+
+  /** Every dispute still waiting on a decision — the operator's queue, oldest first, because the case
+   *  somebody has waited longest for is the one that most needs an answer. */
+  openDisputes(): Parcel[] {
+    return this.list({ status: 'Disputed' }).sort((a, b) => (a.dispute?.raisedAt ?? '').localeCompare(b.dispute?.raisedAt ?? ''));
+  }
+
+  /**
+   * Decide a dispute — the ending `Disputed` never had.
+   *
+   * Before this, a person reported that their goods arrived broken and the parcel stopped there
+   * forever: the status was terminal, adjudication was a comment saying "control-tower/ops", and there
+   * was no path in the code by which anybody could ever be told yes or no. That is also why the
+   * cost-of-risk pricing layer had to stay pinned at zero — a provision that can never be drawn down
+   * is an accumulating fiction.
+   *
+   * THE AWARD IS THE OPERATOR'S NUMBER, deliberately, and it is bounded only against a fat finger.
+   * There is no declared-value cover in this system yet, so the network's liability for a broken thing
+   * is not defined anywhere — and inventing a cap here (the shipping price? the subtotal?) would be
+   * inventing a policy in a service method. A REJECTION still records its note and still closes the
+   * case: somebody whose goods arrived broken is owed an explanation even when they are not owed money.
+   */
+  resolveDispute(
+    parcelId: string,
+    input: { decision: DisputeDecision; award?: number; note: string; by?: string },
+  ): Parcel {
+    const parcel = this.require(parcelId);
+    if (parcel.status !== 'Disputed') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Disputed`);
+    if (!input.note?.trim()) throw new GlosError('FIELD_REQUIRED', 'A decision needs a reason the claimant can be shown — including a rejection');
+    const open = parcel.dispute;
+    // A dispute filed before cases existed has no record to close. Rather than refuse to adjudicate it
+    // — which would leave exactly the parcels that have waited longest permanently stuck — reconstruct
+    // the case from what the parcel does carry. Origin follows the evidence: a buyer's dispute is the
+    // one with a receiver behind it.
+    const origin: DisputeOrigin = open?.origin ?? (parcel.buyerDisputeReason ? 'buyer' : 'counter');
+    const fromStatus: ParcelStatus = open?.fromStatus ?? (origin === 'buyer' ? 'Delivered' : 'Ready_For_Pickup');
+
+    const award = input.decision === 'rejected' ? 0 : Math.round(Math.max(0, Number(input.award) || 0) * 100) / 100;
+    if (input.decision !== 'rejected' && award <= 0) {
+      throw new GlosError('INVALID_INPUT', 'Upholding a claim means awarding something — reject it instead of awarding nothing');
+    }
+    if (award > MAX_CLAIM_AWARD) {
+      throw new GlosError('INVALID_INPUT', `An award over ${MAX_CLAIM_AWARD} needs to be settled off-platform — this is a sanity bound, not a policy`);
+    }
+
+    let funding: { fromProvision: number; fromExpense: number } | undefined;
+    let paidTo: { kind: 'vendor' | 'off_platform'; id: string } | undefined;
+    if (award > 0) {
+      const note = `damage claim · ${parcel.parcelId}`;
+      if (parcel.vendorId && this.vendors.has(parcel.vendorId)) {
+        // The store is the counterparty: it bought the shipment, and the shipment failed.
+        funding = this.vendors.payClaim(parcel.vendorId, parcel.parcelId, award, note);
+        paidTo = { kind: 'vendor', id: parcel.vendorId };
+      } else {
+        // A walk-up sender paid cash and has no account. The award becomes a visible payable rather
+        // than a balance we invent for somebody who never asked us to hold their money.
+        const claimant = parcel.senderPhoneHash || parcel.parcelId;
+        const entityId = parcel.collectingEntityId ?? parcel.sellerEntityId;
+        if (!entityId) throw new GlosError('INVALID_STATE', 'This parcel names no sister company, so there are no books to award against');
+        funding = this.gate.recordClaimPayable(entityId, parcel.parcelId, award, claimant);
+        paidTo = { kind: 'off_platform', id: claimant };
+      }
+    }
+
+    parcel.dispute = {
+      ...(open ?? { state: 'open', origin, fromStatus, reason: parcel.buyerDisputeReason ?? parcel.disputeReason ?? '', raisedBy: 'unknown', raisedAt: parcel.deliveredAt ?? parcel.acceptedAt }),
+      state: 'resolved',
+      decision: input.decision,
+      award,
+      note: input.note.trim(),
+      decidedBy: input.by ?? 'ops',
+      decidedAt: new Date().toISOString(),
+      funding,
+      paidTo,
+    };
+    // Back to what the parcel factually IS. `Disputed` was never a description of the goods — it was a
+    // description of an open question, and the question now has an answer.
+    parcel.status = fromStatus;
+    this.scan(parcel, fromStatus, input.by ?? 'ops', `dispute ${input.decision}${award > 0 ? ` · awarded ${award.toFixed(2)}` : ''}`);
+    this.persist(parcel);
     return parcel;
   }
 

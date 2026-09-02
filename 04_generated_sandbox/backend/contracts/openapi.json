@@ -7617,6 +7617,58 @@
         }
       }
     },
+    "/v1/sbg/disputes": {
+      "get": {
+        "operationId": "Sbg.disputes",
+        "summary": "",
+        "description": "The disputes waiting on a decision, oldest first — the case somebody has waited longest for is the\none that most needs an answer.\n\nEverything an adjudicator needs is on the parcel already: the merchant's photo of the contents at\nmint, the drop-off photo, the delivery photo, and the claimant's photo of the problem, all held on\na dispute-evidence clock so none of it is swept while the case is open.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/disputes/{parcelId}/resolve": {
+      "post": {
+        "operationId": "Sbg.resolveDispute",
+        "summary": "",
+        "description": "Decide one. Upheld, partly upheld, or rejected — and every one of them carries a note, because a\nperson whose goods arrived broken is owed an explanation even when they are not owed money.\n\nAn upheld award is paid to whoever CONTRACTED with the sister: the store for a merchant order, or a\nrecorded off-platform payable for a walk-up sender who paid cash and has no account here.",
+        "parameters": [
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveDisputeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Parcel"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/heatmap": {
       "get": {
         "operationId": "Sbg.heatmap",
@@ -13977,6 +14029,86 @@
           "buffer"
         ]
       },
+      "DisputeCase": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "object",
+            "description": "Open until an operator decides. This is the field that makes `Disputed` a queue rather than a grave."
+          },
+          "origin": {
+            "type": "object"
+          },
+          "fromStatus": {
+            "type": "object",
+            "description": "The status the parcel held when the dispute was raised, restored when the case closes. Stored\n rather than inferred: a rejected counter dispute must leave the parcel collectable again, and\n guessing that from the origin would be one assumption away from stranding somebody's goods."
+          },
+          "reason": {
+            "type": "string"
+          },
+          "raisedBy": {
+            "type": "string",
+            "description": "Who reported it — an agent DID at a counter, a person DID from the app."
+          },
+          "raisedAt": {
+            "type": "string"
+          },
+          "decision": {
+            "type": "object"
+          },
+          "award": {
+            "type": "number",
+            "description": "What was awarded, in the parcel's own currency. Zero on a rejection, and zero is a real answer\n that still gets recorded — a refusal a claimant can be shown beats a case that went quiet."
+          },
+          "note": {
+            "type": "string",
+            "description": "The operator's reasoning. REQUIRED on every decision including a rejection: a person whose goods\n arrived broken is owed an explanation even when they are not owed money."
+          },
+          "decidedBy": {
+            "type": "string",
+            "description": "Who decided, and when."
+          },
+          "decidedAt": {
+            "type": "string"
+          },
+          "funding": {
+            "type": "object",
+            "properties": {
+              "fromProvision": {
+                "required": true,
+                "type": "number"
+              },
+              "fromExpense": {
+                "required": true,
+                "type": "number"
+              }
+            }
+          },
+          "paidTo": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "required": true,
+                "type": "object"
+              },
+              "id": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          }
+        },
+        "required": [
+          "state",
+          "origin",
+          "fromStatus",
+          "reason",
+          "raisedBy",
+          "raisedAt",
+          "funding",
+          "paidTo"
+        ]
+      },
       "Birthplace": {
         "type": "object",
         "properties": {
@@ -14297,6 +14429,9 @@
           },
           "buyerDisputedBy": {
             "type": "string"
+          },
+          "dispute": {
+            "$ref": "#/components/schemas/DisputeCase"
           },
           "shortShippedAt": {
             "type": "string"
@@ -15502,6 +15637,33 @@
         },
         "required": [
           "stars"
+        ]
+      },
+      "ResolveDisputeDto": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "object",
+            "minimum": 1,
+            "maximum": 3
+          },
+          "payeeSplitPct": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "atFaultDid": {
+            "type": "string"
+          },
+          "atFault": {
+            "type": "boolean"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "level"
         ]
       },
       "AssignNodeDto": {
@@ -18582,33 +18744,6 @@
           "tag",
           "reason",
           "filedByDid"
-        ]
-      },
-      "ResolveDisputeDto": {
-        "type": "object",
-        "properties": {
-          "level": {
-            "type": "object",
-            "minimum": 1,
-            "maximum": 3
-          },
-          "payeeSplitPct": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 100
-          },
-          "atFaultDid": {
-            "type": "string"
-          },
-          "atFault": {
-            "type": "boolean"
-          },
-          "note": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "level"
         ]
       }
     }
