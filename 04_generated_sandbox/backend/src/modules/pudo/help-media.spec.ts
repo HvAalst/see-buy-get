@@ -1,4 +1,8 @@
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { HelpMediaService } from './help-media.service';
+import { BUILTIN_DIR, loadBuiltins } from './help-builtins';
+import { HELP_TOPICS } from './help.types';
 import { HELP_IMAGE_MAX_BYTES, HELP_TOPIC_KEYS, isHelpKey, isHelpTopic } from './help.types';
 import { PACKAGING } from './packaging';
 import { TRUCK_SUBTYPES } from './fleet.config';
@@ -11,6 +15,9 @@ const FAKE = `data:image/png;base64,${Buffer.from('<svg onload=alert(1)>xxxxxxxx
 
 describe('help illustrations (admin-curated)', () => {
   let help: HelpMediaService;
+  /** A deployment that ships NO house set — a supported state, and since the shipped set became complete,
+   *  the only way left to exercise the un-illustrated path. Pointed at a directory that cannot exist. */
+  const bare = () => new HelpMediaService(join(tmpdir(), 'glos-no-house-set-here'));
   beforeEach(() => {
     help = new HelpMediaService();
     // Each topic's keys are read from the canonical lists, so a fresh service already knows every option.
@@ -35,10 +42,22 @@ describe('help illustrations (admin-curated)', () => {
     // absence. Returning only what has a picture would hide options from the person choosing between them.
     const view = help.topic('packaging');
     expect(view.options.map((o) => o.key)).toEqual([...PACKAGING]);
-    // Some arrive illustrated by the shipped house set; the rest are the slots still to draw. Both are
-    // listed, which is the assertion — a topic where nothing was drawn yet must still offer all seven.
-    expect(view.options.some((o) => o.imageUrl === undefined)).toBe(true);
     expect(view.options.every((o) => o.source !== 'deployment')).toBe(true); // nothing uploaded here yet
+    // And with no house set at all, still all seven — the sheet then shows its words alone.
+    const none = bare().topic('packaging');
+    expect(none.options.map((o) => o.key)).toEqual([...PACKAGING]);
+    expect(none.options.every((o) => o.imageUrl === undefined)).toBe(true);
+  });
+
+  it('ships a house drawing for EVERY option of EVERY topic', () => {
+    // The set is complete as of the brand delivery, and completeness is the property worth guarding: add a
+    // truck subtype without drawing it and this fails by NAME, which is a better message than a picker that
+    // quietly shows one option with no picture among twenty-three that have one.
+    const house = loadBuiltins(BUILTIN_DIR);
+    const undrawn = HELP_TOPICS.flatMap((topic) =>
+      HELP_TOPIC_KEYS[topic].filter((key) => !house.has(`${topic}:${key}`)).map((key) => `${topic}/${key}`),
+    );
+    expect(undrawn).toEqual([]);
   });
 
   it('serves a curated picture at a URL that changes when the picture does', () => {
@@ -85,7 +104,11 @@ describe('help illustrations (admin-curated)', () => {
     expect(help.remove('equipment', 'FLT')).toEqual({ removed: true });
     expect(help.remove('equipment', 'FLT')).toEqual({ removed: false }); // deleting nothing is not an error
     expect(help.topic('equipment').options.map((o) => o.key)).toEqual([...EQUIPMENT]);
-    expect(() => help.image('equipment', 'FLT')).toThrow(/No illustration/);
+    expect(help.topic('equipment').options.find((o) => o.key === 'FLT')!.source).toBe('builtin'); // reverts
+    // Where there is no house drawing behind it either, the option survives with no picture at all.
+    const none = bare();
+    expect(none.topic('equipment').options.map((o) => o.key)).toEqual([...EQUIPMENT]);
+    expect(() => none.image('equipment', 'FLT')).toThrow(/No illustration/);
   });
 
   describe('the house set behind a deployment’s own uploads', () => {
@@ -121,11 +144,12 @@ describe('help illustrations (admin-curated)', () => {
 
     it('an option with neither layer is still returned, with no picture', () => {
       // Undrawn is a normal state, not an absence: the picker still has to offer the option, and its sheet
-      // falls back to the words.
-      const loose = help.topic('packaging').options.find((o) => o.key === 'loose')!;
+      // falls back to the words. Asserted against a deployment with no house set, because the shipped one
+      // now covers every key — the path is unreachable through a real option, not gone.
+      const loose = bare().topic('packaging').options.find((o) => o.key === 'loose')!;
       expect(loose.imageUrl).toBeUndefined();
       expect(loose.source).toBeUndefined();
-      expect(() => help.image('packaging', 'loose')).toThrow(/No illustration/);
+      expect(() => bare().image('packaging', 'loose')).toThrow(/No illustration/);
     });
 
     it('the two layers get different cache-busting versions', () => {

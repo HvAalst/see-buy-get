@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" width="160" height="120"
+     fill="none" stroke="#000963" stroke-width="3"
+     stroke-linejoin="round" stroke-linecap="round">
+  <line x1="12" y1="104" x2="148" y2="104" stroke="#AFAFB0"/>
+  <g transform="translate(0 -24)">
+    <rect x="66" y="62" width="28" height="42" rx="2" fill="#FFB98C"/>
+    <rect x="64" y="56" width="32" height="8" rx="2" fill="#FFB98C"/>
+    <path d="M66 77 L94 77"/>
+    <path d="M66 90 L94 90"/>
+  </g>
+  <g transform="translate(0 0)">
+    <rect x="30" y="62" width="28" height="42" rx="2" fill="#FB6200"/>
+    <rect x="28" y="56" width="32" height="8" rx="2" fill="#FB6200"/>
+    <path d="M30 77 L58 77"/>
+    <path d="M30 90 L58 90"/>
+  </g>
+  <g transform="translate(0 0)">
+    <rect x="66" y="62" width="28" height="42" rx="2" fill="#FB6200"/>
+    <rect x="64" y="56" width="32" height="8" rx="2" fill="#FB6200"/>
+    <path d="M66 77 L94 77"/>
+    <path d="M66 90 L94 90"/>
+  </g>
+  <g transform="translate(0 0)">
+    <rect x="102" y="62" width="28" height="42" rx="2" fill="#FB6200"/>
+    <rect x="100" y="56" width="32" height="8" rx="2" fill="#FB6200"/>
+    <path d="M102 77 L130 77"/>
+    <path d="M102 90 L130 90"/>
+  </g>
+</svg>

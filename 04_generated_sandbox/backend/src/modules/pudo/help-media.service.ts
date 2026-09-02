@@ -27,7 +27,17 @@ export class HelpMediaService {
    * Read from disk at startup rather than per request: these files ship with the build and cannot change
    * under a running process, and a picker sheet should not pay a filesystem walk to open.
    */
-  private readonly builtins = loadBuiltins();
+  private readonly builtins: ReturnType<typeof loadBuiltins>;
+
+  /**
+   * `builtinDir` is for tests and for a deployment that ships no house set at all — a state the design
+   * explicitly supports (the sheets fall back to their words). It exists as a parameter because the shipped
+   * set is now COMPLETE: with every option drawn there is no longer a real key left over to exercise the
+   * un-illustrated path with, and a behaviour nothing can reach is a behaviour nobody notices breaking.
+   */
+  constructor(builtinDir?: string) {
+    this.builtins = loadBuiltins(builtinDir);
+  }
 
   private static id(topic: HelpTopic, key: string): string {
     return `${topic}:${key}`;

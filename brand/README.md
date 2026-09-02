@@ -1,0 +1,147 @@
+# seebuyget — brand assets
+
+BondBridge's construction: overlapping letters on a rounded tile. Here the three letters
+of the name (**see**, **buy**, **get**) grow left to right, so the monogram reads as a
+journey rather than an abbreviation — *see* furthest back and smallest, *get* arrived,
+largest, fully in front. Bricolage Grotesque Bold, converted to outlines: no font dependency.
+
+## Colour
+
+| Role | Hex | RGB | Reference |
+|---|---|---|---|
+| Bright Orange | `#FB6200` | 251 98 0 | Pantone Bright Orange C |
+| Sand | `#FFB98C` | 255 185 140 | 45% tint of Bright Orange |
+| Deep Navy | `#000963` | 0 9 99 | PostNL Navy |
+| Signal Grey | `#AFAFB0` | 175 175 176 | PostNL Grey |
+| Paper | `#FFFFFF` | 255 255 255 | — |
+
+Sand is not a fifth brand colour. It exists only to hold the middle of the depth ladder
+and appears nowhere else in the identity.
+
+## Colour in the interface
+
+The palette above governs *identity* — the logo, the site, documents, anything that says
+who we are. An interface has a second job the identity does not: it must tell someone
+what they can touch. These are the rules where the two meet.
+
+**Orange is a state, never an action.** In the apps, orange marks what *is* chosen — the
+tick, the active tab, the selected row. It never invites a tap. The moment orange means
+"press me" it stops meaning "this one is on", and every screen that used it as a marker
+starts reading as a screen full of buttons. This is the same restraint the identity
+already keeps by refusing an orange wordmark: orange is where the eye lands, so it is
+spent on the one thing that matters, not on every thing that is clickable.
+
+**The interface therefore keeps one action colour that the identity does not have** —
+`#4C46E0`, used for the single primary action on a screen and for links. It is an
+interface token, not a brand colour: it never appears in the logo, in an illustration,
+in a document, or anywhere the identity speaks. It exists because "tap this" and "this
+is selected" must never be the same colour, and the identity supplies only one of them.
+
+**Where the two do overlap, the brand value wins.** The apps align to `#FB6200` and
+`#000963` exactly; there is no near-miss orange and no second navy.
+
+| Interface role | Colour | Note |
+|---|---|---|
+| Primary action, links | `#4C46E0` | Interface only. Never in identity or illustration. |
+| Active choice, ticks, selection | Bright Orange | Marks state. Never a call to action. |
+| Headlines, primary text, ink | Deep Navy | |
+| Receding mass in illustration | Sand | Its second and only other use. |
+| Context, disabled, secondary rule | Signal Grey | |
+
+## Construction
+
+- Tile 100 × 100, corner radius 20% of the side.
+- Letters share one baseline and scale at **58 / 78 / 100**.
+- Each letter advances 58% of its own width, so consecutive letters overlap by 42%.
+- The largest letter (G) is 74% of the tile height.
+
+## Files
+
+| File | Use it for |
+|---|---|
+| `logo-horizontal` | Default. App headers, the site, documents. |
+| `logo-horizontal-on-dark` | Same tile, white wordmark. For dark grounds. |
+| `logo-horizontal-twotone` | Optional. Sets *buy* in orange. Large sizes only. |
+| `logo-stacked` | Narrow columns, square placements, merchandise. |
+| `tile` | App icon, avatar, favicon. The tile is the icon. |
+| `tile-navy` / `-white` / `-black` | One-ink cuts. The ladder becomes three tints of the ink. |
+| `wordmark` | Type-only rows — footers, legal, co-branding. |
+| `illustrations/` | Pictures of the options people choose between. See below. |
+
+SVG is the master in every case. PNGs are transparent-background conveniences.
+
+## Logo rules
+
+- **Clear space** on all four sides is *x* — a quarter of the tile.
+- **Minimum size**: 110 px wide for the lockup, 16 px for the tile alone.
+  Below 110 px, drop the wordmark and use the tile.
+- The tile keeps its colours everywhere; only the wordmark flips (navy on light,
+  white on dark). Where a single ink is all there is, use a one-ink cut.
+- Don't stretch, rotate, recolour, or add shadows, glows or outlines. The tile is flat.
+
+## Illustrations
+
+`illustrations/<topic>/<key>.svg`
+
+Pictures of the things people have to choose between: how a load is packed, what body
+carries it, what lifts it on and off, what is inside. They live here rather than in the
+apps because they are brand assets under the same rules, and because they will outlive
+any one app.
+
+They exist for a specific reason. These vocabularies are **recognised, not known** — a
+shop clerk can see that a load is on pallets without knowing the word "palletised", and
+nobody tells a skeletal from a curtain-side by name. The drawing is not decoration next
+to the answer; it *is* the answer.
+
+### The stage
+
+| | |
+|---|---|
+| Canvas | 160 × 120, one viewBox for every drawing |
+| Baseline | Shared. Everything stands on the same ground line. |
+| Scale | **Relative and honest.** A container dwarfs a sack. |
+
+Scale is the rule that does the work. These pictures are read side by side in one sheet,
+so they are always making a comparison whether or not they meant to — and a sack drawn
+the same size as a twenty-foot container teaches the wrong thing in the one glance the
+picture was there to earn.
+
+### Ink
+
+| Role | Colour |
+|---|---|
+| The drawing | Deep Navy |
+| Receding mass, the second plane | Sand |
+| **The one feature that defines this option** | Bright Orange |
+| Context — ground, background objects | Signal Grey |
+
+Orange carries the same meaning it carries everywhere else: *this is the point*. On a
+tipper it is the raised bed, on a flatbed carrying sacks it is the sacks, on a reefer it
+is the cooling unit. One orange element per drawing. If two things are the point, the
+drawing has not decided what it is showing.
+
+Never blue. Blue means "you can touch this", and nothing inside a picture is touchable.
+
+### Drawing rules
+
+- **No text in a drawing.** It cannot be translated, and every word in these apps is a
+  translatable key. The label and its sentence live beside the picture, not inside it.
+- Flat. No shadows, gradients, glows or outlines — as everywhere else in this identity.
+- One consistent stroke weight across the whole set.
+- Draw the thing, not a scene. No people, no weather, no depot.
+- A drawing must survive at 96 × 72, which is the size it is actually rendered at.
+
+### How they are served
+
+Two layers resolve behind one URL, so the apps need to know nothing about any of this:
+
+1. **A deployment's own upload** wins. An operator replaces any picture from the tower —
+   because a drawing of "a flatbed" is a claim about what trucks look like *here*, and
+   the deployment is what knows.
+2. **This set** is the fallback, shipped with the network.
+3. **Neither** is a supported state: the sheet shows its words alone.
+
+**Origin decides format.** These masters are SVG — authored here, reviewed, in version
+control, and rendered through `<img>`, which runs no script. An operator's upload is
+none of those things, so that path takes raster only and refuses SVG outright. The
+restriction is about where the bytes came from, not about what they depict.
