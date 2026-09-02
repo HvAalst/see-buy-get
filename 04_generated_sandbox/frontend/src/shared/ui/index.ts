@@ -16,6 +16,7 @@ export { GlanceNumber, type GlanceNumberProps } from './GlanceNumber';
 export { SwipeDeck, type SwipeDeckProps } from './SwipeDeck';
 export { Sheet, type SheetProps } from './Sheet';
 export { TopBar, type TopBarProps } from './TopBar';
+export { BrandMark, type BrandMarkProps } from './BrandMark';
 export { BottomNav, type BottomNavProps, type NavItem } from './BottomNav';
 export { ReadAloud, speak, stopSpeaking, isSpeechSupported, type ReadAloudProps } from './ReadAloud';
 export { LanguageSwitcher } from './LanguageSwitcher';

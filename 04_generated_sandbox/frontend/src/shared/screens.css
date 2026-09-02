@@ -16,10 +16,13 @@
 }
 
 .scr__title {
+  font-family: var(--font-display);
   font-size: 30px;
   line-height: 1.16;
   font-weight: 800;
-  letter-spacing: -0.035em;
+  /* Looser than it was on Inter: Bricolage is wider and more open, and Inter's tracking closes its
+     counters until a title stops reading at a glance. Matches .t-screen, which is the same role. */
+  letter-spacing: -0.02em;
   color: var(--navy);
 }
 

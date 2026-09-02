@@ -1,5 +1,5 @@
 import { dirname, resolve } from 'node:path';
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
 import preact from '@preact/preset-vite';
@@ -151,6 +151,38 @@ function pushSwPlugin(): Plugin {
     },
   };
 }
+/**
+ * Sweep the ROOT app's own build artefacts before it rebuilds.
+ *
+ * `emptyOutDir` is off for the root app because its outDir IS dist/, and emptying that would delete
+ * every sibling app already built into dist/agent, dist/driver and so on. The consequence went
+ * unnoticed for months: nothing ever removed the root app's own hash-named output, so dist/assets
+ * accumulated every build since July — 133 files, 16 MB — and the service worker's glob dutifully
+ * PRECACHED all of it. A first visit to the front door was fetching 8 MB of dead artefacts before
+ * the app was usable, which on the connections these apps are built for means it never arrives.
+ *
+ * Narrowly scoped on purpose: dist/assets and the hashed workbox runtime belong to the root app
+ * alone (each sibling has its own dist/<app>/assets), and everything else at the root — the sibling
+ * folders, the widget's embed/, the legacy pages — is left untouched. A leaf app needs none of this;
+ * `emptyOutDir` already does it there.
+ */
+function cleanRootAssetsPlugin(): Plugin {
+  return {
+    name: 'sbg-clean-root-assets',
+    apply: 'build',
+    buildStart() {
+      if (!IS_ROOT) return;
+      const dist = resolve(ROOT, 'dist');
+      rmSync(resolve(dist, 'assets'), { recursive: true, force: true });
+      if (existsSync(dist)) {
+        for (const f of readdirSync(dist)) {
+          if (/^workbox-.*\.js$/.test(f)) rmSync(resolve(dist, f), { force: true });
+        }
+      }
+    },
+  };
+}
+
 // Output mirrors the deploy path, not the app id (genesis ships at /send/), so the
 // whole of dist/ can be copied to a web root and every base resolves as built.
 const OUT_DIR = resolve(ROOT, 'dist', BASE.replace(/^\/|\/$/g, ''));
@@ -165,6 +197,7 @@ export default defineConfig({
 
   plugins: [
     preact(),
+    cleanRootAssetsPlugin(),
     pushSwPlugin(),
     VitePWA({
       strategies: 'generateSW',
@@ -187,8 +220,14 @@ export default defineConfig({
         start_url: BASE,
         display: 'standalone',
         orientation: 'portrait',
+        // Both the app's own surface, deliberately, and they are two different moments.
+        // `background_color` paints the splash while the app boots; matching the first thing that
+        // renders means the launch is a fade rather than an orange flash into a white screen. The
+        // brand moment on that splash is the ICON, which is the whole tile.
+        // `theme_color` paints the status bar directly above a white TopBar — see the note in each
+        // app's index.html for why that must not be a brand colour here.
         background_color: '#FFFFFF',
-        theme_color: '#4C46E0',
+        theme_color: '#FFFFFF',
         lang: 'en',
         dir: 'ltr',
         categories: ['business', 'productivity'],

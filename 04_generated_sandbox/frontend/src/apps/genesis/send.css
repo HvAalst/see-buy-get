@@ -105,6 +105,7 @@
 }
 
 .price__total {
+  font-family: var(--font-display);
   font-size: 36px;
   line-height: 1.1;
   font-weight: 800;
@@ -155,6 +156,7 @@
 }
 
 .now__word {
+  font-family: var(--font-display);
   font-size: 24px;
   font-weight: 800;
   letter-spacing: -0.025em;
@@ -324,6 +326,7 @@
   object-fit: cover;
 }
 .avatar__initial {
+  font-family: var(--font-display);
   font-size: 18px;
   font-weight: 800;
   color: var(--blue-dark);

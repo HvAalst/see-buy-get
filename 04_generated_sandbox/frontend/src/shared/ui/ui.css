@@ -486,9 +486,10 @@
 /* A sheet asks the screen's question ("End your shift?"), so it takes the
    screen-title step. 18px would demote it to a card heading. */
 .sheet__title {
+  font-family: var(--font-display);
   font-size: 30px;
   font-weight: 800;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.012em;
   color: var(--navy);
   line-height: 1.2;
   margin-bottom: 6px;
@@ -530,15 +531,29 @@
   flex: none;
 }
 
+/* Shares the leading slot with the back button, but is NOT a target: no 48px box, no hit area, no
+   focus ring. It is aligned to the same left edge so the bar does not shift its contents by a few
+   pixels when you navigate in and out of a screen. */
+.topbar__mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: var(--tap);
+  margin-left: -1px;
+  flex: none;
+}
+
 .topbar__id {
   min-width: 0;
   flex: 1;
 }
 
 .topbar__brand {
+  font-family: var(--font-display);
   font-size: 16px;
   font-weight: 800;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.012em;
   color: var(--navy);
   line-height: 1.2;
   white-space: nowrap;

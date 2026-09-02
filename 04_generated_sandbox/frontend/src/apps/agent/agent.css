@@ -179,6 +179,7 @@
 }
 
 .slot__value {
+  font-family: var(--font-display);
   font-size: 44px;
   line-height: 1.1;
   font-weight: 800;
@@ -241,6 +242,7 @@
 /* ----------------------------------------------------------------- rates -- */
 
 .rates__median {
+  font-family: var(--font-display);
   font-size: 40px;
   line-height: 1.1;
   font-weight: 800;
@@ -503,6 +505,7 @@
   color: var(--tx2);
 }
 .health__big {
+  font-family: var(--font-display);
   font-size: 28px;
   font-weight: 800;
   color: var(--navy);

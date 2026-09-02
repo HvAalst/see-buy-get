@@ -18,6 +18,25 @@
 @import '@fontsource/inter/latin-700.css';
 @import '@fontsource/inter/latin-800.css';
 
+/* The identity's display face, latin only, ONE variable file for every weight it needs (41 KB).
+   Written by hand rather than @import-ing the package's wght.css, which declares vietnamese and
+   latin-ext too: a browser would never download them, but the build would bundle and PRECACHE all
+   three — 124 KB of service-worker payload for glyphs we never render. Same discipline as the Inter
+   lines above, and the same reason.
+
+   It is a DISPLAY face and it is used like one: screen titles, card headings, the big glance number,
+   the app's own name in the bar. Body text, labels, forms and buttons stay on Inter, which was
+   picked on purpose for reading at 14–16px on a cheap screen in direct sun. Personality belongs in
+   the type you notice; legibility belongs in the type you read. */
+@font-face {
+  font-family: 'Bricolage Grotesque Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 800;
+  src: url('@fontsource-variable/bricolage-grotesque/files/bricolage-grotesque-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 :root {
   /* --- brand ----------------------------------------------------------
      Aligned to brand/README.md — where the identity and the interface name the same colour, the
@@ -73,6 +92,12 @@
 
   /* --- type ----------------------------------------------------------- */
   --font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* Falls back through Inter, not through the system stack: if the display face has not arrived (or
+     never loads at all on a bad connection), a heading should land on the face the rest of the screen
+     is already set in rather than on whatever the OS supplies. `font-display: swap` means that
+     fallback IS what a first-time visitor reads for the first moment, so it has to be a deliberate
+     choice, not a leftover. */
+  --font-display: 'Bricolage Grotesque Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-mono: ui-monospace, 'SFMono-Regular', 'Roboto Mono', Menlo, Consolas, monospace;
 
   /* --- safe areas (0 on desktop, notch-aware on device) ---------------- */
@@ -191,27 +216,33 @@ strong {
    smaller as unreadable, so 14px is a hard minimum across the whole system.
    ========================================================================== */
 
+/* The three display roles, and the only three. Tracking is looser than it was on Inter at every size:
+   Bricolage is a wider, more open face, and Inter's tight negative tracking closes it up until the
+   counters fill in — which is exactly the thing that stops reading at a glance in bright light. */
 .t-screen {
+  font-family: var(--font-display);
   font-size: 30px;
   line-height: 1.16;
   font-weight: 800;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.02em;
   color: var(--navy);
 }
 
 .t-card {
+  font-family: var(--font-display);
   font-size: 18px;
   line-height: 1.35;
   font-weight: 700;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.012em;
   color: var(--navy);
 }
 
 .t-glance {
+  font-family: var(--font-display);
   font-size: 64px;
   line-height: 1;
   font-weight: 800;
-  letter-spacing: -0.045em;
+  letter-spacing: -0.03em;
   color: var(--navy);
   font-variant-numeric: tabular-nums;
   font-feature-settings: 'tnum' 1;
