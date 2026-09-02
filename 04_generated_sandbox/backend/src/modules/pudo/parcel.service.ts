@@ -12,7 +12,9 @@ import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
 import { ShelfService } from './shelf.service';
 import { FleetService } from './fleet.service';
-import { HANDOVER_FEE, LABEL_TZ_OFFSET_MIN, LABOUR_FEE, NETWORK_CURRENCY, OTP_MAX_ATTEMPTS, PICKUP_FEE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, VOID_WINDOW_MS, WHOLESALE, classifySize, withPlatformFee } from './pudo.config';
+import { DEFAULT_TAX_LABEL, HANDOVER_FEE, LABEL_TZ_OFFSET_MIN, LABOUR_FEE, NETWORK_CURRENCY, OTP_MAX_ATTEMPTS, PICKUP_FEE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, VOID_WINDOW_MS, WHOLESALE, classifySize, taxOn, withPlatformFee } from './pudo.config';
+import { EntityService } from '../../foundation/entity/entity.service';
+import type { ResolvedTax } from '../../foundation/entity/entity.types';
 import { Birthplace, ConsumerParcelView, CustodyKind, CustodyLeg, Parcel, ParcelDirection, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy } from './pudo.types';
 import { VendorService } from './vendor.service';
 import { VehicleService } from './vehicle.service';
@@ -467,7 +469,27 @@ export class ParcelService implements OnApplicationBootstrap {
     private readonly media: MediaService,
     private readonly cargo: CargoService,
     private readonly dids: DidService,
+    private readonly entities: EntityService,
   ) {}
+
+  /**
+   * The tax on a flat WHOLESALE charge to a shop — the walk-up cash path, which has no quote to carry one.
+   *
+   * The sale here is the sister's to the SHOP (which then sells on to the person at the counter and keeps
+   * that spread off-platform), so it is the shop's own sister's rate that applies, on the PUDO lane.
+   *
+   * Falls back to no tax rather than throwing, the same way `freightFeePct` falls back — a bookkeeping
+   * lookup must never be the thing that stops a parcel being taken in. The fallback is honest today
+   * because it can only be reached by a shop with no resolvable sister, which is already a broken state
+   * with louder symptoms than this one.
+   */
+  private wholesaleTax(agentDid: string): ResolvedTax {
+    try {
+      return this.entities.taxFor(this.agents.entityIdOf(this.agents.get(agentDid)), 'pudo');
+    } catch {
+      return { ratePct: 0, label: DEFAULT_TAX_LABEL };
+    }
+  }
 
   /** DT — mint the shipment's stable GLOS identity (the digital twin's DID) at parcel creation. Anchored +
    *  resolvable; the reusable sticker parcelId is the human handle, this is the shipment's global id. */
@@ -728,7 +750,17 @@ export class ParcelService implements OnApplicationBootstrap {
     // S26: attach the drop-off proof to this parcel → shipment-proof bin (clock starts at terminal state).
     this.media.link(input.dropoffPhotoRef, { type: 'parcel', id: parcel.parcelId }, 'dropoff');
 
-    if (mode === 'cash') this.gate.chargeShipping(input.agentDid, WHOLESALE, parcel.parcelId);
+    if (mode === 'cash') {
+      const rule = this.wholesaleTax(input.agentDid);
+      const bill = taxOn(WHOLESALE, rule.ratePct);
+      // Stamped, so the void refund reverses the rate this parcel was CHARGED at rather than whatever the
+      // sister's rate happens to be at the moment somebody voids it. `shipmentTax` deliberately stays
+      // unset: this parcel has no `shipmentCost`, and a tax stamped on a cost that does not exist is a
+      // figure nothing can be reconciled against.
+      parcel.taxPct = rule.ratePct;
+      parcel.taxLabel = rule.label;
+      this.gate.chargeShipping(input.agentDid, bill.gross, parcel.parcelId, bill.tax);
+    }
     else this.gate.payLabour(input.agentDid, LABOUR_FEE, parcel.parcelId, 'parcel', parcel.sellerEntityId);
 
     void this.events.publish(GlosEvent.Pudo.ParcelAccepted, { parcelId: parcel.parcelId, agentDid: input.agentDid, destZone: input.destZone, mode }, { source: 'pudo' }).catch(() => undefined);
@@ -960,10 +992,16 @@ export class ParcelService implements OnApplicationBootstrap {
   private reverseIntakeCharge(parcel: Parcel, agentDid: string): void {
     if (parcel.paymentMode !== 'cash') return;
     if (parcel.senderMobile === 'app') {
-      this.gate.refund(agentDid, parcel.shipmentCost ?? 0, parcel.parcelId); // the locked price the shop remitted
+      // The locked price the shop remitted, and the tax inside it — reversed together, because a voided
+      // sale un-owes its tax as surely as it un-earns its revenue.
+      this.gate.refund(agentDid, parcel.shipmentCost ?? 0, parcel.parcelId, parcel.shipmentTax);
       this.gate.clawbackLabour(agentDid, LABOUR_FEE, parcel.parcelId); // reverse the +LABOUR_FEE paid at intake
     } else {
-      this.gate.refund(agentDid, WHOLESALE, parcel.parcelId);
+      // At the rate stamped on the parcel at intake, never today's — a sister that changed its rate inside
+      // the void window must not make a refund differ from the charge it reverses. A parcel from before
+      // the stamp existed reads zero, which is exactly what it was charged.
+      const bill = taxOn(WHOLESALE, parcel.taxPct ?? 0);
+      this.gate.refund(agentDid, bill.gross, parcel.parcelId, bill.tax);
     }
   }
 
@@ -1040,7 +1078,9 @@ export class ParcelService implements OnApplicationBootstrap {
     // delivery); locked commits the cheapest route. The buyer-charge is REPORTED only (collected at checkout).
     const routeMode = input.routeMode === 'locked' ? 'locked' : 'flexible';
     const chosen = routeMode === 'locked' ? quote.locked : quote.flexible;
-    const shipmentCost = chosen.total;
+    // GROSS — what actually leaves the store's float. `chosen.total` is the sister's own price and stays
+    // the basis of every margin figure; what a customer is billed is that plus the tax on it.
+    const shipmentCost = chosen.gross;
     const platformFee = Math.round((chosen.total - chosen.base) * 100) / 100;
     const buyerCharge = this.buyerCharge(input.shippingPolicy, shipmentCost, input.subtotal ?? 0);
 
@@ -1091,6 +1131,12 @@ export class ParcelService implements OnApplicationBootstrap {
       // parcel's real cost at delivery. Unstamped, retuning it would silently re-price every parcel
       // already sold and in the air, which is the one thing this whole block exists to prevent.
       transportFactor: quote.transportFactor,
+      // …and the tax, which is stamped for a reason the knobs above do not have: a rate is changed by a
+      // government on a date, and every sale before it was correctly taxed at the old one. Recomputing
+      // from today's rate would restate history that the authority itself does not restate.
+      taxPct: quote.tax.ratePct,
+      taxLabel: quote.tax.label,
+      shipmentTax: chosen.tax,
       // What the price IS, and — where the route crossed a currency line — the rates it was struck at.
       // Same reason as the margin rate above: a promise is made at a moment, and the rate behind it moves.
       currency: quote.currency,
@@ -1098,7 +1144,8 @@ export class ParcelService implements OnApplicationBootstrap {
       customs,
       sellerEntityId: quote.sellerEntityId,
       shipmentCost,
-      ceilingCost: quote.flexible.total,
+      ceilingCost: quote.flexible.gross, // the money HELD, so gross — the rebate gives back the same kind
+      ceilingTax: quote.flexible.tax, // …and the tax within it, so the rebate can un-owe exactly what was owed
       buyerCharge,
       paidStatus: 'unpaid',
       acceptedAt: now,
@@ -1115,7 +1162,7 @@ export class ParcelService implements OnApplicationBootstrap {
     this.media.link(input.contentPhotoRef, { type: 'parcel', id: parcelId }, 'content');
 
     // Prepaid gate: bill the vendor's balance with the country daughter company → 'ParcelPaid' or 'unpaid'.
-    const bill = this.vendors.billShipment(input.vendorId, parcelId, shipmentCost, quote.fx?.buffer);
+    const bill = this.vendors.billShipment(input.vendorId, parcelId, shipmentCost, quote.fx?.buffer, chosen.tax);
     parcel.paidStatus = bill.paid ? 'ParcelPaid' : 'unpaid';
     const label = this.label(parcel, dest.shopName);
     if (bill.paid) {
@@ -1206,11 +1253,18 @@ export class ParcelService implements OnApplicationBootstrap {
       // parcel's real cost at delivery. Unstamped, retuning it would silently re-price every parcel
       // already sold and in the air, which is the one thing this whole block exists to prevent.
       transportFactor: quote.transportFactor,
+      // …and the tax, which is stamped for a reason the knobs above do not have: a rate is changed by a
+      // government on a date, and every sale before it was correctly taxed at the old one. Recomputing
+      // from today's rate would restate history that the authority itself does not restate.
+      taxPct: quote.tax.ratePct,
+      taxLabel: quote.tax.label,
+      shipmentTax: chosen.tax,
       currency: quote.currency, // the cash the shop will take at the counter is in a named money
       fx: quote.fx,
       sellerEntityId: quote.sellerEntityId,
       shipmentCost: chosen.total,
-      ceilingCost: quote.flexible.total,
+      ceilingCost: quote.flexible.gross, // the money HELD, so gross — the rebate gives back the same kind
+      ceilingTax: quote.flexible.tax, // …and the tax within it, so the rebate can un-owe exactly what was owed
       paidStatus: 'unpaid',
       acceptedAt: now,
       // Minted with the parcel (see accept()): the sender holds the release code in their own twin from
@@ -1244,7 +1298,7 @@ export class ParcelService implements OnApplicationBootstrap {
     const dest = parcel.destAgentDid ? this.agents.get(parcel.destAgentDid) : undefined;
     // The buffer travels on the parcel, so a shipment billed later — after a top-up — splits exactly as
     // one billed at mint would. The rate it was struck at is not re-derived; it is the one it was quoted at.
-    const bill = this.vendors.billShipment(parcel.vendorId, parcelId, parcel.shipmentCost ?? 0, parcel.fx?.buffer);
+    const bill = this.vendors.billShipment(parcel.vendorId, parcelId, parcel.shipmentCost ?? 0, parcel.fx?.buffer, parcel.shipmentTax);
     if (!bill.paid) return { parcel, label: null, paid: false };
     parcel.paidStatus = 'ParcelPaid';
     parcel.label = dest ? this.label(parcel, dest.shopName) : parcel.label;
@@ -1312,7 +1366,7 @@ export class ParcelService implements OnApplicationBootstrap {
     // adopt(), not link(): the photo id came from the CLIENT — only a photo the acting shop owns and that
     // isn't attached elsewhere may bind here (S29/S33a media-laundering guard).
     this.media.adopt(dropoffPhotoRef, agentDid, { type: 'parcel', id: parcelId }, 'dropoff');
-    if (due > 0) this.gate.chargeShipping(agentDid, due, parcelId); // remit the collected cash (a 0-priced route charges nothing)
+    if (due > 0) this.gate.chargeShipping(agentDid, due, parcelId, parcel.shipmentTax); // remit the collected cash, tax and all (a 0-priced route charges nothing)
     this.gate.payLabour(agentDid, LABOUR_FEE, parcelId, 'parcel', parcel.sellerEntityId);
     void this.events.publish(GlosEvent.Pudo.ParcelAccepted, { parcelId, agentDid, destZone: parcel.destZone, mode: 'cash' }, { source: 'pudo' }).catch(() => undefined);
     return parcel;
@@ -1495,15 +1549,24 @@ export class ParcelService implements OnApplicationBootstrap {
     // sister may turn the first while this parcel is in transit and the network may retune the second;
     // settling against either new number would quietly rewrite a price the customer already agreed to.
     // A parcel from before a field existed falls back to the network default.
-    const actual = withPlatformFee(
+    const actualNet = withPlatformFee(
       Math.round((parcel.nodeFees + parcel.routeKm * perKm * ParcelService.transportFactorOf(parcel)) * 100) / 100,
       parcel.platformFeePct,
     );
-    parcel.actualCost = actual;
-    const rebate = Math.round(Math.max(0, parcel.ceilingCost - actual) * 100) / 100;
+    // …and the TAX rate it was minted at, for the same reason and one of its own: settling a shipment at
+    // a rate a government set after it was sold would hand back a different tax than the one collected,
+    // and the difference would sit in the payable forever with nothing to explain it.
+    const actual = taxOn(actualNet, parcel.taxPct ?? 0);
+    parcel.actualCost = actual.gross;
+    // The ceiling is gross and so is the actual, so the rebate is gross — and the tax inside it is the
+    // difference between the two tax figures. Both are figures we HELD rather than figures we re-derive:
+    // reconstructing the ceiling's tax by dividing the gross back out would be inclusive arithmetic, and
+    // it can land a cent away from the number actually posted.
+    const rebate = Math.round(Math.max(0, parcel.ceilingCost - actual.gross) * 100) / 100;
+    const rebateTax = rebate > 0 ? Math.min(Math.max(Math.round(((parcel.ceilingTax ?? 0) - actual.tax) * 100) / 100, 0), rebate) : 0;
     parcel.rebate = rebate;
     this.persist(parcel); // actualCost/rebate mutated after collectConfirm's scan
-    if (rebate > 0) this.vendors.rebate(parcel.vendorId, parcel.parcelId, rebate);
+    if (rebate > 0) this.vendors.rebate(parcel.vendorId, parcel.parcelId, rebate, 'flexible-route rebate', rebateTax);
   }
 
   /** Buyer reports a discrepancy at collection → Disputed, with mandatory photo proof. */

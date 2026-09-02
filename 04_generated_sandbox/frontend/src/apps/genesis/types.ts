@@ -42,7 +42,13 @@ export interface QuoteHop {
 export interface QuoteLegPrice {
   transport: number;
   base: number;
+  /** The network's own price, NET of tax. Not what a person pays — see `gross`. */
   total: number;
+  /** The tax on it. Zero wherever the selling sister has not been told to charge any, which is the
+   *  default; a zero line is never rendered. */
+  tax: number;
+  /** What the sender actually hands over. `total + tax`, to the cent. */
+  gross: number;
 }
 
 export interface QuoteView {
@@ -54,6 +60,10 @@ export interface QuoteView {
   size: ParcelSize;
   perKm: { min: number; max: number };
   platformFeePct: number;
+  /** The tax the selling sister charges, and the authority it collects under. The one part of a price
+   *  breakdown that is nobody's secret — unlike the platform's three rate layers, which never leave the
+   *  server at all. `ratePct` is 0 wherever no sister has been told to charge. */
+  tax?: { ratePct: number; label: string; registration?: string };
   /** Any carrier takes it — priced at the top of the per-km market. */
   flexible: QuoteLegPrice;
   /** Waits for the cheapest carrier — priced at the bottom of the market. */
@@ -92,12 +102,16 @@ export interface ClassifyView {
 /** The locked price a mint returns — what the sender pays in cash at the drop-off shop. */
 export interface MintPrice {
   routeMode: 'locked' | 'flexible';
+  /** The GROSS — the cash handed over at the drop-off shop, tax included. */
   total: number;
   transport?: number;
   nodeFees?: number;
   platformFee?: number;
   km?: number;
   ceiling?: number;
+  /** The tax inside `total`, and what the authority calls it. Absent or zero where none was charged. */
+  tax?: number;
+  taxLabel?: string;
 }
 
 /** POST /identity/parcels — the sender's authenticated twin + their drop-off credential + the locked price. */

@@ -15,7 +15,7 @@ import { MonitorService } from './monitor.service';
 import { RatingService, belowFloor } from './rating.service';
 import { VendorService } from './vendor.service';
 import { ShelfService } from './shelf.service';
-import { RoutingService } from './routing.service';
+import { RoutingService, publicQuote } from './routing.service';
 import { MdpService } from './mdp.service';
 import { ToteService } from './tote.service';
 import { ConsignmentService } from './consignment.service';
@@ -31,7 +31,7 @@ import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
-import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DerivedLegDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityFeeDto, EntityRatesDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
+import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DerivedLegDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityFeeDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
 import { classifySize, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { BooksService } from '../../foundation/books/books.service';
@@ -271,6 +271,32 @@ export class SbgController {
   @Get('entities/:entityId/rates')
   entityRates(@Param('entityId') entityId: string, @Query('lane') lane?: string) {
     return { entityId, lane: lane ?? null, ...this.entities.ratesFor(entityId, lane) };
+  }
+
+  /**
+   * Set the tax a sister collects — a different kind of knob from the three above, and the one place in
+   * this system where a rate is not ours to choose.
+   *
+   * Two things it refuses. A rate above zero without a registration number: charging tax you are not
+   * registered to collect is money taken from a customer in the name of an authority that has never heard
+   * of you. And the group: it is the merchant of record nowhere, so it collects nothing anywhere.
+   *
+   * Like every other rate here it reprices nothing already sold — a shipment carries the tax rate it was
+   * minted at, because a rate change has a date and every sale before it was correctly taxed at the old one.
+   */
+  @Roles('operator')
+  @Post('entities/:entityId/tax')
+  setEntityTax(@Param('entityId') entityId: string, @Body() dto: EntityTaxDto) {
+    return this.entities.setTax(entityId, dto);
+  }
+
+  /** The tax that applies to a lane of work, and the registration it is collected under. Operator-gated
+   *  like its neighbours, though unlike the rate split this is not a secret: what a customer was charged
+   *  and by whom appears on their own receipt. */
+  @Roles('operator')
+  @Get('entities/:entityId/tax')
+  entityTax(@Param('entityId') entityId: string, @Query('lane') lane?: string) {
+    return { entityId, lane: lane ?? null, ...this.entities.taxFor(entityId, lane) };
   }
 
   /**
@@ -866,7 +892,9 @@ export class SbgController {
   @Get('quote')
   quote(@Query('origin') origin: string, @Query('dest') dest: string, @Query('size') size?: string) {
     if (!origin || !dest) throw new GlosError('FIELD_REQUIRED', 'origin and dest are required');
-    return this.routing.quoteShipment(origin, dest, (size as 'S' | 'M' | 'L' | 'HEAVY') || 'M');
+    // `publicQuote`, not the raw quote: this endpoint is @Public(), and the raw shape carries the sister's
+    // three rate layers, which were decided to be internal. A buyer sees a price; a merchant sees one fee.
+    return publicQuote(this.routing.quoteShipment(origin, dest, (size as 'S' | 'M' | 'L' | 'HEAVY') || 'M'));
   }
 
   /**
@@ -883,7 +911,7 @@ export class SbgController {
     if (!list) throw new GlosError('FIELD_REQUIRED', 'provide origin+dests or dest+origins');
     const variable = origin ? 1 : 0; // which side varies → the `did` the pin represents
     return { options: list.filter(([a, b]) => a && b).map(([o, d]) => {
-      try { return { did: [o, d][variable], quote: this.routing.quoteShipment(o, d, sz) }; }
+      try { return { did: [o, d][variable], quote: publicQuote(this.routing.quoteShipment(o, d, sz)) }; }
       catch (e) { return { did: [o, d][variable], error: e instanceof Error ? e.message : 'no route' }; }
     }) };
   }

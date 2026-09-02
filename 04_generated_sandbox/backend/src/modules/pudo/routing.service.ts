@@ -7,9 +7,9 @@ import { MdpService } from './mdp.service';
 import { VehicleService } from './vehicle.service';
 import { Router, ROUTER } from './router';
 import { isOpenAt, nextOpenAt } from './hours';
-import { BORDER_DWELL_H, DISPATCH_BUFFER_H, HANDOVER_BUFFER_H, SIZE_LANE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, VEHICLE_SPEED_KMH, withPlatformFee } from './pudo.config';
+import { BORDER_DWELL_H, DISPATCH_BUFFER_H, HANDOVER_BUFFER_H, SIZE_LANE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, taxOn, VEHICLE_SPEED_KMH, withPlatformFee } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
-import { ResolvedRates } from '../../foundation/entity/entity.types';
+import { ResolvedRates, ResolvedTax } from '../../foundation/entity/entity.types';
 import { currencyForJurisdiction } from '../../foundation/money/currency';
 import { FX_QUOTE_TTL_MIN, FxRate, FxService } from '../../foundation/money/fx.service';
 import { BorderCrossing, crossingsOn } from './country';
@@ -29,10 +29,13 @@ export interface NodePick {
  * platform's take as a line the way they get one from any other platform they pay; derivable is not the
  * same as stated, and every other component of this quote is named.
  *
- * `total` is NET OF TAX. Nothing in this system computes tax yet — when it does, it is the next layer on
- * top of this figure and arrives as its own field beside it, never folded into this one.
+ * `total` is NET OF TAX and stays that way — it is the sister's own price, and it is the figure every
+ * margin question is asked of. `tax` is the next layer on top of it and `gross` is what the customer
+ * actually pays. The three hold `total + tax === gross` exactly.
+ *
+ * Which figure to CHARGE is not a matter of taste: it is `gross`. `total` is what the business earned.
  */
-export interface QuoteLeg { transport: number; base: number; fee: number; total: number; }
+export interface QuoteLeg { transport: number; base: number; fee: number; total: number; tax: number; gross: number; }
 /**
  * A stop on the journey + its open-data fee, the sister company owed that fee, and what it is owed IN.
  *
@@ -81,6 +84,14 @@ export interface ShipmentQuote {
    * shown to a buyer, who sees a price; a merchant sees `fee`, one line, like any platform they pay.
    */
   rates: ResolvedRates;
+  /**
+   * The tax the selling sister charges on this shipment, and the authority it collects under.
+   *
+   * Unlike `rates` this is NOT internal: a customer is entitled to know what tax they were charged and by
+   * whom, and in most jurisdictions a receipt is required to say so. It is the one part of the price
+   * breakdown that is nobody's commercial secret.
+   */
+  tax: ResolvedTax;
   flexible: QuoteLeg;
   locked: QuoteLeg;
 }
@@ -92,6 +103,24 @@ export interface ShipmentQuote {
  * PLACE — the parcel is born there and a driver comes to it — so it belongs on the route (it has a point,
  * a zone and a name a driver can read) and nowhere near the fee stack, because nobody worked there.
  */
+/**
+ * A quote with the platform's own three layers removed — what leaves the building.
+ *
+ * `rates` is documented as internal on the type and was nevertheless being served whole from a `@Public()`
+ * endpoint, which meant anyone could read a sister's cost-of-risk, profit-on-risk and margin by asking for
+ * a shipping price. The decision was explicit: a buyer sees a price, a merchant sees ONE platform fee, and
+ * the split is for running the business. A type comment does not enforce itself, so this does.
+ *
+ * The TAX deliberately stays. It is the one part of a price that is nobody's commercial secret — a customer
+ * is entitled to know what tax they were charged and by whom, and in most jurisdictions a receipt must say.
+ */
+export type PublicQuote = Omit<ShipmentQuote, 'rates'>;
+
+export function publicQuote(quote: ShipmentQuote): PublicQuote {
+  const { rates: _internal, ...rest } = quote;
+  return rest;
+}
+
 export interface RouteEnd {
   type: 'pudo' | 'dock';
   id: string;
@@ -194,6 +223,10 @@ export class RoutingService {
     // comes from the size's own class, so nothing new has to be declared to get the right rate.
     const stack = this.entities.ratesFor(sellerId, SIZE_LANE[size]);
     const feePct = stack.totalPct;
+    // The SELLING sister's tax, on the lane this size ships in. The seller's, deliberately — it is the
+    // merchant of record for the whole shipment, and a leg performed by another sister's shop is bought by
+    // this one at cost rather than sold by that one to the buyer. Whose tax applies follows who is selling.
+    const taxRule = this.entities.taxFor(sellerId, SIZE_LANE[size]);
 
     // ONE CURRENCY, NAMED. The seller quotes in its own money and every figure below is summed into it, so
     // a stop paid in another currency is CONVERTED here — at a stated rate, from a rate book that says
@@ -241,11 +274,15 @@ export class RoutingService {
       const t = transport(rate);
       const base = Math.round((nodeFees + t) * 100) / 100;
       const total = withPlatformFee(base, feePct);
-      return { transport: t, base, fee: Math.round((total - base) * 100) / 100, total };
+      // Tax on the WHOLE price including the platform's take, not on the cost base — what is taxed is the
+      // sale, not the profit. Zero-rated by default, in which case `gross` is `total` to the cent and
+      // every figure below is the number it was before tax existed.
+      const { tax, gross } = taxOn(total, taxRule.ratePct);
+      return { transport: t, base, fee: Math.round((total - base) * 100) / 100, total, tax, gross };
     };
     return {
       hops: plan.hops, nodes, legs, entityIds, sellerEntityId: sellerId, currency, fx, crossesBorder: crossings.length > 0, crossings,
-      totalKm, nodeFees, size, transportFactor: factor, perKm: { min, max }, platformFeePct: feePct, rates: stack,
+      totalKm, nodeFees, size, transportFactor: factor, perKm: { min, max }, platformFeePct: feePct, rates: stack, tax: taxRule,
       flexible: leg(max), locked: leg(min),
     };
   }

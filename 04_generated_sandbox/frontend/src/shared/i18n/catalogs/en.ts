@@ -134,6 +134,9 @@ export const en = {
   'send.logic.repRated': 'Rated {avg} by {count}',
   'send.logic.servingSince': 'Serving since {year}',
   'send.logic.lockedSub': 'Rides the lowest-price bus on this route',
+  // "Includes VAT 16.00" — the price already contains it, so the wording must not read as an addition.
+  'send.logic.taxLine': 'Includes {label} {amount}',
+  'send.logic.taxDefault': 'tax',
   'send.logic.quoteSummary': '{km} kilometres across {stops} stops. The price is {price}.',
   'send.logic.trackPlain': 'Parcel {ref}: {status}.',
   'send.logic.trackAt': 'Parcel {ref}: {status} at {dest}.',

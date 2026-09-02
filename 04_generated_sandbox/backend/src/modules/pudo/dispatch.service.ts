@@ -27,7 +27,7 @@ import { MediaService } from './media.service';
 import { MarketPulseStore } from './market-pulse.store';
 import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, toteCapacityOf, VEHICLE_SPEC } from './fleet.config';
 import { Router, ROUTER } from './router';
-import { DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NUDGE_RADIUS_KM, OFFER_TTL_MIN, PLATFORM_FEE_PCT, TOTE_LOAD_FEE, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
+import { DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NUDGE_RADIUS_KM, OFFER_TTL_MIN, PLATFORM_FEE_PCT, taxOn, TOTE_LOAD_FEE, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
@@ -407,7 +407,11 @@ export class DispatchService {
       ) {
         // A no-show: reserved ahead, but not picked up by the pickup date + grace → free it + undo the charge.
         if (f.paidStatus === 'billed' && f.shipperDid && this.vendors.has(f.shipperDid)) {
-          this.vendors.rebate(f.shipperDid, f.freightId, shipperCharge(f.lockedPrice ?? 0, this.freightFeePct(f)), 'freight no-show release');
+          // Reverses exactly what was charged, off the stamp — the rates behind that figure are knobs, and
+          // a no-show can be days after the claim. A load billed before the stamp existed falls back to
+          // recomputing, which is what it did before and is still right for a rate nobody has touched.
+          const charged = f.billed ?? this.shipperBill(f.lockedPrice ?? 0, f);
+          this.vendors.rebate(f.shipperDid, f.freightId, charged.gross, 'freight no-show release', charged.tax);
         }
         f.status = 'available';
         f.scheduledPickupAt = undefined; // its date has passed — it's now a plain ship-now load: no stale gate, no 'scheduled' timeline, and this loop skips it forever after (so it can never no-show-release twice)
@@ -509,7 +513,7 @@ export class DispatchService {
       // whose all-in charge would exceed what the shipper agreed to pay (a cheaper vehicle may still get it);
       // (2) the driver's own minimum-earning filter. Both apply to freight only (totes settle on a different model).
       if (price && load.kind === 'freight') {
-        if (load.maxSpend != null && shipperCharge(price.total, this.freightFeePctFor(load.ref)) > load.maxSpend) continue;
+        if (load.maxSpend != null && this.shipperBillFor(price.total, load.ref).gross > load.maxSpend) continue;
         if (floor != null && price.total < floor) continue;
       }
       out.push(this.makeOffer(driverDid, load, { detour, minutesAway, price, ratePerKm: profile.ratePerKm, time: this.timeCost(vehicle, route, load), now }));
@@ -620,7 +624,7 @@ export class DispatchService {
           })
         : undefined;
       if (price && load.kind === 'freight') {
-        if (load.maxSpend != null && shipperCharge(price.total, this.freightFeePctFor(load.ref)) > load.maxSpend) continue;
+        if (load.maxSpend != null && this.shipperBillFor(price.total, load.ref).gross > load.maxSpend) continue;
         if (floor != null && price.total < floor) continue;
       }
       // No declared road here — this is the "near me" search, where there is no "on the way" to be extra to.
@@ -659,7 +663,7 @@ export class DispatchService {
         })
       : undefined;
     // The shipper's budget still binds — an interruption offering a price nobody will pay is worse than silence.
-    if (price && load.kind === 'freight' && load.maxSpend != null && shipperCharge(price.total, this.freightFeePctFor(load.ref)) > load.maxSpend) return null;
+    if (price && load.kind === 'freight' && load.maxSpend != null && this.shipperBillFor(price.total, load.ref).gross > load.maxSpend) return null;
 
     return this.makeOffer(driverDid, load, { detour: Math.round(best.km * 10) / 10, minutesAway: this.minutes(point, load.pickupLocation), price, ratePerKm: profile.ratePerKm, time: this.timeCost(vehicle, { from: point }, load), now });
   }
@@ -816,7 +820,7 @@ export class DispatchService {
     // re-coupled to a pricier vehicle (or a surge) after the offer was made (the S31 mirror-at-claim lesson).
     // FB0c — it binds a NEGOTIATED price just as hard: agreeing above the budget would commit a haul nobody
     // has the money for. The proposal stays open, so the shipper can raise the cap and accept it then.
-    if (f.maxSpend != null && shipperCharge(earning, this.freightFeePct(f)) > f.maxSpend) {
+    if (f.maxSpend != null && this.shipperBill(earning, f).gross > f.maxSpend) {
       throw new GlosError('BUDGET_EXCEEDED', "This load's price now exceeds the shipper's budget — it stays open for a cheaper vehicle or a cooler market");
     }
     f.status = 'claimed';
@@ -839,8 +843,13 @@ export class DispatchService {
     //  - 'unpaid'         a bulletin freight with no shipper, settled off-platform (the intended default).
     // The driver is still paid on delivery in every case — labour done is owed regardless of shipper collection.
     if (f.shipperDid && this.vendors.has(f.shipperDid)) {
-      const { paid } = this.vendors.billShipment(f.shipperDid, f.freightId, shipperCharge(earning, this.freightFeePct(f)));
+      const bill = this.shipperBill(earning, f);
+      const { paid } = this.vendors.billShipment(f.shipperDid, f.freightId, bill.gross, 0, bill.tax);
       f.paidStatus = paid ? 'billed' : 'billing_failed';
+      // Stamped at the instant of charging, so a release reverses THIS, not whatever the rates resolve to
+      // whenever the release happens to run. Kept even on a failed billing: what the shipper owes is a real
+      // debt for a Local Admin to collect, and it is only collectable if somebody can say what it was.
+      f.billed = bill;
     } else {
       f.paidStatus = 'unpaid';
     }
@@ -910,7 +919,10 @@ export class DispatchService {
           indivisible: f.indivisible,
         },
         vehicle,
-        { remainingKg, ratingBelowFloor, indicativeCharge: price ? shipperCharge(price.total, this.freightFeePct(f)) : undefined },
+        // Gross, like the gate it mirrors: the board marks a load as over the shipper's budget, and it must
+        // mark exactly the loads the claim would refuse. Two different figures against one cap is how a
+        // board tells an operator a load is takeable and the claim then says it is not.
+        { remainingKg, ratingBelowFloor, indicativeCharge: price ? this.shipperBill(price.total, f).gross : undefined },
       );
       rows.push({
         freightId: f.freightId,
@@ -1244,6 +1256,42 @@ export class DispatchService {
     } catch {
       return PLATFORM_FEE_PCT;
     }
+  }
+
+  /**
+   * The tax the shipper's own sister charges on a dedicated haul. Zero where there is no shipper — a
+   * counter-booked cash freight settles off-platform, so nobody is billed and there is nothing to tax.
+   *
+   * Falls back rather than throwing for the same reason `freightFeePct` does: a pricing lookup must never
+   * be the thing that stops a load being offered.
+   */
+  private freightTaxPct(f?: { shipperDid?: string }): number {
+    if (!f?.shipperDid) return 0;
+    try {
+      return this.entities.taxFor(this.vendors.entityIdOf(this.vendors.get(f.shipperDid)), 'dedicated').ratePct;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * What a shipper actually pays for a haul: the driver's earning, the platform's take, and the tax on
+   * both — ONE computation, so a budget gate and the bill it gates can never disagree.
+   *
+   * Every budget check in this service goes through here for exactly that reason. `maxSpend` is the most a
+   * shipper will part with, and what leaves their account is the gross; comparing a net figure to their
+   * cap would commit them to a haul they cannot pay for and only find out at the billing.
+   */
+  private shipperBill(driverTotal: number, f?: { shipperDid?: string }): { net: number; tax: number; gross: number; feePct: number; taxPct: number } {
+    const feePct = this.freightFeePct(f);
+    const taxPct = this.freightTaxPct(f);
+    return { ...taxOn(shipperCharge(driverTotal, feePct), taxPct), feePct, taxPct };
+  }
+
+  /** The same bill, from a load's ref — for the gates, which hold a Claimable. `shipperDid` deliberately
+   *  does NOT ride on Claimable: that shape reaches drivers, and who pays is not a driver's business. */
+  private shipperBillFor(driverTotal: number, ref: string): { gross: number } {
+    return this.shipperBill(driverTotal, this.freights.get(ref));
   }
 
   /** The same rate, from a load's ref — for the gates, which hold a Claimable. `shipperDid` deliberately

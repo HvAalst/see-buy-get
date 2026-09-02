@@ -11,7 +11,12 @@ import { buildOpenApiDocument } from './openapi';
  */
 async function emit(): Promise<void> {
   process.env.GLOS_PERSIST = 'off';
-  const app = await NestFactory.create(AppModule, { logger: false });
+  // `logger: ['error']`, never `false`. This is the ONLY thing in the repo that boots the whole application
+  // — the test suites construct their providers by hand — so it is also the only place a DI failure can be
+  // seen. Silencing the logger silences Nest's own ExceptionHandler, which exits the process before the
+  // catch below ever runs: the command then fails with exit 1 and NOTHING printed, and an app that cannot
+  // start looks like a broken script. That cost a whole debugging session once; it should not cost another.
+  const app = await NestFactory.create(AppModule, { logger: ['error'] });
   app.setGlobalPrefix('v1');
   await app.init();
 

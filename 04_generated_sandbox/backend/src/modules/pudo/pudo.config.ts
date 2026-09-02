@@ -121,6 +121,45 @@ export const SIZE_LANE: Record<ParcelSize, CargoLane> = { S: 'pudo', M: 'pudo', 
 export const MIN_PLATFORM_FEE_PCT = 0;
 export const MAX_PLATFORM_FEE_PCT = 0.25;
 
+/**
+ * Tax. A different kind of number from the one above, and the bounds say so.
+ *
+ * The platform fee is a decision a sister makes; a tax rate is one it is TOLD. So there is no network
+ * default worth having — the default is zero, meaning "this sister has not been told to charge anything
+ * yet", which is the honest state of every sister until an operator sets one.
+ *
+ * The ceiling is loose on purpose. Standard rates run to the high twenties in some jurisdictions, so a
+ * tight bound would be this file having an opinion about somebody else's law. It exists only to catch the
+ * one mistake that matters: `16` typed where `0.16` was meant, which would charge sixteen hundred percent.
+ */
+export const MIN_TAX_PCT = 0;
+export const MAX_TAX_PCT = 0.4;
+/** What tax is called when a sister has not said. Neutral because the real name is jurisdictional — VAT
+ *  in Kenya, VAT in Ethiopia, GST elsewhere — and inventing one for a sister would be putting a word on
+ *  its receipts that its own authority may not use. */
+export const DEFAULT_TAX_LABEL = 'Tax';
+
+/**
+ * The tax on a net price, and the gross a customer actually pays.
+ *
+ * EXCLUSIVE arithmetic — tax is the layer ON TOP of the sister's whole price, which is what the pricing
+ * stack reserved this seam for: cost → the three layers → a net price → tax. `net` is untouched, so
+ * everything already computed keeps its meaning and its value, and a zero rate returns the same numbers
+ * that were there before this existed.
+ *
+ * A receipt that must DISPLAY the price tax-inclusive (which retail law requires in a good many places)
+ * shows `gross` with `tax` named inside it. That is a presentation of these same two figures and needs no
+ * second arithmetic — which is exactly why there is only one here.
+ */
+export function taxOn(net: number, ratePct: number): { net: number; tax: number; gross: number } {
+  const base = round2(Number.isFinite(net) ? net : 0);
+  const rate = Number.isFinite(ratePct) ? Math.max(0, ratePct) : 0;
+  const tax = round2(base * rate);
+  // Summed rather than multiplied out, so `net + tax === gross` holds exactly at two decimals. Computing
+  // the gross independently is how a receipt ends up with three numbers that do not add up.
+  return { net: base, tax, gross: round2(base + tax) };
+}
+
 // S34b — dynamic market-pulse tunables. The engine buckets the map into ~0.1° cells (a "market zone",
 // mirroring the monitor heatmap), samples supply (live vehicles) vs demand (open freight) per cell, and
 // derives a raw multiplier factor = 1 + K·(pressure − 1) that the freight price is flexed by — always then

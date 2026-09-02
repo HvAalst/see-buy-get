@@ -635,7 +635,9 @@ export function useSendApp() {
     // Snapshot the drop-off shop name NOW: the done screen must name the shop the parcel was actually
     // minted at, even if the user back-navigates and re-picks a different shop while this is in flight.
     const fromName = points.find((p) => p.did === fromDid)?.shopName ?? null;
-    const expectedTotal = quote?.locked.total; // consent to THIS price; the server fails closed if it drifted
+    // The GROSS, matching what the price card showed and what the counter will collect. The server gates on
+    // the same figure — consent is to money a person hands over, and tax is part of that money.
+    const expectedTotal = quote?.locked.gross;
     const epoch = ++mintEpoch.current;
     setState((s) => ({ ...s, mintBusy: true, mintError: null }));
     const r = await client.api.createParcel({

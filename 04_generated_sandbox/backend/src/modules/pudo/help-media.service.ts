@@ -1,10 +1,15 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { GlosError } from '../../foundation/http/glos-error';
 import { BlobStore, FsBlobStore } from '../../foundation/media/blob-store';
 import { decodeImage } from '../../foundation/media/decode-image';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { loadBuiltins, readBuiltin } from './help-builtins';
+
+/** Where the house set is read from. Nothing registers this token in the app — it exists so the directory
+ *  can be OVERRIDDEN (a test, a deployment shipping no drawings) without the container being asked to
+ *  resolve a `String`, which is what an optional primitive constructor parameter quietly demands. */
+export const HELP_BUILTIN_DIR = 'HELP_BUILTIN_DIR';
 import { HELP_IMAGE_MAX_BYTES, HELP_TOPIC_KEYS, HelpImage, HelpTopic, HelpTopicView, isHelpKey } from './help.types';
 
 /**
@@ -34,8 +39,13 @@ export class HelpMediaService {
    * explicitly supports (the sheets fall back to their words). It exists as a parameter because the shipped
    * set is now COMPLETE: with every option drawn there is no longer a real key left over to exercise the
    * un-illustrated path with, and a behaviour nothing can reach is a behaviour nobody notices breaking.
+   *
+   * `@Optional() @Inject` rather than a bare optional parameter, and the difference is not cosmetic: a bare
+   * `builtinDir?: string` makes the DI container read the emitted design:paramtypes metadata, find `String`,
+   * and try to resolve a provider for it — which fails at BOOT, in a service every picker depends on. A
+   * spec that constructs the class by hand never touches the container and so never sees it.
    */
-  constructor(builtinDir?: string) {
+  constructor(@Optional() @Inject(HELP_BUILTIN_DIR) builtinDir?: string) {
     this.builtins = loadBuiltins(builtinDir);
   }
 

@@ -3995,6 +3995,73 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/tax": {
+      "post": {
+        "operationId": "Sbg.setEntityTax",
+        "summary": "",
+        "description": "Set the tax a sister collects — a different kind of knob from the three above, and the one place in\nthis system where a rate is not ours to choose.\n\nTwo things it refuses. A rate above zero without a registration number: charging tax you are not\nregistered to collect is money taken from a customer in the name of an authority that has never heard\nof you. And the group: it is the merchant of record nowhere, so it collects nothing anywhere.\n\nLike every other rate here it reprices nothing already sold — a shipment carries the tax rate it was\nminted at, because a rate change has a date and every sale before it was correctly taxed at the old one.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityTaxDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Entity"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "Sbg.entityTax",
+        "summary": "",
+        "description": "The tax that applies to a lane of work, and the registration it is collected under. Operator-gated\n like its neighbours, though unlike the rate split this is not a secret: what a customer was charged\n and by whom appears on their own receipt.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lane",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/entities/{entityId}/rate-impact": {
       "get": {
         "operationId": "Sbg.entityRateImpact",
@@ -13293,6 +13360,18 @@
             "type": "object",
             "description": "Per-lane overrides, keyed by the CALLER'S vocabulary (today a CargoLane: pudo | mdp | dedicated).\n\nA plain string map because the lane taxonomy belongs to the pudo module and this is foundation — the\nbooks must not learn what a parcel is in order to hold a number. The caller validates the key; this\nonly ever validates the rates.\n\nAbsent lane → the sister's own `rates` → `feePct` as a margin → the network default. Four steps, each\none a real state some sister is in."
           },
+          "taxRegistration": {
+            "type": "string",
+            "description": "The registration this sister collects tax under — its VAT/TIN/GST number in its own country.\n\nNot the same thing as being incorporated there, which `jurisdiction` already says: a company can be\nregistered to trade and not registered to collect, and below a turnover threshold that is the normal\nstate. So this is separate, and absent means \"not registered to collect\" rather than \"unknown\"."
+          },
+          "tax": {
+            "type": "object",
+            "description": "What this sister charges in tax on everything it sells. Absent means none — the network default, and\nthe state every sister is in until an operator deliberately says otherwise."
+          },
+          "taxByLane": {
+            "type": "object",
+            "description": "Per-lane tax overrides, keyed by the caller's vocabulary exactly as `ratesByLane` is.\n\nHere for a reason narrower than it looks: tax rates vary by what is SUPPLIED, and lane is the only\nsupply-type axis this system has. A jurisdiction that zero-rates one kind of transport and standard-\nrates another can express that; everyone else sets one rate and never touches this."
+          },
           "parentEntityId": {
             "type": "string",
             "description": "Sisters point at the group they belong to."
@@ -13335,6 +13414,35 @@
             "type": "number",
             "nullable": true,
             "description": "The general company layer, on everything."
+          }
+        }
+      },
+      "EntityTaxDto": {
+        "type": "object",
+        "properties": {
+          "lane": {
+            "type": "string",
+            "description": "Which kind of work this applies to. Omitted = the sister's default for everything.",
+            "enum": [
+              "pudo",
+              "mdp",
+              "dedicated"
+            ]
+          },
+          "ratePct": {
+            "type": "number",
+            "nullable": true,
+            "description": "As a FRACTION — sixteen percent is 0.16, not 16. Bounds are enforced in the service."
+          },
+          "label": {
+            "type": "string",
+            "nullable": true,
+            "description": "What the authority calls it: 'VAT', 'GST'. The network has no default worth having."
+          },
+          "registration": {
+            "type": "string",
+            "nullable": true,
+            "description": "The number this sister collects under. Required before any rate above zero will be accepted."
           }
         }
       },
@@ -14118,8 +14226,18 @@
           "shipmentCost": {
             "type": "number"
           },
-          "currency": {
+          "taxPct": {
+            "type": "number"
+          },
+          "taxLabel": {
             "type": "string"
+          },
+          "shipmentTax": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string",
+            "description": "The money every figure above is in — the SELLING sister's, stamped at mint. Absent on records\n written before prices named their unit; read it through ParcelService.currencyOf."
           },
           "customs": {
             "description": "The paperwork this parcel crosses a border with. Absent on a domestic shipment, which needs none —\n and never absent on one that crosses, because the mint refuses to sell that shipment without it.",
@@ -14142,6 +14260,9 @@
             ]
           },
           "ceilingCost": {
+            "type": "number"
+          },
+          "ceilingTax": {
             "type": "number"
           },
           "actualCost": {
@@ -16806,6 +16927,31 @@
           "lockedAt": {
             "type": "string"
           },
+          "billed": {
+            "type": "object",
+            "properties": {
+              "net": {
+                "required": true,
+                "type": "number"
+              },
+              "tax": {
+                "required": true,
+                "type": "number"
+              },
+              "gross": {
+                "required": true,
+                "type": "number"
+              },
+              "feePct": {
+                "required": true,
+                "type": "number"
+              },
+              "taxPct": {
+                "required": true,
+                "type": "number"
+              }
+            }
+          },
           "driverPaid": {
             "type": "boolean"
           },
@@ -16903,6 +17049,7 @@
           "requiredCapabilities",
           "requiredEquipment",
           "equipmentGaps",
+          "billed",
           "loadSafety",
           "unloadReport",
           "createdAt"

@@ -519,6 +519,26 @@ export class EntityRatesDto {
   @IsOptional() @ValidateIf((_, v) => v !== null) @IsNumber() marginPct?: number | null;
 }
 
+/**
+ * Set what a sister collects for its tax authority, for one lane of work or for everything it does.
+ *
+ * Same three-way optionality as the rate knobs: absent leaves it alone, a number sets it, `null` clears it.
+ *
+ * `registration` is here rather than on its own endpoint on purpose. A rate above zero is refused without
+ * one, so an operator turning tax on for the first time can do it in a single call instead of discovering
+ * halfway through that the two halves of one decision were split across two screens.
+ */
+export class EntityTaxDto {
+  /** Which kind of work this applies to. Omitted = the sister's default for everything. */
+  @IsOptional() @IsIn(CARGO_LANES) @ApiPropertyOptional({ enum: CARGO_LANES }) lane?: CargoLane;
+  /** As a FRACTION — sixteen percent is 0.16, not 16. Bounds are enforced in the service. */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsNumber() ratePct?: number | null;
+  /** What the authority calls it: 'VAT', 'GST'. The network has no default worth having. */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsString() label?: string | null;
+  /** The number this sister collects under. Required before any rate above zero will be accepted. */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsString() registration?: string | null;
+}
+
 /** Control-tower reissue of a burned release secret; `by` names the human behind the operator token. */
 export class ReissueReleaseDto {
   @IsOptional() @IsString() by?: string;

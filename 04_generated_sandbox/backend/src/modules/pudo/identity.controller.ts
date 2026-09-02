@@ -135,8 +135,11 @@ export class IdentityController {
     // sender's consented total must match the fresh locked quote. If the market moved between the quote
     // and this mint, refuse with the new total so the app can re-confirm — never silently bill a
     // different amount than the one shown at "Make my label".
-    if (dto.expectedTotal != null && Math.abs(dto.expectedTotal - quote.locked.total) > 0.001) {
-      throw new GlosError('PRICE_CHANGED', `The price is now ${quote.locked.total.toFixed(2)} — please review it before sending`, { newTotal: quote.locked.total });
+    // Against the GROSS, because that is the money the sender hands over at the counter. Consent is to a
+    // figure a person can be asked for, and tax is part of what they are asked for — gating on the net
+    // would agree a price and collect a different one, which is the exact failure this gate exists to stop.
+    if (dto.expectedTotal != null && Math.abs(dto.expectedTotal - quote.locked.gross) > 0.001) {
+      throw new GlosError('PRICE_CHANGED', `The price is now ${quote.locked.gross.toFixed(2)} — please review it before sending`, { newTotal: quote.locked.gross });
     }
     const { parcel, label } = this.parcels.createConsumerSend({
       senderPersonDid: person.personDid,
@@ -162,7 +165,10 @@ export class IdentityController {
     return {
       parcel: this.parcels.consumerParcel(parcel.parcelId, person.phoneHash),
       label,
-      price: { routeMode: parcel.routeMode, total: parcel.shipmentCost, transport: parcel.transportCost, nodeFees: parcel.nodeFees, platformFee: parcel.platformFee, km: parcel.routeKm, ceiling: parcel.ceilingCost },
+      // `total` is the GROSS — the cash this sender hands over at the counter. `tax` names the part of it
+      // that is not ours, because a person is entitled to see the tax they paid and, in most places, a
+      // receipt is required to say so. The platform's own three layers stay out of it: a buyer sees a price.
+      price: { routeMode: parcel.routeMode, total: parcel.shipmentCost, transport: parcel.transportCost, nodeFees: parcel.nodeFees, platformFee: parcel.platformFee, km: parcel.routeKm, ceiling: parcel.ceilingCost, tax: parcel.shipmentTax, taxLabel: parcel.taxLabel },
       journey,
     };
   }

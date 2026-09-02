@@ -52,6 +52,45 @@ export interface ResolvedRates {
   totalPct: number;
 }
 
+/**
+ * What a sister collects on top of its own price, on behalf of a tax authority.
+ *
+ * DELIBERATELY NOT A FOURTH LAYER OF `RateStack`, and the distinction is the whole reason this is a
+ * separate type. Every layer of that stack is money the sister EARNS; this is money it never owns for a
+ * moment. It is held, and it is handed over. Folding it in would put a liability through a revenue account
+ * — which is the one thing `PAYABLE_TAX` was declared to prevent, and it would make every margin figure in
+ * the business wrong by exactly the tax rate.
+ *
+ * It also sits at a different point in the arithmetic: the three layers are charged ON the cost base and
+ * summed with each other; tax is charged on the sister's whole price INCLUDING those layers, because what
+ * is taxed is the sale, not the profit.
+ */
+export interface TaxRule {
+  /** As a fraction — 0.16 is sixteen percent. Zero is a real and complete answer, and it is the default. */
+  ratePct: number;
+  /**
+   * What the authority calls it where this sister is registered — 'VAT', 'GST', 'IVA'.
+   *
+   * A receipt has to name the tax it charges, and the name is jurisdictional. The network cannot supply a
+   * default that is true everywhere, so it supplies a neutral one and a sister that charges anything is
+   * expected to say what it is charging.
+   */
+  label?: string;
+}
+
+/**
+ * The tax that applies to one shipment, resolved.
+ *
+ * `registration` rides along because a receipt that charges tax must say who is collecting it. Absent
+ * exactly when the rate is zero — a sister charging nothing is not required to identify itself as a
+ * collector of anything, and `setTax` refuses a non-zero rate without one.
+ */
+export interface ResolvedTax {
+  ratePct: number;
+  label: string;
+  registration?: string;
+}
+
 export class Entity {
   entityId: string; // stable human key ('sbg', 'sbg-ke') — the domain handle
   did: string; // real GLOS DID, so an entity is a first-class actor like any other
@@ -92,6 +131,27 @@ export class Entity {
    * one a real state some sister is in.
    */
   ratesByLane?: Record<string, RateStack>;
+  /**
+   * The registration this sister collects tax under — its VAT/TIN/GST number in its own country.
+   *
+   * Not the same thing as being incorporated there, which `jurisdiction` already says: a company can be
+   * registered to trade and not registered to collect, and below a turnover threshold that is the normal
+   * state. So this is separate, and absent means "not registered to collect" rather than "unknown".
+   */
+  taxRegistration?: string;
+  /**
+   * What this sister charges in tax on everything it sells. Absent means none — the network default, and
+   * the state every sister is in until an operator deliberately says otherwise.
+   */
+  tax?: TaxRule;
+  /**
+   * Per-lane tax overrides, keyed by the caller's vocabulary exactly as `ratesByLane` is.
+   *
+   * Here for a reason narrower than it looks: tax rates vary by what is SUPPLIED, and lane is the only
+   * supply-type axis this system has. A jurisdiction that zero-rates one kind of transport and standard-
+   * rates another can express that; everyone else sets one rate and never touches this.
+   */
+  taxByLane?: Record<string, TaxRule>;
   /** Sisters point at the group they belong to. */
   parentEntityId?: string;
   createdAt: string;

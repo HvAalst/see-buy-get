@@ -258,30 +258,51 @@ export class VendorService {
    * because **SBG is not a bank profiting from exchange rates**: what the buffer absorbs belongs in FX
    * gain/loss, where a buffer that is consistently too fat is a number somebody has to answer for.
    */
-  billShipment(vendorId: string, parcelId: string, amount: number, fxBuffer = 0): { paid: boolean; balance: number } {
+  billShipment(vendorId: string, parcelId: string, amount: number, fxBuffer = 0, tax = 0): { paid: boolean; balance: number } {
     const vendor = this.get(vendorId);
+    // `amount` is the GROSS — what actually leaves the store's float, tax included. The balance is checked
+    // against it for that reason: a customer must fund the whole charge, not the part we get to keep.
     if (this.balanceOf(vendorId) + 1e-9 < amount) return { paid: false, balance: this.balanceOf(vendorId) };
+    // Tax is money held for an authority and never ours, so it comes off the top before anything else is
+    // apportioned. Clamped like the buffer and for the same reason — one caller's arithmetic slip must not
+    // be able to move our own money between two of our own accounts.
+    const collected = Number.isFinite(tax) ? Math.min(Math.max(Math.round(tax * 100) / 100, 0), amount) : 0;
+    const net = Math.round((amount - collected) * 100) / 100;
     // Clamped rather than trusted: a buffer larger than the price, or a negative one, would move money
-    // between two of our own accounts on a caller's arithmetic mistake. It can only ever be a slice of this.
-    const buffer = Number.isFinite(fxBuffer) ? Math.min(Math.max(Math.round(fxBuffer * 100) / 100, 0), amount) : 0;
+    // between two of our own accounts on a caller's arithmetic mistake. It can only ever be a slice of the
+    // NET — the buffer is a hedge on what we sold, and there is nothing to hedge in somebody else's tax.
+    const buffer = Number.isFinite(fxBuffer) ? Math.min(Math.max(Math.round(fxBuffer * 100) / 100, 0), net) : 0;
     // The service is delivered: the deposit is drawn down and the sister recognises the revenue HERE —
-    // all of it, less whatever of it was only ever a hedge against the rate moving.
+    // all of it, less whatever of it was only ever a hedge against the rate moving, and less the tax,
+    // which was never revenue for a moment.
     const entryId = this.post(vendor, 'shipping', parcelId, [
       { code: ACCOUNT_CODES.DEPOSIT_VENDOR, counterparty: vendorId, amount },
-      { code: ACCOUNT_CODES.REVENUE, amount: -(Math.round((amount - buffer) * 100) / 100) },
+      { code: ACCOUNT_CODES.REVENUE, amount: -(Math.round((net - buffer) * 100) / 100) },
       ...(buffer > 0 ? [{ code: ACCOUNT_CODES.FX_GAINLOSS, amount: -buffer }] : []),
+      ...(collected > 0 ? [{ code: ACCOUNT_CODES.PAYABLE_TAX, amount: -collected }] : []),
     ]);
     this.book(vendor, 'BILLING', '-', amount, parcelId, 'shipment', entryId);
     return { paid: true, balance: this.syncBalance(vendor).balance };
   }
 
-  /** Refund a flexible parcel's over-hold (ceiling − actual) back to the vendor after delivery. */
-  rebate(vendorId: string, parcelId: string, amount: number, note = 'flexible-route rebate'): Vendor {
+  /**
+   * Refund a flexible parcel's over-hold (ceiling − actual) back to the vendor after delivery.
+   *
+   * `tax` is the part of that refund that was tax, and it must be named for the entry to be the mirror of
+   * the billing it reverses. Give back a gross amount out of revenue alone and the tax liability stays on
+   * the books for money the customer no longer paid — the sister would eventually remit tax on a sale that
+   * was partly undone, out of its own pocket, and nothing would show why.
+   */
+  rebate(vendorId: string, parcelId: string, amount: number, note = 'flexible-route rebate', tax = 0): Vendor {
     const vendor = this.get(vendorId);
     if (amount <= 0) return vendor;
-    // The over-hold was never earned: revenue is given back and the deposit restored.
+    const collected = Number.isFinite(tax) ? Math.min(Math.max(Math.round(tax * 100) / 100, 0), amount) : 0;
+    const net = Math.round((amount - collected) * 100) / 100;
+    // The over-hold was never earned: revenue is given back, the tax on it is un-owed, and the deposit
+    // restored.
     const entryId = this.post(vendor, 'rebate', parcelId, [
-      { code: ACCOUNT_CODES.REVENUE, amount },
+      ...(net > 0 ? [{ code: ACCOUNT_CODES.REVENUE, amount: net }] : []),
+      ...(collected > 0 ? [{ code: ACCOUNT_CODES.PAYABLE_TAX, amount: collected }] : []),
       { code: ACCOUNT_CODES.DEPOSIT_VENDOR, counterparty: vendorId, amount: -amount },
     ]);
     this.book(vendor, 'REBATE', '+', amount, parcelId, note, entryId);

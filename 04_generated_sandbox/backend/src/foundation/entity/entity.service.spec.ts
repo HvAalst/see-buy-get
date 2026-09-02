@@ -154,4 +154,85 @@ describe('entities (the group and its sisters)', () => {
       expect(entities.ratesFor(sister())).toMatchObject({ costOfRiskPct: 0, profitOnRiskPct: 0, marginPct: 0.04 });
     });
   });
+
+  describe('the tax a sister collects', () => {
+    const sister = () => entities.requireForJurisdiction('KE').entityId;
+
+    it('charges nothing until somebody says otherwise', () => {
+      // The one rate in this system that is not ours to choose. There is no network default worth having,
+      // so the default is none — which is the honest state of a sister nobody has registered anywhere.
+      expect(entities.taxFor(sister())).toMatchObject({ ratePct: 0, registration: undefined });
+    });
+
+    it('refuses a rate above zero from a sister that is not registered to collect one', () => {
+      // Not an arithmetic guard. Charging tax you are not registered to collect is money taken from a
+      // customer in the name of an authority that has never heard of you.
+      expect(() => entities.setTax(sister(), { ratePct: 0.16 })).toThrow(/no tax registration/);
+      expect(entities.taxFor(sister()).ratePct).toBe(0); // and the rejected rate is NOT sitting in the record
+    });
+
+    it('takes the rate and the authority to charge it in one act', () => {
+      entities.setTax(sister(), { ratePct: 0.16, label: 'VAT', registration: 'P051234567X' });
+      expect(entities.taxFor(sister())).toEqual({ ratePct: 0.16, label: 'VAT', registration: 'P051234567X' });
+    });
+
+    it('will not let a sister drop its registration by editing a different lane', () => {
+      // The trap a per-lane rule opens: clear the registration while editing `dedicated` and the standing
+      // 16% on everything else is suddenly being charged by nobody. The guard reads EVERY rule it would
+      // hold, not the one in front of it.
+      entities.setTax(sister(), { ratePct: 0.16, registration: 'P051234567X' });
+      expect(() => entities.setTax(sister(), { lane: 'dedicated', ratePct: 0.08, registration: null })).toThrow(/no tax registration/);
+      expect(entities.taxFor(sister()).ratePct).toBe(0.16);
+      expect(entities.taxFor(sister(), 'dedicated').ratePct).toBe(0.16); // the refused override never landed
+    });
+
+    it('zero-rates one lane without disturbing the rest', () => {
+      // Rates vary by what is SUPPLIED, and lane is the only supply-type axis this system has. A
+      // jurisdiction that zero-rates one kind of transport can say so.
+      entities.setTax(sister(), { ratePct: 0.16, label: 'VAT', registration: 'P051234567X' });
+      entities.setTax(sister(), { lane: 'mdp', ratePct: 0 });
+      expect(entities.taxFor(sister(), 'mdp').ratePct).toBe(0);
+      expect(entities.taxFor(sister(), 'pudo').ratePct).toBe(0.16);
+      expect(entities.taxFor(sister()).ratePct).toBe(0.16);
+    });
+
+    it('resolves a rule WHOLE — never half of one jurisdiction and half of another', () => {
+      // The deliberate difference from the rate stack, which resolves field by field. A rate and the name
+      // it is charged under are one statement; splicing two of them makes a rule no authority would know.
+      entities.setTax(sister(), { ratePct: 0.16, label: 'VAT', registration: 'P051234567X' });
+      entities.setTax(sister(), { lane: 'dedicated', ratePct: 0.08 });
+      expect(entities.taxFor(sister(), 'dedicated')).toMatchObject({ ratePct: 0.08, label: 'Tax' });
+    });
+
+    it('states the registration only where something is actually collected', () => {
+      // A registration number on a zero-rated receipt is noise, and an implied claim nobody made.
+      entities.setTax(sister(), { ratePct: 0.16, registration: 'P051234567X' });
+      entities.setTax(sister(), { lane: 'mdp', ratePct: 0 });
+      expect(entities.taxFor(sister(), 'mdp').registration).toBeUndefined();
+      expect(entities.taxFor(sister(), 'pudo').registration).toBe('P051234567X');
+    });
+
+    it('catches the one typo that matters', () => {
+      // `16` where `0.16` was meant charges sixteen hundred percent. The ceiling is loose on purpose —
+      // tighter would be this codebase having an opinion about somebody else's law.
+      expect(() => entities.setTax(sister(), { ratePct: 16, registration: 'X' })).toThrow(/fraction/);
+    });
+
+    it('lets a sister be cleared back to charging nothing', () => {
+      entities.setTax(sister(), { ratePct: 0.16, registration: 'P051234567X' });
+      entities.setTax(sister(), { ratePct: null });
+      expect(entities.taxFor(sister()).ratePct).toBe(0);
+    });
+
+    it('refuses the group, which is the merchant of record nowhere', () => {
+      expect(() => entities.setTax(entities.group().entityId, { ratePct: 0.16, registration: 'X' })).toThrow(/holding company/);
+    });
+
+    it('is NOT a fourth layer of the rate stack', () => {
+      // The distinction the whole separation exists for: the stack is what the sister EARNS and tax is
+      // money it never owns for a moment. Folding it in would make every margin figure wrong by the rate.
+      entities.setTax(sister(), { ratePct: 0.16, registration: 'P051234567X' });
+      expect(entities.ratesFor(sister()).totalPct).toBe(PLATFORM_FEE_PCT);
+    });
+  });
 });

@@ -214,11 +214,16 @@ export class WalletGateService {
 
   /** A parcel moves: the shop's deposit is drawn down and the sister finally EARNS it. On a cash walk-up
    *  the shop keeps the retail spread off-platform — we never see that money and never should. */
-  chargeShipping(did: string, amount: number, parcelId: string): PudoLedgerEntry {
+  chargeShipping(did: string, amount: number, parcelId: string, tax = 0): PudoLedgerEntry {
     const balance = this.agents.balance(did);
+    // `amount` is the GROSS. The credit line is measured against it too: what a shop owes us is the whole
+    // charge, and a tax we have already booked as payable is exactly as real a debt as the rest.
     if (balance - amount < -TRADE_CREDIT_LIMIT - 1e-9) {
       throw new GlosError('WALLET_INSUFFICIENT', `Trade credit is used up (${TRADE_CREDIT_PARCELS} parcels) — top up to keep scanning`);
     }
+    // Tax first, off the top — held for an authority, never ours, never revenue.
+    const collected = Number.isFinite(tax) ? Math.min(Math.max(Math.round(tax * 100) / 100, 0), amount) : 0;
+    const net = Math.round((amount - collected) * 100) / 100;
     // Draw the shop's own float first; whatever it cannot cover is drawn on the credit line, which is a
     // RECEIVABLE, not a mysteriously negative deposit. The operator can see exactly what is lent out.
     const fromDeposit = Math.min(Math.max(balance, 0), amount);
@@ -226,7 +231,8 @@ export class WalletGateService {
     const entryId = this.postAgent(did, 'shipping', parcelId, [
       ...(fromDeposit > 0 ? [{ code: ACCOUNT_CODES.DEPOSIT_AGENT, counterparty: did, amount: fromDeposit }] : []),
       ...(onCredit > 0 ? [{ code: ACCOUNT_CODES.RECEIVABLE_AGENT, counterparty: did, amount: onCredit }] : []),
-      { code: ACCOUNT_CODES.REVENUE, amount: -amount },
+      { code: ACCOUNT_CODES.REVENUE, amount: -net },
+      ...(collected > 0 ? [{ code: ACCOUNT_CODES.PAYABLE_TAX, amount: -collected }] : []),
     ]);
     const entry = this.record('FEE', '-', amount, did, parcelId, 'parcel', entryId);
     this.agents.refreshLock(did);
@@ -296,10 +302,15 @@ export class WalletGateService {
 
   /** Reverse a shipping charge within the void window. A 0 refund is a no-op (a zero-priced parcel was
    *  never charged) — never trip the positive-amount assertion on a reversal. */
-  refund(did: string, amount: number, parcelId: string): PudoLedgerEntry | null {
+  refund(did: string, amount: number, parcelId: string, tax = 0): PudoLedgerEntry | null {
     if (amount <= 0) return null;
+    // The mirror of chargeShipping, tax included: a voided sale un-owes the tax it collected. Reversing
+    // the gross out of revenue alone would leave the sister liable for tax on a sale that no longer exists.
+    const collected = Number.isFinite(tax) ? Math.min(Math.max(Math.round(tax * 100) / 100, 0), amount) : 0;
+    const net = Math.round((amount - collected) * 100) / 100;
     const entryId = this.postAgent(did, 'refund', parcelId, [
-      { code: ACCOUNT_CODES.REVENUE, amount },
+      ...(net > 0 ? [{ code: ACCOUNT_CODES.REVENUE, amount: net }] : []),
+      ...(collected > 0 ? [{ code: ACCOUNT_CODES.PAYABLE_TAX, amount: collected }] : []),
       { code: ACCOUNT_CODES.DEPOSIT_AGENT, counterparty: did, amount: -amount },
     ]);
     const entry = this.record('REFUND', '+', amount, did, parcelId, 'parcel', entryId);

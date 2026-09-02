@@ -169,6 +169,18 @@ export class Freight {
   lockedAt?: string;
   @ApiPropertyOptional({ enum: ['unpaid', 'billed', 'billing_failed'] })
   paidStatus?: 'unpaid' | 'billed' | 'billing_failed';
+  /**
+   * What the SHIPPER was actually charged, stamped at the moment of charging.
+   *
+   * `lockedPrice` is the driver's earning; this is the other side — the driver's earning plus the platform's
+   * take plus tax. It is stamped rather than recomputed because a release has to reverse what was charged,
+   * and both of the rates behind it (the sister's fee stack, its tax) are knobs somebody may turn between
+   * the claim and the no-show. Recomputing on the way out is how a rebate stops matching its own charge and
+   * leaves a residue in the books that nothing explains.
+   *
+   * Absent on a freight nobody was billed for — the bulletin load settled off-platform, which is most of them.
+   */
+  billed?: { net: number; tax: number; gross: number; feePct: number; taxPct: number };
   driverPaid?: boolean;
   // S33 — the heavy-cargo safety gate. loadSafety is stamped at pickup (the confirmed checklist keys + the
   // securement photo mediaId); unloadReport at delivery. Absent until the driver passes each gate.

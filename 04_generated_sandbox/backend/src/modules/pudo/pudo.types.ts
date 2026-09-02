@@ -608,7 +608,22 @@ export class Parcel {
    *  so an unstamped factor would re-price parcels already sold. Absent on records written before this
    *  field existed; read it through ParcelService.transportFactorOf, which falls back to the constant. */
   transportFactor?: number;
-  shipmentCost?: number; // what the vendor is billed prepaid (nodeFees + transport + platform fee)
+  shipmentCost?: number; // what the vendor is billed prepaid — GROSS: nodeFees + transport + platform fee + tax
+  /**
+   * The tax inside `shipmentCost`, and the rate and name it was charged under — all three stamped at mint.
+   *
+   * Stamped for the same durability reason as the rate stack, and for a sharper one besides: a tax rate is
+   * changed by a government, on a date, and every sale before that date was correctly taxed at the old
+   * one. A ledger that recomputed tax from today's rate would restate history the authority itself does
+   * not restate.
+   *
+   * ABSENT MEANS ZERO, not "look up the default" — unlike `platformFeePct`, whose absence means the
+   * network rate. A shipment sold before any sister charged tax genuinely carried none, and reading a
+   * current rate back onto it would invent a liability nobody ever collected.
+   */
+  taxPct?: number;
+  taxLabel?: string;
+  shipmentTax?: number;
   /** The money every figure above is in — the SELLING sister's, stamped at mint. Absent on records
    *  written before prices named their unit; read it through ParcelService.currencyOf. */
   currency?: string;
@@ -627,8 +642,12 @@ export class Parcel {
    *  argue about, and the sister that collected it could not later prove what it owed the sister that
    *  performed the leg. Absent on every domestic parcel, because nothing was converted. */
   fx?: ParcelFx;
-  ceilingCost?: number; // the worst-case (highest-rate) total a flexible parcel reserves
-  actualCost?: number; // the real total once the carrier is known (drives the flexible rebate)
+  ceilingCost?: number; // the worst-case (highest-rate) GROSS a flexible parcel reserves — money held, tax and all
+  /** The tax inside that ceiling. Held here rather than re-derived, so the rebate can un-owe exactly the
+   *  tax that was owed: dividing a gross figure back out to find its tax is a different sum from the one
+   *  that produced it, and it lands a cent away often enough to matter in a liability account. */
+  ceilingTax?: number;
+  actualCost?: number; // the real GROSS once the carrier is known (drives the flexible rebate)
   rebate?: number; // refunded to the vendor after delivery (ceiling − actual) on a flexible parcel
   actualPerKm?: number; // the delivering carrier's per-km rate (captured at handover, drives the rebate)
   buyerCharge?: number; // what the checkout charged the buyer (REPORTED only — vendor's income)

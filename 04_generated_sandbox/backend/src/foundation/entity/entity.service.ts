@@ -3,8 +3,8 @@ import { GlosError } from '../http/glos-error';
 import { PersistentMap } from '../store/persistent-map';
 import { DidService } from '../did/did.service';
 import { currencyForJurisdiction } from '../money/currency';
-import { MAX_PLATFORM_FEE_PCT, MIN_PLATFORM_FEE_PCT, PLATFORM_FEE_PCT } from '../../modules/pudo/pudo.config';
-import { Entity, RateStack, ResolvedRates, canHoldCustody, canTransact } from './entity.types';
+import { DEFAULT_TAX_LABEL, MAX_PLATFORM_FEE_PCT, MAX_TAX_PCT, MIN_PLATFORM_FEE_PCT, MIN_TAX_PCT, PLATFORM_FEE_PCT } from '../../modules/pudo/pudo.config';
+import { Entity, RateStack, ResolvedRates, ResolvedTax, TaxRule, canHoldCustody, canTransact } from './entity.types';
 
 /**
  * The group and its sisters, seeded at boot.
@@ -210,6 +210,93 @@ export class EntityService implements OnApplicationBootstrap {
 
     entity.rates = rates;
     entity.ratesByLane = ratesByLane;
+    this.entities.set(entity.entityId, entity);
+    return entity;
+  }
+
+  /**
+   * The tax this sister charges on one lane of work — zero unless an operator has said otherwise.
+   *
+   * Same narrow-to-wide walk as the rates, and the same reason: a lane override, then the sister's own
+   * rule, then nothing. Unlike a rate stack a tax rule resolves WHOLE rather than field by field, because
+   * a rate and the name it is charged under are one statement — half of one jurisdiction's rule and half
+   * of another's is not a rule any authority would recognise.
+   */
+  taxFor(entityId: string, lane?: string): ResolvedTax {
+    return EntityService.resolveTax(this.get(entityId), lane);
+  }
+
+  /** The resolution itself, over a plain shape — so a CANDIDATE can be checked before anything is stored. */
+  static resolveTax(from: Pick<Entity, 'tax' | 'taxByLane' | 'taxRegistration'>, lane?: string): ResolvedTax {
+    const rule = (lane ? from.taxByLane?.[lane] : undefined) ?? from.tax;
+    const ratePct = Math.round(Math.max(0, Number(rule?.ratePct) || 0) * 10_000) / 10_000;
+    return {
+      ratePct,
+      label: rule?.label?.trim() || DEFAULT_TAX_LABEL,
+      // Only ever stated where something is actually being collected. A registration number on a zero-rated
+      // receipt is noise on the one hand and, on the other, an implied claim nobody made.
+      registration: ratePct > 0 ? from.taxRegistration : undefined,
+    };
+  }
+
+  /**
+   * Set what a sister collects for its tax authority, for a lane or for everything it does.
+   *
+   * Two guards, and neither is arithmetic.
+   *
+   * A rate above zero requires a REGISTRATION. Charging tax you are not registered to collect is not a
+   * rounding error in somebody's books — it is money taken from a customer in the name of an authority
+   * that has never heard of you, and it is the actual offence. So the number and the authority to charge
+   * it are set together or not at all.
+   *
+   * And only a SISTER may charge. The group is not the merchant of record anywhere; letting it hold a
+   * rate would imply it collects tax on transactions it is deliberately never a party to.
+   */
+  setTax(entityId: string, input: { lane?: string; ratePct?: number | null; label?: string | null; registration?: string | null }): Entity {
+    const entity = this.requireTransacting(entityId);
+
+    // Built as a CANDIDATE and checked before anything is stored — the same discipline as setRates, and
+    // for the same reason: validating a record already mutated refuses the change and applies it at once.
+    const registration = input.registration === undefined ? entity.taxRegistration : input.registration?.trim() || undefined;
+
+    const apply = (into: TaxRule | undefined): TaxRule | undefined => {
+      const next: TaxRule = { ...(into ?? { ratePct: 0 }) };
+      if (input.ratePct !== undefined) {
+        if (input.ratePct === null) return undefined; // cleared entirely — back to "no rule here"
+        if (!Number.isFinite(input.ratePct) || input.ratePct < MIN_TAX_PCT || input.ratePct > MAX_TAX_PCT) {
+          throw new GlosError('INVALID_INPUT', `A tax rate must be between ${MIN_TAX_PCT * 100}% and ${MAX_TAX_PCT * 100}% — it is a fraction, so sixteen percent is 0.16`);
+        }
+        next.ratePct = Math.round(input.ratePct * 10_000) / 10_000;
+      }
+      if (input.label !== undefined) {
+        if (input.label === null) delete next.label;
+        else next.label = input.label.trim().slice(0, 16) || undefined;
+      }
+      return next;
+    };
+
+    const tax = input.lane ? entity.tax : apply(entity.tax);
+    let taxByLane = entity.taxByLane;
+    if (input.lane) {
+      const next: Record<string, TaxRule> = { ...(entity.taxByLane ?? {}) };
+      const rule = apply(entity.taxByLane?.[input.lane]);
+      // A cleared lane leaves no empty shell behind, so `taxByLane` never grows a key that means nothing —
+      // and "this lane is not overridden" stays the same state it was before anybody touched it.
+      if (rule) next[input.lane] = rule;
+      else delete next[input.lane];
+      taxByLane = next;
+    }
+
+    // Checked across EVERY rule this candidate would hold, not just the one being set — a sister with a
+    // standing 16% on one lane must not be able to drop its registration by editing a different lane.
+    const holds = [tax, ...Object.values(taxByLane ?? {})].filter((r): r is TaxRule => !!r);
+    if (holds.some((r) => r.ratePct > 0) && !registration) {
+      throw new GlosError('INVALID_INPUT', `${entity.name} has no tax registration — a rate above zero cannot be charged until it does. Set the registration in the same call.`);
+    }
+
+    entity.taxRegistration = registration;
+    entity.tax = tax;
+    entity.taxByLane = taxByLane;
     this.entities.set(entity.entityId, entity);
     return entity;
   }

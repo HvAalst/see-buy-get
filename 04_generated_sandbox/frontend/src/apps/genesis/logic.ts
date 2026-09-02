@@ -152,8 +152,23 @@ export function servingSince(since: string | undefined, t: Translate): string | 
  * prices every person's parcel at the locked leg; flexible's ceiling-then-rebate is a vendor-rail
  * contract), so showing a dearer "fastest" card would advertise a price nobody here can pay.
  */
-export function lockedPrice(q: QuoteView, t: Translate): { total: number; sub: string } {
-  return { total: q.locked.total, sub: t('send.logic.lockedSub') };
+export function lockedPrice(q: QuoteView, t: Translate): { total: number; tax: number; sub: string } {
+  // The GROSS, always — this figure is shown beside "you pay this at the shop", and it is the figure the
+  // mint consents against. Showing the net would advertise one price and collect another.
+  return { total: q.locked.gross, tax: q.locked.tax, sub: t('send.logic.lockedSub') };
+}
+
+/** The tax line under a price — or null, which is the normal case. A line reading zero is noise on a
+ *  receipt; it belongs to the operator's console, not to the person at the counter. */
+export function taxLine(q: QuoteView, t: Translate): string | null {
+  if (!(q.locked.tax > 0)) return null;
+  return t('send.logic.taxLine', { label: q.tax?.label || t('send.logic.taxDefault'), amount: money(q.locked.tax) });
+}
+
+/** The same line from a minted parcel's own price, which carries the tax it was SOLD with. */
+export function mintTaxLine(price: { tax?: number; taxLabel?: string }, t: Translate): string | null {
+  if (!(price.tax && price.tax > 0)) return null;
+  return t('send.logic.taxLine', { label: price.taxLabel || t('send.logic.taxDefault'), amount: money(price.tax) });
 }
 
 /** "Shop A → Central hub → Shop B" — the journey in names, not ids. */
@@ -162,7 +177,7 @@ export function journeyLine(q: QuoteView): string {
 }
 
 export function quoteSummary(q: QuoteView, t: Translate): string {
-  return t('send.logic.quoteSummary', { km: Math.round(q.totalKm), stops: q.hops.length, price: money(q.locked.total) });
+  return t('send.logic.quoteSummary', { km: Math.round(q.totalKm), stops: q.hops.length, price: money(q.locked.gross) });
 }
 
 /* ------------------------------------------------------------------ track -- */

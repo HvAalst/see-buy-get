@@ -1,0 +1,24 @@
+import { Test } from '@nestjs/testing';
+import { AppModule } from './app.module';
+
+/**
+ * Does the application actually start?
+ *
+ * Every other suite in this repo lists its providers by hand, which is fast and focused and completely
+ * blind to the dependency-injection container. A service can be perfectly unit-tested and still make the
+ * real app fail to boot — and it did: an `@Injectable` given an optional primitive constructor parameter
+ * (`builtinDir?: string`) makes Nest look for a provider for `String`, fails to find one, and the process
+ * dies at startup. 856 green tests said nothing about it, because not one of them asked the container to
+ * build anything.
+ *
+ * So this suite asks exactly one question, and it is the only question that matters before any other test
+ * result means anything: **can the container construct the whole graph?**
+ */
+describe('the application boots', () => {
+  it('resolves every provider in the real module graph', async () => {
+    process.env.GLOS_PERSIST = 'off'; // a boot check must not write to disk
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    expect(moduleRef).toBeDefined();
+    await moduleRef.close();
+  }, 60_000);
+});

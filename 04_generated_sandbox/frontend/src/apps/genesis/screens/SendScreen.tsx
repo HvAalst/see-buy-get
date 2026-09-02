@@ -2,7 +2,7 @@ import { useState } from 'preact/hooks';
 import { Button, Card, Checklist, ErrorNote, Icon, Note, PlaceMap, Pill, ReadAloud, ShopDetailSheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { fromPlaceWords } from '../../../shared/placewords';
-import { cleanPhone, dimsBlocker, journeyLine, lockedPrice, mintChecklist, money, phoneReady, pointDistance, pointLine, quoteSummary, reputationLine, selectablePoints, servingSince, sizeMeta, type Translate } from '../logic';
+import { cleanPhone, dimsBlocker, journeyLine, lockedPrice, mintChecklist, mintTaxLine, money, phoneReady, pointDistance, pointLine, quoteSummary, reputationLine, selectablePoints, servingSince, sizeMeta, taxLine, type Translate } from '../logic';
 import type { NetworkPoint } from '../types';
 import type { SendActions, SendState } from '../useSendApp';
 
@@ -286,6 +286,9 @@ function QuoteStep({ state, actions }: SendScreenProps) {
               <span class="price__title">{t('send.quote.priceTitle')}</span>
               <span class="price__total">{money(lockedPrice(q, t).total)}</span>
               <span class="price__sub">{lockedPrice(q, t).sub}</span>
+              {/* The tax the price already contains — named, never added on at the end. Rendered only when
+                  there is one, which today is nowhere: a line reading zero is noise on a receipt. */}
+              {taxLine(q, t) ? <span class="price__sub">{taxLine(q, t)}</span> : null}
             </div>
           </div>
 
@@ -386,6 +389,7 @@ function BookStep({ state, actions }: SendScreenProps) {
             <b>{money(lockedPrice(q, t).total)}</b>
           </div>
         ) : null}
+        {q && taxLine(q, t) ? <p class="card__note">{taxLine(q, t)}</p> : null}
       </Card>
 
       {state.mintError ? <ErrorNote error={state.mintError} /> : null}
@@ -461,6 +465,9 @@ function DoneStep({ state, actions }: SendScreenProps) {
           <span>{t('send.youPay')}</span>
           <b>{money(m.price.total)}</b>
         </div>
+        {/* From the PARCEL's own price, not from a fresh quote — this is a receipt, and it must show the
+            tax this shipment was actually sold with even if the rate has moved since. */}
+        {mintTaxLine(m.price, t) ? <p class="card__note">{mintTaxLine(m.price, t)}</p> : null}
       </Card>
 
       <div class="scr__cta">

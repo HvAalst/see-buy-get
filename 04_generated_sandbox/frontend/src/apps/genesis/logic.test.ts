@@ -9,6 +9,8 @@ import {
   journeyLine,
   ladderIndex,
   lockedPrice,
+  mintTaxLine,
+  taxLine,
   mapsHref,
   mintChecklist,
   money,
@@ -57,8 +59,9 @@ const quote = (over: Partial<QuoteView> = {}): QuoteView => ({
   size: 'M',
   perKm: { min: 0.2, max: 0.5 },
   platformFeePct: 10,
-  flexible: { transport: 4, base: 6, total: 6.6 },
-  locked: { transport: 2, base: 4, total: 4.4 },
+  // Untaxed, which is every sister until an operator says otherwise: gross IS the net, to the cent.
+  flexible: { transport: 4, base: 6, total: 6.6, tax: 0, gross: 6.6 },
+  locked: { transport: 2, base: 4, total: 4.4, tax: 0, gross: 4.4 },
   ...over,
 });
 
@@ -120,6 +123,30 @@ describe('REP1 reputation display', () => {
 describe('quote presentation', () => {
   it('the ONE price shown is the locked (cheapest) leg — what a booked send actually costs', () => {
     expect(lockedPrice(quote(), t).total).toBe(4.4);
+  });
+
+  it('shows the GROSS, because that is the cash handed over at the shop', () => {
+    // The figure on the card is the figure the mint consents against and the counter collects. Showing the
+    // net would advertise one price and take another the moment any sister charges tax.
+    const taxed = quote({ locked: { transport: 2, base: 4, total: 4.4, tax: 0.7, gross: 5.1 }, tax: { ratePct: 0.16, label: 'VAT' } });
+    expect(lockedPrice(taxed, t).total).toBe(5.1);
+    expect(quoteSummary(taxed, t)).toContain('5.10');
+  });
+
+  it('names the tax inside the price, and says nothing at all when there is none', () => {
+    // "Includes", never "plus" — the price already contains it. And a line reading zero is noise on a
+    // receipt: an untaxed sale shows a price, full stop.
+    const taxed = quote({ locked: { transport: 2, base: 4, total: 4.4, tax: 0.7, gross: 5.1 }, tax: { ratePct: 0.16, label: 'VAT' } });
+    expect(taxLine(taxed, t)).toBe('Includes VAT 0.70');
+    expect(taxLine(quote(), t)).toBeNull();
+    // A sister that charges but never named its tax still gets an honest word for it.
+    expect(taxLine(quote({ locked: { transport: 2, base: 4, total: 4.4, tax: 0.7, gross: 5.1 } }), t)).toBe('Includes tax 0.70');
+  });
+
+  it('reads a receipt’s tax off the PARCEL, so it survives a rate change', () => {
+    expect(mintTaxLine({ tax: 0.7, taxLabel: 'VAT' }, t)).toBe('Includes VAT 0.70');
+    expect(mintTaxLine({ tax: 0 }, t)).toBeNull();
+    expect(mintTaxLine({}, t)).toBeNull(); // a parcel minted before tax existed carried none
   });
 
   it('journeyLine names every hop', () => {
