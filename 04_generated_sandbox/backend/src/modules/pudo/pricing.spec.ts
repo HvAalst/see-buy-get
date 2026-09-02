@@ -68,6 +68,21 @@ describe('what carrying a bag is worth', () => {
   });
 });
 
+describe('the platform’s take on a freight', () => {
+  it('uses the selling sister’s rate when there is one', () => {
+    // Freight is the DEDICATED lane — where a specialised vehicle is bought and where profit-on-risk is
+    // actually earned. It charged the bare network constant until the knobs existed, which would have made
+    // the dedicated knob decorative.
+    expect(shipperCharge(100, 0.09)).toBe(109);
+  });
+
+  it('falls back to the network default for a load with no seller', () => {
+    // A counter-booked cash freight settles off-platform: nobody is billed, so there is no selling sister
+    // whose rate could apply. The default is the honest answer rather than a guess at somebody's rate.
+    expect(shipperCharge(100)).toBe(withPlatformFee(100));
+  });
+});
+
 describe('the factor a parcel was SOLD at (durability)', () => {
   it('uses the stamped factor, not today’s constant', () => {
     // The flexible rebate recomputes a parcel's real cost at DELIVERY. Retuning the network constant while

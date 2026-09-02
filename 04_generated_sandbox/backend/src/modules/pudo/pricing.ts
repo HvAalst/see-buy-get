@@ -127,8 +127,15 @@ export function computeToteHaul(input: { ratePerKm: number; tripKm: number; unit
   return { tripKm, ratePerKm, units, road: round2(tripKm * Math.max(0, ratePerKm) * units) };
 }
 
-/** What the SHIPPER pays = the driver's earning + the platform fee (the same 2% daughter-co margin the
- *  parcel side applies via withPlatformFee). The driver receives `driverTotal`; the platform keeps the fee. */
-export function shipperCharge(driverTotal: number): number {
-  return withPlatformFee(driverTotal);
+/**
+ * What the SHIPPER pays = the driver's earning + the platform's take. The driver receives `driverTotal`.
+ *
+ * `pct` is the SELLING SISTER's rate for the dedicated lane — the same three-layer stack the parcel side
+ * resolves, and the reason the dedicated knob is not decorative: freight is where a specialised vehicle is
+ * bought and where profit-on-risk is actually earned. Omitted falls back to the network default, which is
+ * the honest answer for a load with no sister on it (a counter-booked cash freight settles off-platform,
+ * so nobody is billed and there is no seller to have a rate).
+ */
+export function shipperCharge(driverTotal: number, pct?: number): number {
+  return withPlatformFee(driverTotal, pct);
 }

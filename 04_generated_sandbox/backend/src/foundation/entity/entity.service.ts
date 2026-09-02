@@ -4,7 +4,7 @@ import { PersistentMap } from '../store/persistent-map';
 import { DidService } from '../did/did.service';
 import { currencyForJurisdiction } from '../money/currency';
 import { MAX_PLATFORM_FEE_PCT, MIN_PLATFORM_FEE_PCT, PLATFORM_FEE_PCT } from '../../modules/pudo/pudo.config';
-import { Entity, canHoldCustody, canTransact } from './entity.types';
+import { Entity, RateStack, ResolvedRates, canHoldCustody, canTransact } from './entity.types';
 
 /**
  * The group and its sisters, seeded at boot.
@@ -124,7 +124,94 @@ export class EntityService implements OnApplicationBootstrap {
 
   /** The margin this sister charges, falling back to the network default for one that never set it. */
   feePctOf(entityId: string): number {
-    return this.get(entityId).feePct ?? PLATFORM_FEE_PCT;
+    return this.ratesFor(entityId).totalPct;
+  }
+
+  /**
+   * The three layers this sister prices with, for one lane of work.
+   *
+   * Resolution runs narrow to wide, and every step is a state some sister is genuinely in: the override
+   * for this lane, then the sister's own default stack, then the single `feePct` it may have set before
+   * there were layers — read as its MARGIN, which is what that number always was — then the network
+   * default. A sister that has never touched any of it prices exactly as it did yesterday.
+   *
+   * Layers are resolved INDEPENDENTLY rather than as a whole object: a sister that sets a cost of risk on
+   * dedicated freight and nothing else should keep its own margin, not fall back to the network's because
+   * one field of the override was empty.
+   */
+  ratesFor(entityId: string, lane?: string): ResolvedRates {
+    return EntityService.resolveRates(this.get(entityId), lane);
+  }
+
+  /** The resolution itself, over a plain shape — so a CANDIDATE can be checked before anything is stored. */
+  static resolveRates(from: Pick<Entity, 'rates' | 'ratesByLane' | 'feePct'>, lane?: string): ResolvedRates {
+    const forLane = lane ? from.ratesByLane?.[lane] : undefined;
+    const pick = (of: (s: RateStack) => number | undefined): number | undefined => {
+      const narrow = forLane ? of(forLane) : undefined;
+      return narrow != null ? narrow : from.rates ? of(from.rates) : undefined;
+    };
+    const costOfRiskPct = pick((s) => s.costOfRiskPct) ?? 0;
+    const profitOnRiskPct = pick((s) => s.profitOnRiskPct) ?? 0;
+    // Margin alone has the two extra fallbacks, because margin is what the old single knob always meant.
+    const marginPct = pick((s) => s.marginPct) ?? from.feePct ?? PLATFORM_FEE_PCT;
+    const round4 = (n: number) => Math.round(n * 10_000) / 10_000;
+    return {
+      costOfRiskPct: round4(costOfRiskPct),
+      profitOnRiskPct: round4(profitOnRiskPct),
+      marginPct: round4(marginPct),
+      totalPct: round4(costOfRiskPct + profitOnRiskPct + marginPct), // ADDED, never compounded
+    };
+  }
+
+  /**
+   * Turn one or more of a sister's knobs, for a lane or for everything it does.
+   *
+   * Only the layers actually named are changed — turning the cost-of-risk knob must not silently reset a
+   * margin somebody set last month. Passing `null` for a layer clears it back to the fallback, which is a
+   * different intention from leaving it alone and needs to be sayable.
+   *
+   * Bounded twice over: each layer on its own, and their SUM, so three innocent-looking numbers cannot
+   * add up to a rate that prices a market out of existence.
+   */
+  setRates(entityId: string, input: { lane?: string; costOfRiskPct?: number | null; profitOnRiskPct?: number | null; marginPct?: number | null }): Entity {
+    const entity = this.requireTransacting(entityId);
+    const apply = (into: RateStack): RateStack => {
+      const next = { ...into };
+      for (const key of ['costOfRiskPct', 'profitOnRiskPct', 'marginPct'] as const) {
+        const v = input[key];
+        if (v === undefined) continue; // not mentioned — leave whatever is there
+        if (v === null) {
+          delete next[key]; // explicitly cleared, back to the fallback
+          continue;
+        }
+        if (!Number.isFinite(v) || v < MIN_PLATFORM_FEE_PCT || v > MAX_PLATFORM_FEE_PCT) {
+          throw new GlosError('INVALID_INPUT', `Each rate must be between ${MIN_PLATFORM_FEE_PCT * 100}% and ${MAX_PLATFORM_FEE_PCT * 100}%`);
+        }
+        next[key] = Math.round(v * 10_000) / 10_000; // basis points is as fine as a rate needs to be
+      }
+      return next;
+    };
+
+    // Built as a CANDIDATE and checked before anything is stored. Validating a record we had already
+    // mutated would leave a rejected rate sitting in memory until the next reload — the change would be
+    // refused and applied at the same time.
+    const rates = input.lane ? entity.rates : apply(entity.rates ?? {});
+    const ratesByLane = input.lane ? { ...(entity.ratesByLane ?? {}), [input.lane]: apply(entity.ratesByLane?.[input.lane] ?? {}) } : entity.ratesByLane;
+
+    // The ceiling is on the figure the customer would actually be charged, which is only knowable once the
+    // fallbacks have had their say — three empty-looking overrides can still resolve to a real total.
+    const resolved = EntityService.resolveRates({ rates, ratesByLane, feePct: entity.feePct }, input.lane);
+    if (resolved.totalPct > MAX_PLATFORM_FEE_PCT) {
+      throw new GlosError(
+        'INVALID_INPUT',
+        `Those rates come to ${Math.round(resolved.totalPct * 1000) / 10}%, over the ${MAX_PLATFORM_FEE_PCT * 100}% ceiling. They ADD UP — they do not compound.`,
+      );
+    }
+
+    entity.rates = rates;
+    entity.ratesByLane = ratesByLane;
+    this.entities.set(entity.entityId, entity);
+    return entity;
   }
 
   /**

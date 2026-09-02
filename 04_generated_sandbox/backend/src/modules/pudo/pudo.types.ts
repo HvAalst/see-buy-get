@@ -593,6 +593,16 @@ export class Parcel {
   /** The margin RATE this parcel was priced at, stamped at mint. The sister can turn its knob at any
    *  time; a parcel in transit must settle on the rate its price was quoted with, not on today's. */
   platformFeePct?: number;
+  /**
+   * The three layers that rate was made of, stamped at mint.
+   *
+   * `platformFeePct` alone says what was charged; this says WHY, and it is the only way to ask afterwards
+   * whether a month was profitable because the market was good or because risk was priced into it. A
+   * sister turning a knob tomorrow must not be able to rewrite the answer for shipments already sold —
+   * the same durability rule the rate itself follows. Absent on records written before the layers existed,
+   * whose whole rate was margin by definition.
+   */
+  rateStack?: { costOfRiskPct: number; profitOnRiskPct: number; marginPct: number };
   /** The SIZE FACTOR its transport was quoted at, stamped at mint for the same reason. A network constant
    *  today, but one that will be retuned — and the flexible rebate recomputes the real cost at delivery,
    *  so an unstamped factor would re-price parcels already sold. Absent on records written before this

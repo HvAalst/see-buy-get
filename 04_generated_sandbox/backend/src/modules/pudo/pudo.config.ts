@@ -3,6 +3,7 @@ import { isPackaging, type Packaging } from './packaging';
 // placeholder for the admin-editable config service the playbook mandates (Risk #55).
 
 import { ParcelSize } from './pudo.types';
+import { CargoLane } from './cargo.types';
 import { currencyForJurisdiction } from '../../foundation/money/currency';
 
 export const WHOLESALE = 1.6; // credit the platform consumes per shipped parcel
@@ -98,10 +99,21 @@ export const BORDER_DWELL_H = 4;
 export const QUOTE_TTL_MIN = 60;
 export const round2cfg = round2;
 
-/** Apply the platform margin to a base provider cost. */
+/** Apply the platform's take to a base provider cost. `pct` is the SUM of the seller's three layers. */
 export function withPlatformFee(base: number, pct: number = PLATFORM_FEE_PCT): number {
   return round2(base * (1 + pct));
 }
+
+/**
+ * The handling lane a counter SIZE ends up on — the bridge between the two vocabularies.
+ *
+ * Sizes are what a shopkeeper says; classes and lanes are what the system routes on. The map is
+ * deliberately coarse and derived from SIZE_LIMITS against CARGO_CLASSES: S and M fit the PUDO classes,
+ * L and HEAVY need a hub to sort them. Note what is NOT here — `dedicated`. Anything over
+ * MAX_PARCEL_KG stops being a parcel at all and becomes freight, which is priced on its own path, so no
+ * parcel size can ever resolve to the dedicated lane. That is a fact about the network, not an omission.
+ */
+export const SIZE_LANE: Record<ParcelSize, CargoLane> = { S: 'pudo', M: 'pudo', L: 'mdp', HEAVY: 'mdp' };
 
 // The margin is a KNOB each sister sets for its own market, not a constant of the network — the rate
 // above is only the default a new sister starts on. Bounded so a mistyped rate cannot price a market out

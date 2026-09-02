@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+﻿import { Inject, Injectable } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
 import { AgentService } from './agent.service';
 import { ShelfService } from './shelf.service';
@@ -7,8 +7,9 @@ import { MdpService } from './mdp.service';
 import { VehicleService } from './vehicle.service';
 import { Router, ROUTER } from './router';
 import { isOpenAt, nextOpenAt } from './hours';
-import { BORDER_DWELL_H, DISPATCH_BUFFER_H, HANDOVER_BUFFER_H, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, VEHICLE_SPEED_KMH, withPlatformFee } from './pudo.config';
+import { BORDER_DWELL_H, DISPATCH_BUFFER_H, HANDOVER_BUFFER_H, SIZE_LANE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, VEHICLE_SPEED_KMH, withPlatformFee } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
+import { ResolvedRates } from '../../foundation/entity/entity.types';
 import { currencyForJurisdiction } from '../../foundation/money/currency';
 import { FX_QUOTE_TTL_MIN, FxRate, FxService } from '../../foundation/money/fx.service';
 import { BorderCrossing, crossingsOn } from './country';
@@ -21,7 +22,17 @@ export interface NodePick {
   distanceKm?: number;
 }
 
-export interface QuoteLeg { transport: number; base: number; total: number; }
+/**
+ * One priced outcome: what the work cost, what the platform takes, and the sum.
+ *
+ * `fee` is stated rather than left as `total − base`. A merchant reconciling their books needs the
+ * platform's take as a line the way they get one from any other platform they pay; derivable is not the
+ * same as stated, and every other component of this quote is named.
+ *
+ * `total` is NET OF TAX. Nothing in this system computes tax yet — when it does, it is the next layer on
+ * top of this figure and arrives as its own field beside it, never folded into this one.
+ */
+export interface QuoteLeg { transport: number; base: number; fee: number; total: number; }
 /**
  * A stop on the journey + its open-data fee, the sister company owed that fee, and what it is owed IN.
  *
@@ -60,7 +71,16 @@ export interface ShipmentQuote {
   size: ParcelSize;
   transportFactor: number;
   perKm: { min: number; max: number };
+  /** What the platform takes, as a fraction — the SUM of the seller's three layers. */
   platformFeePct: number;
+  /**
+   * The three layers behind that one number — INTERNAL.
+   *
+   * For seeing how the business is doing and for deciding: a sister earning well cannot otherwise tell
+   * whether it is because the market is good or because it is carrying risk nobody is paying for. Never
+   * shown to a buyer, who sees a price; a merchant sees `fee`, one line, like any platform they pay.
+   */
+  rates: ResolvedRates;
   flexible: QuoteLeg;
   locked: QuoteLeg;
 }
@@ -169,7 +189,11 @@ export class RoutingService {
     // performs the whole journey, so the origin node's rate is that company's; when a route crosses a
     // border the COLLECTING sister's rate is the one that should apply, per R1 — revisit it there.
     const sellerId = sellerEntityId ?? stops[0]?.entityId ?? entityIds[0];
-    const feePct = this.entities.feePctOf(sellerId);
+    // The seller's three layers for THIS KIND of work. A letter through the shop network and a dedicated
+    // truck haul are different businesses carrying different risk, and a sister can now say so. The lane
+    // comes from the size's own class, so nothing new has to be declared to get the right rate.
+    const stack = this.entities.ratesFor(sellerId, SIZE_LANE[size]);
+    const feePct = stack.totalPct;
 
     // ONE CURRENCY, NAMED. The seller quotes in its own money and every figure below is summed into it, so
     // a stop paid in another currency is CONVERTED here — at a stated rate, from a rate book that says
@@ -210,10 +234,18 @@ export class RoutingService {
     // reported rather than charged for: a crossing costs time and paperwork that this quote does NOT yet
     // price or schedule. Saying which leg crosses is what makes that gap addressable instead of invisible.
     const crossings = crossingsOn(plan.hops);
-    const leg = (rate: number) => { const t = transport(rate); const base = Math.round((nodeFees + t) * 100) / 100; return { transport: t, base, total: withPlatformFee(base, feePct) }; };
+    // The fee is derived from the two figures rather than computed a second way, so `base + fee === total`
+    // holds exactly — a rounding difference between a stated line and the total it belongs to is the kind
+    // of penny a merchant reconciles for an hour and never forgives.
+    const leg = (rate: number): QuoteLeg => {
+      const t = transport(rate);
+      const base = Math.round((nodeFees + t) * 100) / 100;
+      const total = withPlatformFee(base, feePct);
+      return { transport: t, base, fee: Math.round((total - base) * 100) / 100, total };
+    };
     return {
       hops: plan.hops, nodes, legs, entityIds, sellerEntityId: sellerId, currency, fx, crossesBorder: crossings.length > 0, crossings,
-      totalKm, nodeFees, size, transportFactor: factor, perKm: { min, max }, platformFeePct: feePct,
+      totalKm, nodeFees, size, transportFactor: factor, perKm: { min, max }, platformFeePct: feePct, rates: stack,
       flexible: leg(max), locked: leg(min),
     };
   }

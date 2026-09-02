@@ -31,7 +31,7 @@ import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
-import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DerivedLegDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityFeeDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
+import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DerivedLegDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityFeeDto, EntityRatesDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
 import { classifySize, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { BooksService } from '../../foundation/books/books.service';
@@ -245,6 +245,32 @@ export class SbgController {
   @Post('entities/:entityId/fee')
   setEntityFee(@Param('entityId') entityId: string, @Body() dto: EntityFeeDto) {
     return this.entities.setFeePct(entityId, dto.feePct);
+  }
+
+  /**
+   * Turn a sister's rate knobs — cost of risk, profit on risk, margin — for one lane of work or for
+   * everything it does.
+   *
+   * Three layers rather than one number because they answer different questions, and blended they answer
+   * none: a sister earning well cannot otherwise tell whether the market is good or whether it is carrying
+   * risk nobody is paying for. They ADD, they do not compound, and their sum is bounded so three
+   * innocent-looking numbers cannot price a market out of existence.
+   *
+   * Operator-gated for now, like the knob above. When sisters get their own administration this is one of
+   * the endpoints it owns — scoped to its own entity — and a group-level console reads them side by side.
+   */
+  @Roles('operator')
+  @Post('entities/:entityId/rates')
+  setEntityRates(@Param('entityId') entityId: string, @Body() dto: EntityRatesDto) {
+    return this.entities.setRates(entityId, dto);
+  }
+
+  /** What this sister actually charges for a lane of work, with the three layers stated. Operator-only:
+   *  the split is for running the business, never for a customer. */
+  @Roles('operator')
+  @Get('entities/:entityId/rates')
+  entityRates(@Param('entityId') entityId: string, @Query('lane') lane?: string) {
+    return { entityId, lane: lane ?? null, ...this.entities.ratesFor(entityId, lane) };
   }
 
   /**

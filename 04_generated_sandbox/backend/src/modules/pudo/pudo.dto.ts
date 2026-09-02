@@ -1,11 +1,11 @@
-import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsIn, IsNumber, IsObject, IsOptional, IsString, Matches, Max, Min, ValidateNested } from 'class-validator';
+import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsIn, IsNumber, IsObject, IsOptional, IsString, Matches, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { DRIVER_ISSUES, DriverIssue } from './rating.service';
 import { TRUCK_SUBTYPES } from './fleet.config';
 import { PACKAGING, type Packaging } from './packaging';
 import { MEDIA_KINDS, MediaKind } from './media.types';
-import { CARGO_NATURES, CargoNature, EQUIPMENT, Equipment } from './cargo.types';
+import { CARGO_LANES, CARGO_NATURES, CargoLane, CargoNature, EQUIPMENT, Equipment } from './cargo.types';
 
 /** F1 — a scheduled pickup instant must be a full datetime WITH a timezone offset (Z or ±HH:MM), so the
  *  moment is unambiguous — a date-only or offset-less string would resolve to a server-timezone-dependent
@@ -499,6 +499,24 @@ export class SealBagDto {
 /** A sister's own margin, as a fraction (0.02 = 2%). Bounds are enforced in the service. */
 export class EntityFeeDto {
   @IsNumber() feePct!: number;
+}
+
+/**
+ * Turn one or more of a sister's three rate knobs, for one lane of work or for everything it does.
+ *
+ * Every layer is OPTIONAL and they mean three different things: absent = leave it alone, a number = set
+ * it, `null` = clear it back to the fallback. Turning the cost-of-risk knob must not silently reset a
+ * margin somebody set last month, and "back to default" has to be sayable without guessing a value.
+ */
+export class EntityRatesDto {
+  /** Which kind of work this applies to. Omitted = the sister's default for everything. */
+  @IsOptional() @IsIn(CARGO_LANES) @ApiPropertyOptional({ enum: CARGO_LANES }) lane?: CargoLane;
+  /** What carrying the exposure costs — an insurance premium, or the provision standing in for one. */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsNumber() costOfRiskPct?: number | null;
+  /** What the sister earns for choosing to carry it — where a specialised vehicle pays itself back. */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsNumber() profitOnRiskPct?: number | null;
+  /** The general company layer, on everything. */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsNumber() marginPct?: number | null;
 }
 
 /** Control-tower reissue of a burned release secret; `by` names the human behind the operator token. */

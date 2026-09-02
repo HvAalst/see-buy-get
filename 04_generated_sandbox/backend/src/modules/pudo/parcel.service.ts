@@ -1083,6 +1083,9 @@ export class ParcelService implements OnApplicationBootstrap {
       transportCost: chosen.transport,
       platformFee,
       platformFeePct: quote.platformFeePct, // the rate quoted, locked to this parcel
+      // …and what that rate was MADE of, for the same reason: a knob turned tomorrow must not rewrite
+      // why a shipment sold today was priced as it was.
+      rateStack: { costOfRiskPct: quote.rates.costOfRiskPct, profitOnRiskPct: quote.rates.profitOnRiskPct, marginPct: quote.rates.marginPct },
       // …and the size factor the transport was quoted at, for exactly the same reason. It is a network
       // constant today, but it is one somebody will retune — and the flexible rebate RE-COMPUTES this
       // parcel's real cost at delivery. Unstamped, retuning it would silently re-price every parcel
@@ -1195,6 +1198,9 @@ export class ParcelService implements OnApplicationBootstrap {
       transportCost: chosen.transport,
       platformFee: Math.round((chosen.total - chosen.base) * 100) / 100,
       platformFeePct: quote.platformFeePct, // the rate quoted, locked to this parcel
+      // …and what that rate was MADE of, for the same reason: a knob turned tomorrow must not rewrite
+      // why a shipment sold today was priced as it was.
+      rateStack: { costOfRiskPct: quote.rates.costOfRiskPct, profitOnRiskPct: quote.rates.profitOnRiskPct, marginPct: quote.rates.marginPct },
       // …and the size factor the transport was quoted at, for exactly the same reason. It is a network
       // constant today, but it is one somebody will retune — and the flexible rebate RE-COMPUTES this
       // parcel's real cost at delivery. Unstamped, retuning it would silently re-price every parcel

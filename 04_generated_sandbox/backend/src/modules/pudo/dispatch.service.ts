@@ -27,7 +27,8 @@ import { MediaService } from './media.service';
 import { MarketPulseStore } from './market-pulse.store';
 import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, toteCapacityOf, VEHICLE_SPEC } from './fleet.config';
 import { Router, ROUTER } from './router';
-import { DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NUDGE_RADIUS_KM, OFFER_TTL_MIN, TOTE_LOAD_FEE, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
+import { DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NUDGE_RADIUS_KM, OFFER_TTL_MIN, PLATFORM_FEE_PCT, TOTE_LOAD_FEE, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
+import { EntityService } from '../../foundation/entity/entity.service';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
 import { BoardRow, Claimable, ClaimableKind, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, MarketRow, MarketSeries, Offer, PostedFreightRow, RoutePlan } from './dispatch.types';
@@ -201,6 +202,9 @@ export class DispatchService {
     private readonly market: MarketPulseStore,
     private readonly media: MediaService,
     private readonly ratings: RatingService,
+    // For the selling sister's rate on a dedicated haul — the lane where a specialised vehicle is bought
+    // and where profit-on-risk is actually earned.
+    private readonly entities: EntityService,
     @Inject(ROUTER) private readonly router: Router,
   ) {
     this.freightSeq = [...this.freights.values()].length; // continue the human FRT-NNN sequence after a restart
@@ -403,7 +407,7 @@ export class DispatchService {
       ) {
         // A no-show: reserved ahead, but not picked up by the pickup date + grace → free it + undo the charge.
         if (f.paidStatus === 'billed' && f.shipperDid && this.vendors.has(f.shipperDid)) {
-          this.vendors.rebate(f.shipperDid, f.freightId, shipperCharge(f.lockedPrice ?? 0), 'freight no-show release');
+          this.vendors.rebate(f.shipperDid, f.freightId, shipperCharge(f.lockedPrice ?? 0, this.freightFeePct(f)), 'freight no-show release');
         }
         f.status = 'available';
         f.scheduledPickupAt = undefined; // its date has passed — it's now a plain ship-now load: no stale gate, no 'scheduled' timeline, and this loop skips it forever after (so it can never no-show-release twice)
@@ -505,7 +509,7 @@ export class DispatchService {
       // whose all-in charge would exceed what the shipper agreed to pay (a cheaper vehicle may still get it);
       // (2) the driver's own minimum-earning filter. Both apply to freight only (totes settle on a different model).
       if (price && load.kind === 'freight') {
-        if (load.maxSpend != null && shipperCharge(price.total) > load.maxSpend) continue;
+        if (load.maxSpend != null && shipperCharge(price.total, this.freightFeePctFor(load.ref)) > load.maxSpend) continue;
         if (floor != null && price.total < floor) continue;
       }
       out.push(this.makeOffer(driverDid, load, { detour, minutesAway, price, ratePerKm: profile.ratePerKm, time: this.timeCost(vehicle, route, load), now }));
@@ -616,7 +620,7 @@ export class DispatchService {
           })
         : undefined;
       if (price && load.kind === 'freight') {
-        if (load.maxSpend != null && shipperCharge(price.total) > load.maxSpend) continue;
+        if (load.maxSpend != null && shipperCharge(price.total, this.freightFeePctFor(load.ref)) > load.maxSpend) continue;
         if (floor != null && price.total < floor) continue;
       }
       // No declared road here — this is the "near me" search, where there is no "on the way" to be extra to.
@@ -655,7 +659,7 @@ export class DispatchService {
         })
       : undefined;
     // The shipper's budget still binds — an interruption offering a price nobody will pay is worse than silence.
-    if (price && load.kind === 'freight' && load.maxSpend != null && shipperCharge(price.total) > load.maxSpend) return null;
+    if (price && load.kind === 'freight' && load.maxSpend != null && shipperCharge(price.total, this.freightFeePctFor(load.ref)) > load.maxSpend) return null;
 
     return this.makeOffer(driverDid, load, { detour: Math.round(best.km * 10) / 10, minutesAway: this.minutes(point, load.pickupLocation), price, ratePerKm: profile.ratePerKm, time: this.timeCost(vehicle, { from: point }, load), now });
   }
@@ -812,7 +816,7 @@ export class DispatchService {
     // re-coupled to a pricier vehicle (or a surge) after the offer was made (the S31 mirror-at-claim lesson).
     // FB0c — it binds a NEGOTIATED price just as hard: agreeing above the budget would commit a haul nobody
     // has the money for. The proposal stays open, so the shipper can raise the cap and accept it then.
-    if (f.maxSpend != null && shipperCharge(earning) > f.maxSpend) {
+    if (f.maxSpend != null && shipperCharge(earning, this.freightFeePct(f)) > f.maxSpend) {
       throw new GlosError('BUDGET_EXCEEDED', "This load's price now exceeds the shipper's budget — it stays open for a cheaper vehicle or a cooler market");
     }
     f.status = 'claimed';
@@ -835,7 +839,7 @@ export class DispatchService {
     //  - 'unpaid'         a bulletin freight with no shipper, settled off-platform (the intended default).
     // The driver is still paid on delivery in every case — labour done is owed regardless of shipper collection.
     if (f.shipperDid && this.vendors.has(f.shipperDid)) {
-      const { paid } = this.vendors.billShipment(f.shipperDid, f.freightId, shipperCharge(earning));
+      const { paid } = this.vendors.billShipment(f.shipperDid, f.freightId, shipperCharge(earning, this.freightFeePct(f)));
       f.paidStatus = paid ? 'billed' : 'billing_failed';
     } else {
       f.paidStatus = 'unpaid';
@@ -906,7 +910,7 @@ export class DispatchService {
           indivisible: f.indivisible,
         },
         vehicle,
-        { remainingKg, ratingBelowFloor, indicativeCharge: price ? shipperCharge(price.total) : undefined },
+        { remainingKg, ratingBelowFloor, indicativeCharge: price ? shipperCharge(price.total, this.freightFeePct(f)) : undefined },
       );
       rows.push({
         freightId: f.freightId,
@@ -1221,6 +1225,31 @@ export class DispatchService {
     const toteKg = this.totes.list().filter((t) => t.claimedBy === driverDid && (t.status === 'claimed' || t.status === 'in_transit')).reduce((s, t) => s + t.weightKg, 0);
     const freightKg = [...this.freights.values()].filter((f) => f.claimedBy === driverDid && (f.status === 'claimed' || f.status === 'in_transit')).reduce((s, f) => s + f.weightKg, 0);
     return Math.round((vehicle.capacityKg - toteKg - freightKg) * 100) / 100;
+  }
+
+  /**
+   * The platform's take on THIS freight — the selling sister's dedicated-lane stack.
+   *
+   * One helper, used by every gate and by the billing, because they must not disagree: a load that passed
+   * a budget check at one rate and then billed at another would overshoot a cap the shipper was promised.
+   *
+   * No sister where there is no shipper — a counter-booked cash freight settles off-platform, so nobody is
+   * billed and there is no seller whose rate could apply. Falls back rather than throwing for the same
+   * reason everywhere else does: a pricing lookup must never be what stops a load being offered.
+   */
+  private freightFeePct(f?: { shipperDid?: string }): number {
+    if (!f?.shipperDid) return PLATFORM_FEE_PCT;
+    try {
+      return this.entities.ratesFor(this.vendors.entityIdOf(this.vendors.get(f.shipperDid)), 'dedicated').totalPct;
+    } catch {
+      return PLATFORM_FEE_PCT;
+    }
+  }
+
+  /** The same rate, from a load's ref — for the gates, which hold a Claimable. `shipperDid` deliberately
+   *  does NOT ride on Claimable: that shape reaches drivers, and who pays is not a driver's business. */
+  private freightFeePctFor(ref: string): number {
+    return this.freightFeePct(this.freights.get(ref));
   }
 
   /** How many BAGS this vehicle holds (the shared pure helper — see fleet.config toteCapacityOf). */

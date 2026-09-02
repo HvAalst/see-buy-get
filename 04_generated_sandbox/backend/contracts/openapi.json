@@ -3928,6 +3928,73 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/rates": {
+      "post": {
+        "operationId": "Sbg.setEntityRates",
+        "summary": "",
+        "description": "Turn a sister's rate knobs — cost of risk, profit on risk, margin — for one lane of work or for\neverything it does.\n\nThree layers rather than one number because they answer different questions, and blended they answer\nnone: a sister earning well cannot otherwise tell whether the market is good or whether it is carrying\nrisk nobody is paying for. They ADD, they do not compound, and their sum is bounded so three\ninnocent-looking numbers cannot price a market out of existence.\n\nOperator-gated for now, like the knob above. When sisters get their own administration this is one of\nthe endpoints it owns — scoped to its own entity — and a group-level console reads them side by side.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityRatesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Entity"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "Sbg.entityRates",
+        "summary": "",
+        "description": "What this sister actually charges for a lane of work, with the three layers stated. Operator-only:\n the split is for running the business, never for a customer.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lane",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/entities/{entityId}/rate-impact": {
       "get": {
         "operationId": "Sbg.entityRateImpact",
@@ -13216,7 +13283,15 @@
           },
           "feePct": {
             "type": "number",
-            "description": "The margin this sister charges on top of provider costs, as a fraction (0.02 = 2%). A knob each\nmarket turns for itself rather than a constant of the network — Nairobi and Amsterdam do not have to\nprice alike. Absent means \"the network default\"; read it through EntityService.feePctOf(), never\noff the record, so a sister created before the knob existed still answers."
+            "description": "The margin this sister charges on top of provider costs, as a fraction (0.02 = 2%). A knob each\nmarket turns for itself rather than a constant of the network — Nairobi and Amsterdam do not have to\nprice alike. Absent means \"the network default\"; read it through EntityService.feePctOf(), never\noff the record, so a sister created before the knob existed still answers.\n\nSUPERSEDED BY `rates` and kept as its input: a sister that only ever set this one number is read as\nhaving set that number as its MARGIN. It is not migrated on write, because a value that rewrites\nitself the first time anything reads it makes the record's history unreadable."
+          },
+          "rates": {
+            "type": "object",
+            "description": "What this sister charges, in the three layers a business actually decides separately.\n\nOne blended percentage cannot answer \"are we earning because the market is good, or because we are\ncarrying risk nobody is paying us for?\" — and that is the question the knobs exist to answer."
+          },
+          "ratesByLane": {
+            "type": "object",
+            "description": "Per-lane overrides, keyed by the CALLER'S vocabulary (today a CargoLane: pudo | mdp | dedicated).\n\nA plain string map because the lane taxonomy belongs to the pudo module and this is foundation — the\nbooks must not learn what a parcel is in order to hold a number. The caller validates the key; this\nonly ever validates the rates.\n\nAbsent lane → the sister's own `rates` → `feePct` as a margin → the network default. Four steps, each\none a real state some sister is in."
           },
           "parentEntityId": {
             "type": "string",
@@ -13233,6 +13308,35 @@
           "name",
           "createdAt"
         ]
+      },
+      "EntityRatesDto": {
+        "type": "object",
+        "properties": {
+          "lane": {
+            "type": "string",
+            "description": "Which kind of work this applies to. Omitted = the sister's default for everything.",
+            "enum": [
+              "pudo",
+              "mdp",
+              "dedicated"
+            ]
+          },
+          "costOfRiskPct": {
+            "type": "number",
+            "nullable": true,
+            "description": "What carrying the exposure costs — an insurance premium, or the provision standing in for one."
+          },
+          "profitOnRiskPct": {
+            "type": "number",
+            "nullable": true,
+            "description": "What the sister earns for choosing to carry it — where a specialised vehicle pays itself back."
+          },
+          "marginPct": {
+            "type": "number",
+            "nullable": true,
+            "description": "The general company layer, on everything."
+          }
+        }
       },
       "AvailabilityDto": {
         "type": "object",
@@ -13990,6 +14094,23 @@
           "platformFeePct": {
             "type": "number"
           },
+          "rateStack": {
+            "type": "object",
+            "properties": {
+              "costOfRiskPct": {
+                "required": true,
+                "type": "number"
+              },
+              "profitOnRiskPct": {
+                "required": true,
+                "type": "number"
+              },
+              "marginPct": {
+                "required": true,
+                "type": "number"
+              }
+            }
+          },
           "transportFactor": {
             "type": "number",
             "description": "The SIZE FACTOR its transport was quoted at, stamped at mint for the same reason. A network constant\n today, but one that will be retuned — and the flexible rebate recomputes the real cost at delivery,\n so an unstamped factor would re-price parcels already sold. Absent on records written before this\n field existed; read it through ParcelService.transportFactorOf, which falls back to the constant."
@@ -14104,6 +14225,7 @@
           "receiverMobile",
           "paymentMode",
           "status",
+          "rateStack",
           "acceptedAt",
           "scans"
         ]

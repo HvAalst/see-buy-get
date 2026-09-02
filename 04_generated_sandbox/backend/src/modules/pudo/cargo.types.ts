@@ -10,8 +10,9 @@
 export const CARGO_CLASS_CODES = ['P0', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6'] as const;
 export type CargoClass = (typeof CARGO_CLASS_CODES)[number];
 
-/** The handling lane a class is eligible for. */
-export type CargoLane = 'pudo' | 'mdp' | 'dedicated';
+/** The handling lane a class is eligible for. A runtime tuple so a DTO can `@IsIn` against it. */
+export const CARGO_LANES = ['pudo', 'mdp', 'dedicated'] as const;
+export type CargoLane = (typeof CARGO_LANES)[number];
 
 /** A commodity's primary cargo nature — the axis the incompatibility matrix and capability rules run on.
  *  A runtime tuple so a DTO can `@IsIn` against it (single source of truth). */
