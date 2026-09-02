@@ -25,9 +25,11 @@ declare const process: { env: Record<string, string | undefined> };
 
    `npm run build` loops the five over `scripts/build-all.mjs`.
 
-   Vite's root is the app directory itself, NOT `src/`. The 26 legacy vanilla pages
-   in `src/*.html` stay a pure http-server concern (npm start, port 4173) — Vite
-   never sees, serves, transforms or builds them.
+   Vite's root is the app directory itself, NOT `src/`. What still lives at `src/` root is
+   the OPERATOR's two consoles — pudo-tower and control-tower — hand-rolled vanilla pages
+   served by http-server (npm start, port 4173) and never seen, transformed or built by
+   Vite. The 26 legacy vanilla copies of the apps that used to sit beside them were deleted
+   once the PWAs superseded them; the towers stayed because nothing has replaced them yet.
    ========================================================================== */
 
 type AppSpec = {
@@ -286,9 +288,8 @@ export default defineConfig({
   ],
 
   build: {
-    // OUTSIDE src/ — `src` is also a generated-output tree (seo-build.mjs writes
-    // areas.html / area/*.html / sitemap.xml into it). An outDir inside src with
-    // emptyOutDir would delete legacy and SEO-generated pages.
+    // OUTSIDE src/, which is source and not a build target — an outDir inside it with
+    // emptyOutDir would delete the operator's tower pages along with the build.
     outDir: OUT_DIR,
     /**
      * Each app owns a LEAF of dist/, so emptying its own folder never touches another —
