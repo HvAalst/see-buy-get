@@ -27,7 +27,7 @@ import { DockService } from './dock.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { GazetteerGeocoder, GEOCODER } from './geocoder';
 import { HeuristicRouter, ROUTER } from './router';
-import { taxOn, WHOLESALE } from './pudo.config';
+import { coverFor, taxOn, WHOLESALE } from './pudo.config';
 import { DigitalTwinService } from '../m7/digital-twin.service';
 import { TrackingService } from '../m4/tracking.service';
 import { TrackingContextService } from '../m4/tracking-context.service';
@@ -411,6 +411,132 @@ describe('tax', () => {
       expect(provision()).toBe(6); // everything after the tax, and not a cent more
       expect(earned()).toBe(0);
       expect(books.balances(ke()).balanced).toBe(true);
+    });
+  });
+
+  /**
+   * Declared value and its premium — the half of item 8 that faces the customer.
+   *
+   * Cost of risk (above) is what the NETWORK sets aside out of its own fee. This is what a SHIPPER buys:
+   * a free limit the sister carries on everything, and a declared value above it that costs a premium.
+   * It is the piece that makes a damage award defensible, because until it existed the network's
+   * liability was undefined and an adjudicator had a number to type with nothing to check it against.
+   */
+  describe('declared value and the cover it buys', () => {
+    const provision = () => -books.balance(ke(), ACCOUNT_CODES.PROVISION_CLAIMS) || 0;
+    /** Walk a parcel to the destination shelf, where a counter dispute can legally be raised. */
+    function toShelf(parcelId: string, from: { did: string }, to: { did: string }) {
+      const driver = corridors.addDriver({ driverDid: `did:glos:cov${seq}`, name: 'D', corridorId: corridors.addCorridor({ name: `Cov${seq}`, originZone: 'Nairobi', destZone: 'Kisumu' }).corridorId });
+      parcels.intakeInbound(parcelId, from.did);
+      parcels.handover({ agentDid: from.did, driverBadgeId: driver.badgeId, parcelIds: [parcelId] });
+      parcels.shelve(parcelId, to.did);
+    }
+
+    /** 5,000 covered free, 2% on anything declared above it. */
+    const coverPolicy = () => entities.setInsurance(ke(), { freeLimit: 5000, premiumPct: 0.02 });
+
+    it('covers nothing until a sister says otherwise, and charges nothing either', () => {
+      const { from, to } = route();
+      expect(routing.quoteShipment(from.did, to.did).insurance).toEqual({ premiumPct: 0, freeLimit: 0 });
+    });
+
+    it('charges the premium only on the part that is NOT already covered', () => {
+      // Charging the whole declared value would bill somebody for cover they already had — the kind of
+      // small dishonesty nobody forgives twice.
+      coverPolicy();
+      const cover = coverFor({ declaredValue: 8000, premiumPct: 0.02, freeLimit: 5000 });
+      expect(cover.premium).toBe(60); // 2% of the 3,000 above the limit, not of 8,000
+      expect(cover.limit).toBe(8000);
+    });
+
+    it('treats the free limit as a FLOOR, not a swap — declaring less never reduces cover', () => {
+      const cover = coverFor({ declaredValue: 900, premiumPct: 0.02, freeLimit: 5000 });
+      expect(cover.limit).toBe(5000);
+      expect(cover.premium).toBe(0); // nothing to charge for: it was covered anyway
+    });
+
+    it('reads a merchant order’s SUBTOTAL as the declaration — nobody is asked what they already said', () => {
+      const { from, to, store } = route();
+      coverPolicy();
+      const { parcel } = parcels.createInbound({
+        vendorId: store.vendorId, originAgentDid: from.did, destAgentDid: to.did, buyerMobile: '+254700771',
+        contentPhotoRef: 'contents.jpg', size: 'M', shippingPolicy: store.shippingPolicy, subtotal: 9000,
+        quote: routing.quoteShipment(from.did, to.did),
+      });
+      expect(parcel.declaredValue).toBe(9000);
+      expect(parcel.coverLimit).toBe(9000);
+      expect(parcel.shipmentPremium).toBe(80); // 2% of the 4,000 above the free limit
+    });
+
+    it('bills the premium as its OWN line on top, and sets it aside rather than earning it', () => {
+      const { from, to, store } = route();
+      coverPolicy();
+      const bare = routing.quoteShipment(from.did, to.did).locked.gross;
+      const before = vendors.balanceOf(store.vendorId);
+      const { parcel } = parcels.createInbound({
+        vendorId: store.vendorId, originAgentDid: from.did, destAgentDid: to.did, buyerMobile: '+254700772',
+        contentPhotoRef: 'contents.jpg', size: 'M', shippingPolicy: store.shippingPolicy, subtotal: 6000,
+        quote: routing.quoteShipment(from.did, to.did),
+      });
+      expect(parcel.shipmentPremium).toBe(20); // 2% of 1,000
+      // The shipping price is untouched; the premium is added beside it, never hidden inside the fee.
+      expect(parcel.shipmentCost).toBe(Math.round((bare + 20) * 100) / 100);
+      expect(Math.round((before - vendors.balanceOf(store.vendorId)) * 100) / 100).toBe(parcel.shipmentCost);
+      // …and it is money held against a promise, not money earned for a service performed.
+      expect(provision()).toBe(20);
+      expect(books.balances(ke()).balanced).toBe(true);
+    });
+
+    it('CAPS an upheld award at the cover — the whole point of declaring', async () => {
+      const { from, to, store } = route();
+      coverPolicy();
+      const { parcel } = parcels.createInbound({
+        vendorId: store.vendorId, originAgentDid: from.did, destAgentDid: to.did, buyerMobile: '+254700773',
+        contentPhotoRef: 'contents.jpg', size: 'M', shippingPolicy: store.shippingPolicy, subtotal: 6000,
+        quote: routing.quoteShipment(from.did, to.did),
+      });
+      toShelf(parcel.parcelId, from, to);
+      parcels.dispute(parcel.parcelId, to.did, 'crushed', 'proof.jpg');
+
+      expect(() => parcels.resolveDispute(parcel.parcelId, { decision: 'upheld', award: 6001, note: 'over' })).toThrow(/covered to 6000.00 \(declared\)/);
+      const ok = parcels.resolveDispute(parcel.parcelId, { decision: 'upheld', award: 6000, note: 'total loss, declared value paid' });
+      expect(ok.dispute?.award).toBe(6000);
+    });
+
+    it('a ZERO limit means NO POLICY STATED, not a policy of nothing', async () => {
+      // Every sister starts at zero, because a free limit invented in this codebase would be a promise
+      // nobody costed. Reading that as a hard cap would have made damage resolution inert on the day
+      // cover shipped — an operator who has DECIDED to pay could not.
+      const { from, to, store } = route();
+      const { parcel } = parcels.createInbound({
+        vendorId: store.vendorId, originAgentDid: from.did, destAgentDid: to.did, buyerMobile: '+254700774',
+        contentPhotoRef: 'contents.jpg', size: 'M', shippingPolicy: store.shippingPolicy,
+        quote: routing.quoteShipment(from.did, to.did),
+      });
+      expect(parcel.coverLimit).toBe(0);
+      toShelf(parcel.parcelId, from, to);
+      parcels.dispute(parcel.parcelId, to.did, 'crushed', 'proof.jpg');
+      expect(parcels.resolveDispute(parcel.parcelId, { decision: 'upheld', award: 40, note: 'goodwill' }).dispute?.award).toBe(40);
+    });
+
+    it('stamps the policy, so changing it cannot rewrite what was promised', () => {
+      const { from, to, store } = route();
+      coverPolicy();
+      const { parcel } = parcels.createInbound({
+        vendorId: store.vendorId, originAgentDid: from.did, destAgentDid: to.did, buyerMobile: '+254700775',
+        contentPhotoRef: 'contents.jpg', size: 'M', shippingPolicy: store.shippingPolicy, subtotal: 6000,
+        quote: routing.quoteShipment(from.did, to.did),
+      });
+      entities.setInsurance(ke(), { freeLimit: 0, premiumPct: null }); // the sister withdraws cover entirely
+      expect(parcels.get(parcel.parcelId).coverLimit).toBe(6000); // …but not on a shipment already sold
+    });
+
+    it('bounds the premium, and lets a sister carry as much free risk as it likes', () => {
+      // A premium is a CHARGE, so a mistyped one reaches somebody's money. A free limit is the sister
+      // promising to carry more itself, which costs a customer nothing and is nobody's business to refuse.
+      expect(() => entities.setInsurance(ke(), { premiumPct: 2 })).toThrow(/fraction/);
+      expect(() => entities.setInsurance(ke(), { freeLimit: -1 })).toThrow(/cannot be negative/);
+      expect(entities.setInsurance(ke(), { freeLimit: 10_000_000 }).insurance?.freeLimit).toBe(10_000_000);
     });
   });
 });

@@ -12,7 +12,7 @@ import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
 import { ShelfService } from './shelf.service';
 import { FleetService } from './fleet.service';
-import { DEFAULT_TAX_LABEL, HANDOVER_FEE, MAX_CLAIM_AWARD, LABEL_TZ_OFFSET_MIN, LABOUR_FEE, NETWORK_CURRENCY, OTP_MAX_ATTEMPTS, PICKUP_FEE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, VOID_WINDOW_MS, WHOLESALE, classifySize, taxOn, withPlatformFee } from './pudo.config';
+import { DEFAULT_TAX_LABEL, HANDOVER_FEE, MAX_CLAIM_AWARD, LABEL_TZ_OFFSET_MIN, LABOUR_FEE, NETWORK_CURRENCY, OTP_MAX_ATTEMPTS, PICKUP_FEE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, VOID_WINDOW_MS, WHOLESALE, classifySize, coverFor, taxOn, withPlatformFee } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import type { ResolvedTax } from '../../foundation/entity/entity.types';
 import { Birthplace, ConsumerParcelView, CustodyKind, CustodyLeg, DisputeDecision, DisputeOrigin, Parcel, ParcelDirection, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy } from './pudo.types';
@@ -1032,7 +1032,7 @@ export class ParcelService implements OnApplicationBootstrap {
    * Generates the handover collection code AND a public tracking key, persists the label, and books the
    * split/contribution settlement (buyer's capped share + the vendor's share).
    */
-  createInbound(input: { vendorId: string; externalOrderId?: string; originAgentDid?: string; originZone?: string; destAgentDid: string; buyerMobile: string; buyerEmail?: string; size?: ParcelSize; dimensionsCm?: { l: number; w: number; h: number }; weightKg?: number; contentPhotoRef: string; fragile?: boolean; natureCode?: CargoNature; items?: Array<{ name: string; qty: number }>; subtotal?: number; shippingPolicy: ShippingPolicy; routeMode?: 'flexible' | 'locked'; quote: ShipmentQuote }): { parcel: Parcel; label: PhygitalLabel | null; paid: boolean } {
+  createInbound(input: { vendorId: string; externalOrderId?: string; originAgentDid?: string; originZone?: string; destAgentDid: string; buyerMobile: string; buyerEmail?: string; size?: ParcelSize; dimensionsCm?: { l: number; w: number; h: number }; weightKg?: number; contentPhotoRef: string; fragile?: boolean; natureCode?: CargoNature; items?: Array<{ name: string; qty: number }>; subtotal?: number; declaredValue?: number; shippingPolicy: ShippingPolicy; routeMode?: 'flexible' | 'locked'; quote: ShipmentQuote }): { parcel: Parcel; label: PhygitalLabel | null; paid: boolean } {
     const dest = this.agents.get(input.destAgentDid);
     const vendor = this.vendors.get(input.vendorId); // the store IS the birthplace — read it, don't infer it
     // A parcel handed in at a shop names that shop; one collected from the store's own dock names none,
@@ -1083,7 +1083,14 @@ export class ParcelService implements OnApplicationBootstrap {
     const chosen = routeMode === 'locked' ? quote.locked : quote.flexible;
     // GROSS — what actually leaves the store's float. `chosen.total` is the sister's own price and stays
     // the basis of every margin figure; what a customer is billed is that plus the tax on it.
-    const shipmentCost = chosen.gross;
+    // THE COVER. A merchant order already says what the goods are worth — the buyer paid that at
+    // checkout — so the subtotal IS the declaration and nobody is asked a question they have already
+    // answered. `declaredValue` overrides it for a store that insures at a different figure.
+    const cover = coverFor({ declaredValue: input.declaredValue ?? input.subtotal, ...quote.insurance });
+    // GROSS — what actually leaves the store's float. `chosen.total` is the sister's own price and stays
+    // the basis of every margin figure; what a customer is billed is that, plus the tax on it, plus the
+    // premium for cover they chose to buy. The premium is its OWN line and never hides inside the fee.
+    const shipmentCost = Math.round((chosen.gross + cover.premium) * 100) / 100;
     const platformFee = Math.round((chosen.total - chosen.base) * 100) / 100;
     const buyerCharge = this.buyerCharge(input.shippingPolicy, shipmentCost, input.subtotal ?? 0);
 
@@ -1143,6 +1150,10 @@ export class ParcelService implements OnApplicationBootstrap {
       // …and the cover inside the platform fee. Stamped for the same reason and one more: a refund must
       // release exactly what the billing set aside, and a knob turned in between must not change that.
       shipmentProvision: chosen.provision,
+      // …and what we promised to cover if we break it, at the policy in force the day it was sold.
+      declaredValue: cover.declaredValue || undefined,
+      coverLimit: cover.limit,
+      shipmentPremium: cover.premium,
       // What the price IS, and — where the route crossed a currency line — the rates it was struck at.
       // Same reason as the margin rate above: a promise is made at a moment, and the rate behind it moves.
       currency: quote.currency,
@@ -1169,7 +1180,7 @@ export class ParcelService implements OnApplicationBootstrap {
     this.media.link(input.contentPhotoRef, { type: 'parcel', id: parcelId }, 'content');
 
     // Prepaid gate: bill the vendor's balance with the country daughter company → 'ParcelPaid' or 'unpaid'.
-    const bill = this.vendors.billShipment(input.vendorId, parcelId, shipmentCost, quote.fx?.buffer, chosen.tax, chosen.provision);
+    const bill = this.vendors.billShipment(input.vendorId, parcelId, shipmentCost, quote.fx?.buffer, chosen.tax, Math.round((chosen.provision + cover.premium) * 100) / 100);
     parcel.paidStatus = bill.paid ? 'ParcelPaid' : 'unpaid';
     const label = this.label(parcel, dest.shopName);
     if (bill.paid) {
@@ -1646,8 +1657,24 @@ export class ParcelService implements OnApplicationBootstrap {
     if (input.decision !== 'rejected' && award <= 0) {
       throw new GlosError('INVALID_INPUT', 'Upholding a claim means awarding something — reject it instead of awarding nothing');
     }
-    if (award > MAX_CLAIM_AWARD) {
-      throw new GlosError('INVALID_INPUT', `An award over ${MAX_CLAIM_AWARD} needs to be settled off-platform — this is a sanity bound, not a policy`);
+    // THE COVER IS THE CAP — a policy rather than a guardrail: the free limit this sister carries, raised
+    // by whatever the shipper declared and paid a premium for.
+    //
+    // A limit of ZERO is read as "no policy has been stated", not as "a policy of nothing", and falls back
+    // to the sanity bound. The distinction matters: every sister starts at zero because inventing a free
+    // limit here would be inventing a promise nobody costed, and treating that as a hard cap would have
+    // made damage resolution inert on the day cover shipped — an operator who has DECIDED to pay could
+    // not. A sister that genuinely wants to cover nothing expresses it by rejecting claims, which it can
+    // already do with a reason the claimant is shown.
+    const stated = parcel.coverLimit != null && parcel.coverLimit > 0;
+    const cap = stated ? parcel.coverLimit! : MAX_CLAIM_AWARD;
+    if (award > cap) {
+      throw new GlosError(
+        'INVALID_INPUT',
+        stated
+          ? `This shipment is covered to ${cap.toFixed(2)}${parcel.declaredValue ? ' (declared)' : ' — the free limit, nothing was declared'}. Award up to that, or settle the excess off-platform.`
+          : `An award over ${MAX_CLAIM_AWARD} needs to be settled off-platform — this is a sanity bound, not a policy`,
+      );
     }
 
     let funding: { fromProvision: number; fromExpense: number } | undefined;

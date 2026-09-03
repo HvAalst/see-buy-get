@@ -337,7 +337,7 @@ function disputesPanel() {
         // What the SHIPMENT sold for. Stated because it is the only money figure the system knows about
         // this parcel, and labelled because it is emphatically NOT what the goods were worth: there is no
         // declared-value cover yet, so nothing here caps an award and an adjudicator must not read one.
-        el('div', { className: 'pt__flag-d', text: `Shipping sold for ${fmtMoney(d.shipmentCost)} ${d.currency || ''} — not a cap on the award` }),
+        el('div', { className: 'pt__flag-d', text: coverLine(d) }),
         el('div', { className: 'pt__flag-d pt__mono', text: `Evidence: ${(d.evidence || []).join(', ') || 'none attached'}` }),
         // Built with attrs + a real listener rather than el()'s option bag: el() understands only
         // className, text, onClick, attrs, dataset and style — so a "value", "placeholder" or "onInput"
@@ -381,6 +381,24 @@ const moneyInput = (initial, onValue) =>
 
 const noteInput = (initial, onValue) =>
   liveInput('pt__input', { placeholder: 'Why — the claimant is shown this', style: 'flex:1 1 260px' }, initial, onValue);
+
+/**
+ * What this shipment is covered for, and where that number came from.
+ *
+ * The ceiling an award is checked against is a POLICY, not a guess: the free limit the selling sister
+ * carries, raised by anything the shipper declared and paid a premium for. Saying which of the two it is
+ * matters to the person deciding — "covered to 6,000 because they declared it" and "covered to 5,000
+ * because that is what we carry for free" invite different conversations with the claimant.
+ *
+ * The shipping price stays on the row and stays labelled as NOT a cap. It is the only other money figure
+ * the system knows about the parcel, and an adjudicator reaching for a number will find it first.
+ */
+function coverLine(d) {
+  const ccy = d.currency || '';
+  const shipping = `Shipping sold for ${fmtMoney(d.shipmentCost)} ${ccy} — not a cap`;
+  if (!d.coverLimit) return `${shipping} · NO COVER on this shipment — an award here is a goodwill decision`;
+  return `${shipping} · covered to ${fmtMoney(d.coverLimit)} ${ccy}${d.declaredValue ? ' (declared)' : ' (free limit — nothing declared)'}`;
+}
 
 /** Whole days a case has been open — the number that decides how loudly a row shouts. */
 function daysWaiting(raisedAt) {

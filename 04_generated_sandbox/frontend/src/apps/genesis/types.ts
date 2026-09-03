@@ -64,6 +64,9 @@ export interface QuoteView {
    *  breakdown that is nobody's secret — unlike the platform's three rate layers, which never leave the
    *  server at all. `ratePct` is 0 wherever no sister has been told to charge. */
   tax?: { ratePct: number; label: string; registration?: string };
+  /** What the selling sister covers if it breaks this, and what it charges to cover more. Public for a
+   *  reason: nobody can decide whether to declare a value without knowing what is already covered. */
+  insurance?: { premiumPct: number; freeLimit: number };
   /** Any carrier takes it — priced at the top of the per-km market. */
   flexible: QuoteLegPrice;
   /** Waits for the cheapest carrier — priced at the bottom of the market. */

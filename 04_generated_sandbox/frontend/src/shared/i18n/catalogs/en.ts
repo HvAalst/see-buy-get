@@ -142,6 +142,10 @@ export const en = {
   // "Includes VAT 16.00" — the price already contains it, so the wording must not read as an addition.
   'send.logic.taxLine': 'Includes {label} {amount}',
   'send.logic.taxDefault': 'tax',
+  // What happens if we break it. Said plainly in BOTH directions — 'we did not mention it' is not a
+  // thing anybody should discover after their parcel is broken.
+  'send.logic.coverFree': 'Covered up to {amount} if it is damaged or lost',
+  'send.logic.coverNone': 'Not covered against damage or loss',
   'send.logic.quoteSummary': '{km} kilometres across {stops} stops. The price is {price}.',
   'send.logic.trackPlain': 'Parcel {ref}: {status}.',
   'send.logic.trackAt': 'Parcel {ref}: {status} at {dest}.',

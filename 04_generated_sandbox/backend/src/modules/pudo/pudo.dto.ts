@@ -539,6 +539,21 @@ export class EntityTaxDto {
   @IsOptional() @ValidateIf((_, v) => v !== null) @IsString() registration?: string | null;
 }
 
+/**
+ * Set what a sister covers when it breaks something, and what it charges to cover more.
+ *
+ * Same three-way optionality as the rate and tax knobs: absent leaves it alone, a number sets it,
+ * null clears it back to the network default of no cover and no charge.
+ */
+export class EntityInsuranceDto {
+  /** Which kind of work this applies to. Omitted = the sister's default for everything. */
+  @IsOptional() @IsIn(CARGO_LANES) @ApiPropertyOptional({ enum: CARGO_LANES }) lane?: CargoLane;
+  /** Charged on the declared value ABOVE the free limit, as a FRACTION — two percent is 0.02. */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsNumber() @Min(0) premiumPct?: number | null;
+  /** Covered on every shipment without anybody declaring anything, in the sister's own currency. */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsNumber() @Min(0) freeLimit?: number | null;
+}
+
 /** Control-tower reissue of a burned release secret; `by` names the human behind the operator token. */
 export class ReissueReleaseDto {
   @IsOptional() @IsString() by?: string;

@@ -680,6 +680,24 @@ export class Parcel {
    * Absent means ZERO, the same reading as tax: a shipment sold before any of this carried no cover.
    */
   shipmentProvision?: number;
+  /**
+   * THE COVER on this shipment, stamped at mint.
+   *
+   * `coverLimit` is the ceiling an upheld damage award is checked against — the free limit the selling
+   * sister carries, or the value the shipper declared, whichever is higher. Declaring less than the free
+   * limit does not reduce cover: the floor is a floor, not a swap.
+   *
+   * `shipmentPremium` is what was charged for the part above the free limit, and like the cost-of-risk
+   * slice it accrues to the claims provision rather than to revenue — money collected against a promise,
+   * not earned for a service performed.
+   *
+   * Stamped, so a sister that changes its policy tomorrow cannot change what it promised on a shipment
+   * sold today. Absent on every parcel from before this existed, which reads as NO cover — the honest
+   * answer, because none was priced, promised or paid for.
+   */
+  declaredValue?: number;
+  coverLimit?: number;
+  shipmentPremium?: number;
   /** The money every figure above is in — the SELLING sister's, stamped at mint. Absent on records
    *  written before prices named their unit; read it through ParcelService.currencyOf. */
   currency?: string;

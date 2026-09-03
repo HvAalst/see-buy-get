@@ -3,8 +3,8 @@ import { GlosError } from '../http/glos-error';
 import { PersistentMap } from '../store/persistent-map';
 import { DidService } from '../did/did.service';
 import { currencyForJurisdiction } from '../money/currency';
-import { DEFAULT_TAX_LABEL, MAX_PLATFORM_FEE_PCT, MAX_TAX_PCT, MIN_PLATFORM_FEE_PCT, MIN_TAX_PCT, PLATFORM_FEE_PCT } from '../../modules/pudo/pudo.config';
-import { Entity, RateStack, ResolvedRates, ResolvedTax, TaxRule, canHoldCustody, canTransact } from './entity.types';
+import { DEFAULT_TAX_LABEL, MAX_PLATFORM_FEE_PCT, MAX_PREMIUM_PCT, MAX_TAX_PCT, MIN_PLATFORM_FEE_PCT, MIN_TAX_PCT, PLATFORM_FEE_PCT } from '../../modules/pudo/pudo.config';
+import { Entity, InsuranceRule, RateStack, ResolvedInsurance, ResolvedRates, ResolvedTax, TaxRule, canHoldCustody, canTransact } from './entity.types';
 
 /**
  * The group and its sisters, seeded at boot.
@@ -297,6 +297,78 @@ export class EntityService implements OnApplicationBootstrap {
     entity.taxRegistration = registration;
     entity.tax = tax;
     entity.taxByLane = taxByLane;
+    this.entities.set(entity.entityId, entity);
+    return entity;
+  }
+
+  /**
+   * The cover this sister gives on one lane of work — what it carries for free, and what it charges to
+   * carry more. Zero and zero unless an operator has said otherwise.
+   *
+   * Resolved WHOLE like the tax rule rather than field by field: a free limit and the premium above it
+   * are one commercial statement, and half of one policy spliced onto half of another is a policy the
+   * sister never wrote.
+   */
+  insuranceFor(entityId: string, lane?: string): ResolvedInsurance {
+    return EntityService.resolveInsurance(this.get(entityId), lane);
+  }
+
+  /** The resolution itself, over a plain shape — so a CANDIDATE can be checked before anything is stored. */
+  static resolveInsurance(from: Pick<Entity, 'insurance' | 'insuranceByLane'>, lane?: string): ResolvedInsurance {
+    const rule = (lane ? from.insuranceByLane?.[lane] : undefined) ?? from.insurance;
+    const num = (v: unknown) => (Number.isFinite(Number(v)) ? Math.max(0, Number(v)) : 0);
+    return {
+      premiumPct: Math.round(num(rule?.premiumPct) * 10_000) / 10_000,
+      freeLimit: Math.round(num(rule?.freeLimit) * 100) / 100,
+    };
+  }
+
+  /**
+   * Set what a sister covers, for a lane or for everything it does.
+   *
+   * Bounded on the premium only. There is deliberately NO ceiling on the free limit: that is a sister
+   * promising to carry more risk itself, which costs a customer nothing and is nobody's business to
+   * refuse here. The premium is bounded because it is a charge, and a mistyped charge reaches somebody's
+   * money.
+   */
+  setInsurance(entityId: string, input: { lane?: string; premiumPct?: number | null; freeLimit?: number | null }): Entity {
+    const entity = this.requireTransacting(entityId);
+
+    const apply = (into: InsuranceRule | undefined): InsuranceRule | undefined => {
+      const next: InsuranceRule = { ...(into ?? {}) };
+      if (input.premiumPct !== undefined) {
+        if (input.premiumPct === null) delete next.premiumPct;
+        else {
+          if (!Number.isFinite(input.premiumPct) || input.premiumPct < 0 || input.premiumPct > MAX_PREMIUM_PCT) {
+            throw new GlosError('INVALID_INPUT', `A premium must be between 0% and ${MAX_PREMIUM_PCT * 100}% — it is a fraction, so two percent is 0.02`);
+          }
+          next.premiumPct = Math.round(input.premiumPct * 10_000) / 10_000;
+        }
+      }
+      if (input.freeLimit !== undefined) {
+        if (input.freeLimit === null) delete next.freeLimit;
+        else {
+          if (!Number.isFinite(input.freeLimit) || input.freeLimit < 0) throw new GlosError('INVALID_INPUT', 'A free cover limit cannot be negative');
+          next.freeLimit = Math.round(input.freeLimit * 100) / 100;
+        }
+      }
+      return Object.keys(next).length ? next : undefined;
+    };
+
+    // Built as a CANDIDATE and assigned only once every bound has held — the same discipline as setRates
+    // and setTax, and for the same reason: a refused value must not also be an applied one.
+    const insurance = input.lane ? entity.insurance : apply(entity.insurance);
+    let insuranceByLane = entity.insuranceByLane;
+    if (input.lane) {
+      const next: Record<string, InsuranceRule> = { ...(entity.insuranceByLane ?? {}) };
+      const rule = apply(entity.insuranceByLane?.[input.lane]);
+      if (rule) next[input.lane] = rule;
+      else delete next[input.lane];
+      insuranceByLane = next;
+    }
+
+    entity.insurance = insurance;
+    entity.insuranceByLane = insuranceByLane;
     this.entities.set(entity.entityId, entity);
     return entity;
   }

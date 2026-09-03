@@ -3,6 +3,7 @@ import { t } from '../../shared/i18n'; // English is the base catalog, so the re
 import {
   LADDER,
   cleanPhone,
+  coverLine,
   codeReady,
   dimsBlocker,
   isOffLadder,
@@ -141,6 +142,14 @@ describe('quote presentation', () => {
     expect(taxLine(quote(), t)).toBeNull();
     // A sister that charges but never named its tax still gets an honest word for it.
     expect(taxLine(quote({ locked: { transport: 2, base: 4, total: 4.4, tax: 0.7, gross: 5.1 } }), t)).toBe('Includes tax 0.70');
+  });
+
+  it('says what is covered — and says it plainly when nothing is', () => {
+    // The only line on the price card about things going wrong, and it must speak in BOTH directions:
+    // "we did not mention it" is not a thing anybody should discover after their parcel is broken.
+    expect(coverLine(quote({ insurance: { premiumPct: 0.02, freeLimit: 5000 } }), t)).toBe('Covered up to 5000.00 if it is damaged or lost');
+    expect(coverLine(quote({ insurance: { premiumPct: 0, freeLimit: 0 } }), t)).toBe('Not covered against damage or loss');
+    expect(coverLine(quote(), t)).toBe('Not covered against damage or loss'); // a quote from before cover existed
   });
 
   it('reads a receipt’s tax off the PARCEL, so it survives a rate change', () => {

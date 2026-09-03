@@ -91,6 +91,38 @@ export interface ResolvedTax {
   registration?: string;
 }
 
+/**
+ * What this sister covers when it breaks something, and what it charges to cover more.
+ *
+ * Every carrier in the world works this way, and the reason is worth stating: a network that promises
+ * unlimited liability on a parcel it never looked inside is promising something it cannot price. So there
+ * is a limit that applies to everything for free, and above it the shipper says what the goods are worth
+ * and pays for the difference.
+ *
+ * This is the piece that makes a damage award defensible. Until it existed the network's liability was
+ * genuinely undefined — an adjudicator had a number to type and nothing to check it against.
+ *
+ * NOT part of the rate stack, and not tax. The stack's three layers are charged on the shipping cost; a
+ * premium is charged on the value of somebody's GOODS, which is a different base entirely. And like the
+ * cost-of-risk layer it accrues to the claims provision rather than to revenue — it is money collected
+ * against a promise, not money earned for a service already performed.
+ */
+export interface InsuranceRule {
+  /** Charged on the declared value ABOVE `freeLimit`, as a fraction. Zero means declaring is free, which
+   *  is a legitimate market position and the default. */
+  premiumPct?: number;
+  /** Covered on every shipment without anybody declaring anything, in the sister's own currency. Zero
+   *  means no cover at all unless it is bought — the honest default for a network that has never priced
+   *  this, because a free limit invented here would be a promise nobody costed. */
+  freeLimit?: number;
+}
+
+/** The cover that applies to one shipment, resolved. */
+export interface ResolvedInsurance {
+  premiumPct: number;
+  freeLimit: number;
+}
+
 export class Entity {
   entityId: string; // stable human key ('sbg', 'sbg-ke') — the domain handle
   did: string; // real GLOS DID, so an entity is a first-class actor like any other
@@ -152,6 +184,14 @@ export class Entity {
    * rates another can express that; everyone else sets one rate and never touches this.
    */
   taxByLane?: Record<string, TaxRule>;
+  /**
+   * What this sister covers when it breaks something, and what it charges to cover more.
+   *
+   * Absent means the network default — no free cover and no premium charged, which is where every sister
+   * starts. Read it through EntityService.insuranceFor(), never off the record.
+   */
+  insurance?: InsuranceRule;
+  insuranceByLane?: Record<string, InsuranceRule>;
   /** Sisters point at the group they belong to. */
   parentEntityId?: string;
   createdAt: string;

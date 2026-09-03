@@ -2,7 +2,7 @@ import { useState } from 'preact/hooks';
 import { Button, Card, Checklist, ErrorNote, Icon, Note, PlaceMap, Pill, ReadAloud, ShopDetailSheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { fromPlaceWords } from '../../../shared/placewords';
-import { cleanPhone, dimsBlocker, journeyLine, lockedPrice, mintChecklist, mintTaxLine, money, phoneReady, pointDistance, pointLine, quoteSummary, reputationLine, selectablePoints, servingSince, sizeMeta, taxLine, type Translate } from '../logic';
+import { cleanPhone, coverLine, dimsBlocker, journeyLine, lockedPrice, mintChecklist, mintTaxLine, money, phoneReady, pointDistance, pointLine, quoteSummary, reputationLine, selectablePoints, servingSince, sizeMeta, taxLine, type Translate } from '../logic';
 import type { NetworkPoint } from '../types';
 import type { SendActions, SendState } from '../useSendApp';
 
@@ -289,6 +289,8 @@ function QuoteStep({ state, actions }: SendScreenProps) {
               {/* The tax the price already contains — named, never added on at the end. Rendered only when
                   there is one, which today is nowhere: a line reading zero is noise on a receipt. */}
               {taxLine(q, t) ? <span class="price__sub">{taxLine(q, t)}</span> : null}
+              {/* What happens if we break it — the one line on this card about things going wrong. */}
+              {coverLine(q, t) ? <span class="price__sub">{coverLine(q, t)}</span> : null}
             </div>
           </div>
 

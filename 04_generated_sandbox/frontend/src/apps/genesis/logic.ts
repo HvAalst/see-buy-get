@@ -356,3 +356,17 @@ export function sendWorkLine(parcels: { sent: Array<{ status: string }>; receive
   if (moving > 0) return moving === 1 ? t('send.bar.movingOne') : t('send.bar.movingMany', { count: moving });
   return undefined;
 }
+
+/**
+ * What this shipment is covered for, in one sentence — or null when nothing is.
+ *
+ * A sender is entitled to know this BEFORE they hand a box over, and it is the only line on the price
+ * card that is about what happens when things go wrong. It is deliberately not a sales pitch: where a
+ * sister covers nothing, this says so plainly rather than going quiet, because "we did not mention it"
+ * is not a thing anybody should discover after their parcel is broken.
+ */
+export function coverLine(q: QuoteView, t: Translate): string | null {
+  const free = q.insurance?.freeLimit ?? 0;
+  if (free > 0) return t('send.logic.coverFree', { amount: money(free) });
+  return t('send.logic.coverNone');
+}

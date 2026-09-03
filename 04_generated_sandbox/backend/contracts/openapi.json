@@ -4062,6 +4062,73 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/insurance": {
+      "post": {
+        "operationId": "Sbg.setEntityInsurance",
+        "summary": "",
+        "description": "Set what a sister covers when it breaks something, and what it charges to cover more.\n\nThis is the policy an upheld damage award is checked against. Until it existed the network's\nliability was undefined — an adjudicator had a number to type and nothing to check it against — and\na sanity bound in a service method was standing in for a commercial decision.\n\nEvery sister starts covering nothing, because a free limit invented in this codebase would be a\npromise nobody costed. Setting one is a deliberate commercial act, exactly like the rates and the tax.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityInsuranceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Entity"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "Sbg.entityInsurance",
+        "summary": "",
+        "description": "What this sister covers on a lane of work. Not a secret — a shipper cannot decide whether to declare\n a value without knowing what is already covered and what more would cost, so the same figures ride\n on every public quote.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lane",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/entities/{entityId}/rate-impact": {
       "get": {
         "operationId": "Sbg.entityRateImpact",
@@ -13424,6 +13491,13 @@
             "type": "object",
             "description": "Per-lane tax overrides, keyed by the caller's vocabulary exactly as `ratesByLane` is.\n\nHere for a reason narrower than it looks: tax rates vary by what is SUPPLIED, and lane is the only\nsupply-type axis this system has. A jurisdiction that zero-rates one kind of transport and standard-\nrates another can express that; everyone else sets one rate and never touches this."
           },
+          "insurance": {
+            "type": "object",
+            "description": "What this sister covers when it breaks something, and what it charges to cover more.\n\nAbsent means the network default — no free cover and no premium charged, which is where every sister\nstarts. Read it through EntityService.insuranceFor(), never off the record."
+          },
+          "insuranceByLane": {
+            "type": "object"
+          },
           "parentEntityId": {
             "type": "string",
             "description": "Sisters point at the group they belong to."
@@ -13495,6 +13569,32 @@
             "type": "string",
             "nullable": true,
             "description": "The number this sister collects under. Required before any rate above zero will be accepted."
+          }
+        }
+      },
+      "EntityInsuranceDto": {
+        "type": "object",
+        "properties": {
+          "lane": {
+            "type": "string",
+            "description": "Which kind of work this applies to. Omitted = the sister's default for everything.",
+            "enum": [
+              "pudo",
+              "mdp",
+              "dedicated"
+            ]
+          },
+          "premiumPct": {
+            "type": "number",
+            "nullable": true,
+            "description": "Charged on the declared value ABOVE the free limit, as a FRACTION — two percent is 0.02.",
+            "minimum": 0
+          },
+          "freeLimit": {
+            "type": "number",
+            "nullable": true,
+            "description": "Covered on every shipment without anybody declaring anything, in the sister's own currency.",
+            "minimum": 0
           }
         }
       },
@@ -14370,6 +14470,16 @@
           "shipmentProvision": {
             "type": "number",
             "description": "The COST-OF-RISK slice of the platform fee on this shipment — money set aside against claims rather\nthan earned, stamped at mint like everything else about the price.\n\nInside `platformFee`, never on top of it: the customer paid this the day the rate stack shipped, and\nmoving it from revenue to a provision changes no price. Stamped because a sister that turns its\ncost-of-risk knob tomorrow must not change what was set aside for a shipment sold today — and\nbecause a refund has to release exactly what a billing set aside.\n\nAbsent means ZERO, the same reading as tax: a shipment sold before any of this carried no cover."
+          },
+          "declaredValue": {
+            "type": "number",
+            "description": "THE COVER on this shipment, stamped at mint.\n\n`coverLimit` is the ceiling an upheld damage award is checked against — the free limit the selling\nsister carries, or the value the shipper declared, whichever is higher. Declaring less than the free\nlimit does not reduce cover: the floor is a floor, not a swap.\n\n`shipmentPremium` is what was charged for the part above the free limit, and like the cost-of-risk\nslice it accrues to the claims provision rather than to revenue — money collected against a promise,\nnot earned for a service performed.\n\nStamped, so a sister that changes its policy tomorrow cannot change what it promised on a shipment\nsold today. Absent on every parcel from before this existed, which reads as NO cover — the honest\nanswer, because none was priced, promised or paid for."
+          },
+          "coverLimit": {
+            "type": "number"
+          },
+          "shipmentPremium": {
+            "type": "number"
           },
           "currency": {
             "type": "string",

@@ -141,6 +141,33 @@ export const MAX_PLATFORM_FEE_PCT = 0.25;
  */
 export const MAX_CLAIM_AWARD = 1_000_000;
 
+/** A premium is a CHARGE, so a mistyped one reaches somebody's money — bounded for the same reason the
+ *  tax rate is. Generous, because insuring fragile goods over a bad road is legitimately expensive. */
+export const MAX_PREMIUM_PCT = 0.25;
+
+/**
+ * The cover on one shipment: what it is worth, what the shipper paid to cover it, and the ceiling an
+ * award is checked against.
+ *
+ * `limit` is the whole point. Before this existed the network's liability was undefined — an adjudicator
+ * had a figure to type and nothing to check it against — so the sanity bound in `resolveDispute` was
+ * doing work that a policy should do.
+ */
+export function coverFor(input: { declaredValue?: number; premiumPct: number; freeLimit: number }): { declaredValue: number; premium: number; limit: number } {
+  const num = (n: unknown) => (Number.isFinite(Number(n)) ? Math.max(0, Number(n)) : 0);
+  const declaredValue = round2(num(input.declaredValue));
+  const freeLimit = round2(num(input.freeLimit));
+  // Charged only on the part that is NOT already covered. Charging the whole declared value would bill
+  // somebody for cover they already had, which is the kind of small dishonesty nobody forgives twice.
+  const chargeable = Math.max(0, round2(declaredValue - freeLimit));
+  return {
+    declaredValue,
+    premium: round2(chargeable * Math.max(0, num(input.premiumPct))),
+    // Declaring LESS than the free limit does not reduce cover — the free limit is a floor, not a swap.
+    limit: Math.max(freeLimit, declaredValue),
+  };
+}
+
 export const MIN_TAX_PCT = 0;
 export const MAX_TAX_PCT = 0.4;
 /** What tax is called when a sister has not said. Neutral because the real name is jurisdictional — VAT

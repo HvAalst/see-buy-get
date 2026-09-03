@@ -9,7 +9,7 @@ import { Router, ROUTER } from './router';
 import { isOpenAt, nextOpenAt } from './hours';
 import { BORDER_DWELL_H, DISPATCH_BUFFER_H, HANDOVER_BUFFER_H, SIZE_LANE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, taxOn, VEHICLE_SPEED_KMH, withPlatformFee } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
-import { ResolvedRates, ResolvedTax } from '../../foundation/entity/entity.types';
+import { ResolvedInsurance, ResolvedRates, ResolvedTax } from '../../foundation/entity/entity.types';
 import { currencyForJurisdiction } from '../../foundation/money/currency';
 import { FX_QUOTE_TTL_MIN, FxRate, FxService } from '../../foundation/money/fx.service';
 import { BorderCrossing, crossingsOn } from './country';
@@ -111,6 +111,15 @@ export interface ShipmentQuote {
    * breakdown that is nobody's commercial secret.
    */
   tax: ResolvedTax;
+  /**
+   * The cover the selling sister gives, and what it charges above it.
+   *
+   * PUBLIC, like the tax and unlike the rate split: a shipper cannot decide whether to declare a value
+   * without knowing what is already covered and what the extra would cost. The premium itself is not in
+   * the legs, because it is charged on the value of the GOODS — a base this quote knows nothing about
+   * until somebody declares one.
+   */
+  insurance: ResolvedInsurance;
   flexible: QuoteLeg;
   locked: QuoteLeg;
 }
@@ -256,6 +265,7 @@ export class RoutingService {
     // merchant of record for the whole shipment, and a leg performed by another sister's shop is bought by
     // this one at cost rather than sold by that one to the buyer. Whose tax applies follows who is selling.
     const taxRule = this.entities.taxFor(sellerId, SIZE_LANE[size]);
+    const insurance = this.entities.insuranceFor(sellerId, SIZE_LANE[size]);
 
     // ONE CURRENCY, NAMED. The seller quotes in its own money and every figure below is summed into it, so
     // a stop paid in another currency is CONVERTED here — at a stated rate, from a rate book that says
@@ -315,7 +325,7 @@ export class RoutingService {
     };
     return {
       hops: plan.hops, nodes, legs, entityIds, sellerEntityId: sellerId, currency, fx, crossesBorder: crossings.length > 0, crossings,
-      totalKm, nodeFees, size, transportFactor: factor, perKm: { min, max }, platformFeePct: feePct, rates: stack, tax: taxRule,
+      totalKm, nodeFees, size, transportFactor: factor, perKm: { min, max }, platformFeePct: feePct, rates: stack, tax: taxRule, insurance,
       flexible: leg(max), locked: leg(min),
     };
   }
