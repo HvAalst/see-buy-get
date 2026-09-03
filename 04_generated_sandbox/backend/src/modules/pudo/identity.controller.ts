@@ -11,7 +11,7 @@ import { ParcelService } from './parcel.service';
 import { DispatchService } from './dispatch.service';
 import { CargoService } from './cargo.service';
 import { RoutingService } from './routing.service';
-import { classifySize } from './pudo.config';
+import { classifySize, measuredFactor } from './pudo.config';
 import { InviteService } from './invite.service';
 import { toInviteView } from './invite.types';
 import { BuyerDisputeDto, ConsumerSendDto, CreateInviteDto, EnrollDto, PinLoginDto, PodDto, ProfileDto, SetPinDto, SwitchRoleDto } from './pudo.dto';
@@ -130,7 +130,9 @@ export class IdentityController {
       throw new GlosError('CARGO_REQUIRES_DEDICATED', `Cargo class ${cargoClass} is too large for the parcel network — ask at a PUDO shop about dedicated freight (personal freight booking is coming)`);
     }
     const size = classifySize({ ...dto.dimensionsCm, kg: dto.weightKg });
-    const quote = this.routing.quoteShipment(dto.originPudoDid, dto.destPudoDid, size);
+    // ITEM 9 — a person sending from the app types real centimetres, so the transport is priced on what
+    // the box measures rather than on the tier it lands in.
+    const quote = this.routing.quoteShipment(dto.originPudoDid, dto.destPudoDid, size, measuredFactor({ ...dto.dimensionsCm, kg: dto.weightKg }));
     // Fail closed on price drift: a consumer send is billed the LOCKED leg (createConsumerSend), so the
     // sender's consented total must match the fresh locked quote. If the market moved between the quote
     // and this mint, refuse with the new total so the app can re-confirm — never silently bill a

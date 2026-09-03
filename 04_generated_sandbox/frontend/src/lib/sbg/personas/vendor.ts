@@ -1,5 +1,26 @@
 import type { SbgClient } from '../client';
 
+/**
+ * A parcel actually measured — three sides in centimetres and a weight in kilos.
+ *
+ * ITEM 9: where the network HAS this, it prices transport on it rather than on the size tier the parcel
+ * happens to land in. All four or none, which is why this is one object rather than four parameters that
+ * can drift apart.
+ */
+export interface Measure {
+  l: number;
+  w: number;
+  h: number;
+  kg: number;
+}
+
+/** The measurement as query values, or nothing at all — the endpoint reads all four or falls back to the
+ *  band, so a partial spread would be silently ignored rather than half-applied. */
+const asQuery = (m?: Measure): Record<string, string> =>
+  m && [m.l, m.w, m.h, m.kg].every((n) => Number.isFinite(n) && n > 0)
+    ? { l: String(m.l), w: String(m.w), h: String(m.h), kg: String(m.kg) }
+    : {};
+
 /** The bookkeeping (ledger) register query params — all optional (no query = the whole book, newest-first). */
 export interface LedgerQuery {
   q?: string;
@@ -175,15 +196,19 @@ export function createVendorApi(sbg: SbgClient) {
     sealDockBag: (vendorId: string, code: string, body: { acknowledgeShortShip?: boolean; shortShipReason?: string } = {}) =>
       sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/dock/bags/{code}/seal', { params: { path: { id: vendorId, code } }, body })),
 
-    /** Quote one origin→destination journey (for the confirm step's price cards). */
-    quote: (originDid: string, destDid: string, size: string) =>
-      sbg.request((c) => c.GET('/v1/sbg/quote', { params: { query: { origin: originDid, dest: destDid, size } } })),
+    /** Quote one origin→destination journey (for the confirm step's price cards).
+     *
+     *  The MEASUREMENT rides along whenever the form has one, because the mint prices on it: a preview
+     *  quoted from the size band would show a store one number and bill it another, and the store would
+     *  be right to call that a bait. */
+    quote: (originDid: string, destDid: string, size: string, measure?: Measure) =>
+      sbg.request((c) => c.GET('/v1/sbg/quote', { params: { query: { origin: originDid, dest: destDid, size, ...asQuery(measure) } } })),
 
     /** Quote many drop-off candidates against the buyer's destination — the origin picker's
      *  prices. (Empty origin/dests: the S5a contract quirk marks the unused pair required.) */
-    quoteOrigins: (destDid: string, originDids: string[], size: string) =>
+    quoteOrigins: (destDid: string, originDids: string[], size: string, measure?: Measure) =>
       sbg.request((c) =>
-        c.GET('/v1/sbg/quote/options', { params: { query: { origin: '', dest: destDid, origins: originDids.join(','), dests: '', size } } }),
+        c.GET('/v1/sbg/quote/options', { params: { query: { origin: '', dest: destDid, origins: originDids.join(','), dests: '', size, ...asQuery(measure) } } }),
       ),
   };
 }

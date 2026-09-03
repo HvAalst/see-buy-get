@@ -297,6 +297,10 @@ function QuoteStep({ state, actions }: SendScreenProps) {
           <Card label={t('send.quote.journey')}>
             <p class="t-body">{journeyLine(q)}</p>
             <p class="card__note">{t('send.quote.about', { km: Math.round(q.totalKm), fees: money(q.nodeFees) })}</p>
+            {/* The tier is on the parcel step as a Pill, so without this the price looks like the tier's
+                price. It is not — the tier is what the network will HANDLE it as; the price follows the
+                centimetres. Said only when it is true, so it never becomes a line nobody reads. */}
+            {q.factorBasis === 'measured' ? <p class="card__note">{t('send.quote.measuredPrice')}</p> : null}
           </Card>
 
           {signedIn ? null : (

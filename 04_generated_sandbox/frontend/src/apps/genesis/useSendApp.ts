@@ -278,7 +278,9 @@ export function useSendApp() {
     if (!size) return;
     const epoch = ++quoteEpoch.current;
     setState((s) => ({ ...s, step: 'quote', quote: null, quoteState: 'loading', quoteError: null }));
-    const r = await fetchQuote(fromDid, toDid, size);
+    // The same dims the tier was derived from, so the figure shown here is the figure the mint charges —
+    // and, because the mint refuses a total it did not quote, the figure that lets the send go through.
+    const r = await fetchQuote(fromDid, toDid, size, parseDims(stateRef.current.dims) ?? undefined);
     if (epoch !== quoteEpoch.current) return;
     if (r.error) {
       setState((s) => ({ ...s, quoteState: 'error', quoteError: r.error }));

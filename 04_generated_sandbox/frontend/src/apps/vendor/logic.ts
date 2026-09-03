@@ -7,6 +7,7 @@
 import { toCsv } from '../../shared/csv';
 import type { Translate } from '../../shared/i18n';
 import type { IconName } from '../../shared/ui/Icon';
+import type { Measure } from '../../lib/sbg/personas/vendor';
 import type { CheckoutRow, NetworkPoint, OrderRow, OriginOption, ParcelStatus, QuoteView, SettlementRow, ShippingPolicy } from './types';
 
 /* ------------------------------------------------------------------ money -- */
@@ -130,6 +131,17 @@ export const EMPTY_MINT: MintForm = {
 /** All four measurements present and positive — the classify call's gate. */
 export function dimsComplete(f: Pick<MintForm, 'l' | 'w' | 'h' | 'kg'>): boolean {
   return [f.l, f.w, f.h, f.kg].every((v) => Number(v) > 0);
+}
+
+/**
+ * The typed measurements as numbers, or undefined while the form is still incomplete.
+ *
+ * ITEM 9 — this is what makes the quote price the parcel the store actually measured instead of the tier
+ * it fell into, and it is the SAME gate as the classify call so the price and the tier can never be
+ * derived from different halves of a half-filled form.
+ */
+export function measureOf(f: Pick<MintForm, 'l' | 'w' | 'h' | 'kg'>): Measure | undefined {
+  return dimsComplete(f) ? { l: Number(f.l), w: Number(f.w), h: Number(f.h), kg: Number(f.kg) } : undefined;
 }
 
 /** What still blocks the mint, in wizard order — the CTA subtitle reads it out. */

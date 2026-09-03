@@ -32,7 +32,7 @@ import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
 import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DerivedLegDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
-import { classifySize, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
+import { classifySize, measuredFactor, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { BooksService } from '../../foundation/books/books.service';
 import { FX_BASE, FX_RATE_MAX_AGE_H, FxService } from '../../foundation/money/fx.service';
@@ -897,6 +897,22 @@ export class SbgController {
     return this.vendors.outboxFor(id);
   }
 
+  /**
+   * A measurement off the query string, or undefined when there isn't a whole one.
+   *
+   * All four or none: three sides without a weight cannot say whether a box is books or bubble wrap, and
+   * half a measurement priced as though it were whole is worse than the band it replaced. When it IS
+   * whole the SIZE comes from it too, so a caller who sends dims and a contradicting `size` gets the one
+   * the tape measure supports — the same precedence every mint in the system already applies.
+   */
+  private measuredFrom(l?: string, w?: string, h?: string, kg?: string): { size: 'S' | 'M' | 'L' | 'HEAVY'; factor: number } | undefined {
+    const [dl, dw, dh, dkg] = [l, w, h, kg].map((v) => Number(v));
+    if (![dl, dw, dh, dkg].every((n) => Number.isFinite(n) && n > 0)) return undefined;
+    const dims = { l: dl, w: dw, h: dh, kg: dkg };
+    const factor = measuredFactor(dims);
+    return factor == null ? undefined : { size: classifySize(dims), factor };
+  }
+
   /** Derive the size tier from dimensions (cm) + weight (kg) — live preview for the mint form. S32c also
    *  returns the cargo class + whether it needs dedicated freight, so the mint form can warn BEFORE minting
    *  that a P4+ load won't ride the parcel network (it will be diverted to the dedicated-freight lane).
@@ -914,12 +930,19 @@ export class SbgController {
    *  @Public (S13): the quote is derived ONLY from open-data prices — it is the SEE of See-Buy-Get,
    *  and a consumer holds no account to authenticate with. */
   @Public()
+  // The measurement, when the caller has one. Optional and declared so, because a required query
+  // parameter that is not required is a lie a widget author finds out about at runtime.
+  @ApiQuery({ name: 'l', required: false })
+  @ApiQuery({ name: 'w', required: false })
+  @ApiQuery({ name: 'h', required: false })
+  @ApiQuery({ name: 'kg', required: false })
   @Get('quote')
-  quote(@Query('origin') origin: string, @Query('dest') dest: string, @Query('size') size?: string) {
+  quote(@Query('origin') origin: string, @Query('dest') dest: string, @Query('size') size?: string, @Query('l') l?: string, @Query('w') w?: string, @Query('h') h?: string, @Query('kg') kg?: string) {
     if (!origin || !dest) throw new GlosError('FIELD_REQUIRED', 'origin and dest are required');
+    const m = this.measuredFrom(l, w, h, kg);
     // `publicQuote`, not the raw quote: this endpoint is @Public(), and the raw shape carries the sister's
     // three rate layers, which were decided to be internal. A buyer sees a price; a merchant sees one fee.
-    return publicQuote(this.routing.quoteShipment(origin, dest, (size as 'S' | 'M' | 'L' | 'HEAVY') || 'M'));
+    return publicQuote(this.routing.quoteShipment(origin, dest, m?.size ?? ((size as 'S' | 'M' | 'L' | 'HEAVY') || 'M'), m?.factor));
   }
 
   /**
@@ -927,16 +950,26 @@ export class SbgController {
    * and vary the destinations (buyer's map) or fix the destination and vary the origins (vendor's drop-off map).
    */
   @Public()
+  // The measurement, when the caller has one. Optional and declared so, because a required query
+  // parameter that is not required is a lie a widget author finds out about at runtime.
+  @ApiQuery({ name: 'l', required: false })
+  @ApiQuery({ name: 'w', required: false })
+  @ApiQuery({ name: 'h', required: false })
+  @ApiQuery({ name: 'kg', required: false })
   @Get('quote/options')
-  quoteOptions(@Query('origin') origin: string, @Query('dest') dest: string, @Query('origins') origins: string, @Query('dests') dests: string, @Query('size') size?: string) {
-    const sz = (size as 'S' | 'M' | 'L' | 'HEAVY') || 'M';
+  quoteOptions(@Query('origin') origin: string, @Query('dest') dest: string, @Query('origins') origins: string, @Query('dests') dests: string, @Query('size') size?: string, @Query('l') l?: string, @Query('w') w?: string, @Query('h') h?: string, @Query('kg') kg?: string) {
+    // ITEM 9 — the pins must price the parcel the SAME WAY the mint will. A map quoting bands beside a
+    // mint quoting measurements would move the price between choosing a shop and paying for it, which
+    // reads as a bait even though both numbers were honest.
+    const m = this.measuredFrom(l, w, h, kg);
+    const sz = m?.size ?? ((size as 'S' | 'M' | 'L' | 'HEAVY') || 'M');
     const list = (origin && dests) ? dests.split(',').map((d) => [origin, d] as const)
       : (dest && origins) ? origins.split(',').map((o) => [o, dest] as const)
         : null;
     if (!list) throw new GlosError('FIELD_REQUIRED', 'provide origin+dests or dest+origins');
     const variable = origin ? 1 : 0; // which side varies → the `did` the pin represents
     return { options: list.filter(([a, b]) => a && b).map(([o, d]) => {
-      try { return { did: [o, d][variable], quote: publicQuote(this.routing.quoteShipment(o, d, sz)) }; }
+      try { return { did: [o, d][variable], quote: publicQuote(this.routing.quoteShipment(o, d, sz, m?.factor)) }; }
       catch (e) { return { did: [o, d][variable], error: e instanceof Error ? e.message : 'no route' }; }
     }) };
   }
@@ -1194,6 +1227,9 @@ export class SbgController {
     // has a collection point — its own dock. The dock is a place on the route, not a node of the network,
     // so the quote carries no origin node fee: nobody handled the parcel, so nobody is owed for handling
     // it. The margin then belongs to the store's own sister, which is who is selling the shipment.
+    // ITEM 9 — a store's mint takes real centimetres, so the transport is priced on the measurement
+    // rather than on the tier it happens to fall in. No dims (a store that only picked a size) → the band.
+    const measured = dto.dimensionsCm ? measuredFactor({ ...dto.dimensionsCm, kg: weightKg }) : undefined;
     const dock = dto.originPudoDid ? undefined : this.vendors.requireCollection(dto.vendorId);
     const quote = dock
       ? this.routing.quoteShipmentFrom(
@@ -1201,8 +1237,9 @@ export class SbgController {
           destPudoDid,
           size,
           this.vendors.entityIdOf(vendor),
+          measured,
         )
-      : this.routing.quoteShipment(dto.originPudoDid!, destPudoDid, size);
+      : this.routing.quoteShipment(dto.originPudoDid!, destPudoDid, size, measured);
     const result = this.parcels.createInbound({
       vendorId: dto.vendorId,
       externalOrderId: dto.externalOrderId ?? handoff?.externalOrderId,

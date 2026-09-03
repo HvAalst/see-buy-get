@@ -30,8 +30,17 @@ export function fetchPoints(): Promise<Result<NetworkPoint[]>> {
   return publicRequest<NetworkPoint[]>(sendConfig(), '/v1/sbg/network/points');
 }
 
-export function fetchQuote(originDid: string, destDid: string, size: ParcelSize): Promise<Result<QuoteView>> {
+/**
+ * The price of a journey for THIS parcel.
+ *
+ * ITEM 9 — the measurement goes with it. The mint prices transport on the typed centimetres, and the
+ * mint also FAILS CLOSED when what a sender agreed to is not what the fresh quote says: a wizard that
+ * priced by size band would therefore not merely mislead, it would make every send bounce on a price it
+ * had itself quoted. The tier still rides along for the parts of the answer that are about the tier.
+ */
+export function fetchQuote(originDid: string, destDid: string, size: ParcelSize, measure?: { l: number; w: number; h: number; kg: number }): Promise<Result<QuoteView>> {
   const q = new URLSearchParams({ origin: originDid, dest: destDid, size });
+  if (measure) for (const [k, v] of Object.entries(measure)) q.set(k, String(v));
   return publicRequest<QuoteView>(sendConfig(), `/v1/sbg/quote?${q.toString()}`);
 }
 

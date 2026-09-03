@@ -408,6 +408,10 @@ function PriceStep({ state, actions }: MintScreenProps) {
         </Info>
       </div>
       <p class="scr__lede">{t('vendor.mint.priceLede')}</p>
+      {/* The size tier is shown three steps back as a Pill, so without this a store reads the price as
+          the tier's price. It is not: the tier says what the network will HANDLE the box as, and the
+          price follows the centimetres the store typed. Said only when it is true. */}
+      {q?.factorBasis === 'measured' ? <p class="card__note">{t('vendor.mint.measuredPrice')}</p> : null}
 
       {state.quoteState === 'loading' ? <p class="hint">{t('vendor.mint.workingJourney')}</p> : null}
       {state.quoteState === 'error' && state.error ? <ErrorNote error={state.error} onRetry={() => void actions.pickOrigin(f.originDid)} /> : null}

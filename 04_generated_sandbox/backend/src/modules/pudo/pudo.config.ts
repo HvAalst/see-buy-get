@@ -249,6 +249,56 @@ export const SIZE_TRANSPORT_FACTOR: Record<ParcelSize, number> = {
 export function bagShare(size: ParcelSize): number {
   return SIZE_UNITS[size] / BAG_CAPACITY_UNITS;
 }
+/**
+ * ITEM 9 — what a parcel ACTUALLY takes, in the same medium-equivalents the bands are written in.
+ *
+ * `SIZE_TRANSPORT_FACTOR` is a step function: every box from 46 cm to 60 cm is charged the same two
+ * mediums, and a box one centimetre over the M ceiling jumps from 1 to 2. That is the right answer when a
+ * person is EYEBALLING a parcel across a counter — four tiers is what an eye can do, and a tier derived
+ * from a limit table cannot be talked down. It is the wrong answer once a machine has been given real
+ * centimetres, because the step throws the measurement away and pays a merchant to shade a number down to
+ * duck under an edge.
+ *
+ * So the rule is not about who is standing there, it is about whether a MEASUREMENT EXISTS: measured →
+ * continuous, declared → the band. The vendor mint and the Send wizard take real cm and get this; a
+ * counter parcel entered as a picked tier keeps the band it was picked from.
+ *
+ * The formula is the standard dimensional weight, `max(kg, l·w·h / divisor)`, expressed against a medium
+ * so it lands on the scale everything else already uses (M = 1).
+ *
+ * WHERE THE DIVISOR COMES FROM. Not from an industry table — carriers use 4000–6000 cm³/kg, and picking
+ * one would be importing somebody else's commercial policy as though it were physics. It is
+ * `MEDIUM_CM3 / MEDIUM_KG` = 7875, the density the M band ALREADY declares by saying a medium is at most
+ * 45×35×25 cm and at most 5 kg. Both axes are therefore calibrated at the same point, which is what makes
+ * the `max` between them a comparison rather than a coincidence — and re-tuning the bands re-tunes this
+ * with them, instead of leaving two numbers to drift apart the way SIZE_UNITS and the old hand-written
+ * transport table did.
+ *
+ * CAPPED AT A WHOLE BAG. Transport is bought BY THE BAG, so a parcel's share of a bag is its share of that
+ * bag's cost, and nothing can consume more than all of it. At the heavy ceiling the raw figure is ~19.5
+ * mediums of volume — true, but not chargeable, because one bag is the most the network can give it. The
+ * cap is exactly `SIZE_TRANSPORT_FACTOR.HEAVY`, so a heavy still prices as it always has.
+ */
+const MEDIUM_LIMIT = SIZE_LIMITS.find((l) => l.size === 'M')!;
+export const MEDIUM_CM3 = MEDIUM_LIMIT.maxCm[0] * MEDIUM_LIMIT.maxCm[1] * MEDIUM_LIMIT.maxCm[2];
+export const MEDIUM_KG = MEDIUM_LIMIT.maxKg;
+/** cm³ per kg — the density the M band declares, and the divisor the volumetric side is measured with. */
+export const DIM_DIVISOR = Math.round(MEDIUM_CM3 / MEDIUM_KG);
+
+/**
+ * The continuous transport factor for a MEASURED parcel, or `undefined` when the measurement is unusable.
+ *
+ * Undefined rather than a guess, and the caller falls back to the band: a zero or a nonsense dimension is
+ * a broken form field, not a free parcel, and this function sits directly upstream of a price.
+ */
+export function measuredFactor(dims: { l: number; w: number; h: number; kg: number }): number | undefined {
+  const nums = [dims.l, dims.w, dims.h, dims.kg];
+  if (!nums.every((n) => typeof n === 'number' && Number.isFinite(n) && n > 0)) return undefined;
+  const byVolume = (dims.l * dims.w * dims.h) / MEDIUM_CM3;
+  const byWeight = dims.kg / MEDIUM_KG;
+  return round2(Math.min(BAG_CAPACITY_UNITS, Math.max(byVolume, byWeight)));
+}
+
 export const TOTE_CODE_PREFIX = 'BAG';
 
 // How many bags a shop can have STANDING ON ITS FLOOR at once — the other capacity, and until now the

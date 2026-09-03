@@ -13,7 +13,7 @@ import {
   vendorLogin,
   vendorRegister,
 } from './api';
-import { EMPTY_MINT, dimsComplete, fromHandoff, type MintForm } from './logic';
+import { EMPTY_MINT, dimsComplete, fromHandoff, measureOf, type MintForm } from './logic';
 import type {
   ApiKeyRow,
   CallbackRow,
@@ -615,7 +615,7 @@ export function useVendorApp() {
       const f = stateRef.current.form;
       const size = f.derivedSize ?? 'M';
       const origins = stateRef.current.points.filter((p) => p.did !== destDid && p.openState === 'open').map((p) => p.did);
-      const r = await client.api.quoteOrigins(destDid, origins, size);
+      const r = await client.api.quoteOrigins(destDid, origins, size, measureOf(f));
       if (r.error) {
         setState((s) => ({ ...s, originState: 'error' }));
         fail(r.error);
@@ -631,7 +631,7 @@ export function useVendorApp() {
       if (!client) return;
       setState((s) => ({ ...s, form: { ...s.form, originDid }, mintStep: 'price', quoteState: 'loading', quote: null }));
       const f = stateRef.current.form;
-      const r = await client.api.quote(originDid, f.destDid, f.derivedSize ?? 'M');
+      const r = await client.api.quote(originDid, f.destDid, f.derivedSize ?? 'M', measureOf(f));
       if (r.error) {
         setState((s) => ({ ...s, quoteState: 'error' }));
         fail(r.error);

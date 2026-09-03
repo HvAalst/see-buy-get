@@ -53,6 +53,9 @@ export interface QuoteLegPrice {
 
 export interface QuoteView {
   hops: QuoteHop[];
+  /** Whether the transport was priced on the box the sender MEASURED or on the tier it was declared as.
+   *  Absent from a quote taken before this existed, which reads as the tier — the honest answer for it. */
+  factorBasis?: 'measured' | 'band';
   nodes: Array<{ type: string; id: string; label: string; fee: number }>;
   legs: Array<{ from: string; to: string; km: number }>;
   totalKm: number;

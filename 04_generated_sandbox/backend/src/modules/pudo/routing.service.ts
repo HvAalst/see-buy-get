@@ -92,6 +92,10 @@ export interface ShipmentQuote {
   nodeFees: number;
   size: ParcelSize;
   transportFactor: number;
+  /** Where `transportFactor` came from: a real measurement, or the band the size was declared as.
+   *  Stated rather than left to be inferred from the decimals — `ToteHaul.basis` set the precedent, and
+   *  a merchant asking why two similar boxes priced differently deserves the answer inside the quote. */
+  factorBasis: 'measured' | 'band';
   perKm: { min: number; max: number };
   /** What the platform takes, as a fraction — the SUM of the seller's three layers. */
   platformFeePct: number;
@@ -207,8 +211,8 @@ export class RoutingService {
    * Two prices: `flexible` reserves the worst case (dearest carrier) so any passing vehicle can claim it
    * (the over-hold is rebated on delivery); `locked` is the cheapest carrier if the vendor commits the route.
    */
-  quoteShipment(originAgentDid: string, destAgentDid: string, size: ParcelSize = 'M'): ShipmentQuote {
-    return this.quoteJourney(this.planJourney({ originAgentDid, destAgentDid, weightKg: SIZE_WEIGHT_KG[size] }), size);
+  quoteShipment(originAgentDid: string, destAgentDid: string, size: ParcelSize = 'M', measured?: number): ShipmentQuote {
+    return this.quoteJourney(this.planJourney({ originAgentDid, destAgentDid, weightKg: SIZE_WEIGHT_KG[size] }), size, undefined, measured);
   }
 
   /**
@@ -217,9 +221,9 @@ export class RoutingService {
    * A customer-facing answer needs both — a price and when they could collect it — and planning the same
    * route twice to get them is work a public endpoint should not be doing on a stranger's behalf.
    */
-  quoteWithPlan(originAgentDid: string, destAgentDid: string, size: ParcelSize = 'M'): { plan: ReturnType<RoutingService['planJourney']>; quote: ShipmentQuote } {
+  quoteWithPlan(originAgentDid: string, destAgentDid: string, size: ParcelSize = 'M', measured?: number): { plan: ReturnType<RoutingService['planJourney']>; quote: ShipmentQuote } {
     const plan = this.planJourney({ originAgentDid, destAgentDid, weightKg: SIZE_WEIGHT_KG[size] });
-    return { plan, quote: this.quoteJourney(plan, size) };
+    return { plan, quote: this.quoteJourney(plan, size, undefined, measured) };
   }
 
   /**
@@ -229,11 +233,11 @@ export class RoutingService {
    * a discount, it is the absence of work. `sellerEntityId` is the sister that sells the shipment (the
    * store's own), which is who the margin belongs to when there is no origin shop to take it from.
    */
-  quoteShipmentFrom(from: RouteEnd, destAgentDid: string, size: ParcelSize = 'M', sellerEntityId?: string): ShipmentQuote {
-    return this.quoteJourney(this.planJourney({ from, destAgentDid, weightKg: SIZE_WEIGHT_KG[size] }), size, sellerEntityId);
+  quoteShipmentFrom(from: RouteEnd, destAgentDid: string, size: ParcelSize = 'M', sellerEntityId?: string, measured?: number): ShipmentQuote {
+    return this.quoteJourney(this.planJourney({ from, destAgentDid, weightKg: SIZE_WEIGHT_KG[size] }), size, sellerEntityId, measured);
   }
 
-  private quoteJourney(plan: ReturnType<RoutingService['planJourney']>, size: ParcelSize, sellerEntityId?: string): ShipmentQuote {
+  private quoteJourney(plan: ReturnType<RoutingService['planJourney']>, size: ParcelSize, sellerEntityId?: string, measured?: number): ShipmentQuote {
     // Each stop names the sister that will be owed its fee. Today they are all the same company, so the
     // quote reads as one entity's cost stack — but the fee is owed to a shop by a specific sister, and
     // writing that down now is what makes a cross-border route expressible later without a re-quote.
@@ -249,7 +253,10 @@ export class RoutingService {
     const entityIds = [...new Set(stops.map((n) => n.entityId))];
     const legs = plan.legs.map((l) => ({ from: l.from, to: l.to, km: l.distanceKm }));
     const totalKm = Math.round(legs.reduce((s, l) => s + l.km, 0) * 10) / 10;
-    const factor = SIZE_TRANSPORT_FACTOR[size];
+    // ITEM 9. A MEASURED parcel is charged for what it measures; a DECLARED one for the band it was
+    // declared as. The band is still derived from the same limit table, so nothing became under-declarable
+    // that was not before — what changed is that a real measurement is no longer rounded up to a tier.
+    const factor = measured ?? SIZE_TRANSPORT_FACTOR[size];
     const { min, max } = this.vehicles.priceRange();
     const transport = (rate: number) => Math.round(totalKm * rate * factor * 100) / 100;
     // The margin belongs to the sister selling the shipment, not to the network. Today one company
@@ -325,7 +332,7 @@ export class RoutingService {
     };
     return {
       hops: plan.hops, nodes, legs, entityIds, sellerEntityId: sellerId, currency, fx, crossesBorder: crossings.length > 0, crossings,
-      totalKm, nodeFees, size, transportFactor: factor, perKm: { min, max }, platformFeePct: feePct, rates: stack, tax: taxRule, insurance,
+      totalKm, nodeFees, size, transportFactor: factor, factorBasis: measured != null ? 'measured' : 'band', perKm: { min, max }, platformFeePct: feePct, rates: stack, tax: taxRule, insurance,
       flexible: leg(max), locked: leg(min),
     };
   }

@@ -351,6 +351,7 @@ export const enVendor = {
   'vendor.mint.dropHere': 'Drop off here',
   'vendor.mint.priceTitle': 'Lock the price',
   'vendor.mint.priceLede': 'Both get it there — you choose what your store pays.',
+  'vendor.mint.measuredPrice': 'Priced on the measurements you entered, not on the size tier — a box that only just tips into a tier pays for what it is.',
   'vendor.mint.workingJourney': 'Working out the journey…',
   'vendor.mint.choosePrice': 'Choose a price',
   'vendor.mint.whatHappensTitle': 'What happens at mint',

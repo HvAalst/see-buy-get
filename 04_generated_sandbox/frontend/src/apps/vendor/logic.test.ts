@@ -4,6 +4,7 @@ import {
   EMPTY_MINT,
   ORDER_CSV_HEADERS,
   dimsComplete,
+  measureOf,
   dockBlockers,
   fromHandoff,
   handoffLine,
@@ -105,6 +106,15 @@ describe('mint wizard', () => {
     expect(dimsComplete({ l: '20', w: '10', h: '5', kg: '1.2' })).toBe(true);
     expect(dimsComplete({ l: '20', w: '10', h: '', kg: '1.2' })).toBe(false);
     expect(dimsComplete({ l: '0', w: '10', h: '5', kg: '1.2' })).toBe(false);
+  });
+
+  it('hands the quote a measurement only when the form has a whole one', () => {
+    // ITEM 9 — the quote prices on this, and the mint prices on the same centimetres. A half-filled form
+    // must yield NOTHING rather than a partial measurement, or the price step would show a figure the
+    // bill then contradicts.
+    expect(measureOf({ l: '20', w: '10', h: '5', kg: '1.2' })).toEqual({ l: 20, w: 10, h: 5, kg: 1.2 });
+    expect(measureOf({ l: '20', w: '10', h: '', kg: '1.2' })).toBeUndefined();
+    expect(measureOf({ l: '20', w: '10', h: '0', kg: '1.2' })).toBeUndefined();
   });
 
   it('mintMissing walks the wizard order', () => {

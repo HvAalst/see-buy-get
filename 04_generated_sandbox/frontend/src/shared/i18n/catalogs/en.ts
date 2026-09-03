@@ -222,6 +222,7 @@ export const en = {
   'send.quote.priceTitle': 'The price',
   'send.quote.journey': 'The journey',
   'send.quote.about': 'About {km} km · shop and hub fees {fees} inside the price',
+  'send.quote.measuredPrice': 'Priced on the size you measured, not on the size tier — a smaller box costs less.',
   'send.quote.nextTitle': 'What you do next',
   'send.quote.nextTake': 'Take the parcel to {shop}',
   'send.quote.nextPay': 'Pay there — cash is fine',
