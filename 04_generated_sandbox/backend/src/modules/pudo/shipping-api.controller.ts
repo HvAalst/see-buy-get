@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Headers, Post, UseGuards } from '@nestjs/common';
 import { IdempotencyService } from '../../foundation/http/idempotency.service';
+import { OwnIdempotency } from '../../foundation/http/idempotency.interceptor';
 import { Public } from '../../foundation/auth/public.decorator';
 import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
 import { ShippingApiService } from './shipping-api.service';
@@ -54,6 +55,7 @@ export class ShippingApiController {
    * A TEST key runs every check and creates nothing — see ShippingApiService.mint.
    */
   @Public() // "public" as in no session; the key is the credential, and mint requires a secret one
+  @OwnIdempotency() // it reports `replayed` on its own body, which the global interceptor cannot do
   @RateLimit(30, 60)
   @Post('shipments')
   async mint(@Body() dto: MintShipmentDto, @CallerKey() caller: Caller, @Headers('idempotency-key') idempotencyKey?: string) {

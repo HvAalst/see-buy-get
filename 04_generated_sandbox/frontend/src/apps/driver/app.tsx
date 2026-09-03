@@ -1,5 +1,5 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
-import { BottomNav, Button, Checklist, FeedbackFlash, Icon, NotificationBell, Pill, TopBar, type NavItem } from '../../shared/ui';
+import { BottomNav, Button, Checklist, FeedbackFlash, Icon, NotificationBell, OutboxNote, Pill, TopBar, type NavItem } from '../../shared/ui';
 import { useT } from '../../shared/i18n';
 import { BoardScreen } from './screens/BoardScreen';
 import { EarningsScreen } from './screens/EarningsScreen';
@@ -86,6 +86,7 @@ export function App() {
             <span>{t('driver.offline')}</span>
           </p>
         ) : null}
+        <OutboxNote />
         <ScreenRouter screen={state.screen} state={state} actions={actions} />
       </main>
 

@@ -2027,3 +2027,52 @@
   font-size: 13px;
   color: var(--tx3);
 }
+
+/* ------------------------------------------------------------------- outbox -- */
+/* Work recorded on this device that has not reached the network. The waiting state reuses `.stale`
+   deliberately — it is the same voice as "showing what we last knew" and needs no new one. A BLOCKED
+   item does need its own, because it is the only thing here that asks somebody to decide. */
+
+.outbox {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.outbox__stuck {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  padding: 12px 14px;
+  border-radius: var(--r-ctl);
+  background: var(--org-light);
+  /* Orange marks the thing that needs attention — a STATE, exactly as everywhere else in this system,
+     and never the buttons beside it, which are the actions. */
+  border-left: 3px solid var(--org);
+}
+
+.outbox__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.outbox__what {
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.outbox__why {
+  font-size: 14px;
+  color: var(--tx2);
+}
+
+.outbox__acts {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}

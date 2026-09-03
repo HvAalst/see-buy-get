@@ -57,6 +57,14 @@ export const en = {
   // The offline banner (shown when the network drops and stale data is on screen).
   'offline.banner': 'No signal — showing what we last knew.',
 
+  // The OUTBOX. The banner above is about a stale READ; these are about a WRITE that has not left the
+  // device — the person did it, walked away, and is entitled to know it is still in their pocket.
+  'common.outbox.waitingOne': 'One thing recorded here has not been sent yet. It will go when there is signal.',
+  'common.outbox.waitingMany': '{count} things recorded here have not been sent yet. They will go when there is signal.',
+  'common.outbox.unknown': 'The network refused this and did not say why.',
+  'common.outbox.retry': 'Try again',
+  'common.outbox.discard': 'Let it go',
+
   // ======================================================================================================
   // Send (buyer) app — the REFERENCE extraction: every user-facing string routed through t().
   // Namespaced by surface (send.<screen>.<key>); shared send.* keys sit at the top; send.logic.* backs the

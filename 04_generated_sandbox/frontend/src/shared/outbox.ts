@@ -1,0 +1,356 @@
+/**
+ * THE OUTBOX — the handover that happens whether or not there is a signal.
+ *
+ * Everything in this network reduces to one event: did this parcel move from A's hands to B's, and can
+ * both prove it. Until now that event needed connectivity. The apps showed "No signal — showing what we
+ * last knew" and a scan simply failed, which is a reasonable answer for a page that is only reading and
+ * an unreasonable one for the act the whole custody chain is built on. A shopkeeper in a dead spot and a
+ * driver on the road between two towns are not edge cases here; they are the normal operating condition.
+ *
+ * So a queued write is COMPLETE from the person's point of view — they scanned it, it is recorded, they
+ * can hand the box over — and settles with the server later. Three things make that honest rather than
+ * merely optimistic:
+ *
+ *  - **The attempt is NAMED BEFORE IT IS FIRST SENT.** The failure we most fear is not "it did not go
+ *    through", it is "it went through and the answer never came back". A key minted at enqueue time would
+ *    not cover that case, because by then the server may already have done the work. So every queueable
+ *    write carries an `Idempotency-Key` from its very first attempt, and every retry reuses it.
+ *  - **Only the custody events queue.** Signing in, topping up and paying need an answer from the server
+ *    to be worth anything; queueing them would be a promise this file cannot keep. The allowlist below is
+ *    a policy, and it is short on purpose.
+ *  - **It is FIFO and it stops at the first stuck item.** Shelving a parcel the server has not been told
+ *    arrived would fail in a way nobody could read. Order is part of the meaning.
+ */
+
+/** Where the queue lives. Versioned: a shape change must not try to replay yesterday's records. */
+const STORE_KEY = 'sbg.outbox.v1';
+
+/** How many times a single item is retried before it stops asking and waits for a person. */
+export const MAX_ATTEMPTS = 8;
+
+export type OutboxState = 'pending' | 'sending' | 'blocked';
+
+export interface OutboxItem {
+  id: string;
+  /** The `Idempotency-Key` this attempt was named with, minted BEFORE the first send and never changed. */
+  key: string;
+  method: string;
+  /** Origin-relative, so a queue survives the API base moving. */
+  path: string;
+  body?: unknown;
+  /** What a person should see in a list of unsent work — never an id, never a URL. */
+  label: string;
+  at: string;
+  attempts: number;
+  state: OutboxState;
+  /** Why it is stuck, in the server's own words, once it has stopped trying. */
+  error?: string;
+}
+
+/**
+ * The writes that may be completed without a server.
+ *
+ * Every one of them is a CUSTODY event — a statement about where a physical thing is, which the person
+ * making it can see with their own eyes and does not need us to confirm. Nothing that moves money on its
+ * own, nothing that grants access, and nothing whose answer the person is waiting to read.
+ */
+const QUEUEABLE: Array<{ method: string; test: RegExp; label: string }> = [
+  { method: 'POST', test: /^\/v1\/sbg\/parcels\/accept$/, label: 'Parcel taken in at the counter' },
+  { method: 'POST', test: /^\/v1\/sbg\/parcels\/handover$/, label: 'Handed to the bus' },
+  { method: 'POST', test: /^\/v1\/sbg\/parcels\/[^/]+\/intake$/, label: 'Parcel taken in' },
+  { method: 'POST', test: /^\/v1\/sbg\/parcels\/[^/]+\/arrive$/, label: 'Parcel arrived' },
+  { method: 'POST', test: /^\/v1\/sbg\/parcels\/[^/]+\/shelve$/, label: 'Parcel shelved' },
+  { method: 'POST', test: /^\/v1\/sbg\/totes\/[^/]+\/(fill|load|assign|release)$/, label: 'Bag moved' },
+  { method: 'POST', test: /^\/v1\/sbg\/agents\/[^/]+\/totes\/[^/]+\/(fill|seal)$/, label: 'Bag filled at the shop' },
+  { method: 'POST', test: /^\/v1\/sbg\/dispatch\/freight\/[^/]+\/(pickup|deliver)$/, label: 'Freight moved' },
+  // A cold-chain reading is taken on the road, which is exactly where the signal is worst — and a gap in
+  // the record breaks the chain as surely as a breach does. It reports a measurement rather than asking
+  // for a decision, so it is safe to complete without an answer.
+  { method: 'POST', test: /^\/v1\/sbg\/dispatch\/freight\/[^/]+\/temperature$/, label: 'Temperature logged' },
+];
+
+/**
+ * RELEASE IS DELIBERATELY NOT HERE, and it is the most important line in this file.
+ *
+ * Handing a parcel to the person collecting it is a custody event, but it is also an AUTHORISATION: the
+ * release code lives with the sender and the receiver, the shop that hands the goods over never learns it,
+ * and only the server can say whether the code offered is the right one. Queue that and a shop in a dead
+ * spot gives somebody's parcel away on a code nobody checked, and finds out hours later that it was wrong
+ * — by which time the goods are gone and the queue reports a failure nobody can act on.
+ *
+ * The rest of this list is safe precisely because none of it is a decision. Taking a parcel in, shelving
+ * it, putting it on a bus: the person doing it can see that it happened and needs nothing confirmed.
+ * Release is the one where the app is checking something on the network's behalf, so it waits for signal.
+ */
+
+ /** Every pattern, for the contract-drift test. Exported so a wrong regex is a failing test rather than
+  *  a feature that silently never queues anything — which is how the first version of this list shipped
+  *  in my hands: half its paths did not exist. */
+export const queueablePatterns = (): RegExp[] => QUEUEABLE.map((q) => q.test);
+
+/** The label for a queueable request, or null when this one must not be queued. */
+export function queueableLabel(method: string, path: string): string | null {
+  const m = method.toUpperCase();
+  return QUEUEABLE.find((q) => q.method === m && q.test.test(path))?.label ?? null;
+}
+
+/* ------------------------------------------------------------------ store -- */
+
+function read(): OutboxItem[] {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    const list = raw ? (JSON.parse(raw) as OutboxItem[]) : [];
+    return Array.isArray(list) ? list : [];
+  } catch {
+    // A corrupt or unavailable store must not take the app down with it. An unsendable queue is bad; an
+    // app that will not open because of one is worse.
+    return [];
+  }
+}
+
+function write(items: OutboxItem[]): void {
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(items));
+  } catch {
+    /* private mode, or full. The in-flight drain still works; only durability is lost. */
+  }
+}
+
+const listeners = new Set<() => void>();
+function announce(): void {
+  for (const l of listeners) l();
+}
+
+/** Re-render when the queue changes. Returns its own unsubscribe. */
+export function onOutboxChange(fn: () => void): () => void {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+
+export function outboxItems(): OutboxItem[] {
+  return read();
+}
+
+/** How many pieces of work are waiting — the number a person sees in the bar. */
+export function outboxCount(): number {
+  return read().length;
+}
+
+/** Whether anything has stopped trying and needs a person to look at it. */
+export function outboxBlocked(): OutboxItem[] {
+  return read().filter((i) => i.state === 'blocked');
+}
+
+export function enqueue(item: Omit<OutboxItem, 'attempts' | 'state'>): void {
+  const items = read();
+  // A key is spent once. If this exact attempt is already queued (a double tap, a re-render), leave the
+  // original in place rather than adding a twin that will replay the same name and be refused.
+  if (items.some((i) => i.key === item.key)) return;
+  items.push({ ...item, attempts: 0, state: 'pending' });
+  write(items);
+  announce();
+}
+
+/** Forget one — used by the operator-facing "give up on this" affordance, and by a successful send. */
+export function discard(id: string): void {
+  write(read().filter((i) => i.id !== id));
+  announce();
+}
+
+/** Put a blocked item back in the queue for another go, after whatever blocked it has been dealt with. */
+export function retry(id: string): void {
+  write(read().map((i) => (i.id === id ? { ...i, state: 'pending', attempts: 0, error: undefined } : i)));
+  announce();
+}
+
+/* ------------------------------------------------------------------ drain -- */
+
+export interface DrainDeps {
+  baseUrl: string;
+  token: () => Promise<string>;
+  fetch?: typeof fetch;
+}
+
+/**
+ * Send what is waiting, oldest first, stopping at the first item that cannot go.
+ *
+ * The stop is the important part. These are custody events in sequence — taken in, handed over, shelved —
+ * and pushing later ones past a stuck earlier one would ask the server to shelve a parcel it has never
+ * been told arrived. It would fail in a way nobody could read, and the queue would look like it was
+ * working. Head-of-line blocking is the correct behaviour here, not a limitation.
+ */
+export async function drain(deps: DrainDeps): Promise<{ sent: number; blocked: number }> {
+  const send = deps.fetch ?? fetch;
+  let sent = 0;
+
+  for (;;) {
+    const items = read();
+    const next = items.find((i) => i.state !== 'blocked');
+    if (!next) break;
+
+    let token = '';
+    try {
+      token = await deps.token();
+    } catch {
+      break; // no credential yet — this is not the item's fault, so nothing is marked blocked
+    }
+
+    let response: Response;
+    try {
+      response = await send(`${deps.baseUrl}${next.path}`, {
+        method: next.method,
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${token}`,
+          // The same name it was first sent with. This is what makes a replay free rather than a
+          // second parcel, a second charge, or a second handover.
+          'idempotency-key': next.key,
+        },
+        body: next.body === undefined ? undefined : JSON.stringify(next.body),
+      });
+    } catch {
+      // Still no network. Leave everything exactly as it is and try again on the next trigger — a
+      // failed connection is not an attempt the item should be punished for.
+      break;
+    }
+
+    if (response.ok) {
+      discard(next.id);
+      sent += 1;
+      continue;
+    }
+
+    // A 5xx or a 429 is the server having a bad moment; keep the item and count the attempt. Anything
+    // else is a refusal that will be refused again forever — a parcel already collected, a shop that has
+    // been locked — so it stops asking and waits for a person, with the server's own words attached.
+    const transient = response.status >= 500 || response.status === 429;
+    const detail = await problemDetail(response);
+    const attempts = next.attempts + 1;
+    const stuck = !transient || attempts >= MAX_ATTEMPTS;
+    write(read().map((i) => (i.id === next.id ? { ...i, attempts, state: stuck ? 'blocked' : 'pending', error: detail } : i)));
+    announce();
+    if (!stuck) break; // a transient failure stops the run; the next trigger tries the same item again
+  }
+
+  return { sent, blocked: read().filter((i) => i.state === 'blocked').length };
+}
+
+/** The server's own explanation, from an RFC 9457 problem document, or a plain status when it has none. */
+async function problemDetail(response: Response): Promise<string> {
+  try {
+    const body = (await response.clone().json()) as { detail?: string; title?: string; message?: string };
+    return body.detail || body.title || body.message || `Error ${response.status}`;
+  } catch {
+    return `Error ${response.status}`;
+  }
+}
+
+/* ------------------------------------------------------------------ fetch -- */
+
+/** A name for one attempt. Random, because it identifies an ACT, not the thing the act is about. */
+function mintKey(): string {
+  const rand = globalThis.crypto?.randomUUID?.();
+  return rand ?? `k_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/**
+ * Wrap a fetch so that a queueable write survives having no signal.
+ *
+ * Two things happen here and both matter. Every queueable write gets an `Idempotency-Key` on its FIRST
+ * attempt, so the server can recognise a replay of something it may already have done. And when the
+ * request cannot leave the device at all, it is put in the outbox and answered with a synthetic 202 —
+ * because from the person's point of view the parcel HAS moved, and telling them otherwise would be the
+ * app arguing with something they can see in their hands.
+ *
+ * A 202 is deliberate: accepted, not completed. A caller that treats it as a finished 200 will show
+ * stale data rather than a lie, and a caller that reads `queued` can say the honest thing.
+ */
+export function offlineFetch(base: typeof fetch, apiOrigin: () => string): typeof fetch {
+  return async (input, init) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+    const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
+    const path = pathOf(url, apiOrigin());
+    const label = path ? queueableLabel(method, path) : null;
+
+    if (!path || !label) return base(input, init);
+
+    // Named before the first attempt — see the note at the top of this file.
+    const key = mintKey();
+    const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
+    headers.set('idempotency-key', key);
+
+    try {
+      return await base(input, { ...init, headers });
+    } catch (err) {
+      // Only a genuine failure to reach the network queues. A refusal that arrived is an answer, and an
+      // answer — even a bad one — must reach the caller rather than being quietly written to disk.
+      const body = await bodyOf(init, input);
+      enqueue({ id: `ob_${key}`, key, method, path, body, label, at: new Date().toISOString() });
+      return new Response(JSON.stringify({ queued: true, id: `ob_${key}`, label }), {
+        status: 202,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+  };
+}
+
+/** The origin-relative path, or null when the request is not going to our own API. */
+function pathOf(url: string, origin: string): string | null {
+  if (!url.startsWith(origin)) return null;
+  const rest = url.slice(origin.length);
+  return rest.split('?')[0] || '/';
+}
+
+async function bodyOf(init: RequestInit | undefined, input: RequestInfo | URL): Promise<unknown> {
+  const raw = init?.body ?? (input instanceof Request ? await input.clone().text() : undefined);
+  if (typeof raw !== 'string') return undefined;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+}
+
+/* ---------------------------------------------------------------- running -- */
+
+let stopCurrent: (() => void) | null = null;
+
+/**
+ * Keep the queue moving, without anybody having to remember to ask.
+ *
+ * Three triggers, and each answers a different way a phone comes back to life: the browser saying the
+ * network returned, the person opening the app again (which on a cheap Android is far more reliable than
+ * the online event), and a slow tick for the case where neither fired because the radio never formally
+ * dropped — it just stopped carrying anything, which is what a bad signal actually looks like.
+ *
+ * One loop per page. Calling this again replaces the previous one rather than stacking a second drain
+ * that would race the first for the same items.
+ */
+export function startOutbox(deps: DrainDeps): () => void {
+  stopCurrent?.();
+  let running = false;
+  const tick = async () => {
+    if (running || typeof navigator !== 'undefined' && navigator.onLine === false) return;
+    running = true;
+    try {
+      await drain(deps);
+    } finally {
+      running = false;
+    }
+  };
+
+  const onFocus = () => void tick();
+  const timer = setInterval(() => void tick(), 30_000);
+  addEventListener('online', onFocus);
+  addEventListener('focus', onFocus);
+  void tick();
+
+  const stop = () => {
+    clearInterval(timer);
+    removeEventListener('online', onFocus);
+    removeEventListener('focus', onFocus);
+    if (stopCurrent === stop) stopCurrent = null;
+  };
+  stopCurrent = stop;
+  return stop;
+}

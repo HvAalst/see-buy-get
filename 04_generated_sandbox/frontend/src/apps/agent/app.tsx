@@ -1,5 +1,5 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
-import { BottomNav, Button, Checklist, FeedbackFlash, Icon, NotificationBell, Pill, TopBar, type NavItem } from '../../shared/ui';
+import { BottomNav, Button, Checklist, FeedbackFlash, Icon, NotificationBell, OutboxNote, Pill, TopBar, type NavItem } from '../../shared/ui';
 import { useT } from '../../shared/i18n';
 import { AcceptScreen } from './screens/AcceptScreen';
 import { CollectScreen } from './screens/CollectScreen';
@@ -90,6 +90,7 @@ export function App() {
             <span>{t('agent.stale')}</span>
           </p>
         ) : null}
+        <OutboxNote />
         <ScreenRouter screen={state.screen} state={state} actions={actions} />
       </main>
 

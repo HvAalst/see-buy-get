@@ -3,6 +3,7 @@ import type { paths } from './schema';
 import type { SbgConfig } from './config';
 import type { Session } from './session';
 import { type SbgError, clientError, toSbgError } from './errors';
+import { offlineFetch, startOutbox } from '../../shared/outbox';
 
 /**
  * Result envelope — a business failure is DATA, never an exception. Every call resolves to exactly one
@@ -68,6 +69,17 @@ export function createSbgClient(opts: SbgClientOptions): SbgClient {
     }
   };
 
+  /**
+   * …and then the outbox, OUTSIDE the timeout, so a request that ran out of time on a bad connection is
+   * queued rather than lost. A timeout on EDGE is not a refusal, it is the network being what it is here.
+   *
+   * Wrapping at the fetch layer rather than at each call site is the whole reason this is one change and
+   * not thirty: every custody write in every app becomes offline-capable without a line moving, and the
+   * list of what may be queued stays in one readable place instead of being a property of whoever
+   * remembered to ask for it.
+   */
+  const transport = offlineFetch(timeoutFetch, () => config.baseUrl);
+
   const headerMiddleware: Middleware = {
     async onRequest({ request }) {
       const token = await session.getToken();
@@ -78,8 +90,22 @@ export function createSbgClient(opts: SbgClientOptions): SbgClient {
     },
   };
 
-  const raw = createClient<paths>({ baseUrl: config.baseUrl, fetch: timeoutFetch });
+  const raw = createClient<paths>({ baseUrl: config.baseUrl, fetch: transport });
   raw.use(headerMiddleware);
+
+  /**
+   * …and keep whatever is already queued moving.
+   *
+   * Started HERE for the same reason the outbox is wrapped here: this is the one place that holds both
+   * the API base and a way to get a token, and every app reaches it by a different route. `startOutbox`
+   * keeps a single loop per page, so a second client replaces the drain rather than racing it.
+   *
+   * Guarded on `addEventListener` because this module is also constructed in the node test environment,
+   * where there is no page to come back into focus.
+   */
+  if (typeof addEventListener === 'function') {
+    startOutbox({ baseUrl: config.baseUrl, token: () => session.getToken() });
+  }
 
   async function request<T>(fn: (c: Client<paths>) => Promise<Raw<T>>): Promise<Result<T>> {
     let outcome = await attempt(fn);
