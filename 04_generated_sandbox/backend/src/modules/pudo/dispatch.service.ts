@@ -411,7 +411,7 @@ export class DispatchService {
           // a no-show can be days after the claim. A load billed before the stamp existed falls back to
           // recomputing, which is what it did before and is still right for a rate nobody has touched.
           const charged = f.billed ?? this.shipperBill(f.lockedPrice ?? 0, f);
-          this.vendors.rebate(f.shipperDid, f.freightId, charged.gross, 'freight no-show release', charged.tax);
+          this.vendors.rebate(f.shipperDid, f.freightId, charged.gross, 'freight no-show release', charged.tax, charged.provision);
         }
         f.status = 'available';
         f.scheduledPickupAt = undefined; // its date has passed — it's now a plain ship-now load: no stale gate, no 'scheduled' timeline, and this loop skips it forever after (so it can never no-show-release twice)
@@ -844,7 +844,7 @@ export class DispatchService {
     // The driver is still paid on delivery in every case — labour done is owed regardless of shipper collection.
     if (f.shipperDid && this.vendors.has(f.shipperDid)) {
       const bill = this.shipperBill(earning, f);
-      const { paid } = this.vendors.billShipment(f.shipperDid, f.freightId, bill.gross, 0, bill.tax);
+      const { paid } = this.vendors.billShipment(f.shipperDid, f.freightId, bill.gross, 0, bill.tax, bill.provision);
       f.paidStatus = paid ? 'billed' : 'billing_failed';
       // Stamped at the instant of charging, so a release reverses THIS, not whatever the rates resolve to
       // whenever the release happens to run. Kept even on a failed billing: what the shipper owes is a real
@@ -1282,10 +1282,24 @@ export class DispatchService {
    * shipper will part with, and what leaves their account is the gross; comparing a net figure to their
    * cap would commit them to a haul they cannot pay for and only find out at the billing.
    */
-  private shipperBill(driverTotal: number, f?: { shipperDid?: string }): { net: number; tax: number; gross: number; feePct: number; taxPct: number } {
+  private shipperBill(driverTotal: number, f?: { shipperDid?: string }): { net: number; tax: number; gross: number; feePct: number; taxPct: number; provision: number } {
     const feePct = this.freightFeePct(f);
     const taxPct = this.freightTaxPct(f);
-    return { ...taxOn(shipperCharge(driverTotal, feePct), taxPct), feePct, taxPct };
+    // The cost-of-risk slice, on the same base the fee was computed on — a haul's provider cost IS the
+    // driver's earning, exactly as node fees plus transport are a parcel's.
+    const provision = Math.round(Math.max(0, driverTotal) * this.freightRiskPct(f) * 100) / 100;
+    return { ...taxOn(shipperCharge(driverTotal, feePct), taxPct), feePct, taxPct, provision };
+  }
+
+  /** The cost-of-risk rate for a dedicated haul. Falls back to none, like its two neighbours above: a
+   *  pricing lookup must never be the thing that stops a load being offered. */
+  private freightRiskPct(f?: { shipperDid?: string }): number {
+    if (!f?.shipperDid) return 0;
+    try {
+      return this.entities.ratesFor(this.vendors.entityIdOf(this.vendors.get(f.shipperDid)), 'dedicated').costOfRiskPct;
+    } catch {
+      return 0;
+    }
   }
 
   /** The same bill, from a load's ref — for the gates, which hold a Claimable. `shipperDid` deliberately

@@ -997,7 +997,7 @@ export class ParcelService implements OnApplicationBootstrap {
     if (parcel.senderMobile === 'app') {
       // The locked price the shop remitted, and the tax inside it — reversed together, because a voided
       // sale un-owes its tax as surely as it un-earns its revenue.
-      this.gate.refund(agentDid, parcel.shipmentCost ?? 0, parcel.parcelId, parcel.shipmentTax);
+      this.gate.refund(agentDid, parcel.shipmentCost ?? 0, parcel.parcelId, parcel.shipmentTax, parcel.shipmentProvision);
       this.gate.clawbackLabour(agentDid, LABOUR_FEE, parcel.parcelId); // reverse the +LABOUR_FEE paid at intake
     } else {
       // At the rate stamped on the parcel at intake, never today's — a sister that changed its rate inside
@@ -1140,6 +1140,9 @@ export class ParcelService implements OnApplicationBootstrap {
       taxPct: quote.tax.ratePct,
       taxLabel: quote.tax.label,
       shipmentTax: chosen.tax,
+      // …and the cover inside the platform fee. Stamped for the same reason and one more: a refund must
+      // release exactly what the billing set aside, and a knob turned in between must not change that.
+      shipmentProvision: chosen.provision,
       // What the price IS, and — where the route crossed a currency line — the rates it was struck at.
       // Same reason as the margin rate above: a promise is made at a moment, and the rate behind it moves.
       currency: quote.currency,
@@ -1148,7 +1151,8 @@ export class ParcelService implements OnApplicationBootstrap {
       sellerEntityId: quote.sellerEntityId,
       shipmentCost,
       ceilingCost: quote.flexible.gross, // the money HELD, so gross — the rebate gives back the same kind
-      ceilingTax: quote.flexible.tax, // …and the tax within it, so the rebate can un-owe exactly what was owed
+      ceilingTax: quote.flexible.tax,
+      ceilingProvision: quote.flexible.provision, // …and the tax within it, so the rebate can un-owe exactly what was owed
       buyerCharge,
       paidStatus: 'unpaid',
       acceptedAt: now,
@@ -1165,7 +1169,7 @@ export class ParcelService implements OnApplicationBootstrap {
     this.media.link(input.contentPhotoRef, { type: 'parcel', id: parcelId }, 'content');
 
     // Prepaid gate: bill the vendor's balance with the country daughter company → 'ParcelPaid' or 'unpaid'.
-    const bill = this.vendors.billShipment(input.vendorId, parcelId, shipmentCost, quote.fx?.buffer, chosen.tax);
+    const bill = this.vendors.billShipment(input.vendorId, parcelId, shipmentCost, quote.fx?.buffer, chosen.tax, chosen.provision);
     parcel.paidStatus = bill.paid ? 'ParcelPaid' : 'unpaid';
     const label = this.label(parcel, dest.shopName);
     if (bill.paid) {
@@ -1262,12 +1266,16 @@ export class ParcelService implements OnApplicationBootstrap {
       taxPct: quote.tax.ratePct,
       taxLabel: quote.tax.label,
       shipmentTax: chosen.tax,
+      // …and the cover inside the platform fee. Stamped for the same reason and one more: a refund must
+      // release exactly what the billing set aside, and a knob turned in between must not change that.
+      shipmentProvision: chosen.provision,
       currency: quote.currency, // the cash the shop will take at the counter is in a named money
       fx: quote.fx,
       sellerEntityId: quote.sellerEntityId,
       shipmentCost: chosen.total,
       ceilingCost: quote.flexible.gross, // the money HELD, so gross — the rebate gives back the same kind
-      ceilingTax: quote.flexible.tax, // …and the tax within it, so the rebate can un-owe exactly what was owed
+      ceilingTax: quote.flexible.tax,
+      ceilingProvision: quote.flexible.provision, // …and the tax within it, so the rebate can un-owe exactly what was owed
       paidStatus: 'unpaid',
       acceptedAt: now,
       // Minted with the parcel (see accept()): the sender holds the release code in their own twin from
@@ -1301,7 +1309,7 @@ export class ParcelService implements OnApplicationBootstrap {
     const dest = parcel.destAgentDid ? this.agents.get(parcel.destAgentDid) : undefined;
     // The buffer travels on the parcel, so a shipment billed later — after a top-up — splits exactly as
     // one billed at mint would. The rate it was struck at is not re-derived; it is the one it was quoted at.
-    const bill = this.vendors.billShipment(parcel.vendorId, parcelId, parcel.shipmentCost ?? 0, parcel.fx?.buffer, parcel.shipmentTax);
+    const bill = this.vendors.billShipment(parcel.vendorId, parcelId, parcel.shipmentCost ?? 0, parcel.fx?.buffer, parcel.shipmentTax, parcel.shipmentProvision);
     if (!bill.paid) return { parcel, label: null, paid: false };
     parcel.paidStatus = 'ParcelPaid';
     parcel.label = dest ? this.label(parcel, dest.shopName) : parcel.label;
@@ -1369,7 +1377,7 @@ export class ParcelService implements OnApplicationBootstrap {
     // adopt(), not link(): the photo id came from the CLIENT — only a photo the acting shop owns and that
     // isn't attached elsewhere may bind here (S29/S33a media-laundering guard).
     this.media.adopt(dropoffPhotoRef, agentDid, { type: 'parcel', id: parcelId }, 'dropoff');
-    if (due > 0) this.gate.chargeShipping(agentDid, due, parcelId, parcel.shipmentTax); // remit the collected cash, tax and all (a 0-priced route charges nothing)
+    if (due > 0) this.gate.chargeShipping(agentDid, due, parcelId, parcel.shipmentTax, parcel.shipmentProvision); // remit the collected cash, tax and all (a 0-priced route charges nothing)
     this.gate.payLabour(agentDid, LABOUR_FEE, parcelId, 'parcel', parcel.sellerEntityId);
     void this.events.publish(GlosEvent.Pudo.ParcelAccepted, { parcelId, agentDid, destZone: parcel.destZone, mode: 'cash' }, { source: 'pudo' }).catch(() => undefined);
     return parcel;
@@ -1567,9 +1575,14 @@ export class ParcelService implements OnApplicationBootstrap {
     // it can land a cent away from the number actually posted.
     const rebate = Math.round(Math.max(0, parcel.ceilingCost - actual.gross) * 100) / 100;
     const rebateTax = rebate > 0 ? Math.min(Math.max(Math.round(((parcel.ceilingTax ?? 0) - actual.tax) * 100) / 100, 0), rebate) : 0;
+    // The cover follows the price down. The cost-of-risk layer is charged on the provider cost, so a
+    // cheaper journey than the ceiling held for was over-provisioned by the same proportion — computed
+    // from the parcel's OWN stamped rate, never today's, for the reason above.
+    const actualProvision = Math.round((actualNet / (1 + (parcel.platformFeePct ?? 0))) * (parcel.rateStack?.costOfRiskPct ?? 0) * 100) / 100;
+    const rebateProvision = rebate > 0 ? Math.min(Math.max(Math.round(((parcel.ceilingProvision ?? 0) - actualProvision) * 100) / 100, 0), rebate) : 0;
     parcel.rebate = rebate;
     this.persist(parcel); // actualCost/rebate mutated after collectConfirm's scan
-    if (rebate > 0) this.vendors.rebate(parcel.vendorId, parcel.parcelId, rebate, 'flexible-route rebate', rebateTax);
+    if (rebate > 0) this.vendors.rebate(parcel.vendorId, parcel.parcelId, rebate, 'flexible-route rebate', rebateTax, rebateProvision);
   }
 
   /** Buyer reports a discrepancy at collection → Disputed, with mandatory photo proof. */

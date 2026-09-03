@@ -35,7 +35,26 @@ export interface NodePick {
  *
  * Which figure to CHARGE is not a matter of taste: it is `gross`. `total` is what the business earned.
  */
-export interface QuoteLeg { transport: number; base: number; fee: number; total: number; tax: number; gross: number; }
+export interface QuoteLeg {
+  transport: number;
+  base: number;
+  fee: number;
+  total: number;
+  tax: number;
+  gross: number;
+  /**
+   * The COST-OF-RISK slice of `fee` — already inside it, never added to it.
+   *
+   * The customer has always paid this: cost of risk is one of the three layers the platform fee is made
+   * of, so it has been in every price since the rate stack shipped. What it has never been is money set
+   * ASIDE — the whole fee landed in revenue, which made carrying risk look like earning. Stating the
+   * slice here lets billing move it to the claims provision instead, and moves not one cent of anybody's
+   * price: `base + fee === total` still holds, and this is a part of `fee`, not a fourth term.
+   *
+   * Zero wherever a sister has not set a cost-of-risk rate, which is everywhere today.
+   */
+  provision: number;
+}
 /**
  * A stop on the journey + its open-data fee, the sister company owed that fee, and what it is owed IN.
  *
@@ -113,12 +132,22 @@ export interface ShipmentQuote {
  *
  * The TAX deliberately stays. It is the one part of a price that is nobody's commercial secret — a customer
  * is entitled to know what tax they were charged and by whom, and in most jurisdictions a receipt must say.
+ *
+ * `provision` goes with `rates`, and it is worth saying why it is not enough to strip the object: the
+ * per-leg provision is `base × costOfRiskPct`, and `base` is public, so leaving it would publish the
+ * cost-of-risk knob by division. A secret that can be divided out of two public numbers is not a secret —
+ * which is how it slipped back in the first time, through a different field than the one that was fixed.
  */
-export type PublicQuote = Omit<ShipmentQuote, 'rates'>;
+export type PublicQuoteLeg = Omit<QuoteLeg, 'provision'>;
+export type PublicQuote = Omit<ShipmentQuote, 'rates' | 'flexible' | 'locked'> & { flexible: PublicQuoteLeg; locked: PublicQuoteLeg };
 
 export function publicQuote(quote: ShipmentQuote): PublicQuote {
-  const { rates: _internal, ...rest } = quote;
-  return rest;
+  const { rates: _internal, flexible, locked, ...rest } = quote;
+  const strip = (leg: QuoteLeg): PublicQuoteLeg => {
+    const { provision: _cover, ...open } = leg;
+    return open;
+  };
+  return { ...rest, flexible: strip(flexible), locked: strip(locked) };
 }
 
 export interface RouteEnd {
@@ -278,7 +307,11 @@ export class RoutingService {
       // sale, not the profit. Zero-rated by default, in which case `gross` is `total` to the cent and
       // every figure below is the number it was before tax existed.
       const { tax, gross } = taxOn(total, taxRule.ratePct);
-      return { transport: t, base, fee: Math.round((total - base) * 100) / 100, total, tax, gross };
+      // The cost-of-risk slice, on the same base the fee was computed on. Carved OUT of the fee rather
+      // than added on: the three layers are additive on `base`, so the risk layer's money is exactly
+      // `base × costOfRiskPct` and it is already inside the total above.
+      const provision = Math.round(base * stack.costOfRiskPct * 100) / 100;
+      return { transport: t, base, fee: Math.round((total - base) * 100) / 100, total, tax, gross, provision };
     };
     return {
       hops: plan.hops, nodes, legs, entityIds, sellerEntityId: sellerId, currency, fx, crossesBorder: crossings.length > 0, crossings,

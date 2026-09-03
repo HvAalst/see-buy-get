@@ -180,7 +180,7 @@ export class Freight {
    *
    * Absent on a freight nobody was billed for — the bulletin load settled off-platform, which is most of them.
    */
-  billed?: { net: number; tax: number; gross: number; feePct: number; taxPct: number };
+  billed?: { net: number; tax: number; gross: number; feePct: number; taxPct: number; provision: number };
   driverPaid?: boolean;
   // S33 — the heavy-cargo safety gate. loadSafety is stamped at pickup (the confirmed checklist keys + the
   // securement photo mediaId); unloadReport at delivery. Absent until the driver passes each gate.

@@ -14367,6 +14367,10 @@
           "shipmentTax": {
             "type": "number"
           },
+          "shipmentProvision": {
+            "type": "number",
+            "description": "The COST-OF-RISK slice of the platform fee on this shipment — money set aside against claims rather\nthan earned, stamped at mint like everything else about the price.\n\nInside `platformFee`, never on top of it: the customer paid this the day the rate stack shipped, and\nmoving it from revenue to a provision changes no price. Stamped because a sister that turns its\ncost-of-risk knob tomorrow must not change what was set aside for a shipment sold today — and\nbecause a refund has to release exactly what a billing set aside.\n\nAbsent means ZERO, the same reading as tax: a shipment sold before any of this carried no cover."
+          },
           "currency": {
             "type": "string",
             "description": "The money every figure above is in — the SELLING sister's, stamped at mint. Absent on records\n written before prices named their unit; read it through ParcelService.currencyOf."
@@ -14396,6 +14400,10 @@
           },
           "ceilingTax": {
             "type": "number"
+          },
+          "ceilingProvision": {
+            "type": "number",
+            "description": "…and the cover inside that ceiling, for the same reason: the rebate has to release exactly the\n provision the ceiling set aside, and re-deriving it from a rate would land a cent away."
           },
           "actualCost": {
             "type": "number"
@@ -17109,6 +17117,10 @@
                 "type": "number"
               },
               "taxPct": {
+                "required": true,
+                "type": "number"
+              },
+              "provision": {
                 "required": true,
                 "type": "number"
               }

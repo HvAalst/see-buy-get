@@ -668,6 +668,18 @@ export class Parcel {
   taxPct?: number;
   taxLabel?: string;
   shipmentTax?: number;
+  /**
+   * The COST-OF-RISK slice of the platform fee on this shipment — money set aside against claims rather
+   * than earned, stamped at mint like everything else about the price.
+   *
+   * Inside `platformFee`, never on top of it: the customer paid this the day the rate stack shipped, and
+   * moving it from revenue to a provision changes no price. Stamped because a sister that turns its
+   * cost-of-risk knob tomorrow must not change what was set aside for a shipment sold today — and
+   * because a refund has to release exactly what a billing set aside.
+   *
+   * Absent means ZERO, the same reading as tax: a shipment sold before any of this carried no cover.
+   */
+  shipmentProvision?: number;
   /** The money every figure above is in — the SELLING sister's, stamped at mint. Absent on records
    *  written before prices named their unit; read it through ParcelService.currencyOf. */
   currency?: string;
@@ -691,6 +703,9 @@ export class Parcel {
    *  tax that was owed: dividing a gross figure back out to find its tax is a different sum from the one
    *  that produced it, and it lands a cent away often enough to matter in a liability account. */
   ceilingTax?: number;
+  /** …and the cover inside that ceiling, for the same reason: the rebate has to release exactly the
+   *  provision the ceiling set aside, and re-deriving it from a rate would land a cent away. */
+  ceilingProvision?: number;
   actualCost?: number; // the real GROSS once the carrier is known (drives the flexible rebate)
   rebate?: number; // refunded to the vendor after delivery (ceiling − actual) on a flexible parcel
   actualPerKm?: number; // the delivering carrier's per-km rate (captured at handover, drives the rebate)

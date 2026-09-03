@@ -1,7 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { AgentService } from './agent.service';
 import { MdpService } from './mdp.service';
-import { RoutingService } from './routing.service';
+import { RoutingService, publicQuote } from './routing.service';
 import { CorridorService } from './corridor.service';
 import { ShelfService } from './shelf.service';
 import { VendorService } from './vendor.service';
@@ -301,6 +301,116 @@ describe('tax', () => {
       expect(parcel.shipmentTax).toBe(0);
       chargeVat();
       expect(parcels.get(parcel.parcelId).taxPct).toBe(0);
+    });
+  });
+
+  /**
+   * The other slice carved out of the same payment.
+   *
+   * Cost of risk has been in every price since the rate stack shipped — it is one of the three layers the
+   * platform fee is made of. What it had never been is money SET ASIDE: the whole fee landed in revenue,
+   * which made carrying risk look like earning right up until somebody claimed. These tests pin that
+   * moving it changes no price, only where the money sits.
+   */
+  describe('the cost-of-risk layer accrues to the claims provision', () => {
+    const provision = () => -books.balance(ke(), ACCOUNT_CODES.PROVISION_CLAIMS) || 0;
+    /** 10% cost of risk, and nothing else changed — margin stays at the network default. */
+    const chargeRisk = () => entities.setRates(ke(), { costOfRiskPct: 0.1 });
+
+    it('is a SLICE of the fee, never a fourth term on the price', () => {
+      const { from, to } = route();
+      const before = routing.quoteShipment(from.did, to.did).locked;
+      chargeRisk();
+      const after = routing.quoteShipment(from.did, to.did).locked;
+
+      // The price DID rise, because a rate was turned up — but the provision is inside that fee, not
+      // beside it: base + fee is still exactly the total.
+      expect(after.provision).toBe(Math.round(after.base * 0.1 * 100) / 100);
+      expect(Math.round((after.base + after.fee) * 100) / 100).toBe(after.total);
+      expect(before.provision).toBe(0);
+    });
+
+    it('sets the slice aside instead of earning it, and the books still balance', () => {
+      const { from, to, store } = route();
+      chargeRisk();
+      const { parcel } = mint(store, from, to);
+
+      expect(parcel.shipmentProvision).toBeGreaterThan(0);
+      expect(provision()).toBe(parcel.shipmentProvision);
+      // Revenue is what is left after the cover — the two together are the whole charge.
+      expect(Math.round((earned() + provision()) * 100) / 100).toBe(parcel.shipmentCost);
+      expect(books.balances(ke()).balanced).toBe(true);
+    });
+
+    it('accrues NOTHING while the knob is at zero — which is every sister today', () => {
+      const { from, to, store } = route();
+      const { parcel } = mint(store, from, to);
+      expect(parcel.shipmentProvision).toBe(0);
+      expect(provision()).toBe(0);
+      expect(earned()).toBe(parcel.shipmentCost); // exactly as before this existed
+    });
+
+    it('releases the cover when the sale is undone — a shipment nobody makes carries no risk', () => {
+      const a = shop('Provision Void', 'Nairobi', NAIROBI);
+      agents.submitKyc(a.did, { idCopyRef: 'id.jpg', tradingLicenceRef: 'l.pdf', shopPhotoRefs: ['s.jpg'] });
+      agents.decideKyc(a.did, true);
+      gate.topUp(a.did, 500, 'bank-1');
+      gate.chargeShipping(a.did, 10, 'PUD-P1', 0, 2);
+      expect(provision()).toBe(2);
+      expect(earned()).toBe(8);
+
+      gate.refund(a.did, 10, 'PUD-P1', 0, 2);
+      expect(provision()).toBe(0);
+      expect(earned()).toBe(0);
+      expect(books.balances(ke()).balanced).toBe(true);
+    });
+
+    it('settles an unpaid parcel at the cover it was SOLD with, not today’s rate', () => {
+      const { from, to } = route();
+      chargeRisk();
+      const poor = vendors.register({ name: 'Broke Store', country: 'KE' });
+      const { parcel, paid } = parcels.createInbound({
+        vendorId: poor.vendorId, originAgentDid: from.did, destAgentDid: to.did, buyerMobile: '+254700556',
+        contentPhotoRef: 'contents.jpg', size: 'M', shippingPolicy: poor.shippingPolicy, quote: routing.quoteShipment(from.did, to.did),
+      });
+      expect(paid).toBe(false);
+      const stamped = parcel.shipmentProvision!;
+      expect(stamped).toBeGreaterThan(0);
+
+      entities.setRates(ke(), { costOfRiskPct: 0 }); // the knob is turned back down while it waits
+      vendors.topUp(poor.vendorId, 5000);
+      parcels.settleUnpaid(parcel.parcelId);
+
+      expect(provision()).toBe(stamped);
+      expect(books.balances(ke()).balanced).toBe(true);
+    });
+
+    it('never leaves the building — the public quote carries no cover figure', () => {
+      // `provision` is `base × costOfRiskPct` and `base` is public, so publishing it would publish the
+      // knob by division. Stripping the `rates` object alone is not enough: a secret that can be divided
+      // out of two public numbers is not a secret, and that is exactly how it slipped back in here
+      // through a different field than the one that had been fixed.
+      const { from, to } = route();
+      chargeRisk();
+      const open = publicQuote(routing.quoteShipment(from.did, to.did));
+      expect((open as { rates?: unknown }).rates).toBeUndefined();
+      expect((open.locked as { provision?: number }).provision).toBeUndefined();
+      expect((open.flexible as { provision?: number }).provision).toBeUndefined();
+      expect(open.locked.total).toBeGreaterThan(0); // …and everything a buyer is owed is still there
+      expect(open.tax).toBeDefined();
+    });
+
+    it('never lets the slices sum past the payment they came from', () => {
+      // Three clamps on one amount. A caller's arithmetic mistake must not be able to move our own money
+      // between our own accounts, so an absurd provision is capped by what is actually left.
+      const a = shop('Clamp', 'Nairobi', NAIROBI);
+      agents.submitKyc(a.did, { idCopyRef: 'id.jpg', tradingLicenceRef: 'l.pdf', shopPhotoRefs: ['s.jpg'] });
+      agents.decideKyc(a.did, true);
+      gate.topUp(a.did, 500, 'bank-1');
+      gate.chargeShipping(a.did, 10, 'PUD-P2', 4, 999);
+      expect(provision()).toBe(6); // everything after the tax, and not a cent more
+      expect(earned()).toBe(0);
+      expect(books.balances(ke()).balanced).toBe(true);
     });
   });
 });
