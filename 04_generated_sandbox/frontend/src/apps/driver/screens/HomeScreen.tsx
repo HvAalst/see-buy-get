@@ -7,6 +7,7 @@ import {
   capacitySubLine,
   driverStatusNotice,
   isFull,
+  minEarnFilter,
   offShiftSummary,
   rateBand,
   shiftSummary,
@@ -164,7 +165,10 @@ function OffShift({ state, actions }: HomeScreenProps) {
 function WorkCard({ state, actions }: HomeScreenProps) {
   const t = useT();
   const [ask, setAsk] = useState(false);
+  const [askFloor, setAskFloor] = useState(false);
+  const [floorDraft, setFloorDraft] = useState('');
   const work = state.session.assignment?.work;
+  const quiet = state.session.quiet;
   const until = state.session.assignment?.snoozedUntil;
   const snoozed = !!until && new Date(until).getTime() > Date.now();
 
@@ -216,9 +220,77 @@ function WorkCard({ state, actions }: HomeScreenProps) {
       <Button variant="link" full={false} onClick={() => actions.go('route')}>
         {work ? t('driver.home.headingChange') : t('driver.home.headingSet')}
       </Button>
+      {/* The standing floor, and — the half that makes it safe to be standing — what it kept quiet today.
+          A silencer nobody can see working is how somebody hears nothing for a week and blames us, so the
+          setting and its effect are one line, never a number buried in a settings screen. */}
+      <p class="card__note">
+        {quiet?.floor ? t('driver.home.minEarnSet', { amount: String(quiet.floor) }) : t('driver.home.minEarnUnset')}
+        {quiet?.floor && quiet.belowFloor > 0
+          ? ` ${quiet.belowFloor === 1 ? t('driver.home.minEarnQuietedOne') : t('driver.home.minEarnQuietedMany', { count: quiet.belowFloor })}`
+          : ''}
+      </p>
+      {/* The OTHER silence, and the one nobody was ever told about: priced above what shippers will pay.
+          Said as a consequence for THEM, never as a benchmark against anybody else — an average rate
+          pushed at independent operators is price signalling however kindly it is worded, and warning only
+          the dear ones would be the network leaning on prices in its own favour. Shown only once enough
+          loads have been refused for it to mean anything, and only to the driver who actually holds the
+          lever: a fleet driver's rate belongs to their manager. */}
+      {quiet?.rateLooksHigh && quiet.rateIsYours ? (
+        <Note
+          tone="warn"
+          icon="wallet"
+          title={t('driver.home.rateHighTitle', { count: quiet.overBudget })}
+          detail={quiet.ratePerKm ? t('driver.home.rateHighDetail', { rate: String(quiet.ratePerKm) }) : t('driver.home.rateHighDetailNoRate')}
+        />
+      ) : null}
+      <Button
+        variant="link"
+        full={false}
+        onClick={() => {
+          setFloorDraft(quiet?.floor ? String(quiet.floor) : '');
+          setAskFloor(true);
+        }}
+      >
+        {quiet?.floor ? t('driver.home.minEarnChange') : t('driver.home.minEarnSetCta')}
+      </Button>
       <Button variant="link" full={false} onClick={() => setAsk(true)}>
         {t('driver.home.snoozeNew')}
       </Button>
+
+      <Sheet open={askFloor} onClose={() => setAskFloor(false)} title={t('driver.home.minEarnSheetTitle')}>
+        <p class="t-body">{t('driver.home.minEarnSheetBody')}</p>
+        <div class="field">
+          <label class="field__label" for="nudge-min-earn">
+            {t('driver.home.minEarnFieldLabel')}
+          </label>
+          <input
+            id="nudge-min-earn"
+            class="input"
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="1"
+            value={floorDraft}
+            placeholder={t('driver.home.minEarnPlaceholder')}
+            onInput={(e) => setFloorDraft(e.currentTarget.value)}
+          />
+        </div>
+        {/* Clearing is the same control, not a different screen — a driver must never have to hunt for the
+            way out of a setting that is making their phone quiet. */}
+        {/* The SAME parser the work-search box uses. Two boxes a driver types a minimum into must not
+            disagree about what "0", a blank or a stray minus sign mean — and this one is the parser that
+            already refuses a negative before the backend's @Min(0) can 400 on it. */}
+        <Button
+          busy={state.busy === 'min-earn'}
+          chevron={false}
+          onClick={() => {
+            setAskFloor(false);
+            void actions.setMinEarn(minEarnFilter(floorDraft));
+          }}
+        >
+          {minEarnFilter(floorDraft) ? t('driver.home.minEarnSave') : t('driver.home.minEarnClear')}
+        </Button>
+      </Sheet>
 
       <Sheet open={ask} onClose={() => setAsk(false)} title={t('driver.home.snoozeSheetTitle')}>
         <p class="t-body">{t('driver.home.snoozeSheetBody')}</p>

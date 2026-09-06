@@ -9331,11 +9331,50 @@
         }
       }
     },
+    "/v1/sbg/fleet/drivers/{did}/min-earn": {
+      "post": {
+        "operationId": "Sbg.setNudgeMinEarn",
+        "summary": "",
+        "description": "\"Do not wake me for less than this\", all in, for both bags and freight.\n\nA STANDING setting on the driver, not a filter on a search. The list views already had a minimum, but\nit was a box typed into the request — so the one surface that speaks first, the lock-screen nudge off\na GPS fix, had nothing to read and applied none. A driver could set a minimum, watch the list obey it,\nand still be interrupted at the wheel for a job beneath it.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NudgeMinEarnDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FleetDriver"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/drivers/{did}/session": {
       "get": {
         "operationId": "Sbg.driverSession",
         "summary": "",
-        "description": "The driver's current shift session (active coupling + vehicle), or { active:false } off duty.",
+        "description": "The driver's current shift session (active coupling + vehicle), or { active:false } off duty.\n\n Carries WHY TODAY WAS QUIET, split by cause. A setting that silences a phone without ever saying so is\n how somebody hears nothing for a week and blames the network — so the two things the network knows and\n was never saying, their own floor and their own rate, travel with the card that shows them.",
         "parameters": [
           {
             "name": "did",
@@ -16500,6 +16539,10 @@
           "status": {
             "type": "object"
           },
+          "nudgeMinEarn": {
+            "type": "number",
+            "description": "Do not interrupt this driver for work paying less than this, all in.\n\nIt lives on the DRIVER, not on the coupling, unlike the snooze and the derived-leg switch beside it.\nThose two are moods held for a shift — a puncture, a favour taken this morning — and it is right that\nending the shift ends them. A fee floor is not a mood: it is the driver's cost base, and fuel does not\nget cheaper because yesterday finished. Asking for it again every morning would make it the thing it\nreplaced — a number typed into a search box that dies on the next reload.\n\nThe price of standing is that it can starve somebody silently, which is exactly what the snooze warns\nabout. That is paid for by COUNTING what it suppresses and showing them (see DispatchService's floor\nreport): a setting you can watch working is a setting you can undo.\n\nAbsent, or zero, means no floor. Bounded by MAX_NUDGE_MIN_EARN."
+          },
           "assignedVehicleId": {
             "type": "string"
           },
@@ -16717,6 +16760,15 @@
           "at",
           "radiusKm"
         ]
+      },
+      "NudgeMinEarnDto": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
       },
       "AssignCorridorDto": {
         "type": "object",

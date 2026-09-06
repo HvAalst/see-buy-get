@@ -95,6 +95,16 @@ export function createDriverApi(sbg: SbgClient) {
       sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/suggest-nearby', { params: { path: { did } }, body })),
 
     /** Hold new offers. Omit `minutes` for "until I resume". Never touches loads already claimed. */
+    /**
+     * "Do not interrupt me for less than this", all in, for bags and freight alike.
+     *
+     * A STANDING setting, unlike the minimum typed into a work search: a fee floor is the driver's cost
+     * base, not a mood, and it is the only one the lock-screen nudge can read — that path is triggered by
+     * a GPS fix and has no request to carry a filter. Omit the amount (or send 0) to clear it.
+     */
+    setMinEarn: (did: string, amount?: number) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/min-earn', { params: { path: { did } }, body: { amount } })),
+
     snoozeWork: (did: string, minutes?: number) =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/snooze', { params: { path: { did } }, body: { minutes } })),
 

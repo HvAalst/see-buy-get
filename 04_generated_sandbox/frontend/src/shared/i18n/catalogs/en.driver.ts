@@ -120,6 +120,27 @@ export const enDriver = {
   'driver.home.workArea': 'Loads within {km} km of you.',
   // Snoozing NEW offers — the duration is chosen at the moment of stopping.
   'driver.home.snoozeNew': 'Snooze new offers',
+  // The standing floor under an interruption. Stated in the driver's own terms — being woken — rather than
+  // in the network's, because "minimum earning filter" is a thing a form does, not a thing a phone does.
+  'driver.home.minEarnUnset': 'You are woken for any job near you.',
+  'driver.home.minEarnSet': 'You are only woken for jobs paying {amount} or more.',
+  // A key PAIR, because t() does no pluralising of its own — and the singular really does happen on a
+  // quiet morning, which is exactly when a driver is most likely to be wondering why it is quiet.
+  'driver.home.minEarnQuietedOne': '1 job today was below it.',
+  'driver.home.minEarnQuietedMany': '{count} jobs today were below it.',
+  'driver.home.minEarnSetCta': 'Set a minimum',
+  // The other reason a phone stays quiet. Said as what it cost THEM, never as what anybody else charges: a
+  // going-rate figure pushed at independent operators steers prices, and this may only ever explain silence.
+  'driver.home.rateHighTitle': '{count} jobs near you were more than the sender would pay',
+  'driver.home.rateHighDetail': 'Your price is {rate} per km. Lowering it would put more of the work near you within reach.',
+  'driver.home.rateHighDetailNoRate': 'Lowering your price per km would put more of the work near you within reach.',
+  'driver.home.minEarnChange': 'Change my minimum',
+  'driver.home.minEarnSheetTitle': 'Least I will be woken for',
+  'driver.home.minEarnSheetBody': 'We will still show you everything when you go looking. This only stops the phone waking you for small jobs.',
+  'driver.home.minEarnFieldLabel': 'Minimum for one job',
+  'driver.home.minEarnPlaceholder': 'Any amount',
+  'driver.home.minEarnSave': 'Save',
+  'driver.home.minEarnClear': 'Wake me for anything',
   'driver.home.snoozeSheetTitle': 'Snooze new offers',
   'driver.home.snoozeSheetBody': 'We will stop sending you new work. Anything you are already carrying stays yours to deliver.',
   'driver.home.snoozeSheetNote': 'This does not count against you, and it ends when your shift does.',
@@ -424,6 +445,8 @@ export const enDriver = {
   'driver.toast.rateUpdated': 'Rate updated',
   'driver.toast.rateUpdatedDetail': 'You now charge the market rate.',
   'driver.toast.pickRoute': 'Pick where you start and where you are heading.',
+  'driver.toast.minEarnSet': 'You will only be woken for {amount} or more',
+  'driver.toast.minEarnCleared': 'You will be woken for any job near you',
   'driver.toast.snoozed': 'New offers snoozed',
   'driver.toast.snoozedFor': 'Quiet for {count} minutes. Your current loads are unchanged.',
   'driver.toast.snoozedOpen': 'Quiet until you start again. Your current loads are unchanged.',

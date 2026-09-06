@@ -839,6 +839,16 @@ export class DerivedLegDto {
   @IsBoolean() on!: boolean;
 }
 
+/**
+ * "Do not wake me for less than this." OMITTED, or zero, clears the floor.
+ *
+ * Optional rather than required so that clearing it is the same call as setting it — a separate "clear"
+ * endpoint is how a driver ends up with a silencer they cannot find the switch for.
+ */
+export class NudgeMinEarnDto {
+  @IsOptional() @IsNumber() @Min(0) amount?: number;
+}
+
 /** Hold new offers. Omitted `minutes` = until the driver resumes (bounded by the shift either way). */
 export class SnoozeDto {
   @IsOptional() @IsNumber() @Min(1) minutes?: number;

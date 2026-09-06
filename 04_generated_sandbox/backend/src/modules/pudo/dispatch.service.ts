@@ -9,6 +9,7 @@ import { MdpService } from './mdp.service';
 import { ToteService } from './tote.service';
 import { GeoPoint, Tote, ToteHaul } from './pudo.types';
 import { haversineKm } from './geo';
+import { DriverService } from './driver.service';
 import { FleetService } from './fleet.service';
 import { CargoService } from './cargo.service';
 import { CargoNature, Equipment, VehicleCapability } from './cargo.types';
@@ -27,7 +28,7 @@ import { MediaService } from './media.service';
 import { MarketPulseStore } from './market-pulse.store';
 import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, toteCapacityOf, VEHICLE_SPEC } from './fleet.config';
 import { Router, ROUTER } from './router';
-import { DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NUDGE_RADIUS_KM, OFFER_TTL_MIN, PLATFORM_FEE_PCT, taxOn, TOTE_LOAD_FEE, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
+import { DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MARKET_MIN_DEMAND, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NUDGE_RADIUS_KM, OFFER_TTL_MIN, PLATFORM_FEE_PCT, taxOn, TOTE_LOAD_FEE, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
@@ -188,6 +189,9 @@ export class DispatchService {
   private readonly proposals = new PersistentMap<string, FreightProposal>('pudo-freight-proposals');
   /** Live "decline this one offer" capabilities (see mintDeclineToken). In-memory like the offers they answer. */
   private readonly declineTokens = new Map<string, { offerId: string; expiresAt: number }>();
+  /** WHY it was quiet today, split by cause: their own floor, and their own rate. Same-day and in memory —
+   *  a restart losing it is correct for a figure whose whole meaning is "since this morning". */
+  private readonly quietToday = new Map<string, { day: string; belowFloor: number; overBudget: number }>();
   private freightSeq = 0;
 
   constructor(
@@ -202,6 +206,10 @@ export class DispatchService {
     private readonly market: MarketPulseStore,
     private readonly media: MediaService,
     private readonly ratings: RatingService,
+    // For the driver's own standing "do not wake me below this". Read HERE rather than passed in, because
+    // the caller is a GPS fix and there is no request to carry it — which is exactly why this path had no
+    // floor at all until now.
+    private readonly drivers: DriverService,
     // For the selling sister's rate on a dedicated haul — the lane where a specialised vehicle is bought
     // and where profit-on-risk is actually earned.
     private readonly entities: EntityService,
@@ -633,6 +641,21 @@ export class DispatchService {
     return out;
   }
 
+  /**
+   * The ONE load worth interrupting this driver for, or nothing.
+   *
+   * Two rules here that the list views do not have, because this is the only surface that speaks first.
+   *
+   * THE DRIVER'S OWN FLOOR (item 10). A minimum used to exist only as a box typed into a search, sent as a
+   * query parameter — so this path, which is triggered by a GPS fix and has no request behind it, had
+   * nowhere to read one from and applied none. A driver could set a floor, watch the list obey it, and
+   * still be woken at the wheel for a job beneath it. The floor now lives on the driver and is read here.
+   *
+   * NEAREST THAT PASSES, not "the nearest, if it passes". This used to take the closest load and then
+   * return null when it failed the shipper's budget — so a driver heard silence while a load two streets
+   * further on was perfectly takeable. Every rejection now steps to the next candidate instead of ending
+   * the search, which is what "the best one" was always supposed to mean.
+   */
   offerNear(driverDid: string, point: GeoPoint, now: number = Date.now()): Offer | null {
     const vehicle = this.fleet.vehicleForDriver(driverDid);
     if (!vehicle) return null;
@@ -641,31 +664,132 @@ export class DispatchService {
     const remainingTotes = this.remainingTotes(driverDid);
     const profile = this.pricingProfile(vehicle);
     const freightBarred = belowFloor(this.ratings.driverRating(driverDid));
+    const floor = this.nudgeFloorFor(driverDid);
 
-    const best = this.availableLoads()
+    const candidates = this.availableLoads()
       .filter((load) => !(freightBarred && load.kind === 'freight'))
       .filter((load) => this.vehicleCanCarry(vehicle, load, remaining, remainingTotes))
       .map((load) => ({ load, km: this.router.roadKm(point, load.pickupLocation) }))
       // A rider who declared a patch is asking to hear about their whole patch; anyone else gets the tighter
       // interrupt-someone-driving radius. Either way the declaration below decides whether it is really theirs.
       .filter(({ load, km }) => km <= this.nudgeRadiusFor(driverDid) && this.worksNear(driverDid, load.pickupLocation))
-      .sort((a, b) => a.km - b.km)[0];
-    if (!best) return null;
+      .sort((a, b) => a.km - b.km);
 
-    const { load } = best;
-    const price = load.kind === 'freight'
-      ? computeFreightPrice({
-          baseFee: profile.baseFee,
-          ratePerKm: profile.ratePerKm,
-          deadheadKm: best.km,
-          tripKm: load.destLocation ? this.router.roadKm(load.pickupLocation, load.destLocation) : 0,
-          multiplier: freightMultiplier(new Date(now), { min: profile.min, max: profile.max }, this.market.factorFor(load.pickupLocation, now)),
-        })
-      : undefined;
-    // The shipper's budget still binds — an interruption offering a price nobody will pay is worse than silence.
-    if (price && load.kind === 'freight' && load.maxSpend != null && this.shipperBillFor(price.total, load.ref).gross > load.maxSpend) return null;
+    // NOT `belowFloor` — that name is taken by the RATING floor helper imported above, and shadowing it
+    // here would silently disarm the freight bar two lines up.
+    let underMin = 0;
+    let overBudget = 0;
+    for (const { load, km } of candidates) {
+      const price = load.kind === 'freight'
+        ? computeFreightPrice({
+            baseFee: profile.baseFee,
+            ratePerKm: profile.ratePerKm,
+            deadheadKm: km,
+            tripKm: load.destLocation ? this.router.roadKm(load.pickupLocation, load.destLocation) : 0,
+            multiplier: freightMultiplier(new Date(now), { min: profile.min, max: profile.max }, this.market.factorFor(load.pickupLocation, now)),
+          })
+        : undefined;
+      // The shipper's budget still binds — an interruption offering a price nobody will pay is worse than
+      // silence. Counted, though: priced above what shippers will pay is the OTHER way a phone goes quiet,
+      // and a driver who cannot tell it apart from "no work about" has no idea which lever to reach for.
+      if (price && load.kind === 'freight' && load.maxSpend != null && this.shipperBillFor(price.total, load.ref).gross > load.maxSpend) {
+        overBudget += 1;
+        continue;
+      }
 
-    return this.makeOffer(driverDid, load, { detour: Math.round(best.km * 10) / 10, minutesAway: this.minutes(point, load.pickupLocation), price, ratePerKm: profile.ratePerKm, time: this.timeCost(vehicle, { from: point }, load), now });
+      if (floor != null) {
+        // The ALL-IN figure, for BOTH kinds. The old filter compared a freight price and let every bag
+        // through, which was defensible only while a bag paid a flat handling fee; since a bag started
+        // earning for the road as well it has had a real number, and a driver who said "not below 200"
+        // meant it about bags too. This is the same function the lock screen prints and the claim locks.
+        const earn = this.expectedEarn(load, price, profile.ratePerKm);
+        // An earn we cannot state cannot be promised to clear a floor, and the lock screen would fall back
+        // to the bare handling fee — which is under any real floor anyway. Silence is the honest answer.
+        if (earn == null || earn < floor) {
+          underMin += 1;
+          continue;
+        }
+      }
+
+      this.recordQuiet(driverDid, underMin, overBudget, now);
+      return this.makeOffer(driverDid, load, { detour: Math.round(km * 10) / 10, minutesAway: this.minutes(point, load.pickupLocation), price, ratePerKm: profile.ratePerKm, time: this.timeCost(vehicle, { from: point }, load), now });
+    }
+    this.recordQuiet(driverDid, underMin, overBudget, now);
+    return null;
+  }
+
+  /** The driver's standing "do not wake me below this", or undefined. Unknown driver → no floor: a missing
+   *  record must not silence a phone, and every other guard here already fails open the same way. */
+  private nudgeFloorFor(driverDid: string): number | undefined {
+    try {
+      const floor = this.drivers.get(driverDid).nudgeMinEarn;
+      return floor != null && Number.isFinite(floor) && floor > 0 ? floor : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Why the phone was quiet today, split by the two causes a driver can actually do something about.
+   *
+   * Silence has three explanations and they need completely different answers: there was no work, your own
+   * floor stopped it, or shippers would not pay what you charge. A driver who cannot tell them apart
+   * reaches for the wrong lever, or for none — and the second and third are both things the network knows
+   * and was simply never saying.
+   *
+   * WHAT THIS DELIBERATELY IS NOT. It reports the driver's OWN reach, never what anybody else charges. An
+   * average rate pushed at independent operators is price signalling however kindly it is worded, and
+   * warning only the expensive ones is not neutral either — it is the network leaning on prices in its own
+   * favour. Reach has no such asymmetry: a competitively-priced driver simply has nothing here to read, and
+   * nobody is ever told what to charge. (The same rule the merchant scorecard is committed to: publish only
+   * what we measured, identically.)
+   *
+   * These are ABSOLUTE counts, never a fraction. The search stops at the first load worth offering, so the
+   * ones behind it were never classified — "6 of 14" would be a denominator we did not actually count.
+   *
+   * In memory and same-day: a restart loses it, which is right for a figure that means "since this morning"
+   * and on which no money depends.
+   */
+  quietReport(driverDid: string, now: number = Date.now()): {
+    floor?: number;
+    belowFloor: number;
+    overBudget: number;
+    ratePerKm?: number;
+    rateIsYours: boolean;
+    rateLooksHigh: boolean;
+  } {
+    const today = new Date(now).toISOString().slice(0, 10);
+    const held = this.quietToday.get(driverDid);
+    const fresh = held && held.day === today ? held : { day: today, belowFloor: 0, overBudget: 0 };
+    const vehicle = this.fleet.vehicleForDriver(driverDid);
+    // A fleet-attached driver does not own the lever: the vehicle is the manager's and so is its rate.
+    // Telling them their price is costing them work would be telling somebody about a control they cannot
+    // reach — that belongs on the manager's console, not here.
+    let rateIsYours = false;
+    try {
+      rateIsYours = this.drivers.get(driverDid).managerDid == null;
+    } catch {
+      rateIsYours = false;
+    }
+    return {
+      floor: this.nudgeFloorFor(driverDid),
+      belowFloor: fresh.belowFloor,
+      overBudget: fresh.overBudget,
+      ratePerKm: vehicle?.pricePerKm,
+      rateIsYours,
+      // One load refused on price says nothing at all, and a warning built on it is noise that teaches a
+      // driver to ignore the real ones. The same threshold the market pulse uses before it will call a
+      // cell busy or quiet — a number is only worth acting on once there is enough of it.
+      rateLooksHigh: fresh.overBudget >= MARKET_MIN_DEMAND,
+    };
+  }
+
+  private recordQuiet(driverDid: string, underMin: number, overBudget: number, now: number): void {
+    if (underMin === 0 && overBudget === 0) return;
+    const today = new Date(now).toISOString().slice(0, 10);
+    const held = this.quietToday.get(driverDid);
+    const base = held && held.day === today ? held : { day: today, belowFloor: 0, overBudget: 0 };
+    this.quietToday.set(driverDid, { day: today, belowFloor: base.belowFloor + underMin, overBudget: base.overBudget + overBudget });
   }
 
   /* --- declining from the lock screen --- */

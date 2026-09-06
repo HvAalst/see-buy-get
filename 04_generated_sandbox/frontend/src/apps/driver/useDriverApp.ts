@@ -830,6 +830,32 @@ export function useDriverApp() {
   );
 
   /**
+   * Set (or clear) the standing floor under an interruption.
+   *
+   * Deliberately NOT the minimum on the work-search screen. That one narrows a list the driver is already
+   * reading; this one decides whether the phone is allowed to speak first, and it is the only one the
+   * lock-screen nudge can see. Clearing is the same call with nothing in it, so a driver can never end up
+   * with a silencer whose off switch lives somewhere else.
+   */
+  const setMinEarn = useCallback(
+    async (amount?: number) => {
+      if (!client || !did) return;
+      await run('min-earn', async () => {
+        const r = await client.api.setMinEarn(did, amount);
+        if (r.error) return fail(r.error);
+        buzz();
+        pushToast({
+          tone: 'ok',
+          icon: 'wallet',
+          title: amount ? t('driver.toast.minEarnSet', { amount: String(amount) }) : t('driver.toast.minEarnCleared'),
+        });
+        await refresh();
+      });
+    },
+    [client, did, run, fail, pushToast, refresh],
+  );
+
+  /**
    * Switch off (or back on) the road worked out from a load the driver took.
    *
    * A switch rather than a prompt, and off is honoured for the shift: without that, turning it off would
@@ -1171,6 +1197,7 @@ export function useDriverApp() {
       findNearby,
       snoozeWork,
       resumeWork,
+      setMinEarn,
       setDerivedLeg,
       queryJobs,
       loadJobs,

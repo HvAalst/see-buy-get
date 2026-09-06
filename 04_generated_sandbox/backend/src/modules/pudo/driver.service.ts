@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
+import { MAX_NUDGE_MIN_EARN } from './pudo.config';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { createHash, randomBytes } from 'crypto';
 import { DidService } from '../../foundation/did/did.service';
@@ -199,6 +200,24 @@ export class DriverService {
 
   get(did: string): FleetDriver {
     return this.require(did);
+  }
+
+  /**
+   * "Do not wake me for less than this." Zero, or nothing, clears it.
+   *
+   * Deliberately NOT a search filter. This gates the INTERRUPTION; the list views keep their own typed
+   * filter and the open board keeps none — a driver who is already looking is asking a different question
+   * from a driver being tapped on the shoulder at the wheel.
+   */
+  setNudgeMinEarn(did: string, amount?: number): FleetDriver {
+    const driver = this.require(did);
+    if (amount != null && (!Number.isFinite(amount) || amount < 0 || amount > MAX_NUDGE_MIN_EARN)) {
+      throw new GlosError('INVALID_INPUT', `A minimum must be between 0 and ${MAX_NUDGE_MIN_EARN}`);
+    }
+    // Zero and undefined are ONE state — no floor — rather than "a floor of nothing", which every load
+    // clears anyway and which would leave two ways of saying the same thing.
+    driver.nudgeMinEarn = amount != null && amount > 0 ? Math.round(amount * 100) / 100 : undefined;
+    return driver;
   }
 
   list(filter: { managerDid?: string } = {}): FleetDriver[] {

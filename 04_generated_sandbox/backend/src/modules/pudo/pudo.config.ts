@@ -349,6 +349,14 @@ export const MAX_WORK_RADIUS_KM = 15;
 // A snooze on new offers cannot outlive the shift it was taken in, and 12 h is longer than any shift — so
 // "until I resume" and "the rest of my day" are the same promise, and neither can strand a driver tomorrow.
 export const MAX_SNOOZE_MIN = 12 * 60;
+/**
+ * The most a driver may refuse to be woken for.
+ *
+ * A floor is a silencer, and an unbounded silencer is a driver who types a number they meant as "quite a
+ * lot", hears nothing for a week and blames the network. The bound is deliberately generous — it is not a
+ * judgement about what work is worth, only a stop against a fat finger turning the phone off for good.
+ */
+export const MAX_NUDGE_MIN_EARN = 100_000;
 export const NUDGE_COOLDOWN_MIN = 10; // at most one interruption per driver in this window
 export const NUDGE_MIN_MOVE_KM = 0.4; // a parked phone's GPS jitters; only real movement asks the question
 export const OFFER_TTL_MIN = 10; // a suggestion auto-ignores if the driver does not answer in time

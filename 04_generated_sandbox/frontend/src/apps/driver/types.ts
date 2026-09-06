@@ -121,6 +121,26 @@ export interface SessionView {
   active: boolean;
   assignment?: AssignmentView;
   vehicle?: VehicleView;
+  /**
+   * WHY today was quiet, split by the two causes a driver can act on.
+   *
+   * Silence has three explanations needing three different answers — there was no work, your own floor
+   * stopped it, or shippers would not pay what you charge — and two of those the network knew all along
+   * and never said. The counts travel with the settings on purpose: a control that silences a phone
+   * without saying so is how somebody hears nothing for a week and blames us.
+   *
+   * `rateLooksHigh` is the network's own thickness test, not a judgement: one load refused on price says
+   * nothing. `rateIsYours` is false for a fleet driver, whose vehicle — and so whose rate — is the
+   * manager's. Absent on an older backend.
+   */
+  quiet?: {
+    floor?: number;
+    belowFloor: number;
+    overBudget: number;
+    ratePerKm?: number;
+    rateIsYours: boolean;
+    rateLooksHigh: boolean;
+  };
 }
 
 export type ClaimKind = 'tote' | 'freight';

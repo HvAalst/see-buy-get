@@ -147,6 +147,22 @@ export class FleetDriver {
   criminalRecordClear: boolean;
   homeZone?: string;
   status: DriverStatus;
+  /**
+   * Do not interrupt this driver for work paying less than this, all in.
+   *
+   * It lives on the DRIVER, not on the coupling, unlike the snooze and the derived-leg switch beside it.
+   * Those two are moods held for a shift — a puncture, a favour taken this morning — and it is right that
+   * ending the shift ends them. A fee floor is not a mood: it is the driver's cost base, and fuel does not
+   * get cheaper because yesterday finished. Asking for it again every morning would make it the thing it
+   * replaced — a number typed into a search box that dies on the next reload.
+   *
+   * The price of standing is that it can starve somebody silently, which is exactly what the snooze warns
+   * about. That is paid for by COUNTING what it suppresses and showing them (see DispatchService's floor
+   * report): a setting you can watch working is a setting you can undo.
+   *
+   * Absent, or zero, means no floor. Bounded by MAX_NUDGE_MIN_EARN.
+   */
+  nudgeMinEarn?: number;
   assignedVehicleId?: string; // convenience mirror of the active coupling
   createdAt: string;
   lastSeenAt: string;
