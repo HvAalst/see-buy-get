@@ -258,6 +258,19 @@ export class RoutingService {
     // that was not before — what changed is that a real measurement is no longer rounded up to a tier.
     const factor = measured ?? SIZE_TRANSPORT_FACTOR[size];
     const { min, max } = this.vehicles.priceRange();
+    /**
+     * NO SURGE HERE, AND THAT IS A DECISION — user, 2026-09-06.
+     *
+     * The market pulse prices freight: `suggest`, `suggestNearby`, `offerNear` and the claim lock all flex
+     * a driver's offer by what the zone is doing. It has never reached this function, and it must not. A
+     * published shipping price on a merchant's checkout is a different promise from a driver's spot offer:
+     * a buyer quoted one figure at breakfast and another at lunch reads it as a trick, and it is the
+     * MERCHANT who fields that complaint, not us.
+     *
+     * That is why `MarketPulseStore` is absent from this service's constructor. Injecting it would look
+     * like finishing an unfinished job; `parcel-price-stability.spec.ts` is what says otherwise, and it
+     * fails loudly the moment a surge factor reaches a parcel.
+     */
     const transport = (rate: number) => Math.round(totalKm * rate * factor * 100) / 100;
     // The margin belongs to the sister selling the shipment, not to the network. Today one company
     // performs the whole journey, so the origin node's rate is that company's; when a route crosses a
