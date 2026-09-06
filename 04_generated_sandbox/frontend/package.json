@@ -13,7 +13,8 @@
     "types": "openapi-typescript ../backend/contracts/openapi.json -o src/lib/sbg/schema.d.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "preview:site": "npx http-server dist -p 8080 -c-1"
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",
