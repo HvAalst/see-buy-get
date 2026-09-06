@@ -34,6 +34,7 @@ import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
 import { BoardRow, Claimable, ClaimableKind, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, MarketRow, MarketSeries, Offer, PostedFreightRow, RoutePlan } from './dispatch.types';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
+import { buildOfferResponse, type OfferResponse } from './offer-response';
 
 /**
  * FB0c — how a load may be taken, defaulted ON READ.
@@ -784,6 +785,21 @@ export class DispatchService {
     };
   }
 
+  /**
+   * The RATE half of the same picture, for whoever owns the rate.
+   *
+   * A fleet driver cannot act on this — `pricePerKm` is on the vehicle and the vehicle is the manager's —
+   * so `quietReport` withholds it from them and it surfaces here instead, on the manager's own list.
+   *
+   * WHAT IT DELIBERATELY LEAVES OUT: the driver's earnings floor, and what it suppressed. That is the
+   * driver's own decision about their own time, and handing it to the person who schedules them turns a
+   * setting into something to be talked out of. The manager gets the lever that is theirs and nothing else.
+   */
+  rateReachFor(driverDid: string, now: number = Date.now()): { overBudget: number; ratePerKm?: number; rateLooksHigh: boolean } {
+    const full = this.quietReport(driverDid, now);
+    return { overBudget: full.overBudget, ratePerKm: full.ratePerKm, rateLooksHigh: full.rateLooksHigh };
+  }
+
   private recordQuiet(driverDid: string, underMin: number, overBudget: number, now: number): void {
     if (underMin === 0 && overBudget === 0) return;
     const today = new Date(now).toISOString().slice(0, 10);
@@ -1333,6 +1349,25 @@ export class DispatchService {
     const p = this.proposals.get(proposalId);
     if (!p) throw new GlosError('NOT_FOUND', 'Proposal not found');
     return p;
+  }
+
+  /**
+   * How often work at a given price is actually taken — the instrument for the question nobody could answer.
+   *
+   * *"Below some fee nobody takes the hop, and that number decides how dense the node network has to be."*
+   * The data for it was never missing: every offer carries what it would pay and what the driver did about
+   * it. Nothing read it. This reads it, and deliberately reports a CURVE rather than a threshold — see the
+   * four rules in `offer-response.ts`, of which the sharpest is that a lapsed offer is not a refusal.
+   *
+   * KNOWN LIMIT, reported rather than papered over: offers live in memory, so the window is usually "since
+   * the last restart". `observedFrom`/`observedTo` are read off the offers themselves so a reader can see
+   * the real edges instead of trusting a period we never had the data to fill.
+   */
+  offerResponse(opts: { kind?: 'tote' | 'freight'; driverDid?: string } = {}, now: number = Date.now()): OfferResponse {
+    const offers = [...this.offers.values()].filter(
+      (o) => (!opts.kind || o.kind === opts.kind) && (!opts.driverDid || o.driverDid === opts.driverDid),
+    );
+    return buildOfferResponse(offers, now);
   }
 
   ignore(offerId: string): Offer {

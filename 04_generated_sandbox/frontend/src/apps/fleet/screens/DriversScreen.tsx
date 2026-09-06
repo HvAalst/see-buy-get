@@ -115,6 +115,16 @@ export function DriversScreen({ state, actions }: DriversScreenProps) {
                     <span class="row__s">
                       {`${d.badgeId ?? shortDid(d.did)} · ${d.registry} · ${(d.licence?.classes ?? []).join(', ') || '—'}`}
                     </span>
+                    {/* The work this driver's RATE is turning away — said here because this is where the
+                        lever is. Only once enough loads have been refused to mean something, and never as
+                        a benchmark against what anybody else charges. */}
+                    {d.rateReach?.rateLooksHigh ? (
+                      <span class="row__s">
+                        {d.rateReach.ratePerKm
+                          ? t('fleet.drivers.rateHigh', { count: d.rateReach.overBudget, rate: String(d.rateReach.ratePerKm) })
+                          : t('fleet.drivers.rateHighNoRate', { count: d.rateReach.overBudget })}
+                      </span>
+                    ) : null}
                   </span>
                   <span class="row__end">
                     <Pill tone={statusTone(d.status)} dot>

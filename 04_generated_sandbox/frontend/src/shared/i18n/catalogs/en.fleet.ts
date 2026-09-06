@@ -82,6 +82,10 @@ export const enFleet = {
   'fleet.drivers.lightRegistry': 'Light registry — no licence or SeeBuyGet check needed.',
   'fleet.drivers.onboardCta': 'Onboard driver',
   'fleet.drivers.poolTitle': 'Drivers pool · {count}',
+  // The work a vehicle's price is turning away, told to whoever can change it. A consequence, never a
+  // comparison with what other operators charge — that would be the network leaning on prices.
+  'fleet.drivers.rateHigh': '{count} jobs near them were more than the sender would pay at {rate}/km',
+  'fleet.drivers.rateHighNoRate': '{count} jobs near them were more than the sender would pay at this rate',
   'fleet.drivers.empty': 'No drivers yet.',
   'fleet.drivers.beingChecked': 'Being checked',
   'fleet.drivers.sendPapers': 'Send papers',

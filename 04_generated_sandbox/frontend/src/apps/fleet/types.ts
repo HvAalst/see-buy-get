@@ -43,6 +43,17 @@ export interface DriverRow {
   status: DriverStatus;
   licence?: { classes?: string[]; number?: string; expiresAt?: string };
   managerDid?: string;
+  /**
+   * What this driver's VEHICLE RATE is costing them in work, today.
+   *
+   * It arrives on the manager's list and not on the driver's own card, because the price per km lives on
+   * the vehicle and the vehicle is the manager's: telling a driver their price is losing them work when
+   * they hold no way to change it is an accusation, not information.
+   *
+   * Their earnings FLOOR is deliberately absent. That is the driver's own decision about their own time,
+   * and putting it in front of whoever schedules them turns a setting into a negotiation.
+   */
+  rateReach?: { overBudget: number; ratePerKm?: number; rateLooksHigh: boolean };
 }
 
 export interface AssignmentRow {

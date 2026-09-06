@@ -8752,17 +8752,7 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/FleetDriver"
-                  }
-                }
-              }
-            }
+            "description": ""
           }
         }
       }
@@ -9768,6 +9758,39 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MarketSeries"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/offers/response": {
+      "get": {
+        "operationId": "Sbg.offerResponse",
+        "summary": "",
+        "description": "The fee-response curve: what share of offers at each price were actually taken.\n\nOperator-gated, and not for drivers. It is a picture of how the whole market answers a price, and the\none legitimate use is deciding how dense the node network has to be — not telling any individual what\nto charge. A driver's own view of the same machinery is their reach, on their own card.",
+        "parameters": [
+          {
+            "name": "kind",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "tote",
+                "freight"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
                 }
               }
             }

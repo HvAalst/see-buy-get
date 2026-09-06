@@ -1724,9 +1724,22 @@ export class SbgController {
   }
 
   /** A fleet manager sees only their own drivers (actor.tenant); operator sees all. */
+  /**
+   * This fleet's drivers — each with the work their VEHICLE'S RATE is costing them.
+   *
+   * The driver's own card says nothing about the rate, because a fleet driver cannot change it: the price
+   * per km is on the vehicle and the vehicle is the manager's. Telling somebody their price is losing them
+   * work when they hold no way to change it is an accusation, not information — so it arrives here, beside
+   * the control that can actually answer it.
+   *
+   * Their earnings FLOOR is not here and should not be: that is the driver's own decision about their own
+   * time, and putting it in front of the person who schedules them turns a setting into a negotiation.
+   */
   @Get('fleet/drivers')
   listFleetDrivers(@Actor() actor: IntrospectionResult) {
-    return this.drivers.list({ managerDid: actingTenant(actor) });
+    return this.drivers
+      .list({ managerDid: actingTenant(actor) })
+      .map((d) => ({ ...d, rateReach: this.dispatch.rateReachFor(d.did) }));
   }
 
   @Roles('operator')
@@ -2006,6 +2019,21 @@ export class SbgController {
     }
     const from = q.lat != null && q.lng != null ? { lat: Number(q.lat), lng: Number(q.lng) } : undefined;
     return this.dispatch.marketSeries({ from, radiusKm: q.radiusKm, since, until });
+  }
+
+  /**
+   * The fee-response curve: what share of offers at each price were actually taken.
+   *
+   * Operator-gated, and not for drivers. It is a picture of how the whole market answers a price, and the
+   * one legitimate use is deciding how dense the node network has to be — not telling any individual what
+   * to charge. A driver's own view of the same machinery is their reach, on their own card.
+   */
+  @Roles('operator')
+  @ApiQuery({ name: 'kind', required: false, enum: ['tote', 'freight'] })
+  @Get('offers/response')
+  offerResponse(@Query('kind') kind?: string) {
+    const k = kind === 'tote' || kind === 'freight' ? kind : undefined;
+    return this.dispatch.offerResponse({ kind: k });
   }
 
   /* ------------------------------------------- FB0c: negotiate before commit -- */
