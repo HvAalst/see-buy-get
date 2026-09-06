@@ -125,6 +125,16 @@ export interface ParcelView {
   collectionCode?: string;
   /** ISO time the parcel was accepted — drives the 5-minute void window countdown. */
   acceptedAt?: string;
+  /** ISO time it reached this shop's shelf and became collectable. */
+  readyAt?: string;
+  /**
+   * Waiting to be collected for longer than it should be.
+   *
+   * DERIVED ON THE SERVER, where the threshold lives — a shopkeeper's screen and an operator's flag
+   * disagreeing about what "overdue" means is the kind of thing nobody notices until two people are
+   * arguing across a counter about whose number is right. Absent unless it is true.
+   */
+  overdue?: boolean;
 }
 
 /** A destination PUDO the counter can pick from the public directory (Map/Address intake picker). */

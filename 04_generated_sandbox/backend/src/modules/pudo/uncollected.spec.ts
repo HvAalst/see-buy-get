@@ -28,6 +28,7 @@ import { FleetManagerService } from './fleet-manager.service';
 import { GazetteerGeocoder, GEOCODER } from './geocoder';
 import { HeuristicRouter, ROUTER } from './router';
 import { NEVER_DROPPED_H, UNCOLLECTED_H } from './pudo.config';
+import { operationalParcelView } from './parcel.service';
 import { DigitalTwinService } from '../m7/digital-twin.service';
 import { TrackingService } from '../m4/tracking.service';
 import { TrackingContextService } from '../m4/tracking-context.service';
@@ -215,6 +216,56 @@ describe('the states nothing watched', () => {
       const p = parcels.get(parcel.parcelId);
       p.status = 'On_Bus';
       expect(() => parcels.cancel(p.parcelId, 'operator:test', 'nope')).toThrow(/Cannot cancel/);
+    });
+  });
+
+  describe('what the shop is actually handed', () => {
+    // THE BUG UNDER THIS ONE. The counter's "N to collect" was computed over a list fetched with
+    // status=At_PUDO, so it could never contain a parcel to collect: the line was dead in production and
+    // the shopkeeper was never told anybody's parcel had arrived. The unit test for the line passed the
+    // whole time, because it hand-fed a row the app never received — a function proved, a wiring not.
+    function atShop() {
+      const { parcel, from, to } = shipment();
+      const outbound = parcels.get(parcel.parcelId);
+      outbound.status = 'At_PUDO';
+      outbound.originAgentDid = from.did;
+
+      const { parcel: second } = shipment();
+      const waiting = parcels.get(second.parcelId);
+      waiting.status = 'Ready_For_Pickup';
+      waiting.destAgentDid = to.did;
+      waiting.readyAt = agoH(UNCOLLECTED_H + 2);
+      return { to, from, outbound, waiting };
+    }
+
+    it('serves BOTH piles a counter has to clear, in one ask', () => {
+      const { to, waiting } = atShop();
+      const rows = parcels.list({ status: 'Ready_For_Pickup', agentDid: to.did });
+      expect(rows.map((p) => p.parcelId)).toContain(waiting.parcelId);
+    });
+
+    it('marks the one that has been waiting too long', () => {
+      // Derived on the SERVER, where the threshold lives. A shopkeeper's screen and an operator's flag
+      // disagreeing about "overdue" is the kind of thing nobody notices until two people are arguing
+      // across a counter about whose number is right.
+      const { waiting } = atShop();
+      expect(operationalParcelView(waiting)).toMatchObject({ overdue: true });
+    });
+
+    it('says nothing about overdue on a parcel that is not waiting', () => {
+      // Absent rather than false: a flag that is false on every parcel in every other state invites a
+      // list filtered on it to look sensible and mean nothing.
+      const { outbound } = atShop();
+      expect('overdue' in operationalParcelView(outbound)).toBe(false);
+    });
+
+    it('leaves a freshly-arrived parcel unmarked', () => {
+      const { parcel, to } = shipment();
+      const p = parcels.get(parcel.parcelId);
+      p.status = 'Ready_For_Pickup';
+      p.destAgentDid = to.did;
+      p.readyAt = agoH(1);
+      expect('overdue' in operationalParcelView(p)).toBe(false);
     });
   });
 

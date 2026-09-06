@@ -29,6 +29,22 @@ describe('the top bar’s live line', () => {
       expect(agentWorkLine({ openState: 'open' }, parcels, t)).toBe('2 to hand over · 1 to collect');
     });
 
+    it('calls out the pile that is NOT moving', () => {
+      // "3 to collect" and "3 to collect, 2 waiting too long" ask a shopkeeper to do different things.
+      // An overdue parcel is this counter's own capacity sitting on a shelf, not somebody else's problem
+      // reported for information.
+      const parcels = [
+        { status: 'Ready_For_Pickup' },
+        { status: 'Ready_For_Pickup', overdue: true },
+        { status: 'Ready_For_Pickup', overdue: true },
+      ];
+      expect(agentWorkLine({ openState: 'open' }, parcels, t)).toBe('3 to collect · 2 waiting too long');
+    });
+
+    it('says nothing about overdue when nothing is', () => {
+      expect(agentWorkLine({ openState: 'open' }, [{ status: 'Ready_For_Pickup' }], t)).toBe('1 to collect');
+    });
+
     it('drops a pile that is empty rather than printing a zero', () => {
       expect(agentWorkLine({ openState: 'open' }, [{ status: 'At_PUDO' }], t)).toBe('1 to hand over');
     });

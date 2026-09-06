@@ -5678,7 +5678,7 @@
       "get": {
         "operationId": "Sbg.listParcels",
         "summary": "",
-        "description": "The operational parcel list (agent + hub screens). PG2: PROJECTED for everyone but an operator —\n the raw record carries phones, hashes and the handover secrets (collection code / OTP), none of\n which a list surface needs; before this, ANY valid token could read them all.",
+        "description": "The operational parcel list (agent + hub screens). PG2: PROJECTED for everyone but an operator —\nthe raw record carries phones, hashes and the handover secrets (collection code / OTP), none of\nwhich a list surface needs; before this, ANY valid token could read them all.\n\n`status` takes a COMMA-SEPARATED list. A shop counter has two piles — what is waiting to go on a bus\nand what a customer is coming to collect — and a single-status query made the second pile impossible\nto ask for in one breath. The alternative, omitting the filter, returns every parcel the shop has ever\nhandled: unbounded, and growing, on the cheapest phone in the network.",
         "parameters": [
           {
             "name": "status",

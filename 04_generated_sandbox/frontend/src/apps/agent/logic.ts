@@ -621,16 +621,23 @@ export function agentLedgerTypeWord(type: string, t: Translate): string {
  */
 export function agentWorkLine(
   agent: { openState?: string } | null,
-  parcels: Array<{ status: string }>,
+  parcels: Array<{ status: string; overdue?: boolean }>,
   t: Translate,
 ): string | undefined {
   if (!agent) return undefined;
   if (agent.openState === 'closed') return t('agent.bar.closed');
   const handOver = parcels.filter((p) => p.status === 'At_PUDO').length;
-  const collect = parcels.filter((p) => p.status === 'Ready_For_Pickup').length;
+  const waiting = parcels.filter((p) => p.status === 'Ready_For_Pickup');
+  const collect = waiting.length;
+  // The pile that is not moving. A shelf slot is what decides whether this shop can take anything new, so
+  // an overdue parcel is not somebody else's problem being reported for information — it is this counter's
+  // capacity, sitting there. Called out separately rather than folded into the count, because "3 to
+  // collect" and "3 to collect, 2 of them overdue" ask the shopkeeper to do different things.
+  const overdue = waiting.filter((p) => p.overdue).length;
   const bits = [
     handOver > 0 ? t('agent.bar.handOver', { count: handOver }) : null,
     collect > 0 ? t('agent.bar.collect', { count: collect }) : null,
+    overdue > 0 ? t('agent.bar.overdue', { count: overdue }) : null,
   ].filter(Boolean);
   // An empty counter says so rather than showing an empty bar: "nothing waiting" is a real and
   // welcome answer, and a blank line would read as "not loaded yet".

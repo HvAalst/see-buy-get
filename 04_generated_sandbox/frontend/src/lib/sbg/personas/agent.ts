@@ -94,8 +94,16 @@ export function createAgentApi(sbg: SbgClient) {
     ping: (did: string) => sbg.request((c) => c.POST('/v1/sbg/agents/{did}/ping', { params: { path: { did } } })),
 
     /** Parcels sitting at this shop, waiting for the bus. */
+    /**
+     * What is physically standing in this shop: the pile waiting to go on a bus, and the pile a customer
+     * is coming to collect.
+     *
+     * It asked for At_PUDO alone until 2026-09-06, which meant the counter's "N to collect" was computed
+     * over a list that could never contain one — the line was dead and the shopkeeper was never told
+     * anybody's parcel had arrived. Both statuses, one round trip.
+     */
     parcelsAtShop: (did: string) =>
-      sbg.request((c) => c.GET('/v1/sbg/parcels', { params: { query: { status: 'At_PUDO', agent: did } } })),
+      sbg.request((c) => c.GET('/v1/sbg/parcels', { params: { query: { status: 'At_PUDO,Ready_For_Pickup', agent: did } } })),
 
     /** The shop's PARCEL-HISTORY register (R4): parcels it handled (drop-off or collection), server-side
      *  searched / filtered / sorted / paged → { items, total }. Owner-scoped. */

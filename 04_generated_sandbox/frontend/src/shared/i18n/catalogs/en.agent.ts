@@ -13,6 +13,9 @@ export const enAgent = {
   'agent.bar.closed': 'Closed — not taking parcels',
   'agent.bar.handOver': '{count} to hand over',
   'agent.bar.collect': '{count} to collect',
+  // Not folded into the count above: "3 to collect" and "3 to collect, 2 waiting too long" ask a
+  // shopkeeper to do different things. The overdue ones are this counter's own capacity, sitting there.
+  'agent.bar.overdue': '{count} waiting too long',
   'agent.bar.clear': 'Nothing waiting',
   'agent.signInSubtitle': 'Sign in',
   'agent.backToShop': 'Back to my shop',

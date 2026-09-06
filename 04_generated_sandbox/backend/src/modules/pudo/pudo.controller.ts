@@ -674,12 +674,25 @@ export class SbgController {
     return this.parcels.void(id, actingDid(actor, dto.agentDid), dto.voidedPhotoRef);
   }
 
-  /** The operational parcel list (agent + hub screens). PG2: PROJECTED for everyone but an operator —
-   *  the raw record carries phones, hashes and the handover secrets (collection code / OTP), none of
-   *  which a list surface needs; before this, ANY valid token could read them all. */
+  /**
+   * The operational parcel list (agent + hub screens). PG2: PROJECTED for everyone but an operator —
+   * the raw record carries phones, hashes and the handover secrets (collection code / OTP), none of
+   * which a list surface needs; before this, ANY valid token could read them all.
+   *
+   * `status` takes a COMMA-SEPARATED list. A shop counter has two piles — what is waiting to go on a bus
+   * and what a customer is coming to collect — and a single-status query made the second pile impossible
+   * to ask for in one breath. The alternative, omitting the filter, returns every parcel the shop has ever
+   * handled: unbounded, and growing, on the cheapest phone in the network.
+   */
   @Get('parcels')
   listParcels(@Query('status') status?: string, @Query('agent') agent?: string, @Actor() actor?: IntrospectionResult) {
-    const rows = this.parcels.list({ status: status as never, agentDid: agent });
+    const wanted = (status ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const rows = wanted.length
+      ? wanted.flatMap((s) => this.parcels.list({ status: s as never, agentDid: agent }))
+      : this.parcels.list({ agentDid: agent });
     return actor?.role === 'operator' ? rows : rows.map(operationalParcelView);
   }
 

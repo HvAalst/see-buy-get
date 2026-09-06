@@ -407,6 +407,20 @@ export function operationalParcelView(p: Parcel) {
     acceptedAt: p.acceptedAt,
     handedToBusAt: p.handedToBusAt,
     deliveredAt: p.deliveredAt,
+    readyAt: p.readyAt,
+    /**
+     * Whether this parcel has been waiting to be collected longer than it should.
+     *
+     * DERIVED HERE rather than in the app, so the threshold has one home. A shopkeeper's screen and an
+     * operator's flag disagreeing about what "overdue" means is the kind of thing nobody notices until two
+     * people are arguing across a counter about whose number is right.
+     *
+     * Absent unless it is actually waiting — a boolean that is false on every parcel in every other state
+     * invites a list filtered on it to look sensible and mean nothing.
+     */
+    ...(p.status === 'Ready_For_Pickup' && p.readyAt && Date.now() - new Date(p.readyAt).getTime() > UNCOLLECTED_H * 3_600_000
+      ? { overdue: true as const }
+      : {}),
   };
 }
 
