@@ -557,6 +557,116 @@ describe('the public shipping quote', () => {
       { country: 'KE', areas: ['Kisumu', 'Nairobi'] }, // Nakuru is not an area we serve — nobody there is live
     ]);
   });
+
+  /**
+   * After the mint, a shipment lived only in the merchant console. A store that created it through the API
+   * could not ask where it was, and could not call it off — so an integration had one door in and none out,
+   * and the answer to "the buyer changed their mind" was "log in".
+   */
+  describe('reading and cancelling what you created', () => {
+    const merchant = (mode: 'test' | 'live' = 'live') => {
+      const store = vendors.register({ name: `Store ${(seq += 1)}`, country: 'KE' });
+      vendors.topUp(store.vendorId, 500);
+      return { store, caller: apiKeys.resolve(apiKeys.issue(store.vendorId, 'secret', mode).secret) };
+    };
+    const publishable = (vendorId: string) => apiKeys.resolve(apiKeys.issue(vendorId, 'publishable', 'live').secret);
+    const order = (over: Record<string, unknown> = {}) => ({
+      from: { country: 'KE', area: 'Nairobi' },
+      to: { country: 'KE', area: 'Kisumu' },
+      dimensionsCm: { l: 30, w: 20, h: 10 },
+      weightKg: 2,
+      buyerMobile: '+254700999',
+      contentPhotoRef: 'contents.jpg',
+      ...over,
+    });
+
+    it('reads back its state, at the price it was SOLD at', () => {
+      // The price comes off the parcel, never from a fresh quote. Re-pricing on read would have this
+      // endpoint disagree with the merchant's own invoice for the same shipment.
+      domesticPair();
+      const { caller } = merchant();
+      const made = shipping.mint(order({ externalOrderId: 'SO-READ' }), caller);
+
+      const read = shipping.shipment(made.shipmentId, caller);
+      expect(read).toMatchObject({
+        shipmentId: made.shipmentId,
+        externalOrderId: 'SO-READ',
+        status: 'Created',
+        paid: true,
+        cancellable: true,
+      });
+      expect(read.price).toEqual(made.price);
+    });
+
+    it('does not put the collection code on a pollable read', () => {
+      // The same rule the mint already keeps. The store learns the code on the ready_for_pickup callback,
+      // when it is useful; on a read it would sit in every log that ever recorded a response body.
+      domesticPair();
+      const { caller } = merchant();
+      const made = shipping.mint(order(), caller);
+      const read = shipping.shipment(made.shipmentId, caller);
+      expect(JSON.stringify(read)).not.toContain(parcels.get(made.shipmentId).collectionCode);
+    });
+
+    it('answers NOT FOUND for somebody else’s shipment, never FORBIDDEN', () => {
+      // "You may not see this" tells a stranger the id is real. Worth nothing to the owner, and something
+      // to anybody working through a list of ids.
+      domesticPair();
+      const mine = merchant();
+      const theirs = merchant();
+      const made = shipping.mint(order(), mine.caller);
+      expect(() => shipping.shipment(made.shipmentId, theirs.caller)).toThrow(/No shipment/);
+    });
+
+    it('says plainly that a TEST shipment was never created', () => {
+      // A test mint runs every check and commits nothing. A bare 404 here reads like a bug in the
+      // merchant's own integration, which is exactly the wrong thing for a sandbox to teach.
+      domesticPair();
+      const { caller } = merchant('test');
+      const made = shipping.mint(order(), caller);
+      expect(made.simulated).toBe(true);
+      expect(() => shipping.shipment(made.shipmentId, caller)).toThrow(/simulated shipment/);
+    });
+
+    it('cancels a shipment nobody has picked up yet', () => {
+      domesticPair();
+      const { caller } = merchant();
+      const made = shipping.mint(order(), caller);
+
+      const cancelled = shipping.cancelShipment(made.shipmentId, caller, 'buyer changed their mind');
+      expect(cancelled.status).toBe('Voided');
+      expect(cancelled.cancellable).toBe(false);
+      expect(parcels.get(made.shipmentId).status).toBe('Voided');
+    });
+
+    it('needs a SECRET key to cancel, exactly as it does to create', () => {
+      // A credential that can undo a shipment must never sit in a page. A publishable key asks prices.
+      domesticPair();
+      const { store, caller } = merchant();
+      const made = shipping.mint(order(), caller);
+      expect(() => shipping.cancelShipment(made.shipmentId, publishable(store.vendorId))).toThrow(/secret key/);
+      expect(parcels.get(made.shipmentId).status).toBe('Created');
+    });
+
+    it('refuses once somebody is actually carrying it', () => {
+      // Not a limitation to apologise for: past this point calling it off is a conversation, not an API
+      // call. The window is the network's own rule, not a second one invented for the API.
+      domesticPair();
+      const { caller } = merchant();
+      const made = shipping.mint(order(), caller);
+      parcels.get(made.shipmentId).status = 'On_Bus';
+      expect(() => shipping.cancelShipment(made.shipmentId, caller)).toThrow(/Cannot cancel/);
+    });
+
+    it('cannot cancel a stranger’s shipment either', () => {
+      domesticPair();
+      const mine = merchant();
+      const theirs = merchant();
+      const made = shipping.mint(order(), mine.caller);
+      expect(() => shipping.cancelShipment(made.shipmentId, theirs.caller)).toThrow(/No shipment/);
+      expect(parcels.get(made.shipmentId).status).toBe('Created');
+    });
+  });
 });
 
 describe('the public rate limit', () => {

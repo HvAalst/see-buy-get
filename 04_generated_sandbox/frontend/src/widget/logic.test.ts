@@ -9,6 +9,7 @@ import {
   money,
   parseAreas,
   priceLine,
+  packFor,
   quoteRequest,
   readyLine,
   savingLine,
@@ -177,5 +178,51 @@ describe('the destination list', () => {
     ]);
     expect(parseAreas([{ country: 'KE', areas: [] }, { country: 'ZZ' }, null, 'nope'])).toEqual([]);
     expect(parseAreas({ not: 'a list' })).toEqual([]);
+  });
+});
+
+describe('the languages the widget ships', () => {
+  // NOT the network's own catalogues, deliberately: those are ~2500 English keys against ~20 stubs in
+  // everything else, so wiring this to them would dress a stub up as a translation on somebody's checkout.
+  // Seventeen short strings is a set that can actually be translated and checked.
+
+  it('reads a language, not a region', () => {
+    // A region tag says where somebody is; the language says what they read. A Kenyan browser asking for
+    // sw-KE and a bare sw want the same words.
+    expect(packFor('sw').cta).toBeDefined();
+    expect(packFor('sw-KE').cta).toBe(packFor('sw').cta);
+    expect(packFor('SW').cta).toBe(packFor('sw').cta);
+    expect(packFor('sw_KE').cta).toBe(packFor('sw').cta);
+  });
+
+  it('falls back to English rather than guessing', () => {
+    expect(packFor('de')).toEqual({});
+    expect(packFor(undefined)).toEqual({});
+    expect(packFor('')).toEqual({});
+    expect(strings(undefined, 'de')).toEqual(EN);
+  });
+
+  it('keeps every placeholder a line depends on', () => {
+    // A translated string that drops {amount} loses the number it exists to carry — the one failure here
+    // that shows up as a missing PRICE rather than as odd wording.
+    for (const [lang, pack] of Object.entries({ sw: packFor('sw') })) {
+      expect(`${lang}:${pack.asLowAs}`).toContain('{amount}');
+    }
+  });
+
+  it('translates nothing it has no word for', () => {
+    // Every key in a pack must be a real key. A typo silently adds a string nothing renders, and the line
+    // it was meant to translate stays English while looking translated in the source.
+    for (const key of Object.keys(packFor('sw'))) {
+      expect(Object.keys(EN)).toContain(key);
+    }
+  });
+
+  it('lets the MERCHANT win, over both English and the pack', () => {
+    // Their checkout, their voice. Somebody who wrote their own wording for a line should not have it
+    // replaced because a buyer's browser asked for a language we happen to ship.
+    const s = strings({ submit: 'Bei tafadhali' }, 'sw');
+    expect(s.submit).toBe('Bei tafadhali');
+    expect(s.close).toBe(packFor('sw').close); // …and the rest of the pack still applies
   });
 });

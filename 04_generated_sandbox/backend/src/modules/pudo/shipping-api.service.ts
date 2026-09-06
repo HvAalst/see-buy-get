@@ -11,6 +11,7 @@ import { declareFor } from './customs';
 import { BorderCrossing } from './country';
 import { ANONYMOUS, ApiKeyService, type Caller } from './api-key.service';
 import { classifySize, measuredFactor, SIZE_WEIGHT_KG } from './pudo.config';
+import { parcelCurrency } from './parcel.service';
 import { Agent, ParcelSize } from './pudo.types';
 import { Geocoder, GEOCODER } from './geocoder';
 import { Router, ROUTER } from './router';
@@ -139,6 +140,27 @@ export interface MintInput {
  * a stranger and the parcel — and it belongs to the person collecting, in their own app. A merchant does
  * not need it, and putting it on an API response would widen its exposure for nobody's benefit.
  */
+/**
+ * A shipment read back by the store that created it.
+ *
+ * Smaller than `MintedShipment` on purpose. That one answers "what did I just buy", so it carries the
+ * quote it was bought against; this one answers "where is it now", and re-quoting to fill in a route would
+ * put TODAY's price on a shipment sold last week. Every figure here is read off the parcel.
+ */
+export interface PublicShipment {
+  shipmentId: string;
+  did?: string;
+  trackingKey?: string;
+  externalOrderId?: string;
+  status: string;
+  paid: boolean;
+  /** The price it was SOLD at, stamped at mint — never a fresh quote. */
+  price: { currency: string; amount: number };
+  /** Whether it can still be called off. Reported rather than left to be discovered by a failed attempt. */
+  cancellable: boolean;
+  createdAt: string;
+}
+
 export interface MintedShipment {
   shipmentId: string;
   did?: string;
@@ -391,6 +413,89 @@ export class ShippingApiService {
     // The ETA is recomputed and the PRICE is not, and that asymmetry is deliberate: an arrival time is a
     // prediction that should be as good as we can make it today, while a price is a promise made earlier.
     return this.viewOf(held.quote, plan, from, to, held.size as ParcelSize, held.weightKg, caller);
+  }
+
+  /**
+   * A shipment the caller already created — its state now, not a fresh quote.
+   *
+   * THE PRICE COMES OFF THE PARCEL, never off `quote`. Re-quoting a sold shipment would answer with
+   * today's number for something bought yesterday, and a merchant reconciling an invoice would find the
+   * API disagreeing with their own books. Everything stamped at mint is stamped precisely so this can be
+   * read back years later.
+   *
+   * A shipment belonging to somebody else answers NOT FOUND, not FORBIDDEN. "You may not see this" tells a
+   * stranger the id is real, which is a probe worth nothing to the owner and something to everyone else.
+   */
+  shipment(shipmentId: string, caller: Caller): PublicShipment {
+    if (!caller.vendorId) throw new GlosError('FORBIDDEN', 'Reading a shipment needs your key — a shipment belongs to the store that created it');
+    if (shipmentId.startsWith('test_')) {
+      // A test mint creates nothing on purpose, so there is nothing here to read. Said plainly: the
+      // alternative is a 404 that reads like a bug in the merchant's own integration.
+      throw new GlosError('NOT_FOUND', 'That is a simulated shipment from a test key — nothing was created, so there is nothing to look up');
+    }
+    const parcel = this.ownedParcel(shipmentId, caller.vendorId);
+    return this.publicShipmentOf(parcel);
+  }
+
+  /**
+   * Call it off, while it can still be called off.
+   *
+   * Needs a SECRET key for the same reason minting does: a credential that can undo a shipment must never
+   * sit in a page. The rules are the network's own, not a second set invented for the API — a parcel can be
+   * cancelled while it is Created, At_PUDO or At_MDP, and the money is reversed by the same path an
+   * operator's cancellation uses. Refusing later is not a limitation to apologise for: once somebody is
+   * carrying it, calling it off is a conversation and not an API call.
+   *
+   * THERE IS NO AMEND, deliberately. Changing where a parcel goes, or how big it is, changes what it costs
+   * — an "edit" that quietly re-prices a shipment a buyer already paid for is the worst version of this
+   * feature. Cancel it and create the new one, so the re-price is visible and consented to.
+   */
+  cancelShipment(shipmentId: string, caller: Caller, reason?: string): PublicShipment {
+    if (!ApiKeyService.canMint(caller) || !caller.vendorId) {
+      throw new GlosError('FORBIDDEN', 'Cancelling needs a secret key (sk_…) — a publishable key can only ask for prices');
+    }
+    if (shipmentId.startsWith('test_')) {
+      throw new GlosError('NOT_FOUND', 'That is a simulated shipment from a test key — nothing was created, so there is nothing to cancel');
+    }
+    const parcel = this.ownedParcel(shipmentId, caller.vendorId);
+    // `by` names the store, not a person: the network's audit trail records WHO asked, and through this
+    // door the answer is a merchant's own system rather than anybody at a counter.
+    this.parcels.cancel(parcel.parcelId, `vendor:${caller.vendorId}`, reason?.trim() || 'cancelled by the store');
+    return this.publicShipmentOf(this.parcels.get(parcel.parcelId));
+  }
+
+  /** The caller's own shipment, or nothing they can distinguish from one that never existed. */
+  private ownedParcel(shipmentId: string, vendorId: string) {
+    let parcel;
+    try {
+      parcel = this.parcels.get(shipmentId);
+    } catch {
+      throw new GlosError('NOT_FOUND', `No shipment ${shipmentId}`);
+    }
+    if (parcel.vendorId !== vendorId) throw new GlosError('NOT_FOUND', `No shipment ${shipmentId}`);
+    return parcel;
+  }
+
+  /**
+   * What a merchant may read back about their own shipment.
+   *
+   * Deliberately NOT the collection code. The store is told that on the `ready_for_pickup` callback, at
+   * the moment it is useful and to an endpoint they registered; putting it on a pollable read means every
+   * integration that logs a response body has it in a log file forever.
+   */
+  private publicShipmentOf(parcel: ReturnType<ParcelService['get']>): PublicShipment {
+    return {
+      shipmentId: parcel.parcelId,
+      did: parcel.did,
+      trackingKey: parcel.trackingKey,
+      externalOrderId: parcel.externalOrderId,
+      status: parcel.status,
+      paid: parcel.paidStatus === 'ParcelPaid',
+      // The figure it was SOLD at, read off the parcel. See the note on `shipment`.
+      price: { currency: parcelCurrency(parcel), amount: parcel.shipmentCost ?? 0 },
+      cancellable: ['Created', 'At_PUDO', 'At_MDP'].includes(parcel.status),
+      createdAt: parcel.acceptedAt,
+    };
   }
 
   private shipmentView(

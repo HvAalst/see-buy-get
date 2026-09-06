@@ -101,6 +101,8 @@
     <li><a href="#places">Naming a place</a></li>
     <li><a href="#quote">Quote reference</a></li>
     <li><a href="#ship">Creating a shipment</a></li>
+    <li><a href="#track">Reading and cancelling</a></li>
+    <li><a href="#callbacks">Status callbacks</a></li>
     <li><a href="#areas">Where we deliver</a></li>
     <li><a href="#embed">The drop-in button</a></li>
     <li><a href="#borders">Crossing a border</a></li>
@@ -440,6 +442,110 @@
   </div>
 </section>
 
+<section id="track">
+  <h2>Reading and cancelling</h2>
+  <p class="lede">A shipment you created here can be read and called off here. You do not have to log in to
+  find out where it got to.</p>
+
+  <h3>Where is it?</h3>
+<pre><code>curl https://api.seebuyget.example/v1/sbg/shipping/shipments/PUD-A1B2C3D4E5 \
+  -H "X-SBG-Key: sk_live_…"</code></pre>
+<pre><code>{
+  "shipmentId": "PUD-A1B2C3D4E5",
+  "trackingKey": "T-9F8E7D6C5B",
+  "externalOrderId": "SO-1183",
+  "status": "At_PUDO",
+  "paid": true,
+  "price": { "currency": "KES", "amount": 240.00 },
+  "cancellable": true,
+  "createdAt": "2026-09-06T08:12:04.000Z"
+}</code></pre>
+  <p><b>The price is the one it was SOLD at</b>, read off the shipment itself — not a fresh quote. Ask this
+  a year later and it still answers what you were charged, which is what makes it safe to reconcile an
+  invoice against.</p>
+  <p><b>The collection code is not here.</b> You are told it on the <code>ready_for_pickup</code> callback,
+  at the moment it is useful and to an endpoint you registered. On an endpoint you can poll it would end up
+  in every log file that ever recorded a response body.</p>
+  <p>A shipment belonging to another store answers <code>404</code>, not <code>403</code>. "You may not see
+  this" would confirm the id is real to somebody working through a list of them.</p>
+
+  <h3>Calling it off</h3>
+<pre><code>curl -X POST https://api.seebuyget.example/v1/sbg/shipping/shipments/PUD-A1B2C3D4E5/cancel \
+  -H "X-SBG-Key: sk_live_…" \
+  -H "content-type: application/json" \
+  -d '{ "reason": "buyer changed their mind" }'</code></pre>
+  <p>Needs a <b>secret</b> key, for the reason creating one does: a credential that can undo a shipment
+  must never sit in a page. <code>reason</code> is optional and kept on the audit trail.</p>
+  <p>You can cancel while the shipment is <code>Created</code>, <code>At_PUDO</code> or <code>At_MDP</code>
+  — that is, until somebody is actually carrying it. <code>cancellable</code> on the read above tells you
+  before you try. Past that point it is a conversation rather than an API call, and you get
+  <code>INVALID_STATE</code>. Money already taken is reversed the same way an operator's cancellation
+  reverses it.</p>
+
+  <h3>There is no amend, on purpose</h3>
+  <p>Moving a shipment's destination or changing its size changes what it costs. An "edit" that quietly
+  re-prices something your buyer has already paid for is the worst possible version of this call, so it
+  does not exist: <b>cancel it and create the replacement</b>, and the new price is one somebody can see
+  and agree to.</p>
+
+  <h3>Test keys</h3>
+  <p>A test mint creates nothing, so there is nothing to read or cancel. Both calls say exactly that rather
+  than answering a bare <code>404</code> that reads like a bug in your own integration.</p>
+</section>
+
+<section id="callbacks">
+  <h2>Status callbacks</h2>
+  <p class="lede">You do not have to poll. Register a callback URL and the network tells you when a
+  shipment moves.</p>
+
+  <p>The URL and the signing secret are set on your store record, not on a key — they belong to the
+  merchant, not to a credential you might rotate.</p>
+
+  <h3>What you get</h3>
+<pre><code>POST https://your-shop.example/hooks/sbg
+content-type: application/json
+
+{
+  "event": "ready_for_pickup",
+  "data": {
+    "parcelId": "PUD-A1B2C3D4E5",
+    "externalOrderId": "SO-1183",
+    "status": "Ready_For_Pickup",
+    "collectionCode": "8412",
+    "binSlot": "B-04"
+  },
+  "at": "2026-09-06T14:02:11.000Z"
+}</code></pre>
+
+  <h3>The events</h3>
+  <ul class="plain">
+    <li><code>parcel_paid</code> — your prepaid balance covered it and the label is unblocked.</li>
+    <li><code>ready_for_pickup</code> — it is on the shelf and the buyer can collect. <b>This is the one
+      that carries the collection code</b>, which is what you tell your buyer. A reissued code sends this
+      event again with the new one: same status, new code, which is exactly what somebody standing at a
+      counter unable to collect needs.</li>
+    <li><code>collected</code> — the buyer has it. The order is closed.</li>
+    <li><code>disputed</code> — something is wrong with it; <code>data.disputeReason</code> says what was
+      claimed.</li>
+  </ul>
+
+  <h3>Checking it really came from us</h3>
+  <p>Every callback is signed: <b>HMAC-SHA256 over the exact request body</b>, keyed with your store
+  secret, hex-encoded. Verify against the raw bytes you received — re-serialising the JSON first will
+  change the whitespace and the signature will not match.</p>
+<pre><code>const expected = crypto.createHmac('sha256', STORE_SECRET).update(rawBody).digest('hex');
+if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(received))) return res.sendStatus(401);</code></pre>
+  <p>Compare in constant time, as above. A plain <code>===</code> on a signature leaks how much of it was
+  right, one character at a time.</p>
+
+  <h3>What is NOT true yet</h3>
+  <p>Callbacks are <b>recorded, not yet delivered over HTTP.</b> Every event is built, signed and queued on
+  your store's outbox, and a sandbox deployment does not post it to your URL — you can read the queue
+  through the merchant console. Said here rather than left for you to discover with a webhook endpoint that
+  never fires. There is no retry schedule and no delivery receipt yet either, so build your handler to be
+  idempotent on <code>parcelId</code> + <code>event</code> and you will be ready when there is.</p>
+</section>
+
 <section id="areas">
   <h2>Where we deliver</h2>
   <p class="lede">Every country the network operates in and the areas inside it that have a collection point.
@@ -602,15 +708,22 @@
   <p class="lede">Said plainly, because you will ask. None of these exist today and none of them are
   faked.</p>
   <ul class="plain">
-    <li><b>Cancelling or amending through this API.</b> A shipment is created here and then lives in the
-      merchant console.</li>
+    <li><b>Amending a shipment.</b> Cancelling is here now; amending is not, and will not be —
+      see <a href="#track">Reading and cancelling</a> for why an edit that re-prices somebody's paid
+      shipment is worse than making them create a new one.</li>
+    <li><b>Callback DELIVERY.</b> Status callbacks are built, signed and queued, and a sandbox does not yet
+      post them to your URL. See <a href="#callbacks">Status callbacks</a>.</li>
     <li><b>A media upload on this surface.</b> <code>contentPhotoRef</code> comes from the authenticated
       media endpoint.</li>
     <li><b>Street-level addresses.</b> The gazetteer places towns and neighbourhoods in Kenya and
       Ethiopia, not house numbers, and knows no other country. A production deployment swaps in a live
       geocoder behind the same interface.</li>
-    <li><b>Translations for the button.</b> Its words are English until you replace them with
-      <code>window.SBG_QUOTE_STRINGS</code>; it is not wired to the network's own translation catalogues.</li>
+    <li><b>More languages for the button.</b> It ships English and Swahili, chosen by its
+      <code>locale</code> attribute, and falls back to English for anything else rather than guessing. It
+      is deliberately NOT wired to the network's own catalogues: those are thousands of English keys
+      against a handful of stubs in other languages, and reading from them would dress a stub up as a
+      translation on your checkout. Supply any language you need through
+      <code>window.SBG_QUOTE_STRINGS</code> — your words always win, over ours and over the pack.</li>
     <li><b>Minting from the button.</b> It quotes. Turning a quote into a shipment is still the
       authenticated merchant API.</li>
   </ul>

@@ -182,9 +182,60 @@ export const EN: Strings = {
   close: 'Close',
 };
 
-/** Merge a merchant's overrides over the defaults, ignoring anything that is not a string. */
-export function strings(overrides?: unknown): Strings {
-  const out = { ...EN };
+/**
+ * The languages the widget itself ships.
+ *
+ * NOT the network's own catalogues, and that is deliberate. Those hold roughly two and a half thousand
+ * English keys against about twenty stubs in everything else — wiring this to them would dress a stub up
+ * as a translation on somebody's checkout. Seventeen short strings is a set that can actually be
+ * translated and checked, which is why the widget keeps its own.
+ *
+ * Swahili only, for now, because the home market speaks it and it is the one this can stand behind.
+ * Everything else falls back to English rather than guessing, and a merchant who needs another language
+ * supplies it through SBG_QUOTE_STRINGS — the same door, first-class and documented.
+ *
+ * TO REVIEW BEFORE A REAL LAUNCH: a native speaker should read the Swahili. Shipping it is better than an
+ * English-only checkout in Nairobi; shipping it unreviewed and unsaid would not be.
+ */
+export const PACKS: Record<string, Partial<Strings>> = {
+  sw: {
+    cta: 'Kokotoa gharama ya usafirishaji',
+    panelTitle: 'Tukupelekee wapi?',
+    country: 'Nchi',
+    area: 'Mji au anwani',
+    areaHint: 'Mji, eneo, au barabara — kama vile ungemwambia rafiki.',
+    notPlaced: 'Hatukupata mahali hapo. Jaribu jina la mji peke yake.',
+    choose: 'Chagua…',
+    submit: 'Pata bei',
+    working: 'Tunahesabu…',
+    collectAt: 'Chukua kutoka',
+    readyBy: 'Itakuwa tayari',
+    asLowAs: 'hadi {amount} ikiwa muuzaji atachagua njia',
+    crossesBorder: 'Inavuka mpaka — orodha ya vitu na thamani yake inahitajika.',
+    noAreas: 'Bado hatupeleki mahali popote.',
+    offline: 'Hatukuweza kufikia huduma ya usafirishaji. Angalia mtandao wako.',
+    retry: 'Jaribu tena',
+    close: 'Funga',
+  },
+};
+
+/** The pack for a locale, matched on the LANGUAGE alone: sw-KE, SW and sw all read Swahili, because a
+ *  region tag says where somebody is and not what they read. Unknown languages get nothing, and nothing
+ *  means English. */
+export function packFor(locale?: string): Partial<Strings> {
+  const lang = (locale ?? '').trim().toLowerCase().split(/[-_]/)[0];
+  return (lang && PACKS[lang]) || {};
+}
+
+/**
+ * The strings to render with: English, then the locale's pack, then the merchant's own overrides.
+ *
+ * THE MERCHANT WINS, always and last. It is their checkout and their brand voice, and somebody who has
+ * written their own wording for one line should not have it replaced because a buyer's browser asked for
+ * a language we happen to ship.
+ */
+export function strings(overrides?: unknown, locale?: string): Strings {
+  const out = { ...EN, ...packFor(locale) };
   if (overrides && typeof overrides === 'object') {
     for (const [k, v] of Object.entries(overrides as Record<string, unknown>)) {
       if (k in out && typeof v === 'string' && v.trim()) out[k as keyof Strings] = v;

@@ -11689,6 +11689,74 @@
         }
       }
     },
+    "/v1/sbg/shipping/shipments/{shipmentId}": {
+      "get": {
+        "operationId": "ShippingApi.shipment",
+        "summary": "",
+        "description": "Where is my shipment? The state of one you created, read back by the key that created it.\n\nThe price comes off the parcel, not from a fresh quote: re-pricing a sold shipment would have this\nendpoint disagree with the merchant's own invoice. Somebody else's shipment answers NOT FOUND rather\nthan FORBIDDEN — \"you may not see this\" tells a stranger the id is real.\n\nThe collection code is NOT here. It arrives on the `ready_for_pickup` callback, at the moment it is\nuseful and to an endpoint the store registered; on a pollable read it would sit in every log file that\never recorded a response body.",
+        "parameters": [
+          {
+            "name": "shipmentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/shipping/shipments/{shipmentId}/cancel": {
+      "post": {
+        "operationId": "ShippingApi.cancelShipment",
+        "summary": "",
+        "description": "Call it off, while it still can be.\n\nA secret key, for the reason minting needs one: a credential that can undo a shipment must never sit\nin a page. The window is the network's own — Created, At_PUDO or At_MDP — and once somebody is\ncarrying it, calling it off is a conversation rather than an API call.\n\nTHERE IS NO AMEND, deliberately. Moving a parcel's destination or changing its size changes what it\ncosts, and an \"edit\" that quietly re-prices something a buyer already paid for is the worst possible\nversion of this call. Cancel and create the replacement, so the new price is seen and agreed.",
+        "parameters": [
+          {
+            "name": "shipmentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelShipmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/settlement/module-info": {
       "get": {
         "operationId": "Sse.info",
@@ -19142,6 +19210,15 @@
           "buyerMobile",
           "contentPhotoRef"
         ]
+      },
+      "CancelShipmentDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 200
+          }
+        }
       },
       "MilestoneTermDto": {
         "type": "object",

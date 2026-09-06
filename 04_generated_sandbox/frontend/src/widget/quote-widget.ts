@@ -88,7 +88,9 @@ class SbgShippingQuote extends HTMLElement {
   }
 
   private root!: ShadowRoot;
-  private s: Strings = strings((globalThis as { SBG_QUOTE_STRINGS?: unknown }).SBG_QUOTE_STRINGS);
+  // Locale-aware from the first paint: the CTA is rendered before anything is clicked, so reading the
+  // attribute later would show an English button and then swap it under the reader.
+  private s: Strings = strings((globalThis as { SBG_QUOTE_STRINGS?: unknown }).SBG_QUOTE_STRINGS, this.getAttribute('locale') ?? undefined);
   private areas: Array<{ country: string; areas: string[] }> = [];
   private open = false;
   private busy = false;
@@ -173,7 +175,7 @@ class SbgShippingQuote extends HTMLElement {
   /* ------------------------------------------------------------ rendering -- */
 
   private render(): void {
-    this.s = strings((globalThis as { SBG_QUOTE_STRINGS?: unknown }).SBG_QUOTE_STRINGS);
+    this.s = strings((globalThis as { SBG_QUOTE_STRINGS?: unknown }).SBG_QUOTE_STRINGS, this.locale);
     this.root.replaceChildren(this.styles(), this.cta(), this.panel());
   }
 

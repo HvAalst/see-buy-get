@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Post, UseGuards } from '@nestjs/common';
 import { IdempotencyService } from '../../foundation/http/idempotency.service';
 import { OwnIdempotency } from '../../foundation/http/idempotency.interceptor';
 import { Public } from '../../foundation/auth/public.decorator';
@@ -6,7 +6,7 @@ import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guar
 import { ShippingApiService } from './shipping-api.service';
 import { ApiKeyGuard, CallerKey } from './api-key.guard';
 import type { Caller } from './api-key.service';
-import { MintShipmentDto, PublicQuoteDto } from './pudo.dto';
+import { CancelShipmentDto, MintShipmentDto, PublicQuoteDto } from './pudo.dto';
 
 /**
  * The public shipping API — SBG as a Shipment Service Provider.
@@ -80,5 +80,41 @@ export class ShippingApiController {
   @Get('areas')
   areas() {
     return this.shipping.areas();
+  }
+
+  /**
+   * Where is my shipment? The state of one you created, read back by the key that created it.
+   *
+   * The price comes off the parcel, not from a fresh quote: re-pricing a sold shipment would have this
+   * endpoint disagree with the merchant's own invoice. Somebody else's shipment answers NOT FOUND rather
+   * than FORBIDDEN — "you may not see this" tells a stranger the id is real.
+   *
+   * The collection code is NOT here. It arrives on the `ready_for_pickup` callback, at the moment it is
+   * useful and to an endpoint the store registered; on a pollable read it would sit in every log file that
+   * ever recorded a response body.
+   */
+  @Public()
+  @RateLimit(120, 60)
+  @Get('shipments/:shipmentId')
+  shipment(@Param('shipmentId') shipmentId: string, @CallerKey() caller: Caller) {
+    return this.shipping.shipment(shipmentId, caller);
+  }
+
+  /**
+   * Call it off, while it still can be.
+   *
+   * A secret key, for the reason minting needs one: a credential that can undo a shipment must never sit
+   * in a page. The window is the network's own — Created, At_PUDO or At_MDP — and once somebody is
+   * carrying it, calling it off is a conversation rather than an API call.
+   *
+   * THERE IS NO AMEND, deliberately. Moving a parcel's destination or changing its size changes what it
+   * costs, and an "edit" that quietly re-prices something a buyer already paid for is the worst possible
+   * version of this call. Cancel and create the replacement, so the new price is seen and agreed.
+   */
+  @Public()
+  @RateLimit(30, 60)
+  @Post('shipments/:shipmentId/cancel')
+  cancelShipment(@Param('shipmentId') shipmentId: string, @Body() dto: CancelShipmentDto, @CallerKey() caller: Caller) {
+    return this.shipping.cancelShipment(shipmentId, caller, dto.reason);
   }
 }

@@ -1,4 +1,4 @@
-import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsIn, IsNumber, IsObject, IsOptional, IsString, Matches, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
+import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsIn, IsNumber, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { DRIVER_ISSUES, DriverIssue } from './rating.service';
@@ -317,6 +317,11 @@ export class PublicQuoteDto {
  * The store is NOT named here — it is whoever the key belongs to. A merchant cannot mint against somebody
  * else's account by changing a field, because there is no field to change.
  */
+/** Why it was called off. Optional and free text — a store's own words, kept on the audit trail. */
+export class CancelShipmentDto {
+  @IsOptional() @IsString() @MaxLength(200) reason?: string;
+}
+
 export class MintShipmentDto {
   /** A price held earlier. Give this OR the four fields below — never both. */
   @IsOptional() @IsString() quoteId?: string;
