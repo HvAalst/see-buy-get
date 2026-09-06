@@ -376,6 +376,39 @@ export const STAGNANT_INVENTORY_H = 48; // At_PUDO too long
 export const GHOST_BUS_H = 6; // On_Bus too long
 export const MDP_DWELL_H = 12; // At_MDP (awaiting sort/load) too long
 export const CONNECTIVITY_LOSS_H = 2; // agent no-ping
+/**
+ * How long a parcel may wait on the destination shelf before somebody is told.
+ *
+ * The gap this closes: every state a parcel PASSES THROUGH was watched, and the one it can sit in
+ * indefinitely was not. A parcel nobody collects held a shelf slot for ever, silently — and the shelf is
+ * the scarce thing that decides whether a shop can accept anything new at all, so each one permanently
+ * cost the network a slot in a shop that has six or nine of them.
+ *
+ * Days rather than hours, unlike the transit windows beside it. Those measure a thing going wrong; this
+ * measures a person being busy, and three days is a weekend plus a working day — long enough not to
+ * nag somebody who was always going to come on Monday.
+ */
+export const UNCOLLECTED_H = 72;
+/**
+ * …and when the RECEIVER is reminded, which is deliberately sooner.
+ *
+ * The reminder exists to prevent the flag, not to accompany it: by the time an operator sees a parcel it
+ * has already cost the shop a slot for three days. One reminder, not a series — a parcel that has been
+ * waiting a day is a nudge, and a parcel nagging somebody daily is an app they turn off.
+ */
+export const UNCOLLECTED_REMINDER_H = 24;
+/**
+ * How long a MINTED shipment may sit before somebody is told it never started.
+ *
+ * A vendor is billed at mint, so this is the merchant's money held against a shipment that may never be
+ * dropped off. Nothing watched `Created`, so nothing said so. Long, because a store legitimately prints
+ * labels ahead of a courier run — this is for the order that was forgotten, not the one packed early.
+ */
+export const NEVER_DROPPED_H = 48;
+/** How often the uncollected sweep runs. Hourly is far finer than the day-scale thing it is watching,
+ *  which is the point: the cost of a miss is a reminder a few hours late, and the cost of running is one
+ *  pass over the shelf. */
+export const UNCOLLECTED_SWEEP_MS = 60 * 60_000;
 export const AGENT_ONLINE_H = 1; // counted "online" if pinged within this window
 
 /**

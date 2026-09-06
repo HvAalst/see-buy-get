@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { NotificationService } from './notification.service';
@@ -11,7 +11,7 @@ import { MdpService } from './mdp.service';
 import { DispatchService } from './dispatch.service';
 import { haversineKm } from './geo';
 import { GeoPoint } from './pudo.types';
-import { MARKET_SUPPLY_STALE_MIN, NETWORK_CURRENCY, NUDGE_COOLDOWN_MIN, NUDGE_MIN_MOVE_KM, TOTE_LOAD_FEE } from './pudo.config';
+import { MARKET_SUPPLY_STALE_MIN, NETWORK_CURRENCY, NUDGE_COOLDOWN_MIN, NUDGE_MIN_MOVE_KM, TOTE_LOAD_FEE, UNCOLLECTED_REMINDER_H, UNCOLLECTED_SWEEP_MS } from './pudo.config';
 
 /**
  * NotificationDispatcher (N2/N3) — the bridge from the event cascade to a person's devices. It
@@ -28,7 +28,7 @@ import { MARKET_SUPPLY_STALE_MIN, NETWORK_CURRENCY, NUDGE_COOLDOWN_MIN, NUDGE_MI
  * GENESIS — "a parcel is coming in" so the DROP-OFF shop expects a minted vendor order / peer-send).
  */
 @Injectable()
-export class NotificationDispatcher implements OnModuleInit {
+export class NotificationDispatcher implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(NotificationDispatcher.name);
 
   /** "Near you" radius + a fan-out cap so one tote never pings a whole city of drivers. */
@@ -54,6 +54,22 @@ export class NotificationDispatcher implements OnModuleInit {
     private readonly mdps: MdpService,
     private readonly dispatch: DispatchService,
   ) {}
+
+  /** The uncollected sweep's timer. Self-unref'd: a reminder is never a reason to hold the process open. */
+  private uncollectedTimer?: ReturnType<typeof setInterval>;
+
+  onApplicationBootstrap(): void {
+    // Every other notification here is a REACTION to an event. This one cannot be: nothing happens when a
+    // parcel is not collected, which is exactly why nobody was ever told. A sweep is the only shape that
+    // fits the absence of an event.
+    void this.remindUncollected().catch(() => undefined);
+    this.uncollectedTimer = setInterval(() => void this.remindUncollected().catch(() => undefined), UNCOLLECTED_SWEEP_MS);
+    this.uncollectedTimer.unref?.();
+  }
+
+  onModuleDestroy(): void {
+    if (this.uncollectedTimer) clearInterval(this.uncollectedTimer);
+  }
 
   onModuleInit(): void {
     // Rule 1 (buyer) — a parcel reached its destination PUDO and is ready to collect.
@@ -123,6 +139,52 @@ export class NotificationDispatcher implements OnModuleInit {
     } catch (err) {
       this.logger.warn(`parcel-ready notify failed for ${parcelId}: ${(err as Error).message}`);
     }
+  }
+
+  /**
+   * The reminder nobody was getting.
+   *
+   * A receiver was told once, on a notification tagged so that re-publishing collapses onto the same one.
+   * If they were on a bus, or the phone was flat, that was the entire conversation — and the parcel then
+   * sat on a shop's shelf holding a slot with nothing in the system aware of it.
+   *
+   * ONE reminder, not a series. A parcel waiting a day is worth a nudge; an app that nags daily about a
+   * parcel is an app somebody turns notifications off for, and then hears nothing about the next one
+   * either. Its own tag, deliberately — reusing the arrival tag would collapse onto a notification the
+   * receiver has already dismissed, which is the bug this is fixing rather than a way to fix it.
+   *
+   * Driven by the same sweep that raises the operator flag, so the two cannot drift apart: the reminder
+   * fires before the flag, because its whole job is to stop the flag being needed.
+   */
+  async remindUncollected(now: number = Date.now()): Promise<number> {
+    let sent = 0;
+    for (const parcel of this.parcels.list({ status: 'Ready_For_Pickup' })) {
+      const since = parcel.readyAt;
+      if (!since) continue; // written before the fact was stamped — no honest clock to age it from
+      if (now - new Date(since).getTime() < UNCOLLECTED_REMINDER_H * 3_600_000) continue;
+      if (parcel.uncollectedRemindedAt) continue; // said once
+      const hash = parcel.receiverPhoneHash;
+      const person = hash ? this.persons.findByHash(hash) : undefined;
+      // Stamped even when there is nobody to tell, so a receiver who signs up next week is not greeted by
+      // a reminder about a parcel that has been waiting a fortnight.
+      parcel.uncollectedRemindedAt = new Date(now).toISOString();
+      if (!person) continue;
+      try {
+        const where = this.shopName(parcel.destAgentDid) ?? parcel.destZone ?? 'your pickup point';
+        await this.notifications.notify(person.personDid, {
+          kind: 'parcel_ready',
+          title: 'Your parcel is still waiting',
+          body: `It is at ${where}. Bring your collection code.`,
+          link: '/',
+          tag: `parcel-waiting:${parcel.parcelId}`,
+          data: { parcelId: parcel.parcelId },
+        });
+        sent += 1;
+      } catch (err) {
+        this.logger.warn(`uncollected reminder failed for ${parcel.parcelId}: ${(err as Error).message}`);
+      }
+    }
+    return sent;
   }
 
   /**

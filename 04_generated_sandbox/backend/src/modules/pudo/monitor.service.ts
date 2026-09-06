@@ -4,10 +4,10 @@ import { ParcelService } from './parcel.service';
 import { CorridorService } from './corridor.service';
 import { WalletGateService } from './wallet-gate.service';
 import { DispatchService } from './dispatch.service';
-import { AGENT_ONLINE_H, CONNECTIVITY_LOSS_H, GHOST_BUS_H, MDP_DWELL_H, STAGNANT_INVENTORY_H } from './pudo.config';
+import { AGENT_ONLINE_H, CONNECTIVITY_LOSS_H, GHOST_BUS_H, MDP_DWELL_H, STAGNANT_INVENTORY_H , NEVER_DROPPED_H, UNCOLLECTED_H} from './pudo.config';
 
 export interface PudoFlag {
-  type: 'Stagnant_Inventory' | 'Ghost_Bus' | 'Stuck_At_MDP' | 'Connectivity_Loss' | 'Blocked_Corridor' | 'Buyer_Dispute' | 'Short_Shipped' | 'Temp_Breach';
+  type: 'Stagnant_Inventory' | 'Ghost_Bus' | 'Stuck_At_MDP' | 'Uncollected' | 'Never_Dropped_Off' | 'Connectivity_Loss' | 'Blocked_Corridor' | 'Buyer_Dispute' | 'Short_Shipped' | 'Temp_Breach';
   subject: string;
   detail: string;
   ageHours?: number;
@@ -44,6 +44,37 @@ export class MonitorService {
     for (const p of this.parcels.list({ status: 'On_Bus' })) {
       const age = hoursSince(p.handedToBusAt);
       if (age > GHOST_BUS_H) flags.push({ type: 'Ghost_Bus', subject: p.parcelId, detail: `On_Bus ${Math.round(age)}h`, ageHours: Math.round(age) });
+    }
+    /**
+     * The state nothing watched.
+     *
+     * Every state a parcel passes THROUGH had a window — 48 h at a shop, 6 h on a bus, 12 h at a hub —
+     * and the one state it can sit in for ever had none. A parcel nobody collects holds a shelf slot
+     * indefinitely, and the shelf is what decides whether a shop can take anything new at all, so each
+     * one quietly costs the network a slot in a shop that has six or nine.
+     *
+     * Aged from the ARRIVAL scan rather than from `acceptedAt`: a parcel that took a week to cross the
+     * country has not been uncollected for a week, and dating it from the mint would flag the network's
+     * own slowness as the receiver's.
+     */
+    for (const p of this.parcels.list({ status: 'Ready_For_Pickup' })) {
+      const age = hoursSince(p.readyAt ?? p.scans[p.scans.length - 1]?.at);
+      if (age > UNCOLLECTED_H) {
+        flags.push({ type: 'Uncollected', subject: p.parcelId, detail: `waiting at ${p.destZone ?? 'the shop'} ${Math.round(age / 24)}d · shelf ${p.binSlot ?? '—'}`, ageHours: Math.round(age) });
+      }
+    }
+    /**
+     * Minted, billed, and never handed over.
+     *
+     * The vendor's money is taken at mint, so a shipment that never starts is a merchant paying for
+     * nothing — and `Created` was the other state with no watch on it. The way out already existed
+     * (`cancel` accepts Created and reverses the charge); what was missing was anybody noticing.
+     */
+    for (const p of this.parcels.list({ status: 'Created' })) {
+      const age = hoursSince(p.acceptedAt);
+      if (age > NEVER_DROPPED_H) {
+        flags.push({ type: 'Never_Dropped_Off', subject: p.parcelId, detail: `minted ${Math.round(age)}h ago and never dropped off${p.vendorId ? ' · the store has been billed' : ''}`, ageHours: Math.round(age) });
+      }
     }
     for (const p of this.parcels.list({ status: 'At_MDP' })) {
       const age = hoursSince(p.scans[p.scans.length - 1]?.at); // since the drop/sort scan at the hub

@@ -15023,6 +15023,14 @@
           "acceptedAt": {
             "type": "string"
           },
+          "readyAt": {
+            "type": "string",
+            "description": "When it became collectable — the moment it hit the destination shelf.\n\nStamped rather than derived from the last scan, and the difference is not cosmetic: a wrong\ncollection code writes a `Ready_For_Pickup` scan of its own, so ageing off the scan list would reset\nthe uncollected clock every time somebody fumbled their code. The one event that matters here happens\nonce, so it is recorded once.\n\nAbsent on records written before this existed; readers fall back to the scan list."
+          },
+          "uncollectedRemindedAt": {
+            "type": "string",
+            "description": "When the receiver was reminded it was still waiting. Set once — see the dispatcher for why one\n reminder and not a series — and set even when there was nobody to tell, so somebody who signs up\n later is not greeted by a nudge about a parcel that has been sitting a fortnight."
+          },
           "handedToBusAt": {
             "type": "string"
           },

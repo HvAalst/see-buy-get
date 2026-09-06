@@ -12,7 +12,7 @@ import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
 import { ShelfService } from './shelf.service';
 import { FleetService } from './fleet.service';
-import { DEFAULT_TAX_LABEL, HANDOVER_FEE, MAX_CLAIM_AWARD, LABEL_TZ_OFFSET_MIN, LABOUR_FEE, NETWORK_CURRENCY, OTP_MAX_ATTEMPTS, PICKUP_FEE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, VOID_WINDOW_MS, WHOLESALE, classifySize, coverFor, taxOn, withPlatformFee } from './pudo.config';
+import { DEFAULT_TAX_LABEL, HANDOVER_FEE, MAX_CLAIM_AWARD, LABEL_TZ_OFFSET_MIN, LABOUR_FEE, NETWORK_CURRENCY, OTP_MAX_ATTEMPTS, PICKUP_FEE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, UNCOLLECTED_H, VOID_WINDOW_MS, WHOLESALE, classifySize, coverFor, taxOn, withPlatformFee } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import type { ResolvedTax } from '../../foundation/entity/entity.types';
 import { Birthplace, ConsumerParcelView, CustodyKind, CustodyLeg, DisputeDecision, DisputeOrigin, Parcel, ParcelDirection, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy } from './pudo.types';
@@ -928,6 +928,7 @@ export class ParcelService implements OnApplicationBootstrap {
     parcel.otpLockedAt = undefined;
     parcel.binSlot = this.shelf.assign(destAgentDid, parcelId, parcel.size); // commit to a shelf slot for pickup (small parcels may bundle)
     this.handTo(parcel, 'shop', destAgentDid, 'arrived at the collection point');
+    parcel.readyAt = new Date().toISOString(); // when the wait began — see Parcel.readyAt
     this.scan(parcel, 'Ready_For_Pickup', destAgentDid, `arrived · shelf ${parcel.binSlot}`);
     void this.events.publish(GlosEvent.Pudo.ParcelReadyForPickup, { parcelId, destAgentDid, binSlot: parcel.binSlot }, { source: 'pudo' }).catch(() => undefined);
     // No secret in this response: the customer brings the code, the shop checks it.
@@ -1012,7 +1013,23 @@ export class ParcelService implements OnApplicationBootstrap {
    * shipping charge if it is still at the accepting PUDO. (A more complete return-to-sender is future.) */
   cancel(parcelId: string, by = 'ops', reason?: string): Parcel {
     const parcel = this.require(parcelId);
-    if (!['Created', 'At_PUDO', 'At_MDP'].includes(parcel.status)) throw new GlosError('INVALID_STATE', `Cannot cancel a ${parcel.status} parcel`);
+    // Ready_For_Pickup is admitted, but ONLY once it has genuinely been abandoned. Without the window
+    // this would be a button that cancels a shipment which arrived an hour ago and is about to be
+    // collected; with it, it is the only way out of the one state that had none.
+    const abandoned =
+      parcel.status === 'Ready_For_Pickup' &&
+      Date.now() - new Date(parcel.readyAt ?? parcel.acceptedAt).getTime() > UNCOLLECTED_H * 3_600_000;
+    if (!abandoned && !['Created', 'At_PUDO', 'At_MDP'].includes(parcel.status)) {
+      throw new GlosError(
+        'INVALID_STATE',
+        parcel.status === 'Ready_For_Pickup'
+          ? `It is waiting to be collected — it can only be called off after ${Math.round(UNCOLLECTED_H / 24)} days unclaimed`
+          : `Cannot cancel a ${parcel.status} parcel`,
+      );
+    }
+    // The shelf is the scarce thing. A cancelled parcel that still counted against a shop's capacity would
+    // leave the network exactly as short of slots as the uncollected one it replaced.
+    if (parcel.status === 'Ready_For_Pickup' && parcel.destAgentDid) this.shelf.release(parcel.destAgentDid, parcel.parcelId);
     // Only an At_PUDO cash parcel moved agent cash at intake; reverse it flow-correctly (peer-send vs walk-up).
     // Only a parcel a SHOP took in has an intake charge to reverse — a dock parcel never had one, because
     // no shop ever handled it.
@@ -1425,6 +1442,7 @@ export class ParcelService implements OnApplicationBootstrap {
     parcel.otpAttempts = 0;
     parcel.otpLockedAt = undefined;
     this.handTo(parcel, 'shop', agentDid, 'shelved at the collection point');
+    parcel.readyAt = new Date().toISOString(); // when the wait began — see Parcel.readyAt
     this.scan(parcel, 'Ready_For_Pickup', agentDid, `shelved · bin ${parcel.binSlot}`);
     void this.events.publish(GlosEvent.Pudo.ParcelReadyForPickup, { parcelId, destAgentDid: agentDid, collectionCode: parcel.collectionCode, binSlot: parcel.binSlot, vendorId: parcel.vendorId, externalOrderId: parcel.externalOrderId }, { source: 'pudo' }).catch(() => undefined);
     return { parcelId, binSlot: parcel.binSlot, status: parcel.status };

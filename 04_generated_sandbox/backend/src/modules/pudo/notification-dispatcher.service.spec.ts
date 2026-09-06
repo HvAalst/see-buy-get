@@ -28,6 +28,8 @@ interface HarnessOpts {
   // rules 2 + 5 — whose DECLARED WORK (a road, or a radius) covers the pickup (default: all, as no
   // declaration does)
   heading?: (driverDid: string) => boolean;
+  // the uncollected sweep — what is sitting on destination shelves right now
+  onShelf?: unknown[];
   // rule 2c — the single best load near a moving driver, and what they are already deciding
   offerNear?: () => unknown | null;
   activeOffers?: () => unknown[];
@@ -44,6 +46,9 @@ function harness(opts: HarnessOpts) {
       if (!opts.parcel) throw new Error(`no such parcel ${id}`);
       return opts.parcel;
     },
+    // The uncollected sweep reads the shelf rather than reacting to an event — there IS no event when
+    // nothing happens, which is the whole reason nobody was being told.
+    list: () => opts.onShelf ?? [],
   } as unknown as ParcelService;
   const persons = { findByHash: (hash: string) => opts.personByHash?.[hash] } as unknown as PersonService;
   const agents = {
@@ -82,7 +87,7 @@ function harness(opts: HarnessOpts) {
 
   const dispatcher = new NotificationDispatcher(events, notifications, parcels, persons, agents, fleet, totes, mdps, dispatch);
   dispatcher.onModuleInit();
-  return { events, notifications, outbox };
+  return { events, notifications, outbox, dispatcher };
 }
 
 describe('NotificationDispatcher — rule 1: buyer "parcel arrived" (N2)', () => {
@@ -413,5 +418,84 @@ describe('NotificationDispatcher — rule 5: driver "load near you" for a posted
     await events.publish(GlosEvent.Pudo.FreightPosted, { freightId: 'frt_3', destLabel: 'Kisumu', pickupLocation: at(0, 0), weightKg: 300 });
     expect(notifications.inboxFor('d-truck')).toHaveLength(1);
     expect(notifications.inboxFor('d-bike')).toHaveLength(0); // near, but can't carry it
+  });
+});
+
+/**
+ * The sweep — because nothing happens when a parcel is NOT collected.
+ *
+ * Every other rule here reacts to an event. This one cannot: the failure being watched for is an absence,
+ * and an absence publishes nothing. A receiver used to be told once, on a notification tagged so that
+ * republishing collapses onto it — so if they were on a bus or the phone was flat, that was the whole
+ * conversation, and the parcel then sat on a shop's shelf holding a slot with nobody aware of it.
+ */
+describe('NotificationDispatcher — the uncollected reminder', () => {
+  const HOUR = 3_600_000;
+  const shelved = (over: Record<string, unknown> = {}) => ({
+    parcelId: 'PUD-WAITING',
+    status: 'Ready_For_Pickup',
+    receiverPhoneHash: 'hash-r',
+    destAgentDid: 'did:glos:shop',
+    destZone: 'Kisumu',
+    readyAt: new Date(Date.now() - 30 * HOUR).toISOString(),
+    ...over,
+  });
+  const receiver = { 'hash-r': { personDid: 'did:glos:person-r' } };
+  const shop = { 'did:glos:shop': { shopName: "Mama Sarah's" } };
+
+  it('reminds a receiver whose parcel has been waiting', async () => {
+    const { dispatcher, notifications } = harness({ onShelf: [shelved()], personByHash: receiver, agents: shop });
+    expect(await dispatcher.remindUncollected()).toBe(1);
+    const [note] = notifications.inboxFor('did:glos:person-r');
+    expect(note.title).toMatch(/still waiting/i);
+    expect(note.body).toContain("Mama Sarah's");
+  });
+
+  it('arrives ALONGSIDE the arrival notice, not on top of it', async () => {
+    // The reminder carries its own tag. Reusing the arrival one would collapse it onto a notification the
+    // receiver has already seen and dismissed — which is the bug being fixed, not a way to fix it. Asserted
+    // as what the receiver actually ends up holding, which is the thing that matters and the stronger claim.
+    const { dispatcher, notifications, events } = harness({
+      parcel: shelved(),
+      onShelf: [shelved()],
+      personByHash: receiver,
+      agents: shop,
+    });
+    await events.publish(GlosEvent.Pudo.ParcelReadyForPickup, { parcelId: 'PUD-WAITING' });
+    await new Promise((r) => setImmediate(r));
+    await dispatcher.remindUncollected();
+
+    const inbox = notifications.inboxFor('did:glos:person-r');
+    expect(inbox).toHaveLength(2);
+    expect(inbox.map((n) => n.title)).toEqual(expect.arrayContaining([expect.stringMatching(/arrived/i), expect.stringMatching(/still waiting/i)]));
+  });
+
+  it('says nothing while the parcel has only just arrived', async () => {
+    const { dispatcher } = harness({ onShelf: [shelved({ readyAt: new Date(Date.now() - HOUR).toISOString() })], personByHash: receiver, agents: shop });
+    expect(await dispatcher.remindUncollected()).toBe(0);
+  });
+
+  it('reminds ONCE, however often the sweep runs', async () => {
+    // Hourly sweep, day-scale problem. A parcel that nags somebody daily is an app they turn off, and
+    // then they hear nothing about the next parcel either.
+    const { dispatcher } = harness({ onShelf: [shelved()], personByHash: receiver, agents: shop });
+    expect(await dispatcher.remindUncollected()).toBe(1);
+    expect(await dispatcher.remindUncollected()).toBe(0);
+  });
+
+  it('marks a parcel it could not tell anybody about, so they are not greeted by stale news', async () => {
+    // A receiver with no account has nowhere to push to. Stamping anyway means somebody who signs up next
+    // week is not met by a reminder about a parcel that has been sitting a fortnight.
+    const waiting = shelved();
+    const { dispatcher } = harness({ onShelf: [waiting], personByHash: {}, agents: shop });
+    expect(await dispatcher.remindUncollected()).toBe(0);
+    expect((waiting as { uncollectedRemindedAt?: string }).uncollectedRemindedAt).toBeDefined();
+  });
+
+  it('will not age a parcel it has no honest clock for', async () => {
+    // Records written before the arrival was stamped. Guessing from the scan list would reset the clock
+    // every time somebody fumbled a collection code.
+    const { dispatcher } = harness({ onShelf: [shelved({ readyAt: undefined })], personByHash: receiver, agents: shop });
+    expect(await dispatcher.remindUncollected()).toBe(0);
   });
 });

@@ -755,6 +755,21 @@ export class Parcel {
   shortShippedAt?: string;
   shortShipReason?: string;
   acceptedAt: string;
+  /**
+   * When it became collectable — the moment it hit the destination shelf.
+   *
+   * Stamped rather than derived from the last scan, and the difference is not cosmetic: a wrong
+   * collection code writes a `Ready_For_Pickup` scan of its own, so ageing off the scan list would reset
+   * the uncollected clock every time somebody fumbled their code. The one event that matters here happens
+   * once, so it is recorded once.
+   *
+   * Absent on records written before this existed; readers fall back to the scan list.
+   */
+  readyAt?: string;
+  /** When the receiver was reminded it was still waiting. Set once — see the dispatcher for why one
+   *  reminder and not a series — and set even when there was nobody to tell, so somebody who signs up
+   *  later is not greeted by a nudge about a parcel that has been sitting a fortnight. */
+  uncollectedRemindedAt?: string;
   handedToBusAt?: string;
   deliveredAt?: string;
   /** Where it came into being. Absent on pre-slice records — read it through `birthplaceOf`. */
