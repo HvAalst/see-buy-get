@@ -138,7 +138,17 @@ async function loadAll() {
   try {
     [state.dashboard, state.agents, state.finance, state.flags, state.kycQueue, state.heatmap, state.mdps, state.totes, state.help, state.disputesRes] = await Promise.all([api('/dashboard'), api('/agents'), api('/finance'), api('/flags'), api('/agents/kyc-queue'), api('/heatmap'), api('/mdps'), api('/totes'), api(`/help/${state.helpTopic}`), api('/disputes')]);
     state.disputes = state.disputesRes?.disputes || [];
+    // The sister whose books this tower is looking at. One deployment, one sister today; when the group
+    // console arrives this becomes a picker rather than the first row.
+    // /entities answers with a bare ARRAY, not a paged envelope. Reading .items off it yields undefined,
+    // which reads as a network with no sisters — and the panel would then show nothing owed to anybody.
+    const sisters = await api('/entities').catch(() => []);
+    // A SISTER, never the mother: the group has no jurisdiction, holds no custody and cannot be posted to.
+    state.entityId = (Array.isArray(sisters) ? sisters : []).find((e) => e.jurisdiction)?.entityId || null;
     state.msg = null;
+    // AFTER the clear, not before: loadSettlement reports its own failures through state.msg, and
+    // clearing the slate on the line below would swallow the one it had just written.
+    await loadSettlement();
   } catch (e) {
     const m = String(e.message || e);
     state.msg = { type: 'err', text: m.includes('Failed to fetch') ? 'Cannot reach the server. Start the backend.' : m };
@@ -462,6 +472,111 @@ function financePanel() {
   return el('div', { className: 'pt__panel' }, [el('h2', { className: 'pt__panel-title', text: 'Finance' }), tiles, ledger]);
 }
 
+/**
+ * Settlement — what the sister holds, what it owes, and paying it.
+ *
+ * The books have accrued a payable for every driver, fleet and hub since the postings were wired, and
+ * until now nothing on any screen could see it, let alone pay it. Coverage sits at the top on purpose:
+ * "can we pay everybody" is the question a run is an answer to, and pressing the button without it is how
+ * a sister spends the shops' float on its drivers.
+ *
+ * Nothing here settles anything by itself. The run RAISES payouts, the rail carries them, and only the
+ * rail's answer moves money — in the sandbox that answer is a person pressing Settle, in a live
+ * deployment it is the provider's callback, and it is deliberately the same door.
+ */
+function settlementPanel() {
+  const cov = state.books?.coverage || {};
+  const rows = state.payouts?.items || [];
+  const ccy = cov.currency || '';
+  const money = (n) => `${ccy} ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0)}`;
+
+  const tiles = el('div', { className: 'pt__kpis', style: { gridTemplateColumns: 'repeat(3,1fr)', margin: '4px 0 14px' } }, [
+    el('div', { className: 'pt__kpi' }, [el('div', { className: 'pt__kpi-num', text: money(cov.held) }), el('div', { className: 'pt__kpi-label', text: 'Cash held' })]),
+    el('div', { className: 'pt__kpi' }, [el('div', { className: 'pt__kpi-num', text: money(cov.owed) }), el('div', { className: 'pt__kpi-label', text: 'Owed to everybody' })]),
+    // Cover going negative is the single most important number on this page, so it is coloured rather
+    // than left as one figure among three.
+    el('div', { className: 'pt__kpi' }, [
+      el('div', { className: 'pt__kpi-num', style: { color: (cov.cover ?? 0) < 0 ? 'var(--danger)' : 'inherit' }, text: money(cov.cover) }),
+      el('div', { className: 'pt__kpi-label', text: 'Cover' }),
+    ]),
+  ]);
+
+  const runBtn = el('button', {
+    className: 'pt__btn',
+    text: "Run today's settlement",
+    onClick: async () => {
+      try {
+        const res = await post(`/entities/${state.entityId}/payouts/run`, {});
+        // Say what was SKIPPED and why. A run that quietly pays four of six people is how somebody
+        // discovers on Friday that they have not been paid since Tuesday.
+        const skipped = (res.skipped || []).map((s) => `${short(s.payeeDid)}: ${s.reason}`).join('; ');
+        state.msg = {
+          type: res.raised?.length ? 'ok' : 'err',
+          text: `Raised ${res.raised?.length || 0} payout(s) for ${res.day}${skipped ? ` — skipped ${skipped}` : ''}`,
+        };
+      } catch (e) {
+        state.msg = { type: 'err', text: String(e.message || e) };
+      }
+      await loadSettlement();
+      render();
+    },
+  });
+
+  const act = (payoutId, label, path, body) =>
+    el('button', {
+      className: 'pt__btn pt__btn--ghost',
+      text: label,
+      onClick: async () => {
+        try {
+          await post(`/payouts/${payoutId}/${path}`, body);
+          state.msg = { type: 'ok', text: `${label} — done` };
+        } catch (e) {
+          state.msg = { type: 'err', text: String(e.message || e) };
+        }
+        await loadSettlement();
+        render();
+      },
+    });
+
+  const tone = { requested: 'info', submitted: 'warn', settled: 'ok', failed: 'bad', reversed: 'bad' };
+  const table = rows.length
+    ? el('table', { className: 'pt__table' }, [
+        el('thead', {}, [el('tr', {}, ['Payee', 'Amount', 'Day', 'State', 'Reference', ''].map((h) => el('th', { text: h })))]),
+        el('tbody', {}, rows.slice(0, 12).map((p) => el('tr', {}, [
+          el('td', {}, [el('span', { className: 'pt__mono', text: short(p.payeeDid) })]),
+          el('td', { text: money(p.amount) }),
+          el('td', { text: p.day }),
+          el('td', {}, [el('span', { className: `pt__chip pt__chip--${tone[p.status] || 'info'}`, text: p.status })]),
+          el('td', {}, [el('span', { className: 'pt__mono', text: p.providerRef || '—' })]),
+          el('td', {}, [
+            // One action per state, because there is only ever one honest next step.
+            p.status === 'requested' ? act(p.payoutId, 'Submit', 'submit', {}) : null,
+            p.status === 'submitted' ? act(p.payoutId, 'Settle', 'settle', {}) : null,
+            p.status === 'submitted' ? act(p.payoutId, 'Failed', 'fail', { reason: 'reported by the rail' }) : null,
+            p.status === 'settled' ? act(p.payoutId, 'Reverse', 'reverse', { reason: 'returned by the rail' }) : null,
+          ].filter(Boolean)),
+        ]))),
+      ])
+    : el('div', { className: 'pt__empty', text: 'Nobody has been paid yet, and nobody is waiting.' });
+
+  return el('div', { className: 'pt__panel' }, [
+    el('h2', { className: 'pt__panel-title', text: 'Settlement' }),
+    tiles,
+    el('div', { style: { margin: '0 0 12px' } }, [runBtn]),
+    table,
+  ]);
+}
+
+/** Coverage and payouts for the sister this tower is looking at. */
+async function loadSettlement() {
+  if (!state.entityId) return;
+  try {
+    [state.books, state.payouts] = await Promise.all([api(`/entities/${state.entityId}/books`), api(`/entities/${state.entityId}/payouts`)]);
+  } catch (e) {
+    state.msg = { type: 'err', text: String(e.message || e) };
+  }
+}
+
 function supportPanel() {
   const input = el('input', { className: 'pt__input', attrs: { placeholder: 'Parcel sticker ID', style: 'flex:1' } });
   const find = el('button', { className: 'pt__btn', text: 'Look up', onClick: async () => { if (!input.value.trim()) return; try { state.lookup = await api(`/parcels/${encodeURIComponent(input.value.trim())}`); state.msg = null; } catch (e) { state.lookup = null; state.msg = { type: 'err', text: String(e.message || e) }; } render(); } });
@@ -608,7 +723,7 @@ function render() {
   parts.push(kpis());
   parts.push(el('div', { className: 'pt__grid' }, [
     el('div', {}, [heatmapPanel(), agentsPanel(), mdpPanel()]),
-    el('div', {}, [disputesPanel(), kycPanel(), flagsPanel(), financePanel(), supportPanel(), helpPanel()]),
+    el('div', {}, [disputesPanel(), kycPanel(), flagsPanel(), financePanel(), settlementPanel(), supportPanel(), helpPanel()]),
   ]));
   mount(root, parts);
 }

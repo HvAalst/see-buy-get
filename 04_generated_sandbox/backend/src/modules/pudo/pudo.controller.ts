@@ -31,9 +31,10 @@ import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
-import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DerivedLegDto, NudgeMinEarnDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
+import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
 import { classifySize, measuredFactor, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
+import { PayoutService } from '../../foundation/payouts/payout.service';
 import { BooksService } from '../../foundation/books/books.service';
 import { FX_BASE, FX_RATE_MAX_AGE_H, FxService } from '../../foundation/money/fx.service';
 import { BagPlanService } from './bag-plan.service';
@@ -79,6 +80,7 @@ export class SbgController {
     private readonly consignments: ConsignmentService,
     private readonly vehicles: VehicleService,
     private readonly drivers: DriverService,
+    private readonly payouts: PayoutService,
     private readonly fleet: FleetService,
     private readonly dispatch: DispatchService,
     private readonly managers: FleetManagerService,
@@ -233,6 +235,63 @@ export class SbgController {
       integrity: this.books.balances(entityId),
       coverage: this.books.coverage(entityId),
     };
+  }
+
+  /* ------------------------------------------------ paying the people we owe -- */
+
+  /**
+   * Settle today's provider payables — raise a payout for everybody this sister owes.
+   *
+   * It RAISES, it does not pay: the run decides, the rail carries, and only the rail's answer moves the
+   * books. Idempotent per payee per day, so a retry, an overlapping cron or two operators pressing the
+   * same button cannot pay one day's work twice. A payee it cannot cover is SKIPPED and told why — a
+   * part-payment nobody asked for reads as a wrong amount rather than as short cash.
+   */
+  @Roles('operator')
+  @Post('entities/:entityId/payouts/run')
+  runPayouts(@Param('entityId') entityId: string) {
+    return this.payouts.runFor(entityId);
+  }
+
+  /** Hand a raised payout to the rail. Still not a payment — an attempt, with a reference. */
+  @Roles('operator')
+  @Post('payouts/:payoutId/submit')
+  submitPayout(@Param('payoutId') payoutId: string) {
+    return this.payouts.submit(payoutId);
+  }
+
+  /**
+   * The rail says it landed — the one call that moves money in the books.
+   *
+   * Operator-gated because in the sandbox a person presses it. In a live deployment this is what the
+   * provider's callback drives, and the door is deliberately the same one: nothing above here is allowed
+   * to learn that a payment can complete merely because we asked for it.
+   */
+  @Roles('operator')
+  @Post('payouts/:payoutId/settle')
+  settlePayout(@Param('payoutId') payoutId: string, @Body() dto: PayoutSettleDto) {
+    return this.payouts.settle(payoutId, dto.providerRef);
+  }
+
+  /** It did not go. The payable stands, because the money is still owed. */
+  @Roles('operator')
+  @Post('payouts/:payoutId/fail')
+  failPayout(@Param('payoutId') payoutId: string, @Body() dto: PayoutFailureDto) {
+    return this.payouts.fail(payoutId, dto.reason);
+  }
+
+  /** It went and came back. Its own entry, never an unwinding of the first. */
+  @Roles('operator')
+  @Post('payouts/:payoutId/reverse')
+  reversePayout(@Param('payoutId') payoutId: string, @Body() dto: PayoutFailureDto) {
+    return this.payouts.reverse(payoutId, dto.reason);
+  }
+
+  /** A sister's payouts, newest first — the settlement page. */
+  @Roles('operator')
+  @Get('entities/:entityId/payouts')
+  listPayouts(@Param('entityId') entityId: string) {
+    return { items: this.payouts.list({ entityId }) };
   }
 
   /**

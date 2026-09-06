@@ -213,6 +213,26 @@ export class BooksService {
   }
 
   /**
+   * Who is owed on one account code, and how much — the list a settlement run works from.
+   *
+   * Reported POSITIVE for a liability, flipped here at the presentation edge exactly as `coverage` does,
+   * because "owed 40" is the sentence a human says and the sign convention is an internal matter.
+   *
+   * A zero balance is left out. An account opened and then settled back to nothing is not somebody
+   * waiting for money, and including it would have every run raise a payout for everybody the network has
+   * ever paid.
+   */
+  outstanding(entityId: string, code: AccountCode, currency?: string): { counterparty: string; amount: number }[] {
+    const entity = this.entities.get(entityId);
+    const ccy = currency ?? entity.currency ?? '';
+    return [...this.accounts.values()]
+      .filter((a) => a.entityId === entityId && a.code === code && a.currency === ccy && a.counterparty)
+      .map((a) => ({ counterparty: a.counterparty!, amount: toMajor(-this.balanceMinorOf(a.accountId)) }))
+      .filter((row) => row.amount > 0)
+      .sort((a, b) => b.amount - a.amount || a.counterparty.localeCompare(b.counterparty));
+  }
+
+  /**
    * Wipe the books. Sandbox only: the cutover resets rather than migrating notional balances, so a demo
    * never shows a figure that has no postings behind it.
    */

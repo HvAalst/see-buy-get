@@ -3889,6 +3889,194 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/payouts/run": {
+      "post": {
+        "operationId": "Sbg.runPayouts",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/payouts/{payoutId}/submit": {
+      "post": {
+        "operationId": "Sbg.submitPayout",
+        "summary": "",
+        "description": "Hand a raised payout to the rail. Still not a payment — an attempt, with a reference.",
+        "parameters": [
+          {
+            "name": "payoutId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Payout"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/payouts/{payoutId}/settle": {
+      "post": {
+        "operationId": "Sbg.settlePayout",
+        "summary": "",
+        "description": "The rail says it landed — the one call that moves money in the books.\n\nOperator-gated because in the sandbox a person presses it. In a live deployment this is what the\nprovider's callback drives, and the door is deliberately the same one: nothing above here is allowed\nto learn that a payment can complete merely because we asked for it.",
+        "parameters": [
+          {
+            "name": "payoutId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PayoutSettleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Payout"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/payouts/{payoutId}/fail": {
+      "post": {
+        "operationId": "Sbg.failPayout",
+        "summary": "",
+        "description": "It did not go. The payable stands, because the money is still owed.",
+        "parameters": [
+          {
+            "name": "payoutId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PayoutFailureDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Payout"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/payouts/{payoutId}/reverse": {
+      "post": {
+        "operationId": "Sbg.reversePayout",
+        "summary": "",
+        "description": "It went and came back. Its own entry, never an unwinding of the first.",
+        "parameters": [
+          {
+            "name": "payoutId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PayoutFailureDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Payout"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/payouts": {
+      "get": {
+        "operationId": "Sbg.listPayouts",
+        "summary": "",
+        "description": "A sister's payouts, newest first — the settlement page.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/entities/{entityId}/fee": {
       "post": {
         "operationId": "Sbg.setEntityFee",
@@ -13557,6 +13745,94 @@
         "required": [
           "currency",
           "perBase"
+        ]
+      },
+      "Payout": {
+        "type": "object",
+        "properties": {
+          "payoutId": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string",
+            "description": "The sister that owes it. Its books are where the drawdown posts."
+          },
+          "payeeDid": {
+            "type": "string",
+            "description": "WHO IS PAID — the party the network contracts with: a fleet, a courier, a hub. Never a person who\n merely did the work; see DriverService.payeeOf."
+          },
+          "amount": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "status": {
+            "type": "object"
+          },
+          "day": {
+            "type": "string",
+            "description": "The settlement day this covers, `YYYY-MM-DD`.\n\nThe idempotency key, with the payee: a run that fires twice — a retry, two operators, a cron that\noverlaps itself — must not pay the same day's work twice. Same-day settlement is a promise about\nWHEN, so the day is the natural unit rather than a batch id nobody can reason about."
+          },
+          "requestedAt": {
+            "type": "string"
+          },
+          "submittedAt": {
+            "type": "string"
+          },
+          "settledAt": {
+            "type": "string"
+          },
+          "failedAt": {
+            "type": "string"
+          },
+          "reversedAt": {
+            "type": "string"
+          },
+          "providerRef": {
+            "type": "string",
+            "description": "The rail's own reference. The thing you quote when somebody says they were not paid."
+          },
+          "failureReason": {
+            "type": "string"
+          },
+          "entryId": {
+            "type": "string",
+            "description": "The journal entry that moved the money. Present ONLY once settled — before that nothing has moved."
+          },
+          "reversalEntryId": {
+            "type": "string",
+            "description": "…and the entry that moved it back, if it bounced."
+          }
+        },
+        "required": [
+          "payoutId",
+          "entityId",
+          "payeeDid",
+          "amount",
+          "currency",
+          "status",
+          "day",
+          "requestedAt"
+        ]
+      },
+      "PayoutSettleDto": {
+        "type": "object",
+        "properties": {
+          "providerRef": {
+            "type": "string"
+          }
+        }
+      },
+      "PayoutFailureDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
         ]
       },
       "EntityFeeDto": {

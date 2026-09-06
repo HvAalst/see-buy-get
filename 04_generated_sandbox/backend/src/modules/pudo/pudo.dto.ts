@@ -849,6 +849,16 @@ export class NudgeMinEarnDto {
   @IsOptional() @IsNumber() @Min(0) amount?: number;
 }
 
+/** Why a payout did not go, or came back. Free text because a rail's reason is a rail's own words. */
+export class PayoutFailureDto {
+  @IsString() reason!: string;
+}
+
+/** The rail's confirmation. Its reference, when it gives a better one than the submit call did. */
+export class PayoutSettleDto {
+  @IsOptional() @IsString() providerRef?: string;
+}
+
 /** Hold new offers. Omitted `minutes` = until the driver resumes (bounded by the shift either way). */
 export class SnoozeDto {
   @IsOptional() @IsNumber() @Min(1) minutes?: number;
