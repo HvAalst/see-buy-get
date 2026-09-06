@@ -285,7 +285,15 @@ export const enDriver = {
 
   // Earnings screen (jobs + earnings register).
   'driver.earn.earned': 'Earned',
-  'driver.earn.sub': '{paid} paid · {unpaid} owed · {delivered} delivered',
+  // "paid" used to mean the network had BOOKED what it owes, at the moment of delivery — which was
+  // harmless shorthand while nothing ever left the building, and became a false statement about
+  // somebody's money the day settlement shipped. Booked and paid are now two different lines.
+  'driver.earn.sub': '{booked} booked · {unpaid} still to come · {delivered} delivered',
+  'driver.earn.settledLine': '{settled} has actually reached you. {inFlight} is on its way.',
+  'driver.earn.settledNone': 'Nothing has been paid out to you yet.',
+  // A fleet driver's work is theirs to read; the payment is their employer's to receive. Said here rather
+  // than left to be discovered on payday.
+  'driver.earn.settledFleet': 'Your earnings are paid to your fleet, not to you directly.',
   'driver.earn.subEmpty': 'What you have earned on your freight hauls — for whatever you filter to below.',
   'driver.earn.liveLoading': 'Loading jobs…',
   'driver.earn.liveError': 'Could not load jobs.',

@@ -2291,12 +2291,20 @@ export class SbgController {
     return this.dispatch.driverJobsPage(did, query);
   }
 
-  /** Running totals (earned / paid / unpaid / delivered / count) for the current filter. Owner-scoped. */
+  /**
+   * Running totals for the current filter, and — separately — what has actually been PAID.
+   *
+   * They are two different questions and the screen used to answer only one of them under the other's
+   * name. `earned`/`paid`/`unpaid` come from the jobs themselves, where "paid" means the network booked
+   * what it owes at the moment of delivery. `settlement` comes from the payouts, where paid means a rail
+   * confirmed money leaving. Until settlement existed there was nothing to tell apart; now there is, and
+   * conflating them would tell somebody they have their money when it is still in the sister's account.
+   */
   @Scopes('driver:read:self')
   @Get('fleet/drivers/:did/jobs/summary')
   driverJobsSummaryRoute(@Param('did') did: string, @Query() query: DriverJobsQueryDto, @Actor() actor: IntrospectionResult) {
     this.assertDriverOwner(did, actor);
-    return this.dispatch.driverJobsSummary(did, query);
+    return { ...this.dispatch.driverJobsSummary(did, query), settlement: this.drivers.settlementFor(did, this.payouts) };
   }
 
   /** Export the whole matching set (every page, current filters) as CSV — the driver's OWN earnings export. Owner-scoped. */

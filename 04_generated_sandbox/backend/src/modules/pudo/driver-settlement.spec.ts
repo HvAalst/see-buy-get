@@ -45,6 +45,9 @@ import { LedgerService } from '../../foundation/ledger/ledger.service';
 import { InMemoryLedgerAdapter } from '../../foundation/ledger/in-memory-ledger.adapter';
 import { LEDGER_ADAPTER } from '../../foundation/ledger/ledger.types';
 import { EventBus } from '../../foundation/events/event-bus.service';
+import { PayoutService } from '../../foundation/payouts/payout.service';
+import { SandboxPayoutRail } from '../../foundation/payouts/sandbox-rail.adapter';
+import { PAYOUT_RAIL } from '../../foundation/payouts/payout.types';
 
 /**
  * What the network owes the people who move things — and, until now, never wrote down.
@@ -72,6 +75,7 @@ describe('what the network owes its drivers', () => {
   let gate: WalletGateService;
   let books: BooksService;
   let entities: EntityService;
+  let payouts: PayoutService;
 
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -84,6 +88,7 @@ describe('what the network owes its drivers', () => {
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
         EntityService, BooksService, FxService,
+        PayoutService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
         GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder },
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
@@ -100,6 +105,17 @@ describe('what the network owes its drivers', () => {
     fleet = moduleRef.get(FleetService);
     managers = moduleRef.get(FleetManagerService);
     gate = moduleRef.get(WalletGateService);
+    payouts = moduleRef.get(PayoutService);
+    // A sister with money in the account: settlement can only pay what is actually held.
+    books.post({
+      entityId: ke(),
+      kind: 'top-up',
+      ref: 'funding',
+      lines: [
+        { code: ACCOUNT_CODES.CASH_CUSTODY, amount: 5000 },
+        { code: ACCOUNT_CODES.DEPOSIT_AGENT, counterparty: 'did:glos:shop', amount: -5000 },
+      ],
+    });
   });
 
   let seq = 0;
@@ -187,6 +203,31 @@ describe('what the network owes its drivers', () => {
       // entity comes from the fleet's own incorporation and not from wherever the parcel happened to move.
       const { manager, driver } = employed();
       expect(drivers.payeeOf(driver.did)).toEqual({ entityId: managers.entityIdOf(manager), payeeDid: manager.did });
+    });
+  });
+
+  describe('what a driver is told about their own money', () => {
+    it('keeps EARNED and PAID apart, because they stopped being the same thing', () => {
+      // The jobs register's `paid` flag is set at DELIVERY — it means the network booked what it owes.
+      // While nothing ever left the building that was harmless shorthand; the day settlement shipped it
+      // became a false statement on the one screen somebody opens to check whether they were paid.
+      const d = courier();
+      gate.driverPayout(d.did, 60);
+      const before = drivers.settlementFor(d.did, payouts);
+      expect(before).toMatchObject({ payeeDid: d.did, paidToMe: true, settled: 0, inFlight: 0 });
+
+      const [p] = payouts.runFor(ke()).raised;
+      expect(drivers.settlementFor(d.did, payouts)).toMatchObject({ settled: 0, inFlight: 60 });
+      payouts.settle(payouts.submit(p.payoutId).payoutId);
+      expect(drivers.settlementFor(d.did, payouts)).toMatchObject({ settled: 60, inFlight: 0 });
+    });
+
+    it('tells a FLEET driver that the money goes to their fleet', () => {
+      // The scope boundary made visible rather than left for somebody to discover on payday. A fleet
+      // driver's earnings are real and theirs to read; the payment is their employer's to receive.
+      const { manager, driver } = employed();
+      gate.driverPayout(driver.did, 30);
+      expect(drivers.settlementFor(driver.did, payouts)).toMatchObject({ payeeDid: manager.did, paidToMe: false });
     });
   });
 

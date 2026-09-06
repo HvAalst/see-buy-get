@@ -46,10 +46,21 @@ export interface DriverJobRow {
 /** R5 — the earnings register's running totals for the current filtered view. */
 export interface DriverJobsSummary {
   earned: number;
+  /** BOOKED, not paid. Set when a load is delivered and the network accrues what it owes — it has never
+   *  meant money reached anybody, and since settlement shipped that difference is real. */
   paid: number;
   unpaid: number;
   delivered: number;
   count: number;
+  /**
+   * What has actually LEFT, and who it goes to.
+   *
+   * A separate question from the numbers above, kept separate on the screen too: merging them is how "we
+   * owe you this" came to be displayed as "you have been paid". `paidToMe` is false for a fleet driver,
+   * whose earnings are real and theirs to read but whose payment is their employer's to receive.
+   * Absent on an older backend.
+   */
+  settlement?: { payeeDid: string; paidToMe: boolean; settled: number; inFlight: number; currency?: string };
 }
 
 export interface VehicleView {

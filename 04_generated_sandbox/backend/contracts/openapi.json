@@ -10637,7 +10637,7 @@
       "get": {
         "operationId": "Sbg.driverJobsSummaryRoute",
         "summary": "",
-        "description": "Running totals (earned / paid / unpaid / delivered / count) for the current filter. Owner-scoped.",
+        "description": "Running totals for the current filter, and — separately — what has actually been PAID.\n\nThey are two different questions and the screen used to answer only one of them under the other's\nname. `earned`/`paid`/`unpaid` come from the jobs themselves, where \"paid\" means the network booked\nwhat it owes at the moment of delivery. `settlement` comes from the payouts, where paid means a rail\nconfirmed money leaving. Until settlement existed there was nothing to tell apart; now there is, and\nconflating them would tell somebody they have their money when it is still in the sister's account.",
         "parameters": [
           {
             "name": "did",
@@ -10730,14 +10730,7 @@
         ],
         "responses": {
           "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
+            "description": ""
           }
         }
       }

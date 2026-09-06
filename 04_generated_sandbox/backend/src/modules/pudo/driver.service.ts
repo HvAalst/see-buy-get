@@ -87,6 +87,31 @@ export class DriverService {
     return { entityId: this.settlingEntityIdOf(driver), payeeDid: driver.managerDid ?? driver.did };
   }
 
+  /**
+   * What this driver's work has actually turned into money for, and for WHOM.
+   *
+   * The jobs register has always carried a `paid` flag, and it has never meant paid: `driverPaid` is set
+   * the moment a load is delivered, when the network ACCRUES what it owes. While nothing ever left the
+   * building that was a harmless shorthand. It stopped being harmless the day settlement shipped — a
+   * screen that says "paid" about money still sitting in the sister's account is a false statement on the
+   * one screen somebody opens to find out whether they have been paid.
+   *
+   * So the two facts are reported apart. `settled` is money a rail confirmed leaving; `inFlight` is a
+   * payment on its way. And `payeeDid` names who it goes to, which for a fleet driver is not them — that
+   * is the scope boundary made visible rather than left for somebody to discover on payday.
+   */
+  settlementFor(did: string, payouts: { forPayee(payeeDid: string): { settled: number; inFlight: number; currency?: string } }): {
+    payeeDid: string;
+    paidToMe: boolean;
+    settled: number;
+    inFlight: number;
+    currency?: string;
+  } {
+    const driver = this.require(did);
+    const { payeeDid } = this.payeeOf(did);
+    return { payeeDid, paidToMe: payeeDid === driver.did, ...payouts.forPayee(payeeDid) };
+  }
+
   /** Whether the network contracts this driver directly (an independent courier) or through a fleet. */
   isIndependent(driver: FleetDriver): boolean {
     return !driver.managerDid;

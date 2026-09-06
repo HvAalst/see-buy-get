@@ -76,7 +76,23 @@ export function EarningsScreen({ state, actions }: EarningsScreenProps) {
     <div class="scr">
       {state.error ? <ErrorNote error={state.error} onRetry={() => actions.go('earnings')} /> : null}
 
-      <GlanceNumber label={t('driver.earn.earned')} value={sum ? money(sum.earned) : '—'} sub={sum ? t('driver.earn.sub', { paid: money(sum.paid), unpaid: money(sum.unpaid), delivered: sum.delivered }) : t('driver.earn.subEmpty')} />
+      <GlanceNumber
+        label={t('driver.earn.earned')}
+        value={sum ? money(sum.earned) : '—'}
+        sub={sum ? t('driver.earn.sub', { booked: money(sum.paid), unpaid: money(sum.unpaid), delivered: sum.delivered }) : t('driver.earn.subEmpty')}
+      />
+      {/* What has actually LEFT, which is a different question from what the network has booked. Kept as
+          its own line rather than folded into the one above, because merging them is exactly how "we owe
+          you this" came to be displayed as "you have been paid". */}
+      {sum?.settlement ? (
+        <p class="card__note">
+          {!sum.settlement.paidToMe
+            ? t('driver.earn.settledFleet')
+            : sum.settlement.settled > 0 || sum.settlement.inFlight > 0
+              ? t('driver.earn.settledLine', { settled: money(sum.settlement.settled), inFlight: money(sum.settlement.inFlight) })
+              : t('driver.earn.settledNone')}
+        </p>
+      ) : null}
 
       <Card title={t('driver.earn.jobsTitle')} aside={<span class="row__count">{state.jobsTotal}</span>}>
         <div class="reg__controls">
