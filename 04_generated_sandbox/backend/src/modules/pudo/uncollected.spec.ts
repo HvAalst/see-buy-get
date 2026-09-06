@@ -30,6 +30,7 @@ import { HeuristicRouter, ROUTER } from './router';
 import { NEVER_DROPPED_H, RETURN_OFFER_TTL_H, UNCOLLECTED_H } from './pudo.config';
 import { operationalParcelView } from './parcel.service';
 import { ReturnService } from './return.service';
+import { UnclaimedService } from './unclaimed.service';
 import { DigitalTwinService } from '../m7/digital-twin.service';
 import { TrackingService } from '../m4/tracking.service';
 import { TrackingContextService } from '../m4/tracking-context.service';
@@ -76,6 +77,7 @@ describe('the states nothing watched', () => {
   let shelf: ShelfService;
   let routing: RoutingService;
   let returns: ReturnService;
+  let unclaimed: UnclaimedService;
   let entities: EntityService;
 
   beforeEach(async () => {
@@ -89,7 +91,7 @@ describe('the states nothing watched', () => {
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
         EntityService, BooksService, FxService,
-        PayoutService, ReturnService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },
+        PayoutService, ReturnService, UnclaimedService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
         GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder },
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
@@ -107,6 +109,7 @@ describe('the states nothing watched', () => {
     shelf = moduleRef.get(ShelfService);
     routing = moduleRef.get(RoutingService);
     returns = moduleRef.get(ReturnService);
+    unclaimed = moduleRef.get(UnclaimedService);
   });
 
   let seq = 0;
@@ -355,13 +358,16 @@ describe('the journey home', () => {
       expect(closed.returnParcelId).toBe(returnParcelId); // the two read as one story
     });
 
-    it('bills the store for the journey home', () => {
+    it('bills the store for the journey home AND the shelf it sat on', () => {
+      // Two halves, and the assertion reads them off the SETTLED offer rather than recomputing them.
+      // Holding is counted in started days, so a parcel that lapsed a moment ago already owes its first
+      // one — recomputing here would race the clock and make the test flake instead of the meter.
       const { parcel, store } = strandedFor(10, 500);
       const offer = returns.offerFor(parcel.parcelId)!;
       const before = vendors.balanceOf(store.vendorId);
 
-      returns.accept(offer.offerId, store.vendorId);
-      expect(vendors.balanceOf(store.vendorId)).toBeCloseTo(before - offer.returnCost, 2);
+      const { offer: settled } = returns.accept(offer.offerId, store.vendorId);
+      expect(before - vendors.balanceOf(store.vendorId)).toBeCloseTo(settled.returnCost + (settled.holdingCost ?? 0), 2);
     });
 
     it('refuses BEFORE anything moves when the store cannot pay', () => {
@@ -374,7 +380,7 @@ describe('the journey home', () => {
 
       expect(() => returns.accept(offer.offerId, store.vendorId)).toThrow(/Top up first/);
       // Nothing moved: no return minted, the parcel still stranded, the slot still held.
-      expect(parcels.get(parcel.parcelId).status).toBe('Ready_For_Pickup');
+      expect(parcels.get(parcel.parcelId).status).toBe('Unclaimed');
       expect(shelf.available(to.did)).toBe(freeBefore);
       expect(returns.get(offer.offerId).status).toBe('offered'); // still theirs to answer
     });
@@ -384,7 +390,7 @@ describe('the journey home', () => {
       const other = vendors.register({ name: 'Somebody else', country: 'KE', ownerPhone: '+254700111222' } as never);
       const offer = returns.offerFor(parcel.parcelId)!;
       expect(() => returns.accept(offer.offerId, other.vendorId)).toThrow(/not found/i);
-      expect(parcels.get(parcel.parcelId).status).toBe('Ready_For_Pickup');
+      expect(parcels.get(parcel.parcelId).status).toBe('Unclaimed');
       expect(store).toBeDefined();
     });
 
@@ -408,7 +414,7 @@ describe('the journey home', () => {
 
       returns.decline(offer.offerId, store.vendorId, 'not worth the trip');
       expect(returns.get(offer.offerId)).toMatchObject({ status: 'declined', declineReason: 'not worth the trip' });
-      expect(parcels.get(parcel.parcelId).status).toBe('Ready_For_Pickup');
+      expect(parcels.get(parcel.parcelId).status).toBe('Unclaimed');
       expect(shelf.available(to.did)).toBe(freeBefore); // still holding a slot — the gap that remains
     });
 
@@ -466,6 +472,10 @@ describe('the journey home', () => {
     p.status = 'Ready_For_Pickup';
     p.readyAt = agoH(waitedH);
     shelf.assign(to.did, p.parcelId, 'M');
+    // Through the SWEEP, not by assignment. A store is only ever asked about a parcel the network has
+    // already admitted is stranded, and a harness that set 'Unclaimed' by hand would prove the offer
+    // works on a row the running app never produces.
+    unclaimed.sweep();
     return { parcel: p, from, to, store };
   }
 });

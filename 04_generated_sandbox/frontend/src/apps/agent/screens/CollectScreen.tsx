@@ -1,4 +1,4 @@
-import { Button, Card, Checklist, ErrorNote, QrBlock, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
+import { Button, Card, Checklist, ErrorNote, Note, QrBlock, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { qrPayload } from '../../../shared/qr';
 import type { AgentActions, AgentState } from '../useAgentApp';
@@ -65,6 +65,18 @@ export function CollectScreen({ state, actions }: CollectScreenProps) {
               label={t('agent.collect.qrLabel', { id: found.parcel.parcelId })}
             />
           </Card>
+
+          {/* Money owed BEFORE the hand-over button, never after it. This shop has already been paid for
+              holding the slot; what it is collecting here is the network's money, and the amount is the
+              same figure the customer's own app showed them — one arithmetic, one number, no argument. */}
+          {found.holdingOwed ? (
+            <Note
+              tone="warn"
+              icon="clock"
+              title={t('agent.collect.holdingTitle', { amount: found.holdingOwed.toFixed(2) })}
+              detail={t('agent.collect.holdingDetail')}
+            />
+          ) : null}
 
           <Card label={t('agent.collect.checkContents')}>
             {items.length ? (

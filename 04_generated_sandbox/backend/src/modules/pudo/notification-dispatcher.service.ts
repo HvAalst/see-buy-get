@@ -11,7 +11,9 @@ import { MdpService } from './mdp.service';
 import { DispatchService } from './dispatch.service';
 import { haversineKm } from './geo';
 import { GeoPoint } from './pudo.types';
-import { MARKET_SUPPLY_STALE_MIN, NETWORK_CURRENCY, NUDGE_COOLDOWN_MIN, NUDGE_MIN_MOVE_KM, TOTE_LOAD_FEE, UNCOLLECTED_REMINDER_H, UNCOLLECTED_SWEEP_MS } from './pudo.config';
+import { UnclaimedService } from './unclaimed.service';
+import { VendorService } from './vendor.service';
+import { HOLDING_FEE_PER_DAY, MARKET_SUPPLY_STALE_MIN, NETWORK_CURRENCY, NUDGE_COOLDOWN_MIN, NUDGE_MIN_MOVE_KM, TOTE_LOAD_FEE, UNCOLLECTED_REMINDER_H, UNCOLLECTED_SWEEP_MS } from './pudo.config';
 
 /**
  * NotificationDispatcher (N2/N3) — the bridge from the event cascade to a person's devices. It
@@ -53,6 +55,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     private readonly totes: ToteService,
     private readonly mdps: MdpService,
     private readonly dispatch: DispatchService,
+    private readonly unclaimed: UnclaimedService,
+    private readonly vendors: VendorService,
   ) {}
 
   /** The uncollected sweep's timer. Self-unref'd: a reminder is never a reason to hold the process open. */
@@ -62,8 +66,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     // Every other notification here is a REACTION to an event. This one cannot be: nothing happens when a
     // parcel is not collected, which is exactly why nobody was ever told. A sweep is the only shape that
     // fits the absence of an event.
-    void this.remindUncollected().catch(() => undefined);
-    this.uncollectedTimer = setInterval(() => void this.remindUncollected().catch(() => undefined), UNCOLLECTED_SWEEP_MS);
+    void this.sweepShelf().catch(() => undefined);
+    this.uncollectedTimer = setInterval(() => void this.sweepShelf().catch(() => undefined), UNCOLLECTED_SWEEP_MS);
     this.uncollectedTimer.unref?.();
   }
 
@@ -185,6 +189,67 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       }
     }
     return sent;
+  }
+
+  /**
+   * One pass over the destination shelf: nudge, then close the window on whatever the nudge did not save.
+   *
+   * ORDER IS THE DESIGN. The reminder runs first and is deliberately earlier (24h against 72h) because
+   * its entire job is to stop the second half being needed. Only then does a parcel nobody answered for
+   * become 'Unclaimed', and only then is its store asked whether it wants it home.
+   */
+  async sweepShelf(now: number = Date.now()): Promise<{ reminded: number; closed: number }> {
+    const reminded = await this.remindUncollected(now);
+    let closed = 0;
+    for (const parcel of this.unclaimed.sweep(now)) {
+      closed += 1;
+      await this.finalNotice(parcel.parcelId);
+    }
+    return { reminded, closed };
+  }
+
+  /**
+   * The last message: your collection window has closed, and here is what you can do about it.
+   *
+   * It must not read as a threat, because the parcel is not being taken away — it is still on the shelf
+   * and their code still opens it. What has changed is that it now costs something to sit there. The
+   * FOUR THINGS THEY CAN DO are the substance of this notification; the deep link is what makes the
+   * difference between somebody who would have answered and somebody who could not find how.
+   *
+   * The store is told in the same pass, because the person paying for the outcome should not learn about
+   * it from a return offer arriving out of nowhere.
+   */
+  private async finalNotice(parcelId: string): Promise<void> {
+    try {
+      const parcel = this.parcels.get(parcelId);
+      const where = this.shopName(parcel.destAgentDid) ?? parcel.destZone ?? 'your pickup point';
+      const hash = parcel.receiverPhoneHash;
+      const person = hash ? this.persons.findByHash(hash) : undefined;
+      if (person) {
+        await this.notifications.notify(person.personDid, {
+          kind: 'parcel_ready',
+          title: 'Time to collect your parcel',
+          body: `It is still at ${where} and still yours. Holding now costs ${HOLDING_FEE_PER_DAY} a day — tell us what you want to do.`,
+          link: `/parcel/${parcelId}`,
+          // Its own tag: collapsing this onto the reminder would swallow the one message that changes
+          // the terms behind one the receiver has already read and dismissed.
+          tag: `parcel-unclaimed:${parcelId}`,
+          data: { parcelId },
+        });
+      }
+      // The store hears it too — they are about to be asked to pay for a journey home, and finding that
+      // out from the offer alone is being handed a bill with no story attached to it.
+      if (parcel.vendorId) {
+        this.vendors.notify(parcel.vendorId, 'parcel.unclaimed', {
+          parcelId,
+          externalOrderId: parcel.externalOrderId,
+          destAgentDid: parcel.destAgentDid,
+          unclaimedAt: parcel.unclaimedAt,
+        });
+      }
+    } catch (err) {
+      this.logger.warn(`final notice failed for ${parcelId}: ${(err as Error).message}`);
+    }
   }
 
   /**

@@ -62,6 +62,7 @@ import { LEDGER_ADAPTER } from '../../foundation/ledger/ledger.types';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { PayoutService } from '../../foundation/payouts/payout.service';
 import { ReturnService } from './return.service';
+import { UnclaimedService } from './unclaimed.service';
 import { SandboxPayoutRail } from '../../foundation/payouts/sandbox-rail.adapter';
 import { PAYOUT_RAIL } from '../../foundation/payouts/payout.types';
 import { GlosEvent } from '../../foundation/events/glos-events';
@@ -114,7 +115,7 @@ describe('PUDO Light', () => {
         GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, VehicleService, DriverService, FleetService, DispatchService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus, EntityService, BooksService, FxService, ApiKeyService,
-        PayoutService, ReturnService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },
+        PayoutService, ReturnService, UnclaimedService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
         GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder },
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },

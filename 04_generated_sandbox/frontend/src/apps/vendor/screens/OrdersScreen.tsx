@@ -19,7 +19,7 @@ export interface OrdersScreenProps {
  * checkouts waiting to ship — each one starts the mint), and every order with its status
  * in merchant words. Tapping an order opens the drill-down sheet.
  */
-const STATUS_OPTIONS: string[] = ['Created', 'At_PUDO', 'On_Bus', 'At_MDP', 'Ready_For_Pickup', 'Delivered', 'Disputed', 'Voided'];
+const STATUS_OPTIONS: string[] = ['Created', 'At_PUDO', 'On_Bus', 'At_MDP', 'Ready_For_Pickup', 'Unclaimed', 'Delivered', 'Disputed', 'Voided'];
 const SORT_OPTIONS: Array<{ value: OrderQuery['sort']; labelKey: MessageKey }> = [
   { value: 'newest', labelKey: 'vendor.sort.newest' },
   { value: 'oldest', labelKey: 'vendor.sort.oldest' },
@@ -117,10 +117,18 @@ export function OrdersScreen({ state, actions }: OrdersScreenProps) {
                   <span class="row__s">
                     {t('vendor.returns.line', {
                       value: `${r.currency} ${r.declaredValue.toFixed(2)}`,
-                      cost: `${r.currency} ${r.returnCost.toFixed(2)}`,
+                      cost: `${r.currency} ${(r.returnCost + (r.holdingCost ?? 0)).toFixed(2)}`,
                     })}
                   </span>
                   <span class="row__s">{t('vendor.returns.waitingSince', { date: formatDate(r.offeredAt, { dateStyle: 'medium' }) })}</span>
+                  {r.holdingCost ? (
+                    <span class="row__s">
+                      {t('vendor.returns.holdingLine', {
+                        trip: `${r.currency} ${r.returnCost.toFixed(2)}`,
+                        shelf: `${r.currency} ${r.holdingCost.toFixed(2)}`,
+                      })}
+                    </span>
+                  ) : null}
                 </span>
                 <span class="row__end">
                   <Button variant="link" full={false} busy={state.busy === `return:${r.offerId}`} onClick={() => void actions.answerReturn(r.offerId, true)}>

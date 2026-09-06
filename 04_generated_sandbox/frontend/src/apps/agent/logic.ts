@@ -439,7 +439,9 @@ export type ReleaseStage = 'arrive' | 'otp' | 'rate' | 'blocked';
  */
 export function releaseStage(status: ParcelStatus): ReleaseStage {
   if (status === 'On_Bus') return 'arrive';
-  if (status === 'Ready_For_Pickup') return 'otp';
+  // Unclaimed releases exactly like ready. If this ever returns 'blocked' the counter has become a way
+  // of refusing somebody their own parcel for being late, which is the opposite of what the status is for.
+  if (status === 'Ready_For_Pickup' || status === 'Unclaimed') return 'otp';
   if (status === 'Delivered') return 'rate';
   return 'blocked';
 }
@@ -576,6 +578,8 @@ export function parcelStatusWord(status: ParcelStatus, t: Translate): string {
       return t('agent.status.atMdp');
     case 'Ready_For_Pickup':
       return t('agent.status.ready');
+    case 'Unclaimed':
+      return t('agent.status.unclaimed');
     case 'Delivered':
       return t('agent.status.delivered');
     case 'Disputed':
@@ -627,7 +631,7 @@ export function agentWorkLine(
   if (!agent) return undefined;
   if (agent.openState === 'closed') return t('agent.bar.closed');
   const handOver = parcels.filter((p) => p.status === 'At_PUDO').length;
-  const waiting = parcels.filter((p) => p.status === 'Ready_For_Pickup');
+  const waiting = parcels.filter((p) => p.status === 'Ready_For_Pickup' || p.status === 'Unclaimed');
   const collect = waiting.length;
   // The pile that is not moving. A shelf slot is what decides whether this shop can take anything new, so
   // an overdue parcel is not somebody else's problem being reported for information — it is this counter's

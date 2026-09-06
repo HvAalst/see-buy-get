@@ -154,7 +154,57 @@ export class CustomsDeclaration {
 }
 
 export type ParcelSize = 'S' | 'M' | 'L' | 'HEAVY';
-export type ParcelStatus = 'Created' | 'At_PUDO' | 'On_Bus' | 'At_MDP' | 'Ready_For_Pickup' | 'Delivered' | 'Disputed' | 'Voided' | 'Returned';
+export type ParcelStatus = 'Created' | 'At_PUDO' | 'On_Bus' | 'At_MDP' | 'Ready_For_Pickup' | 'Unclaimed' | 'Delivered' | 'Disputed' | 'Voided' | 'Returned';
+
+/**
+ * The two states in which a parcel is sitting on a destination shelf waiting for its owner.
+ *
+ * 'Unclaimed' marks a change in TERMS, never in availability: the free window is over, the shop is now
+ * being paid by the day, and somebody owes for that — but the box is still on the shelf and still
+ * belongs to whoever holds the code. A status that blocked collection would build a system that punishes
+ * the one person who eventually did the right thing and walked in on day ten.
+ *
+ * Exported as a set rather than spelled out at each of the dozen call sites that check for a collectable
+ * parcel, because the failure mode of spelling it out is one release path that silently stops working
+ * for exactly the parcels this feature exists for.
+ */
+export const COLLECTABLE_STATUSES: ReadonlySet<ParcelStatus> = new Set<ParcelStatus>(['Ready_For_Pickup', 'Unclaimed']);
+export const isCollectable = (status: ParcelStatus): boolean => COLLECTABLE_STATUSES.has(status);
+
+/**
+ * What a receiver said when they were told their parcel's collection window had run out.
+ *
+ * Every one of these DOES something. A reason field that changes nothing is a survey, and this is not a
+ * survey — it is the last chance to reach an outcome better than the default, which is a return nobody
+ * wanted or an operator writing a box off.
+ *
+ * 'not-mine' is deliberately NOT a kind of abandonment. Somebody telling us they never ordered this is
+ * the one answer after which disposing of it is the last thing we may do; it opens a case against the
+ * store instead.
+ */
+export type ReceiverIntent = 'coming' | 'proxy' | 'relinquish' | 'not-mine';
+
+/** A receiver's answer to the final notice, kept whole — the choice, when, and anything they typed. */
+export interface ReceiverResponse {
+  choice: ReceiverIntent;
+  at: string;
+  note?: string;
+}
+
+/**
+ * Somebody the receiver named to collect on their behalf.
+ *
+ * This STRENGTHENS the release secret rather than bending it. The workaround it replaces is a receiver
+ * reading their own code down the phone to a neighbour — invisible to us, unrecorded, and indistinguishable
+ * afterwards from a stranger who guessed. A nomination mints a second code bound to a named person, and
+ * the shop still never learns either of them.
+ */
+export interface CollectProxy {
+  name: string;
+  phoneHash?: string;
+  code: string;
+  nominatedAt: string;
+}
 
 /**
  * How a dispute ended.
@@ -572,6 +622,26 @@ export interface ConsumerParcelView {
    * authenticated app, never on the public track and never in the list.
    */
   collectToken?: { code: string; qrPayload: string };
+  /**
+   * The closed-window facts, on the RECEIVER's twin only.
+   *
+   * A sender does not get these. They own the shipment, and it was delivered to the shelf they paid for;
+   * whether the person at the other end has come for it, and what that is now costing, is between the
+   * receiver and the network. On a peer send the sender is the receiver's only relay, but that argues for
+   * telling them the parcel is waiting — which the status already does — not for showing them somebody
+   * else's bill.
+   */
+  unclaimedAt?: string;
+  /** What is owed for the shelf slot right now — the same figure the counter will ask for. */
+  holdingOwed?: number;
+  /** How many extensions are gone, so the app can say whether the next one is free. */
+  extensionsUsed?: number;
+  /** What they already answered, so a screen does not ask a question they have answered. */
+  receiverResponse?: ReceiverResponse;
+  /** Who they named to collect, and the code to pass on. Their own nomination, so their own code. */
+  collectProxy?: { name: string; code: string };
+  /** They gave up their claim. The parcel is still on a shelf; this says they are no longer coming. */
+  relinquishedAt?: string;
 }
 
 export class Parcel {
@@ -796,6 +866,34 @@ export class Parcel {
   /** The journey home, for a parcel nobody came for. Present only on a 'Returned' one — the two read as
    *  one story rather than as an abandonment and an unexplained new shipment. */
   returnParcelId?: string;
+  /**
+   * When the free collection window ran out — the start of the holding-fee clock.
+   *
+   * Distinct from readyAt, and the distinction is the whole feature: readyAt is when the wait began,
+   * this is when the wait stopped being free. An extension resets readyAt and CLEARS this, because a
+   * receiver who bought more time is inside a free window again by definition.
+   */
+  unclaimedAt?: string;
+  /** Holding already settled, so a part-paid parcel is not billed twice at the counter. */
+  holdingSettled?: number;
+  /** Extensions taken. The first is free (FREE_EXTENSIONS); counted so the second can be priced. */
+  extensionsUsed?: number;
+  /** What the receiver said when told the window had closed. Absent means silence — which is the
+   *  common case and an outcome the whole flow has to reach correctly without. */
+  receiverResponse?: ReceiverResponse;
+  /** Somebody named to collect instead of the receiver. Their code releases the parcel; so does the
+   *  receiver's own, because nominating a neighbour does not stop you collecting it yourself. */
+  collectProxy?: CollectProxy;
+  /**
+   * When the RECEIVER gave up their claim to the goods.
+   *
+   * Only the receiver can set this: sender owns the shipment, receiver owns the goods, so the receiver
+   * is the only party with anything to relinquish. It does not make the box disappear — there is a real
+   * parcel in a real shop — and it is not 'Voided', which would say the shipment never happened when it
+   * happened all the way. It moves the parcel into the disposal queue, and only once no store still has
+   * a funded claim to bring it home.
+   */
+  relinquishedAt?: string;
   handedToBusAt?: string;
   deliveredAt?: string;
   /** Where it came into being. Absent on pre-slice records — read it through `birthplaceOf`. */
@@ -849,6 +947,16 @@ export class ReturnOffer {
   /** What the goods are worth, and what the journey home costs. The store's arithmetic, shown not implied. */
   declaredValue: number;
   returnCost: number;
+  /**
+   * What the shop is owed for having held the slot since the window closed — recomputed on every read,
+   * never stamped.
+   *
+   * The transport half is a held price a store is billed exactly what it was shown. This half is a
+   * METER, and showing it as though it were fixed would be the one dishonest number on the screen. It
+   * grows while they think about it, which is also the truest pressure this feature has: a store
+   * watching the cost of deciding nothing go up is being told something real.
+   */
+  holdingCost?: number;
   currency: string;
   /** The held price this will be billed at. A store is billed the figure it was shown. */
   quoteId?: string;

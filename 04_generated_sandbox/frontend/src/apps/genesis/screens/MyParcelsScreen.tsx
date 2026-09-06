@@ -139,6 +139,9 @@ function ParcelDetail({ parcel, state, actions }: { parcel: ConsumerParcelView; 
 
   // S23: the receiver's delivered-state actions live on a Delivered parcel that is theirs.
   const canAct = parcel.relation === 'received' && parcel.status === 'Delivered';
+  // Local, uncontrolled-by-the-app text. The name of somebody you trust is not application state, and
+  // routing every keystroke through the reducer is how this app has re-rendered a whole screen per letter.
+  const [proxyName, setProxyName] = useState('');
   const [disputeOpen, setDisputeOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [photo, setPhoto] = useState('');
@@ -165,7 +168,9 @@ function ParcelDetail({ parcel, state, actions }: { parcel: ConsumerParcelView; 
         <span class="now__body">
           <span class="now__word">{pres.word}</span>
           <span class="now__sub">
-            {parcel.status === 'Ready_For_Pickup'
+            {parcel.status === 'Unclaimed'
+              ? t('send.parcels.unclaimedIn', { zone: parcel.destZone })
+              : parcel.status === 'Ready_For_Pickup'
               ? t('send.parcels.readyIn', { zone: parcel.destZone })
               : parcel.status === 'Delivered'
                 ? t('send.parcels.handedIn', { zone: parcel.destZone })
@@ -180,6 +185,72 @@ function ParcelDetail({ parcel, state, actions }: { parcel: ConsumerParcelView; 
           retry, instead of silently showing the token-less list row for a parcel that is ready to collect. */}
       {state.openParcelState === 'error' && state.openParcelError ? (
         <ErrorNote error={state.openParcelError} onRetry={() => void actions.openParcel(parcel.parcelId)} />
+      ) : null}
+
+      {/* The final notice. Four things a person can do, and each of them DOES something — a reason field
+          that changes nothing is a survey, and nobody fills in a survey about a parcel.
+
+          It sits ABOVE the collection code deliberately: the terms have changed, and finding that out
+          after being shown the code is finding it out at the counter instead. It never replaces the code
+          — the parcel is still theirs and still there, which is the whole point of the status. */}
+      {parcel.relation === 'received' && parcel.status === 'Unclaimed' ? (
+        <Card title={t('send.notice.title')}>
+          <p class="card__note">
+            {parcel.holdingOwed
+              ? t('send.notice.ledeCost', { zone: parcel.destZone, amount: parcel.holdingOwed.toFixed(2) })
+              : t('send.notice.lede', { zone: parcel.destZone })}
+          </p>
+
+          {state.noticeError ? <ErrorNote error={state.noticeError} /> : null}
+
+          {/* Already answered: their own words back, and no second interrogation. */}
+          {parcel.receiverResponse ? (
+            <Note tone="info" icon="check" title={t('send.notice.answered')} detail={t(`send.notice.choice.${parcel.receiverResponse.choice}` as 'send.notice.choice.coming')} />
+          ) : null}
+
+          {/* The code for the person they named. Shown to THEM to pass on — we do not choose who a
+              person trusts, and the shop never learns it either way. */}
+          {state.proxyCode ?? parcel.collectProxy ? (
+            <CodeCard
+              label={t('send.notice.proxyCode', { name: (state.proxyCode ?? parcel.collectProxy)!.name })}
+              code={(state.proxyCode ?? parcel.collectProxy)!.code}
+              sayLabel={t('send.parcels.hearCode')}
+            />
+          ) : null}
+
+          {!parcel.relinquishedAt ? (
+            <div class="stack">
+              <Button variant="primary" busy={state.noticeBusy === 'coming'} onClick={() => void actions.respondToNotice('coming')}>
+                {parcel.extensionsUsed ? t('send.notice.comingAgain') : t('send.notice.coming')}
+              </Button>
+              {/* Naming somebody is SAFER than the workaround it replaces — reading your own code down
+                  the phone, which nobody can see and nobody can afterwards account for. */}
+              {!parcel.collectProxy ? (
+                <>
+                  <label class="field">
+                    <span class="field__label">{t('send.notice.proxyLabel')}</span>
+                    <input class="field__in" value={proxyName} onInput={(e) => setProxyName((e.target as HTMLInputElement).value)} placeholder={t('send.notice.proxyPlaceholder')} />
+                  </label>
+                  <Button variant="outline" busy={state.noticeBusy === 'nominate'} disabled={!proxyName.trim()} onClick={() => void actions.nominateCollector(proxyName)}>
+                    {t('send.notice.proxy')}
+                  </Button>
+                </>
+              ) : null}
+              {/* Giving it up and saying it was never yours are DIFFERENT ANSWERS, and separated here on
+                  purpose: "I never ordered this" is the one answer after which disposing of it is the
+                  last thing anybody may do. */}
+              <Button variant="link" busy={state.noticeBusy === 'relinquish'} onClick={() => void actions.respondToNotice('relinquish')}>
+                {t('send.notice.relinquish')}
+              </Button>
+              <Button variant="link" busy={state.noticeBusy === 'not-mine'} onClick={() => void actions.respondToNotice('not-mine')}>
+                {t('send.notice.notMine')}
+              </Button>
+            </div>
+          ) : (
+            <Note tone="warn" icon="info" title={t('send.notice.gaveUpTitle')} detail={t('send.notice.gaveUpDetail')} />
+          )}
+          <p class="card__note">{t('send.notice.stillYours')}</p>
+        </Card>
       ) : null}
 
       {/* S22: the in-app release token — the receiver shows this QR (or reads the code) at the shop; the

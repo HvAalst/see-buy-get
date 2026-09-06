@@ -563,6 +563,31 @@ export class EntityInsuranceDto {
 }
 
 /** Control-tower reissue of a burned release secret; `by` names the human behind the operator token. */
+/**
+ * The receiver's answer to "your collection window has closed".
+ *
+ * Every choice DOES something (see ReceiverIntent), which is the whole reason this is a fixed list and
+ * not a free-text box: a reason field that changes nothing is a survey, and nobody fills in a survey
+ * about a parcel. The note is optional and never required — demanding an explanation before somebody may
+ * tell you they are ill is how you get silence instead.
+ */
+export class CollectionResponseDto {
+  @IsIn(['coming', 'proxy', 'relinquish', 'not-mine']) choice!: 'coming' | 'proxy' | 'relinquish' | 'not-mine';
+  @IsOptional() @IsString() note?: string;
+}
+
+/** Naming somebody to collect on the receiver's behalf. A name, because the shop has to ask for one. */
+export class NominateCollectorDto {
+  @IsString() name!: string;
+  @IsOptional() @IsString() phone?: string;
+}
+
+/** An operator closing out a relinquished parcel under the local disposal rule. */
+export class WriteOffParcelDto {
+  @IsOptional() @IsString() by?: string;
+  @IsOptional() @IsString() reason?: string;
+}
+
 export class ReissueReleaseDto {
   @IsOptional() @IsString() by?: string;
 }

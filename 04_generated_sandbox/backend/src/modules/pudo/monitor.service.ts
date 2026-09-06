@@ -57,7 +57,10 @@ export class MonitorService {
      * country has not been uncollected for a week, and dating it from the mint would flag the network's
      * own slowness as the receiver's.
      */
-    for (const p of this.parcels.list({ status: 'Ready_For_Pickup' })) {
+    // 'Unclaimed' is the fact now, so the flag reads it instead of recomputing it. Ready_For_Pickup is
+    // still scanned beside it, because a parcel is only unclaimed once the sweep has reached it and an
+    // operator must not be blind to one in the gap between two ticks.
+    for (const p of [...this.parcels.list({ status: 'Ready_For_Pickup' }), ...this.parcels.list({ status: 'Unclaimed' })]) {
       const age = hoursSince(p.readyAt ?? p.scans[p.scans.length - 1]?.at);
       if (age > UNCOLLECTED_H) {
         flags.push({ type: 'Uncollected', subject: p.parcelId, detail: `waiting at ${p.destZone ?? 'the shop'} ${Math.round(age / 24)}d · shelf ${p.binSlot ?? '—'}`, ageHours: Math.round(age) });

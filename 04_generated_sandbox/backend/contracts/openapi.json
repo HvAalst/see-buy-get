@@ -7831,6 +7831,51 @@
         }
       }
     },
+    "/v1/sbg/ops/disposal-queue": {
+      "get": {
+        "operationId": "Sbg.disposalQueue",
+        "summary": "",
+        "description": "Control tower: the parcels whose owners gave up their claim and that nobody is paying to recover.\n\nA QUEUE rather than a status, because what happens to them is decided by the law of the sister's\njurisdiction rather than by this system. Modelling a disposal rule we do not know would be worse\nthan showing an operator the list and letting them apply the one they do.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/parcels/{id}/write-off": {
+      "post": {
+        "operationId": "Sbg.writeOffParcel",
+        "summary": "",
+        "description": "Control tower: close out one of them, and settle what the shop is owed for having held it.\n\nThe only path on which the NETWORK absorbs the holding fee. Everywhere else it is recovered from\nwhoever ended the situation; here nobody did, and the alternative is a shortfall settling quietly on\na shopkeeper who did the work and had no say in any of it.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WriteOffParcelDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/parcels/{id}/dispute": {
       "post": {
         "operationId": "Sbg.dispute",
@@ -11269,6 +11314,70 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/v1/sbg/identity/parcels/{id}/collection-response": {
+      "post": {
+        "operationId": "Identity.collectionResponse",
+        "summary": "",
+        "description": "The receiver answers the final notice — the four things a person can do about a closed window.\n\nOn their OWN parcel only, and 404 otherwise: this is the one screen in the network where somebody\ncan give up a claim to goods, so it must not be possible to do it to somebody else's.\n\nReturns their twin rather than a bare acknowledgement, because three of the four choices change what\nthe app should be showing them and a screen that has to guess will guess wrong.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionResponseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/identity/parcels/{id}/nominate-collector": {
+      "post": {
+        "operationId": "Identity.nominateCollector",
+        "summary": "",
+        "description": "The receiver names somebody to collect for them.\n\nThe code comes BACK to the receiver, which is the point: they are the one who has to pass it on, and\na code the network delivered straight to the neighbour would be the network deciding who a person\ntrusts. Their own code keeps working alongside it, and the shop still learns neither.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NominateCollectorDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
           }
         }
       }
@@ -15132,6 +15241,30 @@
             "type": "string",
             "description": "The journey home, for a parcel nobody came for. Present only on a 'Returned' one — the two read as\n one story rather than as an abandonment and an unexplained new shipment."
           },
+          "unclaimedAt": {
+            "type": "string",
+            "description": "When the free collection window ran out — the start of the holding-fee clock.\n\nDistinct from readyAt, and the distinction is the whole feature: readyAt is when the wait began,\nthis is when the wait stopped being free. An extension resets readyAt and CLEARS this, because a\nreceiver who bought more time is inside a free window again by definition."
+          },
+          "holdingSettled": {
+            "type": "number",
+            "description": "Holding already settled, so a part-paid parcel is not billed twice at the counter."
+          },
+          "extensionsUsed": {
+            "type": "number",
+            "description": "Extensions taken. The first is free (FREE_EXTENSIONS); counted so the second can be priced."
+          },
+          "receiverResponse": {
+            "type": "object",
+            "description": "What the receiver said when told the window had closed. Absent means silence — which is the\n common case and an outcome the whole flow has to reach correctly without."
+          },
+          "collectProxy": {
+            "type": "object",
+            "description": "Somebody named to collect instead of the receiver. Their code releases the parcel; so does the\n receiver's own, because nominating a neighbour does not stop you collecting it yourself."
+          },
+          "relinquishedAt": {
+            "type": "string",
+            "description": "When the RECEIVER gave up their claim to the goods.\n\nOnly the receiver can set this: sender owns the shipment, receiver owns the goods, so the receiver\nis the only party with anything to relinquish. It does not make the box disappear — there is a real\nparcel in a real shop — and it is not 'Voided', which would say the shipment never happened when it\nhappened all the way. It moves the parcel into the disposal queue, and only once no store still has\na funded claim to bring it home."
+          },
           "handedToBusAt": {
             "type": "string"
           },
@@ -15968,6 +16101,10 @@
           "returnCost": {
             "type": "number"
           },
+          "holdingCost": {
+            "type": "number",
+            "description": "What the shop is owed for having held the slot since the window closed — recomputed on every read,\nnever stamped.\n\nThe transport half is a held price a store is billed exactly what it was shown. This half is a\nMETER, and showing it as though it were fixed would be the one dishonest number on the screen. It\ngrows while they think about it, which is also the truest pressure this feature has: a store\nwatching the cost of deciding nothing go up is being told something real."
+          },
           "currency": {
             "type": "string"
           },
@@ -16368,6 +16505,17 @@
         "type": "object",
         "properties": {
           "by": {
+            "type": "string"
+          }
+        }
+      },
+      "WriteOffParcelDto": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string"
+          },
+          "reason": {
             "type": "string"
           }
         }
@@ -19145,6 +19293,40 @@
         },
         "required": [
           "photoRef"
+        ]
+      },
+      "CollectionResponseDto": {
+        "type": "object",
+        "properties": {
+          "choice": {
+            "type": "string",
+            "enum": [
+              "coming",
+              "proxy",
+              "relinquish",
+              "not-mine"
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "choice"
+        ]
+      },
+      "NominateCollectorDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
         ]
       },
       "BuyerDisputeDto": {

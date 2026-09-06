@@ -6,7 +6,8 @@ import { ParcelService, parcelCurrency } from './parcel.service';
 import { VendorService } from './vendor.service';
 import { RoutingService } from './routing.service';
 import { ShelfService } from './shelf.service';
-import { RETURN_OFFER_TTL_H, UNCOLLECTED_H, measuredFactor } from './pudo.config';
+import { WalletGateService } from './wallet-gate.service';
+import { RETURN_OFFER_TTL_H, holdingFeeFor, measuredFactor } from './pudo.config';
 import { ReturnOffer } from './pudo.types';
 
 /**
@@ -37,6 +38,7 @@ export class ReturnService {
     private readonly vendors: VendorService,
     private readonly routing: RoutingService,
     private readonly shelf: ShelfService,
+    private readonly gate: WalletGateService,
   ) {}
 
   /**
@@ -51,9 +53,12 @@ export class ReturnService {
    */
   sweep(now: number = Date.now()): ReturnOffer[] {
     const raised: ReturnOffer[] = [];
-    for (const parcel of this.parcels.list({ status: 'Ready_For_Pickup' })) {
-      if (!parcel.vendorId || !parcel.readyAt) continue;
-      if (now - new Date(parcel.readyAt).getTime() <= UNCOLLECTED_H * 3_600_000) continue;
+    // 'Unclaimed' rather than an arithmetic re-derivation of the same window. The status IS the fact
+    // that nobody came; asking a store about a parcel the network has not yet admitted is stranded would
+    // put two different answers to one question in front of two different people.
+    for (const parcel of this.parcels.list({ status: 'Unclaimed' })) {
+      if (!parcel.vendorId) continue;
+      if (parcel.relinquishedAt) continue; // its owner has already let it go — see UnclaimedService
       if (this.offersFor(parcel.parcelId).length) continue; // asked once
       const offer = this.offerFor(parcel.parcelId, now);
       if (offer) raised.push(offer);
@@ -70,7 +75,7 @@ export class ReturnService {
    */
   offerFor(parcelId: string, now: number = Date.now()): ReturnOffer | null {
     const parcel = this.parcels.get(parcelId);
-    if (parcel.status !== 'Ready_For_Pickup') return null;
+    if (parcel.status !== 'Unclaimed') return null;
     if (!parcel.vendorId || !parcel.destAgentDid) return null;
     // Back to the shop it started from. A parcel that began at a store's own dock has no origin SHOP to
     // return to, and inventing one would send somebody's goods to a place nobody chose — left for the
@@ -116,6 +121,7 @@ export class ReturnService {
       toAgentDid,
       declaredValue,
       returnCost: quote.locked.gross,
+      holdingCost: holdingFeeFor({ unclaimedAt: parcel.unclaimedAt, now, shipmentCost: parcel.shipmentCost, settled: parcel.holdingSettled }),
       currency: quote.currency,
       status: 'offered',
       offeredAt: new Date(now).toISOString(),
@@ -140,7 +146,7 @@ export class ReturnService {
   accept(offerId: string, vendorId: string, now: number = Date.now()): { offer: ReturnOffer; returnParcelId: string } {
     const offer = this.requireOpen(offerId, vendorId, now);
     const parcel = this.parcels.get(offer.parcelId);
-    if (parcel.status !== 'Ready_For_Pickup') {
+    if (parcel.status !== 'Unclaimed') {
       // Somebody came for it after all. The best possible outcome, and not an error to shout about.
       offer.status = 'expired';
       offer.decidedAt = new Date(now).toISOString();
@@ -155,11 +161,21 @@ export class ReturnService {
       parcel.dimensionsCm ? measuredFactor({ ...parcel.dimensionsCm, kg: parcel.weightKg }) : undefined,
     );
     const vendor = this.vendors.get(vendorId);
+    // What the shop is owed for the days it held the slot. The store is ending the situation, so the
+    // store settles it — and this is the whole of the "recover from whoever ends it" rule in one line.
+    const holding = this.holdingOn(offer.parcelId, now);
+    const total = Math.round((quote.locked.gross + holding) * 100) / 100;
     // Checked BEFORE anything moves. The forward path can leave a parcel unpaid and block its label,
     // which is fine for a warehouse; here a store's "yes" that fails afterwards leaves a shop holding a
-    // parcel that is now nobody's problem.
-    if (this.vendors.balanceOf(vendorId) < quote.locked.gross) {
-      throw new GlosError('WALLET_INSUFFICIENT', `Top up first — the journey home costs ${quote.locked.gross.toFixed(2)} ${quote.currency}`);
+    // parcel that is now nobody's problem. Checked against the TOTAL, so a store cannot afford the
+    // transport, be billed for both, and go negative on the half it never saw coming.
+    if (this.vendors.balanceOf(vendorId) < total) {
+      throw new GlosError(
+        'WALLET_INSUFFICIENT',
+        holding > 0
+          ? `Top up first — the journey home costs ${quote.locked.gross.toFixed(2)} plus ${holding.toFixed(2)} for the shelf, ${total.toFixed(2)} ${quote.currency} in all`
+          : `Top up first — the journey home costs ${quote.locked.gross.toFixed(2)} ${quote.currency}`,
+      );
     }
 
     const { parcel: returned } = this.parcels.createInbound({
@@ -185,6 +201,15 @@ export class ReturnService {
       quote,
     });
 
+    // The shop that held the slot is paid for it, and the store that just agreed to that is billed.
+    // Both halves or neither: paying the shop out of a charge that never landed would be the network
+    // quietly funding a store's return, which is not what anybody agreed to.
+    if (holding > 0) {
+      this.vendors.billShipment(vendorId, parcel.parcelId, holding);
+      this.gate.payLabour(offer.fromAgentDid, holding, parcel.parcelId, 'parcel', parcel.sellerEntityId);
+      parcel.holdingSettled = (parcel.holdingSettled ?? 0) + holding;
+    }
+
     // The stranded one is closed and its slot handed back. This is the point of the whole feature: a
     // return that left the shelf occupied would leave the network exactly as short of slots as before.
     this.shelf.release(offer.fromAgentDid, parcel.parcelId);
@@ -192,6 +217,7 @@ export class ReturnService {
 
     offer.status = 'accepted';
     offer.decidedAt = new Date(now).toISOString();
+    offer.holdingCost = holding; // frozen at what was actually charged, not left ticking on a closed offer
     offer.returnParcelId = returned.parcelId;
     this.offers.set(offer.offerId, offer);
     return { offer, returnParcelId: returned.parcelId };
@@ -240,7 +266,16 @@ export class ReturnService {
       offer.status = 'expired';
       this.offers.set(offer.offerId, offer);
     }
+    // The holding meter is re-read here too, for the same reason the expiry is: a store's screen and
+    // this service must never be able to disagree about what deciding nothing has cost so far.
+    if (offer.status === 'offered') offer.holdingCost = this.holdingOn(offer.parcelId, now);
     return offer;
+  }
+
+  /** What the shop holding this parcel is owed for the slot, right now. Zero once it is settled. */
+  private holdingOn(parcelId: string, now: number): number {
+    const parcel = this.parcels.get(parcelId);
+    return holdingFeeFor({ unclaimedAt: parcel.unclaimedAt, now, shipmentCost: parcel.shipmentCost, settled: parcel.holdingSettled });
   }
 
   private requireOpen(offerId: string, vendorId: string, now: number): ReturnOffer {

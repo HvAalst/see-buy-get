@@ -103,7 +103,7 @@ export function createAgentApi(sbg: SbgClient) {
      * anybody's parcel had arrived. Both statuses, one round trip.
      */
     parcelsAtShop: (did: string) =>
-      sbg.request((c) => c.GET('/v1/sbg/parcels', { params: { query: { status: 'At_PUDO,Ready_For_Pickup', agent: did } } })),
+      sbg.request((c) => c.GET('/v1/sbg/parcels', { params: { query: { status: 'At_PUDO,Ready_For_Pickup,Unclaimed', agent: did } } })),
 
     /** The shop's PARCEL-HISTORY register (R4): parcels it handled (drop-off or collection), server-side
      *  searched / filtered / sorted / paged → { items, total }. Owner-scoped. */

@@ -10,10 +10,14 @@ import type { FleetService } from './fleet.service';
 import type { ToteService } from './tote.service';
 import type { MdpService } from './mdp.service';
 import type { DispatchService } from './dispatch.service';
+import type { UnclaimedService } from './unclaimed.service';
+import type { VendorService } from './vendor.service';
 
 type Geo = { lat: number; lng: number };
 
 interface HarnessOpts {
+  /** What the window-closing half of the shelf sweep found, so the final-notice cases can name it. */
+  unclaimedSweep?: () => Array<{ parcelId: string }>;
   // rule 1 + rule 4 (senderMobile picks the peer-send vs vendor copy)
   parcel?: { receiverPhoneHash?: string; destAgentDid?: string; destZone?: string; senderMobile?: string } | null;
   personByHash?: Record<string, { personDid: string }>;
@@ -85,7 +89,12 @@ function harness(opts: HarnessOpts) {
     mintDeclineToken: () => 'decline-token',
   } as unknown as DispatchService;
 
-  const dispatcher = new NotificationDispatcher(events, notifications, parcels, persons, agents, fleet, totes, mdps, dispatch);
+  // The window-closing half of the shelf sweep, stubbed: these cases are about who gets TOLD what, and a
+  // real UnclaimedService would drag a shelf, a wallet and a return book into every one of them.
+  const unclaimed = { sweep: () => (opts.unclaimedSweep ? opts.unclaimedSweep() : []) } as unknown as UnclaimedService;
+  const vendors = { notify: () => null } as unknown as VendorService;
+
+  const dispatcher = new NotificationDispatcher(events, notifications, parcels, persons, agents, fleet, totes, mdps, dispatch, unclaimed, vendors);
   dispatcher.onModuleInit();
   return { events, notifications, outbox, dispatcher };
 }

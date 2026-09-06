@@ -49,6 +49,20 @@ export function createConsumerApi(sbg: SbgClient) {
     dispute: (id: string, reason: string, photoRef: string) =>
       sbg.request((c) => c.POST('/v1/sbg/identity/parcels/{id}/dispute', { params: { path: { id } }, body: { reason, photoRef } })),
 
+    /**
+     * Answer the final notice — the four things a person can do about a closed collection window.
+     *
+     * Not a survey. Each choice does something, which is why it is a fixed list: "I am coming" buys more
+     * time, "someone else will" opens a nomination, "I do not want it" gives up the claim, and "I never
+     * ordered this" raises it with whoever sent it — which is emphatically NOT giving it up.
+     */
+    respondToNotice: (id: string, choice: 'coming' | 'proxy' | 'relinquish' | 'not-mine', note?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/identity/parcels/{id}/collection-response', { params: { path: { id } }, body: { choice, note } })),
+
+    /** Name somebody to collect instead. The code comes back HERE, because passing it on is the point. */
+    nominateCollector: (id: string, name: string, phone?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/identity/parcels/{id}/nominate-collector', { params: { path: { id } }, body: { name, phone } })),
+
     /** Create (or return) the person's reusable invite link — the app turns the token into a share link (S24). */
     createInvite: (channels?: string[]) => sbg.request((c) => c.POST('/v1/sbg/identity/invites', { body: { channels } })),
 

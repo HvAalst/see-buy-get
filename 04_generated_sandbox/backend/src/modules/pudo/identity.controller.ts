@@ -4,7 +4,7 @@ import { Roles, Scopes } from '../../foundation/auth/scopes.decorator';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { GlosError } from '../../foundation/http/glos-error';
-import { isPlausiblePhone } from '../../foundation/identity/phone';
+import { hashPhone, isPlausiblePhone } from '../../foundation/identity/phone';
 import { PersonService } from './person.service';
 import { OtpService } from './otp.service';
 import { ParcelService } from './parcel.service';
@@ -14,7 +14,8 @@ import { RoutingService } from './routing.service';
 import { classifySize, measuredFactor } from './pudo.config';
 import { InviteService } from './invite.service';
 import { toInviteView } from './invite.types';
-import { BuyerDisputeDto, ConsumerSendDto, CreateInviteDto, EnrollDto, PinLoginDto, PodDto, ProfileDto, SetPinDto, SwitchRoleDto } from './pudo.dto';
+import { BuyerDisputeDto, CollectionResponseDto, ConsumerSendDto, CreateInviteDto, EnrollDto, NominateCollectorDto, PinLoginDto, PodDto, ProfileDto, SetPinDto, SwitchRoleDto } from './pudo.dto';
+import { UnclaimedService } from './unclaimed.service';
 
 /**
  * Identity — the authenticated consumer surface (S20). "One person, one account, many roles."
@@ -37,6 +38,7 @@ export class IdentityController {
     private readonly dispatch: DispatchService,
     private readonly cargo: CargoService,
     private readonly routing: RoutingService,
+    private readonly unclaimed: UnclaimedService,
   ) {}
 
   /**
@@ -189,6 +191,39 @@ export class IdentityController {
   addPod(@Param('id') id: string, @Body() dto: PodDto, @Actor() actor: IntrospectionResult) {
     const person = this.persons.requireByDid(actor.did!);
     return this.parcels.attachPod(id, person.phoneHash, person.personDid, dto.photoRef);
+  }
+
+  /**
+   * The receiver answers the final notice — the four things a person can do about a closed window.
+   *
+   * On their OWN parcel only, and 404 otherwise: this is the one screen in the network where somebody
+   * can give up a claim to goods, so it must not be possible to do it to somebody else's.
+   *
+   * Returns their twin rather than a bare acknowledgement, because three of the four choices change what
+   * the app should be showing them and a screen that has to guess will guess wrong.
+   */
+  @Roles('consumer')
+  @Post('parcels/:id/collection-response')
+  collectionResponse(@Param('id') id: string, @Body() dto: CollectionResponseDto, @Actor() actor: IntrospectionResult) {
+    const person = this.persons.requireByDid(actor.did!);
+    this.parcels.requireReceiver(id, person.phoneHash);
+    const { outcome } = this.unclaimed.respond(id, dto.choice, dto.note);
+    return { outcome, parcel: this.parcels.consumerParcel(id, person.phoneHash) };
+  }
+
+  /**
+   * The receiver names somebody to collect for them.
+   *
+   * The code comes BACK to the receiver, which is the point: they are the one who has to pass it on, and
+   * a code the network delivered straight to the neighbour would be the network deciding who a person
+   * trusts. Their own code keeps working alongside it, and the shop still learns neither.
+   */
+  @Roles('consumer')
+  @Post('parcels/:id/nominate-collector')
+  nominateCollector(@Param('id') id: string, @Body() dto: NominateCollectorDto, @Actor() actor: IntrospectionResult) {
+    const person = this.persons.requireByDid(actor.did!);
+    this.parcels.requireReceiver(id, person.phoneHash);
+    return this.unclaimed.nominate(id, dto.name, dto.phone ? hashPhone(dto.phone) : undefined);
   }
 
   /** The receiver files a delivery dispute (reason + photo) → routed to the vendor / sender + control tower. */

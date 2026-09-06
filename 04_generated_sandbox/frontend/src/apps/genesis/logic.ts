@@ -191,6 +191,10 @@ export function normalizeKey(input: string): string {
 export const LADDER: ParcelStatus[] = ['Created', 'At_PUDO', 'On_Bus', 'At_MDP', 'Ready_For_Pickup', 'Delivered'];
 
 export function ladderIndex(status: ParcelStatus): number {
+  // Unclaimed sits ON the ready rung: the parcel arrived and is still there. Giving it a rung of its own
+  // would draw a journey with an extra leg nobody travelled, and leaving it off would file it with the
+  // cancelled and the disputed — where a parcel a person can still walk in and collect does not belong.
+  if (status === 'Unclaimed') return LADDER.indexOf('Ready_For_Pickup');
   return LADDER.indexOf(status);
 }
 
@@ -213,6 +217,11 @@ export function statusPresentation(status: ParcelStatus, t: Translate): StatusPr
       return { word: t('send.status.atMdp'), icon: 'grid', tone: 'info' };
     case 'Ready_For_Pickup':
       return { word: t('send.status.ready'), icon: 'box', tone: 'ok' };
+    // 'danger' rather than 'ok', and the word says waiting rather than ready: something has changed and
+    // the reader has to do something about it. Not the same as a problem with the parcel, which is why
+    // the icon is a clock and not a warning triangle — nothing has gone wrong, time has passed.
+    case 'Unclaimed':
+      return { word: t('send.status.unclaimed'), icon: 'clock', tone: 'danger' };
     case 'Delivered':
       return { word: t('send.status.delivered'), icon: 'check', tone: 'ok' };
     case 'Disputed':
@@ -224,7 +233,7 @@ export function statusPresentation(status: ParcelStatus, t: Translate): StatusPr
 
 export function trackSummary(view: TrackView, t: Translate): string {
   const status = statusPresentation(view.status, t).word.toLowerCase();
-  const atDest = view.status === 'Ready_For_Pickup' || view.status === 'Delivered';
+  const atDest = view.status === 'Ready_For_Pickup' || view.status === 'Unclaimed' || view.status === 'Delivered';
   return atDest
     ? t('send.logic.trackAt', { ref: view.ref, status, dest: view.destination })
     : t('send.logic.trackPlain', { ref: view.ref, status });
@@ -251,7 +260,9 @@ export function mapsHref(t: Pick<TrackView, 'destinationLocation' | 'destination
 
 /** The collect card renders once the parcel is somewhere a receiver can act on. */
 export function showCollectCard(status: ParcelStatus): boolean {
-  return status === 'Ready_For_Pickup' || status === 'Delivered';
+  // Unclaimed included, and this is the one that matters. Hiding the code at exactly the moment the app
+  // is telling somebody to come and collect would be a notice with the door locked behind it.
+  return status === 'Ready_For_Pickup' || status === 'Unclaimed' || status === 'Delivered';
 }
 
 /* -------------------------------------------------- identity (S20/S21) -- */
@@ -320,6 +331,7 @@ export function parcelRowLine(p: ConsumerParcelView, t: Translate): string {
  *  anything ready to collect, then in-flight, then finished. Pure + stable for testing. */
 export function sortForPerson(list: ConsumerParcelView[]): ConsumerParcelView[] {
   const rank = (s: ParcelStatus): number => {
+    if (s === 'Unclaimed') return -1; // act now, and it is costing something
     if (s === 'Ready_For_Pickup') return 0; // act now
     if (s === 'Delivered' || s === 'Voided' || s === 'Disputed') return 2; // done
     return 1; // in flight
@@ -350,6 +362,10 @@ export function isOffLadder(status: ParcelStatus): boolean {
 export function sendWorkLine(parcels: { sent: Array<{ status: string }>; received: Array<{ status: string }> } | null, t: Translate): string | undefined {
   if (!parcels) return undefined;
   const all = [...parcels.sent, ...parcels.received];
+  // The overdue ones get their own line and come first. "1 to collect" and "1 waiting past its date"
+  // ask a person to do the same thing with very different urgency, and folding them together loses that.
+  const late = all.filter((p) => p.status === 'Unclaimed').length;
+  if (late > 0) return late === 1 ? t('send.bar.unclaimedOne') : t('send.bar.unclaimedMany', { count: late });
   const ready = all.filter((p) => p.status === 'Ready_For_Pickup').length;
   if (ready > 0) return ready === 1 ? t('send.bar.readyOne') : t('send.bar.readyMany', { count: ready });
   const moving = all.filter((p) => p.status === 'At_PUDO' || p.status === 'On_Bus' || p.status === 'At_MDP').length;

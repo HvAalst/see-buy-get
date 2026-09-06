@@ -106,6 +106,37 @@ export const en = {
   'send.status.onBus': 'On the bus',
   'send.status.atMdp': 'At the sort hub',
   'send.status.ready': 'Ready to collect',
+  // Deliberately not "expired" or "overdue": nothing has expired — the parcel is still there and still
+  // theirs. What has run out is the free part, and the word has to say "come and get it" rather than
+  // "you have lost it", because the second one is both untrue and the fastest way to be abandoned.
+  'send.status.unclaimed': 'Waiting for you',
+  // The final notice. Every word here is doing the same job: say that the terms changed, and do NOT say
+  // that the parcel is being taken away — because it is not, and a person who believes it is has no
+  // reason left to answer at all.
+  'send.notice.title': 'Your collection time has run out',
+  'send.notice.lede': 'Your parcel is still at {zone} and still yours. Tell us what you would like to do.',
+  'send.notice.ledeCost': 'Your parcel is still at {zone} and still yours. Holding it has cost {amount} so far — tell us what you would like to do.',
+  'send.notice.coming': 'I am coming — hold it for me',
+  'send.notice.comingAgain': 'Hold it a little longer',
+  'send.notice.proxyLabel': 'Someone else will collect it',
+  'send.notice.proxyPlaceholder': 'Their name',
+  'send.notice.proxy': 'Give them a code',
+  'send.notice.proxyCode': 'Give this code to {name}',
+  'send.notice.relinquish': 'I do not want it',
+  'send.notice.notMine': 'I never ordered this',
+  'send.notice.answered': 'You told us',
+  'send.notice.choice.coming': 'You said you are coming for it.',
+  'send.notice.choice.proxy': 'You said someone else will collect it.',
+  'send.notice.choice.relinquish': 'You said you do not want it.',
+  'send.notice.choice.notMine': 'You said you never ordered it.',
+  'send.notice.choice.not-mine': 'You said you never ordered it.',
+  'send.notice.gaveUpTitle': 'You gave up this parcel',
+  'send.notice.gaveUpDetail': 'It is still at the shop while the sender decides whether to have it back.',
+  // Said out loud rather than left to be inferred, because the whole design depends on people believing it.
+  'send.notice.stillYours': 'Nothing here takes the parcel away. It stays at the shop and your code still opens it.',
+  'send.parcels.unclaimedIn': 'Still waiting for you at {zone}',
+  'send.bar.unclaimedOne': '1 parcel waiting past its date',
+  'send.bar.unclaimedMany': '{count} parcels waiting past their date',
   'send.status.delivered': 'Delivered',
   'send.status.disputed': 'Problem reported',
   'send.status.voided': 'Cancelled',

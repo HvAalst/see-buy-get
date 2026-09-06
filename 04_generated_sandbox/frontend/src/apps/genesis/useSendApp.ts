@@ -96,6 +96,12 @@ export interface SendState {
   openParcelDetail: ConsumerParcelView | null; // the single-parcel twin (carries the S22 collect token)
   openParcelState: 'idle' | 'loading' | 'ready' | 'error';
   openParcelError: SbgError | null;
+  /** The final-notice card: which answer is in flight, and anything that came back from it. */
+  noticeBusy: string | null;
+  noticeError: SbgError | null;
+  /** The code to pass to the person they named. Held in state rather than only on the twin so the
+   *  screen can show it the moment it exists, without a second round trip. */
+  proxyCode: { name: string; code: string } | null;
   podBusy: boolean; // S23: attaching the delivered-state photo
   disputeBusy: boolean; // S23: filing a dispute
   disputeError: SbgError | null;
@@ -171,6 +177,9 @@ const INITIAL: SendState = {
   openParcelDetail: null,
   openParcelState: 'idle',
   openParcelError: null,
+  noticeBusy: null,
+  noticeError: null,
+  proxyCode: null,
   podBusy: false,
   disputeBusy: false,
   disputeError: null,
@@ -732,6 +741,49 @@ export function useSendApp() {
     [client],
   );
 
+  /**
+   * The receiver answers "your collection window has closed".
+   *
+   * Refreshes the LIST as well as the twin, because three of the four answers change what the parcel is
+   * and a home screen still saying "waiting past its date" after somebody said they were coming is the
+   * app not listening.
+   */
+  const respondToNotice = useCallback(
+    async (choice: 'coming' | 'proxy' | 'relinquish' | 'not-mine', note?: string) => {
+      const id = stateRef.current.openParcelId;
+      if (!client || !id) return;
+      setState((s) => ({ ...s, noticeBusy: choice, noticeError: null }));
+      const r = await client.api.respondToNotice(id, choice, note);
+      if (r.error) {
+        if (isSignInRequired(r.error)) return signOutRef.current(r.error);
+        setState((s) => ({ ...s, noticeBusy: null, noticeError: r.error }));
+        return;
+      }
+      const body = narrow<{ parcel: ConsumerParcelView }>(r.data);
+      setState((s) => ({ ...s, noticeBusy: null, openParcelDetail: body.parcel }));
+      void loadParcels();
+    },
+    [client, loadParcels],
+  );
+
+  /** Name somebody to collect. The code comes back to THEM to pass on — we do not choose who they trust. */
+  const nominateCollector = useCallback(
+    async (name: string, phone?: string) => {
+      const id = stateRef.current.openParcelId;
+      if (!client || !id || !name.trim()) return;
+      setState((s) => ({ ...s, noticeBusy: 'nominate', noticeError: null }));
+      const r = await client.api.nominateCollector(id, name.trim(), phone);
+      if (r.error) {
+        if (isSignInRequired(r.error)) return signOutRef.current(r.error);
+        setState((s) => ({ ...s, noticeBusy: null, noticeError: r.error }));
+        return;
+      }
+      setState((s) => ({ ...s, noticeBusy: null, proxyCode: narrow<{ name: string; code: string }>(r.data) }));
+      void openParcel(id);
+    },
+    [client, openParcel],
+  );
+
   /** S23: file a delivery dispute (reason + photo) on the open parcel → routed to vendor / sender + tower. */
   const submitDispute = useCallback(
     async (reason: string, photoRef: string) => {
@@ -1000,6 +1052,8 @@ export function useSendApp() {
       // my parcels + account
       loadParcels,
       openParcel,
+    respondToNotice,
+    nominateCollector,
       closeParcel,
       uploadPhoto,
       submitPod,

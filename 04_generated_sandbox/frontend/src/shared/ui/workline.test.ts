@@ -43,6 +43,10 @@ describe('the top bar’s live line', () => {
 
     it('says nothing about overdue when nothing is', () => {
       expect(agentWorkLine({ openState: 'open' }, [{ status: 'Ready_For_Pickup' }], t)).toBe('1 to collect');
+      // A parcel whose window closed is still ON this shop's shelf and still theirs to hand over, so it
+      // must keep counting. Dropping out of the count would make the pile the shopkeeper can see bigger
+      // than the number the app shows them — which is how a count stops being believed.
+      expect(agentWorkLine({ openState: 'open' }, [{ status: 'Unclaimed' }], t)).toBe('1 to collect');
     });
 
     it('drops a pile that is empty rather than printing a zero', () => {

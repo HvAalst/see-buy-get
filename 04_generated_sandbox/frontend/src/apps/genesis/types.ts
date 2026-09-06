@@ -13,6 +13,8 @@ export type ParcelStatus =
   | 'On_Bus'
   | 'At_MDP'
   | 'Ready_For_Pickup'
+  // The free window has run out. STILL COLLECTABLE — this changes the terms, never the door.
+  | 'Unclaimed'
   | 'Delivered'
   | 'Disputed'
   | 'Voided';
@@ -194,6 +196,14 @@ export interface ConsumerParcelView {
   podPhotoRef?: string;
   disputePhotoRef?: string;
   disputeReason?: string;
+  /** The closed-window facts — RECEIVER ONLY. A sender owns the shipment, not the goods, so whether the
+   *  person at the other end has come and what that is costing them is not the sender's business. */
+  unclaimedAt?: string;
+  holdingOwed?: number;
+  extensionsUsed?: number;
+  receiverResponse?: { choice: 'coming' | 'proxy' | 'relinquish' | 'not-mine'; at: string; note?: string };
+  collectProxy?: { name: string; code: string };
+  relinquishedAt?: string;
 }
 
 /** S32d — a diverted dedicated-freight job the buyer is a party to (the freight analogue of a parcel twin).

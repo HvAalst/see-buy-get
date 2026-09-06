@@ -244,6 +244,9 @@ describe('releaseStage', () => {
   it('maps parcel status to the release step', () => {
     expect(releaseStage('On_Bus')).toBe('arrive');
     expect(releaseStage('Ready_For_Pickup')).toBe('otp');
+    // If this ever returns 'blocked' the counter has become a way of refusing somebody their own parcel
+    // for being late, which is the exact opposite of what the status exists to do.
+    expect(releaseStage('Unclaimed')).toBe('otp');
     expect(releaseStage('Delivered')).toBe('rate');
     expect(releaseStage('At_MDP')).toBe('blocked');
     expect(releaseStage('Voided')).toBe('blocked');

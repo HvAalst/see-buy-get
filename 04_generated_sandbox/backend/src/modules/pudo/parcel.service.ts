@@ -12,10 +12,10 @@ import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
 import { ShelfService } from './shelf.service';
 import { FleetService } from './fleet.service';
-import { DEFAULT_TAX_LABEL, HANDOVER_FEE, MAX_CLAIM_AWARD, LABEL_TZ_OFFSET_MIN, LABOUR_FEE, NETWORK_CURRENCY, OTP_MAX_ATTEMPTS, PICKUP_FEE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, UNCOLLECTED_H, VOID_WINDOW_MS, WHOLESALE, classifySize, coverFor, taxOn, withPlatformFee } from './pudo.config';
+import { DEFAULT_TAX_LABEL, HANDOVER_FEE, MAX_CLAIM_AWARD, LABEL_TZ_OFFSET_MIN, LABOUR_FEE, NETWORK_CURRENCY, OTP_MAX_ATTEMPTS, RELEASE_FEE, SHELVING_FEE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, UNCOLLECTED_H, VOID_WINDOW_MS, WHOLESALE, classifySize, coverFor, holdingFeeFor, taxOn, withPlatformFee } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import type { ResolvedTax } from '../../foundation/entity/entity.types';
-import { Birthplace, ConsumerParcelView, CustodyKind, CustodyLeg, DisputeDecision, DisputeOrigin, Parcel, ParcelDirection, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy } from './pudo.types';
+import { Birthplace, ConsumerParcelView, CustodyKind, CustodyLeg, DisputeDecision, DisputeOrigin, Parcel, ParcelDirection, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy, isCollectable } from './pudo.types';
 import { VendorService } from './vendor.service';
 import { VehicleService } from './vehicle.service';
 import { MediaService } from './media.service';
@@ -294,7 +294,7 @@ export function custodianOf(p: Parcel): CustodyLeg | undefined {
   const last = p.scans[p.scans.length - 1];
   if (!last) return undefined;
   const kind: CustodyKind | undefined =
-    p.status === 'On_Bus' ? 'driver' : p.status === 'At_MDP' ? 'hub' : p.status === 'Delivered' ? 'receiver' : p.status === 'At_PUDO' || p.status === 'Ready_For_Pickup' ? 'shop' : undefined;
+    p.status === 'On_Bus' ? 'driver' : p.status === 'At_MDP' ? 'hub' : p.status === 'Delivered' ? 'receiver' : p.status === 'At_PUDO' || isCollectable(p.status) ? 'shop' : undefined;
   return kind ? { holderId: last.by, holderKind: kind, from: last.at, note: 'reconstructed from the scan trail' } : undefined;
 }
 
@@ -418,8 +418,19 @@ export function operationalParcelView(p: Parcel) {
      * Absent unless it is actually waiting — a boolean that is false on every parcel in every other state
      * invites a list filtered on it to look sensible and mean nothing.
      */
-    ...(p.status === 'Ready_For_Pickup' && p.readyAt && Date.now() - new Date(p.readyAt).getTime() > UNCOLLECTED_H * 3_600_000
+    ...(isCollectable(p.status) && p.readyAt && Date.now() - new Date(p.readyAt).getTime() > UNCOLLECTED_H * 3_600_000
       ? { overdue: true as const }
+      : {}),
+    unclaimedAt: p.unclaimedAt,
+    /**
+     * What is owed for the shelf slot, right now.
+     *
+     * On the view rather than left to the caller, for the same reason `overdue` is: the counter about to
+     * charge somebody and the screen that told them the number must not be able to disagree. Absent when
+     * nothing is owed, so a list filtered on it cannot quietly include every parcel in the network.
+     */
+    ...(p.unclaimedAt && holdingFeeFor({ unclaimedAt: p.unclaimedAt, shipmentCost: p.shipmentCost, settled: p.holdingSettled }) > 0
+      ? { holdingOwed: holdingFeeFor({ unclaimedAt: p.unclaimedAt, shipmentCost: p.shipmentCost, settled: p.holdingSettled }) }
       : {}),
   };
 }
@@ -553,6 +564,17 @@ export class ParcelService implements OnApplicationBootstrap {
     return ParcelService.toConsumerView(p, phoneHash, true); // detail: carries the in-app collect token
   }
 
+  /**
+   * The parcel a receiver may act on, for callers OUTSIDE this class.
+   *
+   * Returns it rather than a boolean, and 404s rather than 403s, for the same reason receiverParcel does:
+   * telling a stranger that a parcel exists but is not theirs is telling them something about somebody
+   * else's business.
+   */
+  requireReceiver(id: string, phoneHash: string): Parcel {
+    return this.receiverParcel(id, phoneHash);
+  }
+
   /** The parcel a RECEIVER may act on (PoD / dispute) — receiver-scoped, or 404 (existence not confirmed). */
   private receiverParcel(id: string, phoneHash: string): Parcel {
     const p = this.parcels.get(id);
@@ -647,6 +669,21 @@ export class ParcelService implements OnApplicationBootstrap {
       podPhotoRef: relation === 'received' ? p.buyerPodPhotoRef : undefined,
       disputePhotoRef: relation === 'received' ? p.buyerDisputePhotoRef : undefined,
       disputeReason: relation === 'received' && p.status === 'Disputed' ? (p.buyerDisputeReason ?? p.disputeReason) : undefined,
+      // The closed-window facts, receiver-only — see ConsumerParcelView. The owed figure is DERIVED here
+      // rather than left to the app, so the number somebody reads on their phone and the number the
+      // counter asks for cannot come from two different pieces of arithmetic.
+      ...(relation === 'received'
+        ? {
+            unclaimedAt: p.unclaimedAt,
+            extensionsUsed: p.extensionsUsed,
+            receiverResponse: p.receiverResponse,
+            relinquishedAt: p.relinquishedAt,
+            ...(p.collectProxy ? { collectProxy: { name: p.collectProxy.name, code: p.collectProxy.code } } : {}),
+            ...(p.unclaimedAt && holdingFeeFor({ unclaimedAt: p.unclaimedAt, shipmentCost: p.shipmentCost, settled: p.holdingSettled }) > 0
+              ? { holdingOwed: holdingFeeFor({ unclaimedAt: p.unclaimedAt, shipmentCost: p.shipmentCost, settled: p.holdingSettled }) }
+              : {}),
+          }
+        : {}),
     };
     // The in-app release token — QR (scanned) + the code (typed/spoken fallback). Detail view only, so the
     // secret leaves the vault of the twin no wider than it must. Who may see it, and when, differs by how
@@ -664,7 +701,10 @@ export class ParcelService implements OnApplicationBootstrap {
       const isPeerSend = !p.vendorId;
       const secret = p.collectionCode ?? p.otp;
       const audienceOk = relation === 'received' || isPeerSend; // the sender is a party only on a peer send
-      const stageOk = isPeerSend ? !TERMINAL_STATUSES.has(p.status) : p.status === 'Ready_For_Pickup';
+      // isCollectable, not Ready_For_Pickup: a parcel whose free window has run out is still collectable,
+      // and hiding the receiver's own code at exactly the moment they are being urged to come would be a
+      // notice telling somebody to collect a parcel and an app refusing to show them how.
+      const stageOk = isPeerSend ? !TERMINAL_STATUSES.has(p.status) : isCollectable(p.status);
       if (secret && audienceOk && stageOk) {
         view.collectToken = { code: secret, qrPayload: `sbg:collect:${secret}` };
       }
@@ -943,6 +983,9 @@ export class ParcelService implements OnApplicationBootstrap {
     parcel.binSlot = this.shelf.assign(destAgentDid, parcelId, parcel.size); // commit to a shelf slot for pickup (small parcels may bundle)
     this.handTo(parcel, 'shop', destAgentDid, 'arrived at the collection point');
     parcel.readyAt = new Date().toISOString(); // when the wait began — see Parcel.readyAt
+    // The shelving half, paid HERE rather than at release. Receiving, scanning and committing a shelf
+    // slot is finished work at this moment, and it stays finished whether or not anybody ever comes.
+    this.gate.payLabour(destAgentDid, SHELVING_FEE, parcelId, 'parcel', parcel.sellerEntityId);
     this.scan(parcel, 'Ready_For_Pickup', destAgentDid, `arrived · shelf ${parcel.binSlot}`);
     void this.events.publish(GlosEvent.Pudo.ParcelReadyForPickup, { parcelId, destAgentDid, binSlot: parcel.binSlot }, { source: 'pudo' }).catch(() => undefined);
     // No secret in this response: the customer brings the code, the shop checks it.
@@ -952,7 +995,9 @@ export class ParcelService implements OnApplicationBootstrap {
   /** Screen 3 — Customer Pickup (release) with the code the CUSTOMER brings. */
   pickup(parcelId: string, agentDid: string, otp: string, deliveredPhotoRef?: string): Parcel {
     const parcel = this.require(parcelId);
-    if (parcel.status !== 'Ready_For_Pickup') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
+    // Unclaimed releases exactly like Ready_For_Pickup. The window closing changes what is OWED, never
+    // whether the person standing at the counter with the right code may have their parcel.
+    if (!isCollectable(parcel.status)) throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
     if (parcel.otpLockedAt) throw new GlosError('OTP_LOCKED', 'Too many wrong codes — ask the control tower to reissue');
 
     if (parcel.otp !== (otp || '').trim()) {
@@ -1030,9 +1075,12 @@ export class ParcelService implements OnApplicationBootstrap {
     // Ready_For_Pickup is admitted, but ONLY once it has genuinely been abandoned. Without the window
     // this would be a button that cancels a shipment which arrived an hour ago and is about to be
     // collected; with it, it is the only way out of the one state that had none.
+    // 'Unclaimed' says this out loud now, so the arithmetic is only a fallback for a parcel the sweep
+    // has not reached yet. Both kept: a cancel must not depend on a timer having run.
     const abandoned =
-      parcel.status === 'Ready_For_Pickup' &&
-      Date.now() - new Date(parcel.readyAt ?? parcel.acceptedAt).getTime() > UNCOLLECTED_H * 3_600_000;
+      parcel.status === 'Unclaimed' ||
+      (parcel.status === 'Ready_For_Pickup' &&
+        Date.now() - new Date(parcel.readyAt ?? parcel.acceptedAt).getTime() > UNCOLLECTED_H * 3_600_000);
     if (!abandoned && !['Created', 'At_PUDO', 'At_MDP'].includes(parcel.status)) {
       throw new GlosError(
         'INVALID_STATE',
@@ -1043,7 +1091,7 @@ export class ParcelService implements OnApplicationBootstrap {
     }
     // The shelf is the scarce thing. A cancelled parcel that still counted against a shop's capacity would
     // leave the network exactly as short of slots as the uncollected one it replaced.
-    if (parcel.status === 'Ready_For_Pickup' && parcel.destAgentDid) this.shelf.release(parcel.destAgentDid, parcel.parcelId);
+    if (isCollectable(parcel.status) && parcel.destAgentDid) this.shelf.release(parcel.destAgentDid, parcel.parcelId);
     // Only an At_PUDO cash parcel moved agent cash at intake; reverse it flow-correctly (peer-send vs walk-up).
     // Only a parcel a SHOP took in has an intake charge to reverse — a dock parcel never had one, because
     // no shop ever handled it.
@@ -1381,7 +1429,7 @@ export class ParcelService implements OnApplicationBootstrap {
       size: parcel.size,
       destination: dest?.shopName ?? parcel.destZone,
       destZone: parcel.destZone,
-      binSlot: parcel.status === 'Ready_For_Pickup' ? parcel.binSlot : undefined,
+      binSlot: isCollectable(parcel.status) ? parcel.binSlot : undefined,
       // The collect card (rev 5 "show me the way"): landmark + pin of the destination shop.
       // Both are already public via GET /network/points, so this adds no new exposure —
       // still no PII and no collection code on this surface. Additive for the legacy page.
@@ -1450,9 +1498,66 @@ export class ParcelService implements OnApplicationBootstrap {
    * 'Returned' is its own ending and it carries a pointer to the journey home, so the two parcels read as
    * one story rather than as an abandonment and an unexplained new shipment.
    */
-  closeAsReturned(parcelId: string, returnParcelId: string): Parcel {
+  /**
+   * The free collection window has run out.
+   *
+   * A change in TERMS, not in availability. The parcel is still on the shelf and still releases to
+   * whoever holds the code — every guard on the release paths asks isCollectable() for exactly this
+   * reason. What changes is that the shop starts being paid by the day and somebody owes for that.
+   *
+   * The transition lives here rather than in the service that decides WHEN, because this is the class
+   * that owns a parcel's fields and its scan trail; putting the write anywhere else means a state change
+   * that never reaches the timeline two people later have to argue over.
+   */
+  markUnclaimed(parcelId: string, at: number = Date.now()): Parcel {
     const parcel = this.require(parcelId);
     if (parcel.status !== 'Ready_For_Pickup') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
+    parcel.status = 'Unclaimed';
+    parcel.unclaimedAt = new Date(at).toISOString();
+    this.scan(parcel, 'Unclaimed', parcel.destAgentDid ?? 'network', 'collection window closed · still on the shelf');
+    return parcel;
+  }
+
+  /**
+   * …and the way back: a receiver bought more time.
+   *
+   * Straight back to Ready_For_Pickup with a fresh readyAt, which is not a trick — somebody who has just
+   * been granted a new window is inside a free one by definition. It matters that this is the SAME pair
+   * of fields the ordinary path uses: the monitor flag, the uncollected reminder and the return sweep
+   * all key off (status, readyAt), so all three resume correctly without knowing extensions exist.
+   *
+   * A chargeable extension keeps its holding clock running by re-stamping unclaimedAt to now, so the
+   * meter restarts rather than compounding what was already owed.
+   */
+  reopenCollection(parcelId: string, at: number, chargeable: boolean, note: string): Parcel {
+    const parcel = this.require(parcelId);
+    if (!isCollectable(parcel.status)) throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
+    parcel.status = 'Ready_For_Pickup';
+    parcel.readyAt = new Date(at).toISOString();
+    parcel.unclaimedAt = chargeable ? new Date(at).toISOString() : undefined;
+    parcel.extensionsUsed = (parcel.extensionsUsed ?? 0) + 1;
+    parcel.uncollectedRemindedAt = undefined; // a new window earns a new reminder
+    this.scan(parcel, 'Ready_For_Pickup', 'receiver', note);
+    return parcel;
+  }
+
+  /**
+   * Write a note into a parcel's timeline without moving it.
+   *
+   * For the facts that are real and change no state: who was named to collect, that the receiver gave up
+   * their claim, that somebody says they never ordered this. Persisting is the side effect that matters
+   * — collaborating services mutate the live record and this is what flushes it.
+   */
+  annotate(parcelId: string, by: string, note: string): Parcel {
+    const parcel = this.require(parcelId);
+    this.scan(parcel, parcel.status, by, note);
+    return parcel;
+  }
+
+  closeAsReturned(parcelId: string, returnParcelId: string): Parcel {
+    const parcel = this.require(parcelId);
+    // Unclaimed is the ordinary input: a store is only asked about a return once the window has closed.
+    if (!isCollectable(parcel.status)) throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
     parcel.status = 'Returned';
     parcel.returnParcelId = returnParcelId;
     this.scan(parcel, 'Returned', parcel.destAgentDid ?? 'network', `uncollected · returning as ${returnParcelId}`);
@@ -1476,6 +1581,7 @@ export class ParcelService implements OnApplicationBootstrap {
     parcel.otpLockedAt = undefined;
     this.handTo(parcel, 'shop', agentDid, 'shelved at the collection point');
     parcel.readyAt = new Date().toISOString(); // when the wait began — see Parcel.readyAt
+    this.gate.payLabour(agentDid, SHELVING_FEE, parcelId, 'parcel', parcel.sellerEntityId); // see arrive()
     this.scan(parcel, 'Ready_For_Pickup', agentDid, `shelved · bin ${parcel.binSlot}`);
     void this.events.publish(GlosEvent.Pudo.ParcelReadyForPickup, { parcelId, destAgentDid: agentDid, collectionCode: parcel.collectionCode, binSlot: parcel.binSlot, vendorId: parcel.vendorId, externalOrderId: parcel.externalOrderId }, { source: 'pudo' }).catch(() => undefined);
     return { parcelId, binSlot: parcel.binSlot, status: parcel.status };
@@ -1486,11 +1592,17 @@ export class ParcelService implements OnApplicationBootstrap {
    * A burned code opens nothing: the counter learns at the lookup that this parcel needs a reissue,
    * rather than being walked to the confirm step only to be refused there.
    */
-  collect(collectionCode: string, agentDid: string): { parcel: Parcel; binSlot?: string } {
-    const parcel = [...this.parcels.values()].find((p) => p.collectionCode === collectionCode && p.destAgentDid === agentDid && p.status === 'Ready_For_Pickup');
+  collect(collectionCode: string, agentDid: string): { parcel: Parcel; binSlot?: string; holdingOwed?: number } {
+    const parcel = [...this.parcels.values()].find(
+      (p) => (p.collectionCode === collectionCode || p.collectProxy?.code === collectionCode) && p.destAgentDid === agentDid && isCollectable(p.status),
+    );
     if (!parcel) throw new GlosError('NOT_FOUND', 'No parcel awaiting collection for that code at this PUDO');
     if (parcel.otpLockedAt) throw new GlosError('CODE_LOCKED', 'Too many wrong codes — ask the control tower to reissue');
-    return { parcel, binSlot: parcel.binSlot };
+    // What is owed comes back with the LOOKUP, not with the release. A shopkeeper who discovers a charge
+    // only after the customer has the box in their hands has to ask for money back, which is the one
+    // conversation across a counter that nobody wins.
+    const holdingOwed = holdingFeeFor({ unclaimedAt: parcel.unclaimedAt, shipmentCost: parcel.shipmentCost, settled: parcel.holdingSettled });
+    return { parcel, binSlot: parcel.binSlot, ...(holdingOwed > 0 ? { holdingOwed } : {}) };
   }
 
   /**
@@ -1503,10 +1615,14 @@ export class ParcelService implements OnApplicationBootstrap {
    */
   collectConfirm(parcelId: string, agentDid: string, collectionCode: string): Parcel {
     const parcel = this.require(parcelId);
-    if (parcel.status !== 'Ready_For_Pickup') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
+    if (!isCollectable(parcel.status)) throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
     if (parcel.destAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Release only at the destination PUDO');
     if (parcel.otpLockedAt) throw new GlosError('CODE_LOCKED', 'Too many wrong codes — ask the control tower to reissue');
-    if (parcel.collectionCode !== (collectionCode || '').trim()) {
+    const supplied = (collectionCode || '').trim();
+    // EITHER code opens it: the receiver's own, or the one held by somebody they named. Nominating a
+    // neighbour to collect does not stop you collecting it yourself, and the shop still learns neither.
+    const byProxy = !!parcel.collectProxy && parcel.collectProxy.code === supplied;
+    if (parcel.collectionCode !== supplied && !byProxy) {
       parcel.otpAttempts = (parcel.otpAttempts ?? 0) + 1;
       if (parcel.otpAttempts >= OTP_MAX_ATTEMPTS) {
         parcel.otpLockedAt = new Date().toISOString();
@@ -1516,14 +1632,27 @@ export class ParcelService implements OnApplicationBootstrap {
       this.persist(parcel); // keep the attempt counter durable so a restart can't reset the lockout
       throw new GlosError('CODE_MISMATCH', 'Collection code does not match');
     }
+    // Settled BEFORE the status flips, while the clock still has an end to measure to. The receiver
+    // pays the shop in cash at the counter and the shop keeps it, so nothing is posted — this records
+    // that the debt is gone, which is what stops the network paying the shop for it a second time.
+    const holdingPaid = holdingFeeFor({ unclaimedAt: parcel.unclaimedAt, shipmentCost: parcel.shipmentCost, settled: parcel.holdingSettled });
+    if (holdingPaid > 0) parcel.holdingSettled = (parcel.holdingSettled ?? 0) + holdingPaid;
+
     parcel.status = 'Delivered';
     parcel.deliveredAt = new Date().toISOString();
     this.media.anchorParcelTerminal(parcelId); // S26: shipment-proof retention starts at collection
     this.shelf.release(agentDid, parcelId); // free the shelf slot
-    this.handTo(parcel, 'receiver', parcel.receiverPhoneHash ?? 'receiver', 'collected in person');
+    // WHO took it, recorded. The point of a nomination over a code read down the phone is that afterwards
+    // there is an answer to "who did you hand it to" other than "somebody who knew the number".
+    this.handTo(
+      parcel,
+      'receiver',
+      byProxy ? `proxy:${parcel.collectProxy!.name}` : parcel.receiverPhoneHash ?? 'receiver',
+      byProxy ? `collected by ${parcel.collectProxy!.name}, named by the receiver` : 'collected in person',
+    );
     this.endCustody(parcel);
-    this.scan(parcel, 'Delivered', agentDid, 'collected · OK');
-    this.gate.payLabour(agentDid, PICKUP_FEE, parcelId, 'parcel', parcel.sellerEntityId);
+    this.scan(parcel, 'Delivered', agentDid, byProxy ? 'collected · by a named proxy' : 'collected · OK');
+    this.gate.payLabour(agentDid, RELEASE_FEE, parcelId, 'parcel', parcel.sellerEntityId);
     this.rebateFlexible(parcel); // a flexible parcel taken by a cheaper carrier → refund the over-hold
     void this.events.publish(GlosEvent.Pudo.ParcelDelivered, { parcelId, agentDid, vendorId: parcel.vendorId, externalOrderId: parcel.externalOrderId }, { source: 'pudo' }).catch(() => undefined);
     return parcel;
@@ -1571,7 +1700,9 @@ export class ParcelService implements OnApplicationBootstrap {
    */
   reissueRelease(parcelId: string, byDid: string): { parcelId: string; kind: 'otp' | 'collection'; otp?: string } {
     const parcel = this.require(parcelId);
-    if (parcel.status !== 'Ready_For_Pickup') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
+    // Including Unclaimed — a receiver who lost their code while the window lapsed is the likeliest
+    // person in the network to need a reissue, and refusing them one strands the goods for good.
+    if (!isCollectable(parcel.status)) throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
     parcel.otpAttempts = 0;
     parcel.otpLockedAt = undefined;
 
@@ -1650,7 +1781,7 @@ export class ParcelService implements OnApplicationBootstrap {
   /** Buyer reports a discrepancy at collection → Disputed, with mandatory photo proof. */
   dispute(parcelId: string, agentDid: string, reason: string, photoProofRef: string): Parcel {
     const parcel = this.require(parcelId);
-    if (parcel.status !== 'Ready_For_Pickup') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
+    if (!isCollectable(parcel.status)) throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
     if (parcel.destAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Dispute is raised at the destination PUDO');
     if (!reason?.trim() || !photoProofRef) throw new GlosError('DISPUTE_INCOMPLETE', 'A reason and a photo proof are required to dispute');
     // The CASE opens before the status flips, and it remembers where the parcel was: these goods are

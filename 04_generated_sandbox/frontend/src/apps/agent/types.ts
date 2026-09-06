@@ -16,6 +16,8 @@ export type ParcelStatus =
   | 'On_Bus'
   | 'At_MDP'
   | 'Ready_For_Pickup'
+  // The free window has run out. STILL COLLECTABLE — this changes the terms, never the door.
+  | 'Unclaimed'
   | 'Delivered'
   | 'Disputed'
   | 'Voided';
@@ -212,6 +214,14 @@ export interface HandoverView {
 export interface CollectView {
   parcel: ParcelView;
   binSlot?: string;
+  /**
+   * What the customer owes for the days this parcel sat past its free window — absent when nothing does.
+   *
+   * On the LOOKUP rather than the release, deliberately. A shopkeeper who discovers a charge after the
+   * box has changed hands has to ask for money back, which is the one conversation across a counter that
+   * nobody wins.
+   */
+  holdingOwed?: number;
 }
 
 export interface ReceiveBagView {

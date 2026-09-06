@@ -101,6 +101,7 @@ export const enVendor = {
   'vendor.status.onBus': 'On the bus',
   'vendor.status.atMdp': 'At the sort hub',
   'vendor.status.ready': 'Ready for the buyer',
+  'vendor.status.unclaimed': 'Customer has not collected',
   'vendor.status.delivered': 'Collected',
   'vendor.status.disputed': 'Problem reported',
   'vendor.status.voided': 'Cancelled',
@@ -356,6 +357,8 @@ export const enVendor = {
   'vendor.returns.lede': 'Waiting at the shop. You can pay to have one brought back, or leave it.',
   'vendor.returns.line': 'Worth {value} · bringing it back costs {cost}',
   'vendor.returns.waitingSince': 'Waiting since {date}',
+  // Names the growing half out loud. A store that reads only a total will not understand why it moved.
+  'vendor.returns.holdingLine': '{trip} for the trip · {shelf} for the shelf so far, and rising each day',
   'vendor.returns.accept': 'Bring it back',
   'vendor.returns.decline': 'Leave it',
   'vendor.returns.acceptedToast': 'On its way back to you',

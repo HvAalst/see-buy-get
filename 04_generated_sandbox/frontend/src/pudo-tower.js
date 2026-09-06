@@ -8,7 +8,7 @@ import { el, mount } from './components/index.js';
 const API = window.GLOS_API || 'http://localhost:3000/v1';
 const root = document.getElementById('pudo-tower');
 
-const state = { dashboard: null, agents: [], finance: null, flags: [], kycQueue: [], heatmap: null, mdps: [], totes: [], lookup: null, msg: null, loading: true, help: null, helpTopic: 'packaging', helpBusy: null, disputes: [], disputeBusy: null, disputeForm: {} };
+const state = { dashboard: null, agents: [], finance: null, flags: [], kycQueue: [], heatmap: null, mdps: [], totes: [], lookup: null, msg: null, loading: true, help: null, helpTopic: 'packaging', helpBusy: null, disputes: [], disputeBusy: null, disputeForm: {}, disposal: [], disposalBusy: null };
 
 // The four vocabularies a person has to CHOOSE from, and whose options are recognised rather than known.
 // The labels here are the operator's own words for the topic; the option keys come from the server, which
@@ -136,8 +136,9 @@ async function selectHelpTopic(topic) {
 
 async function loadAll() {
   try {
-    [state.dashboard, state.agents, state.finance, state.flags, state.kycQueue, state.heatmap, state.mdps, state.totes, state.help, state.disputesRes] = await Promise.all([api('/dashboard'), api('/agents'), api('/finance'), api('/flags'), api('/agents/kyc-queue'), api('/heatmap'), api('/mdps'), api('/totes'), api(`/help/${state.helpTopic}`), api('/disputes')]);
+    [state.dashboard, state.agents, state.finance, state.flags, state.kycQueue, state.heatmap, state.mdps, state.totes, state.help, state.disputesRes, state.disposalRes] = await Promise.all([api('/dashboard'), api('/agents'), api('/finance'), api('/flags'), api('/agents/kyc-queue'), api('/heatmap'), api('/mdps'), api('/totes'), api(`/help/${state.helpTopic}`), api('/disputes'), api('/ops/disposal-queue')]);
     state.disputes = state.disputesRes?.disputes || [];
+    state.disposal = state.disposalRes?.rows || [];
     // The sister whose books this tower is looking at. One deployment, one sister today; when the group
     // console arrives this becomes a picker rather than the first row.
     // /entities answers with a bare ARRAY, not a paged envelope. Reading .items off it yields undefined,
@@ -373,6 +374,63 @@ function disputesPanel() {
 }
 
 /**
+ * Parcels whose owners gave them up, that nobody is paying to recover.
+ *
+ * A QUEUE and not a status, because what happens to them is decided by the law of the sister's
+ * jurisdiction rather than by this system. Modelling a disposal rule we do not know would be worse than
+ * showing an operator the list and letting them apply the one they do — so this panel deliberately stops
+ * at "here they are, and here is what closing one costs", and a person decides.
+ *
+ * Two things every row states out loud. There is a REAL BOX in a real shop, sitting in a slot that shop
+ * cannot use — which is why the oldest come first. And the shop is OWED for having held it: closing the
+ * row pays them, from the network, because nobody else is going to and a shortfall settling quietly on a
+ * shopkeeper who did the work is the trust asymmetry this network refuses everywhere else.
+ */
+function disposalPanel() {
+  const q = state.disposal || [];
+  const rows = q.map((r) => {
+    const busy = state.disposalBusy === r.parcelId;
+    const set = (patch) => {
+      state.disposalForm = { ...(state.disposalForm || {}), [r.parcelId]: { ...((state.disposalForm || {})[r.parcelId] || {}), ...patch } };
+    };
+    const form = (state.disposalForm || {})[r.parcelId] || {};
+    return el('div', { className: 'pt__flag', style: { borderLeftColor: r.heldDays >= 14 ? 'var(--danger)' : 'var(--warn, var(--slate))' } }, [
+      el('span', { className: 'pt__chip pt__chip--warn', text: 'GIVEN UP' }),
+      el('div', {}, [
+        el('div', { className: 'pt__flag-t', text: `${r.parcelId} · held ${r.heldDays} day${r.heldDays === 1 ? '' : 's'}` }),
+        el('div', { className: 'pt__flag-d', text: r.declaredValue != null ? `Declared worth ${r.declaredValue.toFixed(2)} — the receiver gave up their claim, the sender is not paying to recover it.` : 'The receiver gave up their claim, and the sender is not paying to recover it.' }),
+        el('div', { className: 'pt__flag-d', text: `Closing it pays the shop ${(r.owedToShop || 0).toFixed(2)} for the slot and hands the slot back.` }),
+        el('div', { className: 'pt__flag-d pt__mono', text: `At ${r.agentDid || 'unknown shop'}` }),
+        el('div', { className: 'pt__btns', style: { marginTop: '8px', flexWrap: 'wrap', gap: '6px' } }, [
+          noteInput(form.reason, (v) => set({ reason: v })),
+          el('button', { className: 'pt__btn', attrs: { disabled: busy }, style: { background: 'var(--danger)', borderColor: 'var(--danger)', color: '#fff' }, text: busy ? '…' : 'Close under local rules', onClick: () => closeDisposal(r.parcelId) }),
+        ]),
+      ]),
+    ]);
+  });
+  return el('div', { className: 'pt__panel' }, [
+    el('h2', { className: 'pt__panel-title', text: `Awaiting disposal${q.length ? ` · ${q.length}` : ''}` }),
+    el('div', {}, rows.length ? rows : [el('div', { className: 'pt__empty', text: 'Nothing to dispose of. No shelf is holding goods nobody wants.' })]),
+  ]);
+}
+
+async function closeDisposal(parcelId) {
+  const reason = ((state.disposalForm || {})[parcelId] || {}).reason || '';
+  state.disposalBusy = parcelId;
+  render();
+  try {
+    const out = await post(`/parcels/${encodeURIComponent(parcelId)}/write-off`, { by: 'control-tower', reason });
+    state.msg = { type: 'ok', text: `${parcelId} closed. Paid the shop ${(out.paidToShop || 0).toFixed(2)} for the slot it held.` };
+    await loadAll();
+  } catch (e) {
+    state.msg = { type: 'bad', text: e.message };
+  } finally {
+    state.disposalBusy = null;
+    render();
+  }
+}
+
+/**
  * A text box that reports what is typed into it WITHOUT re-rendering the console.
  *
  * This tower rebuilds its entire tree on `render()`, so calling it per keystroke would rip the caret
@@ -590,7 +648,7 @@ function supportPanel() {
     // The recovery half of the release lockout: a customer is at the counter, the code was burned by
     // wrong guesses, and only the control tower can rotate it. The new code is never shown here — it
     // goes to the buyer's app and the store; a peer-send OTP comes back for the agent to read aloud.
-    if (p.status === 'Ready_For_Pickup') {
+    if (p.status === 'Ready_For_Pickup' || p.status === 'Unclaimed') {
       const locked = Boolean(p.releaseLockedAt);
       children.push(el('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', margin: '0 0 12px' } }, [
         locked ? el('span', { className: 'pt__chip pt__chip--warn', text: 'release code locked' }) : el('span', { style: { color: 'var(--muted)' }, text: 'Release code is live.' }),
@@ -723,7 +781,7 @@ function render() {
   parts.push(kpis());
   parts.push(el('div', { className: 'pt__grid' }, [
     el('div', {}, [heatmapPanel(), agentsPanel(), mdpPanel()]),
-    el('div', {}, [disputesPanel(), kycPanel(), flagsPanel(), financePanel(), settlementPanel(), supportPanel(), helpPanel()]),
+    el('div', {}, [disputesPanel(), disposalPanel(), kycPanel(), flagsPanel(), financePanel(), settlementPanel(), supportPanel(), helpPanel()]),
   ]));
   mount(root, parts);
 }

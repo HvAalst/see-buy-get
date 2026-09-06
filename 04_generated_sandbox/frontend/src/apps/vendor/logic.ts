@@ -75,6 +75,10 @@ export function orderStatus(status: ParcelStatus, t: Translate): StatusPresentat
       return { word: t('vendor.status.onBus'), icon: 'truck', tone: 'info' };
     case 'At_MDP':
       return { word: t('vendor.status.atMdp'), icon: 'grid', tone: 'info' };
+    case 'Unclaimed':
+      // The store's word for it, not the network's: what a merchant needs to know is that their customer
+      // has not come, which is a thing they may have to act on rather than a state machine label.
+      return { word: t('vendor.status.unclaimed'), icon: 'clock', tone: 'warn' };
     case 'Ready_For_Pickup':
       return { word: t('vendor.status.ready'), icon: 'box', tone: 'ok' };
     case 'Delivered':

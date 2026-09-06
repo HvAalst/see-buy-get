@@ -30,6 +30,7 @@ import {
   relationWord,
   roleMeta,
   selectablePoints,
+  sendWorkLine,
   showCollectCard,
   sortForPerson,
   statusPresentation,
@@ -218,6 +219,8 @@ describe('track', () => {
       expect(p.icon.length).toBeGreaterThan(0);
     }
     expect(statusPresentation('Ready_For_Pickup', t)).toEqual({ word: 'Ready to collect', icon: 'box', tone: 'ok' });
+    // Not "expired" and not "overdue": nothing has expired, the parcel is still there and still theirs.
+    expect(statusPresentation('Unclaimed', t)).toEqual({ word: 'Waiting for you', icon: 'clock', tone: 'danger' });
   });
 
   it('trackSummary names the destination only once the parcel is there', () => {
@@ -317,3 +320,39 @@ function mkParcel(over: Partial<ConsumerParcelView>): ConsumerParcelView {
     ...over,
   };
 }
+
+/**
+ * A closed collection window, from the receiver's side.
+ *
+ * Every case here is the same assertion wearing a different hat: the terms changed, the parcel did NOT
+ * move, and nothing about the app's behaviour may suggest it has been taken away.
+ */
+describe('a parcel whose collection window has closed', () => {
+  it('still shows the collect card, which is the whole point', () => {
+    // Telling somebody to come and collect while hiding what opens the door is not a notice, it is a taunt.
+    expect(showCollectCard('Unclaimed')).toBe(true);
+  });
+
+  it('sits ON the ready rung rather than falling off the ladder', () => {
+    // Off the ladder means cancelled or disputed in this app, and a parcel a person can still walk in
+    // and collect does not belong with either.
+    expect(ladderIndex('Unclaimed')).toBe(LADDER.indexOf('Ready_For_Pickup'));
+    expect(isOffLadder('Unclaimed')).toBe(false);
+  });
+
+  it('sorts above everything, including a parcel that is merely ready', () => {
+    // It is the only kind of parcel in this list that is costing the reader money by sitting there.
+    const list = [
+      mkParcel({ parcelId: 'READY', status: 'Ready_For_Pickup', updatedAt: '2026-07-20T10:00:00Z' }),
+      mkParcel({ parcelId: 'LATE', status: 'Unclaimed', updatedAt: '2026-07-01T10:00:00Z' }),
+    ];
+    expect(sortForPerson(list).map((p) => p.parcelId)).toEqual(['LATE', 'READY']);
+  });
+
+  it('gets its own line in the top bar rather than being counted as ready', () => {
+    // "1 to collect" and "1 waiting past its date" ask a person to do the same thing with very different
+    // urgency, and folding them together loses exactly the part that would make somebody get up.
+    const parcels = { sent: [], received: [{ status: 'Unclaimed' }, { status: 'Ready_For_Pickup' }] };
+    expect(sendWorkLine(parcels as never, t)).toBe('1 parcel waiting past its date');
+  });
+});

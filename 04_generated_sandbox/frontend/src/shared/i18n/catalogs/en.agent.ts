@@ -52,6 +52,13 @@ export const enAgent = {
   'agent.status.onBus': 'On the bus',
   'agent.status.atMdp': 'At the sort hub',
   'agent.status.ready': 'Ready for pickup',
+  // What the shopkeeper needs from this word is that the slot is not turning over. It is still a parcel
+  // they can hand to whoever brings the code — the word must not read as "do not release".
+  'agent.status.unclaimed': 'Not collected',
+  // Framed as what it IS — the shelf, not a fine. A shopkeeper repeating this to a customer should be
+  // able to explain it in one sentence without sounding like they invented it.
+  'agent.collect.holdingTitle': 'Collect {amount} for the extra days',
+  'agent.collect.holdingDetail': 'This parcel waited past its free time. Take the money before you hand it over.',
   'agent.status.delivered': 'Collected',
   'agent.status.disputed': 'Problem reported',
   'agent.status.voided': 'Cancelled',

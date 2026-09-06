@@ -11,6 +11,8 @@ export type ParcelStatus =
   | 'On_Bus'
   | 'At_MDP'
   | 'Ready_For_Pickup'
+  // The free window has run out. STILL COLLECTABLE — this changes the terms, never the door.
+  | 'Unclaimed'
   | 'Delivered'
   | 'Disputed'
   | 'Voided';
@@ -206,6 +208,15 @@ export interface ReturnOfferView {
   parcelId: string;
   declaredValue: number;
   returnCost: number;
+  /**
+   * What the shop is owed for holding the slot since the window closed — a METER, not a held price.
+   *
+   * The transport half is fixed and billed at exactly the figure shown. This one grows while the store
+   * thinks about it, and rendering it as though it were fixed would be the single dishonest number on
+   * the screen. It is also the truest pressure this feature has: a merchant watching the cost of
+   * deciding nothing go up is being told something real.
+   */
+  holdingCost?: number;
   currency: string;
   offeredAt: string;
   expiresAt: string;

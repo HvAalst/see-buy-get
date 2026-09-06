@@ -10,7 +10,25 @@ export const WHOLESALE = 1.6; // credit the platform consumes per shipped parcel
 export const RETAIL = 2.0; // what the agent charges a cash customer (keeps the spread)
 export const LABOUR_FEE = 0.4; // paid to the agent for handling a pre-paid drop / inbound intake
 export const HANDOVER_FEE = 0.5; // paid to the agent for handing a batch to the bus
-export const PICKUP_FEE = 0.3; // paid to the destination agent for releasing a parcel to the customer
+/**
+ * What the destination shop earns, and WHEN — split in two, which is the point.
+ *
+ * It used to be one fee paid on release, and that quietly made the shop the only party in the network
+ * whose entire pay depended on a stranger turning up. They received the parcel, scanned it, and gave up
+ * one of the six or nine shelf slots that decide whether they can accept anything else — and if nobody
+ * ever came, they earned nothing for any of it. The origin shop has always been paid at intake
+ * (LABOUR_FEE); the destination shop was not, for no reason anybody chose.
+ *
+ * Splitting it moves no money into or out of the system: the sender already paid for a whole journey,
+ * last leg included, so the two halves still sum to what the single fee was. What changes is that the
+ * half covering work already done stops being contingent on somebody else's decision.
+ *
+ * Kept as literals rather than derived from each other, because round2 is not defined until further down
+ * this file and a const arrow cannot be called from above itself.
+ */
+export const SHELVING_FEE = 0.15; // paid when the parcel lands on their shelf — that work is finished then
+export const RELEASE_FEE = 0.15; // …and the rest when they actually hand it over
+export const PICKUP_FEE = 0.3; // SHELVING_FEE + RELEASE_FEE — the whole destination leg, unchanged
 export const LOCK_THRESHOLD = 1.6; // wallet below this → 'no money, no scan' lockout
 // Trade credit for an APPROVED shop. A customer standing at the counter with cash in their hand must not
 // be turned away because the shop's float ran dry — so the shop may keep scanning on credit, bounded to
@@ -405,6 +423,61 @@ export const UNCOLLECTED_REMINDER_H = 24;
  * labels ahead of a courier run — this is for the order that was forgotten, not the one packed early.
  */
 export const NEVER_DROPPED_H = 48;
+/**
+ * What a shop is paid, per started day, for a shelf slot held past the free window.
+ *
+ * The free window (UNCOLLECTED_H) is bought and paid for: it is part of the journey the sender purchased.
+ * Past it, the slot is being consumed by somebody's delay rather than by the shipment, and the shop is
+ * carrying it. This is what that costs.
+ *
+ * THE SHOP IS PAID ON THIS CLOCK, by the network, whether or not anybody ever settles it. Recovery is a
+ * separate question with three answers — the receiver pays it at the counter if they collect late, it is
+ * added to the store's return cost if the store brings the parcel home, and the network absorbs it from a
+ * provision when nobody answers at all. A shopkeeper waiting to find out whether they will be paid is the
+ * same trust asymmetry we refuse everywhere else in this network.
+ */
+export const HOLDING_FEE_PER_DAY = 0.1;
+/**
+ * …and where it stops.
+ *
+ * Uncapped daily accrual turns a forgotten 3-unit parcel into a bill larger than the goods, and asking
+ * somebody for more than a thing is worth is how you manufacture the abandonment you were trying to
+ * prevent. Two ceilings, whichever binds first: a fortnight of days, and never more than the shipment
+ * itself cost. Past that the network is carrying it, which is the honest place for the loss to sit.
+ */
+export const HOLDING_FEE_MAX_DAYS = 14;
+/**
+ * How much longer a receiver who answers gets — and how many of those are free.
+ *
+ * THE FIRST ONE IS FREE, deliberately. The common answer to a final notice is no answer, and silence
+ * costs this network far more than a few extra shelf-days: it ends in a return nobody wanted or a box
+ * nobody may lawfully touch. Charging somebody for telling us the truth ("I am ill, I will come Friday")
+ * teaches them that saying nothing is cheaper. The second extension is priced, because by then it is no
+ * longer information — it is storage.
+ */
+export const EXTENSION_H = 72;
+export const FREE_EXTENSIONS = 1;
+
+/**
+ * What is owed for a parcel that has sat past its free window, at a given moment.
+ *
+ * Pure, and derived from the two stamps rather than accrued into a field on a timer: an accrual that ran
+ * on a schedule would be wrong for every parcel between two ticks, and a shop reading its own screen
+ * would see a different number from the counter about to charge somebody. Counted in STARTED days, which
+ * is how storage is charged everywhere and how a person expects to be billed for one.
+ */
+export function holdingFeeFor(input: { unclaimedAt?: string; now?: number; shipmentCost?: number; settled?: number }): number {
+  if (!input.unclaimedAt) return 0;
+  const since = new Date(input.unclaimedAt).getTime();
+  if (!Number.isFinite(since)) return 0;
+  const elapsed = (input.now ?? Date.now()) - since;
+  if (elapsed <= 0) return 0;
+  const days = Math.min(Math.ceil(elapsed / 86_400_000), HOLDING_FEE_MAX_DAYS);
+  // Never more than the journey itself cost. A parcel with no recorded cost is capped by the days alone.
+  const ceiling = input.shipmentCost && input.shipmentCost > 0 ? input.shipmentCost : Number.POSITIVE_INFINITY;
+  const accrued = Math.min(round2(days * HOLDING_FEE_PER_DAY), ceiling);
+  return Math.max(0, round2(accrued - (input.settled ?? 0)));
+}
 /**
  * How long a store has to answer a return offer.
  *

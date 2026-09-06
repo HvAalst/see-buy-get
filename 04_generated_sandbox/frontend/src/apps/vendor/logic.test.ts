@@ -90,7 +90,7 @@ describe('policy', () => {
 
 describe('status words', () => {
   it('every status has merchant words and a drawable icon', () => {
-    for (const s of ['Created', 'At_PUDO', 'On_Bus', 'At_MDP', 'Ready_For_Pickup', 'Delivered', 'Disputed', 'Voided'] as const) {
+    for (const s of ['Created', 'At_PUDO', 'On_Bus', 'At_MDP', 'Ready_For_Pickup', 'Unclaimed', 'Delivered', 'Disputed', 'Voided'] as const) {
       const p = orderStatus(s, t);
       expect(p.word.length).toBeGreaterThan(0);
       expect(p.icon.length).toBeGreaterThan(0);
