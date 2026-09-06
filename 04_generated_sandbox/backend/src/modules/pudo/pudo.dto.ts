@@ -228,6 +228,9 @@ class ShippingPolicyDto {
   @IsOptional() @IsNumber() @Min(0) buyerContributionCap?: number;
   // S34c — the vendor's per-shipment dedicated-freight spend cap (0 = no cap).
   @IsOptional() @IsNumber() @Min(0) maxTransportSpend?: number;
+  /** The goods value above which this store wants an uncollected parcel shipped back to it. Omitted =
+   *  never offer; 0 = always ask. Two different statements, and both are real. */
+  @IsOptional() @IsNumber() @Min(0) recoverAboveValue?: number;
 }
 
 export class RegisterVendorDto {
@@ -850,6 +853,11 @@ export class DerivedLegDto {
  * Optional rather than required so that clearing it is the same call as setting it — a separate "clear"
  * endpoint is how a driver ends up with a silencer they cannot find the switch for.
  */
+/** A store declining a return. Its own words, kept on the offer. */
+export class DeclineReturnDto {
+  @IsOptional() @IsString() @MaxLength(200) reason?: string;
+}
+
 export class NudgeMinEarnDto {
   @IsOptional() @IsNumber() @Min(0) amount?: number;
 }

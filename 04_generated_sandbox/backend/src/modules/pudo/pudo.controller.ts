@@ -31,9 +31,10 @@ import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
-import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
+import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto } from './pudo.dto';
 import { classifySize, measuredFactor, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
+import { ReturnService } from './return.service';
 import { PayoutService } from '../../foundation/payouts/payout.service';
 import { BooksService } from '../../foundation/books/books.service';
 import { FX_BASE, FX_RATE_MAX_AGE_H, FxService } from '../../foundation/money/fx.service';
@@ -81,6 +82,7 @@ export class SbgController {
     private readonly vehicles: VehicleService,
     private readonly drivers: DriverService,
     private readonly payouts: PayoutService,
+    private readonly returns: ReturnService,
     private readonly fleet: FleetService,
     private readonly dispatch: DispatchService,
     private readonly managers: FleetManagerService,
@@ -967,6 +969,39 @@ export class SbgController {
   vendorCallbacks(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
     this.assertVendorOwner(id, actor);
     return this.vendors.outboxFor(id);
+  }
+
+  /* ----------------------------------------------- returning what nobody came for -- */
+
+  /**
+   * Returns waiting on this store's decision.
+   *
+   * A parcel nobody collected is still the BUYER'S — they paid for the goods — so this is not a store
+   * choosing whether to abandon something. It is a store choosing whether to pay for its journey home.
+   * Declining settles who is not paying; it settles nothing about whose goods they are.
+   */
+  @Scopes('shipment:create')
+  @Get('vendors/:id/returns')
+  vendorReturns(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    this.assertVendorOwner(id, actor);
+    return { items: this.returns.pendingFor(id) };
+  }
+
+  /** Yes: mint the journey home, bill this store the figure the offer showed, and hand the shop its
+   *  shelf slot back — which is the whole reason any of this exists. */
+  @Scopes('shipment:create')
+  @Post('vendors/:id/returns/:offerId/accept')
+  acceptReturn(@Param('id') id: string, @Param('offerId') offerId: string, @Actor() actor: IntrospectionResult) {
+    this.assertVendorOwner(id, actor);
+    return this.returns.accept(offerId, id);
+  }
+
+  /** No. The parcel stays exactly where it is, because it is still somebody else's property. */
+  @Scopes('shipment:create')
+  @Post('vendors/:id/returns/:offerId/decline')
+  declineReturn(@Param('id') id: string, @Param('offerId') offerId: string, @Body() dto: DeclineReturnDto, @Actor() actor: IntrospectionResult) {
+    this.assertVendorOwner(id, actor);
+    return this.returns.decline(offerId, id, dto.reason);
   }
 
   /**

@@ -154,7 +154,7 @@ export class CustomsDeclaration {
 }
 
 export type ParcelSize = 'S' | 'M' | 'L' | 'HEAVY';
-export type ParcelStatus = 'Created' | 'At_PUDO' | 'On_Bus' | 'At_MDP' | 'Ready_For_Pickup' | 'Delivered' | 'Disputed' | 'Voided';
+export type ParcelStatus = 'Created' | 'At_PUDO' | 'On_Bus' | 'At_MDP' | 'Ready_For_Pickup' | 'Delivered' | 'Disputed' | 'Voided' | 'Returned';
 
 /**
  * How a dispute ended.
@@ -399,6 +399,21 @@ export class ShippingPolicy {
   // S34c — the most the vendor will pay to move ONE dedicated-freight (P4+) shipment: the all-in charge cap
   // dispatch enforces before a driver may claim a diverted order. Undefined = no cap (accept any market price).
   maxTransportSpend?: number;
+  /**
+   * The goods value above which this store wants an UNCOLLECTED parcel shipped back to it.
+   *
+   * A store's own arithmetic, pre-declared so nobody has to be asked while a shelf slot sits occupied:
+   * what the goods are worth against what the return leg costs. Below it, getting the box back is worth
+   * less than the journey and the store would rather not pay for it.
+   *
+   * Undefined = never offer, which is the safe default: a store that has said nothing has not agreed to
+   * be billed for anything. Zero means "always offer", which is a different statement and a real one.
+   *
+   * NOTE what this is NOT. It does not let a store abandon anything — the buyer paid for the goods, so
+   * they are the buyer's (see the parcel-trunk rule). This decides only whether the store is OFFERED the
+   * chance to pay for its return.
+   */
+  recoverAboveValue?: number;
 }
 
 /** A registered e-commerce vendor that wires its checkout into PUDO for click-and-collect. */
@@ -477,6 +492,14 @@ export class Vendor {
   /** That daughter company, by id. Absent on records written before entities existed — resolve it
    *  through VendorService.entityIdOf(), which derives it from the country the record already has. */
   entityId?: string;
+  /**
+   * Somebody to tell when a parcel is coming BACK.
+   *
+   * A store is a counterparty on the outbound leg and a RECEIVER on a return, and a receiver the network
+   * cannot reach is a parcel that arrives at a shop with nobody expecting it. Taken from the operator's
+   * phone at registration, where it is already asked for.
+   */
+  contactMobile?: string;
   balance: number; // prepaid balance held with the daughter company ('no prepay, no label' gate)
   shippingPolicy: ShippingPolicy;
   createdAt: string;
@@ -770,6 +793,9 @@ export class Parcel {
    *  reminder and not a series — and set even when there was nobody to tell, so somebody who signs up
    *  later is not greeted by a nudge about a parcel that has been sitting a fortnight. */
   uncollectedRemindedAt?: string;
+  /** The journey home, for a parcel nobody came for. Present only on a 'Returned' one — the two read as
+   *  one story rather than as an abandonment and an unexplained new shipment. */
+  returnParcelId?: string;
   handedToBusAt?: string;
   deliveredAt?: string;
   /** Where it came into being. Absent on pre-slice records — read it through `birthplaceOf`. */
@@ -798,6 +824,41 @@ export class PudoLedgerEntry {
   reference: string; // parcel id / manifest id / driver id / admin id / bank txn / mdp id / vendor id
   refType: 'parcel' | 'manifest' | 'driver' | 'admin' | 'bank' | 'mdp' | 'vendor';
   at: string;
+}
+
+/**
+ * A return offered to the store that sold it, for a parcel nobody came for.
+ *
+ * The offer exists because three parties each hold one piece: the network knows the parcel is stranded,
+ * the STORE knows whether the goods are worth the journey home, and the SHOP is the one with it on a
+ * shelf. Nobody can answer alone, so the network computes, the store decides, and the shop hands it over.
+ *
+ * The price is held AT THE OFFER, not at acceptance. A store that says yes on Friday to a figure quoted on
+ * Monday must be billed Monday's number — the same promise a held checkout quote makes, for the same
+ * reason, and the reason `quoteId` is carried rather than re-derived.
+ */
+export type ReturnOfferStatus = 'offered' | 'accepted' | 'declined' | 'expired';
+
+export class ReturnOffer {
+  offerId: string;
+  parcelId: string;
+  vendorId: string;
+  /** Where it is now — the shop holding it — and where it would go back to. */
+  fromAgentDid: string;
+  toAgentDid: string;
+  /** What the goods are worth, and what the journey home costs. The store's arithmetic, shown not implied. */
+  declaredValue: number;
+  returnCost: number;
+  currency: string;
+  /** The held price this will be billed at. A store is billed the figure it was shown. */
+  quoteId?: string;
+  status: ReturnOfferStatus;
+  offeredAt: string;
+  expiresAt: string;
+  decidedAt?: string;
+  declineReason?: string;
+  /** The return shipment, once it exists. */
+  returnParcelId?: string;
 }
 
 export class Corridor {

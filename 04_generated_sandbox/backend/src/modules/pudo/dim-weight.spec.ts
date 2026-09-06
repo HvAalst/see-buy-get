@@ -57,6 +57,7 @@ import { InMemoryLedgerAdapter } from '../../foundation/ledger/in-memory-ledger.
 import { LEDGER_ADAPTER } from '../../foundation/ledger/ledger.types';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { PayoutService } from '../../foundation/payouts/payout.service';
+import { ReturnService } from './return.service';
 import { SandboxPayoutRail } from '../../foundation/payouts/sandbox-rail.adapter';
 import { PAYOUT_RAIL } from '../../foundation/payouts/payout.types';
 
@@ -98,7 +99,7 @@ describe('dimensional weight', () => {
         AccountService, OtpService, PersonService, InviteService, ApiKeyService, AuthService,
         WalletService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
         EntityService, BooksService, FxService,
-        PayoutService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },
+        PayoutService, ReturnService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
         GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder },
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },

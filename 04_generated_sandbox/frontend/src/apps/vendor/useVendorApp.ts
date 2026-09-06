@@ -27,7 +27,7 @@ import type {
   OrderRow,
   OrderStats,
   OriginOption,
-  QuoteView,
+  QuoteView, ReturnOfferView,
   SettlementRow,
   VendorRegisteredView,
   VendorView,
@@ -139,6 +139,9 @@ export interface VendorState {
   pointsState: 'idle' | 'loading' | 'ready' | 'error';
   originOptions: OriginOption[] | null;
   originState: 'idle' | 'loading' | 'ready' | 'error';
+  /** Returns this store has been asked to decide on. Loaded with the orders, because that is where a
+   *  store operator already looks and a decision nobody sees is a decision nobody makes. */
+  returns: ReturnOfferView[];
   quote: QuoteView | null;
   quoteState: 'idle' | 'loading' | 'ready' | 'error';
   minted: MintView | null;
@@ -182,6 +185,7 @@ const INITIAL: VendorState = {
   pointsState: 'idle',
   originOptions: null,
   originState: 'idle',
+  returns: [],
   quote: null,
   quoteState: 'idle',
   minted: null,
@@ -322,7 +326,7 @@ export function useVendorApp() {
       // The register page loads on its own (ordersEpoch-guarded) path; the header counts come from the
       // store-wide stats endpoint, NOT the filtered page. Both run alongside the checkouts inbox.
       void fetchOrdersWith(stateRef.current.orderQuery);
-      const [statsR, checkoutsR] = await Promise.all([client.api.orderStats(creds.vendorId), client.api.checkouts(creds.vendorId)]);
+      const [statsR, checkoutsR, returnsR] = await Promise.all([client.api.orderStats(creds.vendorId), client.api.checkouts(creds.vendorId), client.api.returns(creds.vendorId)]);
       if (superseded()) return;
       setState((s) => ({
         ...s,
@@ -330,6 +334,7 @@ export function useVendorApp() {
         vendor,
         orderStats: statsR.error ? s.orderStats : (narrow<OrderStats>(statsR.data) ?? s.orderStats),
         checkouts: checkoutsR.error ? s.checkouts : (narrow<CheckoutRow[]>(checkoutsR.data) ?? []),
+        returns: returnsR.error ? s.returns : (narrow<{ items: ReturnOfferView[] }>(returnsR.data)?.items ?? []),
         error: null,
         stale: false,
         refreshing: false,
@@ -783,6 +788,30 @@ export function useVendorApp() {
   }, [client, creds, run, fail, pushToast, refresh]);
 
   /** Unpaid mint → top up → settle the parcel → the label releases. */
+  /**
+   * Answer a return: yes, pay for its journey home — or no.
+   *
+   * Both go through one action because they are one decision with two endings, and both refresh: an
+   * accepted return mints a new shipment that belongs in the list below it, and a declined one has to
+   * leave the card so nobody answers it twice.
+   */
+  const answerReturn = useCallback(
+    async (offerId: string, accept: boolean, reason?: string) => {
+      if (!client || !creds) return;
+      await run(`return:${offerId}`, async () => {
+        const r = accept ? await client.api.acceptReturn(creds.vendorId, offerId) : await client.api.declineReturn(creds.vendorId, offerId, reason);
+        if (r.error) return fail(r.error);
+        pushToast({
+          tone: 'ok',
+          icon: accept ? 'truck' : 'check',
+          title: accept ? t('vendor.returns.acceptedToast') : t('vendor.returns.declinedToast'),
+        });
+        await refresh();
+      });
+    },
+    [client, creds, run, fail, pushToast, refresh],
+  );
+
   const settleOrder = useCallback(
     async (parcelId: string) => {
       if (!client || !creds) return;
@@ -984,6 +1013,7 @@ export function useVendorApp() {
       closeOrder,
       exportOrders,
       savePolicy,
+      answerReturn,
       saveCallback,
       loadPoints,
       loadDock,

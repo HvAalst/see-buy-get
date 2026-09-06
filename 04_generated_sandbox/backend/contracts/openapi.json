@@ -6678,6 +6678,103 @@
         }
       }
     },
+    "/v1/sbg/vendors/{id}/returns": {
+      "get": {
+        "operationId": "Sbg.vendorReturns",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/vendors/{id}/returns/{offerId}/accept": {
+      "post": {
+        "operationId": "Sbg.acceptReturn",
+        "summary": "",
+        "description": "Yes: mint the journey home, bill this store the figure the offer showed, and hand the shop its\n shelf slot back — which is the whole reason any of this exists.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offerId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/vendors/{id}/returns/{offerId}/decline": {
+      "post": {
+        "operationId": "Sbg.declineReturn",
+        "summary": "",
+        "description": "No. The parcel stays exactly where it is, because it is still somebody else's property.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offerId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeclineReturnDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnOffer"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/size/classify": {
       "post": {
         "operationId": "Sbg.classify",
@@ -15031,6 +15128,10 @@
             "type": "string",
             "description": "When the receiver was reminded it was still waiting. Set once — see the dispatcher for why one\n reminder and not a series — and set even when there was nobody to tell, so somebody who signs up\n later is not greeted by a nudge about a parcel that has been sitting a fortnight."
           },
+          "returnParcelId": {
+            "type": "string",
+            "description": "The journey home, for a parcel nobody came for. Present only on a 'Returned' one — the two read as\n one story rather than as an abandonment and an unexplained new shipment."
+          },
           "handedToBusAt": {
             "type": "string"
           },
@@ -15326,6 +15427,11 @@
           "maxTransportSpend": {
             "type": "number",
             "minimum": 0
+          },
+          "recoverAboveValue": {
+            "type": "number",
+            "description": "The goods value above which this store wants an uncollected parcel shipped back to it. Omitted =\n never offer; 0 = always ask. Two different statements, and both are real.",
+            "minimum": 0
           }
         }
       },
@@ -15406,6 +15512,10 @@
           },
           "maxTransportSpend": {
             "type": "number"
+          },
+          "recoverAboveValue": {
+            "type": "number",
+            "description": "The goods value above which this store wants an UNCOLLECTED parcel shipped back to it.\n\nA store's own arithmetic, pre-declared so nobody has to be asked while a shelf slot sits occupied:\nwhat the goods are worth against what the return leg costs. Below it, getting the box back is worth\nless than the journey and the store would rather not pay for it.\n\nUndefined = never offer, which is the safe default: a store that has said nothing has not agreed to\nbe billed for anything. Zero means \"always offer\", which is a different statement and a real one.\n\nNOTE what this is NOT. It does not let a store abandon anything — the buyer paid for the goods, so\nthey are the buyer's (see the parcel-trunk rule). This decides only whether the store is OFFERED the\nchance to pay for its return."
           }
         },
         "required": [
@@ -15452,6 +15562,10 @@
           },
           "entityId": {
             "type": "string"
+          },
+          "contactMobile": {
+            "type": "string",
+            "description": "Somebody to tell when a parcel is coming BACK.\n\nA store is a counterparty on the outbound leg and a RECEIVER on a return, and a receiver the network\ncannot reach is a parcel that arrives at a shop with nobody expecting it. Taken from the operator's\nphone at registration, where it is already asked for."
           },
           "balance": {
             "type": "number"
@@ -15817,6 +15931,82 @@
         "required": [
           "destPudoDid",
           "buyerEmail"
+        ]
+      },
+      "DeclineReturnDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 200
+          }
+        }
+      },
+      "ReturnOffer": {
+        "type": "object",
+        "properties": {
+          "offerId": {
+            "type": "string"
+          },
+          "parcelId": {
+            "type": "string"
+          },
+          "vendorId": {
+            "type": "string"
+          },
+          "fromAgentDid": {
+            "type": "string",
+            "description": "Where it is now — the shop holding it — and where it would go back to."
+          },
+          "toAgentDid": {
+            "type": "string"
+          },
+          "declaredValue": {
+            "type": "number",
+            "description": "What the goods are worth, and what the journey home costs. The store's arithmetic, shown not implied."
+          },
+          "returnCost": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "quoteId": {
+            "type": "string",
+            "description": "The held price this will be billed at. A store is billed the figure it was shown."
+          },
+          "status": {
+            "type": "object"
+          },
+          "offeredAt": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string"
+          },
+          "decidedAt": {
+            "type": "string"
+          },
+          "declineReason": {
+            "type": "string"
+          },
+          "returnParcelId": {
+            "type": "string",
+            "description": "The return shipment, once it exists."
+          }
+        },
+        "required": [
+          "offerId",
+          "parcelId",
+          "vendorId",
+          "fromAgentDid",
+          "toAgentDid",
+          "declaredValue",
+          "returnCost",
+          "currency",
+          "status",
+          "offeredAt",
+          "expiresAt"
         ]
       },
       "ClassifyDto": {

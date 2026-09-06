@@ -4,6 +4,7 @@ import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
 import { triggerDownload } from '../../../shared/download';
 import { toggleAll, toggleId } from '../../../shared/register';
 import { useDebounced } from '../../../shared/useDebounced';
+import { formatDate } from '../../../shared/i18n';
 import { handoffLine, money, orderRowsToCsv, orderStatus, ordersSummary, paidWord } from '../logic';
 import { ORDER_LIMIT, type OrderQuery, type VendorActions, type VendorState } from '../useVendorApp';
 import type { NetworkPoint, OrderRow } from '../types';
@@ -101,6 +102,42 @@ export function OrdersScreen({ state, actions }: OrdersScreenProps) {
   return (
     <div class="scr">
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
+
+      {/* Parcels nobody came for, above the register because they are the only thing here waiting on a
+          DECISION rather than on the network. Both numbers are shown, because "pay to bring it back" is
+          not a question anybody can answer without what it is worth and what the trip costs. */}
+      {state.returns.length ? (
+        <Card title={t('vendor.returns.title')} aside={<span class="row__count">{state.returns.length}</span>}>
+          <p class="card__note">{t('vendor.returns.lede')}</p>
+          <div class="rows" role="list">
+            {state.returns.map((r) => (
+              <div key={r.offerId} class="row row--static" role="listitem">
+                <span class="row__body">
+                  <span class="row__t">{r.parcelId}</span>
+                  <span class="row__s">
+                    {t('vendor.returns.line', {
+                      value: `${r.currency} ${r.declaredValue.toFixed(2)}`,
+                      cost: `${r.currency} ${r.returnCost.toFixed(2)}`,
+                    })}
+                  </span>
+                  <span class="row__s">{t('vendor.returns.waitingSince', { date: formatDate(r.offeredAt, { dateStyle: 'medium' }) })}</span>
+                </span>
+                <span class="row__end">
+                  <Button variant="link" full={false} busy={state.busy === `return:${r.offerId}`} onClick={() => void actions.answerReturn(r.offerId, true)}>
+                    {t('vendor.returns.accept')}
+                  </Button>
+                  <Button variant="link" full={false} busy={state.busy === `return:${r.offerId}`} onClick={() => void actions.answerReturn(r.offerId, false)}>
+                    {t('vendor.returns.decline')}
+                  </Button>
+                </span>
+              </div>
+            ))}
+          </div>
+          {/* Said rather than implied: declining does not make the parcel go away, and a store that
+              believes it has should not find out from a phone call. */}
+          <p class="card__note">{t('vendor.returns.declineNote')}</p>
+        </Card>
+      ) : null}
 
       <GlanceNumber
         label={t('vendor.balanceLabel')}

@@ -27,8 +27,9 @@ import { DockService } from './dock.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { GazetteerGeocoder, GEOCODER } from './geocoder';
 import { HeuristicRouter, ROUTER } from './router';
-import { NEVER_DROPPED_H, UNCOLLECTED_H } from './pudo.config';
+import { NEVER_DROPPED_H, RETURN_OFFER_TTL_H, UNCOLLECTED_H } from './pudo.config';
 import { operationalParcelView } from './parcel.service';
+import { ReturnService } from './return.service';
 import { DigitalTwinService } from '../m7/digital-twin.service';
 import { TrackingService } from '../m4/tracking.service';
 import { TrackingContextService } from '../m4/tracking-context.service';
@@ -74,6 +75,7 @@ describe('the states nothing watched', () => {
   let monitor: MonitorService;
   let shelf: ShelfService;
   let routing: RoutingService;
+  let returns: ReturnService;
   let entities: EntityService;
 
   beforeEach(async () => {
@@ -87,7 +89,7 @@ describe('the states nothing watched', () => {
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
         EntityService, BooksService, FxService,
-        PayoutService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },
+        PayoutService, ReturnService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
         GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder },
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
@@ -104,6 +106,7 @@ describe('the states nothing watched', () => {
     monitor = moduleRef.get(MonitorService);
     shelf = moduleRef.get(ShelfService);
     routing = moduleRef.get(RoutingService);
+    returns = moduleRef.get(ReturnService);
   });
 
   let seq = 0;
@@ -268,6 +271,204 @@ describe('the states nothing watched', () => {
       expect('overdue' in operationalParcelView(p)).toBe(false);
     });
   });
+
+
+/**
+ * Getting a stranded parcel home — and the constraint that shapes the whole feature.
+ *
+ * THE BUYER PAID FOR THE GOODS, so the goods are the BUYER'S: sender owns the shipment, receiver owns the
+ * goods, and COD is zero by construction here so a store order is always pre-paid by the time it reaches a
+ * shelf. A store therefore cannot abandon it, keep it, or dispose of it — you cannot abandon what you do
+ * not own. All a store can do is offer to pay for its journey back, which is why a DECLINE leaves the
+ * parcel exactly where it was and settles nothing about whose it is.
+ *
+ * The buyer is not in this flow at all, and that is not an omission: for an uncollected parcel the goods
+ * never left the network's custody, so the return is one more leg between two nodes.
+ */
+describe('the journey home', () => {
+  // Re-uses the outer harness by construction: this file's beforeEach builds the whole graph.
+  let seqR = 0;
+
+  it('is offered only when the store said it wanted one', () => {
+    // Undefined is not zero. A store that has said nothing has agreed to be billed for nothing.
+    const { parcel, to } = strandedFor(undefined, 500);
+    expect(returns.offerFor(parcel.parcelId)).toBeNull();
+    expect(to).toBeDefined();
+  });
+
+  it('is not offered when the goods are worth less than the trip', () => {
+    // The store's own arithmetic, pre-declared so nobody is asked while a shelf slot sits occupied.
+    const { parcel } = strandedFor(1000, 20);
+    expect(returns.offerFor(parcel.parcelId)).toBeNull();
+  });
+
+  it('shows the store BOTH numbers it is deciding between', () => {
+    // "Pay to get it back" is not a decision anybody can make without what it is worth and what it costs.
+    const { parcel } = strandedFor(10, 500);
+    const offer = returns.offerFor(parcel.parcelId)!;
+    expect(offer.declaredValue).toBe(500);
+    expect(offer.returnCost).toBeGreaterThan(0);
+    expect(offer.currency).toBeTruthy();
+    expect(offer.status).toBe('offered');
+  });
+
+  it('asks once, not once per sweep', () => {
+    strandedFor(10, 500);
+    expect(returns.sweep()).toHaveLength(1);
+    expect(returns.sweep()).toHaveLength(0);
+  });
+
+  it('leaves a parcel that has only just arrived alone', () => {
+    const { parcel } = strandedFor(10, 500, 1);
+    expect(returns.sweep().map((o) => o.parcelId)).not.toContain(parcel.parcelId);
+  });
+
+  describe('when the store says yes', () => {
+    it('mints the journey home from the same box, and hands the shop its slot back', () => {
+      // THE POINT OF THE WHOLE FEATURE. A return that left the shelf occupied would leave the network
+      // exactly as short of slots as the uncollected parcel it replaced.
+      const { parcel, to, from, store } = strandedFor(10, 500);
+      const offer = returns.offerFor(parcel.parcelId)!;
+      const freeBefore = shelf.available(to.did);
+
+      const { returnParcelId } = returns.accept(offer.offerId, store.vendorId);
+      const home = parcels.get(returnParcelId);
+
+      expect(shelf.available(to.did)).toBe(freeBefore + 1);
+      expect(home.originAgentDid).toBe(to.did); // it starts where it was stranded…
+      expect(home.destAgentDid).toBe(from.did); // …and goes back where it came from
+      // The SAME box: copied rather than re-measured, because re-measuring lets it change size between
+      // two legs of one journey and nobody can then settle what was in it.
+      expect(home.size).toBe(parcel.size);
+      expect(home.dimensionsCm).toEqual(parcel.dimensionsCm);
+    });
+
+    it('closes the stranded one as RETURNED — not delivered, not voided', () => {
+      // Nobody collected it, so recording it as delivered would put a lie in the very history a damage
+      // claim is judged against. And the shipment WAS performed — it arrived — so it is not void either.
+      const { parcel, store } = strandedFor(10, 500);
+      const offer = returns.offerFor(parcel.parcelId)!;
+      const { returnParcelId } = returns.accept(offer.offerId, store.vendorId);
+
+      const closed = parcels.get(parcel.parcelId);
+      expect(closed.status).toBe('Returned');
+      expect(closed.returnParcelId).toBe(returnParcelId); // the two read as one story
+    });
+
+    it('bills the store for the journey home', () => {
+      const { parcel, store } = strandedFor(10, 500);
+      const offer = returns.offerFor(parcel.parcelId)!;
+      const before = vendors.balanceOf(store.vendorId);
+
+      returns.accept(offer.offerId, store.vendorId);
+      expect(vendors.balanceOf(store.vendorId)).toBeCloseTo(before - offer.returnCost, 2);
+    });
+
+    it('refuses BEFORE anything moves when the store cannot pay', () => {
+      // A "yes" that fails afterwards leaves a shop holding a parcel that is now nobody's problem. The
+      // forward path may leave a label blocked and chase the money; here the check has to come first,
+      // while the store can still top up.
+      const { parcel, to, store } = strandedFor(10, 500, UNCOLLECTED_H + 2, 0);
+      const offer = returns.offerFor(parcel.parcelId)!;
+      const freeBefore = shelf.available(to.did);
+
+      expect(() => returns.accept(offer.offerId, store.vendorId)).toThrow(/Top up first/);
+      // Nothing moved: no return minted, the parcel still stranded, the slot still held.
+      expect(parcels.get(parcel.parcelId).status).toBe('Ready_For_Pickup');
+      expect(shelf.available(to.did)).toBe(freeBefore);
+      expect(returns.get(offer.offerId).status).toBe('offered'); // still theirs to answer
+    });
+
+    it('will not act on another store’s offer', () => {
+      const { parcel, store } = strandedFor(10, 500);
+      const other = vendors.register({ name: 'Somebody else', country: 'KE', ownerPhone: '+254700111222' } as never);
+      const offer = returns.offerFor(parcel.parcelId)!;
+      expect(() => returns.accept(offer.offerId, other.vendorId)).toThrow(/not found/i);
+      expect(parcels.get(parcel.parcelId).status).toBe('Ready_For_Pickup');
+      expect(store).toBeDefined();
+    });
+
+    it('stands down if somebody came for it after all', () => {
+      // The best possible outcome, and not an error to shout about.
+      const { parcel, store } = strandedFor(10, 500);
+      const offer = returns.offerFor(parcel.parcelId)!;
+      parcels.get(parcel.parcelId).status = 'Delivered';
+      expect(() => returns.accept(offer.offerId, store.vendorId)).toThrow(/no longer waiting/);
+      expect(returns.get(offer.offerId).status).toBe('expired');
+    });
+  });
+
+  describe('when the store says no', () => {
+    it('leaves the parcel exactly where it is, because it is not theirs to abandon', () => {
+      // A decline settles who is NOT paying for a journey home. It settles nothing about whose goods
+      // these are — the buyer paid for them, so they are the buyer's, still on that shelf.
+      const { parcel, to, store } = strandedFor(10, 500);
+      const offer = returns.offerFor(parcel.parcelId)!;
+      const freeBefore = shelf.available(to.did);
+
+      returns.decline(offer.offerId, store.vendorId, 'not worth the trip');
+      expect(returns.get(offer.offerId)).toMatchObject({ status: 'declined', declineReason: 'not worth the trip' });
+      expect(parcels.get(parcel.parcelId).status).toBe('Ready_For_Pickup');
+      expect(shelf.available(to.did)).toBe(freeBefore); // still holding a slot — the gap that remains
+    });
+
+    it('does not ask again — they answered', () => {
+      const { parcel, store } = strandedFor(10, 500);
+      returns.decline(returns.offerFor(parcel.parcelId)!.offerId, store.vendorId);
+      expect(returns.sweep().map((o) => o.parcelId)).not.toContain(parcel.parcelId);
+    });
+
+    it('refuses a second answer to one question', () => {
+      const { parcel, store } = strandedFor(10, 500);
+      const offer = returns.offerFor(parcel.parcelId)!;
+      returns.decline(offer.offerId, store.vendorId);
+      expect(() => returns.accept(offer.offerId, store.vendorId)).toThrow(/already declined/);
+    });
+  });
+
+  it('stops waiting for an answer that never came', () => {
+    // Expired as it is READ, so a store's screen and this service can never disagree about whether they
+    // still have a decision to make.
+    const { parcel, store } = strandedFor(10, 500);
+    const offer = returns.offerFor(parcel.parcelId)!;
+    const later = Date.now() + (RETURN_OFFER_TTL_H + 1) * 3_600_000;
+    expect(returns.pendingFor(store.vendorId, later)).toHaveLength(0);
+    expect(returns.get(offer.offerId).status).toBe('expired');
+  });
+
+  /** A stranded parcel for a store with (or without) a recovery threshold. */
+  function strandedFor(threshold: number | undefined, value: number, waitedH = UNCOLLECTED_H + 2, funds = 500) {
+    seqR += 1;
+    const from = shop(`R Origin ${seqR}`, 'Nairobi');
+    const to = shop(`R Dest ${seqR}`, 'Kisumu');
+    corridors.addCorridor({ name: 'Nairobi-Kisumu', originZone: 'Nairobi', destZone: 'Kisumu' });
+    // A corridor runs in a DIRECTION. The journey home needs its own, which is a real operational fact
+    // and not test scaffolding: a route that brought a parcel here may not be able to take it back.
+    corridors.addCorridor({ name: 'Kisumu-Nairobi', originZone: 'Kisumu', destZone: 'Nairobi' });
+    const store = vendors.register({
+      name: `R Store ${seqR}`,
+      country: 'KE',
+      ownerPhone: `+2547900${seqR}`,
+      ...(threshold == null ? {} : { shippingPolicy: { recoverAboveValue: threshold } }),
+    } as never);
+    // Funded EXACTLY for the outbound leg when the test wants an empty float afterwards. The balance is
+    // derived from the books, so it cannot be set — it has to be spent, which is the realistic case
+    // anyway: a store that shipped everything it could afford.
+    const outbound = routing.quoteShipment(from.did, to.did, 'M');
+    vendors.topUp(store.vendorId, funds === 0 ? outbound.locked.gross : 500);
+    const { parcel } = parcels.createInbound({
+      vendorId: store.vendorId, originAgentDid: from.did, destAgentDid: to.did, buyerMobile: `+25470088${seqR}`,
+      contentPhotoRef: 'c.jpg', size: 'M', dimensionsCm: { l: 30, w: 20, h: 10 }, weightKg: 2,
+      declaredValue: value, routeMode: 'locked', shippingPolicy: store.shippingPolicy,
+      quote: routing.quoteShipment(from.did, to.did, 'M'),
+    } as never);
+    const p = parcels.get(parcel.parcelId);
+    p.status = 'Ready_For_Pickup';
+    p.readyAt = agoH(waitedH);
+    shelf.assign(to.did, p.parcelId, 'M');
+    return { parcel: p, from, to, store };
+  }
+});
 
   describe('a shipment that never started', () => {
     it('is flagged, because the store has already paid for it', () => {

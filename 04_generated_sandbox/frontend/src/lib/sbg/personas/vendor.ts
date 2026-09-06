@@ -196,6 +196,23 @@ export function createVendorApi(sbg: SbgClient) {
     sealDockBag: (vendorId: string, code: string, body: { acknowledgeShortShip?: boolean; shortShipReason?: string } = {}) =>
       sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/dock/bags/{code}/seal', { params: { path: { id: vendorId, code } }, body })),
 
+    /**
+     * Returns waiting on this store's decision — parcels nobody came for.
+     *
+     * Not a store choosing whether to abandon something: the buyer paid for the goods, so they are the
+     * buyer's. This is a store choosing whether to pay for their journey home.
+     */
+    returns: (vendorId: string) =>
+      sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/returns', { params: { path: { id: vendorId } } })),
+
+    /** Yes — mint the journey home, bill this store, and hand the shop its shelf slot back. */
+    acceptReturn: (vendorId: string, offerId: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/returns/{offerId}/accept', { params: { path: { id: vendorId, offerId } } })),
+
+    /** No — and the parcel stays where it is, because it is still somebody else's property. */
+    declineReturn: (vendorId: string, offerId: string, reason?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/returns/{offerId}/decline', { params: { path: { id: vendorId, offerId } }, body: { reason } })),
+
     /** Quote one origin→destination journey (for the confirm step's price cards).
      *
      *  The MEASUREMENT rides along whenever the form has one, because the mint prices on it: a preview

@@ -22,6 +22,7 @@ import { AgentService } from './agent.service';
 import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
 import { ParcelService } from './parcel.service';
+import { ReturnService } from './return.service';
 import { MonitorService } from './monitor.service';
 import { RatingService } from './rating.service';
 import { GraduationService } from './graduation.service';
@@ -64,7 +65,7 @@ import { IdempotencyService } from '../../foundation/http/idempotency.service';
 @Module({
   imports: [M1Module, M4Module, M7Module],
   controllers: [SbgController, IdentityController, MediaController, HelpController, NotificationsController, ShippingApiController],
-  providers: [AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService, GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, BagPlanService, ForthcomingService, DockService, ShippingApiService, QuoteBookService, ApiKeyService, ApiKeyGuard, RateLimitGuard, ToteService, ConsignmentService, VehicleService, DriverService, FleetService, DispatchService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, HelpMediaService, CargoService, NotificationService, NotificationDispatcher, OutboxPushSender, { provide: PUSH_SENDER, useExisting: OutboxPushSender }, GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder }, HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter }],
-  exports: [AgentService, ParcelService, MonitorService, RatingService, MdpService, BagPlanService, ForthcomingService, DockService, ToteService, VehicleService, DriverService, FleetService, DispatchService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, NotificationService, OutboxPushSender],
+  providers: [AgentService, WalletGateService, CorridorService, ParcelService, ReturnService, MonitorService, RatingService, GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, BagPlanService, ForthcomingService, DockService, ShippingApiService, QuoteBookService, ApiKeyService, ApiKeyGuard, RateLimitGuard, ToteService, ConsignmentService, VehicleService, DriverService, FleetService, DispatchService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, HelpMediaService, CargoService, NotificationService, NotificationDispatcher, OutboxPushSender, { provide: PUSH_SENDER, useExisting: OutboxPushSender }, GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder }, HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter }],
+  exports: [AgentService, ParcelService, ReturnService, MonitorService, RatingService, MdpService, BagPlanService, ForthcomingService, DockService, ToteService, VehicleService, DriverService, FleetService, DispatchService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, NotificationService, OutboxPushSender],
 })
 export class PudoModule {}

@@ -350,6 +350,19 @@ export const enVendor = {
   'vendor.mint.toShipAllIn': '{price} to ship, all in',
   'vendor.mint.dropHere': 'Drop off here',
   'vendor.mint.priceTitle': 'Lock the price',
+  // Parcels nobody came for. Worded as what it IS — paying for a journey home — and never as
+  // "abandon": the buyer paid for the goods, so they are the buyer's, and a store has no say over them.
+  'vendor.returns.title': 'Nobody collected these',
+  'vendor.returns.lede': 'Waiting at the shop. You can pay to have one brought back, or leave it.',
+  'vendor.returns.line': 'Worth {value} · bringing it back costs {cost}',
+  'vendor.returns.waitingSince': 'Waiting since {date}',
+  'vendor.returns.accept': 'Bring it back',
+  'vendor.returns.decline': 'Leave it',
+  'vendor.returns.acceptedToast': 'On its way back to you',
+  'vendor.returns.declinedToast': 'Left where it is',
+  // Said plainly rather than implied by an empty card: declining does not make the parcel go away, and a
+  // store that thinks it has should not learn otherwise from a bill or a phone call.
+  'vendor.returns.declineNote': 'It stays at the shop — the goods belong to the buyer, so leaving it is not the same as disposing of it.',
   'vendor.mint.priceLede': 'Both get it there — you choose what your store pays.',
   'vendor.mint.measuredPrice': 'Priced on the measurements you entered, not on the size tier — a box that only just tips into a tier pays for what it is.',
   'vendor.mint.workingJourney': 'Working out the journey…',

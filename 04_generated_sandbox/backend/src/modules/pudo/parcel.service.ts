@@ -1441,6 +1441,25 @@ export class ParcelService implements OnApplicationBootstrap {
     return parcel;
   }
 
+  /**
+   * Close a stranded parcel because it is going home instead.
+   *
+   * Deliberately NOT 'Delivered': nobody collected it, and writing one down as though somebody had would
+   * put a lie in the very history a damage claim is judged against. Deliberately not 'Voided' either —
+   * the shipment was performed, it did arrive; what failed afterwards is that nobody came for it.
+   * 'Returned' is its own ending and it carries a pointer to the journey home, so the two parcels read as
+   * one story rather than as an abandonment and an unexplained new shipment.
+   */
+  closeAsReturned(parcelId: string, returnParcelId: string): Parcel {
+    const parcel = this.require(parcelId);
+    if (parcel.status !== 'Ready_For_Pickup') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
+    parcel.status = 'Returned';
+    parcel.returnParcelId = returnParcelId;
+    this.scan(parcel, 'Returned', parcel.destAgentDid ?? 'network', `uncollected · returning as ${returnParcelId}`);
+    this.parcels.set(parcel.parcelId, parcel);
+    return parcel;
+  }
+
   /** Destination PUDO shelves an arrived parcel in a chaos-shelf slot → Ready_For_Pickup + buyer notified. */
   shelve(parcelId: string, agentDid: string, binId?: string): { parcelId: string; binSlot: string; status: string } {
     const parcel = this.require(parcelId);

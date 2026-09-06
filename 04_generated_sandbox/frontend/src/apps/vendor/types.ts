@@ -195,6 +195,22 @@ export interface NetworkPoint {
   freeSlots?: number;
 }
 
+/**
+ * A return waiting on this store's decision.
+ *
+ * Carries BOTH numbers the decision is made between — what the goods are worth and what the journey home
+ * costs — because "pay to get it back" is not a question anybody can answer without them.
+ */
+export interface ReturnOfferView {
+  offerId: string;
+  parcelId: string;
+  declaredValue: number;
+  returnCost: number;
+  currency: string;
+  offeredAt: string;
+  expiresAt: string;
+}
+
 export interface QuoteLegPrice {
   transport: number;
   base: number;

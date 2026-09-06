@@ -405,6 +405,14 @@ export const UNCOLLECTED_REMINDER_H = 24;
  * labels ahead of a courier run — this is for the order that was forgotten, not the one packed early.
  */
 export const NEVER_DROPPED_H = 48;
+/**
+ * How long a store has to answer a return offer.
+ *
+ * Days, not the hour a checkout quote gets. A person has to read it, think about a box they cannot see,
+ * and decide about their own money — and unlike a checkout, nothing is waiting on the other end of the
+ * line. Long enough to survive a weekend; short enough that a stranded parcel's fate is not open ended.
+ */
+export const RETURN_OFFER_TTL_H = 7 * 24;
 /** How often the uncollected sweep runs. Hourly is far finer than the day-scale thing it is watching,
  *  which is the point: the cost of a miss is a reminder a few hours late, and the cost of running is one
  *  pass over the shelf. */

@@ -191,10 +191,15 @@ export class VendorService {
     // nobody can afford to move), so it is normalised to undefined here at the single policy chokepoint.
     const cap = p?.maxTransportSpend;
     const maxTransportSpend = cap != null && Number.isFinite(cap) && cap > 0 ? Math.round(cap * 100) / 100 : undefined;
-    return { mode: p?.mode === 'full' ? 'full' : 'capped', freeOverSubtotal: p?.freeOverSubtotal ?? 50, buyerContributionCap: p?.buyerContributionCap ?? 3, maxTransportSpend };
+    // The returns threshold. UNDEFINED IS NOT ZERO here, unlike the cap above: a store that has said
+    // nothing has not agreed to be billed for anything, while a store that typed 0 has said "always ask
+    // me" — a different sentence and a real one. So only a negative or non-finite value is normalised away.
+    const recover = p?.recoverAboveValue;
+    const recoverAboveValue = recover != null && Number.isFinite(recover) && recover >= 0 ? Math.round(recover * 100) / 100 : undefined;
+    return { mode: p?.mode === 'full' ? 'full' : 'capped', freeOverSubtotal: p?.freeOverSubtotal ?? 50, buyerContributionCap: p?.buyerContributionCap ?? 3, maxTransportSpend, recoverAboveValue };
   }
 
-  register(input: { name: string; callbackUrl?: string; secret?: string; location?: { lat: number; lng: number }; address?: string; country?: string; shippingPolicy?: Partial<ShippingPolicy> }): Vendor {
+  register(input: { name: string; callbackUrl?: string; secret?: string; location?: { lat: number; lng: number }; address?: string; country?: string; ownerPhone?: string; shippingPolicy?: Partial<ShippingPolicy> }): Vendor {
     const country = requireCountryCode(input.country, DEFAULT_VENDOR_COUNTRY);
     // Which sister company will settle this store — refused outright if the network has no daughter
     // company there. Registering a vendor we cannot lawfully invoice is not a favour to anyone.
@@ -203,7 +208,7 @@ export class VendorService {
     // key; the DID is what the vendors/login token binds to. No PII goes to the core.
     const did = this.dids.generate(`vendor:${input.name}`, { role: 'vendor' }).id;
     this.core.upsert({ did, tier: 2, status: 'active', capabilities: ['vendor'], metadata: { country } });
-    const vendor: Vendor = { vendorId: `ven_${randomBytes(6).toString('hex')}`, did, name: input.name, callbackUrl: input.callbackUrl, secret: input.secret ?? `whsec_${randomBytes(12).toString('hex')}`, location: input.location, address: input.address, country, entityId: entity.entityId, balance: 0, shippingPolicy: VendorService.policy(input.shippingPolicy), createdAt: new Date().toISOString() };
+    const vendor: Vendor = { vendorId: `ven_${randomBytes(6).toString('hex')}`, did, name: input.name, callbackUrl: input.callbackUrl, secret: input.secret ?? `whsec_${randomBytes(12).toString('hex')}`, location: input.location, address: input.address, country, entityId: entity.entityId, contactMobile: input.ownerPhone?.trim() || undefined, balance: 0, shippingPolicy: VendorService.policy(input.shippingPolicy), createdAt: new Date().toISOString() };
     this.vendors.set(vendor.vendorId, vendor);
     return vendor;
   }
