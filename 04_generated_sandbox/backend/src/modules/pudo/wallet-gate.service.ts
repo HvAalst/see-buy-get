@@ -5,6 +5,7 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { WalletService } from '../m1/wallet/wallet.service';
+import { DriverService } from './driver.service';
 import { AgentService } from './agent.service';
 import { LOCK_THRESHOLD, NETWORK_CURRENCY, TRADE_CREDIT_LIMIT, TRADE_CREDIT_PARCELS } from './pudo.config';
 import { BooksService } from '../../foundation/books/books.service';
@@ -144,6 +145,9 @@ export class WalletGateService {
     private readonly books: BooksService,
     private readonly entities: EntityService,
     private readonly fx: FxService,
+    // To resolve WHO a driver's money is owed to. Read here rather than passed in, because an optional
+    // parameter is a thing every call site forgot — which is exactly how this posting went missing.
+    private readonly drivers: DriverService,
   ) {}
 
   /**
@@ -373,20 +377,32 @@ export class WalletGateService {
   // Every approved shop now has the same standing line of TRADE_CREDIT_PARCELS — one rule, no override,
   // and no staff member put under pressure to grant one.
 
-  /** Driver settlement — accrues what the sister owes the party it CONTRACTS with (a fleet, or an
-   *  independent courier). Never a payroll entry: see the settling-entity rule. */
-  driverPayout(driverId: string, amount: number, entityId?: string): PudoLedgerEntry {
-    const entryId = entityId
-      ? this.books.post({
-          entityId,
-          kind: 'driver-payout',
-          ref: driverId,
-          lines: [
-            { code: ACCOUNT_CODES.EXPENSE_PROVIDER_FEES, amount },
-            { code: ACCOUNT_CODES.PAYABLE_PROVIDER, counterparty: driverId, amount: -amount },
-          ],
-        }).entryId
-      : undefined;
+  /**
+   * Driver settlement — accrues what the sister owes the party it CONTRACTS with (a fleet, or an
+   * independent courier). Never a payroll entry: see the settling-entity rule.
+   *
+   * IT RESOLVES THE PAYEE ITSELF, and that is the point. This used to take an optional `entityId` and post
+   * to the books only when one was passed — and **not one of the three call sites passed it.** Every
+   * driver payout the network has ever made wrote a register row and no double entry, so the money owed
+   * to the people doing the driving was invisible in the books: absent from the trial balance, and missing
+   * from `coverage().owed`, which is the one figure that says whether the sister could pay everybody
+   * today. Making it a parameter made it forgettable. Resolving it here means no call site can forget.
+   *
+   * The REGISTER row stays keyed to the driver even when the money goes to their fleet — see
+   * `DriverService.payeeOf` for why those are deliberately two different keys.
+   */
+  driverPayout(driverId: string, amount: number): PudoLedgerEntry {
+    const { entityId, payeeDid } = this.drivers.payeeOf(driverId);
+    const entryId = this.books.post({
+      entityId,
+      kind: 'driver-payout',
+      ref: driverId,
+      lines: [
+        { code: ACCOUNT_CODES.EXPENSE_PROVIDER_FEES, amount },
+        // Owed to whoever we contract with. A fleet driver's earning is their FLEET's receivable.
+        { code: ACCOUNT_CODES.PAYABLE_PROVIDER, counterparty: payeeDid, amount: -amount },
+      ],
+    }).entryId;
     return this.record('DRIVER_PAYOUT', '-', amount, undefined, driverId, 'driver', entryId);
   }
 

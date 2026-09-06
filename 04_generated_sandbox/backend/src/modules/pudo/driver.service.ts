@@ -70,6 +70,23 @@ export class DriverService {
     return driver.entityId ?? this.entities.requireForJurisdiction(driver.jurisdiction ?? NETWORK_JURISDICTION).entityId;
   }
 
+  /**
+   * Who actually gets paid for this driver's work, and which sister owes it.
+   *
+   * The network contracts a FLEET or an independent courier — never a person who happens to be at a
+   * wheel — so a fleet driver's money is owed to their fleet. See the scope boundary: we move parcels, we
+   * do not do payroll, and the payable is keyed to who we CONTRACT with rather than who does the work.
+   *
+   * Note what this does NOT change: the driver's own earnings register stays keyed to the DRIVER. "What
+   * did I earn today" and "who does the network owe" are different questions with legitimately different
+   * answers, and collapsing them would either hide a fleet driver's own record from them or quietly turn
+   * their earnings into their employer's ledger row.
+   */
+  payeeOf(did: string): { entityId: string; payeeDid: string } {
+    const driver = this.require(did);
+    return { entityId: this.settlingEntityIdOf(driver), payeeDid: driver.managerDid ?? driver.did };
+  }
+
   /** Whether the network contracts this driver directly (an independent courier) or through a fleet. */
   isIndependent(driver: FleetDriver): boolean {
     return !driver.managerDid;
