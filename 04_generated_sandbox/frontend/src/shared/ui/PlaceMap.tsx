@@ -23,6 +23,13 @@ export interface PlaceMapProps {
   dropped?: GeoPoint | null;
   /** AT description of the whole surface. */
   label: string;
+  /**
+   * Render at full height, for a map opened deliberately rather than one embedded in a card.
+   *
+   * A 220px strip is right for "where is this shop" beside the thing it describes, and wrong for a map
+   * somebody opened ON PURPOSE to read — which is every reason to open one at all.
+   */
+  tall?: boolean;
 }
 
 export type MapMode = 'map' | 'plot';
@@ -106,7 +113,7 @@ export function PlaceMap(props: PlaceMapProps) {
   const showMap = wantMap && MapComp;
 
   return (
-    <div class="pmap-wrap">
+    <div class={`pmap-wrap${props.tall ? ' pmap-wrap--tall' : ''}`}>
       <div class="pmap-toggle" role="group" aria-label="Map view">
         <button type="button" class={`pmap-toggle__btn${mode === 'map' ? ' is-on' : ''}`} aria-pressed={mode === 'map'} onClick={() => choose('map')}>
           <Icon name="pin" size={18} /> Map

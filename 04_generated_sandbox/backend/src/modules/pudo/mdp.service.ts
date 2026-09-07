@@ -360,14 +360,16 @@ export class MdpService {
     // this driver is already carrying, and only for a bag they have NOT already reserved (a claimed bag was
     // counted the moment it was claimed — loading it must not charge for the same space twice).
     if (fleet) {
-      const held = this.totes.list().filter((t) => t.claimedBy === fleet.driverDid && (t.status === 'claimed' || t.status === 'in_transit')).length;
+      // Claimed OR carried. Counting claims alone let a driver be handed bag after bag across a counter
+      // while the vehicle's capacity read zero — a physical limit that could be exceeded silently.
+      const held = this.totes.list().filter((t) => (t.claimedBy === fleet.driverDid || t.carriedBy === fleet.driverDid) && (t.status === 'claimed' || t.status === 'in_transit')).length;
       const capacity = toteCapacityOf(fleet.vehicle);
-      const alreadyMine = pending.claimedBy === fleet.driverDid;
+      const alreadyMine = pending.claimedBy === fleet.driverDid || pending.carriedBy === fleet.driverDid;
       if (!alreadyMine && held >= capacity) {
         throw new GlosError('CAPACITY_EXCEEDED', `This ${fleet.vehicle.vehicleClass} is carrying all ${capacity} bag(s) it holds — drop one before loading bag ${code}`);
       }
     }
-    const tote = this.totes.load(code, driverBadgeId);
+    const tote = this.totes.load(code, driverBadgeId, fleet?.driverDid);
     for (const parcelId of tote.parcels) {
       this.parcels.setTransit(parcelId, 'On_Bus', driverBadgeId, `bag ${tote.code} → ${tote.destinationLabel ?? tote.destinationNodeId}`, tote.toteId);
       // Graduation: the tote path must raise HANDOVER on the M4 timeline like the direct handover does.

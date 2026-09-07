@@ -2802,6 +2802,45 @@ describe('PUDO Light', () => {
     expect(cargo.items[0].driverDid).toBe(d.did);
   });
 
+  /**
+   * A bag handed ACROSS A COUNTER is cargo too.
+   *
+   * The test above this one claims a load off the marketplace, and that was the only way cargo ever got
+   * onto a vehicle in this suite — so nothing noticed that the ordinary path recorded no driver at all.
+   * `load()` wrote the carrier into locationId as a 'bus:<badge>' string prefix and nothing queried it,
+   * which made a bag on a real bike invisible in two places at once: the fleet manager's live cargo, and
+   * the check that stops a vehicle being given more bags than it holds.
+   *
+   * Found by seeding a fleet and watching a manager's dashboard report an empty vehicle that had two
+   * parcels on it. The suite was green before the fix and after it.
+   */
+  it('counts a bag handed straight to a driver as cargo, and against the vehicle it is on', () => {
+    const origin = onboardAgent('Counter Feeder', 'NorthTown', 50);
+    const mdp = mdps.register({ name: 'Counter Hub', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } });
+    const d = drivers.register({ displayName: 'Hana', fullName: 'Ha', nationalId: 'FD-2', mobile: '+254fd2', licenceClasses: ['motorcycle'] });
+    const moto = vehicles.register({ plate: 'FD-2', vehicleClass: 'motorcycle', ownerName: 'Ha' });
+    fleet.startSession(d.did, moto.qr);
+    const badge = drivers.get(d.did).badgeId!;
+
+    const bag = totes.register(origin.did);
+    totes.assign(bag.code, mdp.mdpId, mdp.name);
+    parcels.accept({ agentDid: origin.did, parcelId: 'CT-P', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg', paymentMode: 'prepaid' });
+    mdps.fillTote(bag.code, 'CT-P');
+
+    // The shop hands it over directly. No offer, no claim — the common case.
+    mdps.loadBag(bag.code, badge);
+
+    const carried = totes.byCodeMaybe(bag.code)!;
+    expect(carried.status).toBe('in_transit');
+    expect(carried.claimedBy).toBeUndefined(); // nobody claimed anything…
+    expect(carried.carriedBy).toBe(d.did); // …but somebody is carrying it
+
+    const cargo = dispatch.activeCargo(new Set([d.did]));
+    expect(cargo.count).toBe(1);
+    expect(cargo.items[0].driverDid).toBe(d.did);
+    expect(cargo.items[0].parcels).toBe(1);
+  });
+
   it('flexibly couples a driver to a vehicle and re-assigns to another (separate IDs, not bound)', () => {
     const d = drivers.register({ displayName: 'Multi', fullName: 'Mary', nationalId: 'DRV-ID-3', mobile: '+254900003', licenceClasses: ['bike', 'motorcycle'] });
     const bike = vehicles.register({ plate: 'BK-9', vehicleClass: 'bike', ownerName: 'Mary' });

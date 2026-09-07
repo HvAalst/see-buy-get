@@ -9,7 +9,7 @@ import {
   freeDrivers,
   freeVehicles,
   isHeavySelection,
-  projectPositions,
+  vehiclePins,
   shortDid,
   statusTone,
   subtypeLine,
@@ -96,35 +96,39 @@ describe('pools', () => {
   });
 });
 
-describe('projectPositions', () => {
+/**
+ * The live map's pins.
+ *
+ * The dashboard used to project positions onto an abstract 0–100 grid, which was right while the map was
+ * a hand-drawn plot and wrong the moment it had tiles: the whole point of geography is that a dot sits on
+ * the road it is actually on. Real coordinates now, straight through.
+ */
+describe('vehiclePins', () => {
   const at = (lat: number, lng: number): PositionRow => ({
-    plate: 'P',
-    driverName: 'D',
-    vehicleClass: 'van',
+    plate: 'KLM 002B',
+    driverName: 'Amos K.',
+    vehicleClass: 'bike',
     hoursOnDuty: 2,
     location: { lat, lng },
   });
 
-  it('spreads points inside the clamped 4–96 / 6–94 frame', () => {
-    const [a, b] = projectPositions([at(-1.2, 36.7), at(-1.3, 36.9)]);
-    for (const p of [a, b]) {
-      expect(p.x).toBeGreaterThanOrEqual(4);
-      expect(p.x).toBeLessThanOrEqual(96);
-      expect(p.y).toBeGreaterThanOrEqual(6);
-      expect(p.y).toBeLessThanOrEqual(94);
-    }
-    expect(a.x).not.toBeCloseTo(b.x);
-    expect(a.y).toBeLessThan(b.y); // higher latitude renders higher (smaller y)
+  it('passes real coordinates through untouched', () => {
+    const [p] = vehiclePins([at(-1.2942, 36.8331)]);
+    expect(p.point).toEqual({ lat: -1.2942, lng: 36.8331 });
   });
 
-  it('one vehicle centres instead of dividing by zero', () => {
-    const [p] = projectPositions([at(-1.2, 36.7)]);
-    expect(Number.isFinite(p.x)).toBe(true);
-    expect(Number.isFinite(p.y)).toBe(true);
+  it('labels a pin the way a manager says it out loud', () => {
+    // The plate is the handle — it is what gets said on the phone — and the driver rides along so a pin
+    // can still answer "who is that".
+    const [p] = vehiclePins([at(-1.2, 36.7)]);
+    expect(p.id).toBe('KLM 002B');
+    expect(p.label).toBe('KLM 002B · Amos K.');
   });
 
-  it('empty input renders nothing', () => {
-    expect(projectPositions([])).toEqual([]);
+  it('renders no pins rather than failing when nobody is reporting', () => {
+    // The map still draws — that is the point. An empty operating area beats an empty grid, and beats
+    // no map at all for a manager opening the app before anyone has started a shift.
+    expect(vehiclePins([])).toEqual([]);
   });
 });
 

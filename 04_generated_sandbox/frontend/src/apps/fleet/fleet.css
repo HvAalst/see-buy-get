@@ -122,53 +122,6 @@
 
 /* The live-position surface: a bounded relative plot, not a tile map — the point is
    WHO is out and roughly where, at a glance, with zero network dependencies. */
-.fmap {
-  position: relative;
-  height: 200px;
-  border: 1.5px solid var(--bd);
-  border-radius: var(--r-ctl);
-  overflow: hidden;
-  background:
-    repeating-linear-gradient(0deg, var(--appbg) 0 23px, var(--panel) 23px 24px),
-    repeating-linear-gradient(90deg, var(--appbg) 0 23px, var(--panel) 23px 24px);
-  margin-top: 10px;
-}
-
-.fmap__empty {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  font-size: 15px;
-  color: var(--tx3);
-}
-
-.fmap__pt {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  display: grid;
-  justify-items: center;
-  gap: 2px;
-}
-
-.fmap__dot {
-  width: 14px;
-  height: 14px;
-  border-radius: 999px;
-  background: var(--blue);
-  border: 2.5px solid var(--bg);
-  box-shadow: var(--sh-sm);
-}
-
-.fmap__lbl {
-  font-size: 14px;
-  color: var(--navy);
-  background: var(--bg);
-  border: 1px solid var(--bd-soft);
-  border-radius: 999px;
-  padding: 0 8px;
-  white-space: nowrap;
-}
 
 /* ----------------------------------------------------- vehicle photos (S26) --
    Capture pad + thumbnails for the owner's vehicle/trailer/registration photos.

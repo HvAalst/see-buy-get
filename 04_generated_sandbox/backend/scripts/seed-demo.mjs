@@ -285,19 +285,29 @@ const run = async () => {
     return p;
   };
 
-  // S25 completeness gate: a parcel is handed to the bus while it is the ONLY one waiting for that
-  // corridor (p3, then p6 below), and the two that should sit "waiting" for the handover-screen demo
-  // (p1, p2) are accepted AFTERWARDS — otherwise the gate rightly refuses the short load.
+  // S25 completeness gate: the bus takes ONE parcel and knowingly leaves the rest, which is exactly the
+  // acknowledgement a real shopkeeper gives when a load will not fit.
+  //
+  // It used to rely on the shelf being empty — hand p3 over while it is the only parcel waiting for that
+  // corridor, and accept p1/p2 afterwards. True on a virgin store and false on every re-run after it: the
+  // shelf accumulates, the gate rightly refuses a short load, and the seed died at this line with 28
+  // parcels listed. A seeder that only works once is a seeder you cannot use to reproduce anything.
   const p3 = await accept(3);
   need(
-    await req('POST', '/v1/sbg/parcels/handover', { token: tokA1, body: { agentDid: a1.did, driverBadgeId: amos.badgeId, parcelIds: [p3.parcelId] } }),
+    await req('POST', '/v1/sbg/parcels/handover', {
+      token: tokA1,
+      body: { agentDid: a1.did, driverBadgeId: amos.badgeId, parcelIds: [p3.parcelId], acknowledgeShortShip: true, shortShipReason: 'demo seed — the bus takes one parcel' },
+    }),
     'handover p3',
   );
   say(`parcel on the bus with Amos: ${p3.parcelId} (track ${p3.trackingKey})`);
 
   const p6 = await accept(6, { size: 'L' });
   need(
-    await req('POST', '/v1/sbg/parcels/handover', { token: tokA1, body: { agentDid: a1.did, driverBadgeId: amos.badgeId, parcelIds: [p6.parcelId] } }),
+    await req('POST', '/v1/sbg/parcels/handover', {
+      token: tokA1,
+      body: { agentDid: a1.did, driverBadgeId: amos.badgeId, parcelIds: [p6.parcelId], acknowledgeShortShip: true, shortShipReason: 'demo seed — the bus takes one parcel' },
+    }),
     'handover p6',
   );
   need(
@@ -358,9 +368,13 @@ const run = async () => {
   const vLogin = need(await req('POST', '/v1/sbg/vendors/login', { body: { vendorId: shop.vendorId, secret: VENDOR_SECRET } }), 'vendor login');
   const tokV = vLogin.token.access_token;
 
-  if ((vLogin.balance ?? 0) < 40) {
-    need(await req('POST', `/v1/sbg/vendors/${shop.vendorId}/top-up`, { token: tokV, body: { amount: 120 } }), 'vendor top-up');
-    say('vendor balance topped up: Nairobi Threads');
+  // Enough float for the WHOLE run, not enough to look plausible. This run mints about fifty shipments —
+  // two demo orders plus the 44-row register history — and each one is billed at mint. Topping up 120
+  // when the balance dips under 40 covered the first run and starved every one after it: the float drained
+  // faster than the threshold refilled it, and the seed died at an intake with SHIPMENT_NOT_PAID.
+  if ((vLogin.balance ?? 0) < 300) {
+    need(await req('POST', `/v1/sbg/vendors/${shop.vendorId}/top-up`, { token: tokV, body: { amount: 600 } }), 'vendor top-up');
+    say(`vendor balance topped up: Nairobi Threads (was ${(vLogin.balance ?? 0).toFixed(2)})`);
   }
 
   // Two buyer checkouts waiting to ship (the console's inbox) + one order minted end-to-end.
@@ -483,6 +497,71 @@ const run = async () => {
   }
   const paidNow = history.filter((h) => h.paid).length;
   say(`vendor history: ${paidNow} paid / ${history.length - paidNow} unpaid · ${intook} at the shop · ${voided} voided · rest created`);
+
+  /* ----------------------------------------------------- fleet in motion --- */
+  /**
+   * Put the fleet ON THE ROAD, which nothing before this did.
+   *
+   * Every other app got a world with something in it, and the fleet manager got two vehicles, two
+   * drivers and an empty screen: no shift, no cargo, no position, no map pins. The coupling above exists
+   * to make ONE handover resolve a badge — it is a means to a parcel, and it ends. A manager's whole app
+   * is the live picture, so a seed that never starts a shift seeds every app but theirs.
+   *
+   * Idempotent like the rest: a driver already on shift is left where they are, because re-coupling
+   * would end a session this run had nothing to do with.
+   */
+  const live = need(await req('GET', '/v1/sbg/fleet/assignments?status=active', { token: fm }), 'active assignments');
+  const onShift = async (driver, vehicle, corridorId) => {
+    if (live.some((x) => x.driverDid === driver.did)) return;
+    const r = await req('POST', `/v1/sbg/fleet/drivers/${encodeURIComponent(driver.did)}/couple`, {
+      token: fm,
+      body: { vehicleId: vehicle.vehicleId, ...(corridorId ? { corridorId } : {}) },
+    });
+    if (!r.ok) say(`  (could not put ${driver.displayName} on ${vehicle.plate}: ${r.status})`);
+  };
+  await onShift(amos, bike, corridorZAB?.corridorId);
+  // Grace is the KYC_PENDING half of the pair on purpose — she is what a manager chasing paperwork looks
+  // like — so she is put on the van only once her papers actually clear.
+  const graceNow = need(await req('GET', '/v1/sbg/fleet/drivers', { token: fm }), 'drivers again').find((d) => d.displayName === 'Grace M.');
+  if (graceNow?.status === 'ACTIVE') await onShift(graceNow, van);
+
+  // A BAG THAT IS STILL ON THE BIKE. The tote leg above loads one onto Amos and drops it at the hub in
+  // the same breath, which is right for the hub demo and leaves the fleet manager watching an empty
+  // vehicle: "cargo in motion" counts totes a driver is holding, so cargo that has already arrived is
+  // cargo nobody is carrying. This one is loaded and deliberately never dropped.
+  if (!live.some((x) => x.driverDid === amos.did) || true) {
+    const p7 = await accept(7);
+    const p8 = await accept(8, { size: 'S' });
+    const rolling = need(await req('POST', `/v1/sbg/agents/${encodeURIComponent(a1.did)}/totes`, { token: tokA1 }), 'rolling tote');
+    need(
+      await req('POST', `/v1/sbg/totes/${encodeURIComponent(rolling.code)}/assign`, {
+        token: tokA1,
+        body: { destinationNodeId: hubRow.mdpId, destinationLabel: 'Central Sort' },
+      }),
+      'assign rolling bag',
+    );
+    for (const p of [p7, p8]) {
+      need(await req('POST', `/v1/sbg/totes/${encodeURIComponent(rolling.code)}/fill`, { token: tokA1, body: { parcelId: p.parcelId } }), `fill ${p.parcelId}`);
+    }
+    const loaded = await req('POST', `/v1/sbg/totes/${encodeURIComponent(rolling.code)}/load`, { token: tokA1, body: { driverBadgeId: amos.badgeId } });
+    say(loaded.ok ? `bag ${rolling.code} is on ${bike.plate} with Amos, still rolling` : `  (could not load ${rolling.code}: ${loaded.status})`);
+  }
+
+  // A GPS heartbeat each, so the live map has something on it. Positions ON THE ROAD between the shops
+  // rather than at them: a dot sitting exactly on a shop is indistinguishable from a dot that has not
+  // moved, and the one thing this map exists to show is movement.
+  const heartbeat = async (driver, lat, lng) => {
+    if (!driver) return;
+    await req('POST', `/v1/sbg/fleet/drivers/${encodeURIComponent(driver.did)}/locate`, { token: fm, body: { lat, lng } });
+  };
+  await heartbeat(amos, -1.2942, 36.8331); // between Mama Sarah (Z-A) and Riverside (Z-B)
+  await heartbeat(graceNow?.status === 'ACTIVE' ? graceNow : null, -1.2881, 36.8198); // near Downtown Kiosk
+
+  const fleetNow = need(await req('GET', '/v1/sbg/fleet/dashboard', { token: fm }), 'fleet dashboard');
+  say(
+    `fleet on the road: ${fleetNow.drivers.onShift}/${fleetNow.drivers.total} on shift · ` +
+      `${(fleetNow.positions ?? []).length} reporting a position · ${fleetNow.cargo?.count ?? 0} parcels in motion`,
+  );
 
   /* -------------------------------------------------------------- sheet --- */
   out.push('', '='.repeat(64), '  SEEBUYGET DEMO — SIGN-IN SHEET', '='.repeat(64));

@@ -54,10 +54,13 @@ export const enFleet = {
   'fleet.dash.tileHours': 'Hours today',
   'fleet.dash.mapTitle': 'Where your vehicles are',
   'fleet.dash.mapLabel': 'Live GPS',
+  // Two different notes, because "no vehicle is reporting" and "here is where they are" are different
+  // facts and a screen that says the second while showing neither is lying quietly.
+  'fleet.dash.mapNoneNote': 'Nobody is reporting a position right now. This is the area you work in.',
+  'fleet.dash.mapExpand': 'Open the big map',
   'fleet.dash.mapNote': 'Vehicles on shift that reported a position — drivers ping when they look for work.',
   'fleet.dash.mapAriaOne': '{count} vehicle reporting a position',
   'fleet.dash.mapAriaMany': '{count} vehicles reporting a position',
-  'fleet.dash.mapEmpty': 'No vehicle is reporting a position.',
   'fleet.dash.hoursTitle': 'Working hours — on shift now',
   'fleet.dash.noDrivers': 'No drivers on shift.',
   'fleet.dash.onDutyRow': '{plate} · {cls} · on duty {hours}',

@@ -1647,7 +1647,13 @@ export class DispatchService {
   /** All cargo currently claimed or moving (optionally scoped to one fleet's drivers) for the dashboard. */
   activeCargo(driverDids?: Set<string>): { items: Array<{ kind: 'tote' | 'freight'; ref: string; weightKg: number; destLabel: string; status: string; driverDid: string; parcels?: number }>; count: number; totalKg: number } {
     const mine = (did: string) => !driverDids || driverDids.has(did);
-    const totes = this.totes.list().filter((t) => t.claimedBy && mine(t.claimedBy) && (t.status === 'claimed' || t.status === 'in_transit')).map((t) => ({ kind: 'tote' as const, ref: t.code, weightKg: t.weightKg, destLabel: t.destinationLabel || 'destination', status: t.status, driverDid: t.claimedBy!, parcels: t.parcels.length }));
+    // Claimed off the board OR handed over a counter — both are cargo on somebody's vehicle, and only the
+    // first used to count. A manager watching a driver ride around with three bags saw an empty fleet.
+    const totes = this.totes
+      .list()
+      .map((t) => ({ t, holder: t.claimedBy ?? t.carriedBy }))
+      .filter(({ t, holder }) => holder && mine(holder) && (t.status === 'claimed' || t.status === 'in_transit'))
+      .map(({ t, holder }) => ({ kind: 'tote' as const, ref: t.code, weightKg: t.weightKg, destLabel: t.destinationLabel || 'destination', status: t.status, driverDid: holder!, parcels: t.parcels.length }));
     const freight = [...this.freights.values()].filter((f) => f.claimedBy && mine(f.claimedBy) && (f.status === 'claimed' || f.status === 'in_transit')).map((f) => ({ kind: 'freight' as const, ref: f.code, weightKg: f.weightKg, destLabel: f.destLabel, status: f.status, driverDid: f.claimedBy! }));
     const items = [...totes, ...freight];
     return { items, count: items.length, totalKg: Math.round(items.reduce((s, i) => s + i.weightKg, 0) * 100) / 100 };

@@ -142,12 +142,17 @@ export class ToteService {
   }
 
   /** Scan the bag onto a bus — the whole tote (and its parcels) moves with one scan. */
-  load(code: string, driverBadgeId: string): Tote {
+  load(code: string, driverBadgeId: string, driverDid?: string): Tote {
     const tote = this.requireByCode(code);
     if (tote.status !== 'filling' && tote.status !== 'available' && tote.status !== 'claimed') throw new GlosError('INVALID_STATE', `Bag ${code} is ${tote.status}, nothing to load`);
     if (!tote.parcels.length) throw new GlosError('BAG_EMPTY', `Bag ${code} is empty`);
     tote.status = 'in_transit';
     tote.locationId = `bus:${driverBadgeId}`;
+    // WHO IS CARRYING IT, as a field. locationId already said so, but as a 'bus:<badge>' string prefix —
+    // a fact nothing could query, and so a fact the fleet map and the capacity check both missed.
+    // Optional because a badge that resolves to no coupled driver still loads: the bag is on a bus either
+    // way, and refusing the load would strand real parcels over a bookkeeping gap.
+    if (driverDid) tote.carriedBy = driverDid;
     return this.save(tote);
   }
 
@@ -164,6 +169,7 @@ export class ToteService {
     tote.filledAt = undefined;
     tote.availableAt = undefined;
     tote.claimedBy = undefined;
+    tote.carriedBy = undefined; // it is off the vehicle — see Tote.carriedBy
     tote.locationId = atLocationId;
     return { tote: this.save(tote), parcels };
   }

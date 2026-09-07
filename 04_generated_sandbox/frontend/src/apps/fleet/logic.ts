@@ -157,38 +157,24 @@ export function freeVehicles(vehicles: VehicleRow[], assignments: AssignmentRow[
 
 /* ------------------------------------------------------------------- map -- */
 
-export interface MapPoint {
-  x: number;
-  y: number;
-  plate: string;
-  title: string;
-}
-
 /**
- * Project GPS positions into a 0–100 box with padding — the legacy console's projection,
- * kept pure so it is testable: clamped to 4–96 / 6–94 so a dot never clips the frame, and
- * a degenerate span (one vehicle) centres instead of dividing by zero.
+ * Vehicles as map pins — real coordinates, for a real map.
+ *
+ * Replaces the grid projection below for the dashboard. Projecting onto an abstract grid was fine while
+ * the map was a hand-drawn plot, and it is the wrong shape for a map with tiles: the whole value of
+ * geography is that the dots sit on the roads they are actually on.
+ *
+ * Labelled by PLATE, because that is what a manager says out loud on the phone. The driver and the class
+ * ride along in the label so a pin can still answer "who is that".
  */
-export function projectPositions(positions: PositionRow[]): MapPoint[] {
-  const pts = positions ?? [];
-  if (pts.length === 0) return [];
-  const lats = pts.map((p) => p.location.lat);
-  const lngs = pts.map((p) => p.location.lng);
-  const pad = 0.05;
-  const b = {
-    minLat: Math.min(...lats) - pad,
-    maxLat: Math.max(...lats) + pad,
-    minLng: Math.min(...lngs) - pad,
-    maxLng: Math.max(...lngs) + pad,
-  };
-  const span = (mx: number, mn: number) => mx - mn || 1;
-  return pts.map((p) => ({
-    x: Math.max(4, Math.min(96, ((p.location.lng - b.minLng) / span(b.maxLng, b.minLng)) * 100)),
-    y: Math.max(6, Math.min(94, ((b.maxLat - p.location.lat) / span(b.maxLat, b.minLat)) * 100)),
-    plate: p.plate,
-    title: `${p.plate} · ${p.driverName} · ${p.vehicleClass}`,
+export function vehiclePins(positions: PositionRow[]): Array<{ id: string; label: string; point: { lat: number; lng: number } }> {
+  return (positions ?? []).map((p) => ({
+    id: p.plate,
+    label: `${p.plate} · ${p.driverName}`,
+    point: { lat: p.location.lat, lng: p.location.lng },
   }));
 }
+
 
 /* ------------------------------------------------------------------ views -- */
 

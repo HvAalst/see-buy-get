@@ -1411,6 +1411,13 @@
   display: block;
 }
 
+/* A map opened on purpose. Capped in vh rather than fixed, so it fills a phone without pushing its own
+   controls off the bottom of a small one. */
+.pmap-wrap--tall .pmap,
+.pmap-wrap--tall .pmap-leaflet {
+  height: min(70vh, 560px);
+}
+
 /* Map ⇄ Simple toggle — a segmented control, NOT a CTA (soft-blue active state, no solid fill). */
 .pmap-toggle {
   display: inline-flex;

@@ -15928,8 +15928,12 @@
           "claimedBy": {
             "type": "string"
           },
+          "carriedBy": {
+            "type": "string"
+          },
           "sealRequired": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "A SHOP bag, published by the shopkeeper's SEAL and by nothing else. A hub bag has no seal step, so the\ndispatch sweep publishes it the moment it is full or aged; a shop bag that the sweep published behind\nthe counter would advertise a bag still open on the floor — and lock the shop out of the completeness\ngate, which only accepts a filling bag. The sweep asks the shop to close it instead (see publishReady).\nUndefined on a hub bag and on every pre-slice record, which is the correct default for both."
           },
           "sealPromptedFor": {
             "type": "object",

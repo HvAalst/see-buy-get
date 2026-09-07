@@ -1,6 +1,7 @@
-import { Card, ErrorNote, Icon, Pill, ReadAloud } from '../../../shared/ui';
+import { useState } from 'preact/hooks';
+import { Button, Card, ErrorNote, Icon, PlaceMap, Pill, ReadAloud, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
-import { dashboardSummary, hoursLabel, projectPositions } from '../logic';
+import { dashboardSummary, hoursLabel, vehiclePins } from '../logic';
 import type { FleetActions, FleetState } from '../useFleetApp';
 
 export interface DashboardScreenProps {
@@ -11,8 +12,9 @@ export interface DashboardScreenProps {
 /** The live fleet: counts, GPS positions, working hours and cargo in motion. */
 export function DashboardScreen({ state, actions }: DashboardScreenProps) {
   const t = useT();
+  const [bigMap, setBigMap] = useState(false);
   const d = state.dashboard;
-  const points = projectPositions(d?.positions ?? []);
+  const pins = vehiclePins(d?.positions ?? []);
   const sessions = d?.sessions.list ?? [];
   const cargo = d?.cargo.items ?? [];
 
@@ -28,25 +30,46 @@ export function DashboardScreen({ state, actions }: DashboardScreenProps) {
         <Tile value={hoursLabel(d?.sessions.todayHours)} label={t('fleet.dash.tileHours')} />
       </div>
 
+{/* A REAL map, and one that renders whether or not anything is on it.
+
+          It used to be a bespoke dot-plot projected onto an abstract grid, which meant that with nothing
+          reporting there was nothing to see — an empty grid says less than no map at all. A manager
+          opening this app at six in the morning, before a single driver has started, should still see
+          the place they operate in. The shared map handles that already: no pins simply means the
+          operating area at city zoom, and it falls back to the plot when the tiles cannot load.
+
+          Pins are INFO-ONLY — no onPick — because there is nothing to choose here. A tappable vehicle
+          that did nothing would be a dead tap on every dot. */}
       <Card title={t('fleet.dash.mapTitle')} label={t('fleet.dash.mapLabel')}>
-        <p class="card__note">{t('fleet.dash.mapNote')}</p>
-        <div
-          class="fmap"
-          role="img"
-          aria-label={points.length === 1 ? t('fleet.dash.mapAriaOne', { count: points.length }) : t('fleet.dash.mapAriaMany', { count: points.length })}
-        >
-          {points.length === 0 ? (
-            <p class="fmap__empty">{t('fleet.dash.mapEmpty')}</p>
-          ) : (
-            points.map((p) => (
-              <span key={p.plate} class="fmap__pt" style={`left:${p.x}%;top:${p.y}%`} title={p.title}>
-                <span class="fmap__dot" />
-                <span class="fmap__lbl mono">{p.plate}</span>
-              </span>
-            ))
-          )}
+        <p class="card__note">{pins.length === 0 ? t('fleet.dash.mapNoneNote') : t('fleet.dash.mapNote')}</p>
+        <PlaceMap
+          pins={pins}
+          label={pins.length === 1 ? t('fleet.dash.mapAriaOne', { count: pins.length }) : t('fleet.dash.mapAriaMany', { count: pins.length })}
+        />
+        {/* Its own control rather than a tap on the surface: the map underneath pans and zooms, and a
+            surface that both moves under your finger and opens something is a surface that does the
+            wrong one of those about half the time. */}
+        <div style="margin-top:12px">
+          <Button variant="outline" chevron={false} onClick={() => setBigMap(true)}>
+            {t('fleet.dash.mapExpand')}
+          </Button>
         </div>
       </Card>
+
+      {/* Mounted only while open, so Leaflet initialises once and against a box that already has its
+          real height — a map built inside a closed sheet comes up sized to nothing. */}
+      <Sheet open={bigMap} onClose={() => setBigMap(false)} title={t('fleet.dash.mapTitle')}>
+        {bigMap ? (
+          <>
+            <PlaceMap
+              tall
+              pins={pins}
+              label={pins.length === 1 ? t('fleet.dash.mapAriaOne', { count: pins.length }) : t('fleet.dash.mapAriaMany', { count: pins.length })}
+            />
+            <p class="card__note">{pins.length === 0 ? t('fleet.dash.mapNoneNote') : t('fleet.dash.mapNote')}</p>
+          </>
+        ) : null}
+      </Sheet>
 
       <Card title={t('fleet.dash.hoursTitle')}>
         {sessions.length === 0 ? (

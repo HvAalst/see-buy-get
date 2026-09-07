@@ -343,7 +343,21 @@ export class Tote {
   weightKg: number; // accumulated parcel weight (for vehicle capacity / dispatch matching)
   filledAt?: string; // when the first parcel went in (drives the 24 h max-wait publish)
   availableAt?: string; // when it was published to the claim marketplace
-  claimedBy?: string; // driverDid that claimed it
+  claimedBy?: string; // driverDid that claimed it OFF THE MARKETPLACE
+  /**
+   * The driver physically carrying it, however it got onto their vehicle.
+   *
+   * Distinct from claimedBy, which records a marketplace act: taking a load off the board. A shop
+   * handing a bag across the counter is the ordinary way cargo reaches a vehicle and is not a claim at
+   * all — so before this, that bag had no driver on it anywhere. Its only trace was locationId reading
+   * 'bus:<badge>', a fact encoded in a string prefix that nothing queried.
+   *
+   * Two things were silently wrong because of it. A fleet manager's "cargo in motion" counted claimed
+   * loads only, so a driver riding around with three bags handed to them showed as carrying nothing.
+   * And the VEHICLE CAPACITY check counted the same way — so a physical limit, the number of bags a bike
+   * can hold, could be exceeded without the count ever moving.
+   */
+  carriedBy?: string;
   /**
    * A SHOP bag, published by the shopkeeper's SEAL and by nothing else. A hub bag has no seal step, so the
    * dispatch sweep publishes it the moment it is full or aged; a shop bag that the sweep published behind
