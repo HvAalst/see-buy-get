@@ -91,6 +91,18 @@ export const enFleet = {
   'fleet.drivers.rateHighNoRate': '{count} jobs near them were more than the sender would pay at this rate',
   'fleet.drivers.empty': 'No drivers yet.',
   'fleet.drivers.beingChecked': 'Being checked',
+  // The papers sheet. Every line here is doing one job: say what the photo is for, so a manager
+  // photographing somebody else's documents can explain it to them.
+  'fleet.kyc.title': 'Send this driver’s papers',
+  'fleet.kyc.lede': 'GLOS checks the numbers you typed against the documents. Photograph both, in good light, with all four corners in frame.',
+  'fleet.kyc.idLabel': 'Photo of their national ID',
+  'fleet.kyc.licenceLabel': 'Photo of their driving licence',
+  'fleet.kyc.faceNote': 'Optional — a photo of their face becomes their badge picture, so a shopkeeper handing over a bag can see who they are expecting. You can add it later.',
+  'fleet.kyc.faceLabel': 'Photo of their face (optional)',
+  'fleet.kyc.checkTitle': 'What GLOS checks',
+  'fleet.kyc.checkDetail': 'That the name, ID number, licence number and expiry you entered match the documents — and that the licence is still valid.',
+  'fleet.kyc.send': 'Send for checking',
+  'fleet.kyc.later': 'Not now',
   'fleet.drivers.sendPapers': 'Send papers',
   'fleet.drivers.aloudPool': '{count} drivers in the pool. ',
   'fleet.drivers.aloudPending': '{count} waiting on the SeeBuyGet check.',

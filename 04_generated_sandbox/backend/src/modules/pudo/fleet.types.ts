@@ -124,9 +124,27 @@ export class DriverKyc {
   submittedAt: string;
 }
 
+/**
+ * The driver's face, and why it is NOT part of KYC.
+ *
+ * It is the BADGE PORTRAIT — the picture a shopkeeper sees beside a badge id when somebody they have
+ * never met asks for a bag. That is a product reason, and it happens to give an operator something to
+ * check the two documents against.
+ *
+ * Deliberately not a gate. A manager onboarding a driver in a yard at dusk with a cracked camera must
+ * still be able to finish; blocking on a portrait would trade a real driver for a nicer record. The two
+ * DOCUMENTS are the gate, because without them an approval means nothing at all.
+ */
+export class DriverPortrait {
+  photoRef: string;
+  addedAt: string;
+}
+
 export class FleetDriver {
   driverId: string;
   did: string;
+  /** Their face, for the badge — see DriverPortrait. Absent is ordinary, never a blocker. */
+  portrait?: DriverPortrait;
   managerDid?: string; // the fleet manager that employs this driver (undefined = independent courier)
   /**
    * Legal residence — and ONLY for an independent courier, who the network contracts with directly.

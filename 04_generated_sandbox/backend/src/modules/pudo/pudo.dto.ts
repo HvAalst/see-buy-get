@@ -836,6 +836,8 @@ export class RegisterDriverDto {
 export class DriverKycDto {
   @IsString() idCopyRef!: string;
   @IsString() licenceCopyRef!: string;
+  /** The driver's face for their badge — optional by design; see DriverPortrait. */
+  @IsOptional() @IsString() photoRef?: string;
 }
 
 export class DriverKycDecisionDto {

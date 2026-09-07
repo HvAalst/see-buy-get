@@ -1,4 +1,4 @@
-import { Button, Card, ErrorNote, Pill, ReadAloud } from '../../../shared/ui';
+import { Button, Card, ErrorNote, Note, PhotoField, Pill, ReadAloud, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { driverAction, driverMissing, isHeavySelection, shortDid, statusTone, toggleClass } from '../logic';
 import { VEHICLE_CLASSES } from '../types';
@@ -131,7 +131,7 @@ export function DriversScreen({ state, actions }: DriversScreenProps) {
                       {d.status === 'KYC_PENDING' ? t('fleet.drivers.beingChecked') : d.status.replace(/_/g, ' ').toLowerCase()}
                     </Pill>
                     {action === 'submit-kyc' ? (
-                      <Button variant="link" full={false} busy={state.busy === `kyc:${d.did}`} onClick={() => void actions.submitKyc(d.did)}>
+                      <Button variant="link" full={false} onClick={() => actions.setKyc({ for: d.did, idCopyRef: '', licenceCopyRef: '', photoRef: '' })}>
                         {t('fleet.drivers.sendPapers')}
                       </Button>
                     ) : null}
@@ -142,6 +142,56 @@ export function DriversScreen({ state, actions }: DriversScreenProps) {
           </div>
         )}
       </Card>
+
+      {/* THE PAPERS THEMSELVES.
+
+          Before this the "send papers" button posted the literal strings 'id.jpg' and 'licence.jpg' —
+          the contract asked for two document references and was satisfied with two filenames. So an SBG
+          admin approving a driver was approving nothing, and the national id, licence number and expiry
+          a manager types were unverifiable claims made by the party who benefits from them being wrong.
+
+          Both documents are REQUIRED, because without them the approval means nothing. The face is not:
+          it is the driver's badge picture, and a cracked camera in a yard at dusk must not be the reason
+          a real driver cannot start work. */}
+      <Sheet open={Boolean(state.kyc.for)} onClose={() => actions.setKyc({ for: null })} title={t('fleet.kyc.title')}>
+        <p class="card__note">{t('fleet.kyc.lede')}</p>
+        <PhotoField
+          id="kyc-id"
+          value={state.kyc.idCopyRef}
+          label={t('fleet.kyc.idLabel')}
+          upload={(file) => actions.uploadPhoto('kyc_id', file)}
+          onCapture={(ref) => actions.setKyc({ idCopyRef: ref })}
+        />
+        <PhotoField
+          id="kyc-licence"
+          value={state.kyc.licenceCopyRef}
+          label={t('fleet.kyc.licenceLabel')}
+          upload={(file) => actions.uploadPhoto('kyc_licence', file)}
+          onCapture={(ref) => actions.setKyc({ licenceCopyRef: ref })}
+        />
+        {/* Said out loud so a manager knows it is safe to skip, and knows what it is FOR — a photo asked
+            for with no stated purpose is a photo people refuse. */}
+        <p class="card__note">{t('fleet.kyc.faceNote')}</p>
+        <PhotoField
+          id="kyc-face"
+          value={state.kyc.photoRef}
+          label={t('fleet.kyc.faceLabel')}
+          upload={(file) => actions.uploadPhoto('avatar', file)}
+          onCapture={(ref) => actions.setKyc({ photoRef: ref })}
+        />
+        <Note tone="info" icon="info" title={t('fleet.kyc.checkTitle')} detail={t('fleet.kyc.checkDetail')} />
+        <Button
+          chevron={false}
+          disabled={!state.kyc.idCopyRef || !state.kyc.licenceCopyRef}
+          busy={state.busy === `kyc:${state.kyc.for}`}
+          onClick={() => void actions.submitKyc(state.kyc.for!, state.kyc.idCopyRef, state.kyc.licenceCopyRef, state.kyc.photoRef)}
+        >
+          {t('fleet.kyc.send')}
+        </Button>
+        <Button variant="link" onClick={() => actions.setKyc({ for: null })}>
+          {t('fleet.kyc.later')}
+        </Button>
+      </Sheet>
 
       <div class="scr__foot">
         <ReadAloud

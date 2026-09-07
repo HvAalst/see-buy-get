@@ -27,6 +27,8 @@ export interface Toast {
 }
 
 export interface FleetState {
+  /** The papers being gathered for one driver. `for` is the did whose sheet is open, null when closed. */
+  kyc: { for: string | null; idCopyRef: string; licenceCopyRef: string; photoRef: string };
   phase: Phase;
   screen: Screen;
   manager: { did: string; company: string } | null;
@@ -48,7 +50,10 @@ export interface FleetState {
 
 const EMPTY_COUPLE = { driverDid: '', vehicleId: '', corridorId: '' };
 
+const EMPTY_KYC = { for: null, idCopyRef: '', licenceCopyRef: '', photoRef: '' } as const;
+
 const INITIAL: FleetState = {
+  kyc: { ...EMPTY_KYC },
   phase: 'boot',
   screen: 'dash',
   manager: null,
@@ -383,20 +388,35 @@ export function useFleetApp() {
     });
   }, [client, managerDid, run, fail, pushToast, refresh]);
 
+  /**
+   * Send a driver's papers — with the papers.
+   *
+   * This used to post the literal strings 'id.jpg' and 'licence.jpg'. The contract required two document
+   * references and got two filenames, so an SBG admin approving a driver was approving nothing: the
+   * national id, licence number and expiry a manager types are claims by the person who benefits from
+   * them being wrong, and there was never anything to check them against.
+   *
+   * The portrait is passed only when there is one — it is the badge picture, not evidence, and it must
+   * never be the reason a real driver cannot be onboarded in a yard at dusk.
+   */
   const submitKyc = useCallback(
-    async (did: string) => {
-      if (!client) return;
+    async (did: string, idCopyRef: string, licenceCopyRef: string, photoRef?: string) => {
+      if (!client || !idCopyRef || !licenceCopyRef) return;
       await run(`kyc:${did}`, async () => {
-        // The sandbox transports no bytes; the REFERENCES are the contract fields,
-        // exactly as the legacy console recorded them.
-        const r = await client.api.submitDriverKyc(did, 'id.jpg', 'licence.jpg');
+        const r = await client.api.submitDriverKyc(did, idCopyRef, licenceCopyRef, photoRef || undefined);
         if (r.error) return fail(r.error);
+        setState((s) => ({ ...s, kyc: { ...EMPTY_KYC } }));
         pushToast({ tone: 'ok', icon: 'badge', title: t('fleet.toast.kycSubmitted'), detail: t('fleet.toast.kycSubmittedDetail') });
         await refresh();
       });
     },
     [client, run, fail, pushToast, refresh],
   );
+
+  /** Which driver's papers are being gathered, and what has been captured so far. */
+  const setKyc = useCallback((p: Partial<FleetState['kyc']>) => {
+    setState((s) => ({ ...s, kyc: { ...s.kyc, ...p } }));
+  }, []);
 
   const setVehiclePrice = useCallback(
     async (vehicleId: string, price: number) => {
@@ -453,6 +473,7 @@ export function useFleetApp() {
       submitVehicle,
       submitDriver,
       submitKyc,
+      setKyc,
       setVehiclePrice,
       couple,
       uncouple,

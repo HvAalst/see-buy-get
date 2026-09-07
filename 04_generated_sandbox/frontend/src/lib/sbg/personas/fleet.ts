@@ -68,10 +68,15 @@ export function createFleetApi(sbg: SbgClient) {
       // enum — an S5a generation quirk; the backend validates the real array.
     }) => sbg.request((c) => c.POST('/v1/sbg/drivers/onboard', { body: body as never })),
 
-    /** Heavy registry: submit ID + licence copies → KYC_PENDING (the DECISION is GLOS ops'). */
-    submitDriverKyc: (did: string, idCopyRef: string, licenceCopyRef: string) =>
+    /**
+     * Heavy registry: submit the ID and licence PHOTOS → KYC_PENDING (the DECISION is GLOS ops').
+     *
+     * Real media ids. The two documents are what makes the typed national id, licence number and expiry
+     * checkable at all; the optional portrait is the driver's badge picture, sent only when there is one.
+     */
+    submitDriverKyc: (did: string, idCopyRef: string, licenceCopyRef: string, photoRef?: string) =>
       sbg.request((c) =>
-        c.POST('/v1/sbg/fleet/drivers/{did}/submit-kyc', { params: { path: { did } }, body: { idCopyRef, licenceCopyRef } }),
+        c.POST('/v1/sbg/fleet/drivers/{did}/submit-kyc', { params: { path: { did } }, body: { idCopyRef, licenceCopyRef, ...(photoRef ? { photoRef } : {}) } }),
       ),
 
     /** Active driver↔vehicle couplings. */

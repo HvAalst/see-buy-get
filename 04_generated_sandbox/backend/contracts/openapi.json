@@ -17165,6 +17165,21 @@
           "licenceClasses"
         ]
       },
+      "DriverPortrait": {
+        "type": "object",
+        "properties": {
+          "photoRef": {
+            "type": "string"
+          },
+          "addedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "photoRef",
+          "addedAt"
+        ]
+      },
       "DriverLicence": {
         "type": "object",
         "properties": {
@@ -17213,6 +17228,14 @@
           },
           "did": {
             "type": "string"
+          },
+          "portrait": {
+            "description": "Their face, for the badge — see DriverPortrait. Absent is ordinary, never a blocker.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DriverPortrait"
+              }
+            ]
           },
           "managerDid": {
             "type": "string"
@@ -17286,6 +17309,10 @@
           },
           "licenceCopyRef": {
             "type": "string"
+          },
+          "photoRef": {
+            "type": "string",
+            "description": "The driver's face for their badge — optional by design; see DriverPortrait."
           }
         },
         "required": [

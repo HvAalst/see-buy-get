@@ -178,11 +178,14 @@ export class DriverService {
   }
 
   /** Heavy registry: upload ID + licence copy → KYC_PENDING. */
-  submitKyc(did: string, documents: { idCopyRef: string; licenceCopyRef: string }): FleetDriver {
+  submitKyc(did: string, documents: { idCopyRef: string; licenceCopyRef: string; photoRef?: string }): FleetDriver {
     const driver = this.require(did);
     if (driver.registry !== 'heavy') throw new GlosError('INVALID_STATE', 'Light-registry drivers (bike/motorcycle) do not need KYC');
     if (driver.status !== 'DRAFT') throw new GlosError('INVALID_STATE', `Driver is ${driver.status}, expected DRAFT`);
     if (!documents.idCopyRef || !documents.licenceCopyRef) throw new GlosError('KYC_INCOMPLETE', 'KYC requires an ID copy and a licence copy');
+    // The portrait rides along when there is one, and is absent without complaint when there is not —
+    // see DriverPortrait for why the face is not a gate and the documents are.
+    if (documents.photoRef) driver.portrait = { photoRef: documents.photoRef, addedAt: new Date().toISOString() };
     driver.kyc = { idCopyRef: documents.idCopyRef, licenceCopyRef: documents.licenceCopyRef, submittedAt: new Date().toISOString() } as DriverKyc;
     driver.status = 'KYC_PENDING';
     return driver;
