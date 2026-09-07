@@ -15,8 +15,7 @@ export interface HomeScreenProps {
 /** The counter jobs, in field-frequency order. Each is one row — one task per screen. */
 const JOBS: Array<{ screen: Screen; icon: IconName; titleKey: MessageKey; subKey: MessageKey; gated?: boolean }> = [
   { screen: 'accept', icon: 'box', titleKey: 'agent.accept.title', subKey: 'agent.home.jobAcceptSub', gated: true },
-  { screen: 'release', icon: 'person', titleKey: 'agent.release.title', subKey: 'agent.home.jobReleaseSub' },
-  { screen: 'collect', icon: 'search', titleKey: 'agent.collect.title', subKey: 'agent.home.jobCollectSub' },
+  { screen: 'release', icon: 'person', titleKey: 'agent.counter.title', subKey: 'agent.home.jobCounterSub' },
   { screen: 'handover', icon: 'truck', titleKey: 'agent.handover.title', subKey: 'agent.home.jobHandoverSub' },
   { screen: 'bag', icon: 'bag', titleKey: 'agent.bag.title', subKey: 'agent.home.jobBagSub' },
   { screen: 'receivebag', icon: 'bag', titleKey: 'agent.receivebag.title', subKey: 'agent.home.jobReceiveBagSub' },

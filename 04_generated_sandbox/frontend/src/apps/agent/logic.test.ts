@@ -4,6 +4,7 @@ import {
   BODY_HINTS,
   EMPTY_ACCEPT,
   EXCLUDABLE_BODIES,
+  handoverRoute,
   VOID_WINDOW_MS,
   acceptMissing,
   bodyHintValue,
@@ -439,5 +440,40 @@ describe('the customer’s excluded bodies (FB2d)', () => {
     expect(toggleExcludedBody(form({ bodyHint: 'lowboy' }), 'flatbed')).toEqual({ excludedBodies: ['flatbed'], bodyHint: 'lowboy' });
     // And clearing the hint back to "I don't know" never disturbs the exclusions.
     expect(chooseBodyHint(form({ excludedBodies: ['flatbed'], bodyHint: 'lowboy' }), '')).toEqual({ excludedBodies: ['flatbed'], bodyHint: '' });
+  });
+});
+
+/**
+ * One counter, and the code decides what happens next.
+ *
+ * The counter used to be two screens — "Collect an order" and "Hand to a customer" — so a shopkeeper had
+ * to work out which kind of customer they were facing before they could serve them. A person holding a
+ * code looks identical either way, and the app's first question was one only the SHOPKEEPER could
+ * answer, about a parcel they had not found yet.
+ *
+ * Routing on the SHAPE of the code, not by trying a lookup and falling back, and the two shapes are
+ * genuinely different things rather than two spellings of one thing.
+ */
+describe('handoverRoute', () => {
+  it('reads an order code, which identifies a parcel by itself', () => {
+    // COL- plus 8 hex is unique across the network, so it can BE the search.
+    expect(handoverRoute('COL-3F9A2B71')).toBe('order');
+    expect(handoverRoute('  col-3f9a2b71  ')).toBe('order'); // typed in lower case, with thumbs
+  });
+
+  it('reads a peer-send code, which identifies nothing', () => {
+    // Four digits is 9000 possibilities against a shelf of nine parcels. It is a second factor checked
+    // against a parcel already in hand — which is why that path still asks for the label afterwards.
+    expect(handoverRoute('4821')).toBe('peer');
+  });
+
+  it('calls anything else unknown rather than guessing', () => {
+    // A mistyped order code sent to a lookup comes back "no parcel for that code", which reads as the
+    // parcel being missing — and sends a shopkeeper to search a shelf for something never lost.
+    expect(handoverRoute('COL3F9A2B71')).toBe('unknown'); // missing the dash
+    expect(handoverRoute('482')).toBe('unknown'); // one digit short
+    expect(handoverRoute('48210')).toBe('unknown'); // one too many
+    expect(handoverRoute('PUD-12')).toBe('unknown'); // a parcel sticker is not a customer's code
+    expect(handoverRoute('')).toBe('unknown');
   });
 });

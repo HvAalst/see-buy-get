@@ -16,7 +16,7 @@ import type { IconName } from '../../shared/ui/Icon';
 import { agentConfig, clearDid, createAgentClient, purgeAgentTokens, readDid, readEmail, saveDid, saveEmail } from './api';
 import { signal } from '../../shared/feedback';
 import { triggerDownload } from '../../shared/download';
-import { bodyHintValue, bookFreightMissing, EMPTY_ACCEPT, excludedBodiesValue, otpValid, packagingValue, parseBudget, parseDims, plannedPickupIso, type AcceptForm, type DimsForm } from './logic';
+import { bodyHintValue, bookFreightMissing, EMPTY_ACCEPT, excludedBodiesValue, handoverRoute, otpValid, packagingValue, parseBudget, parseDims, plannedPickupIso, type AcceptForm, type DimsForm } from './logic';
 import type { GeoPoint } from '../../shared/geo';
 import type {
   AgentLedgerRow,
@@ -1562,7 +1562,10 @@ export function useAgentApp() {
       const r = await client.api.rate(f.parcel!.parcelId, f.stars, f.parcel!.receiverMobile || 'n/a');
       if (r.error) return fail(r.error);
       buzz();
-      setState((s) => ({ ...s, release: { ...EMPTY_RELEASE }, screen: 'home' }));
+      // BOTH slices. The counter's code field lives on `collect` now even for a peer send, so clearing
+      // only `release` would leave the next customer's screen pre-filled with the last one's code — and
+      // the first thing that screen does with a code is decide which kind of hand-over this is.
+      setState((s) => ({ ...s, release: { ...EMPTY_RELEASE }, collect: { ...EMPTY_COLLECT }, screen: 'home' }));
       pushToast({ tone: 'ok', icon: 'star', title: t('agent.toast.thankYou'), detail: t('agent.toast.thankYouDetail') });
     });
   }, [client, run, fail, pushToast]);
@@ -1581,6 +1584,39 @@ export function useAgentApp() {
       setCollect({ found: narrow<CollectView>(r.data), disputing: false });
     });
   }, [client, did, run, fail, setCollect]);
+
+  /**
+   * THE COUNTER'S ONE ENTRY: whatever the customer just handed over, in code form.
+   *
+   * Routing on the SHAPE rather than by trying a lookup and falling back. A speculative
+   * "search for it as an order, and if that misses treat it as a peer send" would spend a network round
+   * trip to learn something the string already says, and would report a mistyped order code as a missing
+   * parcel — sending a shopkeeper to search a shelf for something that was never lost.
+   *
+   * A peer-send code resolves nothing on its own and must not appear to: it stays a second factor, so
+   * this only carries it into the release form and lets the shopkeeper find the parcel.
+   */
+  const handOver = useCallback(
+    async (override?: string) => {
+      const code = (override ?? stateRef.current.collect.code).trim().toUpperCase();
+      if (!code) return;
+      const route = handoverRoute(code);
+      if (route === 'unknown') return; // the screen already says why; nothing to ask the network
+      if (route === 'order') {
+        setCollect({ code });
+        await findCollect(code);
+        return;
+      }
+      // A peer send: keep the code for the OTP step so the shopkeeper never types it twice, and clear any
+      // order lookup left over from a previous customer at the same counter.
+      setState((s) => ({
+        ...s,
+        collect: { ...s.collect, code, found: null },
+        release: { ...s.release, otp: code },
+      }));
+    },
+    [findCollect, setCollect],
+  );
 
   const confirmCollect = useCallback(async () => {
     if (!client || !did) return;
@@ -1725,6 +1761,7 @@ export function useAgentApp() {
       submitPickup,
       submitRating,
       findCollect,
+      handOver,
       confirmCollect,
       submitDispute,
       submitReceiveBag,

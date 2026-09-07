@@ -1,4 +1,4 @@
-import { Button, Card, Checklist, ErrorNote, Note, QrBlock, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
+import { Button, Card, Checklist, Note, QrBlock, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { qrPayload } from '../../../shared/qr';
 import type { AgentActions, AgentState } from '../useAgentApp';
@@ -10,11 +10,14 @@ export interface CollectScreenProps {
 }
 
 /**
- * Click-and-collect counter flow: the buyer shows their collection code, the screen answers
- * with the SHELF SLOT (the one thing the shopkeeper needs, so it is the hero), the buyer
- * checks the contents, then confirm — or file a dispute with a reason + photo.
+ * Everything that happens once an ORDER code has resolved a parcel: the shelf slot (the hero — it is the
+ * one thing the shopkeeper needs), the contents check, what is owed, hand over, or report a problem.
+ *
+ * Split out from the screen so the merged counter flow can render it without duplicating any of it. The
+ * counter asks for the customer's code once and then shows whichever hand-over that code turned out to
+ * be; two copies of this markup would be two places for the hand-over to drift apart.
  */
-export function CollectScreen({ state, actions }: CollectScreenProps) {
+export function CollectBody({ state, actions }: CollectScreenProps) {
   const t = useT();
   const f = state.collect;
   const found = f.found;
@@ -22,31 +25,7 @@ export function CollectScreen({ state, actions }: CollectScreenProps) {
   const slot = f.found?.binSlot || found?.parcel.binSlot;
 
   return (
-    <div class="scr">
-      <h1 class="scr__title">{t('agent.collect.title')}</h1>
-      <p class="scr__lede">{t('agent.collect.lede')}</p>
-
-      {state.error ? <ErrorNote error={state.error} /> : null}
-
-      <Card>
-        <ScanField
-          id="collect-code"
-          label={t('agent.collect.codeLabel')}
-          value={f.code}
-          onValue={(v) => actions.setCollect({ code: v })}
-          expect="collect"
-          placeholder={t('agent.scanPlaceholder')}
-          upper
-          enterKeyHint="search"
-          onScan={(v) => void actions.findCollect(v)}
-        />
-        <div style="margin-top:12px">
-          <Button chevron={false} onClick={() => void actions.findCollect()} disabled={!f.code.trim()} busy={state.busy === 'collect-find'}>
-            {t('agent.collect.findOrder')}
-          </Button>
-        </div>
-      </Card>
-
+    <>
       {found ? (
         <>
           <section class="slot" aria-label={t('agent.collect.shelfAria')}>
@@ -97,17 +76,6 @@ export function CollectScreen({ state, actions }: CollectScreenProps) {
         </>
       ) : null}
 
-      <div class="scr__foot">
-        <ReadAloud
-          text={() =>
-            found
-              ? t('agent.collect.aloudFound', { slot: slot ?? t('agent.collect.slotUnknown') })
-              : t('agent.collect.aloudPrompt')
-          }
-          label={t('agent.readAloud')}
-        />
-      </div>
-
       <Sheet open={f.disputing} onClose={() => actions.setCollect({ disputing: false })} title={t('agent.collect.disputeTitle')}>
         <div class="field">
           <label class="field__label" for="dispute-reason">
@@ -134,6 +102,6 @@ export function CollectScreen({ state, actions }: CollectScreenProps) {
           {t('agent.collect.goBack')}
         </Button>
       </Sheet>
-    </div>
+    </>
   );
 }

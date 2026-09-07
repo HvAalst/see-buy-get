@@ -2,7 +2,6 @@ import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { BottomNav, Button, Checklist, FeedbackFlash, Icon, NotificationBell, OutboxNote, Pill, TopBar, type NavItem } from '../../shared/ui';
 import { useT } from '../../shared/i18n';
 import { AcceptScreen } from './screens/AcceptScreen';
-import { CollectScreen } from './screens/CollectScreen';
 import { ConsignmentsScreen } from './screens/ConsignmentsScreen';
 import { FreightScreen } from './screens/FreightScreen';
 import { BagScreen } from './screens/BagScreen';
@@ -113,10 +112,11 @@ function ScreenRouter({ screen, state, actions }: { screen: Screen; state: Agent
       return <HandoverScreen state={state} actions={actions} />;
     case 'bag':
       return <BagScreen state={state} actions={actions} />;
+    // ONE COUNTER. 'collect' survives as a route because notifications, the home tiles and anything
+    // already bookmarked point at it — but it is the same screen, because it was always the same job.
     case 'release':
-      return <ReleaseScreen state={state} actions={actions} />;
     case 'collect':
-      return <CollectScreen state={state} actions={actions} />;
+      return <ReleaseScreen state={state} actions={actions} />;
     case 'receivebag':
       return <ReceiveBagScreen state={state} actions={actions} />;
     case 'void':

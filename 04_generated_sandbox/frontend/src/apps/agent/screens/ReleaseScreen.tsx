@@ -1,7 +1,8 @@
 import { Button, Card, Checklist, CodeBoxes, ErrorNote, Note, ReadAloud, ScanField } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
-import { otpValid, releaseBlockedDetail, releaseStage } from '../logic';
+import { handoverRoute, otpValid, releaseBlockedDetail, releaseStage } from '../logic';
 import type { AgentActions, AgentState } from '../useAgentApp';
+import { CollectBody } from './CollectScreen';
 import { PhotoField } from './PhotoField';
 
 export interface ReleaseScreenProps {
@@ -10,41 +11,86 @@ export interface ReleaseScreenProps {
 }
 
 /**
- * Release to the customer — the walk-up flow. Find the parcel by sticker, then the screen
- * follows its status: still on the bus → mark arrived (sends the code); ready → verify the
- * 4-digit code; delivered → take the rating. One stage on screen at a time.
+ * THE COUNTER. One person is standing there wanting their parcel, so there is one screen.
+ *
+ * It used to be two — "Collect an order" and "Hand to a customer" — and a shopkeeper had to work out
+ * which kind of customer they were facing before they could serve them. A person holding a code looks
+ * identical either way, so the app's first question was one only the shopkeeper could answer, about a
+ * parcel they had not found yet. The code comes first now, because it is the thing the customer has.
+ *
+ * What follows depends on what the code turns out to be, and the difference is forced by the secrets
+ * themselves rather than chosen: an order code identifies a parcel on its own, a four-digit peer-send
+ * code cannot identify anything and stays what it always was — a second factor checked against a parcel
+ * already in hand. So that path still asks for the label or sticker, but SECOND, and only once we know
+ * it is that kind of hand-over.
  */
 export function ReleaseScreen({ state, actions }: ReleaseScreenProps) {
   const t = useT();
   const f = state.release;
   const p = f.parcel;
   const stage = p ? releaseStage(p.status) : null;
+  const route = handoverRoute(state.collect.code);
+  const found = state.collect.found;
 
   return (
     <div class="scr">
-      <h1 class="scr__title">{t('agent.release.title')}</h1>
-      <p class="scr__lede">{t('agent.release.lede')}</p>
+      <h1 class="scr__title">{t('agent.counter.title')}</h1>
+      <p class="scr__lede">{t('agent.counter.lede')}</p>
 
       {state.error ? <ErrorNote error={state.error} /> : null}
 
+      {/* The one question the customer can always answer. */}
       <Card>
         <ScanField
-          id="pick-id"
-          label={t('agent.release.stickerLabel')}
-          value={f.stickerId}
-          onValue={(v) => actions.setRelease({ stickerId: v })}
-          expect="parcel"
-          placeholder={t('agent.release.stickerPh')}
+          id="counter-code"
+          label={t('agent.counter.codeLabel')}
+          value={state.collect.code}
+          onValue={(v) => actions.setCollect({ code: v })}
+          expect="collect"
+          placeholder={t('agent.counter.codePh')}
           upper
           enterKeyHint="search"
-          onScan={(v) => void actions.findRelease(v)}
+          onScan={(v) => void actions.handOver(v)}
         />
         <div style="margin-top:12px">
-          <Button chevron={false} onClick={() => void actions.findRelease()} disabled={!f.stickerId.trim()} busy={state.busy === 'find'}>
-            {t('agent.release.findParcel')}
+          <Button chevron={false} onClick={() => void actions.handOver()} disabled={!state.collect.code.trim() || route === 'unknown'} busy={state.busy === 'collect-find'}>
+            {t('agent.counter.go')}
           </Button>
         </div>
+        {/* Said as soon as it is typed, not after a lookup: a mistyped order code that fell through to a
+            search comes back "no parcel for that code", which reads as the parcel being missing rather
+            than the code being wrong — and sends a shopkeeper to look at a shelf for nothing. */}
+        {state.collect.code.trim() && route === 'unknown' ? (
+          <p class="hint">{t('agent.counter.unknownCode')}</p>
+        ) : null}
       </Card>
+
+      {/* An ORDER code resolved a parcel by itself — straight to the shelf slot and the hand-over. */}
+      {route === 'order' && found ? <CollectBody state={state} actions={actions} /> : null}
+
+      {/* A PEER-SEND code cannot resolve anything, so now — and only now, knowing which hand-over this
+          is — the shopkeeper is asked for the parcel. The code they already typed is carried over. */}
+      {route === 'peer' && !p ? (
+        <Card title={t('agent.counter.peerTitle')}>
+          <p class="t-body">{t('agent.counter.peerBody')}</p>
+          <ScanField
+            id="pick-id"
+            label={t('agent.release.stickerLabel')}
+            value={f.stickerId}
+            onValue={(v) => actions.setRelease({ stickerId: v })}
+            expect="parcel"
+            placeholder={t('agent.release.stickerPh')}
+            upper
+            enterKeyHint="search"
+            onScan={(v) => void actions.findRelease(v)}
+          />
+          <div style="margin-top:12px">
+            <Button chevron={false} onClick={() => void actions.findRelease()} disabled={!f.stickerId.trim()} busy={state.busy === 'find'}>
+              {t('agent.release.findParcel')}
+            </Button>
+          </div>
+        </Card>
+      ) : null}
 
       {p && stage === 'arrive' ? (
         <Card title={t('agent.release.onBusTitle')} label={p.parcelId}>
@@ -119,7 +165,9 @@ export function ReleaseScreen({ state, actions }: ReleaseScreenProps) {
         <ReadAloud
           text={() =>
             !p
-              ? t('agent.release.aloudScan')
+              ? route === 'peer'
+                ? t('agent.release.aloudScan')
+                : t('agent.counter.aloudCode')
               : stage === 'otp'
                 ? t('agent.release.aloudOtp')
                 : stage === 'arrive'

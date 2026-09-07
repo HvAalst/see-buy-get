@@ -112,7 +112,7 @@ export const enAgent = {
   'agent.logic.gateLowShortfall': 'Top up at least {amount} to keep accepting parcels.',
   'agent.logic.gateLowDetail': 'Top up to keep accepting parcels.',
   'agent.logic.statusNotice': 'Your shop is {status}. SeeBuyGet must activate it before you can take parcels.',
-  'agent.logic.acceptScanFirst': 'Scan the parcel sticker first.',
+  'agent.logic.acceptScanFirst': 'Scan the parcel label or sticker first.',
   'agent.logic.acceptMeasure': 'Measure the parcel: length, width, height and weight.',
   'agent.logic.acceptPickDest': 'Pick where it is going.',
   'agent.logic.acceptPhoto': 'Take the proof photo.',
@@ -174,7 +174,7 @@ export const enAgent = {
   'agent.bag.nothingBody': 'When parcels are dropped off, you can bag them here.',
   'agent.bag.bagCode': 'Bag for {zone}',
   'agent.bag.hearCode': 'Hear the bag code',
-  'agent.bag.scanLabel': 'Parcel sticker',
+  'agent.bag.scanLabel': 'Parcel label or sticker',
   'agent.bag.scanHint': 'Scan each parcel to put it in the bag.',
   'agent.bag.addCta': 'Put it in the bag',
   'agent.bag.wentIn': '{id} is in the bag',
@@ -225,8 +225,7 @@ export const enAgent = {
   'agent.home.topUpFirst': 'Top up your wallet first',
   'agent.home.signOut': 'Sign out of this shop',
   'agent.home.jobAcceptSub': 'A customer drops something off',
-  'agent.home.jobReleaseSub': 'Verify the code and hand over',
-  'agent.home.jobCollectSub': 'Release an online order to the buyer',
+  'agent.home.jobCounterSub': 'Any customer collecting anything',
   'agent.home.jobHandoverSub': 'Give waiting parcels to the driver',
   'agent.home.jobReceiveBagSub': 'A bus dropped a bag for your shop',
   'agent.home.jobVoidSub': 'Cancel a parcel you just took in',
@@ -468,8 +467,20 @@ export const enAgent = {
   'agent.accept.closedNow': 'Closed right now',
 
   // Collect an order (click-and-collect).
-  'agent.collect.title': 'Collect an order',
-  'agent.collect.lede': 'Ask the buyer for their collection code.',
+  // THE COUNTER — one screen, because one person is standing there wanting their parcel. The first
+  // question is the code, because that is the thing the customer actually has; asking for the parcel
+  // first asked the SHOPKEEPER for something they had not found yet.
+  'agent.counter.title': 'Hand over a parcel',
+  'agent.counter.lede': 'Ask the customer for their code.',
+  'agent.counter.codeLabel': "The customer's code",
+  'agent.counter.codePh': 'Scan or type it',
+  'agent.counter.go': 'Find the parcel',
+  // Named as a code problem, not a parcel problem: "no parcel for that code" sends a shopkeeper to
+  // search a shelf for something that was never missing.
+  'agent.counter.unknownCode': 'That is not a code we recognise. An order code looks like COL-3F9A2B71; a code for a parcel someone sent is four digits.',
+  'agent.counter.aloudCode': 'Ask the customer for their code and scan or type it here.',
+  'agent.counter.peerTitle': 'Now find the parcel',
+  'agent.counter.peerBody': 'A four-digit code cannot tell us which parcel it is — it is the second check, not the search. Scan the parcel the customer is asking for and the code will be checked against it.',
   'agent.collect.codeLabel': 'Collection code',
   'agent.collect.findOrder': 'Find the order',
   'agent.collect.shelfAria': 'Shelf slot',
@@ -518,10 +529,8 @@ export const enAgent = {
   'agent.handover.reasonDriverRefused': 'Driver would not take it',
 
   // Hand to a customer (Release).
-  'agent.release.title': 'Hand to a customer',
-  'agent.release.lede': 'Scan the sticker on the parcel the customer is asking for.',
-  'agent.release.stickerLabel': 'Parcel sticker',
-  'agent.release.stickerPh': 'Scan the sticker',
+  'agent.release.stickerLabel': 'Parcel label or sticker',
+  'agent.release.stickerPh': 'Scan the label or sticker',
   'agent.release.findParcel': 'Find the parcel',
   'agent.release.onBusTitle': 'It is still marked as on the bus',
   'agent.release.onBusBody': 'If the driver just dropped it here, mark it arrived and put it on the shelf. The customer already has their pickup code — the sender gave it to them.',
@@ -544,7 +553,7 @@ export const enAgent = {
   'agent.release.noCode1': 'The code was sent to the receiver phone',
   'agent.release.noCode2': 'They can show the message instead',
   'agent.release.noCode3': 'Never hand over without the code',
-  'agent.release.aloudScan': 'Scan the parcel sticker to begin.',
+  'agent.release.aloudScan': 'Scan the parcel label or sticker to begin.',
   'agent.release.aloudOtp': 'Ask the customer for their four digit code, type it in, then confirm.',
   'agent.release.aloudArrive': 'Mark the parcel arrived to send the customer their code.',
   'agent.release.aloudRate': 'Ask the customer to rate the delivery from one to five.',

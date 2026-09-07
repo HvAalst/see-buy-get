@@ -446,6 +446,34 @@ export function releaseStage(status: ParcelStatus): ReleaseStage {
   return 'blocked';
 }
 
+/**
+ * Which hand-over a customer's code is asking for.
+ *
+ * WHY THIS EXISTS. The counter used to have two screens for one situation — "Collect an order" and
+ * "Hand to a customer" — and a shopkeeper had to decide which kind of customer they were facing before
+ * they could serve them. A person walking in holding a code looks identical either way, so the first
+ * question the app asked was one only the SHOPKEEPER could answer, about a parcel they had not found yet.
+ * Now the code is the first question, because it is the one thing the customer definitely has.
+ *
+ * The two release secrets are shaped differently, and the difference is not cosmetic:
+ *
+ *  - an ORDER code is COL- plus 8 hex, unique across the whole network, so it RESOLVES a parcel by itself
+ *  - a PEER-SEND code is FOUR DIGITS. There are nine thousand of them and a shop may hold nine parcels,
+ *    so it cannot identify anything. It is a second factor, checked against a parcel already in hand —
+ *    which is exactly why that path still has to ask for the label or sticker afterwards.
+ *
+ * Anything else is 'unknown', deliberately: a typo'd order code that fell through to a lookup would come
+ * back "no parcel for that code", which reads like the parcel is missing rather than the code is wrong.
+ */
+export type HandoverRoute = 'order' | 'peer' | 'unknown';
+
+export function handoverRoute(code: string): HandoverRoute {
+  const c = (code ?? '').trim().toUpperCase();
+  if (c.startsWith('COL-')) return 'order';
+  if (/^\d{4}$/.test(c)) return 'peer';
+  return 'unknown';
+}
+
 export function releaseBlockedDetail(status: ParcelStatus, t: Translate): string {
   return t('agent.logic.releaseBlocked', { status: status.replace(/_/g, ' ').toLowerCase() });
 }
