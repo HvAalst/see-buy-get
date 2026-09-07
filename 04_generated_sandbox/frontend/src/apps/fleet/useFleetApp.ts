@@ -4,7 +4,7 @@ import type { MediaKind } from '../../lib/sbg/personas/media';
 import { t } from '../../shared/i18n';
 import { downscaleImage } from '../../shared/media';
 import type { IconName } from '../../shared/ui/Icon';
-import { clearManager, createFleetClient, managerLogin, purgeFleetTokens, readManager, saveManager } from './api';
+import { clearManager, createFleetClient, managerLookup, managerSession, purgeFleetTokens, readManager, saveManager } from './api';
 import { EMPTY_DRIVER, EMPTY_VEHICLE, isHeavySelection, type DriverForm, type VehicleForm } from './logic';
 import type {
   AssignmentRow,
@@ -27,6 +27,8 @@ export interface Toast {
 }
 
 export interface FleetState {
+  /** Step one's answer: the fleet named by the company code, before anybody has proved who they are. */
+  company: { code: string; did: string; name: string } | null;
   /** The papers being gathered for one driver. `for` is the did whose sheet is open, null when closed. */
   kyc: { for: string | null; idCopyRef: string; licenceCopyRef: string; photoRef: string };
   phase: Phase;
@@ -53,6 +55,7 @@ const EMPTY_COUPLE = { driverDid: '', vehicleId: '', corridorId: '' };
 const EMPTY_KYC = { for: null, idCopyRef: '', licenceCopyRef: '', photoRef: '' } as const;
 
 const INITIAL: FleetState = {
+  company: null,
   kyc: { ...EMPTY_KYC },
   phase: 'boot',
   screen: 'dash',
@@ -222,11 +225,41 @@ export function useFleetApp() {
     if (client && managerDid) void refresh();
   }, [client, managerDid, refresh]);
 
-  const signIn = useCallback(async (code: string) => {
+  /**
+   * Step one: name the fleet. No token, and nothing stored yet.
+   *
+   * Its whole job is so the person sees they are signing into the RIGHT company before typing a PIN —
+   * and so a mistyped company code is caught here rather than blamed on their PIN two fields later,
+   * which is the error that makes people think they have forgotten it.
+   */
+  const findCompany = useCallback(async (code: string) => {
     const trimmed = code.trim();
     if (!trimmed) return;
     setState((s) => ({ ...s, busy: 'signin', error: null }));
-    const r = await managerLogin(trimmed);
+    const r = await managerLookup(trimmed);
+    if (r.error) {
+      setState((s) => ({ ...s, busy: null, error: r.error }));
+      return;
+    }
+    setState((s) => ({ ...s, busy: null, error: null, company: { code: trimmed, did: r.data!.did, name: r.data!.companyName } }));
+  }, []);
+
+  /** Back to the code field — somebody at the wrong company must not have to reload the app. */
+  const clearCompany = useCallback(() => {
+    setState((s) => ({ ...s, company: null, error: null }));
+  }, []);
+
+  /**
+   * Step two: the person. The SERVER mints the token, and it is seeded into the client.
+   *
+   * The app used to mint its own fleet_manager token for whatever DID the code resolved to, which made
+   * the sign-in screen decoration: anything holding the code had access, and nothing recorded who.
+   */
+  const signIn = useCallback(async (phone: string, pin: string) => {
+    const company = stateRef.current.company;
+    if (!company || !phone.trim() || !pin.trim()) return;
+    setState((s) => ({ ...s, busy: 'signin', error: null }));
+    const r = await managerSession(company.code, phone.trim(), pin.trim());
     if (r.error) {
       setState((s) => ({ ...s, busy: null, error: r.error }));
       return;
@@ -234,6 +267,7 @@ export function useFleetApp() {
     const m = r.data!;
     purgeFleetTokens(null);
     saveManager(m.did, m.companyName);
+    await createFleetClient(m.did).client.seed(m.token);
     setState((s) => ({ ...INITIAL, phase: 'boot', manager: { did: m.did, company: m.companyName }, toasts: s.toasts }));
     setManagerDid(m.did);
   }, []);
@@ -462,6 +496,8 @@ export function useFleetApp() {
     actions: {
       refresh,
       signIn,
+      findCompany,
+      clearCompany,
       signOut,
       go,
       setVForm,

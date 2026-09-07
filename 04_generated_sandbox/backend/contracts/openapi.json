@@ -8634,9 +8634,9 @@
     },
     "/v1/sbg/fleet/managers/login": {
       "post": {
-        "operationId": "Sbg.managerLogin",
+        "operationId": "Sbg.managerLookup",
         "summary": "",
-        "description": "Fleet-console sign-in — resolve an ACTIVE manager from their login code, mint their actor token.\nA manager's own DID is both their identity and their tenant boundary (they see only their fleet).",
+        "description": "Fleet console, step one: WHICH FLEET. Names the company, and hands back nothing else.\n\nThe code used to be the whole sign-in. One shared secret per company is a poor fit for a company\nrunning twenty managers across as many depots: no record of who did what, no way to cut off one\nleaver without re-issuing to everybody, and a code that is permanent access to whoever once saw it.\nIt selects the tenant now; the person proves who they are in step two.",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -8644,6 +8644,29 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ManagerLoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/session": {
+      "post": {
+        "operationId": "Sbg.managerSession",
+        "summary": "",
+        "description": "Fleet console, step two: WHICH PERSON — and the only step that mints anything.\n\nChecked against the identity spine, which already counts wrong PINs and locks out; the fleet code\nnever had either. The person must actually hold a fleet_manager role for THIS company, so knowing a\ncompany code and holding some unrelated account is not a way in.\n\nThe token still carries the manager DID as both did and tenant, so every fleet-scoped read behaves\nexactly as before. Recording WHICH PERSON acted needs a claim the actor token does not have yet —\nthe response names them so the console can say who is signed in, and the audit trail does not.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManagerSessionDto"
               }
             }
           }
@@ -16925,6 +16948,25 @@
         },
         "required": [
           "code"
+        ]
+      },
+      "ManagerSessionDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "pin": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "phone",
+          "pin"
         ]
       },
       "ManagerKycDto": {

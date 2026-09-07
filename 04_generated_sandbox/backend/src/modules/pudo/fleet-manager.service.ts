@@ -154,6 +154,17 @@ export class FleetManagerService {
     return m;
   }
 
+  /**
+   * Which fleet a code belongs to — a NAME, not a session.
+   *
+   * Deliberately returns nothing that could be used against the company: the console shows "Kilima
+   * Logistics" so the person can see they are signing into the right fleet before they type a PIN, and
+   * a wrong code is caught here rather than blamed on their PIN two fields later.
+   */
+  lookup(code: string): FleetManager {
+    return this.login(code);
+  }
+
   suspend(did: string): FleetManager {
     return this.transition(this.require(did), 'SUSPENDED');
   }

@@ -1,11 +1,11 @@
 import {
   createFleetApi,
-  createMintedClient,
+  createSeededClient,
   makeConfig,
   publicRequest,
   purgeTokens,
   tokenKeyFor,
-  type AppClient,
+  type MintedToken,
   type FleetApi,
   type Result,
   type SbgConfig,
@@ -23,26 +23,36 @@ export function fleetConfig(): SbgConfig {
 }
 
 /**
- * Manager sign-in is a two-step: the @Public code login resolves the manager record
- * (AUTH_CODE_INVALID / AUTH_NOT_ACTIVE are real, readable rejections), then the app mints
- * a fleet_manager actor token for that DID with tenant = the manager's own DID — the
- * tenant is what scopes /vehicles, /fleet/drivers and /fleet/dashboard to THIS fleet
- * server-side. Same sandbox-mint limitation as the driver app (client-secret gated in
- * production); the manager login itself is real S2 surface.
+ * Step one — WHICH FLEET. The code names a company and hands back nothing else.
+ *
+ * It used to be the whole sign-in, and the app then minted its own fleet_manager token for that DID.
+ * One shared secret per company is a poor fit for a company running twenty managers across as many
+ * depots: no record of who did what, no way to cut off one leaver without re-issuing to everybody, and
+ * a code that is permanent access to anyone who ever saw it.
  */
-export function managerLogin(code: string): Promise<Result<ManagerView>> {
-  return publicRequest<ManagerView>(fleetConfig(), '/v1/sbg/fleet/managers/login', { body: { code } });
+export function managerLookup(code: string): Promise<Result<{ did: string; companyName: string; status: string }>> {
+  return publicRequest(fleetConfig(), '/v1/sbg/fleet/managers/login', { body: { code } });
+}
+
+/**
+ * Step two — WHICH PERSON, and the only step that returns a token.
+ *
+ * The server mints it, against a PIN checked by the identity spine that already counts wrong attempts
+ * and locks out. The app no longer mints its own: a client that can mint its own access is a client
+ * whose sign-in screen is decoration.
+ */
+export function managerSession(code: string, phone: string, pin: string): Promise<Result<ManagerView & { token: MintedToken }>> {
+  return publicRequest(fleetConfig(), '/v1/sbg/fleet/managers/session', { body: { code, phone, pin } });
 }
 
 export interface FleetClient {
   api: FleetApi;
-  client: AppClient;
+  /** Seeded rather than self-minting — the server hands the token over on a real sign-in. */
+  client: ReturnType<typeof createSeededClient>;
 }
 
 export function createFleetClient(managerDid: string): FleetClient {
-  const client = createMintedClient(fleetConfig(), 'fleet_manager', managerDid, tokenKeyFor(TOKEN_PREFIX, managerDid), {
-    tenant: managerDid,
-  });
+  const client = createSeededClient(fleetConfig(), tokenKeyFor(TOKEN_PREFIX, managerDid));
   return { api: createFleetApi(client.sbg), client };
 }
 

@@ -39,6 +39,14 @@ export const enFleet = {
   'fleet.signin.title': 'Open your fleet',
   'fleet.signin.lede': 'Sign in with your fleet manager code.',
   'fleet.signin.codeLabel': 'Sign-in code',
+  'fleet.signin.next': 'Next',
+  'fleet.signin.atCompany': 'Signing in to {company}',
+  'fleet.signin.phoneLabel': 'Your phone number',
+  'fleet.signin.pinLabel': 'Your PIN',
+  // Says why it is personal, because a manager handed a shared code for years will otherwise assume
+  // this is the same code again and try to type it here.
+  'fleet.signin.pinNote': 'Your own PIN, not the company code — so the fleet can see who did what, and one person leaving does not change everybody else’s sign-in.',
+  'fleet.signin.otherCompany': 'Different company',
   'fleet.signin.codeNote': 'SeeBuyGet issued this code when your company was activated.',
   'fleet.signin.submit': 'Sign in',
   'fleet.signin.canDoTitle': 'What you can do here',

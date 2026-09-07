@@ -2749,6 +2749,41 @@ describe('PUDO Light', () => {
     expect(theirs.did).toBeTruthy();
   });
 
+  /**
+   * Signing in to a fleet takes the company AND the person.
+   *
+   * The company code was the whole authentication: one shared secret for a company that may run twenty
+   * managers across as many depots. No record of who did what, no way to cut off one leaver without
+   * re-issuing to everybody, and permanent access for anybody who ever saw it.
+   *
+   * The code selects the fleet; the PIN proves the person; and the person must actually hold a
+   * fleet_manager role for THAT company — so knowing a code and holding some unrelated account is not a
+   * way in. Asserted here rather than through the console because it is the boundary, not the screen.
+   */
+  it('needs a person who actually manages this fleet, not merely the company code', () => {
+    const m = managers.register({ companyName: 'Two Step Haulage', contactPhone: '+254800780', ownerFullName: 'T S', ownerNationalId: 'MGR-2S', location: { lat: -1.2, lng: 36.8 }, requirements: { businessRegistrationNo: 'BRN-2S', transportOperatorLicence: 'TOL-2S', taxId: 'TAX-2S' } });
+    managers.submitKyc(m.did, { businessRegCertRef: 'r.pdf', operatorLicenceRef: 'l.pdf', ownerIdRef: 'id.jpg', proofOfAddressRef: 'a.pdf' });
+    managers.decideKyc(m.did, true, 'ops');
+    managers.recordBond(m.did);
+
+    // The manager's own person, with a PIN they set. The role link is what the registration and
+    // company-lookup routes both do (tryAttachRole) — done by hand here because this exercises the
+    // services rather than the controller.
+    persons.enroll('+254800780', true, '2468');
+    persons.tryAttachRole(m.contactPhone, 'fleet_manager', m.did, m.did);
+    const mine = persons.loginWithPin('+254800780', '2468').person;
+    expect(mine.roles.some((r) => r.role === 'fleet_manager' && r.entityDid === m.did && r.status === 'active')).toBe(true);
+
+    // A real account, a real PIN — and nothing to do with this fleet.
+    const stranger = persons.enroll('+254800781', true, '1111').person;
+    expect(persons.loginWithPin('+254800781', '1111').person.personDid).toBe(stranger.personDid);
+    // THE CHECK: holding the company code and a working account is not enough.
+    expect(stranger.roles.some((r) => r.role === 'fleet_manager' && r.entityDid === m.did && r.status === 'active')).toBe(false);
+
+    // …and the code alone still names the fleet without granting anything.
+    expect(managers.lookup(m.loginCode!).companyName).toBe('Two Step Haulage');
+  });
+
   it('refuses a DID as a sign-in credential — an identifier is not a secret', () => {
     // The manager's DID is stamped on their vehicles, returned by their dashboard and printed by the
     // seeder. Accepting it as a credential made every surface that exposes one into a way to sign in.

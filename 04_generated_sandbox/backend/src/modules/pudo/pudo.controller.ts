@@ -31,7 +31,7 @@ import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
-import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, WriteOffParcelDto } from './pudo.dto';
+import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, WriteOffParcelDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
 import { classifySize, measuredFactor, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
@@ -1762,16 +1762,45 @@ export class SbgController {
     return this.managers.listScoped(actingTenant(actor), actor?.role === 'operator');
   }
 
-  /** Fleet-console sign-in — resolve an ACTIVE manager from their login code, mint their actor token.
-   * A manager's own DID is both their identity and their tenant boundary (they see only their fleet). */
+  /**
+   * Fleet console, step one: WHICH FLEET. Names the company, and hands back nothing else.
+   *
+   * The code used to be the whole sign-in. One shared secret per company is a poor fit for a company
+   * running twenty managers across as many depots: no record of who did what, no way to cut off one
+   * leaver without re-issuing to everybody, and a code that is permanent access to whoever once saw it.
+   * It selects the tenant now; the person proves who they are in step two.
+   */
   @Public()
   @Post('fleet/managers/login')
-  managerLogin(@Body() dto: ManagerLoginDto) {
-    const m = this.managers.login(dto.code);
-    // S20: resolve this fleet login to the operator's person (idempotent with registration).
+  managerLookup(@Body() dto: ManagerLoginDto) {
+    const m = this.managers.lookup(dto.code);
+    // S20: resolve this fleet to the registered operator's person (idempotent with registration), so a
+    // company signing in for the first time has somebody who can complete step two.
     this.persons.tryAttachRole(m.contactPhone, 'fleet_manager', m.did, m.did);
+    return { did: m.did, companyName: m.companyName, status: m.status };
+  }
+
+  /**
+   * Fleet console, step two: WHICH PERSON — and the only step that mints anything.
+   *
+   * Checked against the identity spine, which already counts wrong PINs and locks out; the fleet code
+   * never had either. The person must actually hold a fleet_manager role for THIS company, so knowing a
+   * company code and holding some unrelated account is not a way in.
+   *
+   * The token still carries the manager DID as both did and tenant, so every fleet-scoped read behaves
+   * exactly as before. Recording WHICH PERSON acted needs a claim the actor token does not have yet —
+   * the response names them so the console can say who is signed in, and the audit trail does not.
+   */
+  @Public()
+  @Post('fleet/managers/session')
+  managerSession(@Body() dto: ManagerSessionDto) {
+    const m = this.managers.login(dto.code);
+    const { person } = this.persons.loginWithPin(dto.phone, dto.pin);
+    const holds = person.roles.some((r) => r.role === 'fleet_manager' && r.entityDid === m.did && r.status === 'active');
+    // Not FORBIDDEN: telling somebody "right PIN, wrong company" confirms both the account and the code.
+    if (!holds) throw new GlosError('AUTH_FAILED', 'That account cannot manage this fleet');
     const token = this.auth.mintActorToken({ role: 'fleet_manager', did: m.did, tenant: m.did });
-    return { ...m, token };
+    return { ...m, person: this.persons.view(person), token };
   }
 
   /** Managers awaiting a KYC decision (the GLOS operator review queue). */

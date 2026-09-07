@@ -25,7 +25,7 @@ export function App() {
       <div class="app">
         <TopBar title={t('fleet.appTitle')} subtitle={t('fleet.signInSubtitle')} />
         <main class="app__scroll app__scroll--nonav">
-          <SignInScreen actions={actions} error={state.error} busy={state.busy === 'signin'} />
+          <SignInScreen actions={actions} error={state.error} busy={state.busy === 'signin'} company={state.company} />
         </main>
         <Toasts state={state} actions={actions} noNav />
       </div>

@@ -689,8 +689,26 @@ export class ManagerKycDecisionDto {
   @IsOptional() @IsString() by?: string;
 }
 
+/** Step one: which fleet. The code NAMES a company; it no longer signs anybody in. */
 export class ManagerLoginDto {
   @IsString() code!: string;
+}
+
+/**
+ * Step two: which person.
+ *
+ * The company code alone used to be the whole of the fleet console's authentication — one shared secret
+ * per company, for a company that may run twenty managers across as many depots. That gave no audit
+ * trail of who did what, no way to cut off one leaver without re-issuing to everyone, and nothing that
+ * could be scoped to a depot. It also meant a code, once seen, was permanent access.
+ *
+ * The person's phone and PIN are the credential now, checked against the identity spine that already
+ * counts wrong attempts and locks out — protection the fleet code never had.
+ */
+export class ManagerSessionDto {
+  @IsString() code!: string;
+  @IsString() phone!: string;
+  @IsString() pin!: string;
 }
 
 // --- participant accounts (sign in / sign up) ---

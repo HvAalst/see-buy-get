@@ -184,7 +184,20 @@ const run = async () => {
     await req('POST', '/v1/auth/token', { body: { role: 'fleet_manager', did: mgr.did, tenant: mgr.did, type: 'client_credentials' } }),
     'fleet mint',
   ).access_token;
-  say(`fleet Kilima Logistics   sign-in code ${fleetCode}`);
+  // The manager as a PERSON, with a PIN. The company code names the fleet; the PIN is what actually
+  // signs somebody in, so a seeded fleet with no person behind it is a console nobody can open.
+  const MGR_PIN = '2468';
+  {
+    const r1 = await req('POST', '/v1/sbg/auth/phone/request', { body: { phone: mgr.contactPhone } });
+    const otp = r1.data?.code ?? r1.data?.otp ?? r1.data?.verificationCode;
+    if (otp) await req('POST', '/v1/sbg/auth/phone/verify', { body: { phone: mgr.contactPhone, code: otp } });
+    const enrolled = await req('POST', '/v1/sbg/identity/enroll', { body: { phone: mgr.contactPhone, pin: MGR_PIN } });
+    if (!enrolled.ok) {
+      // Already enrolled from an earlier run — that is the idempotent case, not a failure.
+      say(`  (fleet manager person already enrolled: ${mgr.contactPhone})`);
+    }
+  }
+  say(`fleet Kilima Logistics   company code ${fleetCode} · manager ${mgr.contactPhone} PIN ${MGR_PIN}`);
 
   const vehicles = need(await req('GET', '/v1/sbg/vehicles?status=&class=', { token: fm }), 'vehicles');
   const ensureVehicle = async (plate, vehicleClass, pricePerKm) => {
@@ -325,6 +338,29 @@ const run = async () => {
   const p1 = await accept(1);
   const p2 = await accept(2, { size: 'S' });
   say(`parcels waiting for the bus at Mama Sarah: ${p1.parcelId}, ${p2.parcelId}`);
+
+  /* The demo shop keeps more bag bays than a two-bay default.
+   *
+   * Each run opens a bag at Mama Sarah, and a run that dies partway leaves it half-filled on the floor.
+   * Two of those and the next run cannot open one at all — STAGING_FULL, which is a real shop constraint
+   * doing its job against a seeder that never tidies up. Room for ten is an honest setting for a shop
+   * this busy, and it costs the demo nothing. */
+  await req('POST', `/v1/sbg/agents/${encodeURIComponent(a1.did)}/bag-bays`, { token: tokA1, body: { bays: 10 } });
+
+  /* Amos finishes yesterday's run before starting today's.
+   *
+   * A bike holds one bag, and the capacity check enforces that properly now — so the bag this seeder
+   * deliberately leaves ON the bike at the end of a run is still there at the start of the next one, and
+   * the hub leg below died with CAPACITY_EXCEEDED. That is the guard doing its job and the seeder
+   * pretending yesterday never happened. He drops it at the hub, which is where it was going. */
+  {
+    const carrying = need(await req('GET', '/v1/sbg/fleet/dashboard', { token: fm }), 'fleet before the tote leg');
+    for (const item of carrying.cargo?.items ?? []) {
+      if (item.kind !== 'tote') continue;
+      const dropped = await req('POST', `/v1/sbg/mdps/${encodeURIComponent(hubRow.mdpId)}/drop-bag`, { token: tokHub, body: { code: item.ref } });
+      say(dropped.ok ? `yesterday's bag ${item.ref} delivered to the hub` : `  (could not drop ${item.ref}: ${dropped.status})`);
+    }
+  }
 
   /* Tote leg → hub floor content: two parcels bagged at the shop, bussed, dropped at the hub. */
   const p4 = await accept(4);
@@ -529,7 +565,11 @@ const run = async () => {
   // the same breath, which is right for the hub demo and leaves the fleet manager watching an empty
   // vehicle: "cargo in motion" counts totes a driver is holding, so cargo that has already arrived is
   // cargo nobody is carrying. This one is loaded and deliberately never dropped.
-  if (!live.some((x) => x.driverDid === amos.did) || true) {
+  // Only if the bike is empty. A bike holds one bag, and the capacity check enforces that properly now —
+  // so a second run that blindly loaded another died with CAPACITY_EXCEEDED, which is the guard working
+  // and the seeder being wrong. Asking what is already aboard is the idempotent question.
+  const aboard = need(await req('GET', '/v1/sbg/fleet/dashboard', { token: fm }), 'fleet before loading');
+  if ((aboard.cargo?.count ?? 0) === 0) {
     const p7 = await accept(7);
     const p8 = await accept(8, { size: 'S' });
     const rolling = need(await req('POST', `/v1/sbg/agents/${encodeURIComponent(a1.did)}/totes`, { token: tokA1 }), 'rolling tote');
@@ -569,7 +609,7 @@ const run = async () => {
   out.push('                        agent2@sbg.test / seebuyget   (Riverside Corner)');
   out.push('                        agent3@sbg.test / seebuyget   (Downtown Kiosk)');
   out.push('  Hub app     /mdp/     hub@sbg.test    / seebuyget   (Central Sort)');
-  out.push(`  Fleet app   /fleet/   sign-in code ${fleetCode}            (Kilima Logistics)`);
+  out.push(`  Fleet app   /fleet/   company ${fleetCode} · then ${mgr.contactPhone} PIN ${MGR_PIN}`);
   out.push(`  Driver app  /driver/  driver ID ${amos.did}`);
   out.push('  Send app    /send/    no sign-in needed');
   out.push(`  Vendor app  /vendor/  store ID ${shop.vendorId}`);
