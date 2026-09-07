@@ -1749,9 +1749,17 @@ export class SbgController {
     return manager;
   }
 
+  /**
+   * The fleets on the network. Scoped, because the raw record carries the console credential.
+   *
+   * Left unrestricted, this returned every fleet's `loginCode` to any authenticated caller — and the
+   * login code is the whole of the fleet console's authentication, so reading this list was signing in
+   * as anybody. An operator sees everything; a fleet sees itself; everyone else gets the name and status
+   * and nothing that could be used against the company.
+   */
   @Get('fleet/managers')
-  listManagers() {
-    return this.managers.list();
+  listManagers(@Actor() actor: IntrospectionResult) {
+    return this.managers.listScoped(actingTenant(actor), actor?.role === 'operator');
   }
 
   /** Fleet-console sign-in — resolve an ACTIVE manager from their login code, mint their actor token.

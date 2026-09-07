@@ -8612,6 +8612,8 @@
       },
       "get": {
         "operationId": "Sbg.listManagers",
+        "summary": "",
+        "description": "The fleets on the network. Scoped, because the raw record carries the console credential.\n\nLeft unrestricted, this returned every fleet's `loginCode` to any authenticated caller — and the\nlogin code is the whole of the fleet console's authentication, so reading this list was signing in\nas anybody. An operator sees everything; a fleet sees itself; everyone else gets the name and status\nand nothing that could be used against the company.",
         "parameters": [],
         "responses": {
           "200": {
@@ -8621,7 +8623,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/FleetManager"
+                    "type": "object"
                   }
                 }
               }

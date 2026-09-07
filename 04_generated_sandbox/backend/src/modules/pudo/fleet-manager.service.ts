@@ -145,7 +145,10 @@ export class FleetManagerService {
   /** Fleet-console sign-in: resolve an ACTIVE manager from their login code (or DID). */
   login(credential: string): FleetManager {
     const c = (credential || '').trim();
-    const m = [...this.managers.values()].find((x) => x.loginCode === c.toUpperCase() || x.did === c);
+    // The CODE only. It used to accept the manager's DID as well, and a DID is an identifier rather than
+    // a secret: it is returned by the fleet dashboard, stamped on vehicles and drivers, and printed by
+    // the seeder. Anything published by design cannot also be the thing that proves who you are.
+    const m = [...this.managers.values()].find((x) => x.loginCode === c.toUpperCase());
     if (!m) throw new GlosError('AUTH_CODE_INVALID', 'Unknown sign-in code');
     if (m.status !== 'ACTIVE') throw new GlosError('AUTH_NOT_ACTIVE', `Fleet manager is ${m.status} — not yet active`);
     return m;
@@ -176,6 +179,31 @@ export class FleetManagerService {
 
   list(): FleetManager[] {
     return [...this.managers.values()];
+  }
+
+  /**
+   * The list as anyone who is NOT this fleet may see it.
+   *
+   * The raw list carried `loginCode` — which IS the credential for the fleet console — alongside the
+   * company's tax id, transport-operator licence, business registration and depot address. The route had
+   * no role on it, so every authenticated actor in the network could read them: a shopkeeper's token, a
+   * driver's, a vendor's. That is not a leak of company data, it is a sign-in for every fleet we host.
+   *
+   * The same raw-object lesson the vehicle read already learned: build the outside view by DELETING from
+   * a copy, so a field added later is exposed only if somebody decides it should be.
+   */
+  listScoped(tenant: string | undefined, isOperator: boolean): Array<FleetManager | Partial<FleetManager>> {
+    return this.list().map((m) => {
+      if (isOperator || (tenant && m.did === tenant)) return m;
+      const view: Partial<FleetManager> = { ...m };
+      delete view.loginCode; // the console credential — never anybody else's business
+      delete view.vaultRef; // the pointer into the identity vault
+      delete view.contactPhone;
+      delete view.requirements; // registration number, transport licence, tax id
+      delete view.depotAddress;
+      delete view.kyc;
+      return view;
+    });
   }
 
   // --- internals ---

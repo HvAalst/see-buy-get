@@ -2712,6 +2712,55 @@ describe('PUDO Light', () => {
     expect(truck.verified).toBe(true); // full registration + factory ID
   });
 
+  /**
+   * The fleet console's credential is not everybody's business.
+   *
+   * GET /fleet/managers returned the RAW record to any authenticated caller, and the raw record carries
+   * `loginCode` — which is the entire authentication of the fleet console. So the lowest-privilege token
+   * in the network could list every fleet we host and read the code that signs in as each of them, along
+   * with their tax id, transport-operator licence, business registration and depot address.
+   *
+   * Found by calling the endpoint with a shopkeeper's token while looking at something else. Nothing
+   * failed before this test existed: leaking a field is not an error, it is a field.
+   */
+  it('never shows one fleet the sign-in code of another, or its papers', () => {
+    const mine = managers.register({ companyName: 'Mine Haulage', contactPhone: '+254800770', ownerFullName: 'M M', ownerNationalId: 'MGR-MINE', location: { lat: -1.2, lng: 36.8 }, requirements: { businessRegistrationNo: 'BRN-MINE', transportOperatorLicence: 'TOL-MINE', taxId: 'TAX-MINE' } });
+    const theirs = managers.register({ companyName: 'Theirs Haulage', contactPhone: '+254800771', ownerFullName: 'T T', ownerNationalId: 'MGR-THEIRS', location: { lat: -1.3, lng: 36.9 }, requirements: { businessRegistrationNo: 'BRN-THEIRS', transportOperatorLicence: 'TOL-THEIRS', taxId: 'TAX-THEIRS' } });
+
+    // An outsider — a shop, a driver, a vendor: anybody holding a token that is not this fleet's.
+    const outside = managers.listScoped('did:glos:some-shop', false);
+    for (const row of outside) {
+      expect(row.companyName).toBeTruthy(); // the network's fleets are not a secret…
+      expect(row.loginCode).toBeUndefined(); // …the way in to them is
+      expect(row.requirements).toBeUndefined(); // registration number, transport licence, tax id
+      expect(row.contactPhone).toBeUndefined();
+      expect(row.vaultRef).toBeUndefined();
+    }
+
+    // A fleet still sees its OWN record whole — its papers, its code once it has one.
+    const asMine = managers.listScoped(mine.did, false).find((m) => m.companyName === 'Mine Haulage');
+    expect(asMine?.requirements?.taxId).toBe('TAX-MINE');
+    const neighbour = managers.listScoped(mine.did, false).find((m) => m.companyName === 'Theirs Haulage');
+    expect(neighbour?.requirements).toBeUndefined();
+
+    // An operator sees everything, which is what an operator is for.
+    const asOps = managers.listScoped(undefined, true);
+    expect(asOps.find((m) => m.companyName === 'Theirs Haulage')?.requirements?.taxId).toBe('TAX-THEIRS');
+    expect(theirs.did).toBeTruthy();
+  });
+
+  it('refuses a DID as a sign-in credential — an identifier is not a secret', () => {
+    // The manager's DID is stamped on their vehicles, returned by their dashboard and printed by the
+    // seeder. Accepting it as a credential made every surface that exposes one into a way to sign in.
+    const m = managers.register({ companyName: 'DID Haulage', contactPhone: '+254800772', ownerFullName: 'D D', ownerNationalId: 'MGR-DID', location: { lat: -1.2, lng: 36.8 }, requirements: { businessRegistrationNo: 'BRN-DID', transportOperatorLicence: 'TOL-DID', taxId: 'TAX-DID' } });
+    managers.submitKyc(m.did, { businessRegCertRef: 'r.pdf', operatorLicenceRef: 'l.pdf', ownerIdRef: 'id.jpg', proofOfAddressRef: 'a.pdf' });
+    managers.decideKyc(m.did, true, 'ops');
+    managers.recordBond(m.did);
+
+    expect(managers.login(m.loginCode!).did).toBe(m.did); // the code works
+    expect(() => managers.login(m.did)).toThrow(/Unknown sign-in code/); // the identifier does not
+  });
+
   it('onboards a fleet manager through its own filter → KYC → vetting → bond → ACTIVE (Ch 19)', () => {
     const base = { companyName: 'Acme Haulage', contactPhone: '+254800001', ownerFullName: 'A Owner', ownerNationalId: 'MGR-1', location: { lat: -1.2, lng: 36.8 }, requirements: { businessRegistrationNo: 'BRN-1', transportOperatorLicence: 'TOL-1', taxId: 'TAX-1' } };
     // Eligibility filter
