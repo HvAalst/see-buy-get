@@ -208,16 +208,6 @@ function ParcelDetail({ parcel, state, actions }: { parcel: ConsumerParcelView; 
             <Note tone="info" icon="check" title={t('send.notice.answered')} detail={t(`send.notice.choice.${parcel.receiverResponse.choice}` as 'send.notice.choice.coming')} />
           ) : null}
 
-          {/* The code for the person they named. Shown to THEM to pass on — we do not choose who a
-              person trusts, and the shop never learns it either way. */}
-          {state.proxyCode ?? parcel.collectProxy ? (
-            <CodeCard
-              label={t('send.notice.proxyCode', { name: (state.proxyCode ?? parcel.collectProxy)!.name })}
-              code={(state.proxyCode ?? parcel.collectProxy)!.code}
-              sayLabel={t('send.parcels.hearCode')}
-            />
-          ) : null}
-
           {!parcel.relinquishedAt ? (
             <div class="stack">
               <Button variant="primary" busy={state.noticeBusy === 'coming'} onClick={() => void actions.respondToNotice('coming')}>
@@ -251,6 +241,24 @@ function ParcelDetail({ parcel, state, actions }: { parcel: ConsumerParcelView; 
           )}
           <p class="card__note">{t('send.notice.stillYours')}</p>
         </Card>
+      ) : null}
+
+      {/* The code for the person they named, beside their own rather than inside the notice.
+
+          It used to live in the notice card, which renders only while the parcel is unclaimed — and
+          naming somebody now ends that status, so the code disappeared at the exact moment its whole
+          purpose was to be passed on. It belongs next to the receiver's own code because that is what it
+          is: a second key to the same parcel, and the person holding it is the one who has to hand it
+          over. The shop learns neither. */}
+      {parcel.relation === 'received' && (state.proxyCode ?? parcel.collectProxy) ? (
+        <>
+          <CodeCard
+            label={t('send.notice.proxyCode', { name: (state.proxyCode ?? parcel.collectProxy)!.name })}
+            code={(state.proxyCode ?? parcel.collectProxy)!.code}
+            sayLabel={t('send.parcels.hearCode')}
+          />
+          <p class="hint">{t('send.notice.proxyHint', { name: (state.proxyCode ?? parcel.collectProxy)!.name })}</p>
+        </>
       ) : null}
 
       {/* S22: the in-app release token — the receiver shows this QR (or reads the code) at the shop; the

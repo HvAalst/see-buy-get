@@ -230,7 +230,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
           kind: 'parcel_ready',
           title: 'Time to collect your parcel',
           body: `It is still at ${where} and still yours. Holding now costs ${HOLDING_FEE_PER_DAY} a day — tell us what you want to do.`,
-          link: `/parcel/${parcelId}`,
+          // A QUERY, not a path. Each app is a single index.html, so '/parcel/PUD-1' resolves against
+          // the SW scope to /send/parcel/PUD-1 — which does not exist, and the one notification that
+          // asks somebody to make a decision would open a 404. Same shape as the driver's offer link.
+          link: `/?parcel=${parcelId}`,
           // Its own tag: collapsing this onto the reminder would swallow the one message that changes
           // the terms behind one the receiver has already read and dismissed.
           tag: `parcel-unclaimed:${parcelId}`,

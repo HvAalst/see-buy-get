@@ -157,6 +157,14 @@ export class UnclaimedService {
     // The NAME goes in the trail; the code does not. A shop reading its own parcel's history must be
     // able to see who is expected, and must not be able to see what will let them through the door.
     this.parcels.annotate(parcelId, 'receiver', `${clean} named to collect on the receiver's behalf`);
+    // NAMING SOMEBODY IS AN ANSWER. Before this it was only a code: the receiver had told us a neighbour
+    // was coming, and the network went on treating the parcel as one nobody had spoken for — still
+    // lapsing, and still being offered back to the store while that neighbour was on their way.
+    parcel.receiverResponse ??= { choice: 'proxy', at: new Date(now).toISOString() };
+    // …and it buys the same time any other "somebody is coming" answer buys. Guarded on the status rather
+    // than on a counter so it is bought ONCE: a receiver who answered 'proxy' first has already left
+    // Unclaimed, and a second grant here would spend their free extension on the same decision twice.
+    if (parcel.status === 'Unclaimed') this.extend(parcelId, now);
     return { name: clean, code: parcel.collectProxy.code };
   }
 

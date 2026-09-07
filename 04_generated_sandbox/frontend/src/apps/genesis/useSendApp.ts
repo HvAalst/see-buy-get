@@ -235,6 +235,37 @@ export function useSendApp() {
     });
   }, []);
 
+  /**
+   * Arriving from the final-notice notification: ?parcel=PUD-1 opens that parcel.
+   *
+   * HELD until the session restores rather than acted on at boot. The twin is authenticated, so opening
+   * it needs an identity that arrives asynchronously — reading the param and firing immediately would
+   * race the restore and drop the person on an empty list, which is the tap they made going nowhere.
+   *
+   * The param is stripped as it is read, exactly as the driver's offer link is: a refresh (or simply
+   * re-opening the app) must not keep re-jumping somebody onto a parcel they have already dealt with.
+   */
+  const [deepParcel, setDeepParcel] = useState<string | null>(null);
+  useEffect(() => {
+    const id = new URLSearchParams(globalThis.location?.search ?? '').get('parcel');
+    if (!id) return;
+    setDeepParcel(id);
+    try {
+      const url = new URL(location.href);
+      url.searchParams.delete('parcel');
+      history.replaceState(null, '', url.toString());
+    } catch {
+      /* a browser that refuses the rewrite still lands on the right screen — it may re-jump on reload */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!deepParcel || !state.identity) return; // signed out: it waits, and opens the moment they sign in
+    setDeepParcel(null);
+    setState((s) => ({ ...s, screen: 'parcels' }));
+    void openParcel(deepParcel);
+  }, [deepParcel, state.identity]);
+
   /* ----------------------------------------------------------------- points */
 
   const pointsEpoch = useRef(0);

@@ -345,6 +345,28 @@ describe('the collection window closing', () => {
       expect(parcels.get(parcel.parcelId).scans.map((s) => s.note).join(' | ')).not.toContain(code);
     });
 
+    it('counts as an ANSWER, and buys the same time any other answer buys', () => {
+      // Found in the friction pass, by reading the screen rather than by a failing test. Naming a
+      // neighbour used to mint a code and nothing else: the receiver had told us somebody was coming,
+      // and the network went on treating the parcel as one nobody had spoken for — still lapsing, still
+      // being offered back to the store while that neighbour was travelling to the shop.
+      const { parcel } = stranded();
+      unclaimed.nominate(parcel.parcelId, 'Mama Njeri');
+      const after = parcels.get(parcel.parcelId);
+      expect(after.receiverResponse?.choice).toBe('proxy');
+      expect(after.status).toBe('Ready_For_Pickup');
+      expect(unclaimed.owed(parcel.parcelId)).toBe(0);
+    });
+
+    it('does not spend the free extension twice on one decision', () => {
+      // 'proxy' then a name is two calls about ONE decision, and a second grant here would quietly use
+      // up the free extension the first one already gave them.
+      const { parcel } = stranded();
+      unclaimed.respond(parcel.parcelId, 'proxy');
+      unclaimed.nominate(parcel.parcelId, 'Mama Njeri');
+      expect(parcels.get(parcel.parcelId).extensionsUsed).toBe(1);
+    });
+
     it('refuses a nomination with nobody in it', () => {
       const { parcel } = stranded();
       expect(() => unclaimed.nominate(parcel.parcelId, '  ')).toThrow(/Name the person/);

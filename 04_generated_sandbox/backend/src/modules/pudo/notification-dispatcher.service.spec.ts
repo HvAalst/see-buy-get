@@ -508,3 +508,45 @@ describe('NotificationDispatcher — the uncollected reminder', () => {
     expect(await dispatcher.remindUncollected()).toBe(0);
   });
 });
+
+/**
+ * Where a notification actually LANDS when somebody taps it.
+ *
+ * Found by walking the built site rather than by a failing test, because nothing here could fail: a
+ * notification link is a string, and a string is always a valid string. The final notice shipped with
+ * link: '/parcel/PUD-1', which the push service worker resolves against the app's scope to
+ * /send/parcel/PUD-1 — a path that does not exist in a build where each app is one index.html. The one
+ * notification in this network that asks a person to make a decision opened a 404.
+ *
+ * THE RULE: a deep link is a QUERY on the app root, never a path segment. '/' means this app's home and
+ * '/?x=y' means home with something selected; anything else is a page the build does not contain. The
+ * driver's offer link had always been the right shape — the new one simply did not copy it.
+ */
+describe('notification deep links resolve to a page that exists', () => {
+  const rx = { 'hash-rx': { personDid: 'did:person:rx' } };
+  const store = { 'did:agent:9': { shopName: "Mama Sarah's" } };
+  const shelfParcel = {
+    parcelId: 'PUD-1',
+    receiverPhoneHash: 'hash-rx',
+    destAgentDid: 'did:agent:9',
+    destZone: 'Westlands',
+  };
+
+  it('sends the final notice somewhere the send app can actually open', async () => {
+    const { notifications, dispatcher } = harness({
+      parcel: shelfParcel,
+      personByHash: rx,
+      agents: store,
+      unclaimedSweep: () => [{ parcelId: 'PUD-1' }],
+    });
+    await dispatcher.sweepShelf();
+
+    // By its payload rather than its tag: the durable inbox record deliberately drops `tag`, which is a
+    // push-collapsing hint for the service worker and not a fact about the notification.
+    const notice = notifications.inboxFor('did:person:rx').find((n) => n.data?.parcelId === 'PUD-1');
+    expect(notice).toBeDefined();
+    // A path segment is the bug. Home, or home with a selection — nothing else is served.
+    expect(notice!.link).toBe('/?parcel=PUD-1');
+    expect(notice!.link === '/' || notice!.link!.startsWith('/?')).toBe(true);
+  });
+});
