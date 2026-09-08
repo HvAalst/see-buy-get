@@ -23,6 +23,7 @@ import { VehicleService } from './vehicle.service';
 import { DriverService } from './driver.service';
 import { FleetService } from './fleet.service';
 import { DispatchService } from './dispatch.service';
+import { RouteConstraintService } from './route-constraint.service';
 import { FreightBoardResponse, FreightProposalsResponse, MarketResponse, MarketSeries, PostedFreightResponse } from './dispatch.types';
 import { MarketPulseService } from './market-pulse.service';
 import { CargoService } from './cargo.service';
@@ -31,7 +32,7 @@ import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
-import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, WriteOffParcelDto } from './pudo.dto';
+import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { classifySize, measuredFactor, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
@@ -89,6 +90,7 @@ export class SbgController {
     private readonly returns: ReturnService,
     private readonly fleet: FleetService,
     private readonly dispatch: DispatchService,
+    private readonly constraints: RouteConstraintService,
     private readonly managers: FleetManagerService,
     private readonly accounts: AccountService,
     private readonly otp: OtpService,
@@ -2168,6 +2170,88 @@ export class SbgController {
     // Judged against the caller's own vehicle unless an operator names someone else's.
     const driverDid = actor?.role === 'operator' ? q.driverDid : (q.driverDid ?? actor?.did);
     const items = this.dispatch.board({ driverDid, from: { lat: Number(q.lat), lng: Number(q.lng) }, radiusKm: q.radiusKm });
+    return { items, total: items.length };
+  }
+
+  // ── The crowd-sourced road map ────────────────────────────────────────────────────────────────────
+  //
+  // Nobody sells bridge clearances for these corridors, so the fleet that needs the map builds it. The
+  // asymmetry that governs the whole feature lives in the service; what the HTTP surface has to get right
+  // is who may do which half. Reporting, confirming and refuting are open to any authenticated driver —
+  // that is the point, and the cost of a bad report is a detour. CLEARING is operator-only, because it is
+  // the one action that takes a warning off everybody's map.
+
+  /**
+   * One tap from the cab: there is something on this road.
+   *
+   * Who reported it comes from the token, never the body — a hazard map with self-asserted attribution is
+   * one anybody can poison anonymously. Reports of the same obstacle from different laybys fold into one
+   * constraint and count as corroboration; the service handles that, so the client may report freely.
+   */
+  @Post('route-constraints')
+  reportConstraint(@Body() dto: ReportConstraintDto, @Actor() actor: IntrospectionResult) {
+    return this.constraints.report({ kind: dto.kind, at: dto.at, value: dto.value, note: dto.note, by: actingDid(actor) });
+  }
+
+  /** A later passer-by agrees it is there. One vote each, and never the original reporter's own. */
+  @Post('route-constraints/:id/confirm')
+  confirmConstraint(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    return this.constraints.confirm(id, actingDid(actor));
+  }
+
+  /**
+   * A driver says it is not there — and it KEEPS WARNING.
+   *
+   * Deliberately NOT a delete, and this endpoint is the reason the distinction has to survive the HTTP
+   * layer too. Refuting moves a constraint to `disputed`, which still appears and still blocks, and puts
+   * it in front of an operator. Letting the crowd remove a hazard would mean one mistaken tap — or one
+   * driver who wanted a shorter route — could take a low bridge off everybody's map.
+   */
+  @Post('route-constraints/:id/refute')
+  refuteConstraint(@Param('id') id: string, @Body() dto: RefuteConstraintDto, @Actor() actor: IntrospectionResult) {
+    return this.constraints.refute(id, actingDid(actor), dto.note);
+  }
+
+  /**
+   * The operator clears it — the ONLY way a constraint stops warning, and operator-only for that reason.
+   *
+   * With a reason, always, and the reason is kept: "either forgive or regret and we don't want both".
+   * A crowd-sourced hazard map must have an auditable way back, or it can never be corrected at all.
+   */
+  @Roles('operator')
+  @Post('route-constraints/:id/clear')
+  clearConstraint(@Param('id') id: string, @Body() dto: ClearConstraintDto, @Actor() actor: IntrospectionResult) {
+    return this.constraints.clear(id, auditActor(actor, dto.by), dto.reason);
+  }
+
+  /** What is around here. Cleared constraints are gone; disputed ones are still shown, and say so. */
+  @Get('route-constraints')
+  constraintsNear(@Query() q: ConstraintsNearQueryDto) {
+    const items = this.constraints.near({ lat: Number(q.lat), lng: Number(q.lng) }, q.radiusKm);
+    return { items, total: items.length };
+  }
+
+  /**
+   * What sits on the corridor a driver is about to run.
+   *
+   * An empty list means only that nothing has been REPORTED on this line — never that the road is clear.
+   * The board pairs this with a caveat it cannot switch off; a client rendering this list on its own must
+   * carry the same warning, because absence of a report is not clearance.
+   */
+  @Get('route-constraints/route')
+  constraintsAlongRoute(@Query() q: ConstraintsRouteQueryDto) {
+    const items = this.constraints.alongRoute(
+      { lat: Number(q.fromLat), lng: Number(q.fromLng) },
+      { lat: Number(q.toLat), lng: Number(q.toLng) },
+    );
+    return { items, total: items.length, basis: 'reported-by-drivers-never-surveyed' };
+  }
+
+  /** The operator's queue: live hazards somebody says are not there. Nothing else resolves these. */
+  @Roles('operator')
+  @Get('route-constraints/disputed')
+  disputedConstraints() {
+    const items = this.constraints.disputed();
     return { items, total: items.length };
   }
 

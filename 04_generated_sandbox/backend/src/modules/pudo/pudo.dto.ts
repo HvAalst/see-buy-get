@@ -6,6 +6,7 @@ import { MERCHANT_TAGS, MerchantTag } from './merchant-rating.service';
 import { TRUCK_SUBTYPES } from './fleet.config';
 import { PACKAGING, type Packaging } from './packaging';
 import { MEDIA_KINDS, MediaKind } from './media.types';
+import { CONSTRAINT_KINDS, ConstraintKind } from './route-constraint.types';
 import { CARGO_LANES, CARGO_NATURES, CargoLane, CargoNature, EQUIPMENT, Equipment } from './cargo.types';
 
 /** F1 — a scheduled pickup instant must be a full datetime WITH a timezone offset (Z or ±HH:MM), so the
@@ -1176,4 +1177,55 @@ export class ConsignmentDepositDto {
 export class RecordTempDto {
   @IsOptional() @IsString() driverDid?: string;
   @IsNumber() celsius!: number;
+}
+
+/**
+ * A driver reporting the road, one tap from the cab.
+ *
+ * Short on purpose, because of WHERE it is filled in. A long form is not something anybody completes at a
+ * junction with a truck behind them, so everything here is either a tap (`kind`), already known to the
+ * phone (`at`), or one number off a sign (`value`). `note` is never required.
+ *
+ * There is no `by`: who reported it comes from the verified token, never from the body. A hazard map whose
+ * attribution can be self-asserted is a hazard map anybody can poison anonymously.
+ */
+export class ReportConstraintDto {
+  @IsIn(CONSTRAINT_KINDS) kind!: ConstraintKind;
+  @ValidateNested() @Type(() => GeoDto) at!: GeoDto;
+  /** Metres for a height, kilograms for a limit. Required for the kinds that have something to measure —
+   *  the service refuses those without it, because an unmeasured limit cannot be checked against a load. */
+  @IsOptional() @IsNumber() @Min(0.01) value?: number;
+  @IsOptional() @IsString() @MaxLength(200) note?: string;
+}
+
+/** A later passer-by saying it is not there any more. The note is the only place they can say why. */
+export class RefuteConstraintDto {
+  @IsOptional() @IsString() @MaxLength(200) note?: string;
+}
+
+/**
+ * An operator clearing a constraint — the only thing that stops one warning.
+ *
+ * The reason is REQUIRED and it is kept. A hazard removed with no recorded justification cannot be told
+ * apart later from somebody deleting an inconvenient bridge.
+ */
+export class ClearConstraintDto {
+  @IsString() @MaxLength(300) reason!: string;
+  /** An operator may name the human who made the call; otherwise the token speaks for itself. */
+  @IsOptional() @IsString() by?: string;
+}
+
+/** What is around here — the driver's map. A point, and how far they care to look. */
+export class ConstraintsNearQueryDto {
+  @IsNumber() @Type(() => Number) @Min(-90) @Max(90) lat!: number;
+  @IsNumber() @Type(() => Number) @Min(-180) @Max(180) lng!: number;
+  @IsOptional() @IsNumber() @Type(() => Number) @Min(1) radiusKm?: number;
+}
+
+/** What sits on the line between two places — the corridor a driver is about to run. */
+export class ConstraintsRouteQueryDto {
+  @IsNumber() @Type(() => Number) @Min(-90) @Max(90) fromLat!: number;
+  @IsNumber() @Type(() => Number) @Min(-180) @Max(180) fromLng!: number;
+  @IsNumber() @Type(() => Number) @Min(-90) @Max(90) toLat!: number;
+  @IsNumber() @Type(() => Number) @Min(-180) @Max(180) toLng!: number;
 }

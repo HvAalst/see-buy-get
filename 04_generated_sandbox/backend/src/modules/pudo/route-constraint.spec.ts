@@ -1,6 +1,10 @@
 import { RouteConstraintService, ON_ROUTE_KM, distanceToSegmentKm } from './route-constraint.service';
 import * as serviceModule from './route-constraint.service';
 import { CONSTRAINT_EFFECT, CONSTRAINT_KINDS } from './route-constraint.types';
+import { SbgController } from './pudo.controller';
+import { ReportConstraintDto } from './pudo.dto';
+import { ROLES_KEY } from '../../foundation/auth/scopes.decorator';
+import { IS_PUBLIC_KEY } from '../../foundation/auth/public.decorator';
 
 /**
  * The crowd-sourced road map — and it is a SAFETY surface, so these tests are written against the two
@@ -332,6 +336,39 @@ describe('route constraints — the road as its drivers report it', () => {
 
     it('does not know a constraint that was never reported', () => {
       expect(() => svc().get('rc_nope')).toThrow(/no such report/i);
+    });
+  });
+
+  /**
+   * WHO may do which half, asserted on the routes themselves.
+   *
+   * @Roles is metadata that only the real AuthGuard enforces, and no spec here builds one — so a test that
+   * called these methods directly would pass with the decorator deleted. This reads the metadata instead:
+   * it proves the routes are LABELLED correctly, which is the half that gets lost in an edit. That the
+   * guard then honours the label is auth.guard.ts's own business, and is tested there.
+   */
+  describe('the HTTP surface: reporting is open, clearing is not', () => {
+    it('lets any authenticated driver report, confirm and refute', () => {
+      // The whole premise. A hazard map that only operators may add to is a hazard map nobody reports to.
+      for (const route of ['reportConstraint', 'confirmConstraint', 'refuteConstraint'] as const) {
+        expect(Reflect.getMetadata(ROLES_KEY, SbgController.prototype[route])).toBeUndefined();
+        // …but never anonymously: an unauthenticated report cannot be held against anybody.
+        expect(Reflect.getMetadata(IS_PUBLIC_KEY, SbgController.prototype[route])).toBeUndefined();
+      }
+    });
+
+    it('reserves CLEARING, and the queue it is done from, to an operator', () => {
+      // Clearing is the single action that takes a warning off everybody's map. It is the expensive half
+      // of the asymmetry, and the HTTP layer has to hold that line as firmly as the service does.
+      expect(Reflect.getMetadata(ROLES_KEY, SbgController.prototype.clearConstraint)).toEqual(['operator']);
+      expect(Reflect.getMetadata(ROLES_KEY, SbgController.prototype.disputedConstraints)).toEqual(['operator']);
+    });
+
+    it('gives a reporter no way to say they are somebody else', () => {
+      // Identity comes from the verified token; there is deliberately no `by` on the report body. A map
+      // whose attribution is self-asserted is one anybody can poison anonymously.
+      expect(Object.keys(new ReportConstraintDto())).not.toContain('by');
+      expect(new ReportConstraintDto()).not.toHaveProperty('reportedBy');
     });
   });
 });
