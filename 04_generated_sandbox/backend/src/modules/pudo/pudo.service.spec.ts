@@ -26,6 +26,7 @@ import { VehicleService } from './vehicle.service';
 import { DriverService } from './driver.service';
 import { FleetService } from './fleet.service';
 import { DispatchService } from './dispatch.service';
+import { RouteConstraintService } from './route-constraint.service';
 import { MarketPulseStore } from './market-pulse.store';
 import { MarketPulseService } from './market-pulse.service';
 import { shipperCharge } from './pricing';
@@ -113,7 +114,7 @@ describe('PUDO Light', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
-        GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, VehicleService, DriverService, FleetService, DispatchService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
+        GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, VehicleService, DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus, EntityService, BooksService, FxService, ApiKeyService,
         PayoutService, ReturnService, UnclaimedService, MerchantRatingService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },

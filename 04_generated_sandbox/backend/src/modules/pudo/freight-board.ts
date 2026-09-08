@@ -87,7 +87,19 @@ const ROUTE_SENSITIVE: TruckSubtype[] = ['lowboy', 'logging', 'car_carrier', 'sk
 export function blockersFor(
   load: BoardLoad,
   vehicle: BoardVehicle | null,
-  ctx: { remainingKg: number; ratingBelowFloor: boolean; indicativeCharge?: number },
+  ctx: {
+    remainingKg: number;
+    ratingBelowFloor: boolean;
+    indicativeCharge?: number;
+    /**
+     * What the crowd-sourced constraint map says about this road, computed by the caller.
+     *
+     * Passed IN rather than looked up here, because this module is pure and the map is a service. When it
+     * is absent — an older caller, a load with no route — the hardcoded NOT CHECKED below still fires, so
+     * the honest answer is the default and the real answer is the upgrade. Never the other way round.
+     */
+    routeBlockers?: BoardBlocker[];
+  },
 ): BoardBlocker[] {
   const out: BoardBlocker[] = [];
 
@@ -132,10 +144,15 @@ export function blockersFor(
   if (load.maxSpend != null && ctx.indicativeCharge != null && ctx.indicativeCharge > load.maxSpend) {
     out.push({ kind: 'preference', code: 'OVER_BUDGET', message: `Your price comes to more than the shipper's budget of ${fmt(load.maxSpend)} — they may still raise it` });
   }
-  // NOT a blocker on this driver — a statement about what we do not know. Kept in the same list precisely so
-  // it cannot be quietly dropped: absence of a report is not clearance, and a board that says nothing about
-  // an unchecked bridge is a board that implies there is not one.
-  if (load.derivedBody && ROUTE_SENSITIVE.includes(load.derivedBody)) {
+  // What the road itself says, from the drivers who reported it.
+  //
+  // The map answers with real constraints where it has them and with NOT CHECKED where it does not, so
+  // this replaces the blanket disclaimer rather than adding to it. The disclaimer stays for callers that
+  // pass nothing — absence of a report is not clearance, and a board silent about an unchecked bridge is
+  // a board implying there is not one.
+  if (ctx.routeBlockers?.length) {
+    out.push(...ctx.routeBlockers);
+  } else if (load.derivedBody && ROUTE_SENSITIVE.includes(load.derivedBody)) {
     out.push({ kind: 'unknown', code: 'ROUTE_NOT_CHECKED', message: 'Bridge heights and axle limits on this route are not known to us — check the road yourself' });
   }
   return out;

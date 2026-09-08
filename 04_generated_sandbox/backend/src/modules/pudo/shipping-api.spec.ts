@@ -18,6 +18,7 @@ import { VehicleService } from './vehicle.service';
 import { DriverService } from './driver.service';
 import { FleetService } from './fleet.service';
 import { DispatchService } from './dispatch.service';
+import { RouteConstraintService } from './route-constraint.service';
 import { WalletGateService } from './wallet-gate.service';
 import { CargoService } from './cargo.service';
 import { MediaService } from './media.service';
@@ -79,7 +80,7 @@ describe('the public shipping quote', () => {
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
         GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService,
         BagPlanService, ForthcomingService, DockService, ShippingApiService, ToteService, ConsignmentService,
-        VehicleService, DriverService, FleetService, DispatchService, MarketPulseStore, MarketPulseService,
+        VehicleService, DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService,
         FleetManagerService, MediaService, CargoService, DigitalTwinService, TrackingService,
         TrackingContextService, NormalizationService, ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,

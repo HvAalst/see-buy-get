@@ -14,6 +14,7 @@ import { FleetService } from './fleet.service';
 import { CargoService } from './cargo.service';
 import { CargoNature, Equipment, VehicleCapability } from './cargo.types';
 import { VendorService } from './vendor.service';
+import { RouteConstraintService } from './route-constraint.service';
 import { RatingService, belowFloor } from './rating.service';
 import { WalletGateService } from './wallet-gate.service';
 import { clampMultiplier, computeFreightPrice, computeToteHaul, distanceSplit, earningsPerKm, freightMultiplier, shipperCharge, type PriceBreakdown } from './pricing';
@@ -207,6 +208,7 @@ export class DispatchService {
     private readonly market: MarketPulseStore,
     private readonly media: MediaService,
     private readonly ratings: RatingService,
+    private readonly constraints: RouteConstraintService,
     // For the driver's own standing "do not wake me below this". Read HERE rather than passed in, because
     // the caller is a GPS fix and there is no request to carry it — which is exactly why this path had no
     // floor at all until now.
@@ -1062,7 +1064,24 @@ export class DispatchService {
         // Gross, like the gate it mirrors: the board marks a load as over the shipper's budget, and it must
         // mark exactly the loads the claim would refuse. Two different figures against one cap is how a
         // board tells an operator a load is takeable and the claim then says it is not.
-        { remainingKg, ratingBelowFloor, indicativeCharge: price ? this.shipperBill(price.total, f).gross : undefined },
+        {
+          remainingKg,
+          ratingBelowFloor,
+          indicativeCharge: price ? this.shipperBill(price.total, f).gross : undefined,
+          // The road, as drivers reported it.
+          //
+          // NO HEIGHT IS PASSED, deliberately. What matters at a bridge is the load PLUS the deck it is
+          // standing on — a 4.0 m load is 5.2 m on a flatbed and 4.4 m on a lowboy — and vehicles carry
+          // no deck height in this system yet. So the map answers HEIGHT_UNKNOWN against any height
+          // limit on the road, which is the truth. Passing the load height alone would clear a load that
+          // does not fit, which is the precise silent pass this whole feature exists to refuse.
+          routeBlockers: this.constraints.checkRoute({
+            from: f.pickupLocation,
+            to: f.destLocation,
+            grossWeightKg: f.weightKg,
+            hazmat: (f.requiredCapabilities ?? []).includes('hazmat'),
+          }),
+        },
       );
       rows.push({
         freightId: f.freightId,
