@@ -73,15 +73,15 @@ describe('blockersFor (FB1)', () => {
   });
 
   describe('the unknown route — absence of a report is not clearance', () => {
-    it('marks an oversize body as NOT CHECKED rather than passing it silently', () => {
-      // We hold no bridge clearance or axle data for any corridor. A board that says nothing about an
-      // unchecked bridge is a board that implies there is not one.
+    it('marks an oversize body as NOT SURVEYED rather than passing it silently', () => {
+      // Nobody surveys these roads. A board that says nothing about an unchecked bridge is a board that
+      // implies there is not one.
       const [b] = blockersFor(load({ derivedBody: 'lowboy' }), truck(), ok);
       expect(b.kind).toBe('unknown');
-      expect(b.code).toBe('ROUTE_NOT_CHECKED');
+      expect(b.code).toBe('ROUTE_NOT_SURVEYED');
     });
 
-    it('an unchecked route does NOT make the load untakeable — it is a warning, not our refusal', () => {
+    it('an unsurveyed route does NOT make the load untakeable — it is a warning, not our refusal', () => {
       // The operator drives the road; deciding for them that they cannot would be the platform overreaching.
       const bs = blockersFor(load({ derivedBody: 'lowboy' }), truck(), ok);
       expect(takeable(bs)).toBe(true);
@@ -90,7 +90,24 @@ describe('blockersFor (FB1)', () => {
     });
 
     it('does not cry wolf on an ordinary body', () => {
-      expect(codes(blockersFor(load({ derivedBody: 'box' }), truck(), ok))).not.toContain('ROUTE_NOT_CHECKED');
+      expect(codes(blockersFor(load({ derivedBody: 'box' }), truck(), ok))).not.toContain('ROUTE_NOT_SURVEYED');
+    });
+
+    it('REPORTS DO NOT PROMOTE A ROAD TO SURVEYED — the caveat survives finding something', () => {
+      // The defect this replaced: any report on the corridor switched the caveat off, so one reported
+      // weighbridge on a 400 km road read as a clearance for every bridge on it. Reports are evidence of
+      // the obstacles somebody MET; they are never evidence about the ones nobody met.
+      const found = [{ kind: 'physical' as const, code: 'OVER_HEIGHT', message: '4.2 m limit' }];
+      const bs = blockersFor(load({ derivedBody: 'lowboy' }), truck(), { ...ok, routeBlockers: found });
+      expect(codes(bs)).toEqual(expect.arrayContaining(['OVER_HEIGHT', 'ROUTE_NOT_SURVEYED']));
+    });
+
+    it('carries what the map found on a body that gets no blanket caveat', () => {
+      // An ordinary box body is not warned about bridges in general — but a bridge somebody actually
+      // reported on its road is a fact about this load, and it is shown.
+      const found = [{ kind: 'legal' as const, code: 'HAZMAT_PROHIBITED', message: 'no hazmat on this road' }];
+      const bs = blockersFor(load({ derivedBody: 'box' }), truck(), { ...ok, routeBlockers: found });
+      expect(codes(bs)).toEqual(['HAZMAT_PROHIBITED']);
     });
   });
 

@@ -334,7 +334,7 @@ describe('the open board (FB2)', () => {
   const priced = (total: number) => ({ baseFee: 10, distanceKm: 25, deadheadKm: 5, loadedKm: 20, ratePerKm: 0.5, multiplier: 1, effectiveRate: 0.5, total });
   const equip = { kind: 'resolvable' as const, code: 'MISSING_EQUIPMENT', message: 'Needs a forklift' };
   const heavy = { kind: 'physical' as const, code: 'OVER_VEHICLE_CAPACITY', message: '12000 kg over' };
-  const unchecked = { kind: 'unknown' as const, code: 'ROUTE_NOT_CHECKED', message: 'Bridges not known' };
+  const unchecked = { kind: 'unknown' as const, code: 'ROUTE_NOT_SURVEYED', message: 'Bridges not known' };
 
   it('counts what ONE change would open up, with what it would pay', () => {
     // The whole reason a load you cannot take is on the screen: "a forklift opens 2 more loads worth 130".

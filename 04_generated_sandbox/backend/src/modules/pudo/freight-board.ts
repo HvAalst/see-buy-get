@@ -73,8 +73,8 @@ export interface BoardVehicle {
   allowsFragile?: boolean;
 }
 
-// Bodies whose loads routinely meet a bridge or a tunnel. We hold no clearance or axle data for any corridor
-// (see the crowd-sourced constraint map), so for these the honest answer is that the route was NOT CHECKED.
+// Bodies whose loads routinely meet a bridge or a tunnel. What we hold for any corridor is what drivers have
+// reported (the crowd-sourced constraint map) — never a survey — so for these the caveat is permanent.
 const ROUTE_SENSITIVE: TruckSubtype[] = ['lowboy', 'logging', 'car_carrier', 'skeletal', 'container_selfloader', 'crane'];
 
 /**
@@ -94,9 +94,9 @@ export function blockersFor(
     /**
      * What the crowd-sourced constraint map says about this road, computed by the caller.
      *
-     * Passed IN rather than looked up here, because this module is pure and the map is a service. When it
-     * is absent — an older caller, a load with no route — the hardcoded NOT CHECKED below still fires, so
-     * the honest answer is the default and the real answer is the upgrade. Never the other way round.
+     * Passed IN rather than looked up here, because this module is pure and the map is a service. Absent —
+     * an older caller, a load with no route — nothing is lost: these are an ADDITION to the permanent
+     * caveat below, never a replacement for it, so the honest answer stands with or without them.
      */
     routeBlockers?: BoardBlocker[];
   },
@@ -144,16 +144,16 @@ export function blockersFor(
   if (load.maxSpend != null && ctx.indicativeCharge != null && ctx.indicativeCharge > load.maxSpend) {
     out.push({ kind: 'preference', code: 'OVER_BUDGET', message: `Your price comes to more than the shipper's budget of ${fmt(load.maxSpend)} — they may still raise it` });
   }
-  // What the road itself says, from the drivers who reported it.
+  // What the road itself says, from the drivers who reported it — and the caveat that never lifts.
   //
-  // The map answers with real constraints where it has them and with NOT CHECKED where it does not, so
-  // this replaces the blanket disclaimer rather than adding to it. The disclaimer stays for callers that
-  // pass nothing — absence of a report is not clearance, and a board silent about an unchecked bridge is
-  // a board implying there is not one.
-  if (ctx.routeBlockers?.length) {
-    out.push(...ctx.routeBlockers);
-  } else if (load.derivedBody && ROUTE_SENSITIVE.includes(load.derivedBody)) {
-    out.push({ kind: 'unknown', code: 'ROUTE_NOT_CHECKED', message: 'Bridge heights and axle limits on this route are not known to us — check the road yourself' });
+  // The two are ADDED, never traded against each other. Reports tell a haulier about the bridges somebody
+  // has already met; they say nothing whatever about the ones nobody has. So a constraint being found must
+  // not silence the caveat — that would let one reported weighbridge on a 400 km corridor read as a
+  // clearance for the whole road, which is the exact silent pass this feature exists to refuse. A
+  // crowd-sourced map can raise a warning; it can never certify a route, however many reports it holds.
+  out.push(...(ctx.routeBlockers ?? []));
+  if (load.derivedBody && ROUTE_SENSITIVE.includes(load.derivedBody)) {
+    out.push({ kind: 'unknown', code: 'ROUTE_NOT_SURVEYED', message: 'Bridge heights and axle limits here come only from drivers who reported them — nobody surveys these roads, so check it yourself' });
   }
   return out;
 }

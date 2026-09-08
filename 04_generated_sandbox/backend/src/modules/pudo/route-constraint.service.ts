@@ -14,8 +14,16 @@ export const ON_ROUTE_KM = 5;
 /** How near two reports must be to be the same obstacle. Two drivers stop in different laybys. */
 export const SAME_SPOT_KM = 0.3;
 
-/** Reports that must agree before a corridor counts as SURVEYED rather than merely unreported. */
-export const SURVEYED_MIN_REPORTS = 1;
+/**
+ * There is deliberately NO "surveyed" threshold here, and there must never be one.
+ *
+ * The tempting version of this file had one: below N reports a corridor answered NOT CHECKED, at or above
+ * it the map answered for itself. That is backwards. Reports are evidence of the obstacles somebody met;
+ * they are never evidence of the absence of the ones nobody met, so no number of them can promote a road
+ * to "checked". One weighbridge reported on a 400 km corridor would have silenced the caveat for every
+ * bridge on it. The caveat is permanent and lives on the board (`ROUTE_NOT_SURVEYED`); this service only
+ * ever reports what it actually knows.
+ */
 
 /**
  * The road, as the people who drive it report it.
@@ -162,10 +170,13 @@ export class RouteConstraintService {
   /**
    * What stands between this load, on this vehicle, on this road.
    *
-   * Returns typed blockers the board already understands — and returns 'unknown' when it has nothing to
-   * go on, which is most of the time and must stay visible. THE HEIGHT IS THE LOAD PLUS THE DECK, never
-   * the load alone: a 4.0 m load is 5.2 m on a flatbed and 4.4 m on a lowboy, so "needs a lowboy" is a
-   * conclusion this function reaches and never a thing anybody declares.
+   * Returns typed blockers the board already understands, plus an explicit 'unknown' for every question it
+   * was asked and could not answer — an unmeasured load against a posted limit, or a load with no route at
+   * all. An empty array means only "nothing reported on this road stops you"; it is NEVER a clear route,
+   * which is why the board pairs this with a caveat it cannot switch off.
+   *
+   * THE HEIGHT IS THE LOAD PLUS THE DECK, never the load alone: a 4.0 m load is 5.2 m on a flatbed and
+   * 4.4 m on a lowboy, so "needs a lowboy" is a conclusion this function reaches, never a declaration.
    */
   checkRoute(input: { from?: GeoPoint; to?: GeoPoint; totalHeightM?: number; grossWeightKg?: number; hazmat?: boolean }): BoardBlocker[] {
     const { from, to } = input;
@@ -174,10 +185,10 @@ export class RouteConstraintService {
     if (!from || !to) {
       return [{ kind: 'unknown', code: 'ROUTE_NOT_CHECKED', message: 'We do not know which road this runs on, so nothing about it has been checked' }];
     }
+    // An unreported road adds nothing here, and adds no reassurance either. The board's permanent
+    // ROUTE_NOT_SURVEYED caveat is what speaks for the roads nobody has reported — see the note on the
+    // absent threshold at the top of this file.
     const on = this.alongRoute(from, to);
-    if (on.length < SURVEYED_MIN_REPORTS) {
-      return [{ kind: 'unknown', code: 'ROUTE_NOT_CHECKED', message: 'Nobody has reported this road to us. That is not the same as it being clear — check the road yourself' }];
-    }
 
     const out: BoardBlocker[] = [];
     for (const c of on) {
