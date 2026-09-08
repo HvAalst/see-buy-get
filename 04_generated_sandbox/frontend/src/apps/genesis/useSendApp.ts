@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { t } from '../../shared/i18n'; // plain t(): toasts/outbound text are built at action time in the sender's active locale
 import { isSignInRequired, narrow, type SbgError } from '../../lib/sbg';
 import type { MediaKind } from '../../lib/sbg/personas/media';
+import type { MerchantTag } from '../../lib/sbg/personas/consumer';
 import { downscaleImage, type MediaView } from '../../shared/media';
 import { openChannel, pickContacts, type PickedContact, type ShareChannel } from '../../shared/device';
 import {
@@ -102,6 +103,9 @@ export interface SendState {
   /** The code to pass to the person they named. Held in state rather than only on the twin so the
    *  screen can show it the moment it exists, without a second round trip. */
   proxyCode: { name: string; code: string } | null;
+  /** The store rating in flight, and whether this parcel has already been rated in this session. */
+  rateBusy: boolean;
+  ratedParcels: string[];
   podBusy: boolean; // S23: attaching the delivered-state photo
   disputeBusy: boolean; // S23: filing a dispute
   disputeError: SbgError | null;
@@ -180,6 +184,8 @@ const INITIAL: SendState = {
   noticeBusy: null,
   noticeError: null,
   proxyCode: null,
+  rateBusy: false,
+  ratedParcels: [],
   podBusy: false,
   disputeBusy: false,
   disputeError: null,
@@ -815,6 +821,29 @@ export function useSendApp() {
     [client, openParcel],
   );
 
+  /**
+   * Rate the store this parcel came from.
+   *
+   * The parcel id is remembered locally so the card can thank them and stop asking — the twin does not
+   * carry the rating back, and re-showing the form to somebody who just filled it in reads as though
+   * their answer was lost.
+   */
+  const rateStore = useCallback(
+    async (stars: number, tags: MerchantTag[]) => {
+      const id = stateRef.current.openParcelId;
+      if (!client || !id || !stars) return;
+      setState((s) => ({ ...s, rateBusy: true }));
+      const r = await client.api.rateStore(id, stars, tags);
+      if (r.error) {
+        if (isSignInRequired(r.error)) return signOutRef.current(r.error);
+        setState((s) => ({ ...s, rateBusy: false, disputeError: r.error }));
+        return;
+      }
+      setState((s) => ({ ...s, rateBusy: false, ratedParcels: [...s.ratedParcels, id] }));
+    },
+    [client],
+  );
+
   /** S23: file a delivery dispute (reason + photo) on the open parcel → routed to vendor / sender + tower. */
   const submitDispute = useCallback(
     async (reason: string, photoRef: string) => {
@@ -1083,6 +1112,7 @@ export function useSendApp() {
       // my parcels + account
       loadParcels,
       openParcel,
+    rateStore,
     respondToNotice,
     nominateCollector,
       closeParcel,

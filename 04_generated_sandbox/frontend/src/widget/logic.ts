@@ -18,6 +18,10 @@ export interface WidgetAttrs {
   fromPoint?: string | null;
   fromCountry?: string | null;
   fromArea?: string | null;
+  /** Where the CONSUMER site lives, for the store-reputation link. A different origin from the API. */
+  site?: string | null;
+  /** This merchant's store id, so the chip can link to their public page. */
+  store?: string | null;
   weightKg?: string | null;
   lengthCm?: string | null;
   widthCm?: string | null;
@@ -75,6 +79,17 @@ const num = (v?: string | null): number | undefined => {
 export function apiBase(attrs: WidgetAttrs, baked: string): string {
   const raw = (attrs.api ?? '').trim() || baked;
   return raw.replace(/\/+$/, '');
+}
+
+/**
+ * Where the shopper-facing site lives — the store profile is a page there, not an API response.
+ *
+ * Its own attribute rather than derived from `api`, because they are genuinely different origins: the
+ * API answers quotes, the site serves people. Deriving one from the other would work in a sandbox where
+ * both are localhost and break on the first real deployment.
+ */
+export function siteBase(attrs: WidgetAttrs): string {
+  return (attrs.site ?? '').trim().replace(/\/+$/, '');
 }
 
 /**
@@ -143,6 +158,8 @@ export function quoteRequest(attrs: WidgetAttrs, to: Destination): QuoteRequestB
  * else's product page to render six labels is a cost they did not ask for.
  */
 export interface Strings {
+  /** The link to this store's measured shipping record. */
+  reputation: string;
   cta: string;
   panelTitle: string;
   country: string;
@@ -163,6 +180,9 @@ export interface Strings {
 }
 
 export const EN: Strings = {
+  // Framed as the SHOP's record rather than as "reviews", because what is on the other end is mostly
+  // measurement and a page promising reviews would under-deliver on its most valuable half.
+  reputation: 'See this shop’s delivery record',
   cta: 'Calculate your shipping fee',
   panelTitle: 'Where should we send it?',
   country: 'Country',
@@ -199,6 +219,7 @@ export const EN: Strings = {
  */
 export const PACKS: Record<string, Partial<Strings>> = {
   sw: {
+    reputation: 'Ona rekodi ya usafirishaji ya duka hili',
     cta: 'Kokotoa gharama ya usafirishaji',
     panelTitle: 'Tukupelekee wapi?',
     country: 'Nchi',

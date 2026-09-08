@@ -4,6 +4,33 @@
  * Not `as const` — values must be typed `string` so a translation may differ from the English literal.
  */
 export const enHome = {
+  // A store's public reputation. Every line is doing one job: say what we MEASURED, say how much of it
+  // there is, and never let a shopper mistake "we have not seen enough yet" for "this store is fine".
+  'home.store.lede': 'What we measured while carrying this store’s parcels — and what the people who received them said.',
+  'home.store.loading': 'Looking up this store…',
+  'home.store.measuredTitle': 'What we measured',
+  'home.store.measuredNote': 'We carried these parcels, so these are not claims — they are what happened.',
+  'home.store.nextDay': 'of orders reach a counter within a day of being sold',
+  'home.store.typical': 'is how long it usually takes them',
+  'home.store.neverArrived': 'were paid for and never handed over at all',
+  'home.store.upheld': 'of orders ended in a claim we upheld',
+  'home.store.basedOn': 'Based on {n} shipments.',
+  'home.store.underAnHour': 'Under an hour',
+  'home.store.hours': 'About {n} hours',
+  'home.store.days': 'About {n} days',
+  'home.store.saidTitle': 'What receivers said',
+  'home.store.saidNote': 'Only people who actually received a parcel from this store, once each.',
+  'home.store.starsTitle': 'Rating',
+  'home.store.outOfFive': 'out of 5, from {n} buyers',
+  'home.store.tooFewTitle': 'Too new to score',
+  'home.store.tooFewDetail': 'Only {n} buyers have rated this store. We do not publish an average from that few — it would say more about the sample than the store.',
+  'home.store.newTitle': 'Nothing to show yet',
+  'home.store.newDetail': 'This store has not shipped through us yet, so there is nothing we have measured. That is not a bad sign — it is a new one.',
+  // The no-suppression rule, on the page it governs: a buyer has no reason to trust a score the store
+  // could have edited, so the page has to say the store could not have.
+  'home.store.ruleTitle': 'The store cannot change this page',
+  'home.store.ruleDetail': 'We publish the same measurements for every store and none of them can hide, edit or switch off their own. Ratings come only from people we delivered a parcel to.',
+  'home.store.aloud': '{name} gets {pct} of orders to a counter within a day, measured over {n} shipments.',
   // Shell (app.tsx).
   'home.appTitle': 'SeeBuyGet',
   'home.back': 'Back',

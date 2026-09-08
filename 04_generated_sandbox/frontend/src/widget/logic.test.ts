@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest';
 import {
+  siteBase, describe, expect, it } from 'vitest';
+import {
+  siteBase,
   apiBase,
   collectLine,
   configProblem,
@@ -224,5 +226,25 @@ describe('the languages the widget ships', () => {
     const s = strings({ submit: 'Bei tafadhali' }, 'sw');
     expect(s.submit).toBe('Bei tafadhali');
     expect(s.close).toBe(packFor('sw').close); // …and the rest of the pack still applies
+  });
+});
+
+/**
+ * The link to a store's measured record.
+ *
+ * Its own attribute rather than derived from `api`: the API answers quotes and the site serves people,
+ * and those are different origins the moment this leaves a sandbox where both are localhost.
+ */
+describe('siteBase', () => {
+  it('trims a trailing slash so the built link has exactly one', () => {
+    expect(siteBase({ site: 'https://seebuyget.example/' })).toBe('https://seebuyget.example');
+    expect(siteBase({ site: '  https://seebuyget.example//  ' })).toBe('https://seebuyget.example');
+  });
+
+  it('is empty without one, which is what stops the chip rendering', () => {
+    // A store id with nowhere to send it would produce a broken link on a merchant's checkout — worse
+    // than no chip. The widget requires BOTH before it renders one.
+    expect(siteBase({})).toBe('');
+    expect(siteBase({ site: '   ' })).toBe('');
   });
 });

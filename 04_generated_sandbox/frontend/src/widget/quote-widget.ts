@@ -15,6 +15,7 @@ import {
   type QuoteResponse,
   type Strings,
   type WidgetAttrs,
+  siteBase,
 } from './logic';
 
 /**
@@ -63,6 +64,19 @@ select, .where {
   border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
   background: transparent; color: inherit;
 }
+/* A quiet link, not a second call to action. The button on this panel is the price; sending somebody
+   away to read about the shop would be the widget competing with the checkout it sits in. */
+.rep {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 13px;
+  color: inherit;
+  opacity: .75;
+  text-decoration: underline;
+}
+
+.rep:hover { opacity: 1; }
+
 .go {
   margin-top: 14px; width: 100%; padding: 10px 14px; border: 0;
   border-radius: var(--sbg-radius, 8px); background: var(--sbg-accent, #4c46e0);
@@ -80,7 +94,7 @@ select, .where {
 .link { background: none; border: 0; padding: 0; color: var(--sbg-accent, #4c46e0); text-decoration: underline; font-size: 13px; }
 `;
 
-const ATTRS = ['api', 'key', 'from-point', 'from-country', 'from-area', 'weight-kg', 'length-cm', 'width-cm', 'height-cm', 'size', 'label', 'locale'];
+const ATTRS = ['api', 'key', 'from-point', 'from-country', 'from-area', 'weight-kg', 'length-cm', 'width-cm', 'height-cm', 'size', 'label', 'locale', 'site', 'store'];
 
 class SbgShippingQuote extends HTMLElement {
   static get observedAttributes(): string[] {
@@ -119,6 +133,7 @@ class SbgShippingQuote extends HTMLElement {
     return {
       api: a('api'), key: a('key'), fromPoint: a('from-point'), fromCountry: a('from-country'), fromArea: a('from-area'),
       weightKg: a('weight-kg'), lengthCm: a('length-cm'), widthCm: a('width-cm'), heightCm: a('height-cm'), size: a('size'),
+      site: a('site'), store: a('store'),
     };
   }
 
@@ -234,6 +249,30 @@ class SbgShippingQuote extends HTMLElement {
     go.disabled = this.busy || !this.picked.country || !this.picked.where?.trim();
     go.addEventListener('click', () => void this.submit());
     p.append(go);
+
+    // A link to what this store's shipping actually looks like, measured by us.
+    //
+    // An ATTRIBUTE rather than something resolved from the publishable key, for two reasons. A public
+    // "which store is this key" endpoint would let anybody walk keys back to businesses, and the merchant
+    // is already writing from-point and key into this tag — one more is the same shape of configuration.
+    //
+    // A merchant who omits it does not suppress the score: the page is public, at a URL, and reachable
+    // without an account. Nobody can be made to put a link on their own website, which is exactly why the
+    // rule was always that the profile must not live ONLY in the widget.
+    // Both, or nothing. A store id with nowhere to send it produces a link to the merchant's own site,
+    // which is a broken link on their checkout — worse than no chip at all. Silent rather than a console
+    // error, because omitting the chip is a legitimate choice and not a misconfiguration.
+    const store = this.getAttribute('store');
+    const site = siteBase(this.attrs());
+    if (store && site) {
+      const chip = document.createElement('a');
+      chip.className = 'rep';
+      chip.href = `${site}/?store=${encodeURIComponent(store)}`;
+      chip.target = '_blank';
+      chip.rel = 'noopener noreferrer';
+      chip.textContent = this.s.reputation;
+      p.append(chip);
+    }
 
     // One live region for whatever the answer turns out to be, so a screen reader hears the price (or the
     // problem) without the panel having to steal focus back from the button that was just pressed.

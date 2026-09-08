@@ -369,6 +369,40 @@
 
 /* ------------------------------------------------------------- invite chips (S28) --
    The "send with" channel selector: pill chips, the chosen one outlined in blue. */
+/* Rating the store: the same stars the shop counter uses, so one gesture means one thing across the
+   network. --tap, because a control you aim a thumb at is 48px here and always has been. */
+.stars {
+  display: flex;
+  gap: 10px;
+  margin: 8px 0 4px;
+}
+
+.starbtn {
+  width: var(--tap);
+  height: var(--tap);
+  border-radius: 999px;
+  border: 1.5px solid var(--bd);
+  background: var(--bg);
+  color: var(--tx2);
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.starbtn--on {
+  border-color: var(--blue);
+  background: var(--blue-light);
+  color: var(--blue-dark);
+}
+
+/* A complaint tag reads differently from a compliment when it is CHOSEN, and identically when it is not
+   — an unpicked "wrong item" that already looked like an accusation would push people toward it. */
+.chip--neg.chip--on {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;

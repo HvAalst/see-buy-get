@@ -88,6 +88,29 @@ export function fetchCountries(): Promise<Result<OperatingCountry[]>> {
 
 /** One load as the public market publishes it. Mirrors backend MarketRow — note what is NOT here: no
  *  freight id, no code, no shop name, no description, and no exact pin. */
+/**
+ * A store's public reputation — no key, no account, no sign-in.
+ *
+ * PUBLIC by design and the design does not survive it being anything else: if the profile existed only
+ * inside the widget a merchant chooses to install, every badly-behaved merchant would suppress it by not
+ * installing, and a score the badly-behaved can opt out of is not a score.
+ */
+export interface StoreReputation {
+  vendorId: string;
+  name: string;
+  shipments: number;
+  shipsNextDayRate?: number;
+  medianHoursToHandover?: number;
+  neverDroppedRate?: number;
+  upheldDisputeRate?: number;
+  tags: Array<{ tag: string; count: number; positive: boolean }>;
+  rating: { average: number; count: number; isNew: boolean };
+}
+
+export function fetchStoreReputation(vendorId: string): Promise<Result<StoreReputation>> {
+  return publicRequest<StoreReputation>(homeConfig(), `/v1/sbg/stores/${encodeURIComponent(vendorId)}/reputation`);
+}
+
 export interface MarketRow {
   area?: string;
   destArea?: string;

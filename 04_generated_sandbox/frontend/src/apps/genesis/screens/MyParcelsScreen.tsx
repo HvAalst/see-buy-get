@@ -3,6 +3,7 @@ import { Button, Card, Checklist, CodeCard, ErrorNote, Icon, Note, Pill, ReadAlo
 import { useT } from '../../../shared/i18n';
 import { PhotoField } from './PhotoField';
 import { LADDER, isOffLadder, ladderIndex, parcelRowLine, relationWord, sortForPerson, statusPresentation, stepTime } from '../logic';
+import { MERCHANT_TAGS, POSITIVE_TAGS, type MerchantTag } from '../../../lib/sbg/personas/consumer';
 import type { ConsumerParcelView, FreightShipmentView, ParcelStatus } from '../types';
 import type { SendActions, SendState } from '../useSendApp';
 
@@ -142,6 +143,8 @@ function ParcelDetail({ parcel, state, actions }: { parcel: ConsumerParcelView; 
   // Local, uncontrolled-by-the-app text. The name of somebody you trust is not application state, and
   // routing every keystroke through the reducer is how this app has re-rendered a whole screen per letter.
   const [proxyName, setProxyName] = useState('');
+  const [stars, setStars] = useState(0);
+  const [tags, setTags] = useState<MerchantTag[]>([]);
   const [disputeOpen, setDisputeOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [photo, setPhoto] = useState('');
@@ -300,6 +303,63 @@ function ParcelDetail({ parcel, state, actions }: { parcel: ConsumerParcelView; 
               {t('send.parcels.reportProblem')}
             </Button>
           </div>
+        </Card>
+      ) : null}
+
+{/* Rating the STORE, which is a different question from rating the delivery.
+          
+          Offered only on a vendor order and only after it arrived — an opinion about a parcel that has
+          not come is an opinion about waiting, and the measured half of a store's scorecard reports that
+          better without asking anybody. Once per parcel: this is verified because we carried the thing
+          being reviewed, which is worth more than volume and is lost the moment it can be stacked.
+
+          Tags rather than a comment box. Prose would mean moderation, defamation exposure and personal
+          details in public strings across five locales; a tag is a catalogue key with nothing in it to
+          moderate. Positives come FIRST, because a list that opens with accusations invites one. */}
+      {canAct && parcel.vendorOrder ? (
+        <Card title={t('send.rate.title')}>
+          {state.ratedParcels.includes(parcel.parcelId) ? (
+            <Note tone="ok" icon="check" title={t('send.rate.thanksTitle')} detail={t('send.rate.thanksDetail')} />
+          ) : (
+            <>
+              <p class="card__note">{t('send.rate.lede')}</p>
+              <div class="stars" role="group" aria-label={t('send.rate.starsAria')}>
+                {([1, 2, 3, 4, 5] as const).map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    class={`starbtn${stars >= n ? ' starbtn--on' : ''}`}
+                    aria-pressed={stars >= n}
+                    aria-label={t('send.rate.starAria', { n })}
+                    onClick={() => setStars(n)}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+              <div class="chips" role="group" aria-label={t('send.rate.tagsAria')}>
+                {MERCHANT_TAGS.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    class={`chip${tags.includes(tag) ? ' chip--on' : ''}${POSITIVE_TAGS.has(tag) ? '' : ' chip--neg'}`}
+                    aria-pressed={tags.includes(tag)}
+                    onClick={() => setTags((cur) => (cur.includes(tag) ? cur.filter((x) => x !== tag) : [...cur, tag]))}
+                  >
+                    {t(`send.rate.tag.${tag}` as 'send.rate.tag.WELL_PACKED')}
+                  </button>
+                ))}
+              </div>
+              <div style="margin-top:12px">
+                <Button chevron={false} disabled={!stars} busy={state.rateBusy} onClick={() => void actions.rateStore(stars, tags)}>
+                  {t('send.rate.send')}
+                </Button>
+              </div>
+              {/* Said plainly: this is published, and the store cannot take it down. Somebody deciding
+                  whether to bother should know it counts for something. */}
+              <p class="card__note">{t('send.rate.publicNote')}</p>
+            </>
+          )}
         </Card>
       ) : null}
 

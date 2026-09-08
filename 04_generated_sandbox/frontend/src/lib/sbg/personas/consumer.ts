@@ -1,4 +1,15 @@
 import type { SbgClient } from '../client';
+
+/**
+ * What a receiver may say about a store — the catalogue, mirrored from the backend.
+ *
+ * Tags rather than free text, and POSITIVES ARE HALF OF IT: a scorecard made only of complaints is a
+ * pillory, and "well packed" is real information a shopper wants. Ordered good-first so a screen that
+ * renders them in order does not open with an accusation.
+ */
+export const MERCHANT_TAGS = ['WELL_PACKED', 'AS_DESCRIBED', 'SHIPPED_FAST', 'POOR_PACKAGING', 'WRONG_ITEM', 'MISSING_ITEM'] as const;
+export type MerchantTag = (typeof MERCHANT_TAGS)[number];
+export const POSITIVE_TAGS: ReadonlySet<string> = new Set(['WELL_PACKED', 'AS_DESCRIBED', 'SHIPPED_FAST']);
 import { createMediaApi } from './media';
 
 /** The person-facing roles a consumer may hold and switch into (mirrors backend PersonRole). */
@@ -62,6 +73,15 @@ export function createConsumerApi(sbg: SbgClient) {
     /** Name somebody to collect instead. The code comes back HERE, because passing it on is the point. */
     nominateCollector: (id: string, name: string, phone?: string) =>
       sbg.request((c) => c.POST('/v1/sbg/identity/parcels/{id}/nominate-collector', { params: { path: { id } }, body: { name, phone } })),
+
+    /**
+     * Rate the STORE this parcel came from — stars plus tags, never prose.
+     *
+     * Only the receiver, only once, only after delivery. That is what a public review site structurally
+     * cannot do and we can, because we carried the thing being reviewed.
+     */
+    rateStore: (id: string, stars: number, tags: MerchantTag[]) =>
+      sbg.request((c) => c.POST('/v1/sbg/identity/parcels/{id}/rate-store', { params: { path: { id } }, body: { stars, tags } })),
 
     /** Create (or return) the person's reusable invite link — the app turns the token into a share link (S24). */
     createInvite: (channels?: string[]) => sbg.request((c) => c.POST('/v1/sbg/identity/invites', { body: { channels } })),

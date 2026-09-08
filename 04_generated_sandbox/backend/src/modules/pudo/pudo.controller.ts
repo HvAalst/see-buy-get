@@ -33,6 +33,7 @@ import { PersonService } from './person.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
 import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, WriteOffParcelDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
+import { MerchantRatingService } from './merchant-rating.service';
 import { classifySize, measuredFactor, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { ReturnService } from './return.service';
@@ -66,6 +67,7 @@ export class SbgController {
     private readonly corridors: CorridorService,
     private readonly parcels: ParcelService,
     private readonly unclaimed: UnclaimedService,
+    private readonly merchants: MerchantRatingService,
     private readonly monitor: MonitorService,
     private readonly ratings: RatingService,
     private readonly entities: EntityService,
@@ -1448,6 +1450,27 @@ export class SbgController {
    * jurisdiction rather than by this system. Modelling a disposal rule we do not know would be worse
    * than showing an operator the list and letting them apply the one they do.
    */
+  /**
+   * A store's public reputation — measured by us, and not theirs to switch off.
+   *
+   * @Public deliberately, and it is the load-bearing decision in this whole feature. If the profile
+   * existed only inside the widget a merchant chooses to install, every badly-behaved merchant would
+   * suppress it by not installing — and a score the badly-behaved can opt out of is not a score. So it
+   * lives on a page of ours that anybody can read without an account, the same rule the public market
+   * page already keeps.
+   *
+   * The other half of that rule binds US: we publish only what we measured, identically for everyone,
+   * and there is no parameter here that could tune one merchant's numbers. If a merchant can hide a bad
+   * score we are worthless to buyers; if we can adjust one, we are selling reputation.
+   *
+   * Carries no PII and no order detail — a scorecard about a business, never a list of its customers.
+   */
+  @Public()
+  @Get('stores/:vendorId/reputation')
+  storeReputation(@Param('vendorId') vendorId: string) {
+    return this.merchants.scorecard(vendorId);
+  }
+
   @Roles('operator')
   @Get('ops/disposal-queue')
   disposalQueue() {

@@ -83,6 +83,7 @@ export const ERROR_CODES = {
   BAG_RESERVED: { status: 400, title: 'The bag is reserved for another driver' },
   BAG_MISADDRESSED: { status: 400, title: 'The bag is addressed to another location' },
   ALREADY_IN_BAG: { status: 400, title: 'That parcel is already in a bag' },
+  ALREADY_RATED: { status: 409, title: 'That order has already been rated' },
   STAGING_FULL: { status: 400, title: 'There is no floor room for another bag' },
   SHELF_FULL: { status: 400, title: 'The shelf is full' },
   NO_CAPACITY_AVAILABLE: { status: 400, title: 'No pick-up point with free capacity' },

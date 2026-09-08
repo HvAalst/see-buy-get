@@ -2,6 +2,7 @@ import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsIn, IsNumb
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { DRIVER_ISSUES, DriverIssue } from './rating.service';
+import { MERCHANT_TAGS, MerchantTag } from './merchant-rating.service';
 import { TRUCK_SUBTYPES } from './fleet.config';
 import { PACKAGING, type Packaging } from './packaging';
 import { MEDIA_KINDS, MediaKind } from './media.types';
@@ -196,6 +197,21 @@ export class RateDto {
 }
 
 /** REP2 — an agent rates a driver on the movement leg (stars + the specific failings it witnessed). */
+/**
+ * A receiver's verdict on the store they bought from — stars plus TAGS, never prose.
+ *
+ * Tags rather than free text for the reason the driver rating already chose them: prose brings
+ * moderation, defamation exposure, personal details in public strings and translation across five
+ * locales, while a catalogue key aggregates and translates and has nothing in it to moderate.
+ */
+export class RateMerchantDto {
+  @IsNumber() @Min(1) @Max(5) stars!: number;
+  // @ApiPropertyOptional so the emitted contract is an ARRAY of the enum — the plugin infers a SCALAR
+  // from @IsArray + @IsIn alone, which is the exact trap the driver-issue tags fell into and the
+  // generated client then refuses an array against. Same fix, same reason.
+  @IsOptional() @IsArray() @IsIn([...MERCHANT_TAGS], { each: true }) @ApiPropertyOptional({ enum: MERCHANT_TAGS, isArray: true }) tags?: MerchantTag[];
+}
+
 export class RateDriverDto {
   @IsOptional() @IsString() agentDid?: string; // operator-override only; a normal agent is pinned to its token
   @IsNumber() @Min(1) @Max(5) stars!: number;

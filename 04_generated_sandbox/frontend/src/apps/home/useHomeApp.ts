@@ -7,10 +7,12 @@ import {
   fetchMarket,
   fetchMarketSeries,
   fetchPoints,
+  fetchStoreReputation,
   geocode,
   handOff,
   type MarketRow,
   type MarketSeriesView,
+  type StoreReputation,
   registerStore,
   requestCode,
   signup,
@@ -22,7 +24,7 @@ import {
 } from './api';
 import { EMPTY_JOIN, nextStep, normalizePhone, prevStep, roleById, signupBody, stepBlocker, type JoinForm, type JoinStep, type RoleSpec } from './logic';
 
-export type Screen = 'welcome' | 'roles' | 'join' | 'signin' | 'market';
+export type Screen = 'welcome' | 'roles' | 'join' | 'signin' | 'market' | 'store';
 
 /** FB3b — how far the visitor cares to look. `null` IS a choice: the whole market. */
 export type MarketReach = number | null;
@@ -43,6 +45,10 @@ export interface HomeState {
   /** What the account became — the "you are in" card. */
   account: SignupView | null;
   store: VendorRegisteredView | null;
+  /** A store's public reputation, reached by ?store=<id> from the widget or a link. */
+  reputation: StoreReputation | null;
+  reputationState: 'idle' | 'loading' | 'ready' | 'error';
+  reputationError: SbgError | null;
   error: SbgError | null;
   busy: string | null;
   /* --- FB3b: the public freight market --- */
@@ -76,6 +82,9 @@ const INITIAL: HomeState = {
   countriesState: 'idle',
   account: null,
   store: null,
+  reputation: null,
+  reputationState: 'idle',
+  reputationError: null,
   error: null,
   busy: null,
   marketQuery: '',
@@ -141,6 +150,39 @@ export function useHomeApp() {
   const go = useCallback((screen: Screen) => {
     setState((s) => ({ ...s, screen, error: null }));
   }, []);
+
+  /**
+   * A store's public page, by id.
+   *
+   * Reached from ?store=<id> — the widget chip's link, and anything else anybody wants to paste. No key
+   * and no account: the page has to be readable by the shopper deciding whether to buy, which is the
+   * whole point of measuring any of this.
+   */
+  const openStore = useCallback(async (vendorId: string) => {
+    if (!vendorId) return;
+    setState((s) => ({ ...s, screen: 'store', reputationState: 'loading', reputationError: null }));
+    const r = await fetchStoreReputation(vendorId);
+    if (r.error) {
+      setState((s) => ({ ...s, reputationState: 'error', reputationError: r.error }));
+      return;
+    }
+    setState((s) => ({ ...s, reputation: r.data, reputationState: 'ready', reputationError: null }));
+  }, []);
+
+  // The deep link, read once and stripped as it is used — a refresh should not re-jump somebody onto a
+  // store page they have already read and navigated away from.
+  useEffect(() => {
+    const id = new URLSearchParams(globalThis.location?.search ?? '').get('store');
+    if (!id) return;
+    try {
+      const url = new URL(location.href);
+      url.searchParams.delete('store');
+      history.replaceState(null, '', url.toString());
+    } catch {
+      /* a browser that refuses the rewrite still lands on the right screen */
+    }
+    void openStore(id);
+  }, [openStore]);
 
   const startJoin = useCallback(
     (roleId: string) => {
@@ -355,7 +397,7 @@ export function useHomeApp() {
 
   return {
     state,
-    actions: { go, startJoin, setForm, back, sendCode, confirmCode, advance, submit, restart, loadPoints, setMarketQuery, lookUpMarket, setMarketReach, setMarketView, loadSeries },
+    actions: { go, openStore, startJoin, setForm, back, sendCode, confirmCode, advance, submit, restart, loadPoints, setMarketQuery, lookUpMarket, setMarketReach, setMarketView, loadSeries },
   };
 }
 

@@ -14,8 +14,9 @@ import { RoutingService } from './routing.service';
 import { classifySize, measuredFactor } from './pudo.config';
 import { InviteService } from './invite.service';
 import { toInviteView } from './invite.types';
-import { BuyerDisputeDto, CollectionResponseDto, ConsumerSendDto, CreateInviteDto, EnrollDto, NominateCollectorDto, PinLoginDto, PodDto, ProfileDto, SetPinDto, SwitchRoleDto } from './pudo.dto';
+import { BuyerDisputeDto, CollectionResponseDto, RateMerchantDto, ConsumerSendDto, CreateInviteDto, EnrollDto, NominateCollectorDto, PinLoginDto, PodDto, ProfileDto, SetPinDto, SwitchRoleDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
+import { MerchantRatingService } from './merchant-rating.service';
 
 /**
  * Identity — the authenticated consumer surface (S20). "One person, one account, many roles."
@@ -39,6 +40,7 @@ export class IdentityController {
     private readonly cargo: CargoService,
     private readonly routing: RoutingService,
     private readonly unclaimed: UnclaimedService,
+    private readonly merchants: MerchantRatingService,
   ) {}
 
   /**
@@ -224,6 +226,21 @@ export class IdentityController {
     const person = this.persons.requireByDid(actor.did!);
     this.parcels.requireReceiver(id, person.phoneHash);
     return this.unclaimed.nominate(id, dto.name, dto.phone ? hashPhone(dto.phone) : undefined);
+  }
+
+  /**
+   * The receiver rates the STORE they bought from — stars and tags, on a parcel we actually carried.
+   *
+   * That last part is the whole point: a public review site cannot tell a real customer from a paid one,
+   * and we can, because we moved the parcel. Verified beats volume. One verdict per shipment, so nobody
+   * can stack a merchant either way, and only after delivery — an opinion about a parcel that has not
+   * arrived is an opinion about waiting, which the measured half already reports better.
+   */
+  @Roles('consumer')
+  @Post('parcels/:id/rate-store')
+  rateStore(@Param('id') id: string, @Body() dto: RateMerchantDto, @Actor() actor: IntrospectionResult) {
+    const person = this.persons.requireByDid(actor.did!);
+    return this.merchants.rate({ parcelId: id, phoneHash: person.phoneHash, stars: dto.stars, tags: dto.tags });
   }
 
   /** The receiver files a delivery dispute (reason + photo) → routed to the vendor / sender + control tower. */

@@ -7831,11 +7831,38 @@
         }
       }
     },
+    "/v1/sbg/stores/{vendorId}/reputation": {
+      "get": {
+        "operationId": "Sbg.storeReputation",
+        "summary": "",
+        "description": "Control tower: the parcels whose owners gave up their claim and that nobody is paying to recover.\n\nA QUEUE rather than a status, because what happens to them is decided by the law of the sister's\njurisdiction rather than by this system. Modelling a disposal rule we do not know would be worse\nthan showing an operator the list and letting them apply the one they do.",
+        "parameters": [
+          {
+            "name": "vendorId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/ops/disposal-queue": {
       "get": {
         "operationId": "Sbg.disposalQueue",
-        "summary": "",
-        "description": "Control tower: the parcels whose owners gave up their claim and that nobody is paying to recover.\n\nA QUEUE rather than a status, because what happens to them is decided by the law of the sister's\njurisdiction rather than by this system. Modelling a disposal rule we do not know would be worse\nthan showing an operator the list and letting them apply the one they do.",
         "parameters": [],
         "responses": {
           "200": {
@@ -11396,6 +11423,38 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/NominateCollectorDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/identity/parcels/{id}/rate-store": {
+      "post": {
+        "operationId": "Identity.rateStore",
+        "summary": "",
+        "description": "The receiver rates the STORE they bought from — stars and tags, on a parcel we actually carried.\n\nThat last part is the whole point: a public review site cannot tell a real customer from a paid one,\nand we can, because we moved the parcel. Verified beats volume. One verdict per shipment, so nobody\ncan stack a merchant either way, and only after delivery — an opinion about a parcel that has not\narrived is an opinion about waiting, which the measured half already reports better.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RateMerchantDto"
               }
             }
           }
@@ -19402,6 +19461,33 @@
         },
         "required": [
           "name"
+        ]
+      },
+      "RateMerchantDto": {
+        "type": "object",
+        "properties": {
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "WELL_PACKED",
+                "AS_DESCRIBED",
+                "SHIPPED_FAST",
+                "POOR_PACKAGING",
+                "WRONG_ITEM",
+                "MISSING_ITEM"
+              ]
+            }
+          },
+          "stars": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 5
+          }
+        },
+        "required": [
+          "stars"
         ]
       },
       "BuyerDisputeDto": {

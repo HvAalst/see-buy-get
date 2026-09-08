@@ -109,6 +109,25 @@ export const en = {
   // Deliberately not "expired" or "overdue": nothing has expired — the parcel is still there and still
   // theirs. What has run out is the free part, and the word has to say "come and get it" rather than
   // "you have lost it", because the second one is both untrue and the fastest way to be abandoned.
+  // Rating the STORE. Asks about the goods and the packing — never about the delivery, which is the
+  // shop's rating and a different question the app asks separately.
+  'send.rate.title': 'How was this order?',
+  'send.rate.lede': 'About the store and what was in the box — not about the shop that handed it to you.',
+  'send.rate.starsAria': 'Rate the store out of five',
+  'send.rate.starAria': '{n} of 5',
+  'send.rate.tagsAria': 'What was good, and what was not',
+  'send.rate.tag.WELL_PACKED': 'Well packed',
+  'send.rate.tag.AS_DESCRIBED': 'As described',
+  'send.rate.tag.SHIPPED_FAST': 'Sent quickly',
+  'send.rate.tag.POOR_PACKAGING': 'Badly packed',
+  'send.rate.tag.WRONG_ITEM': 'Wrong item',
+  'send.rate.tag.MISSING_ITEM': 'Something missing',
+  'send.rate.send': 'Send',
+  // Says it counts, because somebody deciding whether to bother deserves to know it is not a suggestion
+  // box — and because the no-suppression rule is only worth anything if buyers know about it.
+  'send.rate.publicNote': 'This goes on the store’s public page. Only people who actually received a parcel can rate one, and the store cannot take it down.',
+  'send.rate.thanksTitle': 'Thank you',
+  'send.rate.thanksDetail': 'It is on the store’s page now, with everything else we measured about them.',
   'send.status.unclaimed': 'Waiting for you',
   // The final notice. Every word here is doing the same job: say that the terms changed, and do NOT say
   // that the parcel is being taken away — because it is not, and a person who believes it is has no
