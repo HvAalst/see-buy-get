@@ -62,6 +62,13 @@
   .s-ship { color: var(--ship); } .s-now { color: var(--now); }
   .s-next { color: var(--next); } .s-gap { color: var(--gap); } .s-ui { color: var(--ui); }
 
+  .demo table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+  .demo th { text-align: left; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 700; padding: 0 12px 8px 0; }
+  .demo td { padding: 9px 12px 9px 0; border-top: 1px solid var(--line); font-size: 14px; vertical-align: top; }
+  .demo td:first-child { white-space: nowrap; font-weight: 600; }
+  .demo .hint { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
+  .demo .warn { color: var(--gap); font-weight: 600; }
+
   .found { margin-top: 32px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 22px; }
   .found h2 { margin: 0 0 6px; font-size: 18px; }
   .found ul { margin: 14px 0 0; padding-left: 18px; }
@@ -102,6 +109,16 @@
   <ul id="foundations"></ul>
 </div>
 
+<div class="found demo">
+  <h2>Signing in to the seeded demo</h2>
+  <p class="who" id="demo-note"></p>
+  <table>
+    <thead><tr><th>App</th><th>Where</th><th>Sign in with</th></tr></thead>
+    <tbody id="demo-rows"></tbody>
+  </table>
+  <p class="hint" id="demo-tail"></p>
+</div>
+
 <footer>
   Updated as each slice lands — the states below are written by hand from the repo, not scraped, so they say
   what is <em>true</em> rather than what compiled. Open it directly, or serve the repo root
@@ -114,7 +131,7 @@
 
 <script>
 const DATA = {
-  updated: '2026-09-03',
+  updated: '2026-09-08',
   tracks: [
     {
       title: 'The vendor integrates it',
@@ -154,6 +171,31 @@ const DATA = {
       ],
     },
   ],
+  /**
+   * The seeded demo world's sign-ins.
+   *
+   * SANDBOX ONLY, and safe to write down for exactly that reason: this world exists on a developer's
+   * machine, against a seeder that is sandbox-only by construction — it uses the public phone-OTP echo
+   * and the ungated token mint, both of which stop working the moment GLOS_CLIENT_SECRET is configured.
+   * Nothing here is a credential to anything that holds real people's parcels.
+   *
+   * Only the STABLE ones are written down. The driver DID, the store id, parcel references, tracking
+   * keys and collection codes are minted fresh on every run, so printing them here would produce a page
+   * that is confidently wrong a day later — the seeder prints those itself when it finishes.
+   */
+  demo: {
+    note: 'Run the backend, then scripts/seed-demo.mjs in 04_generated_sandbox/backend. These sign-ins are stable across re-seeds; anything minted per run (driver DID, store id, parcel and tracking references) is printed by the seeder when it finishes.',
+    rows: [
+      ['Shop counter', '/agent/', 'agent1@sbg.test / seebuyget  (Mama Sarah Shop) · agent2@ (Riverside Corner) · agent3@ (Downtown Kiosk) — same password'],
+      ['Hub', '/mdp/', 'hub@sbg.test / seebuyget  (Central Sort)'],
+      ['Fleet', '/fleet/', 'Company FM-E4A7D6 (Kilima Logistics), then +254700000001 with PIN 2468 — two steps, because the company code names the fleet and the person signs in'],
+      ['Vendor', '/vendor/', 'Store id from the seeder’s sheet, secret whsec_demo_nairobi_threads  (Nairobi Threads)'],
+      ['Driver', '/driver/', 'Driver id from the seeder’s sheet — Amos K. is on shift with a bag aboard; Grace M. is deliberately waiting on KYC'],
+      ['Send / track', '/send/', 'No sign-in to quote or track. Signing in is phone + a PIN you choose, so any number works on a sandbox'],
+      ['Operator tower', 'npm run preview', 'The two vanilla consoles are NOT in the app build — serve src (npm run preview, port 4173) and open pudo-tower.html or control-tower.html. No sign-in in the sandbox: they mint an operator token, gated by the client secret in production'],
+    ],
+    tail: 'The fleet company code is generated once and persists, so it survives a re-seed but not a wiped store — the seeder prints the current one either way.',
+  },
   foundations: [
     { state: 'shipped', t: 'The open freight board — and we show everything', d: 'Being offered work suits an opportunistic rider; SHOPPING for work suits a fixed asset with fixed costs, where the skill is repositioning — taking the marginal load because it puts you where the good one is. A push model cannot serve that, because relevance is what the operator is deciding. DECIDED, and now built: the board lists loads you cannot take, marked with why, never hidden — information is how an entrepreneur decides what to invest in. Delivered across the five entries below: the driver’s Market tab, the negotiate loop, the counter facts and the customer’s own refusals, an origin the operator names for themselves, and a public page anybody can read without an account.', ref: 'FB1–FB4 · GET /v1/sbg/dispatch/freight' },
     { state: 'shipped', t: 'The empty run is now a number of its own', d: 'Deadhead and loaded kilometres used to be summed into one figure the instant they were computed — so the question a haulier with a fixed asset actually asks, “how far do I run empty to earn this?”, had no answer anywhere in the system. Both halves are now kept: the price is still charged on the total and no money moved, but a driver sees “80 km, 8 of them loaded” and a market series finally has an honest denominator. A price locked before this shows “—” rather than a guessed split. The change caught a real defect on the way: the LOCKED breakdown — the durable one, stamped on the freight — was re-deriving itself as “the whole distance was empty”, so every claimed haul would have been recorded as pure deadhead.', ref: 'FB0a · pricing.ts distanceSplit + earningsPerKm · dispatch.claim' },
@@ -175,6 +217,11 @@ const DATA = {
     { state: 'shipped', t: 'A sister sets three rates, not one, and per kind of work', d: 'A blended percentage cannot answer the question a rate knob exists for: are we earning because the market is good, or because we are carrying risk nobody is paying us for. So the platform’s take is three layers a business decides separately — what carrying the exposure costs, what the sister earns for choosing to carry it, and the general company margin. The middle one is the reason to bother: profit on risk is where a specialised vehicle pays itself back, a food-grade tanker or a flatbed with its own forklift. Blended into one rate, ordinary parcels quietly subsidise the specialised fleet and nobody sees it; split out, it becomes the pricing side of the question the market series asks. They ADD rather than compound — applied in sequence 5 + 5 + 5 comes to 15.76%, and a knob whose effect an admin cannot work out in their head is not worth having — and the ceiling sits on the sum, because three numbers each inside their own range can still price a market out of existence. Nothing repriced: a rate resolves this lane, then the sister’s default, then the single number it may have set before there were layers, read as the MARGIN it always was, then the network default. Every one of the 820 tests that passed before still passes untouched. Freight was the near-miss — dedicated haulage charged the bare network constant everywhere, so shipping only the parcel side would have left the knob decorative on the exact lane where specialised trucks are bought. And the quote states the platform’s take as its own line instead of leaving it as a subtraction, because a merchant gets one from every other platform they pay.', ref: 'Entity.rates + ratesByLane · POST /v1/sbg/entities/:id/rates' },
     { state: 'shipped', t: 'And the network finally charges tax', d: 'PAYABLE_TAX had been in the chart of accounts since the books were written, documented as never revenue, not for a moment — and nothing had ever posted a line to it. Every price quoted was a NET price handed to a customer as final. A sister now carries a rate and the registration it collects under, refused above zero without one, because charging tax you are not registered to collect is money taken in the name of an authority that has never heard of you. Zero by default, so the day it shipped nothing repriced.', ref: 'TaxRule · PAYABLE_TAX · tax.spec.ts' },
     { state: 'shipped', t: 'A dispute has an ending', d: 'Disputed was a TERMINAL status. Somebody reported that their goods arrived broken, the parcel stopped there, and no path in the code could ever tell them yes or no. A claim now opens a case, gets a decision — upheld, part-upheld or rejected, every one carrying a reason the claimant is shown — and the parcel returns to what it factually is. Paid to whoever CONTRACTED with the sister: the store, not the buyer, whose claim is against the merchant they bought from.', ref: 'DisputeCase · POST /sbg/disputes/:id/resolve · the tower’s Damage claims panel' },
+    { state: 'shipped', t: 'One counter, and the code is the first question', d: 'The shop had two screens for one job — “Collect an order” and “Hand to a customer” — so a shopkeeper had to work out which kind of customer they were facing before they could serve them. Somebody holding a code looks identical either way, which meant the app’s opening question was one only the SHOPKEEPER could answer, about a parcel they had not found yet, while the customer stood there holding the thing that would settle it. The code comes first now, and its SHAPE decides what follows: an order code is unique across the network so it resolves the parcel by itself, and a four-digit peer-send code is nine thousand possibilities against a shelf of nine, so it identifies nothing and stays what it always was — a second factor checked against a parcel already in hand. Routed on the shape rather than by trying a lookup and falling back, because a mistyped order code sent to a search comes back “no parcel for that code”, which reads as the parcel being missing and sends somebody to search a shelf for something never lost. The faster variant — matching four digits against just that shop’s shelf — was rejected for working: it turns a two-factor release into one, and there is no single parcel whose attempt counter should burn when somebody guesses across nine.', ref: 'agent counter · handoverRoute · 3b17d95' },
+    { state: 'shipped', t: 'A bag on a bike the fleet could not see', d: 'Loading a tote recorded the carrier by writing the location as the string “bus:&lt;badge&gt;” — a fact buried in a prefix that nothing queried — and left the claim field alone, correctly, because claiming means taking a load off the marketplace and a shop handing a bag over is not that. So the ORDINARY way cargo reaches a vehicle produced a bag that was in transit, full of real parcels, on a real bike, and attached to no driver anywhere. The fleet manager’s live cargo was the visible half; the worse half was that the VEHICLE CAPACITY check counted the same way, so the number of bags a bike can physically hold could be exceeded without the count ever moving. The suite was green before the fix and after it — the only cargo test in the codebase claimed its load off the board, which is exactly why nobody saw this. The live map went with it: it was a bespoke dot-plot on an abstract grid, so with nothing reporting there was nothing to see, and an empty grid says less than no map. Real tiles now, the operating area at city zoom when no vehicle is out, pins that are info-only because a tappable vehicle that did nothing would be a dead tap on every dot, and an explicit control to open it full height rather than a tap on a surface that also pans and zooms.', ref: 'Tote.carriedBy · fleet dashboard PlaceMap · e918941' },
+    { state: 'shipped', t: 'The driver’s papers, actually', d: 'We ask a fleet for a driver’s name, national ID, mobile, licence number and expiry — and the question “what can we check against what?” had the answer: nothing. The contract had required an ID copy and a licence copy since it was written, and the fleet app satisfied it by posting the literal strings “id.jpg” and “licence.jpg”. So an SBG admin approving a driver was approving two filenames, and every number a manager types is a claim made by the party who benefits from it being wrong. Both documents are captured and REQUIRED now, through the same real upload the shop counter has used since S26 — with them an operator can check the four typed fields against the paper, and the licence classes against what is printed on it. The face is deliberately NOT part of that gate: it is the BADGE PORTRAIT a shopkeeper sees when somebody they have never met asks for a bag, which is a product reason that happens to give a third thing to compare. A cracked camera in a yard at dusk must never be why a real driver cannot start work, so it is optional, it says so, and it says what it is for — a photo asked for with no stated purpose is a photo people refuse.', ref: 'DriverPortrait · kyc_id + kyc_licence media · 21953fd' },
+    { state: 'shipped', t: 'A fleet’s sign-in stopped being one shared code', d: 'One code per company, for a company that may run twenty managers across as many depots: no record of who did what, no way to cut off one leaver without re-issuing to everybody, and permanent access for anyone who ever saw it. Worse was found on the way — the endpoint listing fleets had no role on it and returned the raw record, and the raw record carries that code, so the lowest-privilege token in the network could read every fleet’s sign-in along with its tax id, transport-operator licence and depot address. Verified against the running sandbox with a shopkeeper’s token. The manager’s DID was also accepted as a credential, and a DID is an identifier: stamped on vehicles, returned by the dashboard, printed by the seeder — anything published by design cannot also be what proves who you are. Sign-in is two steps now: the code SELECTS the fleet and returns a name and nothing else, then the person’s phone and PIN, checked by the identity spine that already counts wrong attempts and locks out. The person must hold a manager role for THAT company, refused with the same generic message as a bad PIN because “right PIN, wrong company” confirms both. The app also stopped minting its own token — it used to mint one for whatever DID the code resolved to, which made the sign-in screen decoration.', ref: 'POST /fleet/managers/session · listScoped · c0267c3 + e0f7ce7' },
+    { state: 'shipped', t: 'The notification that opened a 404', d: 'Found by walking the built site rather than by a failing test, because nothing could fail: a notification link is a string, and a string is always a valid string. The final notice for an unclaimed parcel shipped with a PATH — and the push service worker resolves a link against the app’s scope, so it became a page that does not exist in a build where each app is one index.html. The one notification in this network that asks a person to make a decision went nowhere when tapped. A deep link is a QUERY on the app root; the driver’s offer link had always been the right shape and the new one simply did not copy it. Two more in the same pass: naming a neighbour to collect recorded a code and nothing else, so the network went on treating the parcel as one nobody had spoken for — still lapsing, still being offered back to the store while that neighbour was on their way — and the code itself rendered inside a card that only exists while the parcel is unclaimed, which naming somebody now ends, so it vanished at the exact moment its purpose was to be passed on.', ref: 'push-sw deep link · ?parcel= · 79bcd69' },
     { state: 'shipped', t: 'Nobody came for it, and now everybody knows', d: 'A parcel sitting unclaimed on a shelf was a fact only the operator tower could see, derived from a clock. The store could not tell an order that had gone quiet from one still in transit; the receiver was told once, at arrival, and then nothing ever said their time had run out; and the shop — which had received, scanned and given up one of the six or nine slots that decide whether it can accept anything else — earned NOTHING for any of it unless a stranger eventually turned up. It is a status now, and the one thing it deliberately does not do is lock the door: it changes the terms, never the availability, so somebody walking in on day ten with their code still gets their parcel. The shop’s pay split in two — half when the parcel lands on the shelf, half when it leaves — which moves no money into the system, because the sender already paid for a whole journey including its last leg; what changed is that the half covering work already done stopped depending on somebody else’s decision. Past the free window the slot earns by the day, capped so a forgotten small parcel never costs more to recover than it is worth, and recovered from whoever ends the situation: the receiver at the counter, the store inside its return cost, and the network itself when nobody does. The receiver gets four answers and every one of them DOES something — a reason field that changes nothing is a survey, and nobody fills in a survey about a parcel. The first extension is free on purpose: silence costs this network far more than a few shelf-days, and charging somebody for telling us they are ill teaches them that saying nothing is cheaper. Naming a neighbour to collect is safer than the workaround it replaces, because reading your own code down the phone is invisible to us and indistinguishable afterwards from a stranger who guessed. And giving up a parcel is the receiver’s alone — the goods are theirs — it does not make a real box in a real shop disappear, a store standing ready to pay to recover it outranks it, and “I never ordered this” is emphatically not the same answer.', ref: 'Unclaimed · UnclaimedService · the tower’s Awaiting disposal panel' },
     { state: 'shipped', t: 'Carrying risk stops looking like earning it', d: 'Cost of risk was one of the three layers a customer already paid, and all of it landed in revenue. It now accrues to a claims provision that awards draw down, released again on every refund, void and rebate — a shipment nobody makes carries no risk. Not one price moved: it is a slice carved out of the fee, not a term added to it.', ref: 'PROVISION_CLAIMS · BooksService.provisionSplit' },
     { state: 'shipped', t: 'And a damage award has something to check itself against', d: 'A sister carries a free limit on everything it moves; above it a shipper declares what the goods are worth and pays a premium on the difference — charged only on the part not already covered, because billing somebody for cover they already had is the kind of small dishonesty nobody forgives twice. The cover caps the award. Before it, the network’s liability was genuinely undefined and an adjudicator had a number to type with nothing to check it against.', ref: 'InsuranceRule · parcel.coverLimit · POST /entities/:id/insurance' },
@@ -244,6 +291,19 @@ function render() {
     sec.append(head, ul);
     tracks.append(sec);
   }
+
+  document.getElementById('demo-note').textContent = DATA.demo.note;
+  const rows = document.getElementById('demo-rows');
+  for (const [app, where, how] of DATA.demo.rows) {
+    const tr = document.createElement('tr');
+    const a = document.createElement('td'); a.textContent = app;
+    const w = document.createElement('td');
+    const wc = document.createElement('code'); wc.textContent = where; w.append(wc);
+    const h = document.createElement('td'); h.textContent = how;
+    tr.append(a, w, h);
+    rows.append(tr);
+  }
+  document.getElementById('demo-tail').textContent = DATA.demo.tail;
 
   const f = document.getElementById('foundations');
   for (const item of DATA.foundations) {
