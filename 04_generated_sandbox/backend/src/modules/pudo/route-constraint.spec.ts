@@ -334,6 +334,23 @@ describe('route constraints — the road as its drivers report it', () => {
       expect(seen).toMatchObject({ confirmations: 0, refutations: 1, status: 'disputed' });
     });
 
+    it('hands back a view from EVERY write, not just the reads', () => {
+      // The leak that is easy to leave open: the list endpoints strip identities, and then report/refute
+      // hand the whole record straight back to the caller — so refuting a bridge would tell you exactly
+      // who reported it. Every path out of this service returns the same narrow shape.
+      const s = svc();
+      const reported = s.report({ kind: 'LOW_BRIDGE', at: ON_THE_ROAD, value: 4.2, by: 'did:driver:a' });
+      const confirmed = s.confirm(reported.constraintId, 'did:driver:b');
+      const refuted = s.refute(reported.constraintId, 'did:driver:c');
+      const cleared = s.clear(reported.constraintId, 'did:operator:1', 'gone');
+      for (const out of [reported, confirmed, refuted, cleared]) {
+        expect(JSON.stringify(out)).not.toContain('did:');
+        expect(out).not.toHaveProperty('reportedBy');
+        expect(out).not.toHaveProperty('confirmedBy');
+        expect(out).not.toHaveProperty('refutedBy');
+      }
+    });
+
     it('does not know a constraint that was never reported', () => {
       expect(() => svc().get('rc_nope')).toThrow(/no such report/i);
     });

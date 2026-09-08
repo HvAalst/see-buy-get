@@ -54,7 +54,7 @@ export class RouteConstraintService {
    * three drivers reporting the same bridge should make the network more sure of one bridge, not draw
    * three bridges on the map.
    */
-  report(input: { kind: ConstraintKind; at: GeoPoint; value?: number; note?: string; by: string }): RouteConstraint {
+  report(input: { kind: ConstraintKind; at: GeoPoint; value?: number; note?: string; by: string }): ConstraintView {
     const effect = CONSTRAINT_EFFECT[input.kind];
     if (!effect) throw new GlosError('VALIDATION_FAILED', `Unknown constraint kind: ${input.kind}`);
     if (!Number.isFinite(input.at?.lat) || !Number.isFinite(input.at?.lng)) {
@@ -76,7 +76,7 @@ export class RouteConstraintService {
       existing.refutedBy = existing.refutedBy.filter((d) => d !== input.by);
       if (existing.status === 'disputed' && existing.confirmedBy.length > existing.refutedBy.length) existing.status = 'active';
       this.constraints.set(existing.constraintId, existing);
-      return existing;
+      return constraintView(existing);
     }
 
     const constraint: RouteConstraint = {
@@ -93,17 +93,17 @@ export class RouteConstraintService {
       status: 'active',
     };
     this.constraints.set(constraint.constraintId, constraint);
-    return constraint;
+    return constraintView(constraint);
   }
 
   /** A later passer-by agrees. One vote each; the original reporter's is already counted. */
-  confirm(constraintId: string, by: string): RouteConstraint {
+  confirm(constraintId: string, by: string): ConstraintView {
     const c = this.require(constraintId);
     if (c.reportedBy !== by && !c.confirmedBy.includes(by)) c.confirmedBy.push(by);
     c.refutedBy = c.refutedBy.filter((d) => d !== by);
     if (c.status === 'disputed' && c.confirmedBy.length > c.refutedBy.length) c.status = 'active';
     this.constraints.set(c.constraintId, c);
-    return c;
+    return constraintView(c);
   }
 
   /**
@@ -114,15 +114,15 @@ export class RouteConstraintService {
    * front of an operator. Letting the crowd delete a hazard would mean one mistaken tap, or one driver
    * who wanted a shorter route, could remove a low bridge from everybody's map.
    */
-  refute(constraintId: string, by: string, note?: string): RouteConstraint {
+  refute(constraintId: string, by: string, note?: string): ConstraintView {
     const c = this.require(constraintId);
-    if (c.status === 'cleared') return c;
+    if (c.status === 'cleared') return constraintView(c);
     if (!c.refutedBy.includes(by)) c.refutedBy.push(by);
     c.confirmedBy = c.confirmedBy.filter((d) => d !== by);
     c.status = 'disputed';
     if (note?.trim()) c.note = c.note ? `${c.note} · ${note.trim()}` : note.trim();
     this.constraints.set(c.constraintId, c);
-    return c;
+    return constraintView(c);
   }
 
   /**
@@ -132,7 +132,7 @@ export class RouteConstraintService {
    * crowd-sourced hazard map has to have an auditable way to be corrected, and a clearance with no
    * recorded justification is indistinguishable from somebody deleting an inconvenient bridge.
    */
-  clear(constraintId: string, by: string, reason: string): RouteConstraint {
+  clear(constraintId: string, by: string, reason: string): ConstraintView {
     const c = this.require(constraintId);
     if (!reason?.trim()) throw new GlosError('VALIDATION_FAILED', 'Say why it is being cleared — a hazard removed without a reason cannot be reviewed later');
     c.status = 'cleared';
@@ -140,14 +140,14 @@ export class RouteConstraintService {
     c.clearedAt = new Date().toISOString();
     c.clearReason = reason.trim();
     this.constraints.set(c.constraintId, c);
-    return c;
+    return constraintView(c);
   }
 
   /** Everything an operator has to look at: somebody says a live hazard is not there. */
   disputed(): ConstraintView[] {
     return this.live()
       .filter((c) => c.status === 'disputed')
-      .map(view)
+      .map(constraintView)
       .sort((a, b) => a.reportedAt.localeCompare(b.reportedAt));
   }
 
@@ -156,7 +156,7 @@ export class RouteConstraintService {
     return this.live()
       .filter((c) => haversineKm(c.at, at) <= radiusKm)
       .sort((a, b) => haversineKm(a.at, at) - haversineKm(b.at, at))
-      .map(view);
+      .map(constraintView);
   }
 
   /** What sits on the straight line between two places. Approximate by construction — see ON_ROUTE_KM. */
@@ -164,7 +164,7 @@ export class RouteConstraintService {
     return this.live()
       .filter((c) => distanceToSegmentKm(c.at, from, to) <= ON_ROUTE_KM)
       .sort((a, b) => haversineKm(from, a.at) - haversineKm(from, b.at))
-      .map(view);
+      .map(constraintView);
   }
 
   /**
@@ -240,7 +240,7 @@ export class RouteConstraintService {
 const round1 = (n: number): number => Math.round(n * 10) / 10;
 
 /** The public shape: counts, never who said what. Who reported a bridge is nobody else's business. */
-function view(c: RouteConstraint): ConstraintView {
+export function constraintView(c: RouteConstraint): ConstraintView {
   return {
     constraintId: c.constraintId,
     kind: c.kind,

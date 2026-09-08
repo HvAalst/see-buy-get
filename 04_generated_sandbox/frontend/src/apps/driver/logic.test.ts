@@ -3,6 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n'; // English is the base catalog, so the real `t` yields the English literals
 import {
   blockerTone,
+  roadBlocks,
+  roadMeasure,
+  roadSummary,
+  roadTone,
+  roadValueLabel,
   boardDistanceLine,
   boardOriginPin,
   boardSummary,
@@ -422,5 +427,65 @@ describe('where the board is read from (FB3a)', () => {
     expect(originReady({ label: 'Mombasa', pin: null })).toBe(false); // a name nobody could place
     expect(originReady({ label: '   ', pin: mombasa })).toBe(false); // a pin nothing can call back
     expect(originReady({ label: '', pin: null })).toBe(false);
+  });
+});
+
+describe('the road, as drivers report it', () => {
+  const at = { lat: -1, lng: 36 };
+  const c = (over: Partial<{ kind: string; status: string; value: number }> = {}) => ({
+    constraintId: 'rc_1',
+    kind: 'LOW_BRIDGE',
+    at,
+    status: 'active',
+    reportedAt: '2026-09-08T00:00:00Z',
+    confirmations: 0,
+    refutations: 0,
+    ...over,
+  });
+
+  it('asks for the number only where there is one to give', () => {
+    // A bridge with no height cannot be checked against any load, so the server refuses it. Asking in the
+    // sheet is the difference between one tap and a rejected form at a junction.
+    expect(roadMeasure('LOW_BRIDGE')).toBe('height_m');
+    expect(roadMeasure('HEIGHT_BARRIER')).toBe('height_m');
+    expect(roadMeasure('WEIGHT_LIMIT')).toBe('weight_kg');
+    for (const kind of ['NO_HAZMAT', 'WASHOUT', 'FERRY', 'WEIGHBRIDGE', 'CHECKPOINT']) {
+      expect(roadMeasure(kind)).toBeNull();
+    }
+  });
+
+  it('keeps blockers and advisories apart', () => {
+    // A board that weights "there is a weighbridge" the same as "this bridge will not take you" teaches a
+    // driver to skim past both.
+    for (const kind of ['LOW_BRIDGE', 'HEIGHT_BARRIER', 'WEIGHT_LIMIT', 'NO_HAZMAT', 'WASHOUT']) {
+      expect(roadBlocks(kind)).toBe(true);
+    }
+    for (const kind of ['FERRY', 'WEIGHBRIDGE', 'CHECKPOINT']) {
+      expect(roadBlocks(kind)).toBe(false);
+    }
+  });
+
+  it('never softens a DISPUTED hazard — that is the state you must still treat as there', () => {
+    // The single most important line on this screen. Somebody saying a low bridge is gone does not make it
+    // gone, so dispute changes the sentence beside it and never the weight of the warning.
+    expect(roadTone(c({ status: 'active' }))).toBe('danger');
+    expect(roadTone(c({ status: 'disputed' }))).toBe('danger');
+    expect(roadTone(c({ kind: 'FERRY', status: 'active' }))).toBe('info');
+  });
+
+  it('reads a limit back in the units on the sign', () => {
+    expect(roadValueLabel(c({ kind: 'LOW_BRIDGE', value: 4.25 }), t)).toBe('4.3 m');
+    // Tonnes, because no weight sign anywhere is posted in kilograms.
+    expect(roadValueLabel(c({ kind: 'WEIGHT_LIMIT', value: 18_000 }), t)).toBe('18 t');
+    expect(roadValueLabel(c({ kind: 'FERRY' }), t)).toBeNull();
+    // A measurable kind with no number says nothing rather than inventing one.
+    expect(roadValueLabel(c({ kind: 'LOW_BRIDGE' }), t)).toBeNull();
+  });
+
+  it('summarises what was REPORTED and never claims the rest of the road', () => {
+    // "Nothing reported" has to survive being read quickly by somebody who wants it to mean "clear".
+    expect(roadSummary([], t)).toBe('Nothing reported here yet — that is not the same as clear');
+    expect(roadSummary([c({ kind: 'FERRY' }), c({ kind: 'WEIGHBRIDGE' })], t)).toBe('2 reported, none of them in your way');
+    expect(roadSummary([c(), c({ kind: 'FERRY' })], t)).toBe('2 reported, 1 could stop you');
   });
 });

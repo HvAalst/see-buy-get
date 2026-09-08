@@ -19,6 +19,7 @@ import type {
   ExpectedLoadView,
   OfferView,
   RatesView,
+  RoadConstraint,
   SavedRoute,
   SessionView,
   SuggestView,
@@ -116,6 +117,11 @@ export interface DriverState {
   /** The half-typed place in the origin picker. Separate from `boardOrigin` so the board is not refetched
    *  against a pin the operator is still moving. */
   boardPlace: CustomPlace;
+  /** The crowd-sourced road map around the driver: what other drivers have reported, never a survey. */
+  road: RoadConstraint[];
+  roadState: 'idle' | 'loading' | 'error' | 'ready';
+  /** Where that list was read from. Null until the phone gives a fix — the distances need one. */
+  roadAt: { lat: number; lng: number } | null;
   /** Screen-level failure — rendered as an ErrorNote, never as a raw string. */
   error: SbgError | null;
   toasts: Toast[];
@@ -194,6 +200,9 @@ const INITIAL: DriverState = {
   boardFrom: null,
   boardOrigin: null, // …and from where they are, until they say otherwise
   boardPlace: { ...EMPTY_PLACE },
+  road: [],
+  roadState: 'idle',
+  roadAt: null,
   error: null,
   toasts: [],
   busy: null,
@@ -662,6 +671,32 @@ export function useDriverApp() {
   const loadBoard = useCallback(() => {
     void fetchBoard(stateRef.current.boardReach);
   }, [fetchBoard]);
+
+  /* ------------------------------------------------- the road, as drivers report it */
+
+  /**
+   * What other drivers have reported around here.
+   *
+   * Needs the phone's own fix and says so when it cannot get one, rather than falling back to a guessed
+   * point: a hazard list drawn around the wrong village is worse than none, because it reads as a survey
+   * of a road the driver is not on.
+   */
+  const loadRoad = useCallback(async () => {
+    if (!client) return;
+    setState((s) => ({ ...s, roadState: s.roadState === 'ready' ? s.roadState : 'loading' }));
+    const at = await currentPosition();
+    if (!at) {
+      setState((s) => ({ ...s, roadState: 'error', roadAt: null }));
+      return;
+    }
+    const r = await client.api.roadNear(at);
+    if (r.error) {
+      setState((s) => ({ ...s, roadState: 'error' }));
+      return;
+    }
+    const page = narrow<{ items?: RoadConstraint[] }>(r.data);
+    setState((s) => ({ ...s, road: page.items ?? [], roadState: 'ready', roadAt: at }));
+  }, [client]);
   const setBoardReach = useCallback(
     (reach: BoardReach) => {
       setState((s) => ({ ...s, boardReach: reach, boardState: 'loading' }));
@@ -1182,6 +1217,56 @@ export function useDriverApp() {
     [client, run, fail, pushToast, refresh],
   );
 
+  /**
+   * One tap from the cab.
+   *
+   * The position comes from the phone, never from a form — the whole premise is that nobody fills in a
+   * form at a junction with a truck behind them. Without a fix there is nothing to report ABOUT, so this
+   * says so and changes nothing.
+   */
+  const reportRoad = useCallback(
+    async (kind: string, value?: number, note?: string) => {
+      if (!client) return;
+      await run('report-road', async () => {
+        const at = await currentPosition();
+        if (!at) {
+          pushToast({ tone: 'warn', icon: 'pin', title: t('driver.toast.noLocation'), detail: t('driver.toast.noLocationDetail') });
+          return;
+        }
+        const r = await client.api.reportRoad({ kind, at, ...(value != null ? { value } : {}), ...(note?.trim() ? { note: note.trim() } : {}) });
+        if (r.error) return fail(r.error);
+        buzz();
+        pushToast({ tone: 'ok', icon: 'check', title: t('driver.toast.roadReported'), detail: t('driver.toast.roadReportedDetail') });
+        await loadRoad();
+      });
+    },
+    [client, run, fail, pushToast, loadRoad],
+  );
+
+  /**
+   * A later passer-by answers: still there, or gone.
+   *
+   * "Gone" DISPUTES it — it does not remove it, and the toast says so out loud. A driver who taps that
+   * expects the warning to disappear, and the one thing this screen must never do is let them believe it
+   * has: being wrong about a bridge that is still standing is the failure the whole feature exists around.
+   */
+  const answerRoad = useCallback(
+    async (constraintId: string, stillThere: boolean) => {
+      if (!client) return;
+      await run(`road:${constraintId}`, async () => {
+        const r = stillThere ? await client.api.confirmRoad(constraintId) : await client.api.refuteRoad(constraintId);
+        if (r.error) return fail(r.error);
+        buzz();
+        pushToast(
+          stillThere
+            ? { tone: 'ok', icon: 'check', title: t('driver.toast.roadConfirmed') }
+            : { tone: 'warn', icon: 'warning', title: t('driver.toast.roadRefuted'), detail: t('driver.toast.roadRefutedDetail') },
+        );
+        await loadRoad();
+      });
+    },
+    [client, run, fail, pushToast, loadRoad],
+  );
   return {
     state,
     // The Web Push controls (N1b) — surfaced for the TopBar NotificationBell; null while signed out.
@@ -1202,6 +1287,9 @@ export function useDriverApp() {
       queryJobs,
       loadJobs,
       loadBoard,
+      loadRoad,
+      reportRoad,
+      answerRoad,
       setBoardReach,
       setBoardPlace,
       applyBoardOrigin,

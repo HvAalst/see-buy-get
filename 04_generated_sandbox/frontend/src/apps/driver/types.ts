@@ -359,3 +359,22 @@ export interface SavedRoute {
   fromLabel: string;
   toLabel: string;
 }
+
+/**
+ * One thing drivers have reported on the road — the crowd-sourced constraint map, as a screen sees it.
+ *
+ * Mirrors the backend's ConstraintView exactly, identities and all: there are none. Who reported a bridge
+ * never crosses the wire, so a screen can only ever show how MANY agree, never who.
+ */
+export interface RoadConstraint {
+  constraintId: string;
+  kind: string;
+  at: { lat: number; lng: number };
+  /** Metres for a height, kilograms for a limit. Absent where the kind has nothing to measure. */
+  value?: number;
+  note?: string;
+  status: 'active' | 'disputed' | 'cleared';
+  reportedAt: string;
+  confirmations: number;
+  refutations: number;
+}

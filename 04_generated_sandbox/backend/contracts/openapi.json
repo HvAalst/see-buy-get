@@ -10028,6 +10028,270 @@
         }
       }
     },
+    "/v1/sbg/route-constraints": {
+      "post": {
+        "operationId": "Sbg.reportConstraint",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportConstraintDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConstraintView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "Sbg.constraintsNear",
+        "summary": "",
+        "description": "What is around here. Cleared constraints are gone; disputed ones are still shown, and say so.",
+        "parameters": [
+          {
+            "name": "lat",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "minimum": -90,
+              "maximum": 90,
+              "type": "number"
+            }
+          },
+          {
+            "name": "lng",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "minimum": -180,
+              "maximum": 180,
+              "type": "number"
+            }
+          },
+          {
+            "name": "radiusKm",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConstraintsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/route-constraints/{id}/confirm": {
+      "post": {
+        "operationId": "Sbg.confirmConstraint",
+        "summary": "",
+        "description": "A later passer-by agrees it is there. One vote each, and never the original reporter's own.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConstraintView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/route-constraints/{id}/refute": {
+      "post": {
+        "operationId": "Sbg.refuteConstraint",
+        "summary": "",
+        "description": "A driver says it is not there — and it KEEPS WARNING.\n\nDeliberately NOT a delete, and this endpoint is the reason the distinction has to survive the HTTP\nlayer too. Refuting moves a constraint to `disputed`, which still appears and still blocks, and puts\nit in front of an operator. Letting the crowd remove a hazard would mean one mistaken tap — or one\ndriver who wanted a shorter route — could take a low bridge off everybody's map.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefuteConstraintDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConstraintView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/route-constraints/{id}/clear": {
+      "post": {
+        "operationId": "Sbg.clearConstraint",
+        "summary": "",
+        "description": "The operator clears it — the ONLY way a constraint stops warning, and operator-only for that reason.\n\nWith a reason, always, and the reason is kept: \"either forgive or regret and we don't want both\".\nA crowd-sourced hazard map must have an auditable way back, or it can never be corrected at all.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClearConstraintDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConstraintView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/route-constraints/route": {
+      "get": {
+        "operationId": "Sbg.constraintsAlongRoute",
+        "summary": "",
+        "description": "What sits on the corridor a driver is about to run.\n\nAn empty list means only that nothing has been REPORTED on this line — never that the road is clear.\nThe board pairs this with a caveat it cannot switch off; a client rendering this list on its own must\ncarry the same warning, because absence of a report is not clearance.",
+        "parameters": [
+          {
+            "name": "fromLat",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "minimum": -90,
+              "maximum": 90,
+              "type": "number"
+            }
+          },
+          {
+            "name": "fromLng",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "minimum": -180,
+              "maximum": 180,
+              "type": "number"
+            }
+          },
+          {
+            "name": "toLat",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "minimum": -90,
+              "maximum": 90,
+              "type": "number"
+            }
+          },
+          {
+            "name": "toLng",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "minimum": -180,
+              "maximum": 180,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteConstraintsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/route-constraints/disputed": {
+      "get": {
+        "operationId": "Sbg.disputedConstraints",
+        "summary": "",
+        "description": "The operator's queue: live hazards somebody says are not there. Nothing else resolves these.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConstraintsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/market": {
       "get": {
         "operationId": "Sbg.publicMarket",
@@ -18502,6 +18766,166 @@
         },
         "required": [
           "items",
+          "total"
+        ]
+      },
+      "ReportConstraintDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "LOW_BRIDGE",
+              "HEIGHT_BARRIER",
+              "WEIGHT_LIMIT",
+              "NO_HAZMAT",
+              "WASHOUT",
+              "WEIGHBRIDGE",
+              "FERRY",
+              "CHECKPOINT"
+            ]
+          },
+          "at": {
+            "$ref": "#/components/schemas/GeoDto"
+          },
+          "value": {
+            "type": "number",
+            "description": "Metres for a height, kilograms for a limit. Required for the kinds that have something to measure —\n the service refuses those without it, because an unmeasured limit cannot be checked against a load.",
+            "minimum": 0.01
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "kind",
+          "at"
+        ]
+      },
+      "ConstraintView": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "LOW_BRIDGE",
+              "HEIGHT_BARRIER",
+              "WEIGHT_LIMIT",
+              "NO_HAZMAT",
+              "WASHOUT",
+              "WEIGHBRIDGE",
+              "FERRY",
+              "CHECKPOINT"
+            ]
+          },
+          "value": {
+            "type": "number"
+          },
+          "note": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "disputed",
+              "cleared"
+            ]
+          },
+          "constraintId": {
+            "type": "string"
+          },
+          "at": {
+            "$ref": "#/components/schemas/GeoPoint"
+          },
+          "reportedAt": {
+            "type": "string"
+          },
+          "confirmations": {
+            "type": "number",
+            "description": "How many OTHER drivers have since agreed it is there. Never who they are."
+          },
+          "refutations": {
+            "type": "number",
+            "description": "How many say it is gone. Recorded and shown, and deliberately not enough to clear it."
+          }
+        },
+        "required": [
+          "kind",
+          "status",
+          "constraintId",
+          "at",
+          "reportedAt",
+          "confirmations",
+          "refutations"
+        ]
+      },
+      "RefuteConstraintDto": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string",
+            "maxLength": 200
+          }
+        }
+      },
+      "ClearConstraintDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "by": {
+            "type": "string",
+            "description": "An operator may name the human who made the call; otherwise the token speaks for itself."
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "ConstraintsResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConstraintView"
+            }
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ]
+      },
+      "RouteConstraintsResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConstraintView"
+            }
+          },
+          "basis": {
+            "type": "string",
+            "enum": [
+              "reported-by-drivers-never-surveyed"
+            ]
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "basis",
           "total"
         ]
       },

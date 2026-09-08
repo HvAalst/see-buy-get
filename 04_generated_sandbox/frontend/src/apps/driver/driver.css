@@ -471,3 +471,144 @@
     gap: 14px;
   }
 }
+
+/* ── The road, as drivers report it ──────────────────────────────────────────────────────────────────
+   A hazard list read in a cab, in sunlight, by somebody who wants to be moving again. Big targets, one
+   glyph per row, and the blocking ones carry a red edge so the eye finds them without reading. The
+   advisories are deliberately quieter — a ferry costs time and a bridge does not, and giving them equal
+   weight is how a list teaches people to skim past all of it. */
+
+.road__h {
+  margin: 0 0 4px;
+  font-size: 17px;
+  color: var(--navy);
+}
+
+.road__sum {
+  margin: 12px 0 8px;
+  font-size: 15px;
+  color: var(--tx2);
+}
+
+.road__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.road__row {
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-card);
+  /* The left edge is the whole signal at arm's length: a blocker is red down its side, an advisory is not. */
+  border-left-width: 4px;
+}
+
+.road__row--danger {
+  border-left-color: var(--danger);
+}
+
+.road__row--info {
+  border-left-color: var(--bd-soft);
+}
+
+.road__ic {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--tx2);
+}
+
+.road__row--danger .road__ic {
+  color: var(--danger);
+}
+
+.road__body {
+  min-width: 0;
+  flex: 1;
+}
+
+.road__name {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--navy);
+}
+
+.road__meta {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--tx3);
+}
+
+/* A disputed hazard is NOT softened. It keeps the row's danger edge and gains this line, because somebody
+   saying a bridge is gone is not evidence that it is — and this is precisely the state in which a driver
+   has to go on treating it as there. */
+.road__disputed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: var(--warn);
+}
+
+.road__acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+/* Shown in every state, the empty one included — that is the state where a driver is likeliest to read
+   silence as a clear road, so it is the state where the sentence earns its place. */
+.road__caveat {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 14px 0;
+  font-size: 14px;
+  color: var(--tx3);
+}
+
+/* The report sheet: eight targets a thumb finds without aiming, two to a row. */
+.road__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.road__pick {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 96px;
+  padding: 12px 8px;
+  font: inherit;
+  font-weight: 600;
+  text-align: center;
+  color: var(--navy);
+  background: var(--card);
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-card);
+  cursor: pointer;
+}
+
+.road__pick--stop {
+  border-left: 4px solid var(--danger);
+}
+
+.road__pick:disabled {
+  opacity: 0.5;
+}

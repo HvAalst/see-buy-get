@@ -24,6 +24,7 @@ import { DriverService } from './driver.service';
 import { FleetService } from './fleet.service';
 import { DispatchService } from './dispatch.service';
 import { RouteConstraintService } from './route-constraint.service';
+import { ConstraintView, ConstraintsResponse, RouteConstraintsResponse } from './route-constraint.types';
 import { FreightBoardResponse, FreightProposalsResponse, MarketResponse, MarketSeries, PostedFreightResponse } from './dispatch.types';
 import { MarketPulseService } from './market-pulse.service';
 import { CargoService } from './cargo.service';
@@ -2189,13 +2190,13 @@ export class SbgController {
    * constraint and count as corroboration; the service handles that, so the client may report freely.
    */
   @Post('route-constraints')
-  reportConstraint(@Body() dto: ReportConstraintDto, @Actor() actor: IntrospectionResult) {
+  reportConstraint(@Body() dto: ReportConstraintDto, @Actor() actor: IntrospectionResult): ConstraintView {
     return this.constraints.report({ kind: dto.kind, at: dto.at, value: dto.value, note: dto.note, by: actingDid(actor) });
   }
 
   /** A later passer-by agrees it is there. One vote each, and never the original reporter's own. */
   @Post('route-constraints/:id/confirm')
-  confirmConstraint(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+  confirmConstraint(@Param('id') id: string, @Actor() actor: IntrospectionResult): ConstraintView {
     return this.constraints.confirm(id, actingDid(actor));
   }
 
@@ -2208,7 +2209,7 @@ export class SbgController {
    * driver who wanted a shorter route — could take a low bridge off everybody's map.
    */
   @Post('route-constraints/:id/refute')
-  refuteConstraint(@Param('id') id: string, @Body() dto: RefuteConstraintDto, @Actor() actor: IntrospectionResult) {
+  refuteConstraint(@Param('id') id: string, @Body() dto: RefuteConstraintDto, @Actor() actor: IntrospectionResult): ConstraintView {
     return this.constraints.refute(id, actingDid(actor), dto.note);
   }
 
@@ -2220,13 +2221,13 @@ export class SbgController {
    */
   @Roles('operator')
   @Post('route-constraints/:id/clear')
-  clearConstraint(@Param('id') id: string, @Body() dto: ClearConstraintDto, @Actor() actor: IntrospectionResult) {
+  clearConstraint(@Param('id') id: string, @Body() dto: ClearConstraintDto, @Actor() actor: IntrospectionResult): ConstraintView {
     return this.constraints.clear(id, auditActor(actor, dto.by), dto.reason);
   }
 
   /** What is around here. Cleared constraints are gone; disputed ones are still shown, and say so. */
   @Get('route-constraints')
-  constraintsNear(@Query() q: ConstraintsNearQueryDto) {
+  constraintsNear(@Query() q: ConstraintsNearQueryDto): ConstraintsResponse {
     const items = this.constraints.near({ lat: Number(q.lat), lng: Number(q.lng) }, q.radiusKm);
     return { items, total: items.length };
   }
@@ -2239,7 +2240,7 @@ export class SbgController {
    * carry the same warning, because absence of a report is not clearance.
    */
   @Get('route-constraints/route')
-  constraintsAlongRoute(@Query() q: ConstraintsRouteQueryDto) {
+  constraintsAlongRoute(@Query() q: ConstraintsRouteQueryDto): RouteConstraintsResponse {
     const items = this.constraints.alongRoute(
       { lat: Number(q.fromLat), lng: Number(q.fromLng) },
       { lat: Number(q.toLat), lng: Number(q.toLng) },
@@ -2250,7 +2251,7 @@ export class SbgController {
   /** The operator's queue: live hazards somebody says are not there. Nothing else resolves these. */
   @Roles('operator')
   @Get('route-constraints/disputed')
-  disputedConstraints() {
+  disputedConstraints(): ConstraintsResponse {
     const items = this.constraints.disputed();
     return { items, total: items.length };
   }

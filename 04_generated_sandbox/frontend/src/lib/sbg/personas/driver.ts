@@ -144,6 +144,49 @@ export function createDriverApi(sbg: SbgClient) {
     freightBoard: (at: { lat: number; lng: number }, radiusKm?: number) =>
       sbg.request((c) => c.GET('/v1/sbg/dispatch/board', { params: { query: { lat: at.lat, lng: at.lng, ...(radiusKm != null ? { radiusKm } : {}) } } })),
 
+    /**
+     * The crowd-sourced road map: what drivers have reported on the roads around here.
+     *
+     * An empty list means nothing has been REPORTED, and never that the road is clear — no one surveys
+     * these corridors, so a screen showing this has to carry that caveat itself.
+     */
+    roadNear: (at: { lat: number; lng: number }, radiusKm?: number) =>
+      sbg.request((c) =>
+        c.GET('/v1/sbg/route-constraints', { params: { query: { lat: at.lat, lng: at.lng, ...(radiusKm != null ? { radiusKm } : {}) } } }),
+      ),
+
+    /** What sits on the corridor between two places. Same caveat, and the response repeats it in `basis`. */
+    roadAlongRoute: (from: { lat: number; lng: number }, to: { lat: number; lng: number }) =>
+      sbg.request((c) =>
+        c.GET('/v1/sbg/route-constraints/route', {
+          params: { query: { fromLat: from.lat, fromLng: from.lng, toLat: to.lat, toLng: to.lng } },
+        }),
+      ),
+
+    /**
+     * One tap from the cab: there is something on this road.
+     *
+     * No `by` — who reported it comes from the token. `value` is metres for a height and kilograms for a
+     * limit, and the kinds that have something to measure are refused without it.
+     */
+    reportRoad: (body: { kind: string; at: { lat: number; lng: number }; value?: number; note?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/route-constraints', { body: body as never })),
+
+    /** A later passer-by agrees it is still there. */
+    confirmRoad: (constraintId: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/route-constraints/{id}/confirm', { params: { path: { id: constraintId } } })),
+
+    /**
+     * A driver says it is gone — and it KEEPS WARNING.
+     *
+     * Deliberately not a delete. This disputes the constraint and puts it in front of an operator; it goes
+     * on appearing and go on blocking meanwhile. A screen must not present it as removing anything.
+     */
+    refuteRoad: (constraintId: string, note?: string) =>
+      sbg.request((c) =>
+        c.POST('/v1/sbg/route-constraints/{id}/refute', { params: { path: { id: constraintId } }, body: (note ? { note } : {}) as never }),
+      ),
+
     /** FB0c — name a price for a load posted for negotiation. Reserves nothing: the shipper's acceptance is
      *  what claims it, so the load stays open to everyone until then. */
     proposeForFreight: (freightId: string, body: { from: { lat: number; lng: number }; price: number; note?: string }) =>

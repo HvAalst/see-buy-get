@@ -438,3 +438,82 @@ export function driverWorkLine(
   }
   return bits.join(' · ');
 }
+
+/* ------------------------------------------------------- the road, reported -- */
+
+/**
+ * What a driver can report from the cab, in the order the sheet shows it.
+ *
+ * BLOCKERS FIRST, advisories last, because the list is read top-down by somebody who has already pulled
+ * over and wants to be moving again. This mirrors the backend's CONSTRAINT_KINDS; the server is the
+ * authority and refuses anything it does not know, so drift here fails safe rather than silently.
+ */
+export const ROAD_KINDS = [
+  'LOW_BRIDGE',
+  'HEIGHT_BARRIER',
+  'WEIGHT_LIMIT',
+  'NO_HAZMAT',
+  'WASHOUT',
+  'WEIGHBRIDGE',
+  'FERRY',
+  'CHECKPOINT',
+] as const;
+export type RoadKind = (typeof ROAD_KINDS)[number];
+
+/**
+ * Which kinds carry a number, and what the number IS.
+ *
+ * A height or a limit is the whole content of the report — the server refuses "low bridge, unknown
+ * height", because an unmeasured limit cannot be checked against any load. Asking here rather than
+ * letting that round-trip fail is the difference between one tap and a rejected form at a junction.
+ */
+export function roadMeasure(kind: string): 'height_m' | 'weight_kg' | null {
+  if (kind === 'LOW_BRIDGE' || kind === 'HEIGHT_BARRIER') return 'height_m';
+  if (kind === 'WEIGHT_LIMIT') return 'weight_kg';
+  return null;
+}
+
+/**
+ * Does meeting this stop a vehicle, or only cost it time?
+ *
+ * The distinction the whole list lives on. A ferry and a weighbridge are things a haulier wants to know
+ * about and neither is a reason to refuse a load; showing them with the same weight as "this bridge will
+ * not take you" teaches a driver to skim past both.
+ */
+export function roadBlocks(kind: string): boolean {
+  return kind === 'LOW_BRIDGE' || kind === 'HEIGHT_BARRIER' || kind === 'WEIGHT_LIMIT' || kind === 'NO_HAZMAT' || kind === 'WASHOUT';
+}
+
+/**
+ * The colour one reported constraint is shown in.
+ *
+ * A DISPUTED blocker is still 'danger', never softened. Somebody saying a low bridge is gone does not
+ * make it gone — it is exactly the state in which a driver must keep treating it as there — so the only
+ * thing dispute changes on screen is the sentence beside it, never the weight of the warning.
+ */
+export function roadTone(c: { kind: string; status: string }): 'danger' | 'info' {
+  return roadBlocks(c.kind) ? 'danger' : 'info';
+}
+
+/** Metres or tonnes, in the words on the sign. Tonnes because no sign anywhere is posted in kilograms. */
+export function roadValueLabel(c: { kind: string; value?: number }, t: Translate): string | null {
+  const measure = roadMeasure(c.kind);
+  if (measure == null || c.value == null) return null;
+  return measure === 'height_m'
+    ? t('driver.road.metres', { n: String(Math.round(c.value * 10) / 10) })
+    : t('driver.road.tonnes', { n: String(Math.round(c.value / 100) / 10) });
+}
+
+/**
+ * The one-line summary above the list.
+ *
+ * Says how many things are REPORTED, and never anything about the rest of the road. "Nothing reported"
+ * is not "clear", and the sentence has to survive being read quickly by somebody who wants it to mean
+ * the road is fine.
+ */
+export function roadSummary(items: Array<{ kind: string }>, t: Translate): string {
+  if (items.length === 0) return t('driver.road.noneReported');
+  const blocking = items.filter((c) => roadBlocks(c.kind)).length;
+  if (blocking === 0) return t('driver.road.onlyAdvisories', { count: items.length });
+  return t('driver.road.someBlocking', { count: items.length, blocking });
+}
