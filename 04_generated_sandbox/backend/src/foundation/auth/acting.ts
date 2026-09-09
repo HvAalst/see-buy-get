@@ -25,12 +25,18 @@ export function actingDid(actor: IntrospectionResult | undefined, override?: str
 }
 
 /**
- * A non-empty audit label for who performed an action. Prefers an explicit override (an operator may
- * name the human), else the actor's DID, else its subject (operator tokens are machine tokens with a
+ * A non-empty audit label for who performed an action.
+ *
+ * Prefers the VERIFIED name the token carries (a named account established it at login), then an
+ * explicit override — which is how the operator console names the human at a keyboard, because its one
+ * shared key cannot — then the actor's DID, then its subject (operator tokens are machine tokens with a
  * `sub` but no `did`), else a constant. Always a string — safe for audit fields.
  */
 export function auditActor(actor: IntrospectionResult | undefined, override?: string): string {
-  return override || actor?.did || actor?.sub || 'operator';
+  // The token's own name wins over an override: a name carried by a signed token was established at
+  // login, while an override is whatever the caller put in the body. The override still serves the
+  // operator console, whose shared key genuinely cannot say who is at the keyboard.
+  return actor?.actorName || override || actor?.did || actor?.sub || 'operator';
 }
 
 /**

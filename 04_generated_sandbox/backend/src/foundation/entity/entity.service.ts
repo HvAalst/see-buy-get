@@ -6,6 +6,7 @@ import { currencyForJurisdiction } from '../money/currency';
 import { DEFAULT_TAX_LABEL, MAX_PLATFORM_FEE_PCT, MAX_PREMIUM_PCT, MAX_TAX_PCT, MIN_PLATFORM_FEE_PCT, MIN_TAX_PCT, PLATFORM_FEE_PCT } from '../../modules/pudo/pudo.config';
 import {
   Entity,
+  EntityChange,
   EntityPricing,
   InsuranceRule,
   LanePricing,
@@ -51,6 +52,8 @@ const SISTER_SEEDS: Array<{ entityId: string; name: string; jurisdiction: string
 export class EntityService implements OnApplicationBootstrap {
   // Durable: an entity's DID is referenced by records that outlive a restart, so it must not be reminted.
   private readonly entities = new PersistentMap<string, Entity>('entities');
+  /** Per company, in the order they happened. See `changes()`. */
+  private readonly changeLog = new PersistentMap<string, EntityChange[]>('entity-changes');
 
   constructor(private readonly dids: DidService) {}
 
@@ -188,8 +191,9 @@ export class EntityService implements OnApplicationBootstrap {
    * Bounded twice over: each layer on its own, and their SUM, so three innocent-looking numbers cannot
    * add up to a rate that prices a market out of existence.
    */
-  setRates(entityId: string, input: { lane?: string; costOfRiskPct?: number | null; profitOnRiskPct?: number | null; marginPct?: number | null }): Entity {
+  setRates(entityId: string, input: { lane?: string; costOfRiskPct?: number | null; profitOnRiskPct?: number | null; marginPct?: number | null }, by?: string): Entity {
     const entity = this.requireTransacting(entityId);
+    const before = EntityService.resolveRates(entity, input.lane);
     const apply = (into: RateStack): RateStack => {
       const next = { ...into };
       for (const key of ['costOfRiskPct', 'profitOnRiskPct', 'marginPct'] as const) {
@@ -226,6 +230,14 @@ export class EntityService implements OnApplicationBootstrap {
     entity.rates = rates;
     entity.ratesByLane = ratesByLane;
     this.entities.set(entity.entityId, entity);
+    this.record(entity.entityId, {
+      at: new Date().toISOString(),
+      by: by ?? 'unknown',
+      what: 'rates',
+      ...(input.lane ? { lane: input.lane } : {}),
+      from: pctLine(before),
+      to: pctLine(resolved),
+    });
     return entity;
   }
 
@@ -267,8 +279,9 @@ export class EntityService implements OnApplicationBootstrap {
    * And only a SISTER may charge. The group is not the merchant of record anywhere; letting it hold a
    * rate would imply it collects tax on transactions it is deliberately never a party to.
    */
-  setTax(entityId: string, input: { lane?: string; ratePct?: number | null; label?: string | null; registration?: string | null }): Entity {
+  setTax(entityId: string, input: { lane?: string; ratePct?: number | null; label?: string | null; registration?: string | null }, by?: string): Entity {
     const entity = this.requireTransacting(entityId);
+    const before = EntityService.resolveTax(entity, input.lane);
 
     // Built as a CANDIDATE and checked before anything is stored — the same discipline as setRates, and
     // for the same reason: validating a record already mutated refuses the change and applies it at once.
@@ -313,6 +326,14 @@ export class EntityService implements OnApplicationBootstrap {
     entity.tax = tax;
     entity.taxByLane = taxByLane;
     this.entities.set(entity.entityId, entity);
+    this.record(entity.entityId, {
+      at: new Date().toISOString(),
+      by: by ?? 'unknown',
+      what: 'tax',
+      ...(input.lane ? { lane: input.lane } : {}),
+      from: taxLine(before),
+      to: taxLine(EntityService.resolveTax(entity, input.lane)),
+    });
     return entity;
   }
 
@@ -346,8 +367,9 @@ export class EntityService implements OnApplicationBootstrap {
    * refuse here. The premium is bounded because it is a charge, and a mistyped charge reaches somebody's
    * money.
    */
-  setInsurance(entityId: string, input: { lane?: string; premiumPct?: number | null; freeLimit?: number | null }): Entity {
+  setInsurance(entityId: string, input: { lane?: string; premiumPct?: number | null; freeLimit?: number | null }, by?: string): Entity {
     const entity = this.requireTransacting(entityId);
+    const before = EntityService.resolveInsurance(entity, input.lane);
 
     const apply = (into: InsuranceRule | undefined): InsuranceRule | undefined => {
       const next: InsuranceRule = { ...(into ?? {}) };
@@ -385,6 +407,14 @@ export class EntityService implements OnApplicationBootstrap {
     entity.insurance = insurance;
     entity.insuranceByLane = insuranceByLane;
     this.entities.set(entity.entityId, entity);
+    this.record(entity.entityId, {
+      at: new Date().toISOString(),
+      by: by ?? 'unknown',
+      what: 'cover',
+      ...(input.lane ? { lane: input.lane } : {}),
+      from: coverLine(before, entity.currency),
+      to: coverLine(EntityService.resolveInsurance(entity, input.lane), entity.currency),
+    });
     return entity;
   }
 
@@ -395,13 +425,21 @@ export class EntityService implements OnApplicationBootstrap {
    * Changing the rate does NOT reprice anything already quoted: a parcel carries the rate it was minted
    * at, so a knob turned this morning cannot rewrite what a customer was told yesterday.
    */
-  setFeePct(entityId: string, pct: number): Entity {
+  setFeePct(entityId: string, pct: number, by?: string): Entity {
     const entity = this.requireTransacting(entityId);
     if (!Number.isFinite(pct) || pct < MIN_PLATFORM_FEE_PCT || pct > MAX_PLATFORM_FEE_PCT) {
       throw new GlosError('INVALID_INPUT', `A margin must be between ${MIN_PLATFORM_FEE_PCT * 100}% and ${MAX_PLATFORM_FEE_PCT * 100}%`);
     }
+    const before = EntityService.resolveRates(entity);
     entity.feePct = Math.round(pct * 10_000) / 10_000; // basis points is as fine as a margin needs to be
     this.entities.set(entity.entityId, entity);
+    this.record(entity.entityId, {
+      at: new Date().toISOString(),
+      by: by ?? 'unknown',
+      what: 'fee',
+      from: pctLine(before),
+      to: pctLine(EntityService.resolveRates(entity)),
+    });
     return entity;
   }
 
@@ -419,6 +457,51 @@ export class EntityService implements OnApplicationBootstrap {
    * inspection, because a wrong label here is worse than no label: it tells an operator a number is
    * inherited when they in fact own it.
    */
+  /* ------------------------------------------------------------------ who may -- */
+
+  /**
+   * MAY THIS ADMINISTRATOR ACT ON THIS COMPANY? Reach follows the company structure and nothing else.
+   *
+   * You reach the entity your token names, and any entity that names it as PARENT. So a sister's admin
+   * reaches its own company; the group's admin reaches the group and every sister under it. That is not
+   * a permission list somebody has to maintain in step with the org chart — it IS the org chart, asked a
+   * question, which is why a sister added tomorrow is administrable by the group the moment it exists.
+   *
+   * The group reaching its sisters does not touch the isolation rule the money model rests on: setting a
+   * rate is a management act, never a transaction, and the group still cannot be a party to one.
+   */
+  mayAdminister(adminEntityId: string | undefined, targetEntityId: string): boolean {
+    if (!adminEntityId) return false;
+    if (adminEntityId === targetEntityId) return true;
+    return this.find(targetEntityId)?.parentEntityId === adminEntityId;
+  }
+
+  /** Every company this administrator reaches — its own first, then the ones it is the parent of. */
+  administrable(adminEntityId: string | undefined): Entity[] {
+    if (!adminEntityId) return [];
+    return this.list().filter((e) => this.mayAdminister(adminEntityId, e.entityId));
+  }
+
+  /* --------------------------------------------------------------- the record -- */
+
+  /**
+   * What was changed, by whom, and what it was before.
+   *
+   * Kept because the whole reason a company has administrators of its own is that a commercial decision
+   * has a person behind it — and that is only true if the decision is recorded with the person on it.
+   * Otherwise this slice has merely widened who may change a price.
+   */
+  changes(entityId: string, limit = 20): EntityChange[] {
+    return [...(this.changeLog.get(entityId) ?? [])].reverse().slice(0, limit);
+  }
+
+  private record(entityId: string, change: EntityChange): void {
+    const kept = [...(this.changeLog.get(entityId) ?? []), change];
+    // A bounded history: the last 200 changes to one company's terms is years of them, and this file is
+    // not an audit warehouse. If it ever needs to be, that is a decision to make on purpose.
+    this.changeLog.set(entityId, kept.slice(-200));
+  }
+
   static rateOrigins(from: Pick<Entity, 'rates' | 'ratesByLane' | 'feePct'>, lane?: string): RateOrigins {
     const forLane = lane ? from.ratesByLane?.[lane] : undefined;
     const originOf = (of: (s: RateStack) => number | undefined, isMargin = false): RateOrigin => {
@@ -459,7 +542,7 @@ export class EntityService implements OnApplicationBootstrap {
    * easier answer and the wrong one: an operator looking for the group's rates should find it and be told
    * why it has none, rather than wonder whether the screen is broken.
    */
-  pricingFor(entityId: string, lanes: string[]): EntityPricing {
+  pricingFor(entityId: string, lanes: string[], opts?: { editable?: boolean }): EntityPricing {
     const entity = this.get(entityId);
     const rowFor = (lane?: string): LanePricing => ({
       ...(lane ? { lane } : {}),
@@ -482,6 +565,10 @@ export class EntityService implements OnApplicationBootstrap {
       // The default first: every lane row below is read against it, and a table whose fallback row is
       // buried in the middle makes "inherited from where?" a question you have to hunt for.
       lanes: [rowFor(), ...lanes.map((l) => rowFor(l))],
+      recentChanges: this.changes(entity.entityId, 8),
+      // A screen that renders controls it cannot use is a screen that lies about what you may do. The
+      // caller's reach is decided by the guard; this only reports it, so the UI never has to guess.
+      editable: (opts?.editable ?? false) && entity.kind === 'sister',
       bounds: {
         minRatePct: MIN_PLATFORM_FEE_PCT,
         maxRatePct: MAX_PLATFORM_FEE_PCT,
@@ -495,4 +582,27 @@ export class EntityService implements OnApplicationBootstrap {
   canHoldCustody(entityId: string): boolean {
     return canHoldCustody(this.get(entityId));
   }
+}
+
+/* ---------------------------------------------------------------- the record -- */
+
+/**
+ * A change, as one readable line. The audit trail is read by people asking "what did this used to be",
+ * and two objects side by side do not answer that as well as one sentence does.
+ */
+function pct(n: number): string {
+  return `${(n * 100).toFixed(2)}%`;
+}
+
+function pctLine(r: { costOfRiskPct: number; profitOnRiskPct: number; marginPct: number; totalPct: number }): string {
+  return `${pct(r.totalPct)} (risk ${pct(r.costOfRiskPct)} + return ${pct(r.profitOnRiskPct)} + margin ${pct(r.marginPct)})`;
+}
+
+function taxLine(t: { ratePct: number; label: string }): string {
+  return t.ratePct ? `${pct(t.ratePct)} ${t.label}` : 'none';
+}
+
+function coverLine(i: { premiumPct: number; freeLimit: number }, currency?: string): string {
+  const free = i.freeLimit ? `${i.freeLimit} ${currency ?? ''}`.trim() : 'nothing';
+  return `${free} free, premium ${pct(i.premiumPct)}`;
 }

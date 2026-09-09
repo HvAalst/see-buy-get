@@ -14,6 +14,16 @@ export const enTower = {
 
   // Who is at the keyboard. The credential proves somebody has the operator key; the NAME is what goes
   // into the record beside every decision, and the sign-in screen says plainly that it is not verified.
+  // Two kinds of caller, and the screen says which is which rather than blending them into one form.
+  'tower.signIn.whoAreYou': 'Who is signing in',
+  'tower.signIn.asCompany': 'A company',
+  'tower.signIn.asOperator': 'Network staff',
+  'tower.signIn.companyTitle': 'Company sign-in',
+  'tower.signIn.companyLede': 'For the people who run one of the companies in this network. You will see your own company — and, if you are the group, the sisters under it.',
+  'tower.signIn.email': 'Email',
+  'tower.signIn.password': 'Password',
+  'tower.signIn.companyHint': 'Your account was created by whoever administers your company. Everything you change here is recorded against your name.',
+  'tower.signIn.needBoth': 'Both the email and the password are needed.',
   'tower.signIn.title': 'Operator sign-in',
   'tower.signIn.lede': 'This console acts with full operator rights on the live network.',
   'tower.signIn.name': 'Your name',
@@ -82,6 +92,7 @@ export const enTower = {
   // the hints exist because two of these knobs behave in ways nobody guesses (the three layers ADD, and an
   // empty box inherits rather than meaning zero).
   'tower.nav.rates': 'Rates & tax',
+  'tower.nav.companies': 'The companies',
   'tower.rates.title': 'What each sister charges',
   'tower.rates.lede': 'Every sister prices for itself, per kind of work. The three layers are added, never compounded, and each one can be set for one lane or for everything.',
   'tower.rates.caveatLead': 'The split is ours alone.',
@@ -166,4 +177,55 @@ export const enTower = {
   'tower.kind.WEIGHBRIDGE': 'Weighbridge',
   'tower.kind.FERRY': 'Ferry',
   'tower.kind.CHECKPOINT': 'Checkpoint',
+};
+
+/* ---- C3: the companies, their administrators, and the record of what changed ---- */
+export const enTowerCompanies = {
+  'tower.companies.title': 'The companies, side by side',
+  'tower.companies.lede': 'Each one is a separate company with its own currency, its own tax registration and its own books. This is the only place they can be read against each other.',
+  'tower.companies.caveatLead': 'Nothing here is added up.',
+  'tower.companies.caveat': 'These companies settle in different currencies, and a total across them would be a number that is wrong in a way nobody can see. Each column stays in its own money.',
+  'tower.companies.loading': 'Reading the companies…',
+  'tower.companies.groupCharges': 'The mother company charges nothing: it is the merchant of record nowhere and is never a party to a customer transaction. It earns its licence fee from the sisters.',
+  'tower.companies.noPricing': 'Could not read what this company charges.',
+  'tower.companies.noBooks': 'Could not read this company’s books. Shown as missing rather than as zero — a zero balance and an unanswered question look identical and mean opposite things.',
+  'tower.companies.groupBooks': 'It settles in no currency of its own, so there is nothing to hold against what it owes — coverage is a question only a trading company can be asked. Its books still have to balance, and they do.',
+  'tower.companies.held': 'Money held',
+  'tower.companies.owed': 'Owed to others',
+  'tower.companies.cover': 'Cover (held − owed)',
+  'tower.companies.lent': 'Credit out with shops',
+  'tower.companies.integrity': 'The books',
+  'tower.companies.balanced': 'Balanced',
+  'tower.companies.drift': 'Out by {drift}',
+  'tower.companies.openTerms': 'Open {name}’s terms',
+
+  'tower.changes.title': 'What changed, and who changed it',
+  'tower.changes.hint': 'Newest first. A rate somebody set is a decision somebody made.',
+  'tower.changes.col.when': 'When',
+  'tower.changes.col.who': 'Who',
+  'tower.changes.col.what': 'What',
+  'tower.changes.col.from': 'Was',
+  'tower.changes.col.to': 'Now',
+  'tower.changes.what.rates': 'The three layers',
+  'tower.changes.what.tax': 'Tax',
+  'tower.changes.what.cover': 'Cover',
+  'tower.changes.what.fee': 'Margin (the old single knob)',
+
+  'tower.admins.title': 'Who can sign in for {name}',
+  'tower.admins.add': 'Add somebody',
+  'tower.admins.create': 'Create the login',
+  'tower.admins.name': 'Their name',
+  'tower.admins.nameHint': 'Recorded against every change they make. Use the name a colleague would recognise.',
+  'tower.admins.email': 'Their email',
+  'tower.admins.loading': 'Reading the logins…',
+  'tower.admins.emptyTitle': 'Nobody yet',
+  'tower.admins.emptyBody': 'Until somebody here has a login, only network staff can change what this company charges — which makes its own prices somebody else’s decision.',
+  'tower.admins.col.who': 'Name',
+  'tower.admins.col.email': 'Signs in with',
+  'tower.admins.col.lastSeen': 'Last signed in',
+  'tower.admins.never': 'Never',
+  'tower.admins.revoke': 'Revoke',
+  'tower.admins.revealTitle': 'The password for {name}',
+  'tower.admins.revealBody': 'This is the only time it is shown. Hand it over in person or by a channel you trust, and have them change it. Nothing here can show it again — the server keeps only a hash of it.',
+  'tower.admins.revealDone': 'I have it',
 };

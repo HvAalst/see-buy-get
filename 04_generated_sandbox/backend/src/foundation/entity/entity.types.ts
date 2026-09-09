@@ -126,6 +126,67 @@ export class ResolvedInsurance {
 }
 
 /**
+ * A person who administers a company, as stored. The salt and the hash never leave this file's module.
+ */
+export interface EntityAdmin {
+  adminId: string;
+  /** The login, lower-cased. One person, one company: administering two is two logins, deliberately —
+   *  a single credential that reaches two companies is a credential neither company controls. */
+  email: string;
+  /** What the audit trail records. Established at creation, carried in the token, never self-asserted. */
+  name: string;
+  entityId: string;
+  salt: string;
+  hash: string;
+  createdAt: string;
+  lastSeenAt?: string;
+  /** Revoked logins are KEPT: "who changed this rate in March" must stay answerable after they leave. */
+  revokedAt?: string;
+}
+
+/** An administrator as anybody may read them — no salt, no hash, no password, ever. */
+export class EntityAdminView {
+  adminId: string;
+  email: string;
+  name: string;
+  entityId: string;
+  createdAt: string;
+  @ApiPropertyOptional()
+  lastSeenAt?: string;
+  @ApiPropertyOptional()
+  revokedAt?: string;
+}
+
+/**
+ * ONE change to what a company charges, kept forever.
+ *
+ * The point of giving companies their own administrators is that a commercial decision has a person
+ * behind it. That is only true if the decision is recorded with the person on it — otherwise the network
+ * has simply widened who may change a price. Records the RESOLVED figures either side of the change
+ * rather than the raw override, because "what does this lane charge now" is the question anybody reads
+ * this to answer, and an override is only half of that answer.
+ */
+export class EntityChange {
+  at: string;
+  /** The name the token carried, or the DID when a machine did it. Never a string from a request body. */
+  by: string;
+  @ApiProperty({ enum: ['rates', 'tax', 'cover', 'fee'] })
+  what: 'rates' | 'tax' | 'cover' | 'fee';
+  /** The lane it applies to; absent means the company's default for everything. */
+  @ApiPropertyOptional()
+  lane?: string;
+  /** The resolved figures before and after, as a short readable line ("2.00% → 3.50%"). */
+  from: string;
+  to: string;
+}
+
+export class EntityChanges {
+  entityId: string;
+  @ApiProperty({ type: [EntityChange] })
+  items: EntityChange[];
+}
+
+/**
  * Where a resolved number ACTUALLY came from.
  *
  * The screen that turns these knobs cannot be honest without this. Every one of them resolves through a
@@ -209,6 +270,11 @@ export class EntityPricing {
   @ApiProperty({ type: [LanePricing] })
   lanes: LanePricing[];
   bounds: PricingBounds;
+  /** The most recent changes to this company's terms, newest first. Empty until somebody turns a knob. */
+  @ApiProperty({ type: [EntityChange] })
+  recentChanges: EntityChange[];
+  /** Whether the CALLER may change these, as opposed to only read them — see EntityService.mayAdminister. */
+  editable: boolean;
 }
 
 export class Entity {

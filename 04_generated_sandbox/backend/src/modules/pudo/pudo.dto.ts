@@ -570,6 +570,26 @@ export class EntityTaxDto {
  * Same three-way optionality as the rate and tax knobs: absent leaves it alone, a number sets it,
  * null clears it back to the network default of no cover and no charge.
  */
+/** Create an administrator for a company. The password is generated and returned once — never taken. */
+export class EntityAdminDto {
+  @IsString() @MaxLength(120) email!: string;
+  /** What the audit trail will record against every change this person makes. */
+  @IsString() @MaxLength(80) name!: string;
+}
+
+/** Changing your own password: the current one is the proof, not the session. */
+export class EntityAdminPasswordDto {
+  @IsString() @MaxLength(120) email!: string;
+  @IsString() @MaxLength(200) password!: string;
+  @IsString() @MaxLength(200) newPassword!: string;
+}
+
+/** A company administrator signing in. */
+export class EntityAdminLoginDto {
+  @IsString() @MaxLength(120) email!: string;
+  @IsString() @MaxLength(200) password!: string;
+}
+
 export class EntityInsuranceDto {
   /** Which kind of work this applies to. Omitted = the sister's default for everything. */
   @IsOptional() @IsIn(CARGO_LANES) @ApiPropertyOptional({ enum: CARGO_LANES }) lane?: CargoLane;

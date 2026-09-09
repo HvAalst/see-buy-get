@@ -15,6 +15,9 @@ export type ActorRole =
   | 'mdp'
   | 'genesis'
   | 'fleet_manager'
+  /** Administers a COMPANY — a sister, or the group. `tenant` is the entityId; reach follows the
+   *  company structure from there (see EntityService.mayAdminister). */
+  | 'entity_admin'
   | 'operator'
   | 'anon';
 
@@ -29,8 +32,17 @@ export interface IssueTokenInput {
   did?: string;
   /** What the caller MAY do — <resource>:<action>[:<reach>], derived from capabilities at mint. */
   scopes?: string[];
-  /** Multi-tenancy boundary — a fleet driver/manager's owning managerDid. */
+  /** Multi-tenancy boundary — a fleet driver/manager's owning managerDid, or an admin's entityId. */
   tenant?: string;
+  /**
+   * The HUMAN acting, when the token was minted against a named account.
+   *
+   * Not decoration and not a display string: it is what an audit trail records, and it is here rather
+   * than in a request body because a self-asserted name is a name anybody can type. Absent on tokens
+   * that are not a person — a machine credential, or the shared operator key, which is exactly why the
+   * operator console has to ask somebody to type theirs.
+   */
+  actorName?: string;
   /** Assurance level; gates which scopes may be granted (@MinTier). */
   tier?: Tier;
   /** Revocation counter, copied from the actor's profile at mint; compared on introspect. */
@@ -59,6 +71,8 @@ export interface IntrospectionResult {
   did?: string;
   scopes?: string[];
   tenant?: string;
+  /** The named human behind this token, when there is one. See IssueTokenInput.actorName. */
+  actorName?: string;
   tier?: Tier;
 }
 
@@ -74,6 +88,7 @@ export interface TokenClaims {
   did?: string;
   scopes?: string[];
   tenant?: string;
+  actorName?: string;
   tier?: Tier;
   tokenVersion?: number;
 }

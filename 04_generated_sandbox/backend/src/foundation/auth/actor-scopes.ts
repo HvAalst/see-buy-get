@@ -40,6 +40,12 @@ export const ROLE_SCOPES: Record<ActorRole, string[]> = {
   mdp: ['mdp:read:self', 'tote:sort', 'bag:manage', 'parcel:transit', 'notification:manage:self'],
   genesis: ['shipment:create', 'vendor:read:self', 'vendor:manage:self', 'quote:read', 'parcel:read:own', 'notification:manage:self'],
   fleet_manager: ['fleet:read:own', 'fleet:manage:own', 'driver:onboard:own', 'vehicle:manage:own', 'notification:manage:self'],
+  // A company's own administration: read what it charges and what its books say, and set its commercial
+  // terms. `:own` reach is the company structure — its own entity, and any entity that names it as
+  // parent, which is what makes the GROUP's admin able to see its sisters without a second role.
+  // Deliberately NOT here: anything operational (clearing hazards, KYC decisions, payout runs). Those
+  // belong to network staff, and a commercial login must not quietly become one.
+  entity_admin: ['entity:read:own', 'entity:manage:own', 'books:read:own'],
   operator: [WILDCARD_SCOPE],
   anon: [],
 };

@@ -178,3 +178,113 @@
   font-size: var(--c-fs-sm);
   pointer-events: none;
 }
+
+/* --------------------------------------------------------- sign-in modes -- */
+
+/* Which KIND of caller you are — not a tab strip: the forms below ask for different things because the
+   two credentials are not variants of each other. */
+.twr-modes {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.twr-mode {
+  flex: 1;
+  min-height: var(--c-ctl-h, 36px);
+  padding: 7px 12px;
+  border: 1px solid var(--bd);
+  border-radius: var(--r-ctl);
+  background: var(--bg);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tx2);
+}
+
+.twr-mode--on {
+  background: var(--org-light);
+  border-color: var(--org);
+  color: var(--navy);
+}
+
+.twr-whoco {
+  margin-left: 8px;
+}
+
+/* ------------------------------------------------------------- companies -- */
+
+.twr-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+
+.twr-card__body {
+  padding: 4px 0 14px;
+}
+
+.twr-card__body > .cbtn {
+  margin: 12px 16px 0;
+}
+
+.twr-card__books {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px 18px;
+  padding: 14px 16px 4px;
+  border-top: 1px solid var(--bd-soft);
+  margin-top: 10px;
+}
+
+.twr-fig {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.twr-fig__l {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tx3);
+}
+
+.twr-fig__v {
+  font-weight: 700;
+  color: var(--navy);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A cover that has gone negative is the one number on this screen that is an alarm rather than a fact. */
+.twr-fig__v--bad {
+  color: var(--dang);
+}
+
+/* ---------------------------------------------------------- the password -- */
+
+/* Shown once and closed BY HAND. A toast would take the only copy of a credential away on a timer. */
+.twr-reveal {
+  margin: 12px 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--org);
+  background: var(--org-light);
+  border-radius: var(--r-card);
+  max-width: 70ch;
+}
+
+.twr-reveal__creds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  align-items: baseline;
+  margin: 10px 0 12px;
+}
+
+.twr-reveal__pw {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--navy);
+  user-select: all; /* one click selects the whole thing — it is going to be copied */
+}

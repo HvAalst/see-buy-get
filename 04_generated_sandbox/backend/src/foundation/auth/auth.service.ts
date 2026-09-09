@@ -86,6 +86,7 @@ export class AuthService {
       did: input.did,
       scopes: input.scopes,
       tenant: input.tenant,
+      actorName: input.actorName,
       tier: input.tier,
       tokenVersion: input.tokenVersion,
     };
@@ -118,7 +119,7 @@ export class AuthService {
    * replacement for the ?agent=<did> URL-param "session" — the token now carries who you are and
    * what you may do, verifiably. The DID must already be registered (issueToken enforces it).
    */
-  mintActorToken(input: { role: ActorRole; did: string; tenant?: string; tier?: Tier }): AccessToken {
+  mintActorToken(input: { role: ActorRole; did: string; tenant?: string; tier?: Tier; actorName?: string }): AccessToken {
     const profile = this.profiles.get(input.did);
     return this.issueToken({
       sub: input.did,
@@ -127,6 +128,7 @@ export class AuthService {
       did: input.did,
       scopes: scopesForRole(input.role),
       tenant: input.tenant,
+      actorName: input.actorName,
       tier: input.tier ?? profile?.tier,
       tokenVersion: profile?.tokenVersion ?? 0,
       ttlSeconds: SHIFT_TTL_SECONDS,
@@ -156,6 +158,7 @@ export class AuthService {
       did: claims.did,
       scopes: claims.scopes,
       tenant: claims.tenant,
+      actorName: claims.actorName,
       tier: claims.tier,
     };
   }

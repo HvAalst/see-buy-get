@@ -1,5 +1,6 @@
 import { BrandMark, Icon } from '../../shared/ui';
 import { useT } from '../../shared/i18n';
+import { CompaniesScreen } from './screens/CompaniesScreen';
 import { HazardsScreen } from './screens/HazardsScreen';
 import { RatesScreen } from './screens/RatesScreen';
 import { SignInScreen } from './screens/SignInScreen';
@@ -40,11 +41,22 @@ export function App() {
     return <SignInScreen actions={actions} error={state.signInError} busy={state.loading} />;
   }
 
-  const sections: { key: Screen; label: string; icon: 'route' | 'wallet'; count: number | null }[] = [
-    { key: 'hazards', label: t('tower.nav.hazards'), icon: 'route', count: state.hazards?.length ?? null },
+  /**
+   * The rail is built from WHAT THIS CALLER REACHES, never trimmed after the fact.
+   *
+   * Network staff work the hazard queue; a company's administrator does not, and a section whose every
+   * row would answer 403 is worse than a missing one — it teaches somebody that the console is broken.
+   * The companies view appears only for somebody who reaches more than one, because a comparison of one
+   * company with itself is not a comparison.
+   */
+  const isOperator = state.who?.mode === 'operator';
+  const manyCompanies = (state.entities?.length ?? 0) > 1;
+  const sections: { key: Screen; label: string; icon: 'route' | 'wallet' | 'grid'; count: number | null }[] = [
+    ...(isOperator ? [{ key: 'hazards' as const, label: t('tower.nav.hazards'), icon: 'route' as const, count: state.hazards?.length ?? null }] : []),
+    ...(manyCompanies ? [{ key: 'companies' as const, label: t('tower.nav.companies'), icon: 'grid' as const, count: state.entities?.length ?? null }] : []),
     // No count on the rates section, and not because one is hard to compute: a number beside a section
     // means "this many things are waiting for you", and nothing here is waiting for anybody.
-    { key: 'rates', label: t('tower.nav.rates'), icon: 'wallet', count: null },
+    { key: 'rates' as const, label: t('tower.nav.rates'), icon: 'wallet' as const, count: null },
   ];
 
   return (
@@ -53,12 +65,18 @@ export function App() {
         <div class="cons__brand">
           <BrandMark size={26} />
           <span class="cons__brandname">{t('tower.appTitle')}</span>
-          {/* The live line carries WORK, never identity — the same rule as the phone apps' TopBar. */}
-          <span class="cons__mastwork">· {towerWorkLine(state.hazards?.length ?? null, t)}</span>
+          {/* The live line carries WORK, never identity — the same rule as the phone apps' TopBar. And it
+              belongs to whoever HAS that work: the hazard queue is network staff's, so for a company
+              administrator this slot stays empty rather than reporting forever that it is loading a
+              queue nobody is going to fetch for them. */}
+          {isOperator ? <span class="cons__mastwork">· {towerWorkLine(state.hazards?.length ?? null, t)}</span> : null}
         </div>
         <div class="cons__who">
           <span>
-            {t('tower.signedInAs')} <span class="cons__whoname">{state.operator?.name}</span>
+            {t('tower.signedInAs')} <span class="cons__whoname">{state.who?.name}</span>
+            {/* Which COMPANY, when it is one — an administrator of two sister companies signs in twice,
+                and the difference has to be visible from the masthead, not inferred from the table. */}
+            {state.who?.entityId ? <span class="ctag ctag--quiet twr-whoco">{companyName(state)}</span> : null}
           </span>
           <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={actions.signOut}>
             {t('tower.signOut')}
@@ -86,9 +104,21 @@ export function App() {
         </nav>
 
         <main class="cons__main">
-          {state.screen === 'rates' ? <RatesScreen state={state} actions={actions} /> : <HazardsScreen state={state} actions={actions} />}
+          {state.screen === 'companies' ? (
+            <CompaniesScreen state={state} actions={actions} />
+          ) : state.screen === 'rates' ? (
+            <RatesScreen state={state} actions={actions} />
+          ) : (
+            <HazardsScreen state={state} actions={actions} />
+          )}
         </main>
       </div>
     </div>
   );
+}
+
+/** The name of the company somebody is signed in as — its id until the list arrives to name it. */
+function companyName(state: { who?: { entityId?: string } | null; entities?: { entityId: string; name: string }[] | null }): string {
+  const id = state.who?.entityId ?? '';
+  return state.entities?.find((e) => e.entityId === id)?.name ?? id;
 }

@@ -33,12 +33,13 @@ import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
-import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto } from './pudo.dto';
+import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { classifySize, measuredFactor, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
-import { EntityPricing } from '../../foundation/entity/entity.types';
+import { EntityAdminView, EntityChanges, EntityPricing } from '../../foundation/entity/entity.types';
+import { EntityAdminService } from '../../foundation/entity/entity-admin.service';
 import { CARGO_LANES } from './cargo.types';
 import { ReturnService } from './return.service';
 import { PayoutService } from '../../foundation/payouts/payout.service';
@@ -75,6 +76,7 @@ export class SbgController {
     private readonly monitor: MonitorService,
     private readonly ratings: RatingService,
     private readonly entities: EntityService,
+    private readonly entityAdmins: EntityAdminService,
     private readonly fx: FxService,
     private readonly apiKeys: ApiKeyService,
     private readonly books: BooksService,
@@ -222,14 +224,34 @@ export class SbgController {
   }
 
   /**
+   * MAY THIS CALLER ACT ON THIS COMPANY — and is it acting as network staff or as the company itself?
+   *
+   * Two callers reach these routes now. An OPERATOR is network staff and reaches every company, which is
+   * what the wildcard scope has always meant. An ENTITY_ADMIN reaches the company its token names and any
+   * company under it, which is the org chart asked a question rather than a permission list somebody has
+   * to keep in step with it.
+   *
+   * A company an admin does not reach answers NOT FOUND rather than FORBIDDEN: "you may not touch this"
+   * confirms it exists, and which companies a group owns is not a stranger's business.
+   */
+  private requireReach(actor: IntrospectionResult, entityId: string): void {
+    if (actor?.role === 'operator') return;
+    if (actor?.role === 'entity_admin' && this.entities.mayAdminister(actor.tenant, entityId)) return;
+    throw new GlosError('NOT_FOUND', `No such company: ${entityId}`);
+  }
+
+  /**
    * The group and its sister companies — who is registered where, and which of them may transact.
    * Operator-only: it is the shape of the business, not a public directory. Structural facts only;
    * no balances, no accounts (those belong to the sisters' books, which do not exist yet).
    */
-  @Roles('operator')
+  @Roles('operator', 'entity_admin')
   @Get('entities')
-  listEntities() {
-    return this.entities.list().map((e) => ({ ...e, holdsCustody: this.entities.canHoldCustody(e.entityId) }));
+  listEntities(@Actor() actor: IntrospectionResult) {
+    // An operator sees the whole structure; an administrator sees only what it administers. Filtering
+    // HERE rather than on the screen is the point: a console can only render what it was given.
+    const rows = actor?.role === 'operator' ? this.entities.list() : this.entities.administrable(actor?.tenant);
+    return rows.map((e) => ({ ...e, holdsCustody: this.entities.canHoldCustody(e.entityId) }));
   }
 
   /**
@@ -237,9 +259,10 @@ export class SbgController {
    * money owed. Operator-only, and the closest thing the network has to an answer for "are we solvent",
    * which could not even be ASKED before the postings existed.
    */
-  @Roles('operator')
+  @Roles('operator', 'entity_admin')
   @Get('entities/:entityId/books')
-  entityBooks(@Param('entityId') entityId: string) {
+  entityBooks(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult) {
+    this.requireReach(actor, entityId);
     return {
       entityId,
       accounts: this.books.trialBalance(entityId),
@@ -318,12 +341,84 @@ export class SbgController {
    * Operator-only like its neighbours. The three-layer split is for running the business and is never
    * customer-facing on either side.
    */
-  @Roles('operator')
+  @Roles('operator', 'entity_admin')
   @Get('entities/:entityId/pricing')
-  entityPricing(@Param('entityId') entityId: string): EntityPricing {
+  entityPricing(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult): EntityPricing {
+    this.requireReach(actor, entityId);
     // The lane vocabulary is passed IN because it belongs to this module: foundation holds numbers against
     // keys and has always refused to learn what a parcel is.
-    return this.entities.pricingFor(entityId, [...CARGO_LANES]);
+    // `editable` is the same question this route already answered to get here, reported so the screen
+    // renders what the caller can actually do instead of guessing at it.
+    return this.entities.pricingFor(entityId, [...CARGO_LANES], { editable: true });
+  }
+
+  /** What was changed here, by whom, and what it was before. Same reach as the knobs themselves. */
+  @Roles('operator', 'entity_admin')
+  @Get('entities/:entityId/changes')
+  entityChanges(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult): EntityChanges {
+    this.requireReach(actor, entityId);
+    return { entityId, items: this.entities.changes(entityId) };
+  }
+
+  /* ------------------------------------------------ who administers a company -- */
+
+  /**
+   * Create an administrator for a company.
+   *
+   * There is deliberately NO public route to this. An administrator is created by somebody who already
+   * administers the company — network staff, or the group's own admin over its sisters — because a
+   * signup form that could mint "admin of SeeBuyGet Kenya" for whoever asked would make every other rule
+   * about who may change a price decoration.
+   *
+   * The password comes back EXACTLY ONCE and is never stored in a form anybody can read again.
+   */
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/admins')
+  createEntityAdmin(@Param('entityId') entityId: string, @Body() dto: EntityAdminDto, @Actor() actor: IntrospectionResult) {
+    this.requireReach(actor, entityId);
+    return this.entityAdmins.create(entityId, { email: dto.email, name: dto.name });
+  }
+
+  /** Who administers this company. Never a hash, never anybody else's company. */
+  @Roles('operator', 'entity_admin')
+  @Get('entities/:entityId/admins')
+  listEntityAdmins(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult): { items: EntityAdminView[] } {
+    this.requireReach(actor, entityId);
+    return { items: this.entityAdmins.list(entityId) };
+  }
+
+  /** Take a login away. The record is KEPT — "who changed this rate in March" outlives the person. */
+  @Roles('operator', 'entity_admin')
+  @Delete('entities/:entityId/admins/:adminId')
+  revokeEntityAdmin(@Param('entityId') entityId: string, @Param('adminId') adminId: string, @Actor() actor: IntrospectionResult): EntityAdminView {
+    this.requireReach(actor, entityId);
+    return this.entityAdmins.revoke(entityId, adminId);
+  }
+
+  /**
+   * A company administrator signs in — @Public, like every other login on the network.
+   *
+   * The token it mints carries the ENTITY (the person acts as the company) and the person's NAME, which
+   * is what the audit trail records. That name is established here, at login, rather than typed into a
+   * request body later: a self-asserted name is a name anybody can type.
+   */
+  @Public()
+  @Post('entities/admins/login')
+  entityAdminLogin(@Body() dto: EntityAdminLoginDto) {
+    return this.entityAdmins.login(dto.email, dto.password);
+  }
+
+  /**
+   * Change your own password — @Public because it proves itself with the CURRENT one.
+   *
+   * The other half of handing somebody a generated password: without it, "have them change it" is advice
+   * nobody can take. It is deliberately not gated on the session: a tab left signed in is not proof that
+   * the person at it is the account holder, and the old password is.
+   */
+  @Public()
+  @Post('entities/admins/password')
+  changeEntityAdminPassword(@Body() dto: EntityAdminPasswordDto) {
+    return this.entityAdmins.changePassword(dto.email, dto.password, dto.newPassword);
   }
 
   /**
@@ -332,10 +427,11 @@ export class SbgController {
    *
    * It reprices nothing already quoted: every parcel carries the rate it was minted at.
    */
-  @Roles('operator')
+  @Roles('operator', 'entity_admin')
   @Post('entities/:entityId/fee')
-  setEntityFee(@Param('entityId') entityId: string, @Body() dto: EntityFeeDto) {
-    return this.entities.setFeePct(entityId, dto.feePct);
+  setEntityFee(@Param('entityId') entityId: string, @Body() dto: EntityFeeDto, @Actor() actor: IntrospectionResult) {
+    this.requireReach(actor, entityId);
+    return this.entities.setFeePct(entityId, dto.feePct, auditActor(actor));
   }
 
   /**
@@ -350,17 +446,19 @@ export class SbgController {
    * Operator-gated for now, like the knob above. When sisters get their own administration this is one of
    * the endpoints it owns — scoped to its own entity — and a group-level console reads them side by side.
    */
-  @Roles('operator')
+  @Roles('operator', 'entity_admin')
   @Post('entities/:entityId/rates')
-  setEntityRates(@Param('entityId') entityId: string, @Body() dto: EntityRatesDto) {
-    return this.entities.setRates(entityId, dto);
+  setEntityRates(@Param('entityId') entityId: string, @Body() dto: EntityRatesDto, @Actor() actor: IntrospectionResult) {
+    this.requireReach(actor, entityId);
+    return this.entities.setRates(entityId, dto, auditActor(actor));
   }
 
   /** What this sister actually charges for a lane of work, with the three layers stated. Operator-only:
    *  the split is for running the business, never for a customer. */
-  @Roles('operator')
+  @Roles('operator', 'entity_admin')
   @Get('entities/:entityId/rates')
-  entityRates(@Param('entityId') entityId: string, @Query('lane') lane?: string) {
+  entityRates(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult, @Query('lane') lane?: string) {
+    this.requireReach(actor, entityId);
     return { entityId, lane: lane ?? null, ...this.entities.ratesFor(entityId, lane) };
   }
 
@@ -375,18 +473,20 @@ export class SbgController {
    * Like every other rate here it reprices nothing already sold — a shipment carries the tax rate it was
    * minted at, because a rate change has a date and every sale before it was correctly taxed at the old one.
    */
-  @Roles('operator')
+  @Roles('operator', 'entity_admin')
   @Post('entities/:entityId/tax')
-  setEntityTax(@Param('entityId') entityId: string, @Body() dto: EntityTaxDto) {
-    return this.entities.setTax(entityId, dto);
+  setEntityTax(@Param('entityId') entityId: string, @Body() dto: EntityTaxDto, @Actor() actor: IntrospectionResult) {
+    this.requireReach(actor, entityId);
+    return this.entities.setTax(entityId, dto, auditActor(actor));
   }
 
   /** The tax that applies to a lane of work, and the registration it is collected under. Operator-gated
    *  like its neighbours, though unlike the rate split this is not a secret: what a customer was charged
    *  and by whom appears on their own receipt. */
-  @Roles('operator')
+  @Roles('operator', 'entity_admin')
   @Get('entities/:entityId/tax')
-  entityTax(@Param('entityId') entityId: string, @Query('lane') lane?: string) {
+  entityTax(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult, @Query('lane') lane?: string) {
+    this.requireReach(actor, entityId);
     return { entityId, lane: lane ?? null, ...this.entities.taxFor(entityId, lane) };
   }
 
@@ -400,18 +500,20 @@ export class SbgController {
    * Every sister starts covering nothing, because a free limit invented in this codebase would be a
    * promise nobody costed. Setting one is a deliberate commercial act, exactly like the rates and the tax.
    */
-  @Roles('operator')
+  @Roles('operator', 'entity_admin')
   @Post('entities/:entityId/insurance')
-  setEntityInsurance(@Param('entityId') entityId: string, @Body() dto: EntityInsuranceDto) {
-    return this.entities.setInsurance(entityId, dto);
+  setEntityInsurance(@Param('entityId') entityId: string, @Body() dto: EntityInsuranceDto, @Actor() actor: IntrospectionResult) {
+    this.requireReach(actor, entityId);
+    return this.entities.setInsurance(entityId, dto, auditActor(actor));
   }
 
   /** What this sister covers on a lane of work. Not a secret — a shipper cannot decide whether to declare
    *  a value without knowing what is already covered and what more would cost, so the same figures ride
    *  on every public quote. */
-  @Roles('operator')
+  @Roles('operator', 'entity_admin')
   @Get('entities/:entityId/insurance')
-  entityInsurance(@Param('entityId') entityId: string, @Query('lane') lane?: string) {
+  entityInsurance(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult, @Query('lane') lane?: string) {
+    this.requireReach(actor, entityId);
     return { entityId, lane: lane ?? null, ...this.entities.insuranceFor(entityId, lane) };
   }
 
@@ -420,9 +522,10 @@ export class SbgController {
    * what happened to the NUMBER of shipments after it, which can only be observed. Read as a timeline of
    * spells, so a rate raised and then lowered again shows as two separate periods to compare.
    */
-  @Roles('operator')
+  @Roles('operator', 'entity_admin')
   @Get('entities/:entityId/rate-impact')
-  entityRateImpact(@Param('entityId') entityId: string) {
+  entityRateImpact(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult) {
+    this.requireReach(actor, entityId);
     const entity = this.entities.get(entityId);
     return { entityId, currency: entity.currency, currentPct: this.entities.feePctOf(entityId), ...this.parcels.rateImpact(entityId) };
   }

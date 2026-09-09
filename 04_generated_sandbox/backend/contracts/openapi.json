@@ -4106,6 +4106,182 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/changes": {
+      "get": {
+        "operationId": "Sbg.entityChanges",
+        "summary": "",
+        "description": "What was changed here, by whom, and what it was before. Same reach as the knobs themselves.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityChanges"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/admins": {
+      "post": {
+        "operationId": "Sbg.createEntityAdmin",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityAdminDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "Sbg.listEntityAdmins",
+        "summary": "",
+        "description": "Who administers this company. Never a hash, never anybody else's company.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/admins/{adminId}": {
+      "delete": {
+        "operationId": "Sbg.revokeEntityAdmin",
+        "summary": "",
+        "description": "Take a login away. The record is KEPT — \"who changed this rate in March\" outlives the person.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "adminId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityAdminView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/admins/login": {
+      "post": {
+        "operationId": "Sbg.entityAdminLogin",
+        "summary": "",
+        "description": "A company administrator signs in — @Public, like every other login on the network.\n\nThe token it mints carries the ENTITY (the person acts as the company) and the person's NAME, which\nis what the audit trail records. That name is established here, at login, rather than typed into a\nrequest body later: a self-asserted name is a name anybody can type.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityAdminLoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/admins/password": {
+      "post": {
+        "operationId": "Sbg.changeEntityAdminPassword",
+        "summary": "",
+        "description": "Change your own password —  because it proves itself with the CURRENT one.\n\nThe other half of handing somebody a generated password: without it, \"have them change it\" is advice\nnobody can take. It is deliberately not gated on the session: a tab left signed in is not proof that\nthe person at it is the account holder, and the old password is.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityAdminPasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/entities/{entityId}/fee": {
       "post": {
         "operationId": "Sbg.setEntityFee",
@@ -14618,6 +14794,45 @@
           "insurance"
         ]
       },
+      "EntityChange": {
+        "type": "object",
+        "properties": {
+          "what": {
+            "type": "string",
+            "enum": [
+              "rates",
+              "tax",
+              "cover",
+              "fee"
+            ]
+          },
+          "lane": {
+            "type": "string",
+            "description": "The lane it applies to; absent means the company's default for everything."
+          },
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string",
+            "description": "The name the token carried, or the DID when a machine did it. Never a string from a request body."
+          },
+          "from": {
+            "type": "string",
+            "description": "The resolved figures before and after, as a short readable line (\"2.00% → 3.50%\")."
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "what",
+          "at",
+          "by",
+          "from",
+          "to"
+        ]
+      },
       "PricingBounds": {
         "type": "object",
         "properties": {
@@ -14673,6 +14888,13 @@
               "$ref": "#/components/schemas/LanePricing"
             }
           },
+          "recentChanges": {
+            "description": "The most recent changes to this company's terms, newest first. Empty until somebody turns a knob.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EntityChange"
+            }
+          },
           "entityId": {
             "type": "string"
           },
@@ -14685,15 +14907,129 @@
           },
           "bounds": {
             "$ref": "#/components/schemas/PricingBounds"
+          },
+          "editable": {
+            "type": "boolean",
+            "description": "Whether the CALLER may change these, as opposed to only read them — see EntityService.mayAdminister."
           }
         },
         "required": [
           "kind",
           "lanes",
+          "recentChanges",
           "entityId",
           "name",
           "transacting",
-          "bounds"
+          "bounds",
+          "editable"
+        ]
+      },
+      "EntityChanges": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EntityChange"
+            }
+          },
+          "entityId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "entityId"
+        ]
+      },
+      "EntityAdminDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "name": {
+            "type": "string",
+            "description": "What the audit trail will record against every change this person makes.",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "email",
+          "name"
+        ]
+      },
+      "EntityAdminView": {
+        "type": "object",
+        "properties": {
+          "lastSeenAt": {
+            "type": "string"
+          },
+          "revokedAt": {
+            "type": "string"
+          },
+          "adminId": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "adminId",
+          "email",
+          "name",
+          "entityId",
+          "createdAt"
+        ]
+      },
+      "EntityAdminLoginDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "EntityAdminPasswordDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "newPassword": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "email",
+          "password",
+          "newPassword"
         ]
       },
       "EntityFeeDto": {

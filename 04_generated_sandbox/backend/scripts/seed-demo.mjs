@@ -603,6 +603,25 @@ const run = async () => {
       `${(fleetNow.positions ?? []).length} reporting a position · ${fleetNow.cargo?.count ?? 0} parcels in motion`,
   );
 
+  /* ------------------------------------------------ who administers a company --- */
+
+  // A login for each company, so the operator console can be opened as the people it is FOR: the group,
+  // which sees its sisters side by side, and a sister, which sees only itself. Created with an operator
+  // token because there is deliberately no public route into this — an admin of a company is made by
+  // somebody who already administers it.
+  const companyAdmins = [];
+  const entities = need(await req('GET', '/v1/sbg/entities', { token: op }), 'entities');
+  for (const entity of entities) {
+    const email = `${entity.entityId}@sbg.test`;
+    const made = await req('POST', `/v1/sbg/entities/${encodeURIComponent(entity.entityId)}/admins`, {
+      token: op,
+      body: { email, name: entity.kind === 'group' ? 'Group Finance' : `${entity.name} Finance` },
+    });
+    // A re-seed hits the "already administers" refusal, which is correct and not worth failing over:
+    // the login from the first run still works, and its password was printed then.
+    if (made?.temporaryPassword) companyAdmins.push({ entityId: entity.entityId, kind: entity.kind, email, password: made.temporaryPassword });
+  }
+
   /* -------------------------------------------------------------- sheet --- */
   out.push('', '='.repeat(64), '  SEEBUYGET DEMO — SIGN-IN SHEET', '='.repeat(64));
   out.push('  Agent app   /agent/   agent1@sbg.test / seebuyget   (Mama Sarah Shop)');
@@ -612,6 +631,11 @@ const run = async () => {
   out.push(`  Fleet app   /fleet/   company ${fleetCode} · then ${mgr.contactPhone} PIN ${MGR_PIN}`);
   out.push(`  Driver app  /driver/  driver ID ${amos.did}`);
   out.push('  Send app    /send/    no sign-in needed');
+  out.push('  Operator    /tower/   your name + any key (no GLOS_CLIENT_SECRET set in a sandbox)');
+  for (const a of companyAdmins) {
+    out.push(`              /tower/   ${a.email.padEnd(18)} / ${a.password}   (${a.kind === 'group' ? 'the group: sees every sister' : 'this company only'})`);
+  }
+  if (!companyAdmins.length) out.push('              /tower/   company logins already exist — their passwords were printed on the first seed');
   out.push(`  Vendor app  /vendor/  store ID ${shop.vendorId}`);
   out.push(`                        secret   ${VENDOR_SECRET}`);
   out.push('-'.repeat(64));

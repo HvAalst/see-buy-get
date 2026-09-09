@@ -65,6 +65,26 @@ export function createOperatorApi(sbg: SbgClient) {
     setInsurance: (entityId: string, body: { lane?: string; premiumPct?: number | null; freeLimit?: number | null }) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/insurance', { params: { path: { entityId } }, body: body as never })),
 
+    /** A company's books: the trial balance, whether it balances, and what it holds against what it owes. */
+    books: (entityId: string) => sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/books', { params: { path: { entityId } } })),
+
+    /** What was changed here, by whom, and what it was before. */
+    changes: (entityId: string) => sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/changes', { params: { path: { entityId } } })),
+
+    /** Who administers this company. */
+    admins: (entityId: string) => sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/admins', { params: { path: { entityId } } })),
+
+    /**
+     * Give somebody a login for this company. The password comes back ONCE — the screen shows it in a
+     * panel closed by hand, never a toast, because a toast takes the only copy away on a timer.
+     */
+    createAdmin: (entityId: string, body: { email: string; name: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/admins', { params: { path: { entityId } }, body })),
+
+    /** Take a login away. The record is kept, so past changes still have a name on them. */
+    revokeAdmin: (entityId: string, adminId: string) =>
+      sbg.request((c) => c.DELETE('/v1/sbg/entities/{entityId}/admins/{adminId}', { params: { path: { entityId, adminId } } })),
+
     /**
      * What a rate change actually DID — the shipments either side of it, as a timeline of spells.
      *

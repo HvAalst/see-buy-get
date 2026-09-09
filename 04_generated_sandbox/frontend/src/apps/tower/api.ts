@@ -23,11 +23,42 @@ const APP_VERSION = '1.0.0';
 const CREDS_KEY = 'sbg:tower:creds';
 const TOKEN_KEY = 'sbg:tower:token';
 
+/**
+ * WHO IS SIGNED IN — and they are two genuinely different kinds of caller, not two skins on one.
+ *
+ * NETWORK STAFF hold one shared operator key. It reaches everything, and it cannot say who is holding
+ * it, which is why that mode asks for a name and says plainly that the name is not verified.
+ *
+ * A COMPANY's administrator has an account of their own. The token carries the company they administer
+ * AND their name, established at login — so what they change is recorded against a person the network
+ * actually authenticated, and they reach their own company and nothing else. A sister's admin sees its
+ * own terms; the group's sees the group and every sister under it.
+ */
+export type TowerMode = 'operator' | 'company';
+
 export interface OperatorCreds {
+  mode: 'operator';
   /** Who is at the keyboard. Recorded beside every decision; NOT verified — see the sign-in screen. */
   name: string;
   /** The shared operator credential (GLOS_CLIENT_SECRET). */
   key: string;
+}
+
+export interface CompanyCreds {
+  mode: 'company';
+  email: string;
+  password: string;
+}
+
+export type TowerCreds = OperatorCreds | CompanyCreds;
+
+/** What a company login answers with — the person, and the company they administer. */
+export interface EntityAdminLogin {
+  adminId: string;
+  email: string;
+  name: string;
+  entityId: string;
+  token: { access_token: string; expires_in?: number };
 }
 
 export function towerConfig(): SbgConfig {
@@ -49,6 +80,11 @@ export function mintOperatorToken(key: string): Promise<Result<{ access_token: s
   return publicRequest(towerConfig(), '/v1/auth/token', { body: { role: 'operator', clientSecret: key } });
 }
 
+/** A company administrator signs in. @Public, like every other login: it cannot require what it issues. */
+export function companyLogin(email: string, password: string): Promise<Result<EntityAdminLogin>> {
+  return publicRequest<EntityAdminLogin>(towerConfig(), '/v1/sbg/entities/admins/login', { body: { email, password } });
+}
+
 /* ------------------------------------------------------------------ client -- */
 
 export interface TowerClient {
@@ -61,25 +97,32 @@ export interface TowerClient {
  * rather than bouncing an operator to sign-in mid-decision. A rejected key surfaces as a mint-sourced
  * failure, which the shell reports as "that key was not accepted" instead of "no signal".
  */
-export function createTowerClient(creds: OperatorCreds): TowerClient {
-  const client = createCredentialedClient(towerConfig(), TOKEN_KEY, () => mintOperatorToken(creds.key));
+export function createTowerClient(creds: TowerCreds): TowerClient {
+  // Both modes hold their credential for as long as the tab lives, so both re-mint by themselves rather
+  // than bouncing somebody to sign-in mid-decision. What differs is only what the credential IS.
+  const login = creds.mode === 'operator' ? () => mintOperatorToken(creds.key) : () => companyLogin(creds.email, creds.password);
+  const client = createCredentialedClient(towerConfig(), TOKEN_KEY, login);
   return { api: createOperatorApi(client.sbg), client };
 }
 
 /* ------------------------------------------------------------------- creds -- */
 
-export function readCreds(): OperatorCreds | null {
+export function readCreds(): TowerCreds | null {
   try {
     const raw = globalThis.sessionStorage?.getItem(CREDS_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<OperatorCreds>;
-    return parsed?.name && parsed?.key ? { name: parsed.name, key: parsed.key } : null;
+    // Read as a loose shape rather than a union: what came out of storage is whatever was put there,
+    // possibly by an older build, and narrowing happens below where the fields are actually checked.
+    const parsed = JSON.parse(raw) as { mode?: string; name?: string; key?: string; email?: string; password?: string };
+    // A stored shape from before there were two modes reads as the operator one, which is what it was.
+    if (parsed?.mode === 'company') return parsed.email && parsed.password ? { mode: 'company', email: parsed.email, password: parsed.password } : null;
+    return parsed?.name && parsed?.key ? { mode: 'operator', name: parsed.name, key: parsed.key } : null;
   } catch {
     return null;
   }
 }
 
-export function saveCreds(creds: OperatorCreds): void {
+export function saveCreds(creds: TowerCreds): void {
   try {
     globalThis.sessionStorage?.setItem(CREDS_KEY, JSON.stringify(creds));
   } catch {
