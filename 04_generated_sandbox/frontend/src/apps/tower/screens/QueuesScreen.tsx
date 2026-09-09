@@ -1,0 +1,456 @@
+import { useState } from 'preact/hooks';
+import { Icon } from '../../../shared/ui';
+import { useT } from '../../../shared/i18n';
+import {
+  CLAIM_SLOW_DAYS,
+  DISPOSAL_LONG_DAYS,
+  amount,
+  claimBlocker,
+  coverLine,
+  daysWaiting,
+  documentsOf,
+  money,
+  shelfSlots,
+  type ApprovalRow,
+  type ClaimDecision,
+  type ClaimRow,
+  type DisposalRow,
+} from '../queues';
+import type { TowerActions, TowerState } from '../useTowerApp';
+
+/**
+ * The three queues where somebody is WAITING FOR A PERSON — migrated from the vanilla tower.
+ *
+ * They share a file because they share a shape: a list of situations that stop dead until somebody
+ * decides, each row carrying what the decision costs and what it is checked against BEFORE it is made.
+ * On this side of the console the alternative is finding out from a refusal, which is exactly what the
+ * old claims panel did.
+ */
+
+/* -------------------------------------------------------------------- claims -- */
+
+/**
+ * Damage claims. The one screen in this console where a person is waiting for an ANSWER.
+ *
+ * Oldest first, deliberately: the case somebody has waited longest for is the one that most needs an
+ * answer, and a queue sorted newest-first quietly buries exactly those.
+ */
+export function ClaimsScreen({ state, actions }: { state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const rows = state.claims;
+  const now = Date.now();
+
+  return (
+    <>
+      <header class="cons__head">
+        <h1 class="cons__title">{t('tower.claims.title')}</h1>
+        <p class="cons__lede">{t('tower.claims.lede')}</p>
+      </header>
+
+      <p class="cons__caveat">
+        <Icon name="warning" size={18} />
+        <span>
+          <b>{t('tower.claims.caveatLead')}</b> {t('tower.claims.caveat')}
+        </span>
+      </p>
+
+      <QueuePanel
+        count={rows?.length ?? null}
+        countLabel={t('tower.claims.count', { n: rows?.length ?? 0 })}
+        state={state}
+        actions={actions}
+        emptyTitle={t('tower.claims.emptyTitle')}
+        emptyBody={t('tower.claims.emptyBody')}
+      >
+        {rows?.length ? (
+          <table class="ctbl">
+            <thead>
+              <tr>
+                <th>{t('tower.claims.col.claim')}</th>
+                <th>{t('tower.claims.col.cover')}</th>
+                <th>{t('tower.claims.col.evidence')}</th>
+                <th>{t('tower.claims.col.waiting')}</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <ClaimRowView key={row.parcelId} row={row} now={now} state={state} actions={actions} />
+              ))}
+            </tbody>
+          </table>
+        ) : null}
+      </QueuePanel>
+    </>
+  );
+}
+
+function ClaimRowView({ row, now, state, actions }: { row: ClaimRow; now: number; state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const open = state.openId === row.parcelId;
+  const waited = daysWaiting(row.raisedAt, now);
+  const slow = waited != null && waited >= CLAIM_SLOW_DAYS;
+
+  return (
+    <>
+      <tr class={open ? 'is-open' : undefined}>
+        <td>
+          <div class="ctbl__strong">{row.parcelId}</div>
+          <div class="ctbl__sub">
+            <span class={row.origin === 'buyer' ? 'ctag ctag--warn' : 'ctag ctag--quiet'}>
+              {row.origin === 'buyer' ? t('tower.claims.fromBuyer') : t('tower.claims.fromCounter')}
+            </span>{' '}
+            {row.reason || '—'}
+          </div>
+        </td>
+        <td class="ctbl__sub">{coverLine(row, t)}</td>
+        <td class="ctbl__mono">{row.evidence?.length ? t('tower.claims.nPhotos', { n: row.evidence.length }) : t('tower.claims.noEvidence')}</td>
+        <td>
+          <div>{waited == null ? '—' : t('tower.wait.days', { n: waited })}</div>
+          {slow ? <span class="ctag ctag--warn">{t('tower.claims.slow')}</span> : null}
+        </td>
+        <td class="ctbl__num">
+          <button type="button" class="cbtn cbtn--ghost cbtn--sm" aria-expanded={open} onClick={() => actions.open(open ? null : row.parcelId)}>
+            {open ? t('common.close') : t('tower.claims.decide')}
+          </button>
+        </td>
+      </tr>
+      {open ? (
+        <tr class="is-open ctbl__editor">
+          <td colSpan={5}>
+            <ClaimForm row={row} state={state} actions={actions} />
+          </td>
+        </tr>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * The decision. Three endings, and every one of them carries a reason — including the rejection, because
+ * the claimant is shown it and a person whose goods arrived broken is owed an explanation even when they
+ * are not owed money.
+ */
+function ClaimForm({ row, state, actions }: { row: ClaimRow; state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const [award, setAward] = useState('');
+  const [note, setNote] = useState('');
+  const busy = state.busyId === row.parcelId;
+
+  const decide = (decision: ClaimDecision) => {
+    const blocker = claimBlocker(decision, award, note, row, t);
+    if (blocker) {
+      actions.showQueueError(blocker);
+      return;
+    }
+    void actions.resolveClaim(row.parcelId, decision, decision === 'rejected' ? undefined : Number(award), note);
+  };
+
+  return (
+    <div class="twr-knobs">
+      <p class="twr-clear__t">{t('tower.claims.decideTitle', { parcel: row.parcelId })}</p>
+      <p class="twr-clear__b">{t('tower.claims.decideBody', { max: amount(row.awardCap, row.currency) })}</p>
+
+      <div class="twr-knobs__row">
+        <div class="twr-knob">
+          <label class="cfield">
+            <span class="cfield__label">{t('tower.claims.award', { currency: row.currency ? ` (${row.currency})` : '' })}</span>
+            <input class="cinput" inputMode="decimal" value={award} onInput={(e) => setAward((e.target as HTMLInputElement).value)} />
+            <span class="chint">{t('tower.claims.awardHint')}</span>
+          </label>
+        </div>
+        <div class="twr-knob">
+          <label class="cfield">
+            <span class="cfield__label">{t('tower.claims.reason')}</span>
+            <textarea class="ctextarea" value={note} maxLength={400} onInput={(e) => setNote((e.target as HTMLTextAreaElement).value)} />
+            <span class="chint">{t('tower.claims.reasonHint')}</span>
+          </label>
+        </div>
+      </div>
+
+      {state.queueError ? <p class="cerr">{state.queueError}</p> : null}
+
+      <div class="twr-clear__act">
+        <button type="button" class="cbtn cbtn--primary" disabled={busy} onClick={() => decide('upheld')}>
+          {t('tower.claims.uphold')}
+        </button>
+        <button type="button" class="cbtn cbtn--ghost" disabled={busy} onClick={() => decide('partly_upheld')}>
+          {t('tower.claims.partly')}
+        </button>
+        <button type="button" class="cbtn cbtn--danger" disabled={busy} onClick={() => decide('rejected')}>
+          {t('tower.claims.reject')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ disposal -- */
+
+/**
+ * Parcels nobody claimed and nobody is paying to recover.
+ *
+ * A QUEUE and not a status, because what happens to them is decided by the law of the sister's
+ * jurisdiction rather than by this system. Modelling a disposal rule we do not know would be worse than
+ * showing an operator the list and letting them apply the one they do — so the screen stops at "here they
+ * are, and here is what closing one costs", and a person decides.
+ */
+export function DisposalScreen({ state, actions }: { state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const rows = state.disposal;
+
+  return (
+    <>
+      <header class="cons__head">
+        <h1 class="cons__title">{t('tower.disposal.title')}</h1>
+        <p class="cons__lede">{t('tower.disposal.lede')}</p>
+      </header>
+
+      <p class="cons__caveat">
+        <Icon name="box" size={18} />
+        <span>
+          <b>{t('tower.disposal.caveatLead')}</b> {t('tower.disposal.caveat')}
+        </span>
+      </p>
+
+      <QueuePanel
+        count={rows?.length ?? null}
+        countLabel={t('tower.disposal.count', { n: rows?.length ?? 0 })}
+        state={state}
+        actions={actions}
+        emptyTitle={t('tower.disposal.emptyTitle')}
+        emptyBody={t('tower.disposal.emptyBody')}
+      >
+        {rows?.length ? (
+          <table class="ctbl">
+            <thead>
+              <tr>
+                <th>{t('tower.disposal.col.parcel')}</th>
+                <th>{t('tower.disposal.col.where')}</th>
+                <th class="ctbl__num">{t('tower.disposal.col.worth')}</th>
+                <th class="ctbl__num">{t('tower.disposal.col.owed')}</th>
+                <th>{t('tower.disposal.col.held')}</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <DisposalRowView key={row.parcelId} row={row} state={state} actions={actions} />
+              ))}
+            </tbody>
+          </table>
+        ) : null}
+      </QueuePanel>
+    </>
+  );
+}
+
+function DisposalRowView({ row, state, actions }: { row: DisposalRow; state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const open = state.openId === row.parcelId;
+  const long = row.heldDays >= DISPOSAL_LONG_DAYS;
+
+  return (
+    <>
+      <tr class={open ? 'is-open' : undefined}>
+        <td class="ctbl__strong">{row.parcelId}</td>
+        <td class="ctbl__mono">{row.agentDid ?? t('tower.disposal.unknownShop')}</td>
+        <td class="ctbl__num">{row.declaredValue != null ? money(row.declaredValue) : '—'}</td>
+        <td class="ctbl__num ctbl__strong">{money(row.owedToShop)}</td>
+        <td>
+          <div>{t('tower.wait.days', { n: row.heldDays })}</div>
+          {long ? <span class="ctag ctag--warn">{t('tower.disposal.longHeld')}</span> : null}
+        </td>
+        <td class="ctbl__num">
+          <button type="button" class="cbtn cbtn--ghost cbtn--sm" aria-expanded={open} onClick={() => actions.open(open ? null : row.parcelId)}>
+            {open ? t('common.close') : t('tower.disposal.close')}
+          </button>
+        </td>
+      </tr>
+      {open ? (
+        <tr class="is-open ctbl__editor">
+          <td colSpan={6}>
+            <DisposalForm row={row} state={state} actions={actions} />
+          </td>
+        </tr>
+      ) : null}
+    </>
+  );
+}
+
+function DisposalForm({ row, state, actions }: { row: DisposalRow; state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const [reason, setReason] = useState('');
+  const busy = state.busyId === row.parcelId;
+
+  return (
+    <div class="twr-clear">
+      <p class="twr-clear__t">{t('tower.disposal.closeTitle', { parcel: row.parcelId })}</p>
+      <p class="twr-clear__b">{t('tower.disposal.closeBody', { amount: amount(row.owedToShop, row.currency) })}</p>
+
+      <label class="cfield">
+        <span class="cfield__label">{t('tower.disposal.reason')}</span>
+        <textarea class="ctextarea" value={reason} maxLength={300} placeholder={t('tower.disposal.reasonPlaceholder')} onInput={(e) => setReason((e.target as HTMLTextAreaElement).value)} />
+        <span class="chint">{t('tower.disposal.reasonHint')}</span>
+      </label>
+
+      {state.queueError ? <p class="cerr">{state.queueError}</p> : null}
+
+      <div class="twr-clear__act">
+        <button
+          type="button"
+          class="cbtn cbtn--danger"
+          disabled={busy || !reason.trim()}
+          onClick={() => void actions.closeDisposal(row.parcelId, reason)}
+        >
+          {t('tower.disposal.confirm')}
+        </button>
+        <button type="button" class="cbtn cbtn--ghost" disabled={busy} onClick={() => actions.open(null)}>
+          {t('tower.disposal.keep')}
+        </button>
+        {!reason.trim() ? <span class="chint">{t('tower.disposal.needReason')}</span> : null}
+      </div>
+    </div>
+  );
+}
+
+/* ----------------------------------------------------------------- approvals -- */
+
+/** Shops waiting to be let onto the network — the KYC queue, where the network decides who carries for it. */
+export function ApprovalsScreen({ state, actions }: { state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const rows = state.approvals;
+
+  return (
+    <>
+      <header class="cons__head">
+        <h1 class="cons__title">{t('tower.approvals.title')}</h1>
+        <p class="cons__lede">{t('tower.approvals.lede')}</p>
+      </header>
+
+      <QueuePanel
+        count={rows?.length ?? null}
+        countLabel={t('tower.approvals.count', { n: rows?.length ?? 0 })}
+        state={state}
+        actions={actions}
+        emptyTitle={t('tower.approvals.emptyTitle')}
+        emptyBody={t('tower.approvals.emptyBody')}
+      >
+        {rows?.length ? (
+          <table class="ctbl">
+            <thead>
+              <tr>
+                <th>{t('tower.approvals.col.shop')}</th>
+                <th class="ctbl__num">{t('tower.approvals.col.shelf')}</th>
+                <th>{t('tower.approvals.col.kit')}</th>
+                <th>{t('tower.approvals.col.docs')}</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <ApprovalRowView key={row.did} row={row} state={state} actions={actions} />
+              ))}
+            </tbody>
+          </table>
+        ) : null}
+      </QueuePanel>
+    </>
+  );
+}
+
+function ApprovalRowView({ row, state, actions }: { row: ApprovalRow; state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const busy = state.busyId === row.did;
+  const docs = documentsOf(row);
+
+  return (
+    <tr>
+      <td>
+        <div class="ctbl__strong">{row.shopName ?? row.did}</div>
+        <div class="ctbl__sub">{row.zone ?? '—'}</div>
+      </td>
+      <td class="ctbl__num">{t('tower.approvals.slots', { n: shelfSlots(row) })}</td>
+      <td class="ctbl__sub">
+        {t('tower.approvals.android', { version: row.requirements?.androidVersion ?? '—' })} ·{' '}
+        {t('tower.approvals.licence', { licence: row.requirements?.tradingLicence ?? '—' })}
+      </td>
+      <td class="ctbl__mono">
+        {/* An application with NO documents is a different decision from one with three, and the screen
+            says which it is rather than rendering an empty cell that reads as "not loaded". */}
+        {docs.length ? t('tower.approvals.nDocs', { n: docs.length }) : t('tower.approvals.noDocs')}
+      </td>
+      <td class="ctbl__num">
+        <span class="twr-clear__act">
+          <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy} onClick={() => void actions.decideApproval(row.did, true)}>
+            {t('tower.approvals.approve')}
+          </button>
+          <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => void actions.decideApproval(row.did, false)}>
+            {t('tower.approvals.refuse')}
+          </button>
+        </span>
+      </td>
+    </tr>
+  );
+}
+
+/* ------------------------------------------------------------------- shared -- */
+
+/** The panel every queue sits in: a count, a refresh, what just happened, and an honest empty state. */
+function QueuePanel({
+  count,
+  countLabel,
+  state,
+  actions,
+  emptyTitle,
+  emptyBody,
+  children,
+}: {
+  count: number | null;
+  countLabel: string;
+  state: TowerState;
+  actions: TowerActions;
+  emptyTitle: string;
+  emptyBody: string;
+  children: preact.ComponentChildren;
+}) {
+  const t = useT();
+  return (
+    <section class="cons__panel">
+      <div class="cons__panelhead">
+        <span class="cons__panelt">{countLabel}</span>
+        <span class="twr-panelend">
+          {state.readAt ? <span class="ctbl__sub">{t('tower.hazards.updatedAt', { time: new Date(state.readAt).toLocaleTimeString() })}</span> : null}
+          <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => void actions.refresh()} disabled={state.loading}>
+            <Icon name="refresh" size={16} />
+            {t('tower.hazards.refresh')}
+          </button>
+        </span>
+      </div>
+
+      {state.done ? (
+        <p class="twr-done">
+          <Icon name="check" size={16} />
+          {state.done}
+        </p>
+      ) : null}
+
+      {state.error ? (
+        <p class="cerr" style="margin:12px 16px">
+          <b>{t('tower.queues.failedTitle')}</b> — {state.error.detail || state.error.title}
+        </p>
+      ) : null}
+
+      {count === null ? (
+        <p class="cons__empty">{t('tower.queues.loading')}</p>
+      ) : count === 0 ? (
+        <div class="cons__empty">
+          <p class="cons__emptyt">{emptyTitle}</p>
+          <p>{emptyBody}</p>
+        </div>
+      ) : (
+        children
+      )}
+    </section>
+  );
+}

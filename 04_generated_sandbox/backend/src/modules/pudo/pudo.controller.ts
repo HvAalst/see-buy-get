@@ -36,7 +36,7 @@ import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
 import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
-import { classifySize, measuredFactor, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
+import { classifySize, MAX_CLAIM_AWARD, measuredFactor, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { EntityAdminView, EntityChanges, EntityPricing } from '../../foundation/entity/entity.types';
 import { EntityAdminService } from '../../foundation/entity/entity-admin.service';
@@ -64,6 +64,32 @@ interface ModuleInfo {
  * Surface = the operator Control Tower (agents / finance / corridors / dashboard / support) + the
  * 3-screen agent app (accept / handover / pickup) over the pre-paid wallet gate.
  */
+/**
+ * The ceiling an award on this shipment is checked against, and where that ceiling comes from.
+ *
+ * The same walk `resolveDispute` makes before it refuses one: a stated cover limit if the shipment has
+ * one, else the sanity bound. Computed once, here, so the number an adjudicator is shown and the number
+ * they are refused by are the same number — which they were not, because the queue used to send neither.
+ *
+ * `basis` matters as much as the figure. "Covered to 6,000 because they declared it" and "covered to
+ * 5,000 because that is what we carry for free" invite different conversations with the claimant, and
+ * "there is no cover at all" makes an award a goodwill decision rather than a policy one.
+ */
+export function awardCapOf(p: { coverLimit?: number; declaredValue?: number }): {
+  coverLimit?: number;
+  declaredValue?: number;
+  awardCap: number;
+  capBasis: 'declared' | 'free-limit' | 'sanity-bound';
+} {
+  const stated = p.coverLimit != null && p.coverLimit > 0;
+  return {
+    ...(p.coverLimit != null ? { coverLimit: p.coverLimit } : {}),
+    ...(p.declaredValue != null ? { declaredValue: p.declaredValue } : {}),
+    awardCap: stated ? p.coverLimit! : MAX_CLAIM_AWARD,
+    capBasis: stated ? (p.declaredValue ? 'declared' : 'free-limit') : 'sanity-bound',
+  };
+}
+
 @Controller('sbg')
 export class SbgController {
   constructor(
@@ -1749,10 +1775,15 @@ export class SbgController {
         origin: p.dispute?.origin ?? (p.buyerDisputeReason ? 'buyer' : 'counter'),
         reason: p.dispute?.reason ?? p.buyerDisputeReason ?? p.disputeReason,
         vendorId: p.vendorId,
-        // What the shipment was sold for — the only money figure this system currently knows about the
-        // parcel. It is NOT what the goods were worth, and an adjudicator must not read it as a cap.
+        // What the shipment was sold for. NOT what the goods were worth, and never a cap — it is the
+        // first money figure an adjudicator's eye lands on, so the screen has to label it as not one.
         shipmentCost: p.shipmentCost,
         currency: p.currency,
+        // WHAT AN AWARD IS ACTUALLY CHECKED AGAINST, computed here so the queue and the refusal cannot
+        // disagree. It was missing entirely: the screen read a `coverLimit` this projection never sent,
+        // so every case rendered as "no cover — an award here is a goodwill decision" whether or not the
+        // shipment was covered, and the only way to find out was to type an award and be refused.
+        ...awardCapOf(p),
         evidence: [p.contentPhotoRef, p.dropoffPhotoRef, p.buyerPodPhotoRef, p.buyerDisputePhotoRef, p.disputePhotoRef].filter(Boolean),
       })),
     };

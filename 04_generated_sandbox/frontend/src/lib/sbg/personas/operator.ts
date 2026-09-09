@@ -65,6 +65,33 @@ export function createOperatorApi(sbg: SbgClient) {
     setInsurance: (entityId: string, body: { lane?: string; premiumPct?: number | null; freeLimit?: number | null }) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/insurance', { params: { path: { entityId } }, body: body as never })),
 
+    /* ---- the decision queues: work that stops until a person decides ---- */
+
+    /** Open damage claims, oldest first — the case somebody has waited longest for needs answering most. */
+    disputes: () => sbg.request((c) => c.GET('/v1/sbg/disputes', {})),
+
+    /**
+     * Decide one: upheld, partly upheld or rejected — and every one of them carries a note, because the
+     * claimant is shown it and a person whose goods arrived broken is owed an explanation even when they
+     * are not owed money.
+     */
+    resolveDispute: (parcelId: string, body: { decision: string; award?: number; note: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/disputes/{parcelId}/resolve', { params: { path: { parcelId } }, body: body as never })),
+
+    /** Parcels nobody claimed and nobody is paying to recover — a queue, because the RULE is local law. */
+    disposalQueue: () => sbg.request((c) => c.GET('/v1/sbg/ops/disposal-queue', {})),
+
+    /** Close one out, and settle what the shop is owed for having held it. */
+    writeOff: (parcelId: string, body: { by?: string; reason?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/parcels/{id}/write-off', { params: { path: { id: parcelId } }, body: body as never })),
+
+    /** Shops waiting to be let onto the network. */
+    kycQueue: () => sbg.request((c) => c.GET('/v1/sbg/agents/kyc-queue', {})),
+
+    /** Let a shop in, or refuse it. */
+    decideKyc: (did: string, body: { approve: boolean; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/agents/{did}/kyc-decision', { params: { path: { did } }, body: body as never })),
+
     /** A company's books: the trial balance, whether it balances, and what it holds against what it owes. */
     books: (entityId: string) => sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/books', { params: { path: { entityId } } })),
 

@@ -105,17 +105,6 @@ export function canClear(reason: string): boolean {
   return r.length > 0 && r.length <= CLEAR_REASON_MAX;
 }
 
-/**
- * The masthead's live line — WORK, never identity, the same rule the phone apps' TopBar follows.
- *
- * Zero is a real answer here and it is said out loud: an empty slot reads as "not loaded yet", and on a
- * queue screen that is the difference between "nothing to do" and "we do not know".
- */
-export function towerWorkLine(disputed: number | null, t: Translate): string {
-  if (disputed === null) return t('tower.work.unknown');
-  return disputed === 0 ? t('tower.work.clear') : t('tower.work.waiting', { n: disputed });
-}
-
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
 }

@@ -2,9 +2,10 @@ import { BrandMark, Icon } from '../../shared/ui';
 import { useT } from '../../shared/i18n';
 import { CompaniesScreen } from './screens/CompaniesScreen';
 import { HazardsScreen } from './screens/HazardsScreen';
+import { ApprovalsScreen, ClaimsScreen, DisposalScreen } from './screens/QueuesScreen';
 import { RatesScreen } from './screens/RatesScreen';
 import { SignInScreen } from './screens/SignInScreen';
-import { towerWorkLine } from './logic';
+import { waitingLine } from './queues';
 import { useTowerApp, type Screen } from './useTowerApp';
 import '../../shared/console.css';
 import './tower.css';
@@ -51,8 +52,17 @@ export function App() {
    */
   const isOperator = state.who?.mode === 'operator';
   const manyCompanies = (state.entities?.length ?? 0) > 1;
-  const sections: { key: Screen; label: string; icon: 'route' | 'wallet' | 'grid'; count: number | null }[] = [
-    ...(isOperator ? [{ key: 'hazards' as const, label: t('tower.nav.hazards'), icon: 'route' as const, count: state.hazards?.length ?? null }] : []),
+  const sections: { key: Screen; label: string; icon: 'route' | 'wallet' | 'grid' | 'warning' | 'box' | 'badge'; count: number | null }[] = [
+    // Network staff's work, in the order somebody is kept waiting by it: a claim is a person waiting for
+    // an answer, a disposal row is a shop holding a box, an application is a shop that cannot start.
+    ...(isOperator
+      ? [
+          { key: 'hazards' as const, label: t('tower.nav.hazards'), icon: 'route' as const, count: state.hazards?.length ?? null },
+          { key: 'claims' as const, label: t('tower.nav.claims'), icon: 'warning' as const, count: state.claims?.length ?? null },
+          { key: 'disposal' as const, label: t('tower.nav.disposal'), icon: 'box' as const, count: state.disposal?.length ?? null },
+          { key: 'approvals' as const, label: t('tower.nav.approvals'), icon: 'badge' as const, count: state.approvals?.length ?? null },
+        ]
+      : []),
     ...(manyCompanies ? [{ key: 'companies' as const, label: t('tower.nav.companies'), icon: 'grid' as const, count: state.entities?.length ?? null }] : []),
     // No count on the rates section, and not because one is hard to compute: a number beside a section
     // means "this many things are waiting for you", and nothing here is waiting for anybody.
@@ -69,7 +79,20 @@ export function App() {
               belongs to whoever HAS that work: the hazard queue is network staff's, so for a company
               administrator this slot stays empty rather than reporting forever that it is loading a
               queue nobody is going to fetch for them. */}
-          {isOperator ? <span class="cons__mastwork">· {towerWorkLine(state.hazards?.length ?? null, t)}</span> : null}
+          {isOperator ? (
+            <span class="cons__mastwork">
+              ·{' '}
+              {waitingLine(
+                {
+                  hazards: state.hazards?.length ?? null,
+                  claims: state.claims?.length ?? null,
+                  disposal: state.disposal?.length ?? null,
+                  approvals: state.approvals?.length ?? null,
+                },
+                t,
+              )}
+            </span>
+          ) : null}
         </div>
         <div class="cons__who">
           <span>
@@ -108,6 +131,12 @@ export function App() {
             <CompaniesScreen state={state} actions={actions} />
           ) : state.screen === 'rates' ? (
             <RatesScreen state={state} actions={actions} />
+          ) : state.screen === 'claims' ? (
+            <ClaimsScreen state={state} actions={actions} />
+          ) : state.screen === 'disposal' ? (
+            <DisposalScreen state={state} actions={actions} />
+          ) : state.screen === 'approvals' ? (
+            <ApprovalsScreen state={state} actions={actions} />
           ) : (
             <HazardsScreen state={state} actions={actions} />
           )}

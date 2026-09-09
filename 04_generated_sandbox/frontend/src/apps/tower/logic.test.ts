@@ -6,7 +6,6 @@ import {
   isLongWait,
   measureLabel,
   pointLabel,
-  towerWorkLine,
   waitLabel,
   waitingHours,
   type ConstraintKind,
@@ -104,15 +103,6 @@ describe('the disputed-hazard queue', () => {
       expect(canClear('x')).toBe(true);
       expect(canClear('x'.repeat(CLEAR_REASON_MAX))).toBe(true);
       expect(canClear('x'.repeat(CLEAR_REASON_MAX + 1))).toBe(false);
-    });
-  });
-
-  describe('the masthead line', () => {
-    it('says nothing is disputed rather than showing an empty slot', () => {
-      // "0 disputed" and "we have not read the queue yet" are different answers and must look different.
-      expect(towerWorkLine(0, t)).toBe('tower.work.clear');
-      expect(towerWorkLine(null, t)).toBe('tower.work.unknown');
-      expect(towerWorkLine(3, t)).toBe('tower.work.waiting(n=3)');
     });
   });
 

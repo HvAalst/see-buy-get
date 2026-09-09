@@ -4,9 +4,10 @@ import { t } from '../../shared/i18n'; // plain t(): these strings are built at 
 import { clearCreds, companyLogin, createTowerClient, readCreds, saveCreds, type TowerClient, type TowerCreds } from './api';
 import type { ConstraintView } from './logic';
 import type { EntityPricing, EntityRow } from './money';
+import type { ApprovalRow, ClaimDecision, ClaimRow, DisposalRow } from './queues';
 
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
-export type Screen = 'hazards' | 'rates' | 'companies';
+export type Screen = 'hazards' | 'claims' | 'disposal' | 'approvals' | 'rates' | 'companies';
 
 export interface TowerState {
   phase: Phase;
@@ -39,6 +40,13 @@ export interface TowerState {
   rateImpact: RateImpactView | null;
   /** A refused SAVE, which is a different thing from a failed read and must not clear the form. */
   saveError: SbgError | null;
+
+  /* ---- the operator's decision queues (migrated from the vanilla tower) ---- */
+  claims: ClaimRow[] | null;
+  disposal: DisposalRow[] | null;
+  approvals: ApprovalRow[] | null;
+  /** A refusal the SCREEN made before the server had to — a missing reason, an award over the cover. */
+  queueError: string | null;
 
   /* ---- the companies, side by side (the group's view) ---- */
   companies: CompanyRow[] | null;
@@ -90,6 +98,11 @@ export interface TowerActions {
   refresh(): Promise<void>;
   open(rowId: string | null): void;
   clear(constraintId: string, reason: string, hazard: string): Promise<void>;
+  resolveClaim(parcelId: string, decision: ClaimDecision, award: number | undefined, note: string): Promise<void>;
+  closeDisposal(parcelId: string, reason: string): Promise<void>;
+  decideApproval(did: string, approve: boolean): Promise<void>;
+  /** Show what the screen itself refused, without pretending the server said it. */
+  showQueueError(message: string): void;
   chooseEntity(entityId: string): Promise<void>;
   saveRates(body: { lane?: string; costOfRiskPct: number | null; profitOnRiskPct: number | null; marginPct: number | null }, lane?: string): Promise<void>;
   saveTax(body: { lane?: string; ratePct: number | null; label: string | null; registration: string | null }, lane?: string): Promise<void>;
@@ -118,6 +131,10 @@ const INITIAL: TowerState = {
   companies: null,
   admins: null,
   newAdmin: null,
+  claims: null,
+  disposal: null,
+  approvals: null,
+  queueError: null,
 };
 
 /**
@@ -219,6 +236,26 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     [loadPricing, loadCompanies],
   );
 
+  /**
+   * Every queue that waits on network staff, read together.
+   *
+   * Tolerant per queue and never silently short: a failed read leaves that queue as `null` — which the
+   * screens render as "reading…" rather than as an empty queue, because "nothing is waiting" and "we
+   * could not look" are opposite answers and must not share a rendering.
+   */
+  const loadQueues = useCallback(async (client: TowerClient) => {
+    setState((s) => ({ ...s, loading: true }));
+    const [claims, disposal, approvals] = await Promise.all([client.api.disputes(), client.api.disposalQueue(), client.api.kycQueue()]);
+    setState((s) => ({
+      ...s,
+      loading: false,
+      claims: claims.error ? null : (narrow<{ disputes: ClaimRow[] }>(claims.data)?.disputes ?? []),
+      disposal: disposal.error ? null : (narrow<{ rows: DisposalRow[] }>(disposal.data)?.rows ?? []),
+      approvals: approvals.error ? null : (narrow<ApprovalRow[]>(approvals.data) ?? []),
+      readAt: Date.now(),
+    }));
+  }, []);
+
   // Boot: a credential in this tab means the console picks up where it left off; nothing means sign-in.
   useEffect(() => {
     const creds = readCreds();
@@ -231,6 +268,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     if (creds.mode === 'operator') {
       setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'operator', name: creds.name } }));
       void loadHazards(client);
+      void loadQueues(client);
       void loadEntities(client);
       return;
     }
@@ -246,7 +284,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'company', name: data.name, entityId: data.entityId }, screen: 'rates' }));
       void loadEntities(client);
     });
-  }, [loadHazards, loadEntities]);
+  }, [loadHazards, loadQueues, loadEntities]);
 
   const signIn = useCallback(
     async (name: string, key: string) => {
@@ -264,9 +302,10 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       saveCreds(creds);
       setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'operator', name: creds.name }, signInError: null }));
       await loadHazards(client);
+      await loadQueues(client);
       await loadEntities(client);
     },
-    [loadHazards, loadEntities],
+    [loadHazards, loadQueues, loadEntities],
   );
 
   /**
@@ -316,8 +355,9 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     // Refresh what is on screen, not everything: an operator pressing this on the rates table is asking
     // about rates, and re-reading the hazard queue underneath them would move a list they are not looking at.
     if (state.screen === 'rates' && state.entityId) await loadPricing(client, state.entityId);
+    else if (state.screen === 'claims' || state.screen === 'disposal' || state.screen === 'approvals') await loadQueues(client);
     else await loadHazards(client);
-  }, [loadHazards, loadPricing, state.screen, state.entityId]);
+  }, [loadHazards, loadQueues, loadPricing, state.screen, state.entityId]);
 
   const open = useCallback((constraintId: string | null) => {
     setState((s) => ({ ...s, openId: constraintId, clearError: null }));
@@ -382,7 +422,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     actions: {
       signIn,
       signOut,
-      go: (screen) => setState((s) => ({ ...s, screen, openId: null, done: null, saveError: null })),
+      go: (screen) => setState((s) => ({ ...s, screen, openId: null, done: null, saveError: null, queueError: null })),
       refresh,
       open,
       clear,
@@ -393,6 +433,53 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         if (client) await loadPricing(client, entityId);
       },
       signInAsCompany,
+      showQueueError: (message: string) => setState((s) => ({ ...s, queueError: message })),
+      /**
+       * Decide a claim. The note travels on every ending, including a rejection.
+       *
+       * Re-reads the queue afterwards rather than dropping the row locally: resolving a claim moves money
+       * and can change what else is open, and this is the one screen where guessing at the new state
+       * would put a stale case in front of the next decision.
+       */
+      resolveClaim: async (parcelId: string, decision: ClaimDecision, award: number | undefined, note: string) => {
+        const client = clientRef.current;
+        if (!client) return;
+        setState((s) => ({ ...s, busyId: parcelId, queueError: null }));
+        const { error } = await client.api.resolveDispute(parcelId, { decision, ...(award != null ? { award } : {}), note, by: stateRef.current.who?.name });
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, openId: null, queueError: null, done: t('tower.claims.decided', { parcel: parcelId }) }));
+        await loadQueues(client);
+      },
+      /** Close a disposal row. The screen said what it pays the shop; the toast says what it paid. */
+      closeDisposal: async (parcelId: string, reason: string) => {
+        const client = clientRef.current;
+        if (!client) return;
+        setState((s) => ({ ...s, busyId: parcelId, queueError: null }));
+        const { data, error } = await client.api.writeOff(parcelId, { by: stateRef.current.who?.name, reason: reason.trim() });
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        const paid = narrow<{ paidToShop?: number }>(data)?.paidToShop ?? 0;
+        setState((s) => ({ ...s, busyId: null, openId: null, queueError: null, done: t('tower.disposal.closed', { parcel: parcelId, amount: paid.toFixed(2) }) }));
+        await loadQueues(client);
+      },
+      /** Let a shop in, or refuse it. */
+      decideApproval: async (did: string, approve: boolean) => {
+        const client = clientRef.current;
+        if (!client) return;
+        setState((s) => ({ ...s, busyId: did, queueError: null }));
+        const { error } = await client.api.decideKyc(did, { approve, by: stateRef.current.who?.name });
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, queueError: null, done: approve ? t('tower.approvals.approved') : t('tower.approvals.refused') }));
+        await loadQueues(client);
+      },
       addAdmin: async (entityId: string, email: string, name: string) => {
         const client = clientRef.current;
         if (!client) return;
