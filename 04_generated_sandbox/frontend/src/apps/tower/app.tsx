@@ -1,6 +1,7 @@
 import { BrandMark, Icon } from '../../shared/ui';
 import { useT } from '../../shared/i18n';
 import { HazardsScreen } from './screens/HazardsScreen';
+import { RatesScreen } from './screens/RatesScreen';
 import { SignInScreen } from './screens/SignInScreen';
 import { towerWorkLine } from './logic';
 import { useTowerApp, type Screen } from './useTowerApp';
@@ -39,8 +40,11 @@ export function App() {
     return <SignInScreen actions={actions} error={state.signInError} busy={state.loading} />;
   }
 
-  const sections: { key: Screen; label: string; icon: 'route'; count: number | null }[] = [
+  const sections: { key: Screen; label: string; icon: 'route' | 'wallet'; count: number | null }[] = [
     { key: 'hazards', label: t('tower.nav.hazards'), icon: 'route', count: state.hazards?.length ?? null },
+    // No count on the rates section, and not because one is hard to compute: a number beside a section
+    // means "this many things are waiting for you", and nothing here is waiting for anybody.
+    { key: 'rates', label: t('tower.nav.rates'), icon: 'wallet', count: null },
   ];
 
   return (
@@ -82,7 +86,7 @@ export function App() {
         </nav>
 
         <main class="cons__main">
-          <HazardsScreen state={state} actions={actions} />
+          {state.screen === 'rates' ? <RatesScreen state={state} actions={actions} /> : <HazardsScreen state={state} actions={actions} />}
         </main>
       </div>
     </div>

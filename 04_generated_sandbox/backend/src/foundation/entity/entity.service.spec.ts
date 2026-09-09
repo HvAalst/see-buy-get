@@ -235,4 +235,121 @@ describe('entities (the group and its sisters)', () => {
       expect(entities.ratesFor(sister()).totalPct).toBe(PLATFORM_FEE_PCT);
     });
   });
+
+  describe('the pricing read model — what a sister charges, and where each answer came from', () => {
+    // The screen that turns these knobs is only honest if it can tell an inherited number from a decided
+    // one. They look identical on screen and behave completely differently when edited: clearing an
+    // inherited value does nothing, and re-typing the value it already shows converts an inheritance into
+    // a decision somebody now owns.
+    const LANES = ['pudo', 'mdp', 'dedicated'];
+    const ke = () => entities.requireForJurisdiction('KE').entityId;
+
+    it('names the LANE when the lane is what holds the number', () => {
+      entities.setRates(ke(), { marginPct: 0.03 });
+      entities.setRates(ke(), { lane: 'dedicated', marginPct: 0.07 });
+      expect(EntityService.rateOrigins(entities.get(ke()), 'dedicated').marginPct).toBe('lane');
+      expect(entities.ratesFor(ke(), 'dedicated').marginPct).toBe(0.07);
+    });
+
+    it('names the SISTER when the lane has no opinion of its own', () => {
+      entities.setRates(ke(), { marginPct: 0.03, costOfRiskPct: 0.01 });
+      entities.setRates(ke(), { lane: 'pudo', costOfRiskPct: 0.02 });
+      const origin = EntityService.rateOrigins(entities.get(ke()), 'pudo');
+      // A partial lane override leaves the other layers where they were — the resolution is per LAYER,
+      // and the provenance has to say so or the screen implies the whole row is overridden.
+      expect(origin.costOfRiskPct).toBe('lane');
+      expect(origin.marginPct).toBe('sister');
+      expect(origin.profitOnRiskPct).toBe('network');
+    });
+
+    it('names the pre-layers knob for what it always was: a MARGIN', () => {
+      entities.setFeePct(ke(), 0.05);
+      const origin = EntityService.rateOrigins(entities.get(ke()), 'pudo');
+      expect(origin.marginPct).toBe('legacy-fee');
+      expect(entities.ratesFor(ke(), 'pudo').marginPct).toBe(0.05);
+      // And it is the only layer with that extra step. There was never an old knob for the other two.
+      expect(origin.costOfRiskPct).toBe('network');
+      expect(origin.profitOnRiskPct).toBe('network');
+    });
+
+    it('names the NETWORK where nobody has ever decided anything', () => {
+      const fresh = entities.requireForJurisdiction('KE');
+      const origin = EntityService.rateOrigins(fresh, 'pudo');
+      expect(origin).toEqual({ costOfRiskPct: 'network', profitOnRiskPct: 'network', marginPct: 'network' });
+      expect(entities.ratesFor(fresh.entityId, 'pudo').marginPct).toBe(PLATFORM_FEE_PCT);
+    });
+
+    it('stays IN STEP with the resolution it describes, whatever is set where', () => {
+      // The label is worse than useless if it disagrees with the arithmetic: it would tell an operator a
+      // number is inherited at the moment they own it. So this checks the two against each other across
+      // every combination rather than asserting labels by inspection — clearing the level a label names
+      // MUST move the number, and clearing any other level must not.
+      const combos = [
+        { sister: {}, lane: {} },
+        { sister: { marginPct: 0.03 }, lane: {} },
+        { sister: { marginPct: 0.03 }, lane: { marginPct: 0.06 } },
+        { sister: { costOfRiskPct: 0.01, profitOnRiskPct: 0.02, marginPct: 0.03 }, lane: { costOfRiskPct: 0.04 } },
+        { sister: {}, lane: { profitOnRiskPct: 0.05 } },
+      ];
+      for (const combo of combos) {
+        const id = ke();
+        // Start from nothing every time, so one combination cannot leave a rate behind for the next.
+        entities.setRates(id, { costOfRiskPct: null, profitOnRiskPct: null, marginPct: null });
+        for (const lane of LANES) entities.setRates(id, { lane, costOfRiskPct: null, profitOnRiskPct: null, marginPct: null });
+        entities.setRates(id, combo.sister);
+        entities.setRates(id, { lane: 'pudo', ...combo.lane });
+
+        const before = entities.ratesFor(id, 'pudo');
+        const origin = EntityService.rateOrigins(entities.get(id), 'pudo');
+        for (const layer of ['costOfRiskPct', 'profitOnRiskPct', 'marginPct'] as const) {
+          // Clear the LANE and see whether this layer moved. It must move exactly when the label said the
+          // lane was holding it.
+          entities.setRates(id, { lane: 'pudo', [layer]: null });
+          const after = entities.ratesFor(id, 'pudo');
+          expect(after[layer] === before[layer]).toBe(origin[layer] !== 'lane');
+          // Put it back so the next layer is judged against the same starting state.
+          entities.setRates(id, { lane: 'pudo', ...combo.lane });
+        }
+      }
+    });
+
+    it('reports tax and cover WHOLE, because that is how they resolve', () => {
+      const id = ke();
+      expect(EntityService.taxOrigin(entities.get(id))).toBe('none');
+      entities.setTax(id, { ratePct: 0.16, label: 'VAT', registration: 'KE-VAT-1' });
+      expect(EntityService.taxOrigin(entities.get(id), 'pudo')).toBe('sister');
+      entities.setTax(id, { lane: 'dedicated', ratePct: 0 });
+      expect(EntityService.taxOrigin(entities.get(id), 'dedicated')).toBe('lane');
+
+      expect(EntityService.insuranceOrigin(entities.get(id))).toBe('none');
+      entities.setInsurance(id, { freeLimit: 5000 });
+      expect(EntityService.insuranceOrigin(entities.get(id), 'pudo')).toBe('sister');
+      entities.setInsurance(id, { lane: 'dedicated', freeLimit: 50000 });
+      expect(EntityService.insuranceOrigin(entities.get(id), 'dedicated')).toBe('lane');
+    });
+
+    it('hands back the default row FIRST, then one row per lane', () => {
+      const pricing = entities.pricingFor(ke(), LANES);
+      expect(pricing.lanes.map((l) => l.lane)).toEqual([undefined, 'pudo', 'mdp', 'dedicated']);
+      expect(pricing.transacting).toBe(true);
+      expect(pricing.currency).toBe('KES');
+    });
+
+    it('includes the group, and says it cannot transact rather than hiding it', () => {
+      // Hiding it is the easier answer and the wrong one: an operator who goes looking for the mother's
+      // rates should find it and be told why it has none, not wonder whether the screen is broken.
+      const pricing = entities.pricingFor(entities.group().entityId, LANES);
+      expect(pricing.transacting).toBe(false);
+      expect(() => entities.setRates(entities.group().entityId, { marginPct: 0.02 })).toThrow();
+    });
+
+    it('publishes the bounds it will actually enforce', () => {
+      // A form validating against numbers it holds privately will one day accept what the server refuses.
+      const { bounds } = entities.pricingFor(ke(), LANES);
+      expect(() => entities.setRates(ke(), { marginPct: bounds.maxRatePct + 0.001 })).toThrow();
+      expect(() => entities.setRates(ke(), { marginPct: bounds.maxRatePct })).not.toThrow();
+      expect(() => entities.setTax(ke(), { ratePct: bounds.maxTaxPct + 0.001 })).toThrow();
+      expect(() => entities.setInsurance(ke(), { premiumPct: bounds.maxPremiumPct + 0.001 })).toThrow();
+    });
+  });
 });

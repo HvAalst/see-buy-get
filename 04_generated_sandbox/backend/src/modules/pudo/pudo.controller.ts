@@ -38,6 +38,8 @@ import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { classifySize, measuredFactor, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
+import { EntityPricing } from '../../foundation/entity/entity.types';
+import { CARGO_LANES } from './cargo.types';
 import { ReturnService } from './return.service';
 import { PayoutService } from '../../foundation/payouts/payout.service';
 import { BooksService } from '../../foundation/books/books.service';
@@ -301,6 +303,27 @@ export class SbgController {
   @Get('entities/:entityId/payouts')
   listPayouts(@Param('entityId') entityId: string) {
     return { items: this.payouts.list({ entityId }) };
+  }
+
+  /**
+   * Everything one sister charges, on every lane, in one read — what it earns, what it collects for an
+   * authority, what it covers, where each of those answers came from, and the bounds the next edit will be
+   * held to.
+   *
+   * The endpoint the operator console's rate screen is built on. The knobs below can each be read one lane
+   * at a time, which is the right shape for a service asking about one shipment and the wrong shape for a
+   * person deciding whether a lane should differ from the default: that is a comparison, and it needs the
+   * whole table at once.
+   *
+   * Operator-only like its neighbours. The three-layer split is for running the business and is never
+   * customer-facing on either side.
+   */
+  @Roles('operator')
+  @Get('entities/:entityId/pricing')
+  entityPricing(@Param('entityId') entityId: string): EntityPricing {
+    // The lane vocabulary is passed IN because it belongs to this module: foundation holds numbers against
+    // keys and has always refused to learn what a parcel is.
+    return this.entities.pricingFor(entityId, [...CARGO_LANES]);
   }
 
   /**

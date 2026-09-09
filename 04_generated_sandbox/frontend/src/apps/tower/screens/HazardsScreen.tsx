@@ -154,7 +154,7 @@ function HazardRow({ row, now, state, actions }: { row: ConstraintView; now: num
         </td>
       </tr>
       {open ? (
-        <tr class="is-open">
+        <tr class="is-open ctbl__editor">
           <td colSpan={6}>
             <ClearForm row={row} hazard={name} state={state} actions={actions} />
           </td>

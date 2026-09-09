@@ -1,0 +1,372 @@
+import { useEffect, useState } from 'preact/hooks';
+import { Icon } from '../../../shared/ui';
+import { useT, type Translate } from '../../../shared/i18n';
+import {
+  coverFormError,
+  coverFormOf,
+  coverPayload,
+  isOwnedHere,
+  laneLabel,
+  originLabel,
+  pctLabel,
+  pctText,
+  rateFormError,
+  rateFormOf,
+  ratesPayload,
+  taxFormError,
+  taxFormOf,
+  taxPayload,
+  type CoverForm,
+  type EntityPricing,
+  type LanePricing,
+  type RateForm,
+  type TaxForm,
+} from '../money';
+import type { TowerActions, TowerState } from '../useTowerApp';
+
+/**
+ * What each sister charges — the three rate layers, the tax it collects, and the cover it carries.
+ *
+ * THE SPLIT IS INTERNAL. A buyer sees a price; a merchant sees one platform fee; only this screen sees
+ * that the fee is a cost of risk plus a return for carrying it plus a margin. The separation exists so
+ * somebody can answer "are we earning because the market is good, or because we are carrying risk nobody
+ * is paying for" — a question a single blended percentage cannot be asked.
+ *
+ * The table's real subject is INHERITANCE. Every number here resolves through fallbacks, so two lanes
+ * showing 2% can be two completely different situations: one a decision, the other the absence of one.
+ * Only one of them moves when the default moves, so every cell says which it is.
+ */
+export function RatesScreen({ state, actions }: { state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const pricing = state.pricing;
+
+  return (
+    <>
+      <header class="cons__head">
+        <h1 class="cons__title">{t('tower.rates.title')}</h1>
+        <p class="cons__lede">{t('tower.rates.lede')}</p>
+      </header>
+
+      <p class="cons__caveat">
+        <Icon name="lock" size={18} />
+        <span>
+          <b>{t('tower.rates.caveatLead')}</b> {t('tower.rates.caveat')}
+        </span>
+      </p>
+
+      <nav class="twr-sisters" aria-label={t('tower.rates.pickSister')}>
+        {(state.entities ?? []).map((e) => (
+          <button
+            key={e.entityId}
+            type="button"
+            class={`twr-sister${state.entityId === e.entityId ? ' twr-sister--on' : ''}`}
+            aria-pressed={state.entityId === e.entityId}
+            onClick={() => void actions.chooseEntity(e.entityId)}
+          >
+            <span class="twr-sister__n">{e.name}</span>
+            <span class="twr-sister__m">
+              {e.kind === 'group' ? t('tower.rates.group') : `${e.jurisdiction ?? '—'} · ${e.currency ?? '—'}`}
+            </span>
+          </button>
+        ))}
+      </nav>
+
+      {state.error ? (
+        <p class="cerr" style="max-width:96ch">
+          <b>{t('tower.rates.failedTitle')}</b> — {state.error.detail || state.error.title}
+        </p>
+      ) : null}
+
+      {!pricing ? (
+        <p class="cons__empty">{t('tower.rates.loading')}</p>
+      ) : (
+        <>
+          {/* A company that cannot transact gets the explanation and NOTHING ELSE. The resolution still
+              answers for it — every fallback ends at the network default — so a table here would show the
+              mother company charging 2%% under a paragraph saying it charges nothing. The numbers are real
+              and the row would be a lie. */}
+          {!pricing.transacting ? (
+            <p class="cons__caveat">
+              <Icon name="info" size={18} />
+              <span>
+                <b>{t('tower.rates.groupLead', { name: pricing.name })}</b> {t('tower.rates.groupBody')}
+              </span>
+            </p>
+          ) : (
+          <>
+          <section class="cons__panel">
+            <div class="cons__panelhead">
+              <span class="cons__panelt">{t('tower.rates.whatItCharges', { name: pricing.name })}</span>
+              <span class="ctbl__sub">
+                {pricing.taxRegistration
+                  ? t('tower.rates.registeredAs', { registration: pricing.taxRegistration })
+                  : t('tower.rates.notRegistered')}
+              </span>
+            </div>
+
+            {state.done ? (
+              <p class="twr-done">
+                <Icon name="check" size={16} />
+                {state.done}
+              </p>
+            ) : null}
+
+            <table class="ctbl">
+              <thead>
+                <tr>
+                  <th>{t('tower.rates.col.lane')}</th>
+                  <th class="ctbl__num">{t('tower.rates.costOfRisk')}</th>
+                  <th class="ctbl__num">{t('tower.rates.profitOnRisk')}</th>
+                  <th class="ctbl__num">{t('tower.rates.margin')}</th>
+                  <th class="ctbl__num">{t('tower.rates.col.total')}</th>
+                  <th class="ctbl__num">{t('tower.tax.rate')}</th>
+                  <th class="ctbl__num">{t('tower.cover.freeLimit')}</th>
+                  <th class="ctbl__num">{t('tower.cover.premium')}</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {pricing.lanes.map((row) => (
+                  <LaneRow key={row.lane ?? 'default'} row={row} pricing={pricing} state={state} actions={actions} />
+                ))}
+              </tbody>
+            </table>
+          </section>
+
+          <RateImpact state={state} />
+          </>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+/** One lane, read across: what it charges, and for each number, whether this lane is what decided it. */
+function LaneRow({ row, pricing, state, actions }: { row: LanePricing; pricing: EntityPricing; state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const key = row.lane ?? 'default';
+  const open = state.openId === key;
+  const money = (n: number) => (n ? `${n.toLocaleString()} ${pricing.currency ?? ''}`.trim() : '—');
+
+  return (
+    <>
+      <tr class={open ? 'is-open' : undefined}>
+        <td class="ctbl__strong">{laneLabel(row.lane, t)}</td>
+        <Cell value={pctLabel(row.rates.costOfRiskPct)} origin={row.rateOrigin.costOfRiskPct} lane={row.lane} t={t} />
+        <Cell value={pctLabel(row.rates.profitOnRiskPct)} origin={row.rateOrigin.profitOnRiskPct} lane={row.lane} t={t} />
+        <Cell value={pctLabel(row.rates.marginPct)} origin={row.rateOrigin.marginPct} lane={row.lane} t={t} />
+        <td class="ctbl__num ctbl__strong">{pctLabel(row.rates.totalPct)}</td>
+        <Cell value={row.tax.ratePct ? `${pctLabel(row.tax.ratePct)} ${row.tax.label}` : '—'} origin={row.taxOrigin} lane={row.lane} t={t} />
+        <Cell value={money(row.insurance.freeLimit)} origin={row.insuranceOrigin} lane={row.lane} t={t} />
+        <Cell value={row.insurance.premiumPct ? pctLabel(row.insurance.premiumPct) : '—'} origin={row.insuranceOrigin} lane={row.lane} t={t} />
+        <td class="ctbl__num">
+          <button
+            type="button"
+            class="cbtn cbtn--ghost cbtn--sm"
+            aria-expanded={open}
+            disabled={!pricing.transacting}
+            onClick={() => actions.open(open ? null : key)}
+          >
+            {open ? t('common.close') : t('tower.rates.edit')}
+          </button>
+        </td>
+      </tr>
+      {open ? (
+        <tr class="is-open ctbl__editor">
+          <td colSpan={9}>
+            <LaneEditor row={row} pricing={pricing} state={state} actions={actions} />
+          </td>
+        </tr>
+      ) : null}
+    </>
+  );
+}
+
+/** A number, and whether it was decided here or fell through from somewhere wider. */
+function Cell({ value, origin, lane, t }: { value: string; origin: string; lane?: string; t: Translate }) {
+  const owned = isOwnedHere(origin, lane);
+  return (
+    <td class="ctbl__num">
+      <div class={owned ? 'ctbl__strong' : undefined}>{value}</div>
+      {/* Said in words, never by colour alone: "inherited from the sister" is the whole difference
+          between a number somebody chose and the absence of a choice. */}
+      <div class="ctbl__sub">{owned ? t('tower.origin.here') : originLabel(origin, t)}</div>
+    </td>
+  );
+}
+
+/**
+ * The editor: three panels, three saves, because they are three different acts against three endpoints.
+ *
+ * One combined Save would be a lie about what happens — a rate that is refused for busting the ceiling
+ * would leave a tax change applied, or not, depending on the order they went out in.
+ */
+function LaneEditor({ row, pricing, state, actions }: { row: LanePricing; pricing: EntityPricing; state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const [rates, setRates] = useState<RateForm>(() => rateFormOf(row));
+  const [tax, setTax] = useState<TaxForm>(() => taxFormOf(row, pricing.taxRegistration));
+  const [cover, setCover] = useState<CoverForm>(() => coverFormOf(row));
+  const [shown, setShown] = useState<string | null>(null);
+
+  // A fresh read replaces the row underneath this form (a save re-reads), so the boxes follow it. Without
+  // this, saving a rate would leave the OTHER two panels holding values from before the save.
+  useEffect(() => {
+    setRates(rateFormOf(row));
+    setTax(taxFormOf(row, pricing.taxRegistration));
+    setCover(coverFormOf(row));
+  }, [row, pricing.taxRegistration]);
+
+  const busy = state.busyId === (row.lane ?? 'default');
+  const rateErr = shown === 'rates' ? rateFormError(rates, pricing.bounds, t) : null;
+  const taxErr = shown === 'tax' ? taxFormError(tax, pricing.bounds, t) : null;
+  const coverErr = shown === 'cover' ? coverFormError(cover, pricing.bounds, t) : null;
+
+  const save = (which: 'rates' | 'tax' | 'cover') => {
+    setShown(which);
+    const err =
+      which === 'rates'
+        ? rateFormError(rates, pricing.bounds, t)
+        : which === 'tax'
+          ? taxFormError(tax, pricing.bounds, t)
+          : coverFormError(cover, pricing.bounds, t);
+    if (err) return;
+    const lane = row.lane;
+    if (which === 'rates') void actions.saveRates(ratesPayload(rates, lane), lane);
+    if (which === 'tax') void actions.saveTax(taxPayload(tax, lane), lane);
+    if (which === 'cover') void actions.saveCover(coverPayload(cover, lane), lane);
+  };
+
+  return (
+    <div class="twr-knobs">
+      <p class="twr-clear__b">{t('tower.rates.emptyInherits')}</p>
+
+      <div class="twr-knobs__row">
+        <section class="twr-knob">
+          <p class="twr-clear__t">{t('tower.rates.stackTitle')}</p>
+          <p class="chint">{t('tower.rates.stackHint')}</p>
+          <Pct label={t('tower.rates.costOfRisk')} value={rates.costOfRisk} placeholder={pctText(row.rates.costOfRiskPct)} onInput={(v) => setRates({ ...rates, costOfRisk: v })} />
+          <Pct label={t('tower.rates.profitOnRisk')} value={rates.profitOnRisk} placeholder={pctText(row.rates.profitOnRiskPct)} onInput={(v) => setRates({ ...rates, profitOnRisk: v })} />
+          <Pct label={t('tower.rates.margin')} value={rates.margin} placeholder={pctText(row.rates.marginPct)} onInput={(v) => setRates({ ...rates, margin: v })} />
+          {rateErr ? <p class="cerr">{rateErr}</p> : null}
+          <button type="button" class="cbtn cbtn--primary" disabled={busy} onClick={() => save('rates')}>
+            {t('tower.rates.save')}
+          </button>
+        </section>
+
+        <section class="twr-knob">
+          <p class="twr-clear__t">{t('tower.tax.title')}</p>
+          <p class="chint">{t('tower.tax.hint')}</p>
+          <Pct label={t('tower.tax.rate')} value={tax.rate} placeholder={pctText(row.tax.ratePct)} onInput={(v) => setTax({ ...tax, rate: v })} />
+          <Text label={t('tower.tax.label')} value={tax.label} placeholder={row.tax.label} onInput={(v) => setTax({ ...tax, label: v })} />
+          <Text label={t('tower.tax.registration')} value={tax.registration} hint={t('tower.tax.registrationHint')} onInput={(v) => setTax({ ...tax, registration: v })} />
+          {taxErr ? <p class="cerr">{taxErr}</p> : null}
+          <button type="button" class="cbtn cbtn--primary" disabled={busy} onClick={() => save('tax')}>
+            {t('tower.rates.save')}
+          </button>
+        </section>
+
+        <section class="twr-knob">
+          <p class="twr-clear__t">{t('tower.cover.title')}</p>
+          <p class="chint">{t('tower.cover.hint')}</p>
+          <Text
+            label={t('tower.cover.freeLimitIn', { currency: pricing.currency ?? '' })}
+            value={cover.freeLimit}
+            placeholder={String(row.insurance.freeLimit)}
+            onInput={(v) => setCover({ ...cover, freeLimit: v })}
+          />
+          <Pct label={t('tower.cover.premium')} value={cover.premium} placeholder={pctText(row.insurance.premiumPct)} onInput={(v) => setCover({ ...cover, premium: v })} />
+          {coverErr ? <p class="cerr">{coverErr}</p> : null}
+          <button type="button" class="cbtn cbtn--primary" disabled={busy} onClick={() => save('cover')}>
+            {t('tower.rates.save')}
+          </button>
+        </section>
+      </div>
+
+      {state.saveError ? (
+        <p class="cerr">
+          <b>{t('tower.rates.refused')}</b> — {state.saveError.detail || state.saveError.title}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** A percentage box. The suffix is part of the control: these are the boxes where a unit mistake is money. */
+function Pct({ label, value, placeholder, onInput }: { label: string; value: string; placeholder: string; onInput: (v: string) => void }) {
+  return (
+    <label class="cfield">
+      <span class="cfield__label">{label}</span>
+      <span class="twr-pct">
+        <input class="cinput" inputMode="decimal" value={value} placeholder={placeholder} onInput={(e) => onInput((e.target as HTMLInputElement).value)} />
+        <span class="twr-pct__u">%</span>
+      </span>
+    </label>
+  );
+}
+
+function Text({ label, value, placeholder, hint, onInput }: { label: string; value: string; placeholder?: string; hint?: string; onInput: (v: string) => void }) {
+  return (
+    <label class="cfield">
+      <span class="cfield__label">{label}</span>
+      <input class="cinput" value={value} placeholder={placeholder} onInput={(e) => onInput((e.target as HTMLInputElement).value)} />
+      {hint ? <span class="chint">{hint}</span> : null}
+    </label>
+  );
+}
+
+/**
+ * What each rate actually DID — the half of the question that is not arithmetic.
+ *
+ * What a rate earned per shipment anybody can work out in their head. What it did to the NUMBER of
+ * shipments can only be observed, and it is the part that decides whether a change was worth making. Read
+ * as spells so a rate raised and then lowered again shows as two periods to compare rather than one total.
+ */
+function RateImpact({ state }: { state: TowerState }) {
+  const t = useT();
+  const impact = state.rateImpact;
+  if (!impact) return null;
+
+  return (
+    <section class="cons__panel" style="margin-top:18px">
+      <div class="cons__panelhead">
+        <span class="cons__panelt">{t('tower.impact.title')}</span>
+        <span class="ctbl__sub">{t('tower.impact.hint')}</span>
+      </div>
+      {impact.spells.length === 0 ? (
+        <div class="cons__empty">
+          <p class="cons__emptyt">{t('tower.impact.emptyTitle')}</p>
+          <p>{t('tower.impact.emptyBody')}</p>
+        </div>
+      ) : (
+        <table class="ctbl">
+          <thead>
+            <tr>
+              <th>{t('tower.impact.col.rate')}</th>
+              <th>{t('tower.impact.col.period')}</th>
+              <th class="ctbl__num">{t('tower.impact.col.shipments')}</th>
+              <th class="ctbl__num">{t('tower.impact.col.gross')}</th>
+              <th class="ctbl__num">{t('tower.impact.col.margin')}</th>
+              <th class="ctbl__num">{t('tower.impact.col.avg')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {impact.spells.map((s, i) => (
+              <tr key={`${s.from}-${i}`}>
+                <td class="ctbl__strong">{pctLabel(s.feePct)}</td>
+                <td class="ctbl__sub">
+                  {new Date(s.from).toLocaleDateString()} → {new Date(s.to).toLocaleDateString()}
+                </td>
+                <td class="ctbl__num">{s.shipments}</td>
+                <td class="ctbl__num">{s.gross.toLocaleString()}</td>
+                <td class="ctbl__num">{s.margin.toLocaleString()}</td>
+                <td class="ctbl__num">{s.avgMargin.toLocaleString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {impact.unpriced ? <p class="chint" style="padding:8px 16px 12px">{t('tower.impact.unpriced', { n: impact.unpriced })}</p> : null}
+    </section>
+  );
+}

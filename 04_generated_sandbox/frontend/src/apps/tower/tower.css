@@ -93,3 +93,88 @@
   gap: 10px;
   flex-wrap: wrap;
 }
+
+/* ------------------------------------------------------------- rates ------ */
+
+/* The company picker. A row of real choices rather than a dropdown: there are two or three of these and
+   comparing what they charge is the point of the screen, so hiding the list behind a click is backwards. */
+.twr-sisters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.twr-sister {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: var(--c-ctl-h);
+  padding: 7px 14px;
+  border: 1px solid var(--bd);
+  border-radius: var(--r-ctl);
+  background: var(--bg);
+  text-align: left;
+}
+
+.twr-sister:hover {
+  background: var(--panel);
+}
+
+/* ORANGE = THIS ONE IS CHOSEN. Same signal as the rail, same reason. */
+.twr-sister--on {
+  background: var(--org-light);
+  border-color: var(--org);
+}
+
+.twr-sister__n {
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.twr-sister__m {
+  font-size: var(--c-fs-sm);
+  color: var(--tx2);
+}
+
+/* Three panels side by side because they are three separate acts against three endpoints — one combined
+   Save would leave a tax change applied or not depending on which request went out first. */
+.twr-knobs {
+  padding: 8px 0 12px;
+}
+
+.twr-knobs__row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
+  margin-top: 12px;
+}
+
+.twr-knob {
+  max-width: 42ch;
+}
+
+.twr-knob .cbtn {
+  margin-top: 4px;
+}
+
+/* The unit lives INSIDE the control. These are the boxes where mistaking a percent for a fraction is
+   money, so the box says what it is holding rather than relying on a label above it. */
+.twr-pct {
+  position: relative;
+  display: block;
+}
+
+.twr-pct .cinput {
+  padding-right: 28px;
+}
+
+.twr-pct__u {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--tx3);
+  font-size: var(--c-fs-sm);
+  pointer-events: none;
+}

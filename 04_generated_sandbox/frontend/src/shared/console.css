@@ -293,6 +293,13 @@
   background: var(--org-light);
 }
 
+/* The panel that opens UNDER that row is not itself a choice, so it does not wear the chosen colour —
+   an editor the height of three forms in orange reads as a warning rather than as a workspace. It gets
+   the quiet ground and keeps the orange row directly above it as the thing that says which row this is. */
+.ctbl tbody tr.is-open.ctbl__editor td {
+  background: var(--panel);
+}
+
 .ctbl__num {
   text-align: right;
   white-space: nowrap;

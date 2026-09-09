@@ -4,7 +4,22 @@ import { PersistentMap } from '../store/persistent-map';
 import { DidService } from '../did/did.service';
 import { currencyForJurisdiction } from '../money/currency';
 import { DEFAULT_TAX_LABEL, MAX_PLATFORM_FEE_PCT, MAX_PREMIUM_PCT, MAX_TAX_PCT, MIN_PLATFORM_FEE_PCT, MIN_TAX_PCT, PLATFORM_FEE_PCT } from '../../modules/pudo/pudo.config';
-import { Entity, InsuranceRule, RateStack, ResolvedInsurance, ResolvedRates, ResolvedTax, TaxRule, canHoldCustody, canTransact } from './entity.types';
+import {
+  Entity,
+  EntityPricing,
+  InsuranceRule,
+  LanePricing,
+  RateOrigin,
+  RateOrigins,
+  RateStack,
+  ResolvedInsurance,
+  ResolvedRates,
+  ResolvedTax,
+  RuleOrigin,
+  TaxRule,
+  canHoldCustody,
+  canTransact,
+} from './entity.types';
 
 /**
  * The group and its sisters, seeded at boot.
@@ -391,6 +406,92 @@ export class EntityService implements OnApplicationBootstrap {
   }
 
   /** Whether this entity may hold a settlement account (step 3's custody question, answered early). */
+  /**
+   * Where each resolved rate actually CAME from — the same walk as `resolveRates`, reporting the step it
+   * stopped at instead of the number it found.
+   *
+   * Deliberately a second function rather than a richer return from the first. `ResolvedRates` is stamped
+   * on parcels and rides on quotes; a provenance label has no business travelling with a price for the
+   * rest of that shipment's life. It is a fact about the CONFIGURATION, and it is only interesting to the
+   * one screen where somebody is deciding whether to change it.
+   *
+   * It must stay in step with `resolveRates` — the two are tested against each other rather than by
+   * inspection, because a wrong label here is worse than no label: it tells an operator a number is
+   * inherited when they in fact own it.
+   */
+  static rateOrigins(from: Pick<Entity, 'rates' | 'ratesByLane' | 'feePct'>, lane?: string): RateOrigins {
+    const forLane = lane ? from.ratesByLane?.[lane] : undefined;
+    const originOf = (of: (s: RateStack) => number | undefined, isMargin = false): RateOrigin => {
+      if (forLane && of(forLane) != null) return 'lane';
+      if (from.rates && of(from.rates) != null) return 'sister';
+      // Margin alone falls through the pre-layers knob, which is exactly what that number always meant.
+      if (isMargin && from.feePct != null) return 'legacy-fee';
+      return 'network';
+    };
+    return {
+      costOfRiskPct: originOf((r) => r.costOfRiskPct),
+      profitOnRiskPct: originOf((r) => r.profitOnRiskPct),
+      marginPct: originOf((r) => r.marginPct, true),
+    };
+  }
+
+  /** Where a tax rule came from. Whole, like the rule itself — `none` means nobody has ever set one. */
+  static taxOrigin(from: Pick<Entity, 'tax' | 'taxByLane'>, lane?: string): RuleOrigin {
+    if (lane && from.taxByLane?.[lane]) return 'lane';
+    return from.tax ? 'sister' : 'none';
+  }
+
+  /** Where a cover rule came from. Same shape, same reason. */
+  static insuranceOrigin(from: Pick<Entity, 'insurance' | 'insuranceByLane'>, lane?: string): RuleOrigin {
+    if (lane && from.insuranceByLane?.[lane]) return 'lane';
+    return from.insurance ? 'sister' : 'none';
+  }
+
+  /**
+   * Everything one sister charges, on every lane, with the provenance of each answer and the bounds the
+   * service will hold the next edit to.
+   *
+   * The LANES ARE THE CALLER'S — this file has always refused to learn what a parcel is, and a read model
+   * is not a reason to start. The pudo module knows its own taxonomy and passes it in; the books only ever
+   * hold numbers against keys.
+   *
+   * Includes the group, which cannot transact and therefore cannot be edited. Omitting it would be the
+   * easier answer and the wrong one: an operator looking for the group's rates should find it and be told
+   * why it has none, rather than wonder whether the screen is broken.
+   */
+  pricingFor(entityId: string, lanes: string[]): EntityPricing {
+    const entity = this.get(entityId);
+    const rowFor = (lane?: string): LanePricing => ({
+      ...(lane ? { lane } : {}),
+      rates: EntityService.resolveRates(entity, lane),
+      rateOrigin: EntityService.rateOrigins(entity, lane),
+      tax: EntityService.resolveTax(entity, lane),
+      taxOrigin: EntityService.taxOrigin(entity, lane),
+      insurance: EntityService.resolveInsurance(entity, lane),
+      insuranceOrigin: EntityService.insuranceOrigin(entity, lane),
+    });
+
+    return {
+      entityId: entity.entityId,
+      name: entity.name,
+      kind: entity.kind,
+      jurisdiction: entity.jurisdiction,
+      currency: entity.currency,
+      transacting: entity.kind === 'sister',
+      taxRegistration: entity.taxRegistration,
+      // The default first: every lane row below is read against it, and a table whose fallback row is
+      // buried in the middle makes "inherited from where?" a question you have to hunt for.
+      lanes: [rowFor(), ...lanes.map((l) => rowFor(l))],
+      bounds: {
+        minRatePct: MIN_PLATFORM_FEE_PCT,
+        maxRatePct: MAX_PLATFORM_FEE_PCT,
+        minTaxPct: MIN_TAX_PCT,
+        maxTaxPct: MAX_TAX_PCT,
+        maxPremiumPct: MAX_PREMIUM_PCT,
+      },
+    };
+  }
+
   canHoldCustody(entityId: string): boolean {
     return canHoldCustody(this.get(entityId));
   }

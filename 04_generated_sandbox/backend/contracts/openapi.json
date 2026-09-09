@@ -4077,6 +4077,35 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/pricing": {
+      "get": {
+        "operationId": "Sbg.entityPricing",
+        "summary": "",
+        "description": "Everything one sister charges, on every lane, in one read — what it earns, what it collects for an\nauthority, what it covers, where each of those answers came from, and the bounds the next edit will be\nheld to.\n\nThe endpoint the operator console's rate screen is built on. The knobs below can each be read one lane\nat a time, which is the right shape for a service asking about one shipment and the wrong shape for a\nperson deciding whether a lane should differ from the default: that is a comparison, and it needs the\nwhole table at once.\n\nOperator-only like its neighbours. The three-layer split is for running the business and is never\ncustomer-facing on either side.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityPricing"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/entities/{entityId}/fee": {
       "post": {
         "operationId": "Sbg.setEntityFee",
@@ -14448,6 +14477,223 @@
         },
         "required": [
           "reason"
+        ]
+      },
+      "ResolvedRates": {
+        "type": "object",
+        "properties": {
+          "costOfRiskPct": {
+            "type": "number"
+          },
+          "profitOnRiskPct": {
+            "type": "number"
+          },
+          "marginPct": {
+            "type": "number"
+          },
+          "totalPct": {
+            "type": "number",
+            "description": "What the customer's price is actually built with — the three, added."
+          }
+        },
+        "required": [
+          "costOfRiskPct",
+          "profitOnRiskPct",
+          "marginPct",
+          "totalPct"
+        ]
+      },
+      "RateOrigins": {
+        "type": "object",
+        "properties": {
+          "costOfRiskPct": {
+            "type": "string",
+            "enum": [
+              "lane",
+              "sister",
+              "legacy-fee",
+              "network"
+            ]
+          },
+          "profitOnRiskPct": {
+            "type": "string",
+            "enum": [
+              "lane",
+              "sister",
+              "legacy-fee",
+              "network"
+            ]
+          },
+          "marginPct": {
+            "type": "string",
+            "enum": [
+              "lane",
+              "sister",
+              "legacy-fee",
+              "network"
+            ]
+          }
+        },
+        "required": [
+          "costOfRiskPct",
+          "profitOnRiskPct",
+          "marginPct"
+        ]
+      },
+      "ResolvedTax": {
+        "type": "object",
+        "properties": {
+          "ratePct": {
+            "type": "number"
+          },
+          "label": {
+            "type": "string"
+          },
+          "registration": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ratePct",
+          "label"
+        ]
+      },
+      "ResolvedInsurance": {
+        "type": "object",
+        "properties": {
+          "premiumPct": {
+            "type": "number"
+          },
+          "freeLimit": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "premiumPct",
+          "freeLimit"
+        ]
+      },
+      "LanePricing": {
+        "type": "object",
+        "properties": {
+          "lane": {
+            "type": "string",
+            "description": "The lane this row is about; null is the sister's default for everything it does."
+          },
+          "taxOrigin": {
+            "type": "string",
+            "enum": [
+              "lane",
+              "sister",
+              "none"
+            ]
+          },
+          "insuranceOrigin": {
+            "type": "string",
+            "enum": [
+              "lane",
+              "sister",
+              "none"
+            ]
+          },
+          "rates": {
+            "$ref": "#/components/schemas/ResolvedRates"
+          },
+          "rateOrigin": {
+            "$ref": "#/components/schemas/RateOrigins"
+          },
+          "tax": {
+            "$ref": "#/components/schemas/ResolvedTax"
+          },
+          "insurance": {
+            "$ref": "#/components/schemas/ResolvedInsurance"
+          }
+        },
+        "required": [
+          "taxOrigin",
+          "insuranceOrigin",
+          "rates",
+          "rateOrigin",
+          "tax",
+          "insurance"
+        ]
+      },
+      "PricingBounds": {
+        "type": "object",
+        "properties": {
+          "minRatePct": {
+            "type": "number"
+          },
+          "maxRatePct": {
+            "type": "number",
+            "description": "The ceiling on ONE layer, and on the three of them added together — they are the same number."
+          },
+          "minTaxPct": {
+            "type": "number"
+          },
+          "maxTaxPct": {
+            "type": "number"
+          },
+          "maxPremiumPct": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "minRatePct",
+          "maxRatePct",
+          "minTaxPct",
+          "maxTaxPct",
+          "maxPremiumPct"
+        ]
+      },
+      "EntityPricing": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "group",
+              "sister"
+            ]
+          },
+          "jurisdiction": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "taxRegistration": {
+            "type": "string",
+            "description": "The number this sister collects tax under. Sister-wide: a registration is not a per-lane fact."
+          },
+          "lanes": {
+            "description": "The sister's default first, then one row per lane.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LanePricing"
+            }
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "transacting": {
+            "type": "boolean",
+            "description": "Whether this entity may be a party to a transaction at all. The group may not — it is the merchant of\nrecord nowhere — so its knobs are not editable, and the screen has to say why rather than fail on save."
+          },
+          "bounds": {
+            "$ref": "#/components/schemas/PricingBounds"
+          }
+        },
+        "required": [
+          "kind",
+          "lanes",
+          "entityId",
+          "name",
+          "transacting",
+          "bounds"
         ]
       },
       "EntityFeeDto": {

@@ -1,3 +1,5 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
 /**
  * The legal entities the network is operated by — the structure the money model hangs on.
  *
@@ -44,7 +46,7 @@ export interface RateStack {
 }
 
 /** The resolved stack for one shipment: every layer stated, and their sum. */
-export interface ResolvedRates {
+export class ResolvedRates {
   costOfRiskPct: number;
   profitOnRiskPct: number;
   marginPct: number;
@@ -85,7 +87,7 @@ export interface TaxRule {
  * exactly when the rate is zero — a sister charging nothing is not required to identify itself as a
  * collector of anything, and `setTax` refuses a non-zero rate without one.
  */
-export interface ResolvedTax {
+export class ResolvedTax {
   ratePct: number;
   label: string;
   registration?: string;
@@ -118,9 +120,95 @@ export interface InsuranceRule {
 }
 
 /** The cover that applies to one shipment, resolved. */
-export interface ResolvedInsurance {
+export class ResolvedInsurance {
   premiumPct: number;
   freeLimit: number;
+}
+
+/**
+ * Where a resolved number ACTUALLY came from.
+ *
+ * The screen that turns these knobs cannot be honest without this. Every one of them resolves through a
+ * chain of fallbacks, so a lane showing 2% may be a rate somebody chose for that lane, a rate the sister
+ * chose for everything, the single pre-layers number read as a margin, or the network's own default. They
+ * look identical, and they behave completely differently when you edit them: clearing an inherited value
+ * does nothing visible, and typing the value it already shows silently converts an inheritance into a
+ * decision somebody now owns.
+ */
+export type RateOrigin = 'lane' | 'sister' | 'legacy-fee' | 'network';
+
+/** Tax and cover resolve WHOLE rather than layer by layer, so their provenance is one answer, not three. */
+export type RuleOrigin = 'lane' | 'sister' | 'none';
+
+export class RateOrigins {
+  @ApiProperty({ enum: ['lane', 'sister', 'legacy-fee', 'network'] })
+  costOfRiskPct: RateOrigin;
+  @ApiProperty({ enum: ['lane', 'sister', 'legacy-fee', 'network'] })
+  profitOnRiskPct: RateOrigin;
+  @ApiProperty({ enum: ['lane', 'sister', 'legacy-fee', 'network'] })
+  marginPct: RateOrigin;
+}
+
+/** What one sister charges on one lane of work — every knob resolved, and where each answer came from. */
+export class LanePricing {
+  /** The lane this row is about; null is the sister's default for everything it does. */
+  @ApiPropertyOptional()
+  lane?: string;
+  rates: ResolvedRates;
+  rateOrigin: RateOrigins;
+  tax: ResolvedTax;
+  @ApiProperty({ enum: ['lane', 'sister', 'none'] })
+  taxOrigin: RuleOrigin;
+  insurance: ResolvedInsurance;
+  @ApiProperty({ enum: ['lane', 'sister', 'none'] })
+  insuranceOrigin: RuleOrigin;
+}
+
+/**
+ * The bounds the SERVICE enforces, published so a form cannot invent its own.
+ *
+ * A client that validates money against numbers it holds privately is a client that will one day accept
+ * what the server refuses, or refuse what the server would have taken — and the operator gets to find out
+ * which after they press save.
+ */
+export class PricingBounds {
+  minRatePct: number;
+  /** The ceiling on ONE layer, and on the three of them added together — they are the same number. */
+  maxRatePct: number;
+  minTaxPct: number;
+  maxTaxPct: number;
+  maxPremiumPct: number;
+}
+
+/**
+ * Everything an operator needs in order to see and set what one sister charges.
+ *
+ * A read model rather than four endpoints per lane: the screen's whole job is comparing lanes against each
+ * other and against the default they fall back to, and twelve round trips to draw one table is not a
+ * screen. It also keeps the resolution — the part that decides real prices — on the server, where it is
+ * tested, instead of being restated in a console.
+ */
+export class EntityPricing {
+  entityId: string;
+  name: string;
+  @ApiProperty({ enum: ['group', 'sister'] })
+  kind: EntityKind;
+  @ApiPropertyOptional()
+  jurisdiction?: string;
+  @ApiPropertyOptional()
+  currency?: string;
+  /**
+   * Whether this entity may be a party to a transaction at all. The group may not — it is the merchant of
+   * record nowhere — so its knobs are not editable, and the screen has to say why rather than fail on save.
+   */
+  transacting: boolean;
+  /** The number this sister collects tax under. Sister-wide: a registration is not a per-lane fact. */
+  @ApiPropertyOptional()
+  taxRegistration?: string;
+  /** The sister's default first, then one row per lane. */
+  @ApiProperty({ type: [LanePricing] })
+  lanes: LanePricing[];
+  bounds: PricingBounds;
 }
 
 export class Entity {
