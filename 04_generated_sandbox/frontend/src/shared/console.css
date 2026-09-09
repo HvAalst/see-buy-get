@@ -1,0 +1,512 @@
+/* ==========================================================================
+   SeeBuyGet — the CONSOLE layer: the design contract for a large screen.
+
+   The seven field apps are built for a phone held in a shop, a cab or a queue: one decision per screen,
+   48 px targets, big type, everything readable at arm's length in the sun. That contract is not a house
+   style, it is a response to WHERE those apps are used — and it is the wrong contract here.
+
+   This layer is for the people who OPERATE the network rather than use it. They sit at a desk, at a
+   large screen, with a mouse and a keyboard, and their work is comparing many rows in order to decide
+   about one. Where the phone shows one thing large, the console shows everything at once and lets the
+   eye choose.
+
+   WHAT CHANGES, and why each one is a response to that same difference:
+
+   1. DENSITY. 13px base instead of 16, short rows, tabular figures everywhere. A phone screen holds one
+      decision; a console screen holds a queue, and a queue you have to scroll to count is a queue you
+      stop counting.
+   2. TARGETS. Controls are ~32px, not 48. A mouse pointer is exact; a thumb is not. The 48px rule is
+      restored in full under `pointer: coarse` at the foot of this file, because a tablet propped on a
+      desk is the same person doing the same job with a worse pointing device.
+   3. TABLES, not cards. A card is a good way to show one thing and a bad way to compare twenty. Rows
+      align, and alignment is what makes a column scannable.
+   4. THE KEYBOARD IS A FIRST-CLASS POINTER. Everything interactive shows a visible focus ring, and
+      nothing is reachable by hover alone. Somebody works in this screen all day.
+
+   WHAT DOES NOT CHANGE, and must not:
+
+   - The tokens. Same palette, same type, same LIGHT-ONLY rule (tokens.css says why, and says it
+     permanently). This is one brand and one system; a second palette for the back office would make the
+     identity mean two different things depending on who is looking at it.
+   - ORANGE IS A STATE, NEVER AN ACTION — the active rail item, the row you have open. Blue (--blue) is
+     the one thing that says "press me". The moment orange means "press" it stops meaning "this one is
+     on".
+   - No emoji glyphs (typed <Icon> only), every string a catalogue key, and no colour used alone to
+     carry a meaning.
+   ========================================================================== */
+
+/* ------------------------------------------------------------------ shell -- */
+
+.cons {
+  /* The console's own density scale, named here so no screen hard-codes one of these numbers. */
+  --c-fs: 13px;
+  --c-fs-sm: 12px;
+  --c-fs-lg: 15px;
+  --c-ctl-h: 32px;
+  --c-gap: 16px;
+  --c-rail-w: 232px;
+  --c-mast-h: 56px;
+
+  min-height: 100dvh;
+  display: grid;
+  grid-template-rows: var(--c-mast-h) 1fr;
+  background: var(--appbg);
+  color: var(--tx);
+  font-size: var(--c-fs);
+  line-height: 1.5;
+  /* Every number on this surface sits in a column under another number. */
+  font-variant-numeric: tabular-nums;
+}
+
+/* The masthead: who we are on the left, who is at the keyboard on the right. Deliberately quiet — an
+   operator's screen belongs to the work, and the identity has already been established by the time
+   somebody is signed in and looking at a queue. */
+.cons__mast {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--c-gap);
+  padding: 0 20px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--bd-soft);
+}
+
+.cons__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.cons__brandname {
+  font-family: var(--font-display);
+  font-size: var(--c-fs-lg);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--navy);
+  white-space: nowrap;
+}
+
+/* The one live line in the masthead — the same rule the phone apps' TopBar follows: this slot carries
+   WORK (what is waiting), never identity. */
+.cons__mastwork {
+  color: var(--tx2);
+  font-size: var(--c-fs-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cons__who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: var(--c-fs-sm);
+  color: var(--tx2);
+  white-space: nowrap;
+}
+
+.cons__whoname {
+  font-weight: 600;
+  color: var(--tx);
+}
+
+.cons__body {
+  display: grid;
+  grid-template-columns: var(--c-rail-w) minmax(0, 1fr);
+  min-height: 0;
+}
+
+.cons__rail {
+  border-right: 1px solid var(--bd-soft);
+  background: var(--bg);
+  padding: 14px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cons__railhead {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tx3);
+  padding: 6px 10px 8px;
+}
+
+.cons__railitem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: var(--c-ctl-h);
+  padding: 6px 10px;
+  border-radius: var(--r-ctl);
+  color: var(--tx2);
+  font-size: var(--c-fs);
+  font-weight: 600;
+  text-align: left;
+}
+
+.cons__railitem:hover {
+  background: var(--panel);
+  color: var(--tx);
+}
+
+/* ORANGE = THIS ONE IS CHOSEN: 3px of --org against the app ground, the same signal the phone apps'
+   active nav item carries. */
+.cons__railitem--on {
+  background: var(--org-light);
+  color: var(--navy);
+  box-shadow: inset 3px 0 0 var(--org);
+}
+
+.cons__railcount {
+  margin-left: auto;
+  font-size: var(--c-fs-sm);
+  font-weight: 700;
+  color: var(--tx3);
+}
+
+.cons__railitem--on .cons__railcount {
+  color: var(--navy);
+}
+
+.cons__main {
+  min-width: 0;
+  padding: 22px 24px 64px;
+  overflow-x: auto;
+}
+
+/* ------------------------------------------------------------------ page --- */
+
+.cons__head {
+  margin-bottom: 18px;
+  max-width: 78ch; /* prose stays readable however wide the window is; TABLES take the full width */
+}
+
+.cons__title {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--navy);
+}
+
+.cons__lede {
+  margin-top: 6px;
+  color: var(--tx2);
+  font-size: var(--c-fs);
+}
+
+.cons__panel {
+  background: var(--card);
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-card);
+  box-shadow: var(--sh-sm);
+}
+
+.cons__panelhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--c-gap);
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--bd-soft);
+}
+
+.cons__panelt {
+  font-weight: 700;
+  color: var(--navy);
+}
+
+/* A caveat the screen cannot switch off. Not an error and not a toast — a standing statement about what
+   the data underneath it is and is not. The road map's "absence of a report is not clearance" lives in
+   one of these, and so should anything else an operator must not forget while reading a table. */
+.cons__caveat {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  background: var(--org-light);
+  border: 1px solid var(--sand);
+  border-radius: var(--r-ctl);
+  color: var(--tx);
+  font-size: var(--c-fs-sm);
+  max-width: 96ch;
+}
+
+.cons__caveat b {
+  color: var(--navy);
+}
+
+.cons__empty {
+  padding: 40px 16px;
+  text-align: center;
+  color: var(--tx2);
+}
+
+.cons__emptyt {
+  font-weight: 700;
+  color: var(--navy);
+  margin-bottom: 4px;
+}
+
+/* ----------------------------------------------------------------- table --- */
+
+.ctbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--c-fs);
+}
+
+.ctbl th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tx3);
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--bd-soft);
+  white-space: nowrap;
+}
+
+.ctbl td {
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--bd-soft);
+  vertical-align: top;
+}
+
+.ctbl tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.ctbl tbody tr:hover td {
+  background: var(--blue-soft);
+}
+
+/* The row whose detail is open. Orange again, for the same reason: it is a state, not an action. */
+.ctbl tbody tr.is-open td {
+  background: var(--org-light);
+}
+
+.ctbl__num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* `.ctbl th` sets the alignment for every header, so a numeric COLUMN heading needs to out-specify
+   it — otherwise the number is right-aligned under a left-aligned word, which is worse than either. */
+.ctbl th.ctbl__num {
+  text-align: right;
+}
+
+.ctbl__strong {
+  font-weight: 600;
+  color: var(--navy);
+}
+
+.ctbl__sub {
+  color: var(--tx2);
+  font-size: var(--c-fs-sm);
+}
+
+.ctbl__mono {
+  font-family: var(--font-mono);
+  font-size: var(--c-fs-sm);
+  color: var(--tx3);
+}
+
+/* --------------------------------------------------------------- controls -- */
+
+.cbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: var(--c-ctl-h);
+  padding: 0 14px;
+  border-radius: var(--r-ctl);
+  border: 1px solid transparent;
+  font-size: var(--c-fs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.cbtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cbtn--primary {
+  background: var(--blue);
+  color: #fff;
+}
+
+.cbtn--primary:hover:not(:disabled) {
+  background: var(--blue-dark);
+}
+
+.cbtn--ghost {
+  background: var(--bg);
+  border-color: var(--bd);
+  color: var(--tx);
+}
+
+.cbtn--ghost:hover:not(:disabled) {
+  background: var(--panel);
+}
+
+/* Red is kept for the step that COMMITS a consequence, never for opening the form that describes one:
+   a red button on the ordinary path teaches an operator that the correct action is dangerous. */
+.cbtn--danger {
+  background: var(--dang);
+  color: #fff;
+}
+
+.cbtn--sm {
+  min-height: 26px;
+  padding: 0 10px;
+  font-size: var(--c-fs-sm);
+}
+
+.cfield {
+  display: block;
+  margin-bottom: 12px;
+}
+
+.cfield__label {
+  display: block;
+  font-size: var(--c-fs-sm);
+  font-weight: 600;
+  color: var(--tx2);
+  margin-bottom: 4px;
+}
+
+.cinput,
+.ctextarea {
+  width: 100%;
+  min-height: var(--c-ctl-h);
+  padding: 6px 10px;
+  border: 1px solid var(--bd);
+  border-radius: var(--r-ctl);
+  background: var(--bg);
+  color: var(--tx);
+  font-size: var(--c-fs);
+}
+
+.ctextarea {
+  min-height: 64px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.cinput:focus,
+.ctextarea:focus {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px var(--blue-light);
+}
+
+.chint {
+  margin-top: 4px;
+  font-size: var(--c-fs-sm);
+  color: var(--tx3);
+}
+
+.cerr {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: var(--r-ctl);
+  background: #fdecec;
+  border: 1px solid #f5c2c2;
+  color: #7f1d1d;
+  font-size: var(--c-fs-sm);
+}
+
+/* A status word beside a row — the phone apps' Pill vocabulary, at console scale. */
+.ctag {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.ctag--warn {
+  background: var(--org-light);
+  color: #8a3b00;
+}
+
+.ctag--info {
+  background: var(--blue-light);
+  color: var(--blue-dark);
+}
+
+.ctag--ok {
+  background: var(--ok-light);
+  color: var(--ok);
+}
+
+.ctag--quiet {
+  background: var(--panel);
+  color: var(--tx2);
+}
+
+/* -------------------------------------------------------------- keyboard --- */
+
+.cons :focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ---------------------------------------------------------------- coarse --- */
+
+/* The 48px rule, restored in full the moment the pointer stops being exact. A tablet propped on a desk
+   is the same person doing the same job with a thumb, and density is not worth a mis-tap on a control
+   that takes a hazard off everybody's map. */
+@media (pointer: coarse) {
+  .cons {
+    --c-ctl-h: 48px;
+    --c-fs: 15px;
+    --c-fs-sm: 13px;
+  }
+
+  .ctbl th,
+  .ctbl td {
+    padding: 12px 16px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .cons__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cons__rail {
+    border-right: 0;
+    border-bottom: 1px solid var(--bd-soft);
+    flex-direction: row;
+    align-items: center;
+    overflow-x: auto;
+    padding: 8px 12px;
+  }
+
+  .cons__railhead {
+    display: none;
+  }
+
+  .cons__railitem {
+    width: auto;
+  }
+
+  .cons__main {
+    padding: 18px 16px 48px;
+  }
+}

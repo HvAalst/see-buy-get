@@ -223,7 +223,22 @@ const GLYPHS = {
   ),
   // Storefront: the awning over the shop body — the merchant console.
   vendor: union(roundRect(0.1, 0.14, 0.9, 0.34, 0.09), roundRect(0.18, 0.44, 0.82, 0.88, 0.09)),
+  // A tower: the cab on its stalk, on its base. The one app nobody in the field uses.
+  tower: union(
+    roundRect(0.3, 0.12, 0.7, 0.3, 0.06),
+    roundRect(0.43, 0.3, 0.57, 0.76, 0.05),
+    roundRect(0.16, 0.76, 0.84, 0.88, 0.06),
+  ),
 };
+
+/**
+ * Apps that never install, and therefore need a TAB icon and nothing else.
+ *
+ * The operator console is a page on a desk (see AppSpec.installable in vite.config.ts): it ships no
+ * manifest, so a launcher icon and an apple-touch icon would be files nothing ever references —
+ * and every unreferenced file in a build output is one somebody later has to work out the fate of.
+ */
+const TAB_ONLY = ['tower'];
 
 /** `home` is the network's own front door, so it wears the real mark rather than a glyph. */
 const BRAND_APPS = ['home'];
@@ -310,9 +325,14 @@ const tile = decodePng(readFileSync(BRAND_TILE));
 for (const app of apps) {
   const dir = resolve(ROOT, 'src/apps', app, 'public/icons');
   mkdirSync(dir, { recursive: true });
+  const written = [];
   for (const v of VARIANTS) {
+    if (TAB_ONLY.includes(app) && !v.file.startsWith('favicon-')) continue;
     const rgb = BRAND_APPS.includes(app) ? drawBrand(v.size, tile, v.brandScale) : drawGlyph(v.size, GLYPHS[app], v.scale);
     writeFileSync(resolve(dir, v.file), encodePng(v.size, rgb));
+    written.push(v.file);
   }
-  console.log(`icons: ${app} -> ${VARIANTS.map((v) => v.file).join(', ')}`);
+  // Reports what it WROTE, not what it might have: the tab-only apps write two of the six, and a line
+  // claiming otherwise is how a missing icon goes unnoticed.
+  console.log(`icons: ${app} -> ${written.join(', ')}`);
 }

@@ -1,7 +1,7 @@
 import { dirname, resolve } from 'node:path';
 import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, type Plugin, type PluginOption } from 'vite';
 import preact from '@preact/preset-vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
@@ -42,6 +42,17 @@ type AppSpec = {
   /** Vite dev server port. 4173 belongs to http-server (legacy pages). */
   devPort: number;
   previewPort: number;
+  /**
+   * Does this app INSTALL — manifest, icons, service worker, offline shell? Default yes.
+   *
+   * The seven field apps do, and must: a shop in a dead spot and a driver between towns are the normal
+   * operating environment here. The operator console does NOT, and that is the same reasoning read the
+   * other way. It runs on a desk with a wired connection, and everything it shows is a queue somebody is
+   * about to act on — a cached hazard list would let an operator clear a dispute that was resolved an
+   * hour ago, from a screen that looked current. Where the phone apps must survive no signal, this one
+   * must never pretend to have one.
+   */
+  installable?: boolean;
 };
 
 const APPS = {
@@ -106,6 +117,20 @@ const APPS = {
     devPort: 5179,
     previewPort: 5189,
   },
+  /**
+   * The operator console — the first app in this family built for a LARGE SCREEN and a mouse, for the
+   * people who operate the network rather than use it. Not installable (see `installable` above), and
+   * it is deliberately not on the front door's role chooser: nobody joins as an operator.
+   */
+  tower: {
+    base: '/tower/',
+    name: 'SeeBuyGet Operator',
+    short: 'Operator',
+    description: 'Operate the SeeBuyGet network.',
+    devPort: 5181,
+    previewPort: 5191,
+    installable: false,
+  },
 } satisfies Record<string, AppSpec>;
 
 type AppId = keyof typeof APPS;
@@ -123,6 +148,8 @@ const BASE = app.base;
 
 /** The root app ships at '/', so its output and service-worker scope cover every sibling. */
 const IS_ROOT = BASE === '/';
+/** Whether this app ships a manifest and a service worker at all — see AppSpec.installable. */
+const INSTALLABLE = app.installable !== false;
 /** Every OTHER app's deploy folder, e.g. ['driver', 'agent', …] — used to fence the root SW. */
 const SIBLING_DIRS = Object.values(APPS)
   .map((a) => a.base.replace(/^\/|\/$/g, ''))
@@ -185,21 +212,15 @@ function cleanRootAssetsPlugin(): Plugin {
   };
 }
 
-// Output mirrors the deploy path, not the app id (genesis ships at /send/), so the
-// whole of dist/ can be copied to a web root and every base resolves as built.
-const OUT_DIR = resolve(ROOT, 'dist', BASE.replace(/^\/|\/$/g, ''));
-
-export default defineConfig({
-  root: APP_DIR,
-  base: BASE,
-  // envDir defaults to `root`; without this, VITE_SBG_API (read by src/lib/sbg/config.ts)
-  // would be looked up in src/apps/<app>/.env instead of frontend/.env.
-  envDir: ROOT,
-  publicDir: resolve(APP_DIR, 'public'),
-
-  plugins: [
-    preact(),
-    cleanRootAssetsPlugin(),
+/**
+ * Everything that makes an app INSTALLABLE: the push handler and the manifest + service worker.
+ *
+ * A function rather than two entries in the plugin list, because it is now conditional. An app that does
+ * not install must not merely hide the install prompt — it must not SHIP a service worker at all, or the
+ * first visit registers a worker that outlives the decision and keeps serving a cached shell.
+ */
+function installablePlugins(): PluginOption[] {
+  return [
     pushSwPlugin(),
     VitePWA({
       strategies: 'generateSW',
@@ -285,7 +306,22 @@ export default defineConfig({
       // Keep the service worker out of dev (also avoids writing an ungitignored dev-dist/).
       devOptions: { enabled: false },
     }),
-  ],
+  ];
+}
+
+// Output mirrors the deploy path, not the app id (genesis ships at /send/), so the
+// whole of dist/ can be copied to a web root and every base resolves as built.
+const OUT_DIR = resolve(ROOT, 'dist', BASE.replace(/^\/|\/$/g, ''));
+
+export default defineConfig({
+  root: APP_DIR,
+  base: BASE,
+  // envDir defaults to `root`; without this, VITE_SBG_API (read by src/lib/sbg/config.ts)
+  // would be looked up in src/apps/<app>/.env instead of frontend/.env.
+  envDir: ROOT,
+  publicDir: resolve(APP_DIR, 'public'),
+
+  plugins: [preact(), cleanRootAssetsPlugin(), ...(INSTALLABLE ? installablePlugins() : [])],
 
   build: {
     // OUTSIDE src/, which is source and not a build target — an outDir inside it with

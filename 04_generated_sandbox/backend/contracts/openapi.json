@@ -18833,6 +18833,10 @@
               "cleared"
             ]
           },
+          "disputedAt": {
+            "type": "string",
+            "description": "When somebody first said it was gone. Absent unless the status is 'disputed'.\n\nThe operator's queue is sorted on this and not on the report date: a bridge reported two years ago and\ndisputed this morning has been waiting for an operator since this morning. Sorting the queue by the\nreport date would bury today's dispute under every old hazard on the map."
+          },
           "constraintId": {
             "type": "string"
           },

@@ -148,6 +148,79 @@ describe('route constraints — the road as its drivers report it', () => {
     });
   });
 
+  describe("the operator's queue: how long a hazard has been waiting on THEM", () => {
+    // The queue is the only place a dispute is ever resolved, so its order is the order the network's
+    // hazards actually get looked at. Sorting it on the wrong date is a silent failure: the screen looks
+    // right, and the disputes raised today sit at the bottom for as long as the map has old hazards on it.
+    const at = (iso: string, fn: () => void) => {
+      jest.useFakeTimers({ now: new Date(iso) });
+      try {
+        fn();
+      } finally {
+        jest.useRealTimers();
+      }
+    };
+
+    it('starts the clock when somebody says it is gone, not when it was reported', () => {
+      const s = svc();
+      let id = '';
+      at('2026-01-05T08:00:00Z', () => {
+        id = s.report({ kind: 'LOW_BRIDGE', at: ON_THE_ROAD, value: 4.2, by: 'did:driver:a' }).constraintId;
+      });
+      at('2026-09-09T08:00:00Z', () => s.refute(id, 'did:driver:b'));
+      const [row] = s.disputed();
+      expect(row.reportedAt).toContain('2026-01-05');
+      expect(row.disputedAt).toContain('2026-09-09');
+    });
+
+    it('does not restart the clock when a second driver repeats the same claim', () => {
+      // Otherwise a hazard nobody has looked at for a fortnight drops back down the queue every time
+      // another driver drives past it — the ones being ignored hardest would be the hardest to find.
+      const s = svc();
+      let id = '';
+      at('2026-09-01T08:00:00Z', () => {
+        id = s.report({ kind: 'LOW_BRIDGE', at: ON_THE_ROAD, value: 4.2, by: 'did:driver:a' }).constraintId;
+        s.refute(id, 'did:driver:b');
+      });
+      at('2026-09-09T08:00:00Z', () => s.refute(id, 'did:driver:c'));
+      expect(s.disputed()[0].disputedAt).toContain('2026-09-01');
+    });
+
+    it('takes the clock away again when the crowd talks it back to active', () => {
+      // It is not waiting on anybody any more, and a stale wait would reappear as an ancient one if the
+      // same constraint were ever disputed again.
+      const s = svc();
+      let id = '';
+      at('2026-09-01T08:00:00Z', () => {
+        id = s.report({ kind: 'LOW_BRIDGE', at: ON_THE_ROAD, value: 4.2, by: 'did:driver:a' }).constraintId;
+        s.refute(id, 'did:driver:b');
+      });
+      s.confirm(id, 'did:driver:c');
+      s.confirm(id, 'did:driver:d');
+      expect(s.get(id).status).toBe('active');
+      expect(s.get(id).disputedAt).toBeUndefined();
+      at('2026-09-09T08:00:00Z', () => s.refute(id, 'did:driver:e'));
+      expect(s.disputed()[0].disputedAt).toContain('2026-09-09');
+    });
+
+    it('puts the longest-waiting dispute first even when it is the newest hazard on the map', () => {
+      // The case that separates the two dates. Sorting by reportedAt passes every other test in this file
+      // and puts these two rows in exactly the wrong order.
+      const s = svc();
+      let oldBridge = '';
+      let newBridge = '';
+      at('2026-01-05T08:00:00Z', () => {
+        oldBridge = s.report({ kind: 'LOW_BRIDGE', at: ON_THE_ROAD, value: 4.2, by: 'did:driver:a' }).constraintId;
+      });
+      at('2026-08-01T08:00:00Z', () => {
+        newBridge = s.report({ kind: 'HEIGHT_BARRIER', at: ELSEWHERE, value: 3.1, by: 'did:driver:a' }).constraintId;
+        s.refute(newBridge, 'did:driver:b');
+      });
+      at('2026-09-09T08:00:00Z', () => s.refute(oldBridge, 'did:driver:b'));
+      expect(s.disputed().map((c) => c.constraintId)).toEqual([newBridge, oldBridge]);
+    });
+  });
+
   describe('clearing: the operator, with a reason, and only then', () => {
     it('is the ONLY thing that takes a constraint off the map', () => {
       const s = svc();

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SeeBuyGet Operator</title>
+    <meta name="description" content="Operate the SeeBuyGet network." />
+
+    <!-- Light only, like every other app in this family: one palette, one system. -->
+    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#ffffff" />
+
+    <!-- Internal tooling: this console must never be indexed, and there is nothing here for a crawler. -->
+    <meta name="robots" content="noindex, nofollow" />
+
+    <!-- No manifest and no apple-touch icon: this app does not install (see AppSpec.installable in
+         vite.config.ts). It is a page on a desk, and its update path is the browser's reload. -->
+    <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="48x48" href="icons/favicon-48.png" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

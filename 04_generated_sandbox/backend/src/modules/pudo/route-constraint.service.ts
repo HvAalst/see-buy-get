@@ -74,7 +74,10 @@ export class RouteConstraintService {
       // Somebody who previously said it was gone and now reports it is there has changed their mind, and
       // the record should stop citing them on both sides of the same question.
       existing.refutedBy = existing.refutedBy.filter((d) => d !== input.by);
-      if (existing.status === 'disputed' && existing.confirmedBy.length > existing.refutedBy.length) existing.status = 'active';
+      if (existing.status === 'disputed' && existing.confirmedBy.length > existing.refutedBy.length) {
+        existing.status = 'active';
+        delete existing.disputedAt; // no longer waiting on an operator, so it leaves their queue and its clock
+      }
       this.constraints.set(existing.constraintId, existing);
       return constraintView(existing);
     }
@@ -101,7 +104,10 @@ export class RouteConstraintService {
     const c = this.require(constraintId);
     if (c.reportedBy !== by && !c.confirmedBy.includes(by)) c.confirmedBy.push(by);
     c.refutedBy = c.refutedBy.filter((d) => d !== by);
-    if (c.status === 'disputed' && c.confirmedBy.length > c.refutedBy.length) c.status = 'active';
+    if (c.status === 'disputed' && c.confirmedBy.length > c.refutedBy.length) {
+      c.status = 'active';
+      delete c.disputedAt;
+    }
     this.constraints.set(c.constraintId, c);
     return constraintView(c);
   }
@@ -119,6 +125,9 @@ export class RouteConstraintService {
     if (c.status === 'cleared') return constraintView(c);
     if (!c.refutedBy.includes(by)) c.refutedBy.push(by);
     c.confirmedBy = c.confirmedBy.filter((d) => d !== by);
+    // The FIRST dispute starts the clock and later ones do not restart it: a hazard nobody has looked at
+    // for a fortnight must not be pushed back down the queue by a second driver reporting the same thing.
+    if (c.status !== 'disputed') c.disputedAt = new Date().toISOString();
     c.status = 'disputed';
     if (note?.trim()) c.note = c.note ? `${c.note} · ${note.trim()}` : note.trim();
     this.constraints.set(c.constraintId, c);
@@ -148,7 +157,12 @@ export class RouteConstraintService {
     return this.live()
       .filter((c) => c.status === 'disputed')
       .map(constraintView)
-      .sort((a, b) => a.reportedAt.localeCompare(b.reportedAt));
+      // Longest-waiting first. The wait is measured from the DISPUTE, not the report: a bridge reported
+      // two years ago and disputed this morning has been in front of an operator since this morning, and
+      // sorting on the report date would bury every fresh dispute under the oldest hazards on the map.
+      // Records written before disputedAt existed fall back to the report date, which is the only date
+      // they have.
+      .sort((a, b) => (a.disputedAt ?? a.reportedAt).localeCompare(b.disputedAt ?? b.reportedAt));
   }
 
   /** What is around here — the driver's map. Cleared ones are gone; disputed ones are still shown. */
@@ -249,6 +263,7 @@ export function constraintView(c: RouteConstraint): ConstraintView {
     note: c.note,
     status: c.status,
     reportedAt: c.reportedAt,
+    disputedAt: c.disputedAt,
     confirmations: c.confirmedBy.length,
     refutations: c.refutedBy.length,
   };

@@ -1,0 +1,95 @@
+/* ==========================================================================
+   The operator console's own layer — everything here is specific to THIS app.
+
+   The contract it sits on is shared/console.css: density, tables, controls, the coarse-pointer
+   fallback. Anything in this file that a second console screen would also want belongs there instead.
+   ========================================================================== */
+
+.twr-boot {
+  min-height: 100dvh;
+  background: var(--appbg);
+}
+
+/* ----------------------------------------------------------------- sign-in -- */
+
+/* The one screen in this app that is NOT dense. Signing in is a single decision, so it gets the phone
+   apps' treatment: one column, generous, nothing else on screen. */
+.twr-signin {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--appbg);
+}
+
+.twr-signin__card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--card);
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-card);
+  box-shadow: var(--sh-sm);
+  padding: 24px;
+  font-size: 13px;
+}
+
+.twr-signin__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+/* --------------------------------------------------------------- the queue -- */
+
+.twr-panelend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* What this session has just done. Not a toast: a toast takes the record of a decision away on a timer,
+   and this line is the only confirmation an operator gets that the clearance actually landed. It stays
+   until the next action replaces it. */
+.twr-done {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 16px 0;
+  padding: 8px 12px;
+  border-radius: var(--r-ctl);
+  background: var(--ok-light);
+  color: var(--ok);
+  font-weight: 600;
+}
+
+.twr-link {
+  font-size: var(--c-fs-sm);
+  font-weight: 600;
+}
+
+/* The clear form, opened inside the table under its own row — the row stays visible while the decision
+   is made, because the decision is ABOUT that row. */
+.twr-clear {
+  max-width: 70ch;
+  padding: 6px 0 10px;
+}
+
+.twr-clear__t {
+  font-weight: 700;
+  color: var(--navy);
+  margin-bottom: 4px;
+}
+
+.twr-clear__b {
+  color: var(--tx2);
+  margin-bottom: 12px;
+}
+
+.twr-clear__act {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}

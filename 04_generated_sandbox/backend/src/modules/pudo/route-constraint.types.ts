@@ -82,6 +82,10 @@ export interface RouteConstraint {
   /** Driver DIDs who say it is not there. Recorded, and deliberately NOT enough to clear it. */
   refutedBy: string[];
   status: ConstraintStatus;
+  /** When it FIRST entered dispute since it was last believed. Cleared again if the crowd talks it back
+   *  to 'active' — the operator's queue measures how long a hazard has been waiting on THEM, and a
+   *  constraint that returned to active was never waiting. */
+  disputedAt?: string;
   clearedBy?: string;
   clearedAt?: string;
   clearReason?: string;
@@ -107,6 +111,15 @@ export class ConstraintView {
   @ApiProperty({ enum: CONSTRAINT_STATUSES })
   status: ConstraintStatus;
   reportedAt: string;
+  /**
+   * When somebody first said it was gone. Absent unless the status is 'disputed'.
+   *
+   * The operator's queue is sorted on this and not on the report date: a bridge reported two years ago and
+   * disputed this morning has been waiting for an operator since this morning. Sorting the queue by the
+   * report date would bury today's dispute under every old hazard on the map.
+   */
+  @ApiPropertyOptional()
+  disputedAt?: string;
   /** How many OTHER drivers have since agreed it is there. Never who they are. */
   confirmations: number;
   /** How many say it is gone. Recorded and shown, and deliberately not enough to clear it. */
