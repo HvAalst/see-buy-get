@@ -17,6 +17,8 @@ import {
   paidWord,
   policyLine,
   priceCards,
+  chargeOf,
+  feeLines,
   stagingTone,
 } from './logic';
 import type { CheckoutRow, NetworkPoint, OrderRow, OriginOption, QuoteView } from './types';
@@ -166,6 +168,38 @@ describe('price cards', () => {
     const cards = priceCards(quote(), t);
     expect(cards.map((c) => c.key)).toEqual(['locked', 'flexible']);
     expect(cards[0].total).toBeLessThan(cards[1].total);
+  });
+
+  it('shows what the STORE WILL BE BILLED, not what the network earns', () => {
+    // The defect this exists to prevent: the balance is charged the gross, and a console showing the
+    // pre-tax total quotes one number and bills another the moment any sister sets a tax rate. It reads
+    // as correct today only because every rate is still zero.
+    const taxed = quote();
+    taxed.locked = { ...taxed.locked, tax: 16, gross: taxed.locked.total + 16 };
+    taxed.flexible = { ...taxed.flexible, tax: 20, gross: taxed.flexible.total + 20 };
+    const cards = priceCards(taxed, t);
+    expect(cards[0].total).toBe(taxed.locked.gross);
+    expect(cards[1].total).toBe(taxed.flexible.gross);
+  });
+
+  it('falls back to the total for a quote taken before tax existed', () => {
+    // Where the two were the same number to the cent, so the fallback is not a guess.
+    expect(chargeOf({ transport: 1, base: 10, total: 12 })).toBe(12);
+  });
+
+  it('gives a merchant ONE fee line, and the tax, and nothing about the split', () => {
+    const lines = feeLines({ transport: 1, base: 10, total: 12, fee: 2, tax: 1.92, gross: 13.92 }, t);
+    expect(lines.map((l) => l.amount)).toEqual([2, 1.92]);
+    // What the fee is MADE OF — cost of risk, profit on risk, margin — is for running the business and is
+    // not customer-facing on either side. Nothing here can be divided back into a rate.
+    expect(JSON.stringify(lines)).not.toMatch(/risk|margin|provision/i);
+  });
+
+  it('says nothing where there is nothing to say', () => {
+    // A "Tax 0.00" line on every order in a country that charges none teaches a store to skim, and the
+    // line that matters gets skimmed with it.
+    expect(feeLines({ transport: 1, base: 10, total: 12, fee: 0, tax: 0, gross: 12 }, t)).toEqual([]);
+    expect(feeLines({ transport: 1, base: 10, total: 12 }, t)).toEqual([]);
   });
 });
 

@@ -4,7 +4,7 @@ import { useT, type Translate } from '../../../shared/i18n';
 import { fromPlaceWords } from '../../../shared/placewords';
 import { distanceLabel, haversineKm } from '../../../shared/geo';
 import { PhotoField } from './PhotoField';
-import { dimsComplete, handoffLine, money, originRows, priceCards } from '../logic';
+import { chargeOf, dimsComplete, feeLines, handoffLine, money, originRows, priceCards } from '../logic';
 import type { NetworkPoint } from '../types';
 import type { VendorActions, VendorState } from '../useVendorApp';
 
@@ -431,11 +431,20 @@ function PriceStep({ state, actions }: MintScreenProps) {
             })}
           </div>
 
+          {/* The one fee line a merchant is owed, under the price it is inside — not on a separate screen
+              and not only on the invoice. What it is MADE OF stays ours. */}
+          {feeLines(f.routeMode === 'locked' ? q.locked : q.flexible, t).map((line: { label: string; amount: number }) => (
+            <p key={line.label} class="kv kv--quiet">
+              <span>{line.label}</span>
+              <b>{money(line.amount)}</b>
+            </p>
+          ))}
+
           <Card title={t('vendor.mint.whatHappensTitle')} tone="soft">
             <Checklist
               items={[
                 t('vendor.mint.happen1'),
-                t('vendor.mint.happen2', { amount: money(f.routeMode === 'locked' ? q.locked.total : q.flexible.total) }),
+                t('vendor.mint.happen2', { amount: money(chargeOf(f.routeMode === 'locked' ? q.locked : q.flexible)) }),
                 t('vendor.mint.happen3'),
               ]}
             />

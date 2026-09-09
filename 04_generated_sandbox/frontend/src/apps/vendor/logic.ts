@@ -8,7 +8,7 @@ import { toCsv } from '../../shared/csv';
 import type { Translate } from '../../shared/i18n';
 import type { IconName } from '../../shared/ui/Icon';
 import type { Measure } from '../../lib/sbg/personas/vendor';
-import type { CheckoutRow, NetworkPoint, OrderRow, OriginOption, ParcelStatus, QuoteView, SettlementRow, ShippingPolicy } from './types';
+import type { CheckoutRow, NetworkPoint, OrderRow, OriginOption, ParcelStatus, QuoteLegPrice, QuoteView, SettlementRow, ShippingPolicy } from './types';
 
 /* ------------------------------------------------------------------ money -- */
 
@@ -215,10 +215,39 @@ export interface PriceCard {
   total: number;
 }
 
+/**
+ * WHAT THE STORE WILL BE BILLED, which is not what the network earns.
+ *
+ * `total` is the price before tax — the figure the margin question is asked of. The balance is charged
+ * `gross`, tax and all, so a console showing `total` quotes one number and bills another the moment any
+ * sister sets a tax rate. It reads as correct today only because every rate is still zero.
+ *
+ * Falls back to `total` for a quote taken before the tax seam existed, where the two were the same
+ * number to the cent.
+ */
+export function chargeOf(leg: QuoteLegPrice): number {
+  return leg.gross ?? leg.total;
+}
+
+/**
+ * The breakdown a MERCHANT gets: the one platform fee line, and the tax, when there is any.
+ *
+ * Never the three layers the fee is made of — that split is for running the business and is not
+ * customer-facing on either side. And nothing that reads zero: a line saying "Tax 0.00" on every order in
+ * a country that charges none is noise a store learns to skip past, which is how the line that matters
+ * gets skipped too.
+ */
+export function feeLines(leg: QuoteLegPrice, t: Translate): Array<{ label: string; amount: number }> {
+  const out: Array<{ label: string; amount: number }> = [];
+  if (leg.fee) out.push({ label: t('vendor.price.platformFee'), amount: leg.fee });
+  if (leg.tax) out.push({ label: t('vendor.price.tax'), amount: leg.tax });
+  return out;
+}
+
 export function priceCards(q: QuoteView, t: Translate): PriceCard[] {
   return [
-    { key: 'locked', title: t('vendor.price.cheapest'), sub: t('vendor.price.cheapestSub'), total: q.locked.total },
-    { key: 'flexible', title: t('vendor.price.fastest'), sub: t('vendor.price.fastestSub'), total: q.flexible.total },
+    { key: 'locked', title: t('vendor.price.cheapest'), sub: t('vendor.price.cheapestSub'), total: chargeOf(q.locked) },
+    { key: 'flexible', title: t('vendor.price.fastest'), sub: t('vendor.price.fastestSub'), total: chargeOf(q.flexible) },
   ];
 }
 

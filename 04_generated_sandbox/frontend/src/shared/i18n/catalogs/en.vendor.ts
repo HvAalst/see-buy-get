@@ -124,6 +124,10 @@ export const enVendor = {
     'Fastest holds the highest rate so any carrier can take it, and refunds what it did not cost. Cheapest commits the lowest rate and waits for a carrier at that price.',
   'vendor.price.cheapest': 'Cheapest',
   'vendor.price.cheapestSub': 'Waits for the lowest-price bus',
+  // The one fee line a merchant is owed. Named plainly: they are a business partner reconciling their
+  // books, and a take that has to be worked out from two other numbers reads as one being hidden.
+  'vendor.price.platformFee': 'Includes SeeBuyGet fee',
+  'vendor.price.tax': 'Includes tax',
   'vendor.price.fastest': 'Fastest',
   'vendor.price.fastestSub': 'Any bus can take it — unused ceiling comes back',
 
@@ -235,6 +239,9 @@ export const enVendor = {
   'vendor.order.status': 'Status',
   'vendor.order.sizeZone': 'Size · zone',
   'vendor.order.shippingCost': 'Shipping cost',
+  'vendor.order.platformFee': 'SeeBuyGet fee (inside the cost)',
+  'vendor.order.platformFeePct': 'SeeBuyGet fee at {pct}% (inside the cost)',
+  'vendor.order.tax': 'Tax (inside the cost)',
   'vendor.order.buyerPaid': 'Buyer paid at checkout',
 
   // Merchant API keys (StoreScreen KeysCard) — the credentials the shipping API sees.

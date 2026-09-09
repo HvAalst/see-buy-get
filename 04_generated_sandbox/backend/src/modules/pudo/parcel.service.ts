@@ -160,6 +160,66 @@ export function parcelCurrency(p: Parcel): string {
 }
 
 /** Project a Parcel to a register row (adds the DID, buyer + product names the raw list lacked). */
+/**
+ * The DETAIL a store gets for one of its own orders: the list row, plus everything about that sale it is
+ * entitled to reconcile — and nothing about how the price was built.
+ */
+export interface VendorOrderDetail extends VendorOrderRow {
+  originAgentDid?: string;
+  buyerMobile?: string;
+  subtotal?: number;
+  contentPhotoRef?: string;
+  items?: Parcel['items'];
+  scans?: Parcel['scans'];
+  /** The ONE platform fee line, and the rate it was charged at. Never the three layers inside it. */
+  platformFee?: number;
+  platformFeePct?: number;
+  shipmentTax?: number;
+  taxPct?: number;
+  taxLabel?: string;
+  declaredValue?: number;
+  coverLimit?: number;
+  shipmentPremium?: number;
+  /** Operator-only markers are absent by construction here, not deleted: see vendorOrderDetailOf. */
+}
+
+/**
+ * ONE order, as the store that sold it may read it — PICKED, never the stored parcel.
+ *
+ * Two fields are the reason this changed shape: `rateStack` and `shipmentProvision`. They are the
+ * sister's three rate layers and the slice of them set aside against claims, and the decision has always
+ * been that a merchant sees ONE platform fee while the split stays internal. `provision / base` IS the
+ * cost-of-risk rate, so publishing the money publishes the rate by division — the same defect the public
+ * quote had, on the other side of the network.
+ *
+ * What a merchant DOES get is everything about their own sale: what they were charged, the fee inside it,
+ * the tax and what it is called, the cover they bought, their own customer's details and the parcel's
+ * journey. More than the list gives, because this is the screen where a store reconciles one order.
+ */
+export function vendorOrderDetailOf(p: Parcel): VendorOrderDetail {
+  return {
+    ...vendorOrderRowOf(p),
+    originAgentDid: p.originAgentDid,
+    buyerMobile: p.receiverMobile,
+    subtotal: p.subtotal,
+    contentPhotoRef: p.contentPhotoRef,
+    items: p.items,
+    scans: p.scans,
+    // The one fee line, and the rate it was charged at — a business partner reconciling their books is
+    // owed our take. Stripe and Shopify show theirs, and hiding it reads as evasive.
+    platformFee: p.platformFee,
+    platformFeePct: p.platformFeePct,
+    // Tax is the customer's own money and they are entitled to see it named.
+    shipmentTax: p.shipmentTax,
+    taxPct: p.taxPct,
+    taxLabel: p.taxLabel,
+    // The cover they bought, which is what an upheld damage award is checked against.
+    declaredValue: p.declaredValue,
+    coverLimit: p.coverLimit,
+    shipmentPremium: p.shipmentPremium,
+  };
+}
+
 export function vendorOrderRowOf(p: Parcel): VendorOrderRow {
   return {
     parcelId: p.parcelId,
@@ -631,19 +691,17 @@ export class ParcelService implements OnApplicationBootstrap {
   }
 
   /**
-   * Full order detail for the external merchant console (`GET /vendors/:id/orders/:parcelId`) — everything
-   * the parcel carries EXCEPT the control-tower-only short-ship marker. shortShipReason is operator text
-   * (and shortShippedAt its timestamp): the orders LIST projection already omits it, so the detail must too,
-   * or an internal reason for leaving a parcel behind would reach the vendor. (S25 — the counterpart of the
-   * generic short-ship scan note that keeps the reason off the consumer twins.)
+   * Full order detail for the external merchant console (`GET /vendors/:id/orders/:parcelId`).
+   *
+   * PICKED field by field — see `vendorOrderDetailOf`. It used to be the stored parcel with two fields
+   * deleted, which is the shape S25 already caught once: a deny-list only knows about the fields that
+   * existed when somebody last thought about it, and every money field added since had joined a merchant's
+   * screen on the day it was written.
    */
-  vendorOrderView(vendorId: string, parcelId: string): Omit<Parcel, 'shortShippedAt' | 'shortShipReason'> {
+  vendorOrderView(vendorId: string, parcelId: string): VendorOrderDetail {
     const p = this.require(parcelId);
     if (p.vendorId !== vendorId) throw new GlosError('NOT_FOUND', 'Order does not belong to this vendor');
-    const view: Partial<Parcel> = { ...p }; // shallow copy — never delete off the live stored parcel
-    delete view.shortShippedAt;
-    delete view.shortShipReason;
-    return view as Omit<Parcel, 'shortShippedAt' | 'shortShipReason'>;
+    return vendorOrderDetailOf(p);
   }
 
   private static toConsumerView(p: Parcel, phoneHash: string, withToken = false): ConsumerParcelView {

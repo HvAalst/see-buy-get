@@ -111,6 +111,17 @@ export interface OrderDetail extends OrderRow {
   contentPhotoRef?: string;
   items?: Array<{ name: string; qty: number }>;
   scans?: Array<{ at: string; status: string; note?: string }>;
+  subtotal?: number;
+  /** The platform fee inside what was charged, and the rate it was charged at. Never the split inside it. */
+  platformFee?: number;
+  platformFeePct?: number;
+  /** The tax inside what was charged, and what the authority calls it where this sale happened. */
+  shipmentTax?: number;
+  taxLabel?: string;
+  /** The cover this shipment carries, and what was paid for any part of it that was bought. */
+  declaredValue?: number;
+  coverLimit?: number;
+  shipmentPremium?: number;
 }
 
 /**
@@ -225,7 +236,19 @@ export interface ReturnOfferView {
 export interface QuoteLegPrice {
   transport: number;
   base: number;
+  /** What the network EARNS on this shipment: the cost base plus its own fee. NOT what is billed. */
   total: number;
+  /**
+   * The platform fee inside `total` — the one line a merchant is owed.
+   *
+   * A business partner reconciling their books sees our take; Stripe and Shopify show theirs, and hiding
+   * it reads as evasive. What stays ours is what the fee is MADE OF: cost of risk, profit on risk, margin.
+   */
+  fee?: number;
+  /** Tax on the whole sale, charged on top of `total`. Zero — and absent — until a sister sets a rate. */
+  tax?: number;
+  /** WHAT THE STORE IS ACTUALLY BILLED: total + tax. Absent on a quote taken before tax existed. */
+  gross?: number;
 }
 
 export interface QuoteView {

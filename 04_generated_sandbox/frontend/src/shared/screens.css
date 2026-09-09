@@ -311,6 +311,18 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* A figure that sits INSIDE the one above it — a fee within a cost, a tax within a total. Smaller and
+   quieter on purpose: it is a breakdown of a number already stated, not another thing being charged. */
+.kv--quiet {
+  font-size: 14px;
+  padding: 2px 0;
+}
+
+.kv--quiet b {
+  color: var(--tx2);
+  font-weight: 600;
+}
+
 /* --------------------------------------------------------------- toasts -- */
 
 .toasts {

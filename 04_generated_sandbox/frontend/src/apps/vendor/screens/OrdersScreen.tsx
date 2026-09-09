@@ -439,6 +439,21 @@ function OrderSheet({ state, actions }: { state: VendorState; actions: VendorAct
               <b>{money(d.shipmentCost)}</b>
             </div>
           ) : null}
+          {/* Inside the shipping cost above, never on top of it. Shown only when there is something to
+              show: a "Tax 0.00" line on every order in a country that charges none teaches a store to
+              skim, and the fee line goes with it. */}
+          {d.platformFee ? (
+            <div class="kv kv--quiet">
+              <span>{d.platformFeePct ? t('vendor.order.platformFeePct', { pct: (d.platformFeePct * 100).toFixed(2) }) : t('vendor.order.platformFee')}</span>
+              <b>{money(d.platformFee)}</b>
+            </div>
+          ) : null}
+          {d.shipmentTax ? (
+            <div class="kv kv--quiet">
+              <span>{d.taxLabel ?? t('vendor.order.tax')}</span>
+              <b>{money(d.shipmentTax)}</b>
+            </div>
+          ) : null}
           {d.buyerCharge != null ? (
             <div class="kv">
               <span>{t('vendor.order.buyerPaid')}</span>

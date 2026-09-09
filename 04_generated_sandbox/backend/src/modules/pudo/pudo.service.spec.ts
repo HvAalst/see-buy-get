@@ -3177,7 +3177,27 @@ describe('PUDO Light', () => {
     // …but it still carries the normal order detail the console needs.
     expect(view.parcelId).toBe(parcel.parcelId);
     expect(view.status).toBe('At_PUDO');
-    expect(view.vendorId).toBe(vendor.vendorId);
+    expect(view.shipmentCost).toBeGreaterThan(0);
+
+    // THE SPLIT STAYS INTERNAL. A merchant sees ONE platform fee; the three layers inside it and the
+    // provision set aside against claims are ours. `provision / base` IS the cost-of-risk rate, so
+    // publishing the money would publish the rate by division.
+    expect(view.platformFee).toBeGreaterThan(0);
+    expect('rateStack' in view).toBe(false);
+    expect('shipmentProvision' in view).toBe(false);
+
+    // The shape is PINNED, not filtered. A deny-list only knows about the fields that existed when
+    // somebody last thought about it — which is exactly how the two above arrived on a merchant's screen.
+    // If this list needs changing, that is the moment to decide whether the new field is theirs to see.
+    expect(Object.keys(view).sort()).toEqual(
+      [
+        'binSlot', 'buyer', 'buyerCharge', 'buyerEmail', 'buyerMobile', 'collectionCode', 'contentPhotoRef',
+        'coverLimit', 'createdAt', 'currency', 'declaredValue', 'destAgentDid', 'destZone', 'did',
+        'externalOrderId', 'items', 'originAgentDid', 'paidStatus', 'parcelId', 'platformFee',
+        'platformFeePct', 'products', 'routeMode', 'scans', 'shipmentCost', 'shipmentPremium',
+        'shipmentTax', 'size', 'status', 'subtotal', 'taxLabel', 'taxPct', 'trackingKey',
+      ].sort(),
+    );
 
     // Wrong vendor cannot read it at all.
     expect(() => parcels.vendorOrderView('vendor_other', parcel.parcelId)).toThrow(/does not belong/);
