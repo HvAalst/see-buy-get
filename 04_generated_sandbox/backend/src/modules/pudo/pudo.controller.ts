@@ -348,9 +348,18 @@ export class SbgController {
   }
 
   /** A sister's payouts, newest first — the settlement page. */
-  @Roles('operator')
+  /**
+   * What this company has raised for the people it owes.
+   *
+   * READABLE by the company itself, because it is its own money and its own obligations — the same
+   * reasoning that lets a sister read its own books. RAISING a run and moving a payout along the rail
+   * stay with network staff: those are acts on a payment rail, and a company telling the network that
+   * money has left is not a claim it gets to make about itself.
+   */
+  @Roles('operator', 'entity_admin')
   @Get('entities/:entityId/payouts')
-  listPayouts(@Param('entityId') entityId: string) {
+  listPayouts(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult) {
+    this.requireReach(actor, entityId);
     return { items: this.payouts.list({ entityId }) };
   }
 

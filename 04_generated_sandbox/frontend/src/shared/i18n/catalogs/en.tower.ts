@@ -92,6 +92,7 @@ export const enTower = {
   // The register here is a business one on purpose: the person reading it is deciding what to charge, and
   // the hints exist because two of these knobs behave in ways nobody guesses (the three layers ADD, and an
   // empty box inherits rather than meaning zero).
+  'tower.nav.money': 'Money',
   'tower.nav.rates': 'Rates & tax',
   'tower.nav.companies': 'The companies',
   'tower.nav.network': 'At a glance',
@@ -396,4 +397,53 @@ export const enTowerNetwork = {
   'tower.network.col.bag': 'Bag',
   'tower.network.col.destination': 'Going to',
   'tower.network.col.fill': 'Full',
+};
+
+/* ---- C4c: money — what a company holds, owes, and pays out ---- */
+export const enTowerMoney = {
+  'tower.money.title': 'Money',
+  'tower.money.lede': 'What this company holds, what it owes, and paying the people it owes it to.',
+  'tower.money.caveatLead': 'Nothing on this screen moves money.',
+  'tower.money.caveat': 'A run RAISES payouts, a payment rail carries them, and only the rail’s answer changes what the books say. Here that answer is somebody pressing a button; in a live deployment it is the provider’s callback — deliberately the same door, so this console can never become a place where money is declared paid because a screen said so.',
+  'tower.money.failedTitle': 'Could not read the money',
+
+  'tower.money.held': 'Cash held',
+  'tower.money.owed': 'Owed to everybody',
+  'tower.money.cover': 'Cover (held − owed)',
+  'tower.money.lent': 'Credit out with shops',
+
+  'tower.money.payoutsTitle': 'What {name} has raised',
+  'tower.money.run': 'Run today’s payouts',
+  'tower.money.emptyTitle': 'Nobody has been paid yet',
+  'tower.money.emptyBody': 'And nobody is waiting: no payout has been raised for this company. Running one raises what today’s work owes, and skips anybody the cover cannot carry — it says who, and why.',
+  'tower.money.col.payee': 'Payee',
+  'tower.money.col.amount': 'Amount',
+  'tower.money.col.day': 'For',
+  'tower.money.col.state': 'State',
+  'tower.money.col.ref': 'Reference',
+  'tower.money.col.type': 'Entry',
+  'tower.money.col.when': 'When',
+  'tower.money.state.requested': 'Raised',
+  'tower.money.state.submitted': 'With the rail',
+  'tower.money.state.settled': 'Paid',
+  'tower.money.state.failed': 'Failed',
+  'tower.money.state.reversed': 'Came back',
+  'tower.money.act.submit': 'Hand to the rail',
+  'tower.money.act.settle': 'The rail paid it',
+  'tower.money.act.fail': 'The rail refused it',
+  'tower.money.act.reverse': 'It came back',
+  'tower.money.reason.failed': 'reported failed by the rail',
+  'tower.money.reason.reversed': 'returned by the rail',
+  'tower.money.moved': 'Recorded — {action}.',
+  'tower.money.runRaised': 'Raised {n} payouts for {day}.',
+  'tower.money.runRaisedNone': 'Nothing to raise for {day} — nobody is owed anything today.',
+  'tower.money.runSkipped': 'SKIPPED {n}: {who}',
+
+  'tower.money.ledgerTitle': 'The network’s own ledger',
+  'tower.money.todayRevenue': 'today’s fees {amount}',
+  'tower.money.noFloat': 'no shop float held',
+  'tower.money.noLedgerTitle': 'Nothing has moved yet',
+  'tower.money.noLedgerBody': 'No fee, top-up or payout has been recorded.',
+  'tower.money.showAll': 'Show all {n}',
+  'tower.money.showFewer': 'Show fewer',
 };

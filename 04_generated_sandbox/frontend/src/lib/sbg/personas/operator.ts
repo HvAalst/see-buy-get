@@ -65,6 +65,33 @@ export function createOperatorApi(sbg: SbgClient) {
     setInsurance: (entityId: string, body: { lane?: string; premiumPct?: number | null; freeLimit?: number | null }) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/insurance', { params: { path: { entityId } }, body: body as never })),
 
+    /* ---- money: what a company holds, owes, and pays out ---- */
+
+    /** The network's own ledger — float per currency, today's fees, the last entries. Operator-only. */
+    finance: () => sbg.request((c) => c.GET('/v1/sbg/finance', {})),
+
+    /** What this company has raised for the people it owes. */
+    payouts: (entityId: string) => sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/payouts', { params: { path: { entityId } } })),
+
+    /**
+     * Raise today's payouts for everybody this company owes.
+     *
+     * It RAISES, it does not pay: the rail carries them and only the rail's answer moves the books. The
+     * response says who was SKIPPED and why, which is the half that matters — a run that quietly pays
+     * four of six people is how somebody finds out on Friday.
+     */
+    runPayouts: (entityId: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/payouts/run', { params: { path: { entityId } }, body: {} as never })),
+
+    /** Move one payout along its rail: submit, settle, fail, reverse. One step, and only the honest one. */
+    movePayout: (payoutId: string, action: string, reason?: string) =>
+      sbg.request((c) =>
+        c.POST(`/v1/sbg/payouts/{payoutId}/${action}` as '/v1/sbg/payouts/{payoutId}/submit', {
+          params: { path: { payoutId } },
+          body: (reason ? { reason } : {}) as never,
+        }),
+      ),
+
     /* ---- the network at a glance: monitoring, not deciding ---- */
 
     /** The five numbers, where every parcel is, and every standing alert — in one read. */

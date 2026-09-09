@@ -6,9 +6,10 @@ import type { ConstraintView } from './logic';
 import type { EntityPricing, EntityRow } from './money';
 import type { ApprovalRow, ClaimDecision, ClaimRow, DisposalRow } from './queues';
 import type { AgentRow, CoverageCounts, FlagRow, HubRow, ToteRow } from './network';
+import { runSummary, type PayoutAction, type PayoutRow, type RunResult } from './settlement';
 
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
-export type Screen = 'network' | 'hazards' | 'claims' | 'disposal' | 'approvals' | 'rates' | 'companies';
+export type Screen = 'network' | 'hazards' | 'claims' | 'disposal' | 'approvals' | 'money' | 'rates' | 'companies';
 
 export interface TowerState {
   phase: Phase;
@@ -56,6 +57,11 @@ export interface TowerState {
   /** A refusal the SCREEN made before the server had to — a missing reason, an award over the cover. */
   queueError: string | null;
 
+  /* ---- money: the selected company's books and payouts, and the network ledger ---- */
+  books: BooksView | null;
+  payouts: PayoutRow[] | null;
+  finance: FinanceView | null;
+
   /* ---- the companies, side by side (the group's view) ---- */
   companies: CompanyRow[] | null;
   /** Who administers the company being looked at, and the ONE-TIME password a new login just produced. */
@@ -84,6 +90,15 @@ export interface BooksView {
   entityId: string;
   integrity: { balanced: boolean; drift: number };
   coverage: { currency: string; held: number; lent: number; owed: number; cover: number };
+}
+
+/** `GET /finance` is untyped in the contract; these are the fields the screen reads. */
+export interface FinanceView {
+  /** One float PER CURRENCY. There is deliberately no total: two sisters settle in different money. */
+  floats?: Array<{ currency: string; amount: number }>;
+  currency?: string;
+  todayRevenue?: number;
+  recentLedger?: Array<{ id: string; type: string; sign: '+' | '-'; amount: number; currency?: string; reference?: string; at: string }>;
 }
 
 /** `GET /dashboard` is untyped in the contract; these are the fields the screen reads. */
@@ -121,6 +136,8 @@ export interface TowerActions {
   resolveClaim(parcelId: string, decision: ClaimDecision, award: number | undefined, note: string): Promise<void>;
   closeDisposal(parcelId: string, reason: string): Promise<void>;
   decideApproval(did: string, approve: boolean): Promise<void>;
+  runPayouts(): Promise<void>;
+  movePayout(payoutId: string, action: PayoutAction, reason?: string): Promise<void>;
   /** Show what the screen itself refused, without pretending the server said it. */
   showQueueError(message: string): void;
   chooseEntity(entityId: string): Promise<void>;
@@ -158,6 +175,9 @@ const INITIAL: TowerState = {
   disposal: null,
   approvals: null,
   queueError: null,
+  books: null,
+  payouts: null,
+  finance: null,
   dashboard: null,
   agents: null,
   hubs: null,
@@ -207,6 +227,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
    */
   const loadPricing = useCallback(async (client: TowerClient, entityId: string) => {
     setState((s) => ({ ...s, loading: true, entityId }));
+    void loadMoney(client, entityId);
     const [pricing, impact, admins] = await Promise.all([client.api.pricing(entityId), client.api.rateImpact(entityId), client.api.admins(entityId)]);
     if (pricing.error) {
       setState((s) => ({ ...s, loading: false, error: pricing.error }));
@@ -243,6 +264,26 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       }),
     );
     setState((s) => ({ ...s, companies: results }));
+  }, []);
+
+  /**
+   * What the selected company holds and owes, and what it has raised for the people it owes.
+   *
+   * Read beside the pricing rather than on the money screen alone: choosing a company is one act, and a
+   * console that re-reads on every tab change makes the same question twice. The network ledger comes
+   * with it and is network-wide — it belongs to no single company, which is why it is read once here
+   * rather than per selection.
+   */
+  const loadMoney = useCallback(async (client: TowerClient, entityId: string) => {
+    const [books, payouts, finance] = await Promise.all([client.api.books(entityId), client.api.payouts(entityId), client.api.finance()]);
+    setState((s) => ({
+      ...s,
+      books: books.error ? null : narrow<BooksView>(books.data),
+      payouts: payouts.error ? null : (narrow<{ items: PayoutRow[] }>(payouts.data)?.items ?? []),
+      // Operator-only, so a company administrator simply never gets one — and the screen renders no
+      // ledger rather than an empty one, which would say the network's books were empty.
+      finance: finance.error ? null : narrow<FinanceView>(finance.data),
+    }));
   }, []);
 
   /** The sister list, then the first sister that can actually transact — the group has no rates to show. */
@@ -416,8 +457,9 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     if (state.screen === 'rates' && state.entityId) await loadPricing(client, state.entityId);
     else if (state.screen === 'claims' || state.screen === 'disposal' || state.screen === 'approvals') await loadQueues(client);
     else if (state.screen === 'network') await loadNetwork(client);
+    else if (state.screen === 'money' && state.entityId) await loadMoney(client, state.entityId);
     else await loadHazards(client);
-  }, [loadHazards, loadQueues, loadNetwork, loadPricing, state.screen, state.entityId]);
+  }, [loadHazards, loadQueues, loadNetwork, loadMoney, loadPricing, state.screen, state.entityId]);
 
   const open = useCallback((constraintId: string | null) => {
     setState((s) => ({ ...s, openId: constraintId, clearError: null }));
@@ -489,7 +531,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       chooseEntity: async (entityId: string) => {
         const client = clientRef.current;
         // Closing the open editor is not tidiness: its boxes hold another sister's numbers.
-        setState((s) => ({ ...s, openId: null, saveError: null, done: null, pricing: null, rateImpact: null }));
+        setState((s) => ({ ...s, openId: null, saveError: null, done: null, pricing: null, rateImpact: null, books: null, payouts: null }));
         if (client) await loadPricing(client, entityId);
       },
       signInAsCompany,
@@ -566,6 +608,36 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
           return;
         }
         setState((s) => ({ ...s, busyId: null, admins: (s.admins ?? []).filter((a) => a.adminId !== adminId) }));
+      },
+      /**
+       * Raise today's payouts. Says what it RAISED and, more importantly, who it SKIPPED and why.
+       */
+      runPayouts: async () => {
+        const client = clientRef.current;
+        const entityId = stateRef.current.entityId;
+        if (!client || !entityId) return;
+        setState((s) => ({ ...s, busyId: 'run', queueError: null, done: null }));
+        const { data, error } = await client.api.runPayouts(entityId);
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, done: runSummary(narrow<RunResult>(data) ?? {}, t) }));
+        await loadMoney(client, entityId);
+      },
+      /** Move one payout along the rail. Nothing here moves money; it records what the rail said. */
+      movePayout: async (payoutId: string, action: PayoutAction, reason?: string) => {
+        const client = clientRef.current;
+        const entityId = stateRef.current.entityId;
+        if (!client || !entityId) return;
+        setState((s) => ({ ...s, busyId: payoutId, queueError: null }));
+        const { error } = await client.api.movePayout(payoutId, action, reason);
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, done: t('tower.money.moved', { action }) }));
+        await loadMoney(client, entityId);
       },
       saveRates: (body, lane) => saveKnob(lane, (client, entityId) => client.api.setRates(entityId, body)),
       saveTax: (body, lane) => saveKnob(lane, (client, entityId) => client.api.setTax(entityId, body)),

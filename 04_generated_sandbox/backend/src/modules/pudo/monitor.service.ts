@@ -4,7 +4,7 @@ import { ParcelService } from './parcel.service';
 import { CorridorService } from './corridor.service';
 import { WalletGateService } from './wallet-gate.service';
 import { DispatchService } from './dispatch.service';
-import { AGENT_ONLINE_H, CONNECTIVITY_LOSS_H, GHOST_BUS_H, MDP_DWELL_H, STAGNANT_INVENTORY_H , NEVER_DROPPED_H, UNCOLLECTED_H} from './pudo.config';
+import { AGENT_ONLINE_H, CONNECTIVITY_LOSS_H, GHOST_BUS_H, MDP_DWELL_H, NETWORK_CURRENCY, STAGNANT_INVENTORY_H , NEVER_DROPPED_H, UNCOLLECTED_H} from './pudo.config';
 
 export interface PudoFlag {
   type: 'Stagnant_Inventory' | 'Ghost_Bus' | 'Stuck_At_MDP' | 'Uncollected' | 'Never_Dropped_Off' | 'Connectivity_Loss' | 'Blocked_Corridor' | 'Buyer_Dispute' | 'Short_Shipped' | 'Temp_Breach';
@@ -144,7 +144,18 @@ export class MonitorService {
     const today = new Date().toISOString().slice(0, 10);
     const fees = this.gate.entries({ type: 'FEE' }).filter((e) => e.at.startsWith(today));
     const todayRevenue = Math.round(fees.reduce((s, e) => s + e.amount, 0) * 100) / 100;
-    return { systemFloat: this.gate.float(), todayRevenue, feeCount: fees.length, recentLedger: this.gate.entries().slice(0, 20), at: new Date().toISOString() };
+    return {
+      // The home currency's float, and every currency's — see WalletGateService.floats(). A screen that
+      // can show more than one number shows `floats`; `systemFloat` is the single figure for the one
+      // that cannot, and it is one currency rather than a total across them.
+      systemFloat: this.gate.float(),
+      floats: this.gate.floats(),
+      currency: NETWORK_CURRENCY,
+      todayRevenue,
+      feeCount: fees.length,
+      recentLedger: this.gate.entries().slice(0, 20),
+      at: new Date().toISOString(),
+    };
   }
 
   /** PUDO coverage heatmap (Ch 14 Map): every registered node + its operational state, plus density

@@ -455,9 +455,37 @@ export class WalletGateService {
     return agentLedgerToCsv(filterAgentLedger(this.entries({ did }), q));
   }
 
-  /** Sum of all agent wallet balances — the platform's pre-paid liability (System Float). */
+  /**
+   * The pre-paid liability the network is carrying in shop floats — PER CURRENCY.
+   *
+   * It used to be one number: every shop's balance added together. That was correct while every shop
+   * stood in one country, and it silently stopped being correct the day a second sister existed — a
+   * shilling balance and a birr balance summed into a figure denominated in nothing. Nobody would ever
+   * see it go wrong, which is exactly the failure the money model refuses everywhere else: you may
+   * compare across sisters, you may never total across them.
+   *
+   * The sister a shop belongs to decides its money, and that is where the currency comes from.
+   */
+  floats(): Array<{ currency: string; amount: number }> {
+    const byCurrency = new Map<string, number>();
+    for (const agent of this.agents.list()) {
+      const currency = this.entities.get(this.agents.entityIdOf(agent)).currency ?? NETWORK_CURRENCY;
+      byCurrency.set(currency, (byCurrency.get(currency) ?? 0) + this.agents.balance(agent.did));
+    }
+    return [...byCurrency.entries()]
+      .map(([currency, amount]) => ({ currency, amount: Math.round(amount * 100) / 100 }))
+      .sort((a, b) => a.currency.localeCompare(b.currency));
+  }
+
+  /**
+   * The float in the NETWORK's own currency, for the one caller that can only hold a single figure.
+   *
+   * Deliberately not "the total": a total across currencies is a number that is wrong in a way nobody
+   * can see. This is one currency's float, named as such, and everything that can show more shows
+   * `floats()` instead.
+   */
   float(): number {
-    return Math.round(this.agents.list().reduce((sum, a) => sum + this.agents.balance(a.did), 0) * 100) / 100;
+    return this.floats().find((f) => f.currency === NETWORK_CURRENCY)?.amount ?? 0;
   }
 
   private record(type: LedgerType, sign: '+' | '-', amount: number, did: string | undefined, reference: string, refType: PudoLedgerEntry['refType'], entryId?: string): PudoLedgerEntry {

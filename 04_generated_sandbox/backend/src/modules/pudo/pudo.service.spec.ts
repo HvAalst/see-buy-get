@@ -189,6 +189,66 @@ describe('PUDO Light', () => {
     return agents.get(a.did);
   }
 
+  /**
+   * THE FLOAT IS NOT ONE NUMBER, and the day it stopped being one nobody would have noticed.
+   *
+   * Every shop's wallet is money the network holds in advance, denominated in the currency of the sister
+   * that shop belongs to. Adding a shilling balance to a birr balance produces a figure denominated in
+   * nothing — the exact failure the money model refuses everywhere else, and the one the operator
+   * console refuses when it puts two companies side by side and declines to total the columns.
+   *
+   * It was one number for as long as there was one country, and it silently stopped being correct the
+   * day a second sister existed.
+   */
+  describe('what the network holds in shop floats', () => {
+    const abroad = (shopName: string) => {
+      agentSeq += 1;
+      const a = agents.register({
+        shopName,
+        zone: 'Addis',
+        country: 'ET',
+        location: { lat: 9.03, lng: 38.74 },
+        landmark: 'by the roundabout',
+        openingHours: uniformHours(),
+        shelf: defaultShelf,
+        fullName: `${shopName} owner`,
+        nationalId: `ID-ET-${agentSeq}`,
+        mobile: `+2519${agentSeq}`,
+        deviceImei: `IMEI-ET-${agentSeq}`,
+        requirements: eligibleReqs(),
+      } as never);
+      agents.submitKyc(a.did, kycDocs);
+      agents.decideKyc(a.did, true);
+      return agents.get(a.did);
+    };
+
+    it('reports one float PER CURRENCY, and never one total across them', () => {
+      const home = onboardAgent('Nairobi Float Shop', 'NorthTown', 100);
+      const et = abroad('Addis Float Shop');
+      gate.topUp(et.did, 250);
+
+      const floats = gate.floats();
+      const kes = floats.find((f) => f.currency === 'KES');
+      const etb = floats.find((f) => f.currency === 'ETB');
+      expect(etb).toEqual({ currency: 'ETB', amount: 250 });
+      // The home shop's own top-up is in there, along with whatever the rest of this suite has funded.
+      expect(kes?.amount).toBeGreaterThanOrEqual(100);
+      expect(agents.balance(home.did)).toBe(100);
+      // One entry per currency, never two rows for one money and never one row for two.
+      expect(new Set(floats.map((f) => f.currency)).size).toBe(floats.length);
+    });
+
+    it('gives the single-figure caller ONE currency rather than a mixture', () => {
+      // `float()` is what a place that can hold only one number gets. It is the HOME currency's float,
+      // not a sum — so birr appearing in the network moves it by exactly nothing.
+      const before = gate.float();
+      const et = abroad('Addis Second Shop');
+      gate.topUp(et.did, 4000);
+      expect(gate.float()).toBe(before);
+      expect(gate.floats().find((f) => f.currency === 'ETB')?.amount).toBeGreaterThanOrEqual(4000);
+    });
+  });
+
   it('onboards an agent through the 5-state machine, activating on first top-up', () => {
     const a = agents.register({ shopName: "Mama Sarah's", zone: 'NorthTown', location: { lat: -1.2, lng: 36.8 }, landmark: 'blue gate', openingHours: uniformHours(), shelf: defaultShelf, fullName: 'Sarah K', nationalId: 'ID-999', mobile: '+254700111', deviceImei: 'IMEI-X', requirements: eligibleReqs() });
     expect(a.status).toBe('DRAFT');
