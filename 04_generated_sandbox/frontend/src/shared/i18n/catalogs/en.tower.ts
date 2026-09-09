@@ -94,6 +94,7 @@ export const enTower = {
   // empty box inherits rather than meaning zero).
   'tower.nav.rates': 'Rates & tax',
   'tower.nav.companies': 'The companies',
+  'tower.nav.network': 'At a glance',
   'tower.nav.claims': 'Damage claims',
   'tower.nav.disposal': 'Awaiting disposal',
   'tower.nav.approvals': 'Shop applications',
@@ -326,4 +327,73 @@ export const enTowerQueues = {
   'tower.approvals.refuse': 'Refuse',
   'tower.approvals.approved': 'Approved — they can start taking parcels.',
   'tower.approvals.refused': 'Refused.',
+};
+
+/* ---- C4b: the network at a glance ---- */
+export const enTowerNetwork = {
+  'tower.network.title': 'The network at a glance',
+  'tower.network.lede': 'Nothing here is waiting for a decision. It is here so the exceptions are findable without anybody having to read everything.',
+
+  'tower.network.kpi.alerts': 'Standing alerts',
+  'tower.network.kpi.inTransit': 'Parcels on the road',
+  // The threshold is IN the label: a count of "shops checked in" means nothing until you know since when.
+  'tower.network.kpi.shopsOnline': 'Shops checked in ({hours}h)',
+  'tower.network.kpi.float': 'Money across shop floats',
+  'tower.network.kpi.active': 'Shops still active',
+
+  'tower.network.mixTitle': 'Where every parcel is',
+  'tower.network.mixHint': 'In the order a parcel travels, not by size',
+  'tower.network.col.status': 'Stage',
+  'tower.network.col.parcels': 'Parcels',
+  'tower.network.col.share': 'Share',
+
+  'tower.network.flagsTitle': 'Standing alerts',
+  'tower.network.flagsHint': 'Grouped by kind — three hundred identical rows is one fact',
+  'tower.network.noFlagsTitle': 'Nothing is flagged',
+  'tower.network.noFlagsBody': 'No parcel is stagnant, nothing was left behind, and no shop is locked. It does not mean everything is fine — only that nothing has tripped a rule we wrote.',
+  'tower.network.col.alert': 'Alert',
+  'tower.network.col.howMany': 'How many',
+  'tower.network.col.longest': 'Longest standing',
+  'tower.network.col.example': 'One of them',
+  // Every type the monitor can emit, named in words rather than in its own key. An unknown one falls
+  // back to its key with the underscores taken out, which is why a new flag on the server shows up here
+  // as readable-ish rather than as nothing at all.
+  'tower.network.flag.Stagnant_Inventory': 'Parcel sitting too long at a shop',
+  'tower.network.flag.Ghost_Bus': 'On the bus too long',
+  'tower.network.flag.Stuck_At_MDP': 'Stuck at a sort hub',
+  'tower.network.flag.Uncollected': 'Nobody has come for it',
+  'tower.network.flag.Never_Dropped_Off': 'Minted and never handed in',
+  'tower.network.flag.Connectivity_Loss': 'Shop has stopped checking in',
+  'tower.network.flag.Blocked_Corridor': 'Corridor blocked',
+  'tower.network.flag.Buyer_Dispute': 'Buyer says something is wrong',
+  'tower.network.flag.Short_Shipped': 'Left behind at handover',
+  'tower.network.flag.Temp_Breach': 'Cold chain broken',
+
+  'tower.network.shopsTitle': 'The shops',
+  'tower.network.coverageLine': '{open} open of {registered} registered · {closed} closed today · {inactive} inactive',
+  'tower.network.noShopsTitle': 'No shops yet',
+  'tower.network.noShopsBody': 'Nobody has been let onto the network. Applications waiting on a decision are under Shop applications.',
+  'tower.network.col.shop': 'Shop',
+  'tower.network.col.zone': 'Zone',
+  'tower.network.col.state': 'State',
+  'tower.network.col.wallet': 'Float',
+  'tower.network.col.slots': 'Shelf free',
+  'tower.network.col.rating': 'Rating',
+  'tower.network.agent.locked': 'Locked',
+  'tower.network.agent.kyc': 'Waiting on us',
+  'tower.network.agent.draft': 'Not finished signing up',
+  'tower.network.agent.unfunded': 'No float yet',
+  'tower.network.agent.offline': 'Not checked in',
+  'tower.network.agent.lowBalance': 'Float too thin',
+  'tower.network.agent.active': 'Working',
+
+  'tower.network.hubsTitle': 'The sort hubs',
+  'tower.network.bagsOnRoad': '{n} bags on the road',
+  'tower.network.freeBags': '{n} empty bags on hand',
+  'tower.network.noOpenBags': 'No bags open here.',
+  'tower.network.noHubsTitle': 'No hubs',
+  'tower.network.noHubsBody': 'Nothing sorts through a hub yet — every parcel goes shop to shop.',
+  'tower.network.col.bag': 'Bag',
+  'tower.network.col.destination': 'Going to',
+  'tower.network.col.fill': 'Full',
 };

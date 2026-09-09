@@ -5,9 +5,10 @@ import { clearCreds, companyLogin, createTowerClient, readCreds, saveCreds, type
 import type { ConstraintView } from './logic';
 import type { EntityPricing, EntityRow } from './money';
 import type { ApprovalRow, ClaimDecision, ClaimRow, DisposalRow } from './queues';
+import type { AgentRow, CoverageCounts, FlagRow, HubRow, ToteRow } from './network';
 
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
-export type Screen = 'hazards' | 'claims' | 'disposal' | 'approvals' | 'rates' | 'companies';
+export type Screen = 'network' | 'hazards' | 'claims' | 'disposal' | 'approvals' | 'rates' | 'companies';
 
 export interface TowerState {
   phase: Phase;
@@ -40,6 +41,13 @@ export interface TowerState {
   rateImpact: RateImpactView | null;
   /** A refused SAVE, which is a different thing from a failed read and must not clear the form. */
   saveError: SbgError | null;
+
+  /* ---- the network at a glance (migrated from the vanilla tower) ---- */
+  dashboard: DashboardView | null;
+  agents: AgentRow[] | null;
+  hubs: HubRow[] | null;
+  totes: ToteRow[] | null;
+  coverage: CoverageCounts | null;
 
   /* ---- the operator's decision queues (migrated from the vanilla tower) ---- */
   claims: ClaimRow[] | null;
@@ -78,6 +86,18 @@ export interface BooksView {
   coverage: { currency: string; held: number; lent: number; owed: number; cover: number };
 }
 
+/** `GET /dashboard` is untyped in the contract; these are the fields the screen reads. */
+export interface DashboardView {
+  parcelsInTransit?: number;
+  agentsOnline?: number;
+  agentsTotal?: number;
+  agentRetention?: number;
+  systemFloat?: number;
+  criticalAlerts?: number;
+  statusMix?: Record<string, number>;
+  flags?: FlagRow[];
+}
+
 /** `GET /entities/:id/rate-impact` is untyped in the contract; these are the fields the screen reads. */
 export interface RateImpactView {
   currentPct: number;
@@ -111,7 +131,10 @@ export interface TowerActions {
 
 const INITIAL: TowerState = {
   phase: 'boot',
-  screen: 'hazards',
+  // Network staff open on the overview: the first question an operator has is "is anything wrong",
+  // and a console that opens on a queue answers a narrower one. A company administrator is moved to
+  // its own screen at sign-in — the overview is not theirs.
+  screen: 'network',
   creds: null,
   who: null,
   hazards: null,
@@ -135,6 +158,11 @@ const INITIAL: TowerState = {
   disposal: null,
   approvals: null,
   queueError: null,
+  dashboard: null,
+  agents: null,
+  hubs: null,
+  totes: null,
+  coverage: null,
 };
 
 /**
@@ -237,6 +265,35 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
   );
 
   /**
+   * The monitoring reads: the dashboard, the shops, the hubs and their bags, and where the shops are.
+   *
+   * Five calls in parallel and each one allowed to fail on its own. A panel whose read failed stays
+   * `null` and renders as "reading…" rather than as an empty network — "there are no shops" and "we
+   * could not ask" are opposite answers, and on a monitoring screen the second must never wear the
+   * first's clothes.
+   */
+  const loadNetwork = useCallback(async (client: TowerClient) => {
+    setState((s) => ({ ...s, loading: true }));
+    const [dashboard, agents, hubs, totes, heatmap] = await Promise.all([
+      client.api.dashboard(),
+      client.api.agents(),
+      client.api.hubs(),
+      client.api.totes(),
+      client.api.heatmap(),
+    ]);
+    setState((s) => ({
+      ...s,
+      loading: false,
+      dashboard: dashboard.error ? null : narrow<DashboardView>(dashboard.data),
+      agents: agents.error ? null : (narrow<AgentRow[]>(agents.data) ?? []),
+      hubs: hubs.error ? null : (narrow<HubRow[]>(hubs.data) ?? []),
+      totes: totes.error ? null : (narrow<ToteRow[]>(totes.data) ?? []),
+      coverage: heatmap.error ? null : (narrow<{ counts?: CoverageCounts }>(heatmap.data)?.counts ?? null),
+      readAt: Date.now(),
+    }));
+  }, []);
+
+  /**
    * Every queue that waits on network staff, read together.
    *
    * Tolerant per queue and never silently short: a failed read leaves that queue as `null` — which the
@@ -269,6 +326,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'operator', name: creds.name } }));
       void loadHazards(client);
       void loadQueues(client);
+      void loadNetwork(client);
       void loadEntities(client);
       return;
     }
@@ -284,7 +342,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'company', name: data.name, entityId: data.entityId }, screen: 'rates' }));
       void loadEntities(client);
     });
-  }, [loadHazards, loadQueues, loadEntities]);
+  }, [loadHazards, loadQueues, loadNetwork, loadEntities]);
 
   const signIn = useCallback(
     async (name: string, key: string) => {
@@ -303,9 +361,10 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'operator', name: creds.name }, signInError: null }));
       await loadHazards(client);
       await loadQueues(client);
+      await loadNetwork(client);
       await loadEntities(client);
     },
-    [loadHazards, loadQueues, loadEntities],
+    [loadHazards, loadQueues, loadNetwork, loadEntities],
   );
 
   /**
@@ -356,8 +415,9 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     // about rates, and re-reading the hazard queue underneath them would move a list they are not looking at.
     if (state.screen === 'rates' && state.entityId) await loadPricing(client, state.entityId);
     else if (state.screen === 'claims' || state.screen === 'disposal' || state.screen === 'approvals') await loadQueues(client);
+    else if (state.screen === 'network') await loadNetwork(client);
     else await loadHazards(client);
-  }, [loadHazards, loadQueues, loadPricing, state.screen, state.entityId]);
+  }, [loadHazards, loadQueues, loadNetwork, loadPricing, state.screen, state.entityId]);
 
   const open = useCallback((constraintId: string | null) => {
     setState((s) => ({ ...s, openId: constraintId, clearError: null }));

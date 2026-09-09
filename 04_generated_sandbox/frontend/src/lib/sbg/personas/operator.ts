@@ -65,6 +65,26 @@ export function createOperatorApi(sbg: SbgClient) {
     setInsurance: (entityId: string, body: { lane?: string; premiumPct?: number | null; freeLimit?: number | null }) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/insurance', { params: { path: { entityId } }, body: body as never })),
 
+    /* ---- the network at a glance: monitoring, not deciding ---- */
+
+    /** The five numbers, where every parcel is, and every standing alert — in one read. */
+    dashboard: () => sbg.request((c) => c.GET('/v1/sbg/dashboard', {})),
+
+    /** Every shop on the network, with its float, its shelf and when it last checked in. */
+    agents: () => sbg.request((c) => c.GET('/v1/sbg/agents', {})),
+
+    /** The sort hubs. */
+    hubs: () => sbg.request((c) => c.GET('/v1/sbg/mdps', {})),
+
+    /** The bag pool — which hub each is at, what is in it, and which are on the road. */
+    // The two filters are typed REQUIRED by the generated client and are optional at runtime — the S5a
+    // contract quirk the library documents. Empty strings mean no filter; the backend reads a falsy
+    // value as "all", which is what the whole pool is.
+    totes: () => sbg.request((c) => c.GET('/v1/sbg/totes', { params: { query: { location: '', status: '' } } })),
+
+    /** Where the shops ARE, and how many of them are actually open. */
+    heatmap: () => sbg.request((c) => c.GET('/v1/sbg/heatmap', {})),
+
     /* ---- the decision queues: work that stops until a person decides ---- */
 
     /** Open damage claims, oldest first — the case somebody has waited longest for needs answering most. */

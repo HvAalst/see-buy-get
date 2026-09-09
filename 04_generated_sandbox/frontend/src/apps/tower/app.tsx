@@ -3,6 +3,7 @@ import { useT } from '../../shared/i18n';
 import { CompaniesScreen } from './screens/CompaniesScreen';
 import { HazardsScreen } from './screens/HazardsScreen';
 import { ApprovalsScreen, ClaimsScreen, DisposalScreen } from './screens/QueuesScreen';
+import { NetworkScreen } from './screens/NetworkScreen';
 import { RatesScreen } from './screens/RatesScreen';
 import { SignInScreen } from './screens/SignInScreen';
 import { waitingLine } from './queues';
@@ -52,11 +53,14 @@ export function App() {
    */
   const isOperator = state.who?.mode === 'operator';
   const manyCompanies = (state.entities?.length ?? 0) > 1;
-  const sections: { key: Screen; label: string; icon: 'route' | 'wallet' | 'grid' | 'warning' | 'box' | 'badge'; count: number | null }[] = [
+  const sections: { key: Screen; label: string; icon: 'route' | 'wallet' | 'grid' | 'warning' | 'box' | 'badge' | 'home'; count: number | null }[] = [
     // Network staff's work, in the order somebody is kept waiting by it: a claim is a person waiting for
     // an answer, a disposal row is a shop holding a box, an application is a shop that cannot start.
     ...(isOperator
       ? [
+          // No count beside the overview: a number there would read as "this many things need you",
+          // and nothing on it is waiting for anybody.
+          { key: 'network' as const, label: t('tower.nav.network'), icon: 'home' as const, count: null },
           { key: 'hazards' as const, label: t('tower.nav.hazards'), icon: 'route' as const, count: state.hazards?.length ?? null },
           { key: 'claims' as const, label: t('tower.nav.claims'), icon: 'warning' as const, count: state.claims?.length ?? null },
           { key: 'disposal' as const, label: t('tower.nav.disposal'), icon: 'box' as const, count: state.disposal?.length ?? null },
@@ -127,7 +131,9 @@ export function App() {
         </nav>
 
         <main class="cons__main">
-          {state.screen === 'companies' ? (
+          {state.screen === 'network' ? (
+            <NetworkScreen state={state} actions={actions} />
+          ) : state.screen === 'companies' ? (
             <CompaniesScreen state={state} actions={actions} />
           ) : state.screen === 'rates' ? (
             <RatesScreen state={state} actions={actions} />

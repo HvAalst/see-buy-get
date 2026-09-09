@@ -288,3 +288,86 @@
   color: var(--navy);
   user-select: all; /* one click selects the whole thing — it is going to be copied */
 }
+
+/* ------------------------------------------------------------- at a glance -- */
+
+.twr-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.twr-kpi {
+  background: var(--card);
+  border: 1px solid var(--bd-soft);
+  border-left: 3px solid var(--bd);
+  border-radius: var(--r-card);
+  box-shadow: var(--sh-sm);
+  padding: 12px 16px;
+}
+
+/* The one tile that is an alarm rather than a fact. Red, and never orange: orange means "chosen" here. */
+.twr-kpi--risk {
+  border-left-color: var(--dang);
+}
+
+.twr-kpi--risk .twr-kpi__v {
+  color: var(--dang);
+}
+
+.twr-kpi__v {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--navy);
+  font-variant-numeric: tabular-nums;
+}
+
+.twr-kpi__l {
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tx3);
+}
+
+/* A share, as a bar you can compare across rows AND a number you can quote down a phone. */
+.twr-bar {
+  display: inline-block;
+  width: 120px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--panel);
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.twr-bar__fill {
+  display: block;
+  height: 100%;
+  background: var(--blue);
+}
+
+.twr-hubs {
+  padding: 4px 0 12px;
+}
+
+.twr-hub {
+  padding: 10px 16px;
+  border-top: 1px solid var(--bd-soft);
+}
+
+.twr-hub:first-child {
+  border-top: 0;
+}
+
+.twr-hub__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}

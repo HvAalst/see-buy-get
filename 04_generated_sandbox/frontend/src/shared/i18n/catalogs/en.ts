@@ -14,7 +14,7 @@ import { enFleet } from './en.fleet';
 import { enMdp } from './en.mdp';
 import { enVendor } from './en.vendor';
 import { enHome } from './en.home';
-import { enTower, enTowerCompanies, enTowerQueues } from './en.tower';
+import { enTower, enTowerCompanies, enTowerNetwork, enTowerQueues } from './en.tower';
 
 export const en = {
   // Per-app slices (each app owns its own <app>.* namespace; filled in its own en.<app>.ts file).
@@ -27,6 +27,7 @@ export const en = {
   ...enTower,
   ...enTowerCompanies,
   ...enTowerQueues,
+  ...enTowerNetwork,
 
   // Shared controls the whole network reuses.
   'common.readAloud': 'Read this screen aloud',
