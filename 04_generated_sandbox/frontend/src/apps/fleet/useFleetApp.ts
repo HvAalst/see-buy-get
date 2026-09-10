@@ -478,6 +478,25 @@ export function useFleetApp() {
     });
   }, [client, run, fail, pushToast, refresh]);
 
+  /**
+   * Put a running shift onto a corridor — the repair for a shift started without one.
+   *
+   * Without this the only way to add a corridor was to end the shift and start it again, which loses the
+   * driver's day: the snooze, the declared road, everything that lives on the coupling.
+   */
+  const assignCorridor = useCallback(
+    async (driverDid: string, corridorId: string) => {
+      if (!client || !corridorId) return;
+      await run(`corridor:${driverDid}`, async () => {
+        const r = await client.api.assignCorridor(driverDid, corridorId);
+        if (r.error) return fail(r.error);
+        pushToast({ tone: 'ok', icon: 'route', title: t('fleet.toast.corridorSet'), detail: t('fleet.toast.corridorSetDetail') });
+        await refresh();
+      });
+    },
+    [client, run, fail, pushToast, refresh],
+  );
+
   const uncouple = useCallback(
     async (driverDid: string) => {
       if (!client) return;
@@ -513,6 +532,7 @@ export function useFleetApp() {
       setVehiclePrice,
       couple,
       uncouple,
+      assignCorridor,
       pushToast,
       dismissToast,
     },

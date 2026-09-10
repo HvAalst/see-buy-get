@@ -463,3 +463,33 @@
   font-size: var(--c-fs-sm);
   max-width: 96ch;
 }
+
+/* ------------------------------------------------------------- corridors -- */
+
+/* The draw-a-corridor form: five short fields, so they sit on one line at a desk and stack on a phone
+   rather than becoming a column of full-width boxes with three words in each. */
+.twr-corridornew {
+  margin-top: 20px;
+}
+
+.twr-corridorform {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0 14px;
+  padding: 14px 16px 0;
+}
+
+.twr-corridorsave {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 4px 16px 16px;
+}
+
+/* The reason the button is disabled, beside the button rather than under the field it came from: it is
+   about the corridor as a whole, not about one box. */
+.twr-corridorsave .chint {
+  margin-top: 0;
+  max-width: 70ch;
+}

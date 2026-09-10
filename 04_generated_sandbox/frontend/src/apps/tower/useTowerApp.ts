@@ -6,13 +6,14 @@ import { clearCreds, companyLogin, createTowerClient, readCreds, saveCreds, type
 import type { ConstraintView } from './logic';
 import type { EntityPricing, EntityRow } from './money';
 import type { ApprovalRow, ClaimDecision, ClaimRow, DisposalRow, StalledRow } from './queues';
+import { EMPTY_CORRIDOR_FORM, corridorName, type CorridorForm, type CorridorRow, type CouplingRow } from './corridors';
 import type { AgentRow, CoverageCounts, FlagRow, HubRow, ToteRow } from './network';
 import { runSummary, type PayoutAction, type PayoutRow, type RunResult } from './settlement';
 import type { HelpOption } from './pictures';
 import { resolveBaseUrl } from '../../lib/sbg';
 
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
-export type Screen = 'network' | 'hazards' | 'claims' | 'disposal' | 'approvals' | 'support' | 'pictures' | 'money' | 'rates' | 'companies';
+export type Screen = 'network' | 'hazards' | 'claims' | 'disposal' | 'approvals' | 'support' | 'pictures' | 'money' | 'rates' | 'companies' | 'corridors';
 
 export interface TowerState {
   phase: Phase;
@@ -68,6 +69,12 @@ export interface TowerState {
   /** A freshly rotated release code. Held until dismissed BY HAND — see the support screen. */
   reissued: { kind?: string; otp?: string } | null;
 
+  /* ---- the corridors: the routes the network runs buses on ---- */
+  /** Every corridor, live and blocked. Null while unread. */
+  corridors: CorridorRow[] | null;
+  /** Every shift running now — read only to say how many are on a corridor before it is closed. */
+  couplings: CouplingRow[] | null;
+  corridorForm: CorridorForm;
   /* ---- the illustration library ---- */
   help: HelpOption[] | null;
   helpTopic: string;
@@ -161,6 +168,9 @@ export interface TowerActions {
   revokeAdmin(entityId: string, adminId: string): Promise<void>;
   signOut(): void;
   go(screen: Screen): void;
+  setCorridorForm(patch: Partial<CorridorForm>): void;
+  saveCorridor(): Promise<void>;
+  setCorridorStatus(corridorId: string, status: 'active' | 'blocked'): Promise<void>;
   refresh(): Promise<void>;
   open(rowId: string | null): void;
   clear(constraintId: string, reason: string, hazard: string): Promise<void>;
@@ -212,6 +222,9 @@ const INITIAL: TowerState = {
   disposal: null,
   approvals: null,
   stalled: null,
+  corridors: null,
+  couplings: null,
+  corridorForm: { ...EMPTY_CORRIDOR_FORM },
   queueError: null,
   lookup: null,
   reissued: null,
@@ -419,6 +432,34 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     }));
   }, []);
 
+  /**
+   * The corridors, the shifts on them, and the shops that tell us which zones exist.
+   *
+   * Three questions, so three reads: what routes exist, who is running on each one (blocking a corridor
+   * with four buses on it is a different decision from blocking an idle one), and which zones this
+   * deployment knows about — offered as suggestions, never as a closed list.
+   */
+  const loadCorridors = useCallback(async (client: TowerClient) => {
+    setState((s) => ({ ...s, loading: true }));
+    const [corridors, couplings, agents, hubs] = await Promise.all([
+      client.api.corridors(),
+      client.api.couplings(),
+      client.api.agents(),
+      client.api.hubs(),
+    ]);
+    setState((s) => ({
+      ...s,
+      loading: false,
+      corridors: corridors.error ? null : (narrow<CorridorRow[]>(corridors.data) ?? []),
+      couplings: couplings.error ? s.couplings : (narrow<CouplingRow[]>(couplings.data) ?? []),
+      // The zone suggestions are a convenience: a failed read leaves what was known rather than
+      // emptying a list somebody is typing beside.
+      agents: agents.error ? s.agents : (narrow<AgentRow[]>(agents.data) ?? []),
+      hubs: hubs.error ? s.hubs : (narrow<HubRow[]>(hubs.data) ?? []),
+      queueError: corridors.error ? corridors.error.detail || corridors.error.title : null,
+      readAt: Date.now(),
+    }));
+  }, []);
   // Boot: a credential in this tab means the console picks up where it left off; nothing means sign-in.
   useEffect(() => {
     const creds = readCreds();
@@ -551,13 +592,14 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     else if (state.screen === 'network') await loadNetwork(client);
     else if (state.screen === 'money' && state.entityId) await loadMoney(client, state.entityId);
     else if (state.screen === 'pictures') await loadHelp(client, state.helpTopic);
+    else if (state.screen === 'corridors') await loadCorridors(client);
     else if (state.screen === 'support') {
       // Refreshing the support screen means re-reading the parcel somebody is on the phone about, not
       // reloading a list — there is no list here.
       if (state.lookup) await lookupParcel(state.lookup.parcelId);
     }
     else await loadHazards(client);
-  }, [loadHazards, loadQueues, loadNetwork, loadMoney, loadHelp, lookupParcel, loadPricing, state.screen, state.entityId, state.lookup, state.helpTopic]);
+  }, [loadHazards, loadQueues, loadNetwork, loadMoney, loadHelp, loadCorridors, lookupParcel, loadPricing, state.screen, state.entityId, state.lookup, state.helpTopic]);
 
   const open = useCallback((constraintId: string | null) => {
     setState((s) => ({ ...s, openId: constraintId, clearError: null }));
@@ -634,6 +676,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         setState((s) => ({ ...s, screen, openId: null, done: null, saveError: null, queueError: null }));
         const client = clientRef.current;
         if (screen === 'pictures' && client && stateRef.current.help === null) void loadHelp(client, stateRef.current.helpTopic);
+        if (screen === 'corridors' && client && stateRef.current.corridors === null) void loadCorridors(client);
       },
       refresh,
       open,
@@ -643,6 +686,45 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         // Closing the open editor is not tidiness: its boxes hold another sister's numbers.
         setState((s) => ({ ...s, openId: null, saveError: null, done: null, pricing: null, rateImpact: null, books: null, payouts: null }));
         if (client) await loadPricing(client, entityId);
+      },
+      setCorridorForm: (patch: Partial<CorridorForm>) =>
+        setState((s) => ({ ...s, corridorForm: { ...s.corridorForm, ...patch }, queueError: null })),
+      /**
+       * Draw a corridor. Re-reads afterwards rather than pushing the new row in locally: the id and the
+       * defaults the server fills in are the server’s, and a table an operator BLOCKS things from must
+       * show what the network holds rather than what this tab hoped it would.
+       */
+      saveCorridor: async () => {
+        const client = clientRef.current;
+        if (!client) return;
+        const form = stateRef.current.corridorForm;
+        setState((s) => ({ ...s, busyId: 'corridor', queueError: null, done: null }));
+        const { error } = await client.api.addCorridor({
+          name: corridorName(form),
+          originZone: form.originZone.trim(),
+          destZone: form.destZone.trim(),
+          vehicleType: form.vehicleType,
+          ...(form.schedule.trim() ? { schedule: form.schedule.trim() } : {}),
+        });
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, corridorForm: { ...EMPTY_CORRIDOR_FORM }, done: t('tower.corridors.drawn') }));
+        await loadCorridors(client);
+      },
+      /** Close a corridor or reopen it. Closing stops every cross-zone take-in it was serving. */
+      setCorridorStatus: async (corridorId: string, status: 'active' | 'blocked') => {
+        const client = clientRef.current;
+        if (!client) return;
+        setState((s) => ({ ...s, busyId: corridorId, queueError: null, done: null }));
+        const { error } = await client.api.setCorridorStatus(corridorId, status);
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, done: t(status === 'blocked' ? 'tower.corridors.closed' : 'tower.corridors.reopened') }));
+        await loadCorridors(client);
       },
       signInAsCompany,
       showQueueError: (message: string) => setState((s) => ({ ...s, queueError: message })),

@@ -1,6 +1,7 @@
 import { BrandMark } from '../../shared/ui';
 import { useT } from '../../shared/i18n';
 import { CompaniesScreen } from './screens/CompaniesScreen';
+import { CorridorsScreen } from './screens/CorridorsScreen';
 import { HazardsScreen } from './screens/HazardsScreen';
 import { ApprovalsScreen, ClaimsScreen, DisposalScreen } from './screens/QueuesScreen';
 import { MoneyScreen } from './screens/MoneyScreen';
@@ -68,7 +69,7 @@ export function App() {
   const isOperator = state.who?.mode === 'operator';
   const manyCompanies = (state.entities?.length ?? 0) > 1;
   const available: Screen[] = [
-    ...(isOperator ? (['network', 'hazards', 'claims', 'disposal', 'approvals', 'support', 'pictures'] as Screen[]) : []),
+    ...(isOperator ? (['network', 'hazards', 'claims', 'disposal', 'approvals', 'support', 'corridors', 'pictures'] as Screen[]) : []),
     ...(manyCompanies ? (['companies'] as Screen[]) : []),
     'money',
     'rates',
@@ -132,7 +133,9 @@ export function App() {
         {wide ? <ConsoleRail groups={groups} screen={state.screen} counts={counts} onGo={actions.go} /> : null}
 
         <main class="cons__main">
-          {state.screen === 'support' ? (
+          {state.screen === 'corridors' ? (
+            <CorridorsScreen state={state} actions={actions} />
+          ) : state.screen === 'support' ? (
             <SupportScreen state={state} actions={actions} />
           ) : state.screen === 'pictures' ? (
             <PicturesScreen state={state} actions={actions} />

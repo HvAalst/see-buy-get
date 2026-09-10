@@ -161,6 +161,25 @@ export function createOperatorApi(sbg: SbgClient) {
     writeOff: (parcelId: string, body: { by?: string; reason?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/parcels/{id}/write-off', { params: { path: { id: parcelId } }, body: body as never })),
 
+    /**
+     * THE CORRIDORS — the routes the network runs, and only the network may draw them.
+     *
+     * A corridor is the promise that a bus runs between two zones, and a shop may only take in a
+     * cross-zone parcel that one serves. A fleet manager chooses among them and cannot add one, so if
+     * nobody here draws them, the fleet app's corridor picker is an empty list forever.
+     */
+    corridors: () => sbg.request((c) => c.GET('/v1/sbg/corridors', {})),
+
+    addCorridor: (body: { name: string; originZone: string; destZone: string; vehicleType?: 'bus' | 'truck'; schedule?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/corridors', { body: body as never })),
+
+    /** Close a corridor, or reopen it. Closing stops every cross-zone take-in it was serving. */
+    setCorridorStatus: (corridorId: string, status: 'active' | 'blocked') =>
+      sbg.request((c) => c.POST('/v1/sbg/corridors/{id}/status', { params: { path: { id: corridorId } }, body: { status } as never })),
+
+    /** Every driver↔vehicle coupling running right now — which is to say, every shift. */
+    couplings: () => sbg.request((c) => c.GET('/v1/sbg/fleet/assignments', { params: { query: { status: 'active' } } })),
+
     /** Shops waiting to be let onto the network. */
     kycQueue: () => sbg.request((c) => c.GET('/v1/sbg/agents/kyc-queue', {})),
 

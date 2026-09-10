@@ -8,6 +8,7 @@ import type { MessageKey, Translate } from '../../shared/i18n';
 import {
   HEAVY_CLASSES,
   type AssignmentRow,
+  type CorridorRow,
   type DriverRow,
   type DriverStatus,
   type PositionRow,
@@ -276,4 +277,30 @@ export function fleetWorkLine(
   const bits = [t('fleet.bar.vehiclesOut', { active, total })];
   if (onShift > 0) bits.push(t('fleet.bar.driversOn', { count: onShift }));
   return bits.join(' · ');
+}
+
+/* --------------------------------------------------------------- corridors -- */
+
+/**
+ * What a running shift's corridor IS — and "none" is not a blank, it is a limit.
+ *
+ * The field is optional when the shift starts, and that is correct: a rider taking marketplace loads
+ * never needs one. It stops being correct the moment the same driver pulls up at a shop counter, where
+ * the handover refuses outright without a corridor — and refuses on the SHOPKEEPER's screen, about
+ * something only a manager can fix. So the screen says what empty COSTS instead of calling it optional.
+ *
+ *   none    — local and marketplace work only; no shop counter can hand over to this driver
+ *   on      — a live corridor, named
+ *   blocked — a corridor the network has closed: no shop can take in new parcels for that zone pair
+ *   gone    — a corridor that is no longer published at all
+ */
+export type CorridorState = { kind: 'none' } | { kind: 'on' | 'blocked' | 'gone'; name: string };
+
+export function corridorState(assignment: AssignmentRow, corridors: CorridorRow[]): CorridorState {
+  if (!assignment.corridorId) return { kind: 'none' };
+  const corridor = corridors.find((c) => c.corridorId === assignment.corridorId);
+  // Named by its id when the list cannot name it. Saying "none" here would be the one wrong answer: it
+  // reads as "local work only" about a driver who is on a line-haul run.
+  if (!corridor) return { kind: 'gone', name: assignment.corridorId };
+  return { kind: corridor.status === 'blocked' ? 'blocked' : 'on', name: corridor.name };
 }

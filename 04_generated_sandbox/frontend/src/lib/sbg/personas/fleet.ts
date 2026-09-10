@@ -82,8 +82,27 @@ export function createFleetApi(sbg: SbgClient) {
     /** Active driver↔vehicle couplings. */
     assignments: () => sbg.request((c) => c.GET('/v1/sbg/fleet/assignments', { params: { query: { status: 'active' } } })),
 
-    /** Corridors (for the optional coupling assignment). */
+    /**
+     * The corridors the NETWORK publishes — a manager chooses among them and cannot add one.
+     *
+     * A corridor is the promise that a bus runs between two zones, and every shop in the origin zone
+     * reads it when deciding what it may take in. That is why drawing one is an operator's job and this
+     * is a read.
+     */
     corridors: () => sbg.request((c) => c.GET('/v1/sbg/corridors', {})),
+
+    /**
+     * Put a shift ALREADY RUNNING onto a corridor, or move it to another one.
+     *
+     * The corridor is chosen when the shift starts and may be left empty, which is right for local and
+     * marketplace work — and wrong the moment that driver pulls up at a shop counter, because the
+     * handover refuses without one. This is the way back that did not exist: before it, the only repair
+     * was to end the shift and start it again.
+     */
+    assignCorridor: (did: string, corridorId: string) =>
+      sbg.request((c) =>
+        c.POST('/v1/sbg/fleet/drivers/{did}/assign-corridor', { params: { path: { did } }, body: { corridorId } as never }),
+      ),
 
     /** Couple a driver to a vehicle on the driver's behalf (they normally scan the QR). */
     couple: (did: string, vehicleId: string, corridorId?: string) =>

@@ -731,21 +731,42 @@ export class SbgController {
 
   // --- corridors + drivers (↔ M3 light) ---
 
+  /**
+   * A CORRIDOR IS NETWORK GEOGRAPHY, AND ONLY THE NETWORK MAY DRAW IT.
+   *
+   * It is not one manager's route: a corridor is the promise that a bus runs between two zones, and the
+   * whole network reads it. A shop may only take in a cross-zone parcel that some corridor serves
+   * (`RoutingService.plan` refuses "no active corridor from X to Y" where no hub can route it instead),
+   * and the shop-counter handover manifest is built from the corridor's destination zone. So one fleet
+   * manager adding a corridor would change what shops in that zone are allowed to accept, and blocking
+   * one would stop parcels being taken in by people who never heard of them.
+   *
+   * These three writes were UNLABELLED, which under the guard's pre-migration default means any valid
+   * token at all — a driver's, a shopkeeper's — could draw a route across the network or close one.
+   */
+  @Roles('operator')
   @Post('corridors')
   addCorridor(@Body() dto: CorridorDto) {
     return this.corridors.addCorridor(dto);
   }
 
+  /** Readable by everyone who has to work with them: the fleet app offers them, the agent app checks them. */
   @Get('corridors')
   listCorridors() {
     return this.corridors.listCorridors();
   }
 
+  /** Blocking one stops every cross-zone take-in it was serving. Operator only, for that reason. */
+  @Roles('operator')
   @Post('corridors/:id/status')
   setCorridorStatus(@Param('id') id: string, @Body() dto: CorridorStatusDto) {
     return this.corridors.setStatus(id, dto.status);
   }
 
+  /** The corridor whitelist — a badge that may take a handover without being a fleet driver at all. Same
+   *  reasoning as the corridor itself, and a stronger one: this is the list that says who may be handed
+   *  other people's goods. */
+  @Roles('operator')
   @Post('drivers')
   addDriver(@Body() dto: DriverDto) {
     return this.corridors.addDriver(dto);

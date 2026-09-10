@@ -4,6 +4,7 @@ import {
   EMPTY_DRIVER,
   EMPTY_VEHICLE,
   bodyPickerOptions,
+  corridorState,
   driverAction,
   driverMissing,
   freeDrivers,
@@ -175,5 +176,35 @@ describe('views', () => {
       expect(row.detail).toBe(t('fleet.body.unknownWhy'));
       expect(row.detail).not.toContain('fleet.body');
     });
+  });
+});
+
+describe('the corridor a shift is on', () => {
+  const shift = (corridorId?: string) => ({ assignmentId: 'as_1', driverDid: 'did:1', vehicleId: 'veh_1', corridorId, startedAt: '2026-09-10T06:00:00Z' });
+  const corridors = [
+    { corridorId: 'cor_1', name: 'A → B', originZone: 'Z-A', destZone: 'Z-B', status: 'active' },
+    { corridorId: 'cor_2', name: 'B → C', originZone: 'Z-B', destZone: 'Z-C', status: 'blocked' },
+  ];
+
+  it('names a live one', () => {
+    expect(corridorState(shift('cor_1'), corridors)).toEqual({ kind: 'on', name: 'A → B' });
+  });
+
+  it('calls having none a LIMIT rather than a blank', () => {
+    // The whole defect this fixes: "(optional)" is true when the shift starts and false at the shop
+    // counter, where the handover refuses — on the shopkeeper's screen, about something only a manager
+    // can fix. The screen has to distinguish "chose local work" from "forgot".
+    expect(corridorState(shift(), corridors)).toEqual({ kind: 'none' });
+    expect(corridorState(shift(''), corridors)).toEqual({ kind: 'none' });
+  });
+
+  it('says when the network has closed the corridor under a running shift', () => {
+    expect(corridorState(shift('cor_2'), corridors)).toEqual({ kind: 'blocked', name: 'B → C' });
+  });
+
+  it('never reports a shift as having no corridor just because the list cannot name it', () => {
+    // Saying "none" here would read as "local work only" about a driver who is on a line-haul run.
+    expect(corridorState(shift('cor_gone'), corridors)).toEqual({ kind: 'gone', name: 'cor_gone' });
+    expect(corridorState(shift('cor_1'), [])).toEqual({ kind: 'gone', name: 'cor_1' });
   });
 });

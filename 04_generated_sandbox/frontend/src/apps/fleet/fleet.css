@@ -194,3 +194,27 @@
   font-weight: 600;
   text-align: center;
 }
+
+/* --------------------------------------------------------------- sessions -- */
+
+/* A running shift is a row plus the one control that repairs it: the corridor. They are one block, so
+   the picker cannot be read as belonging to the shift below it. */
+.sess {
+  border-bottom: 1px solid var(--bd-soft);
+}
+
+.sess:last-child {
+  border-bottom: 0;
+}
+
+.sess__cor {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 0 4px 12px;
+}
+
+.sess__cor .select {
+  flex: 1;
+  min-width: 0;
+}
