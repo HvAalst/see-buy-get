@@ -61,6 +61,7 @@ describe('a company’s own terms: who may read them, and who may change them', 
     expect(rolesOf('clearConstraint')).toEqual(['operator']);
     expect(rolesOf('disputedConstraints')).toEqual(['operator']);
     expect(rolesOf('kycQueue')).toEqual(['operator']);
+    expect(rolesOf('unfinishedSignups')).toEqual(['operator']);
     // Reading what you are owed is yours; RAISING a run and telling the network money has left are
     // acts on a payment rail, and they stay with network staff.
     expect(rolesOf('runPayouts')).toEqual(['operator']);

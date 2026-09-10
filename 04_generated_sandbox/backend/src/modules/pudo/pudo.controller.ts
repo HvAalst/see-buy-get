@@ -572,6 +572,18 @@ export class SbgController {
     return this.agents.kycQueue();
   }
 
+  /**
+   * Shops that started joining and stopped.
+   *
+   * Deliberately NOT part of the KYC queue: nothing here is waiting on a decision by us, so it does not
+   * belong in a list whose count means "somebody must act". It is a list of people to ring.
+   */
+  @Roles('operator')
+  @Get('agents/unfinished')
+  unfinishedSignups() {
+    return { items: this.agents.unfinished() };
+  }
+
   @Post('agents/:did/ping')
   ping(@Param('did') did: string) {
     return this.agents.ping(did);

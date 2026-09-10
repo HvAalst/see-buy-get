@@ -195,6 +195,53 @@ export class AgentService {
     return [...this.agents.values()].filter((a) => a.status === 'KYC_PENDING');
   }
 
+  /**
+   * Shops that started joining and stopped — and are waiting on THEMSELVES, not on us.
+   *
+   * The KYC queue above is a decision list: everything in it needs network staff to say yes or no. These
+   * do not, which is exactly why nobody was looking at them: a shop sits in DRAFT because its owner
+   * never sent their documents, and one sits APPROVED_UNFUNDED because they never put money in the
+   * float. Neither ever appeared anywhere except as a grey word in a table, and the oldest of them had
+   * been stuck for a month.
+   *
+   * For a network that grows by shops joining, this is the most valuable list in the console: every row
+   * is somebody who wanted in and hit something. It is a CHASE list, not a queue — which is why it is a
+   * separate call rather than more rows in the one that carries a badge.
+   */
+  unfinished(): Array<{
+    did: string;
+    shopName: string;
+    zone: string;
+    status: string;
+    since: string;
+    /** Why they are stuck — the thing to say when somebody rings them. */
+    reason: 'needs-documents' | 'needs-first-top-up';
+    /** For a DRAFT shop, which documents are actually missing. Empty for an unfunded one. */
+    missing: string[];
+  }> {
+    return [...this.agents.values()]
+      .filter((a) => a.status === 'DRAFT' || a.status === 'APPROVED_UNFUNDED')
+      .map((a) => ({
+        did: a.did,
+        shopName: a.shopName,
+        zone: a.zone,
+        status: a.status,
+        since: a.createdAt,
+        reason: a.status === 'DRAFT' ? ('needs-documents' as const) : ('needs-first-top-up' as const),
+        missing:
+          a.status === 'DRAFT'
+            ? [
+                a.kyc?.idCopyRef ? null : 'id',
+                a.kyc?.tradingLicenceRef ? null : 'licence',
+                a.kyc?.shopPhotoRefs?.length ? null : 'photos',
+              ].filter((x): x is string => Boolean(x))
+            : [],
+      }))
+      // Longest stuck first: the shop that signed up a month ago and never came back is the one nobody
+      // has called, and the one most likely to be gone for good.
+      .sort((a, b) => a.since.localeCompare(b.since));
+  }
+
   /** Recompute the lock state from the wallet balance (called after every wallet movement). */
   refreshLock(did: string): Agent {
     const agent = this.require(did);

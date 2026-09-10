@@ -97,6 +97,13 @@ export const enTower = {
   'tower.nav.money': 'Money',
   'tower.nav.rates': 'Rates & tax',
   'tower.nav.companies': 'The companies',
+  // The four groups the console is navigated by. "Activity" was the obvious name for the second and is
+  // the wrong one: an activity feed records what happened, and every screen in that group is a thing that
+  // has NOT happened yet.
+  'tower.group.overview': 'Overview',
+  'tower.group.waiting': 'Waiting on you',
+  'tower.group.money': 'Money',
+  'tower.group.setup': 'Setup',
   'tower.nav.network': 'At a glance',
   'tower.nav.claims': 'Damage claims',
   'tower.nav.disposal': 'Awaiting disposal',

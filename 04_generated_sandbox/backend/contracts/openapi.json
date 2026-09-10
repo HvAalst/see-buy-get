@@ -4567,6 +4567,19 @@
         }
       }
     },
+    "/v1/sbg/agents/unfinished": {
+      "get": {
+        "operationId": "Sbg.unfinishedSignups",
+        "summary": "",
+        "description": "Shops that started joining and stopped.\n\nDeliberately NOT part of the KYC queue: nothing here is waiting on a decision by us, so it does not\nbelong in a list whose count means \"somebody must act\". It is a list of people to ring.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/agents/{did}/ping": {
       "post": {
         "operationId": "Sbg.ping",
