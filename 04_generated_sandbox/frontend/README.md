@@ -15,9 +15,15 @@ rule restored under a coarse pointer), and it is **not installable**: no manifes
 tab, and no service worker, because an operator acts on a queue and a cached queue is one that lies. See
 `AppSpec.installable` in `vite.config.ts`.
 
-The operator's two hand-rolled vanilla consoles at `src/pudo-tower.html` and `src/control-tower.html` are
-still there and are still never built. The `tower` app is what will eventually replace them, one screen
-at a time; until a panel has moved, the old page is where that panel lives.
+`src/control-tower.html` is the ONE hand-rolled vanilla page left, and it is still never built: the M7
+simulator surface (scenarios, disruption, network design, carbon), which is a different product from the
+operator's day and has not been migrated or retired. Its fate is an open question rather than an
+oversight.
+
+`src/pudo-tower.html` is GONE. Every panel it had — the KPIs and coverage, the shops and hubs, the
+standing alerts, the damage claims, the disposal queue, the shop applications, finance and the payout
+run, the parcel lookup with its release reissue, and the illustration library — lives in the `tower` app
+now, with tests and translations it never had.
 
 Each app is its OWN Vite build with its own `base`, because Vite has one root and one base per build.
 `vite.config.ts` is a factory over `APPS`; `npm run build` loops all eight into `dist/`, laid out exactly
@@ -55,14 +61,14 @@ Sign in with your name and the operator key — the server's `GLOS_CLIENT_SECRET
 configured, any value is accepted. The credential lives in `sessionStorage` only, so closing the tab
 signs the console out.
 
-**The legacy vanilla consoles.**
+**The one legacy vanilla console.**
 
 ```bash
-npm start                     # http://localhost:4173/pudo-tower.html
+npm start                     # http://localhost:4173/control-tower.html
 ```
 
-This serves `src/` — the two vanilla console pages live there and are not part of any build. It does not
-serve the apps, and there is no `src/index.html`.
+This serves `src/` — the M7 simulator page lives there and is not part of any build. It does not serve
+the apps, and there is no `src/index.html`.
 
 The backend must be running for any of it: `cd ../backend && npm run start:dev` (port 3000).
 

@@ -1,4 +1,5 @@
-import { Icon } from '../../../shared/ui';
+import { useState } from 'preact/hooks';
+import { Icon, PlaceMap } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import {
   AGENT_OFFLINE_H,
@@ -30,6 +31,17 @@ export function NetworkScreen({ state, actions }: { state: TowerState; actions: 
   const t = useT();
   const d = state.dashboard;
   const now = Date.now();
+  /**
+   * Which shop a pin belongs to — local, because nothing outside this screen cares.
+   *
+   * The map COMPLEMENTS the list rather than replacing it (the rule this network settled on for every
+   * map it has): tapping a pin does not open a different view, it points at the row that was already
+   * there. So no pin is a dead tap, and everything the row says stays readable.
+   */
+  const [pinned, setPinned] = useState<string | null>(null);
+  const pins = (state.agents ?? [])
+    .filter((a): a is typeof a & { location: { lat: number; lng: number } } => Boolean(a.location))
+    .map((a) => ({ id: a.did, label: a.shopName ?? a.did, point: a.location }));
 
   return (
     <>
@@ -146,6 +158,15 @@ export function NetworkScreen({ state, actions }: { state: TowerState; actions: 
           <span class="cons__panelt">{t('tower.network.shopsTitle')}</span>
           <span class="ctbl__sub">{coverageLine(state.coverage ?? undefined, t)}</span>
         </div>
+
+        {/* Where the shops actually are. A shop with no pin on it is not missing from the network — it
+            simply never dropped one, so it stays in the table below and out of here. */}
+        {pins.length ? (
+          <div class="twr-map">
+            <PlaceMap pins={pins} selectedId={pinned} onPick={(id) => setPinned(id === pinned ? null : id)} label={t('tower.network.mapLabel')} />
+            <p class="chint">{pinned ? t('tower.network.pinned', { name: pins.find((p) => p.id === pinned)?.label ?? '' }) : t('tower.network.mapHint')}</p>
+          </div>
+        ) : null}
         {state.agents === null ? (
           <p class="cons__empty">{t('tower.queues.loading')}</p>
         ) : state.agents.length === 0 ? (
@@ -169,7 +190,8 @@ export function NetworkScreen({ state, actions }: { state: TowerState; actions: 
               {state.agents.map((row) => {
                 const s = agentState(row, now);
                 return (
-                  <tr key={row.did}>
+                  // Orange marks the row a pin is pointing at — a STATE, the same as everywhere else here.
+                  <tr key={row.did} class={pinned === row.did ? 'is-open' : undefined}>
                     <td>
                       <div class="ctbl__strong">{row.shopName ?? row.did}</div>
                       <div class="ctbl__mono">{row.did.slice(0, 18)}…</div>

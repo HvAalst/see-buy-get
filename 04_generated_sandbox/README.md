@@ -40,7 +40,7 @@ The seed prints the URLs, including:
 | Merchant console | `…/vendor.html` |
 | Fleet console (manager) | `…/fleet.html` → sign in with the `FM-…` code |
 | Fleet console (operator) | `…/fleet.html?ops=1` |
-| PUDO control tower | `…/pudo-tower.html` |
+| Operator console | `…/tower/` |
 
 Start at **`hub.html`** — it lists every surface and pre-selects a seeded entity so you can jump straight in.
 

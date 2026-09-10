@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { narrow, type SbgError } from '../../lib/sbg';
+import { downscaleImage } from '../../shared/media';
 import { t } from '../../shared/i18n'; // plain t(): these strings are built at action time
 import { clearCreds, companyLogin, createTowerClient, readCreds, saveCreds, type TowerClient, type TowerCreds } from './api';
 import type { ConstraintView } from './logic';
@@ -7,9 +8,11 @@ import type { EntityPricing, EntityRow } from './money';
 import type { ApprovalRow, ClaimDecision, ClaimRow, DisposalRow } from './queues';
 import type { AgentRow, CoverageCounts, FlagRow, HubRow, ToteRow } from './network';
 import { runSummary, type PayoutAction, type PayoutRow, type RunResult } from './settlement';
+import type { HelpOption } from './pictures';
+import { resolveBaseUrl } from '../../lib/sbg';
 
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
-export type Screen = 'network' | 'hazards' | 'claims' | 'disposal' | 'approvals' | 'money' | 'rates' | 'companies';
+export type Screen = 'network' | 'hazards' | 'claims' | 'disposal' | 'approvals' | 'support' | 'pictures' | 'money' | 'rates' | 'companies';
 
 export interface TowerState {
   phase: Phase;
@@ -57,6 +60,17 @@ export interface TowerState {
   /** A refusal the SCREEN made before the server had to — a missing reason, an award over the cover. */
   queueError: string | null;
 
+  /* ---- support: one parcel, looked up because somebody is on the phone about it ---- */
+  lookup: ParcelView | null;
+  /** A freshly rotated release code. Held until dismissed BY HAND — see the support screen. */
+  reissued: { kind?: string; otp?: string } | null;
+
+  /* ---- the illustration library ---- */
+  help: HelpOption[] | null;
+  helpTopic: string;
+  /** The API origin, so a picture served by the backend can be shown by a plain <img>. */
+  apiBase: string;
+
   /* ---- money: the selected company's books and payouts, and the network ledger ---- */
   books: BooksView | null;
   payouts: PayoutRow[] | null;
@@ -90,6 +104,20 @@ export interface BooksView {
   entityId: string;
   integrity: { balanced: boolean; drift: number };
   coverage: { currency: string; held: number; lent: number; owed: number; cover: number };
+}
+
+/** `GET /parcels/:id` is untyped in the contract; these are the fields the support screen reads. */
+export interface ParcelView {
+  parcelId: string;
+  status: string;
+  size?: string;
+  origin?: string;
+  destination?: string;
+  releaseLockedAt?: string;
+  contentPhotoRef?: string;
+  dropoffPhotoRef?: string;
+  deliveredPhotoRef?: string;
+  scans?: Array<{ at: string; status: string; note?: string }>;
 }
 
 /** `GET /finance` is untyped in the contract; these are the fields the screen reads. */
@@ -138,6 +166,12 @@ export interface TowerActions {
   decideApproval(did: string, approve: boolean): Promise<void>;
   runPayouts(): Promise<void>;
   movePayout(payoutId: string, action: PayoutAction, reason?: string): Promise<void>;
+  lookupParcel(parcelId: string): Promise<void>;
+  reissueRelease(parcelId: string): Promise<void>;
+  dismissReissued(): void;
+  chooseHelpTopic(topic: string): Promise<void>;
+  uploadPicture(topic: string, key: string, file: File): Promise<void>;
+  revertPicture(topic: string, key: string): Promise<void>;
   /** Show what the screen itself refused, without pretending the server said it. */
   showQueueError(message: string): void;
   chooseEntity(entityId: string): Promise<void>;
@@ -175,6 +209,11 @@ const INITIAL: TowerState = {
   disposal: null,
   approvals: null,
   queueError: null,
+  lookup: null,
+  reissued: null,
+  help: null,
+  helpTopic: 'packaging',
+  apiBase: resolveBaseUrl(),
   books: null,
   payouts: null,
   finance: null,
@@ -334,6 +373,20 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     }));
   }, []);
 
+  /** One vocabulary's options, with whatever picture each one has. */
+  const loadHelp = useCallback(async (client: TowerClient, topic: string) => {
+    setState((s) => ({ ...s, loading: true, helpTopic: topic }));
+    const { data, error } = await client.api.help(topic);
+    setState((s) => ({
+      ...s,
+      loading: false,
+      // A failed read leaves it null, which the screen renders as "reading…" — not as a vocabulary with
+      // no options, which would say this deployment has nothing to illustrate.
+      help: error ? null : (narrow<{ options: HelpOption[] }>(data)?.options ?? []),
+      queueError: error ? error.detail || error.title : null,
+    }));
+  }, []);
+
   /**
    * Every queue that waits on network staff, read together.
    *
@@ -449,6 +502,33 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     setState({ ...INITIAL, phase: 'signin' });
   }, []);
 
+  /**
+   * Look one parcel up. A failed lookup CLEARS what was on screen rather than leaving the last parcel
+   * under a new error — an operator reading a timeline that belongs to a different parcel is worse than
+   * an empty screen.
+   */
+  const lookupParcel = useCallback(async (parcelId: string) => {
+    const client = clientRef.current;
+    if (!client) return;
+    setState((s) => ({
+      ...s,
+      busyId: 'lookup',
+      queueError: null,
+      done: null,
+      // A code shown once survives a re-read of the SAME parcel and dies with a new one. Clearing it
+      // unconditionally is what this did first, and it wiped the OTP a tenth of a second after showing
+      // it — the reissue re-reads the parcel to pick up the new lock state, and took the only copy of
+      // the code down with it. A new subject on screen is the one thing that should end it.
+      reissued: s.lookup?.parcelId === parcelId ? s.reissued : null,
+    }));
+    const { data, error } = await client.api.parcel(parcelId);
+    if (error) {
+      setState((s) => ({ ...s, busyId: null, lookup: null, queueError: error.detail || error.title }));
+      return;
+    }
+    setState((s) => ({ ...s, busyId: null, lookup: narrow<ParcelView>(data), queueError: null }));
+  }, []);
+
   const refresh = useCallback(async () => {
     const client = clientRef.current;
     if (!client) return;
@@ -458,8 +538,14 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     else if (state.screen === 'claims' || state.screen === 'disposal' || state.screen === 'approvals') await loadQueues(client);
     else if (state.screen === 'network') await loadNetwork(client);
     else if (state.screen === 'money' && state.entityId) await loadMoney(client, state.entityId);
+    else if (state.screen === 'pictures') await loadHelp(client, state.helpTopic);
+    else if (state.screen === 'support') {
+      // Refreshing the support screen means re-reading the parcel somebody is on the phone about, not
+      // reloading a list — there is no list here.
+      if (state.lookup) await lookupParcel(state.lookup.parcelId);
+    }
     else await loadHazards(client);
-  }, [loadHazards, loadQueues, loadNetwork, loadMoney, loadPricing, state.screen, state.entityId]);
+  }, [loadHazards, loadQueues, loadNetwork, loadMoney, loadHelp, lookupParcel, loadPricing, state.screen, state.entityId, state.lookup, state.helpTopic]);
 
   const open = useCallback((constraintId: string | null) => {
     setState((s) => ({ ...s, openId: constraintId, clearError: null }));
@@ -524,7 +610,19 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     actions: {
       signIn,
       signOut,
-      go: (screen) => setState((s) => ({ ...s, screen, openId: null, done: null, saveError: null, queueError: null })),
+      /**
+       * Move to a section — and read what that section needs if nothing has read it yet.
+       *
+       * The illustration library is the only one nothing else loads: the queues, the overview and the
+       * money reads all happen at sign-in, because they are what somebody is likely to open. This one
+       * would otherwise sit empty until a refresh, and the screen would have to guess whether "no
+       * pictures" meant none or meant nobody had asked.
+       */
+      go: (screen) => {
+        setState((s) => ({ ...s, screen, openId: null, done: null, saveError: null, queueError: null }));
+        const client = clientRef.current;
+        if (screen === 'pictures' && client && stateRef.current.help === null) void loadHelp(client, stateRef.current.helpTopic);
+      },
       refresh,
       open,
       clear,
@@ -638,6 +736,68 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         }
         setState((s) => ({ ...s, busyId: null, done: t('tower.money.moved', { action }) }));
         await loadMoney(client, entityId);
+      },
+      lookupParcel,
+      /**
+       * Rotate a burnt release code. What comes back is never the new code — except a peer send's OTP,
+       * which has no app to go to and is returned once to be read down the phone.
+       */
+      reissueRelease: async (parcelId: string) => {
+        const client = clientRef.current;
+        if (!client) return;
+        setState((s) => ({ ...s, busyId: 'reissue', queueError: null, done: null }));
+        const { data, error } = await client.api.reissueRelease(parcelId, stateRef.current.who?.name);
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, reissued: narrow<{ kind?: string; otp?: string }>(data) ?? {} }));
+        await lookupParcel(parcelId); // the lock state changed; re-read rather than assume
+      },
+      dismissReissued: () => setState((s) => ({ ...s, reissued: null })),
+      chooseHelpTopic: async (topic: string) => {
+        const client = clientRef.current;
+        setState((s) => ({ ...s, help: null, done: null, queueError: null }));
+        if (client) await loadHelp(client, topic);
+      },
+      /**
+       * Put this deployment's own drawing on an option.
+       *
+       * Downscaled in the browser first, with the same helper the field apps use for evidence photos:
+       * this picture is fetched by every clerk on every booking, over connections paid for by the
+       * megabyte, so it is worth being strict at the one moment somebody is at a desk on wifi.
+       */
+      uploadPicture: async (topic: string, key: string, file: File) => {
+        const client = clientRef.current;
+        if (!client) return;
+        setState((s) => ({ ...s, busyId: `${topic}:${key}`, queueError: null, done: null }));
+        try {
+          const { dataUrl } = await downscaleImage(file, { maxEdge: 512, quality: 0.8 });
+          const { error } = await client.api.setHelpImage(topic, key, dataUrl);
+          if (error) {
+            setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+            return;
+          }
+        } catch (e) {
+          // A file that is not an image at all, or one the browser cannot decode.
+          setState((s) => ({ ...s, busyId: null, queueError: t('tower.pictures.notAnImage') }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, done: t('tower.pictures.saved', { key }) }));
+        await loadHelp(client, topic);
+      },
+      /** Take our own drawing back — which reveals the network's again rather than blanking the option. */
+      revertPicture: async (topic: string, key: string) => {
+        const client = clientRef.current;
+        if (!client) return;
+        setState((s) => ({ ...s, busyId: `${topic}:${key}`, queueError: null, done: null }));
+        const { error } = await client.api.clearHelpImage(topic, key);
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, done: t('tower.pictures.reverted', { key }) }));
+        await loadHelp(client, topic);
       },
       saveRates: (body, lane) => saveKnob(lane, (client, entityId) => client.api.setRates(entityId, body)),
       saveTax: (body, lane) => saveKnob(lane, (client, entityId) => client.api.setTax(entityId, body)),

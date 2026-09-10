@@ -26,10 +26,10 @@ declare const process: { env: Record<string, string | undefined> };
    `npm run build` loops the five over `scripts/build-all.mjs`.
 
    Vite's root is the app directory itself, NOT `src/`. What still lives at `src/` root is
-   the OPERATOR's two consoles — pudo-tower and control-tower — hand-rolled vanilla pages
-   served by http-server (npm start, port 4173) and never seen, transformed or built by
-   Vite. The 26 legacy vanilla copies of the apps that used to sit beside them were deleted
-   once the PWAs superseded them; the towers stayed because nothing has replaced them yet.
+   ONE hand-rolled vanilla page — control-tower, the M7 simulator surface — served by
+   http-server (npm start, port 4173) and never seen, transformed or built by Vite. The 26
+   legacy vanilla copies of the apps that used to sit beside it were deleted once the PWAs
+   superseded them, and pudo-tower followed once the `tower` app had every one of its panels.
    ========================================================================== */
 
 type AppSpec = {

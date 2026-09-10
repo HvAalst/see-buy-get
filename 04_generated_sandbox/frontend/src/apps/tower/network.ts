@@ -27,6 +27,9 @@ export interface AgentRow {
   freeSlots?: number;
   lastPingAt?: string;
   rating?: { average?: number; count?: number };
+  /** The pin the shop dropped. Absent on a shop that never dropped one — which is a real state, not a
+   *  missing field, and it keeps that shop off the map while leaving it in the list. */
+  location?: { lat: number; lng: number };
 }
 
 export type AgentTone = 'ok' | 'warn' | 'bad' | 'info';

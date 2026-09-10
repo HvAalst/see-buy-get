@@ -4,6 +4,8 @@ import { CompaniesScreen } from './screens/CompaniesScreen';
 import { HazardsScreen } from './screens/HazardsScreen';
 import { ApprovalsScreen, ClaimsScreen, DisposalScreen } from './screens/QueuesScreen';
 import { MoneyScreen } from './screens/MoneyScreen';
+import { PicturesScreen } from './screens/PicturesScreen';
+import { SupportScreen } from './screens/SupportScreen';
 import { NetworkScreen } from './screens/NetworkScreen';
 import { RatesScreen } from './screens/RatesScreen';
 import { SignInScreen } from './screens/SignInScreen';
@@ -54,7 +56,7 @@ export function App() {
    */
   const isOperator = state.who?.mode === 'operator';
   const manyCompanies = (state.entities?.length ?? 0) > 1;
-  const sections: { key: Screen; label: string; icon: 'route' | 'wallet' | 'grid' | 'warning' | 'box' | 'badge' | 'home' | 'edit'; count: number | null }[] = [
+  const sections: { key: Screen; label: string; icon: 'route' | 'wallet' | 'grid' | 'warning' | 'box' | 'badge' | 'home' | 'edit' | 'search' | 'camera'; count: number | null }[] = [
     // Network staff's work, in the order somebody is kept waiting by it: a claim is a person waiting for
     // an answer, a disposal row is a shop holding a box, an application is a shop that cannot start.
     ...(isOperator
@@ -66,6 +68,10 @@ export function App() {
           { key: 'claims' as const, label: t('tower.nav.claims'), icon: 'warning' as const, count: state.claims?.length ?? null },
           { key: 'disposal' as const, label: t('tower.nav.disposal'), icon: 'box' as const, count: state.disposal?.length ?? null },
           { key: 'approvals' as const, label: t('tower.nav.approvals'), icon: 'badge' as const, count: state.approvals?.length ?? null },
+          // Neither of these is a queue: support is somebody on the phone, and the pictures are a
+          // to-do list nobody is waiting on. No counts, for the same reason as the overview.
+          { key: 'support' as const, label: t('tower.nav.support'), icon: 'search' as const, count: null },
+          { key: 'pictures' as const, label: t('tower.nav.pictures'), icon: 'camera' as const, count: null },
         ]
       : []),
     ...(manyCompanies ? [{ key: 'companies' as const, label: t('tower.nav.companies'), icon: 'grid' as const, count: state.entities?.length ?? null }] : []),
@@ -133,7 +139,11 @@ export function App() {
         </nav>
 
         <main class="cons__main">
-          {state.screen === 'money' ? (
+          {state.screen === 'support' ? (
+            <SupportScreen state={state} actions={actions} />
+          ) : state.screen === 'pictures' ? (
+            <PicturesScreen state={state} actions={actions} />
+          ) : state.screen === 'money' ? (
             <MoneyScreen state={state} actions={actions} />
           ) : state.screen === 'network' ? (
             <NetworkScreen state={state} actions={actions} />

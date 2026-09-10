@@ -65,6 +65,35 @@ export function createOperatorApi(sbg: SbgClient) {
     setInsurance: (entityId: string, body: { lane?: string; premiumPct?: number | null; freeLimit?: number | null }) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/insurance', { params: { path: { entityId } }, body: body as never })),
 
+    /* ---- support: the screen that answers a phone call ---- */
+
+    /** One parcel, whole — status, journey and the proofs attached to it. */
+    parcel: (parcelId: string) => sbg.request((c) => c.GET('/v1/sbg/parcels/{id}', { params: { path: { id: parcelId } } })),
+
+    /**
+     * Rotate a burnt release code.
+     *
+     * The ONLY way back from one: a parcel never carries its own release key and the shop that hands it
+     * over never learns it, so a code guessed to death can only be replaced from here. What comes back is
+     * a NEW code sent to the buyer's app and the store — except a peer send, which has no app to send it
+     * to, so its OTP is returned once for somebody to read down the phone.
+     */
+    reissueRelease: (parcelId: string, by?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/parcels/{id}/reissue-release', { params: { path: { id: parcelId } }, body: (by ? { by } : {}) as never })),
+
+    /* ---- the illustration library ---- */
+
+    /** Every option of one vocabulary, with whatever picture it has and whose picture that is. */
+    help: (topic: string) => sbg.request((c) => c.GET('/v1/sbg/help/{topic}', { params: { path: { topic } } })),
+
+    /** Put this deployment's own drawing on an option. Overrides the network's; never deletes it. */
+    setHelpImage: (topic: string, key: string, dataUrl: string) =>
+      sbg.request((c) => c.PUT('/v1/sbg/help/{topic}/{key}/image', { params: { path: { topic, key } }, body: { dataUrl } as never })),
+
+    /** Take this deployment's drawing back — which REVEALS the network's again rather than blanking it. */
+    clearHelpImage: (topic: string, key: string) =>
+      sbg.request((c) => c.DELETE('/v1/sbg/help/{topic}/{key}/image', { params: { path: { topic, key } } })),
+
     /* ---- money: what a company holds, owes, and pays out ---- */
 
     /** The network's own ledger — float per currency, today's fees, the last entries. Operator-only. */

@@ -371,3 +371,78 @@
   gap: 12px;
   margin-bottom: 6px;
 }
+
+/* The coverage map, at console scale. The shared component brings its own chrome and its own
+   map/plot toggle; this only gives it a frame and keeps it off the full width, because a map that fills
+   a 1500px screen is a map somebody has to scroll past to reach the table it is about. */
+.twr-map {
+  padding: 12px 16px 4px;
+  max-width: 900px;
+}
+
+.twr-map .chint {
+  margin-top: 6px;
+}
+
+/* ------------------------------------------------------ support + pictures -- */
+
+.twr-lookup {
+  display: flex;
+  gap: 8px;
+  max-width: 520px;
+  margin-bottom: 18px;
+}
+
+.twr-release {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--bd-soft);
+}
+
+.twr-release .chint {
+  flex: 1 1 32ch;
+  margin: 0;
+}
+
+.twr-pics {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 14px;
+  padding: 14px 16px;
+}
+
+.twr-pic {
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-card);
+  padding: 10px;
+  background: var(--card);
+}
+
+.twr-pic__img {
+  width: 100%;
+  height: 110px;
+  object-fit: contain;
+  background: var(--bg);
+  border-radius: 6px;
+}
+
+/* A slot with no drawing is a TO-DO, not an error: dashed and quiet, never red. */
+.twr-pic__none {
+  width: 100%;
+  height: 110px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--bd);
+  border-radius: 6px;
+  color: var(--tx3);
+  font-size: var(--c-fs-sm);
+}
+
+.twr-pic__key {
+  margin: 8px 0 2px;
+  font-weight: 700;
+  color: var(--navy);
+}

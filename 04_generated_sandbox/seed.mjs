@@ -150,7 +150,7 @@ async function main() {
   line('Track a parcel (key)', `${FRONT}/index.html   → track key: ${oC.parcel.trackingKey}`);
   line('Fleet console (manager)', `${FRONT}/fleet.html   → sign in: ${active.loginCode}`);
   line('Fleet console (operator)', `${FRONT}/fleet.html?ops=1`);
-  line('PUDO control tower', `${FRONT}/pudo-tower.html`);
+  line('Operator console', `${FRONT}/tower/`);
   console.log('');
 }
 
