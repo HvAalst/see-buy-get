@@ -176,8 +176,8 @@ describe('the shops that started and stopped', () => {
     // The console's other day counts start past 48 hours and can never print a 1. This one starts at
     // zero, so it is the one place that has to.
     expect(stuckLabel(0, t)).toBe('tower.stalled.today');
-    expect(stuckLabel(1, t)).toBe('tower.stalled.day');
-    expect(stuckLabel(29, t)).toBe('tower.stalled.days(n=29)');
+    expect(stuckLabel(1, t)).toBe('tower.stalled.daysOne(count=1)');
+    expect(stuckLabel(29, t)).toBe('tower.stalled.daysMany(count=29)');
   });
 
   it('names the missing documents rather than counting them', () => {

@@ -15,10 +15,12 @@ rule restored under a coarse pointer), and it is **not installable**: no manifes
 tab, and no service worker, because an operator acts on a queue and a cached queue is one that lies. See
 `AppSpec.installable` in `vite.config.ts`.
 
-`src/control-tower.html` is the ONE hand-rolled vanilla page left, and it is still never built: the M7
-simulator surface (scenarios, disruption, network design, carbon), which is a different product from the
-operator's day and has not been migrated or retired. Its fate is an open question rather than an
-oversight.
+`src/control-tower.html` is GONE too, and it was deleted rather than migrated. It drove the M7 module —
+scenarios, disruption, network design, carbon — whose only signal source is a stub feed of Suez-canal and
+Singapore port advisories: software written for a global freight forwarder, before this became a network
+of shops, riders and buses. Nothing in the current cast had a use for it. The M7 backend stays (its
+digital twin is fed by real parcel events and is the one half that is true here); the rest of it is
+parked, not shipped.
 
 `src/pudo-tower.html` is GONE. Every panel it had — the KPIs and coverage, the shops and hubs, the
 standing alerts, the damage claims, the disposal queue, the shop applications, finance and the payout
@@ -61,14 +63,9 @@ Sign in with your name and the operator key — the server's `GLOS_CLIENT_SECRET
 configured, any value is accepted. The credential lives in `sessionStorage` only, so closing the tab
 signs the console out.
 
-**The one legacy vanilla console.**
-
-```bash
-npm start                     # http://localhost:4173/control-tower.html
-```
-
-This serves `src/` — the M7 simulator page lives there and is not part of any build. It does not serve
-the apps, and there is no `src/index.html`.
+**No page is served statically any more.** `src/` is source plus the site files the build copies into
+`dist/`; the `http-server` scripts that used to serve it on 4173 went with the last vanilla page, and
+there is no `src/index.html`.
 
 The backend must be running for any of it: `cd ../backend && npm run start:dev` (port 3000).
 

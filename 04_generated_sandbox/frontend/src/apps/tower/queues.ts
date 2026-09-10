@@ -230,11 +230,11 @@ export function missingWords(missing: string[], t: Translate): string {
 /**
  * "Stuck for" as words.
  *
- * A separate key for one day rather than "1 days". The console's other day counts can never print a 1
- * (they only reach days past 48 hours), and this one starts at zero — so it is the one place that has
- * to say it properly.
+ * A key PAIR for the plural, which is the house rule (`t()` does no pluralising). The console's other
+ * day counts can never print a 1 — they only reach days past 48 hours — and this one starts at zero, so
+ * it is the one place that has to say it properly.
  */
 export function stuckLabel(days: number, t: Translate): string {
   if (days === 0) return t('tower.stalled.today');
-  return days === 1 ? t('tower.stalled.day') : t('tower.stalled.days', { n: days });
+  return days === 1 ? t('tower.stalled.daysOne', { count: days }) : t('tower.stalled.daysMany', { count: days });
 }

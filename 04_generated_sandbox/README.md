@@ -1,22 +1,28 @@
 # GLOS Sandbox — run & test
 
-NestJS backend (`backend/`, port **3000**) + vanilla-JS frontend (`frontend/src`, port **4173**).
-No framework/bundler — each surface is an ES-module page with its own state + a `fetch` API client.
+NestJS backend (`backend/`, port **3000**) + eight Preact/Vite apps (`frontend/src/apps`, one port each).
+The hand-rolled vanilla pages are all gone; `frontend/README.md` is the guide to the apps and their build.
 
 ## Run it
 
 ```bash
 # from 04_generated_sandbox/
-npm run dev        # starts backend (:3000) + frontend (:4173) together, prefixed logs
+npm run dev        # backend (:3000) + the default app (driver, :5173), prefixed logs
 ```
+
+Vite builds ONE app at a time, so pick another by starting it yourself:
+`SBG_APP=tower npm --prefix frontend run dev` (the operator console, :5181).
 
 Then, once the backend is up, in another terminal:
 
 ```bash
-npm run seed       # creates demo data and prints the click-through URLs
+npm --prefix backend run seed:demo   # demo data + the sign-in sheet for every app
 ```
 
 (You can also run the two halves separately: `npm run backend` / `npm run frontend`.)
+
+> `npm run seed` at this level is the OLD seeder: it still populates a backend, but it prints URLs for
+> pages that no longer exist. `seed:demo` in `backend/` is the one that is maintained.
 
 ## What `seed` creates
 
@@ -29,19 +35,20 @@ A full slice you can click through end-to-end:
 - the bike courier **on shift** (scanned the vehicle QR) with a **GPS position**
 - an **outbound bag** released to the marketplace and **claimed** → cargo in motion on the fleet map
 
-The seed prints the URLs, including:
+Where the surfaces live:
 
 | Surface | URL |
 | --- | --- |
-| **Launcher (start here)** | `http://localhost:4173/hub.html` |
-| Agent app | `…/agent.html?agent=<did>` |
-| Driver app | `…/driver.html?driver=<did>` |
-| MDP worker app | `…/mdp.html?mdp=<id>` |
-| Merchant console | `…/vendor.html` |
-| Fleet console (manager) | `…/fleet.html` → sign in with the `FM-…` code |
-| Fleet console (operator) | `…/fleet.html?ops=1` |
-| Operator console | `…/tower/` |
+| Home | `http://localhost:5180/` |
+| Driver app | `http://localhost:5173/driver/` |
+| Agent app (a shop) | `http://localhost:5175/agent/` |
+| Send app | `http://localhost:5176/send/` |
+| Fleet console | `http://localhost:5177/fleet/` |
+| Hub (MDP) app | `http://localhost:5178/mdp/` |
+| Merchant console | `http://localhost:5179/vendor/` |
+| Operator console | `http://localhost:5181/tower/` |
 
-Start at **`hub.html`** — it lists every surface and pre-selects a seeded entity so you can jump straight in.
+Each app runs on its own Vite port and only when you start it: `SBG_APP=<app> npm --prefix frontend run dev`.
+The sign-in sheet `seed:demo` prints has the logins for each one.
 
-> Note: it's an in-memory backend — restarting it clears the data; just run `npm run seed` again.
+> Note: it's an in-memory backend — restarting it clears the data; just run `seed:demo` again.

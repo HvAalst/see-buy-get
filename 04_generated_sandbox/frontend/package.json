@@ -4,8 +4,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "npx http-server src -p 4173 -c-1",
-    "preview": "npx http-server src -p 4173 -c-1",
     "dev": "vite",
     "build": "node scripts/build-all.mjs",
     "icons": "node scripts/gen-icons.mjs",

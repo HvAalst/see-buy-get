@@ -3,12 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "GLOS sandbox orchestrator — runs the NestJS backend + the vanilla frontend together, and seeds demo data.",
+  "description": "GLOS sandbox orchestrator — runs the NestJS backend + one frontend app together, and seeds demo data.",
   "scripts": {
     "dev": "node dev.mjs",
     "seed": "node seed.mjs",
     "seo:build": "node seo-build.mjs",
     "backend": "npm --prefix backend run start:dev",
-    "frontend": "npm --prefix frontend run start"
+    "frontend": "npm --prefix frontend run dev"
   }
 }

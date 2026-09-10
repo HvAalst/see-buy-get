@@ -25,11 +25,12 @@ declare const process: { env: Record<string, string | undefined> };
 
    `npm run build` loops the five over `scripts/build-all.mjs`.
 
-   Vite's root is the app directory itself, NOT `src/`. What still lives at `src/` root is
-   ONE hand-rolled vanilla page — control-tower, the M7 simulator surface — served by
-   http-server (npm start, port 4173) and never seen, transformed or built by Vite. The 26
-   legacy vanilla copies of the apps that used to sit beside it were deleted once the PWAs
-   superseded them, and pudo-tower followed once the `tower` app had every one of its panels.
+   Vite's root is the app directory itself, NOT `src/`. NO hand-rolled page lives at `src/`
+   root any more: the 26 legacy vanilla copies went once the PWAs superseded them, pudo-tower
+   followed once the `tower` app had every one of its panels, and control-tower — the M7
+   simulator surface — was deleted rather than migrated, because what it drove was written for
+   a global freight forwarder and not for this network. Nothing serves `src/` statically now;
+   what is left there is source, plus the site files the build copies into `dist/`.
    ========================================================================== */
 
 type AppSpec = {
@@ -39,7 +40,7 @@ type AppSpec = {
   name: string;
   short: string;
   description: string;
-  /** Vite dev server port. 4173 belongs to http-server (legacy pages). */
+  /** Vite dev server port. 4173 is left free — it belonged to the static server for the legacy pages. */
   devPort: number;
   previewPort: number;
   /**
