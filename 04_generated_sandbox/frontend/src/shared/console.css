@@ -126,6 +126,18 @@
   gap: 2px;
 }
 
+/* The rail is a list of GROUPS, each a heading over its screens. A group holding one screen is drawn
+   without a heading (see ConsoleNav) — a title over a single row labels a list that is not a list. */
+.cons__railgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cons__railgroup + .cons__railgroup {
+  margin-top: 12px;
+}
+
 .cons__railhead {
   font-size: 11px;
   font-weight: 700;
@@ -465,6 +477,50 @@
   color: var(--tx2);
 }
 
+
+/* --------------------------------------------------------------- the sheet -- */
+
+/* Below 1100px the groups move into a slide-up sheet (the shared `Sheet`, the same one the seven field
+   apps use). Rows here are TAPPED, so they take the phone's target size rather than the console's — and
+   they get it from the coarse-pointer block at the foot of this file, which has already raised
+   --c-ctl-h to 48px on anything with a thumb for a pointer. */
+.cons__sheetlist {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cons__sheetitem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 12px;
+  border-radius: var(--r-ctl);
+  color: var(--tx);
+  font-size: var(--c-fs-lg);
+  font-weight: 600;
+  text-align: left;
+}
+
+/* Orange again, and for the same reason as the rail: it is the screen you are ON, not a thing to press. */
+.cons__sheetitem--on {
+  background: var(--org-light);
+  color: var(--navy);
+  box-shadow: inset 3px 0 0 var(--org);
+}
+
+.cons__sheetcount {
+  margin-left: auto;
+  font-weight: 700;
+  color: var(--tx3);
+}
+
+.cons__sheetitem--on .cons__sheetcount {
+  color: var(--navy);
+}
+
 /* -------------------------------------------------------------- keyboard --- */
 
 .cons :focus-visible {
@@ -491,29 +547,41 @@
   }
 }
 
+/* THE 1100px LINE, and it is a line JavaScript reads too.
+
+   Above it: the masthead, the grouped sidebar, the work area. Below it: no sidebar at all — the shell
+   renders a BottomNav and a slide-up sheet instead (shared/useWideScreen.ts asks the same question this
+   query does, and the two must be changed together). What used to happen here was that the rail turned
+   sideways into a scrolling strip of ten sections, which is how this surface earned the complaint that
+   started the rewrite: a menu you have to drag sideways hides its own destinations. */
 @media (max-width: 1100px) {
   .cons__body {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .cons__rail {
-    border-right: 0;
-    border-bottom: 1px solid var(--bd-soft);
-    flex-direction: row;
-    align-items: center;
-    overflow-x: auto;
-    padding: 8px 12px;
+  /* Room for the bar that is fixed over the bottom of the viewport, plus the home indicator under it —
+     otherwise the last row of every table is a row nobody can read or press. */
+  .cons__main {
+    padding: 18px 16px calc(var(--bottomnav-h) + var(--sa-b) + 24px);
   }
 
-  .cons__railhead {
+  /* The masthead keeps the brand and who is signed in, and gives up the running work line: it is a
+     summary of the same queues the bar below is already counting. */
+  .cons__mastwork {
     display: none;
   }
 
-  .cons__railitem {
-    width: auto;
+  .cons__mast {
+    padding: 0 12px;
   }
 
-  .cons__main {
-    padding: 18px 16px 48px;
+  .cons__who {
+    min-width: 0;
+  }
+
+  .cons__who > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }

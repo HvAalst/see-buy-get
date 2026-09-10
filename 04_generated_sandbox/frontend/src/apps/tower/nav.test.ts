@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NAV_GROUPS, firstScreen, groupBadge, groupOf, groupsFor, opensSheet } from './nav';
+import { NAV_GROUPS, SCREEN_META, activeGroupKey, firstScreen, groupBadge, groupOf, groupsFor, opensSheet } from './nav';
 import type { Screen } from './useTowerApp';
 
 const ALL: Screen[] = ['network', 'hazards', 'claims', 'disposal', 'approvals', 'support', 'money', 'companies', 'rates', 'pictures'];
@@ -92,5 +92,38 @@ describe('tapping a group', () => {
     const [setup] = groupsFor(['rates']);
     expect(opensSheet(setup)).toBe(false);
     expect(firstScreen(setup)).toBe('rates');
+  });
+});
+
+describe('every screen can be drawn', () => {
+  it('names and pictures all ten', () => {
+    // A screen reachable from a menu that has no label is a blank row somebody has to click to identify.
+    for (const screen of ALL) {
+      expect(SCREEN_META[screen].labelKey).toBeTruthy();
+      expect(SCREEN_META[screen].icon).toBeTruthy();
+    }
+  });
+
+  it('gives no two screens the same label', () => {
+    const labels = ALL.map((s) => SCREEN_META[s].labelKey);
+    expect(new Set(labels).size).toBe(labels.length);
+  });
+});
+
+describe('which group the console is in', () => {
+  it('answers with the group holding the open screen', () => {
+    const groups = groupsFor(ALL);
+    expect(activeGroupKey(groups, 'disposal')).toBe('waiting');
+    expect(activeGroupKey(groups, 'rates')).toBe('setup');
+  });
+
+  it('falls back to the first group on offer when the open screen is not one of them', () => {
+    // A company administrator restored into an operator's last screen. Marking NOTHING would tell them
+    // they are nowhere; the first group is at least somewhere they can be.
+    expect(activeGroupKey(groupsFor(['money', 'rates']), 'hazards')).toBe('money');
+  });
+
+  it('answers null only when there is nothing to offer', () => {
+    expect(activeGroupKey([], 'money')).toBeNull();
   });
 });

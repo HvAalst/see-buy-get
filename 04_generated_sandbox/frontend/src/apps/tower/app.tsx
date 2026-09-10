@@ -1,4 +1,4 @@
-import { BrandMark, Icon } from '../../shared/ui';
+import { BrandMark } from '../../shared/ui';
 import { useT } from '../../shared/i18n';
 import { CompaniesScreen } from './screens/CompaniesScreen';
 import { HazardsScreen } from './screens/HazardsScreen';
@@ -9,22 +9,31 @@ import { SupportScreen } from './screens/SupportScreen';
 import { NetworkScreen } from './screens/NetworkScreen';
 import { RatesScreen } from './screens/RatesScreen';
 import { SignInScreen } from './screens/SignInScreen';
+import { ConsolePhoneNav, ConsoleRail } from './ConsoleNav';
+import { groupsFor } from './nav';
 import { waitingLine } from './queues';
+import { useWideScreen } from '../../shared/useWideScreen';
 import { useTowerApp, type Screen } from './useTowerApp';
 import '../../shared/console.css';
 import './tower.css';
 
 /**
- * The operator console shell: a masthead, a rail of sections, and one work area.
+ * The operator console shell: a masthead, a navigation, and one work area — the navigation being a
+ * grouped sidebar at a desk and a bottom bar with a slide-up sheet on anything narrower.
  *
- * No BottomNav, no TopBar, no service worker — the three things every other app in this repo has. They
- * are all answers to the same question ("a phone, in the field, maybe with no signal") and this surface
- * answers a different one. What it does keep is the shared TOKENS and the shared meanings: orange is a
- * state, blue is the action, and every string is a catalogue key.
+ * No TopBar and no service worker — two of the three things every other app in this repo has. They are
+ * answers to a question this surface does not ask ("a phone, in the field, maybe with no signal"). The
+ * third, the BottomNav, IS here, but only below 1100px: a console is run at a desk and carried to a
+ * tablet, and on the tablet it should behave like everything else this network puts in a hand. What it
+ * keeps everywhere is the shared TOKENS and the shared meanings: orange is a state, blue is the action,
+ * and every string is a catalogue key.
  */
 export function App() {
   const t = useT();
   const { state, actions } = useTowerApp();
+  // Asked before the early returns, because a hook cannot be called conditionally — and read here rather
+  // than left to CSS, because a stylesheet can move a menu but cannot swap it for a different one.
+  const wide = useWideScreen();
 
   if (state.phase === 'boot') return <div class="twr-boot" aria-busy="true" />;
 
@@ -47,39 +56,39 @@ export function App() {
   }
 
   /**
-   * The rail is built from WHAT THIS CALLER REACHES, never trimmed after the fact.
+   * The navigation is built from WHAT THIS CALLER REACHES, never trimmed after the fact.
    *
    * Network staff work the hazard queue; a company's administrator does not, and a section whose every
    * row would answer 403 is worse than a missing one — it teaches somebody that the console is broken.
    * The companies view appears only for somebody who reaches more than one, because a comparison of one
-   * company with itself is not a comparison.
+   * company with itself is not a comparison. `groupsFor` then does the rest: it puts each reachable
+   * screen under its group and DROPS a group nothing is left in, so an administrator is offered two
+   * groups rather than four, two of them empty.
    */
   const isOperator = state.who?.mode === 'operator';
   const manyCompanies = (state.entities?.length ?? 0) > 1;
-  const sections: { key: Screen; label: string; icon: 'route' | 'wallet' | 'grid' | 'warning' | 'box' | 'badge' | 'home' | 'edit' | 'search' | 'camera'; count: number | null }[] = [
-    // Network staff's work, in the order somebody is kept waiting by it: a claim is a person waiting for
-    // an answer, a disposal row is a shop holding a box, an application is a shop that cannot start.
-    ...(isOperator
-      ? [
-          // No count beside the overview: a number there would read as "this many things need you",
-          // and nothing on it is waiting for anybody.
-          { key: 'network' as const, label: t('tower.nav.network'), icon: 'home' as const, count: null },
-          { key: 'hazards' as const, label: t('tower.nav.hazards'), icon: 'route' as const, count: state.hazards?.length ?? null },
-          { key: 'claims' as const, label: t('tower.nav.claims'), icon: 'warning' as const, count: state.claims?.length ?? null },
-          { key: 'disposal' as const, label: t('tower.nav.disposal'), icon: 'box' as const, count: state.disposal?.length ?? null },
-          { key: 'approvals' as const, label: t('tower.nav.approvals'), icon: 'badge' as const, count: state.approvals?.length ?? null },
-          // Neither of these is a queue: support is somebody on the phone, and the pictures are a
-          // to-do list nobody is waiting on. No counts, for the same reason as the overview.
-          { key: 'support' as const, label: t('tower.nav.support'), icon: 'search' as const, count: null },
-          { key: 'pictures' as const, label: t('tower.nav.pictures'), icon: 'camera' as const, count: null },
-        ]
-      : []),
-    ...(manyCompanies ? [{ key: 'companies' as const, label: t('tower.nav.companies'), icon: 'grid' as const, count: state.entities?.length ?? null }] : []),
-    // No count on the rates section, and not because one is hard to compute: a number beside a section
-    // means "this many things are waiting for you", and nothing here is waiting for anybody.
-    { key: 'money' as const, label: t('tower.nav.money'), icon: 'wallet' as const, count: null },
-    { key: 'rates' as const, label: t('tower.nav.rates'), icon: 'edit' as const, count: null },
+  const available: Screen[] = [
+    ...(isOperator ? (['network', 'hazards', 'claims', 'disposal', 'approvals', 'support', 'pictures'] as Screen[]) : []),
+    ...(manyCompanies ? (['companies'] as Screen[]) : []),
+    'money',
+    'rates',
   ];
+  const groups = groupsFor(available);
+
+  /**
+   * THE FOUR QUEUES ARE THE ONLY THINGS THAT COUNT.
+   *
+   * Not the companies, not the pictures, not the rates — a number beside a section reads as "this many
+   * things are waiting for you", and "3" beside the companies would be a fact wearing the clothes of a
+   * demand. Null while unread, everywhere: a badge of 0 says "you are up to date", which is a different
+   * claim from "we have not looked yet".
+   */
+  const counts: Partial<Record<Screen, number | null>> = {
+    hazards: state.hazards?.length ?? null,
+    claims: state.claims?.length ?? null,
+    disposal: state.disposal?.length ?? null,
+    approvals: state.approvals?.length ?? null,
+  };
 
   return (
     <div class="cons">
@@ -120,23 +129,7 @@ export function App() {
       </header>
 
       <div class="cons__body">
-        <nav class="cons__rail" aria-label={t('tower.rail.heading')}>
-          <p class="cons__railhead">{t('tower.rail.heading')}</p>
-          {sections.map((s) => (
-            <button
-              key={s.key}
-              type="button"
-              class={`cons__railitem${state.screen === s.key ? ' cons__railitem--on' : ''}`}
-              aria-current={state.screen === s.key ? 'page' : undefined}
-              onClick={() => actions.go(s.key)}
-            >
-              <Icon name={s.icon} size={18} />
-              <span>{s.label}</span>
-              {/* null while unread: a blank count reads as zero, and zero is a different answer. */}
-              {s.count === null ? null : <span class="cons__railcount">{s.count}</span>}
-            </button>
-          ))}
-        </nav>
+        {wide ? <ConsoleRail groups={groups} screen={state.screen} counts={counts} onGo={actions.go} /> : null}
 
         <main class="cons__main">
           {state.screen === 'support' ? (
@@ -162,6 +155,8 @@ export function App() {
           )}
         </main>
       </div>
+
+      {wide ? null : <ConsolePhoneNav groups={groups} screen={state.screen} counts={counts} onGo={actions.go} />}
     </div>
   );
 }

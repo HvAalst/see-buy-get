@@ -45,6 +45,26 @@ export const NAV_GROUPS: NavGroup[] = [
   { key: 'setup', labelKey: 'tower.group.setup', icon: 'edit', screens: ['companies', 'rates', 'pictures'] },
 ];
 
+/**
+ * What each screen is CALLED and what it is drawn as, in one place.
+ *
+ * It used to be spelled out inline where the rail was built, which was survivable while there was one
+ * rail and became a duplication the moment the same ten screens had to be listed again in a sheet. A
+ * screen named twice is a screen that will eventually be named two different things.
+ */
+export const SCREEN_META: Record<Screen, { labelKey: MessageKey; icon: IconName }> = {
+  network: { labelKey: 'tower.nav.network', icon: 'home' },
+  hazards: { labelKey: 'tower.nav.hazards', icon: 'route' },
+  claims: { labelKey: 'tower.nav.claims', icon: 'warning' },
+  disposal: { labelKey: 'tower.nav.disposal', icon: 'box' },
+  approvals: { labelKey: 'tower.nav.approvals', icon: 'badge' },
+  support: { labelKey: 'tower.nav.support', icon: 'search' },
+  money: { labelKey: 'tower.nav.money', icon: 'wallet' },
+  companies: { labelKey: 'tower.nav.companies', icon: 'grid' },
+  rates: { labelKey: 'tower.nav.rates', icon: 'edit' },
+  pictures: { labelKey: 'tower.nav.pictures', icon: 'camera' },
+};
+
 /** Which group a screen lives in. Every screen has exactly one home. */
 export function groupOf(screen: Screen): NavGroup['key'] | null {
   return NAV_GROUPS.find((g) => g.screens.includes(screen))?.key ?? null;
@@ -90,4 +110,16 @@ export function opensSheet(group: NavGroup): boolean {
 /** Where tapping a group lands when it does not open a sheet. */
 export function firstScreen(group: NavGroup): Screen {
   return group.screens[0];
+}
+
+/**
+ * Which group the console is currently IN.
+ *
+ * The bottom bar marks a group rather than a screen, so it has to answer this for whatever screen is
+ * open — including one that is no longer offered (a company administrator restored into an operator's
+ * last screen). It falls back to the first group on offer rather than to none: a navigation with
+ * nothing marked tells somebody they are nowhere.
+ */
+export function activeGroupKey(groups: NavGroup[], screen: Screen): NavGroup['key'] | null {
+  return groups.find((g) => g.screens.includes(screen))?.key ?? groups[0]?.key ?? null;
 }
