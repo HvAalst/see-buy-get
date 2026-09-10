@@ -61,7 +61,7 @@ acceptance criteria as definition-of-done):
   /tracking.html?shipment=…, /settlement.html?shipment=… (financial dashboard),
   /reputation.html?did=… (trust score), /pod.html?shipment=… (courier proof-of-delivery),
   /control-tower.html?region=… (M7 admin console — region-cloneable),
-  /agent.html?agent=… (PUDO 3-screen agent app), /pudo-tower.html (PUDO operator control tower),
+  /agent.html?agent=… (PUDO 3-screen agent app), /tower/ (the operator console — the 8th PWA; pudo-tower.html was retired once every panel had moved),
   /vendor.html (PUDO merchant console — e-commerce click-and-collect), /components-demo.html
 
 - **M3 matching marketplace:** ✅ built. Availability feed, demand intake (pulls the M2 JRV),
