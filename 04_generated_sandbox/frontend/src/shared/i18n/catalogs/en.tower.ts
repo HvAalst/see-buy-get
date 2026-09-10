@@ -337,6 +337,27 @@ export const enTowerQueues = {
   'tower.approvals.refuse': 'Refuse',
   'tower.approvals.approved': 'Approved — they can start taking parcels.',
   'tower.approvals.refused': 'Refused.',
+
+  // ---- and the shops that started and stopped: a chase list, not a queue ----
+  'tower.stalled.title': 'Started signing up and stopped',
+  'tower.stalled.lede':
+    'Nobody here is waiting on us — they are waiting on themselves, which is why none of them is in the count above. Every row is a phone call: they wanted in and hit something.',
+  'tower.stalled.count': '{n} to chase',
+  'tower.stalled.emptyTitle': 'Everybody who started, finished',
+  'tower.stalled.emptyBody': 'No shop is halfway through joining.',
+  'tower.stalled.col.shop': 'Shop',
+  'tower.stalled.col.stuck': 'Stuck for',
+  'tower.stalled.col.why': 'Why',
+  'tower.stalled.col.missing': 'Still needed',
+  'tower.stalled.today': 'today',
+  'tower.stalled.day': '1 day',
+  'tower.stalled.days': '{n} days',
+  'tower.stalled.reason.documents': 'Registered, never sent documents',
+  'tower.stalled.reason.topup': 'Approved, never funded its float',
+  'tower.stalled.doc.id': 'ID',
+  'tower.stalled.doc.licence': 'trading licence',
+  'tower.stalled.doc.photos': 'photos of the shop',
+  'tower.stalled.nothingMissing': 'Nothing — the first top-up',
 };
 
 /* ---- C4b: the network at a glance ---- */

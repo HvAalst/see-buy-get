@@ -446,3 +446,20 @@
   font-weight: 700;
   color: var(--navy);
 }
+
+/* ------------------------------------------------------- the stalled sign-ups -- */
+
+/* The second section on the applications screen: a chase list, so it sits UNDER the queue and says out
+   loud what it is. The note is not a caveat (nothing here can mislead a decision) and not an error —
+   it is the reason this table is not part of the count above it. */
+.twr-stalled {
+  margin-top: 20px;
+}
+
+.twr-stalled__note {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--bd-soft);
+  color: var(--tx2);
+  font-size: var(--c-fs-sm);
+  max-width: 96ch;
+}

@@ -162,3 +162,79 @@ export const QUEUE_LABEL: Record<'claims' | 'disposal' | 'approvals', MessageKey
   disposal: 'tower.nav.disposal',
   approvals: 'tower.nav.approvals',
 };
+
+/* ------------------------------------------------------------- stalled sign-ups -- */
+
+/**
+ * A shop that started joining and STOPPED. Not a queue row.
+ *
+ * The distinction is the whole point of this list: an application waits on US, and one of these waits
+ * on THEM — for their own documents, or for their own first top-up. It exists because a network that
+ * grows by shops joining cannot afford "signed up and went quiet" to be invisible, and it is counted
+ * nowhere and badged nowhere, because nothing in it is waiting on network staff.
+ */
+export interface StalledRow {
+  did: string;
+  shopName: string;
+  zone: string;
+  status: string;
+  /** When they registered. */
+  since: string;
+  reason: 'needs-documents' | 'needs-first-top-up';
+  /** Which documents are missing — empty for a shop that sent them all and never funded its float. */
+  missing: string[];
+}
+
+/**
+ * How long they have been stuck, in whole days.
+ *
+ * Rounded DOWN, so a shop that registered this morning reads as 0 rather than as 1. This number is the
+ * argument for picking up a phone, and an argument must never be able to overstate its own case.
+ */
+export function stuckDays(since: string, now = Date.now()): number {
+  const from = Date.parse(since);
+  if (Number.isNaN(from)) return 0;
+  return Math.max(0, Math.floor((now - from) / 86_400_000));
+}
+
+/** What to tell whoever answers: why they are stuck. */
+export const STALLED_REASON: Record<StalledRow['reason'], MessageKey> = {
+  'needs-documents': 'tower.stalled.reason.documents',
+  'needs-first-top-up': 'tower.stalled.reason.topup',
+};
+
+/**
+ * The three documents a draft shop can be short of, NAMED rather than counted.
+ *
+ * "2 missing" is a number somebody has to ring the shop to decode; "trading licence and photos" is the
+ * sentence they were going to have to say anyway.
+ */
+export const STALLED_DOC: Record<string, MessageKey> = {
+  id: 'tower.stalled.doc.id',
+  licence: 'tower.stalled.doc.licence',
+  photos: 'tower.stalled.doc.photos',
+};
+
+/**
+ * What this shop still owes us, as a sentence somebody can read down a phone.
+ *
+ * "2 missing" is a number the caller has to ring the shop to decode; "an ID and photos of the shop" is
+ * the thing they were going to have to say anyway. A document the server names and this console does
+ * not is passed through as it arrived rather than dropped: an unknown word is fixable, a silent gap is
+ * a shop told they are done when they are not.
+ */
+export function missingWords(missing: string[], t: Translate): string {
+  return missing.map((m) => (STALLED_DOC[m] ? t(STALLED_DOC[m]) : m)).join(', ');
+}
+
+/**
+ * "Stuck for" as words.
+ *
+ * A separate key for one day rather than "1 days". The console's other day counts can never print a 1
+ * (they only reach days past 48 hours), and this one starts at zero — so it is the one place that has
+ * to say it properly.
+ */
+export function stuckLabel(days: number, t: Translate): string {
+  if (days === 0) return t('tower.stalled.today');
+  return days === 1 ? t('tower.stalled.day') : t('tower.stalled.days', { n: days });
+}

@@ -8,13 +8,18 @@ import {
   claimBlocker,
   coverLine,
   daysWaiting,
+  STALLED_REASON,
   documentsOf,
+  missingWords,
   money,
   shelfSlots,
+  stuckDays,
+  stuckLabel,
   type ApprovalRow,
   type ClaimDecision,
   type ClaimRow,
   type DisposalRow,
+  type StalledRow,
 } from '../queues';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
@@ -355,7 +360,74 @@ export function ApprovalsScreen({ state, actions }: { state: TowerState; actions
           </table>
         ) : null}
       </QueuePanel>
+
+      <StalledPanel rows={state.stalled} />
     </>
+  );
+}
+
+/**
+ * THE SHOPS NOBODY IS CHASING — the second half of this screen, and deliberately not a queue.
+ *
+ * The queue above is decisions we owe. This is people who are waiting on THEMSELVES: a shop that
+ * registered and never sent its documents, or one we approved that never funded its float. They are on
+ * this screen because it is the screen about shops joining, and they are below the queue, without a
+ * count in the rail or a badge on the bar, because nothing here is waiting on network staff.
+ *
+ * Every row is a phone call, so every row carries what that call is about: how long they have been
+ * stuck, why, and exactly which documents are missing.
+ */
+function StalledPanel({ rows }: { rows: StalledRow[] | null }) {
+  const t = useT();
+  const now = Date.now();
+
+  return (
+    <section class="cons__panel twr-stalled">
+      <div class="cons__panelhead">
+        <span class="cons__panelt">{t('tower.stalled.title')}</span>
+        {/* Null is "not read", and it must not be rendered as a zero. */}
+        {rows === null ? null : <span class="ctbl__sub">{t('tower.stalled.count', { n: rows.length })}</span>}
+      </div>
+
+      <p class="twr-stalled__note">{t('tower.stalled.lede')}</p>
+
+      {rows === null ? (
+        <p class="cons__empty">{t('tower.queues.loading')}</p>
+      ) : rows.length === 0 ? (
+        <div class="cons__empty">
+          <p class="cons__emptyt">{t('tower.stalled.emptyTitle')}</p>
+          <p>{t('tower.stalled.emptyBody')}</p>
+        </div>
+      ) : (
+        <table class="ctbl">
+          <thead>
+            <tr>
+              <th>{t('tower.stalled.col.shop')}</th>
+              <th class="ctbl__num">{t('tower.stalled.col.stuck')}</th>
+              <th>{t('tower.stalled.col.why')}</th>
+              <th>{t('tower.stalled.col.missing')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.did}>
+                <td>
+                  <div class="ctbl__strong">{row.shopName || row.did}</div>
+                  <div class="ctbl__sub">{row.zone || '—'}</div>
+                </td>
+                <td class="ctbl__num">{stuckLabel(stuckDays(row.since, now), t)}</td>
+                <td class="ctbl__sub">{t(STALLED_REASON[row.reason] ?? 'tower.stalled.reason.documents')}</td>
+                <td class="ctbl__sub">
+                  {/* An approved shop that never topped up is missing no documents at all, and an empty
+                      cell there would read as "not loaded" rather than as "nothing outstanding". */}
+                  {row.missing.length ? missingWords(row.missing, t) : t('tower.stalled.nothingMissing')}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
   );
 }
 

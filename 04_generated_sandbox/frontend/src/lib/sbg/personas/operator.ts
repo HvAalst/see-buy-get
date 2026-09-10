@@ -164,6 +164,16 @@ export function createOperatorApi(sbg: SbgClient) {
     /** Shops waiting to be let onto the network. */
     kycQueue: () => sbg.request((c) => c.GET('/v1/sbg/agents/kyc-queue', {})),
 
+    /**
+     * Shops that started joining and STOPPED — a chase list, not a queue.
+     *
+     * Nothing in it is waiting on a decision by us: a draft shop is waiting on the shopkeeper to send
+     * their documents, and an approved one on their first top-up. That is exactly why it is a separate
+     * read from the KYC queue rather than more rows in it — a count that means "somebody must act" must
+     * not be padded with people who are waiting on themselves.
+     */
+    unfinishedSignups: () => sbg.request((c) => c.GET('/v1/sbg/agents/unfinished', {})),
+
     /** Let a shop in, or refuse it. */
     decideKyc: (did: string, body: { approve: boolean; by?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/agents/{did}/kyc-decision', { params: { path: { did } }, body: body as never })),

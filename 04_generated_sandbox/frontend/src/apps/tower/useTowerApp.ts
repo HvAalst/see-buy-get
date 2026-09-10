@@ -5,7 +5,7 @@ import { t } from '../../shared/i18n'; // plain t(): these strings are built at 
 import { clearCreds, companyLogin, createTowerClient, readCreds, saveCreds, type TowerClient, type TowerCreds } from './api';
 import type { ConstraintView } from './logic';
 import type { EntityPricing, EntityRow } from './money';
-import type { ApprovalRow, ClaimDecision, ClaimRow, DisposalRow } from './queues';
+import type { ApprovalRow, ClaimDecision, ClaimRow, DisposalRow, StalledRow } from './queues';
 import type { AgentRow, CoverageCounts, FlagRow, HubRow, ToteRow } from './network';
 import { runSummary, type PayoutAction, type PayoutRow, type RunResult } from './settlement';
 import type { HelpOption } from './pictures';
@@ -57,6 +57,9 @@ export interface TowerState {
   claims: ClaimRow[] | null;
   disposal: DisposalRow[] | null;
   approvals: ApprovalRow[] | null;
+  /** Shops that started signing up and stopped — read beside the applications, counted with none of
+   *  them. Null while unread, like every other list here. */
+  stalled: StalledRow[] | null;
   /** A refusal the SCREEN made before the server had to — a missing reason, an award over the cover. */
   queueError: string | null;
 
@@ -208,6 +211,7 @@ const INITIAL: TowerState = {
   claims: null,
   disposal: null,
   approvals: null,
+  stalled: null,
   queueError: null,
   lookup: null,
   reissued: null,
@@ -396,13 +400,21 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
    */
   const loadQueues = useCallback(async (client: TowerClient) => {
     setState((s) => ({ ...s, loading: true }));
-    const [claims, disposal, approvals] = await Promise.all([client.api.disputes(), client.api.disposalQueue(), client.api.kycQueue()]);
+    const [claims, disposal, approvals, stalled] = await Promise.all([
+      client.api.disputes(),
+      client.api.disposalQueue(),
+      client.api.kycQueue(),
+      // Read with the queues and kept apart from them everywhere after: it shares a screen with the
+      // applications and shares neither their count nor their badge.
+      client.api.unfinishedSignups(),
+    ]);
     setState((s) => ({
       ...s,
       loading: false,
       claims: claims.error ? null : (narrow<{ disputes: ClaimRow[] }>(claims.data)?.disputes ?? []),
       disposal: disposal.error ? null : (narrow<{ rows: DisposalRow[] }>(disposal.data)?.rows ?? []),
       approvals: approvals.error ? null : (narrow<ApprovalRow[]>(approvals.data) ?? []),
+      stalled: stalled.error ? null : (narrow<{ items: StalledRow[] }>(stalled.data)?.items ?? []),
       readAt: Date.now(),
     }));
   }, []);

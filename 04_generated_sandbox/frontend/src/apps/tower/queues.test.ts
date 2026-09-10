@@ -7,8 +7,11 @@ import {
   coverLine,
   daysWaiting,
   documentsOf,
+  missingWords,
   money,
   shelfSlots,
+  stuckDays,
+  stuckLabel,
   waitingLine,
   type ClaimRow,
 } from './queues';
@@ -153,5 +156,37 @@ describe('money', () => {
   it('is always two decimals, so a column of it lines up', () => {
     expect(money(3.4)).toBe('3.40');
     expect(money(undefined)).toBe('0.00');
+  });
+});
+
+describe('the shops that started and stopped', () => {
+  it('counts whole days stuck, and never rounds one up', () => {
+    // This number is the argument for ringing somebody. An argument must not overstate its own case, so
+    // a shop that registered this morning is 0 days stuck rather than 1.
+    expect(stuckDays('2026-08-11T09:00:00Z', NOW)).toBe(29);
+    expect(stuckDays('2026-09-09T06:00:00Z', NOW)).toBe(0);
+    expect(stuckDays('2026-09-10T06:00:00Z', NOW)).toBe(0);
+  });
+
+  it('says 0 rather than NaN for a date the server did not send', () => {
+    expect(stuckDays('', NOW)).toBe(0);
+  });
+
+  it('says one day properly, and today as today', () => {
+    // The console's other day counts start past 48 hours and can never print a 1. This one starts at
+    // zero, so it is the one place that has to.
+    expect(stuckLabel(0, t)).toBe('tower.stalled.today');
+    expect(stuckLabel(1, t)).toBe('tower.stalled.day');
+    expect(stuckLabel(29, t)).toBe('tower.stalled.days(n=29)');
+  });
+
+  it('names the missing documents rather than counting them', () => {
+    expect(missingWords(['id', 'licence', 'photos'], t)).toBe('tower.stalled.doc.id, tower.stalled.doc.licence, tower.stalled.doc.photos');
+    expect(missingWords([], t)).toBe('');
+  });
+
+  it('passes through a document this console has no word for', () => {
+    // A silent gap would tell a caller the shop is done when it is not.
+    expect(missingWords(['id', 'tax-number'], t)).toBe('tower.stalled.doc.id, tax-number');
   });
 });
