@@ -45,6 +45,7 @@ import { ConnectorRegistry, MobileSdkConnector, RestCarrierConnector } from '../
 import { WalletService } from '../m1/wallet/wallet.service';
 import { DidService } from '../../foundation/did/did.service';
 import { EntityService } from '../../foundation/entity/entity.service';
+import { PresenceService } from '../../foundation/presence/presence.service';
 import { BooksService } from '../../foundation/books/books.service';
 import { FxService } from '../../foundation/money/fx.service';
 import { IdentityVault } from '../../foundation/data-firewall/identity-vault.service';
@@ -84,7 +85,7 @@ describe('the public shipping quote', () => {
         FleetManagerService, MediaService, CargoService, DigitalTwinService, TrackingService,
         TrackingContextService, NormalizationService, ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
-        EntityService, BooksService, FxService, RateLimitGuard, ApiKeyService, IdempotencyService, QuoteBookService,
+        EntityService, PresenceService, BooksService, FxService, RateLimitGuard, ApiKeyService, IdempotencyService, QuoteBookService,
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
         GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder },
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },

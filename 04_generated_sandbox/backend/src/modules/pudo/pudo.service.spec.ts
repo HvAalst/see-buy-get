@@ -507,12 +507,12 @@ describe('PUDO Light', () => {
 
   it('voids a parcel within the window and refunds the agent', () => {
     const a = onboardAgent('Void Shop', 'NorthTown', 10);
-    const before = agents.balance(a.did);
+    const before = agents.balance(a.did)!;
     parcels.accept({ agentDid: a.did, parcelId: 'QR-V', size: 'M', destZone: 'Z', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'v.jpg' });
-    expect(agents.balance(a.did)).toBeCloseTo(before - 1.6, 2);
+    expect(agents.balance(a.did)!).toBeCloseTo(before - 1.6, 2);
     const voided = parcels.void('QR-V', a.did, 'torn-label.jpg');
     expect(voided.status).toBe('Voided');
-    expect(agents.balance(a.did)).toBeCloseTo(before, 2); // refunded
+    expect(agents.balance(a.did)!).toBeCloseTo(before, 2); // refunded
     expect(gate.entries({ did: a.did }).some((e) => e.type === 'REFUND')).toBe(true);
   });
 
@@ -1553,12 +1553,12 @@ describe('PUDO Light', () => {
     it('earns the wholesale unit when a walk-up parcel actually moves, and never sees the retail cash', () => {
       const origin = onboardAgent('Books Origin', 'NorthTown', 50);
       onboardAgent('Books Dest', 'SouthTown', 50);
-      const before = agents.balance(origin.did);
+      const before = agents.balance(origin.did)!;
       parcels.accept({ agentDid: origin.did, parcelId: 'QR-BOOK', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
 
       // The shop's float drops by the wholesale unit; the RETAIL 2.0 the customer paid never appears in
       // the sister's books, because the sister never touched it. The shop is a reseller on this flow.
-      expect(agents.balance(origin.did)).toBeCloseTo(before - WHOLESALE, 2);
+      expect(agents.balance(origin.did)!).toBeCloseTo(before - WHOLESALE, 2);
       expect(bal(ACCOUNT_CODES.REVENUE)).toBeCloseTo(-WHOLESALE, 2); // revenue is credit-natured
       expect(bal(ACCOUNT_CODES.CASH_CUSTODY)).toBe(100); // 2×50 topped up; no money moved on a shipment
       expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
@@ -1566,10 +1566,10 @@ describe('PUDO Light', () => {
 
     it('books a labour fee as the sister’s COST, not as money from nowhere', () => {
       const shop = onboardAgent('Labour Shop', 'NorthTown', 50);
-      const before = agents.balance(shop.did);
+      const before = agents.balance(shop.did)!;
       gate.payLabour(shop.did, 0.4, 'PUD-X', 'parcel');
 
-      expect(agents.balance(shop.did)).toBeCloseTo(before + 0.4, 2);
+      expect(agents.balance(shop.did)!).toBeCloseTo(before + 0.4, 2);
       expect(bal(ACCOUNT_CODES.EXPENSE_PROVIDER_FEES)).toBeCloseTo(0.4, 2);
       expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
     });
@@ -1592,7 +1592,7 @@ describe('PUDO Light', () => {
       // And the stronger guarantee: the register's net EQUALS the balance the books derive. Linkage
       // proves the rows came from somewhere; this proves they still say the same thing.
       const summary = gate.agentLedgerSummary(shop.did, {});
-      expect(summary.net).toBeCloseTo(agents.balance(shop.did), 2);
+      expect(summary.net).toBeCloseTo(agents.balance(shop.did)!, 2);
     });
 
     it('keeps the STORE’s register and the books in agreement too', () => {
@@ -3666,10 +3666,10 @@ describe('PUDO Light', () => {
 
   it('cancels a not-yet-delivered parcel and refunds a cash charge (reverse logistics)', () => {
     const origin = onboardAgent('Cx Shop', 'NorthTown', 50);
-    const before = agents.balance(origin.did);
+    const before = agents.balance(origin.did)!;
     parcels.accept({ agentDid: origin.did, parcelId: 'CX-1', size: 'S', destZone: 'Z', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
     expect(parcels.cancel('CX-1', 'ops', 'customer changed mind').status).toBe('Voided');
-    expect(agents.balance(origin.did)).toBeCloseTo(before, 2); // cash charge refunded
+    expect(agents.balance(origin.did)!).toBeCloseTo(before, 2); // cash charge refunded
   });
 
   it('completes the bulk-freight lifecycle (register → claim → pickup → deliver, capacity released)', () => {
@@ -4860,7 +4860,7 @@ describe('PUDO Light', () => {
   it('F2: the counter books a dedicated walk-up as freight — unpaid cash off-platform, maxSpend=cap, tracking code, agent wallet untouched', () => {
     const origin = onboardAgent('Counter Shop', 'NorthTown', 50); // funded → we can prove the wallet is never billed
     const dest = onboardAgent('Far Shop', 'NorthTown', 0);
-    const balBefore = agents.balance(origin.did);
+    const balBefore = agents.balance(origin.did)!;
 
     const res: any = controller.bookFreight(
       { dimensionsCm: { l: 120, w: 100, h: 100 }, weightKg: 200, destPudoDid: dest.did, budgetCap: 40, customerMobile: '+254700900' } as never,
@@ -4889,7 +4889,7 @@ describe('PUDO Light', () => {
     dispatch.claim(offer.offerId);
     const claimed = dispatch.listFreight().find((x) => x.freightId === res.freightId)!;
     expect(claimed.paidStatus).toBe('unpaid'); // no wallet billed — cash settles off-platform
-    expect(agents.balance(origin.did)).toBeCloseTo(balBefore, 2); // the agent's parcel-sized wallet was NOT charged a truck haul
+    expect(agents.balance(origin.did)!).toBeCloseTo(balBefore, 2); // the agent's parcel-sized wallet was NOT charged a truck haul
   });
 
   it('FB2d: the counter records the CUSTOMER’s refusal, and it reaches the claim', () => {

@@ -48,6 +48,7 @@ import { ConnectorRegistry, MobileSdkConnector, RestCarrierConnector } from '../
 import { WalletService } from '../m1/wallet/wallet.service';
 import { DidService } from '../../foundation/did/did.service';
 import { EntityService } from '../../foundation/entity/entity.service';
+import { PresenceService } from '../../foundation/presence/presence.service';
 import { BooksService } from '../../foundation/books/books.service';
 import { FxService } from '../../foundation/money/fx.service';
 import { PayoutService } from '../../foundation/payouts/payout.service';
@@ -96,7 +97,7 @@ describe('the collection window closing', () => {
         MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
-        EntityService, BooksService, FxService,
+        EntityService, PresenceService, BooksService, FxService,
         PayoutService, ReturnService, UnclaimedService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
         GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder },
@@ -441,12 +442,12 @@ describe('the collection window closing', () => {
       p.unclaimedAt = daysAgo(3);
       const owed = unclaimed.owed(parcel.parcelId);
       const offer = returns.offerFor(parcel.parcelId)!;
-      const shopBefore = agents.balance(to.did);
+      const shopBefore = agents.balance(to.did)!;
       const storeBefore = vendors.balanceOf(store.vendorId);
 
       returns.accept(offer.offerId, store.vendorId);
       // Both halves or neither: the shop is paid, and the store that agreed to it is billed for it.
-      expect(agents.balance(to.did)).toBeCloseTo(shopBefore + owed, 2);
+      expect(agents.balance(to.did)!).toBeCloseTo(shopBefore + owed, 2);
       expect(storeBefore - vendors.balanceOf(store.vendorId)).toBeCloseTo(offer.returnCost + owed, 2);
     });
 
@@ -484,12 +485,12 @@ describe('the collection window closing', () => {
       p.unclaimedAt = daysAgo(4);
       unclaimed.respond(parcel.parcelId, 'relinquish');
       const owed = unclaimed.owed(parcel.parcelId);
-      const before = agents.balance(to.did);
+      const before = agents.balance(to.did)!;
       const freeBefore = shelf.available(to.did);
 
       const { paidToShop } = unclaimed.writeOff(parcel.parcelId, 'ops', 'disposed under KE rules');
       expect(paidToShop).toBeCloseTo(owed, 2);
-      expect(agents.balance(to.did)).toBeCloseTo(before + owed, 2);
+      expect(agents.balance(to.did)!).toBeCloseTo(before + owed, 2);
       expect(shelf.available(to.did)).toBe(freeBefore + 1); // and the slot finally comes back
       expect(gate).toBeDefined();
     });

@@ -65,6 +65,15 @@ describe('what a shop’s row says', () => {
     expect(agentState(agent({ balance: LOW_BALANCE }), NOW).key).toBe('active');
   });
 
+  it('never calls a shop LOW on a float it does not have', () => {
+    // A shop in a country where we hold no money is outside the float entirely. Warning that its till
+    // is thin sends somebody to fix a thing that does not exist — and reading it as 0 would claim we
+    // are holding an empty account for them.
+    expect(agentState(agent({ balance: null }), NOW).key).toBe('nofloat');
+    expect(agentState(agent({ balance: undefined }), NOW).key).toBe('nofloat');
+    expect(agentState(agent({ balance: 0 }), NOW).key).toBe('low');
+  });
+
   it('says “—” where there is no shelf and no rating, rather than a zero', () => {
     // "0/0" reads as a full shop; "0.0★" reads as a shop everybody hated. Both are lies about a shop
     // that simply has not been measured yet, and both are about somebody's living.

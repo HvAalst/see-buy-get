@@ -22,7 +22,8 @@ export interface AgentRow {
   shopName?: string;
   zone?: string;
   status?: string;
-  balance?: number;
+  /** Null where the network holds no money in that country — which is NOT a zero float. */
+  balance?: number | null;
   capacity?: number;
   freeSlots?: number;
   lastPingAt?: string;
@@ -54,7 +55,10 @@ export function agentState(row: AgentRow, now: number): { key: string; tone: Age
   if (row.status === 'DRAFT') return { key: 'draft', tone: 'info', labelKey: 'tower.network.agent.draft' };
   if (row.status === 'APPROVED_UNFUNDED') return { key: 'unfunded', tone: 'warn', labelKey: 'tower.network.agent.unfunded' };
   if (offlineFor(row.lastPingAt, now) > AGENT_OFFLINE_H) return { key: 'offline', tone: 'bad', labelKey: 'tower.network.agent.offline' };
-  if ((row.balance ?? 0) < LOW_BALANCE) return { key: 'low', tone: 'warn', labelKey: 'tower.network.agent.lowBalance' };
+  // A shop in a country where we hold no money is not LOW on float, it is outside the float entirely —
+  // and warning about a till that does not exist sends somebody to fix nothing.
+  if (row.balance === null || row.balance === undefined) return { key: 'nofloat', tone: 'info', labelKey: 'tower.network.agent.noFloat' };
+  if (row.balance < LOW_BALANCE) return { key: 'low', tone: 'warn', labelKey: 'tower.network.agent.lowBalance' };
   return { key: 'active', tone: 'ok', labelKey: 'tower.network.agent.active' };
 }
 

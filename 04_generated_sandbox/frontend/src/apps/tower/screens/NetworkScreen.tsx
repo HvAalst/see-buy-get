@@ -200,7 +200,8 @@ export function NetworkScreen({ state, actions }: { state: TowerState; actions: 
                     <td>
                       <span class={`ctag ctag--${s.tone === 'bad' ? 'warn' : s.tone}`}>{t(s.labelKey)}</span>
                     </td>
-                    <td class="ctbl__num">{money(row.balance)}</td>
+                    {/* A dash, never 0.00: no float rail is a different fact from an empty till. */}
+                    <td class="ctbl__num">{row.balance == null ? '—' : money(row.balance)}</td>
                     <td class="ctbl__num">{slotsLabel(row)}</td>
                     <td class="ctbl__num">{ratingLabel(row)}</td>
                   </tr>

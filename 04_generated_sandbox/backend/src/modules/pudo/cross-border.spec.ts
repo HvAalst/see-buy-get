@@ -38,6 +38,7 @@ import { ConnectorRegistry, MobileSdkConnector, RestCarrierConnector } from '../
 import { WalletService } from '../m1/wallet/wallet.service';
 import { DidService } from '../../foundation/did/did.service';
 import { EntityService } from '../../foundation/entity/entity.service';
+import { PresenceService } from '../../foundation/presence/presence.service';
 import { BooksService } from '../../foundation/books/books.service';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
 import { FX_SPREAD_PCT, FxService } from '../../foundation/money/fx.service';
@@ -65,6 +66,7 @@ describe('crossing a border', () => {
   let corridors: CorridorService;
   let vendors: VendorService;
   let entities: EntityService;
+  let presence: PresenceService;
   let fx: FxService;
   let parcels: ParcelService;
   let gate: WalletGateService;
@@ -80,13 +82,14 @@ describe('crossing a border', () => {
         MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
-        EntityService, BooksService, FxService,
+        EntityService, PresenceService, BooksService, FxService,
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
         GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder },
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
       ],
     }).compile();
     entities = moduleRef.get(EntityService);
+    presence = moduleRef.get(PresenceService);
     entities.seed(); // compile() runs no lifecycle hooks — the sisters are seeded by hand, as at boot
     fx = moduleRef.get(FxService);
     fx.seed();
@@ -136,6 +139,72 @@ describe('crossing a border', () => {
     });
   });
 
+  describe('taking goods in where we cannot bill', () => {
+    /**
+     * The heart of the ladder. A country we only MATCH in can hold goods and prove it held them, and not
+     * one shilling of ours moves there. The failure this guards is the opposite of a refusal: a take-in
+     * that quietly posts a fee into a company that does not exist in that country, or promises a cover
+     * nothing can pay.
+     */
+    const takeIn = (agentDid: string, parcelId: string, mode?: 'cash' | 'credit') =>
+      parcels.accept({ parcelId, agentDid, destZone: 'DarEsSalaam2', size: 'M', senderMobile: '+255700111', receiverMobile: '+255700222', dropoffPhotoRef: 'p.jpg', ...(mode ? { paymentMode: mode } : {}) } as never);
+
+    it('records the promise as OURS and posts, where a sister carries it', () => {
+      const ke = shop('Mama Sarah', 'Nairobi', NAIROBI);
+      const keEntity = entities.requireForJurisdiction('KE').entityId;
+      const before = books.balance(keEntity, ACCOUNT_CODES.DEPOSIT_AGENT, undefined, ke.did);
+      const parcel = parcels.accept({ parcelId: 'PUD-KE-1', agentDid: ke.did, destZone: 'Kisumu', size: 'M', paymentMode: 'credit', senderMobile: '+254700111', receiverMobile: '+254700222', dropoffPhotoRef: 'p.jpg' } as never);
+      expect(parcel.takeInPromise).toBe('ours');
+      expect(parcel.collectingEntityId).toBe(keEntity);
+      // The shop is owed for the work, on the sister that contracts it.
+      expect(books.balance(keEntity, ACCOUNT_CODES.DEPOSIT_AGENT, undefined, ke.did)).not.toBe(before);
+    });
+
+    it('takes goods in under the CARRIER’s promise, and books nothing at all', () => {
+      presence.set({ jurisdiction: 'TZ', level: 'matched' });
+      const tz = shop('Dar Duka', 'DarEsSalaam', { lat: -6.79, lng: 39.21 }, 'TZ');
+      const parcel = takeIn(tz.did, 'PUD-TZ-1', 'credit');
+
+      expect(parcel.takeInPromise).toBe('theirs');
+      // No sister is party to it, so none is named. A collecting entity here would be a posting into a
+      // company that does not operate in Tanzania.
+      expect(parcel.collectingEntityId).toBeUndefined();
+      // …and the custody chain is there, which is the whole reason to be in the country at all.
+      expect(parcel.custody?.[0]?.holderId).toBe(tz.did);
+      expect(parcel.status).toBe('At_PUDO');
+    });
+
+    it('does not take the whole shop list down with it', () => {
+      // Found by driving it: reading a shop computes its balance, which asks who contracts it — so ONE
+      // shop in a matching-only country made GET /agents answer 403 for every shop in the network. A
+      // money question reached from a READ path must answer, not refuse.
+      presence.set({ jurisdiction: 'TZ', level: 'matched' });
+      const tz = shop('Dar Duka 4', 'DarEsSalaam', { lat: -6.79, lng: 39.21 }, 'TZ');
+      const ke = shop('Mama Sarah 2', 'Nairobi', NAIROBI);
+
+      // NULL, not zero: a shop we hold no money for does not have an empty float, it has no float.
+      expect(agents.balance(tz.did)).toBeNull();
+      expect(agents.balance(ke.did)).toBe(0);
+      expect(agents.list().map((a) => a.did)).toEqual(expect.arrayContaining([tz.did, ke.did]));
+    });
+    it('refuses CASH at a counter whose promise is the carrier’s', () => {
+      // Cash at the counter is OUR cash: it consumes a platform credit and posts against a float we do
+      // not hold there. The carrier prices and collects its own work.
+      presence.set({ jurisdiction: 'TZ', level: 'matched' });
+      const tz = shop('Dar Duka 2', 'DarEsSalaam', { lat: -6.79, lng: 39.21 }, 'TZ');
+      expect(() => takeIn(tz.did, 'PUD-TZ-2', 'cash')).toThrow(/cannot handle cash/i);
+    });
+
+    it('refuses a take-in outright where the network does not operate', () => {
+      presence.set({ jurisdiction: 'TZ', level: 'matched' });
+      const tz = shop('Dar Duka 3', 'DarEsSalaam', { lat: -6.79, lng: 39.21 }, 'TZ');
+      // The country moves back down while the shop stands open — which is why the door is asked at the
+      // COUNTER and not trusted from registration.
+      presence.set({ jurisdiction: 'TZ', level: 'observed' });
+      expect(() => takeIn(tz.did, 'PUD-TZ-3', 'credit')).toThrow(/does not operate in TZ/);
+    });
+  });
+
   describe('the sister follows from the country, not from the deployment', () => {
     it('contracts an Ethiopian shop to the Ethiopian sister and a Kenyan one to the Kenyan sister', () => {
       const ke = shop('Mama Sarah', 'Nairobi', NAIROBI);
@@ -147,9 +216,23 @@ describe('crossing a border', () => {
       expect(agents.entityIdOf(et)).not.toBe(agents.entityIdOf(ke)); // the whole point
     });
 
-    it('refuses a shop in a country the network has no company in, by name', () => {
-      // Better than approving it and discovering at the first payout that nobody was party to the deal.
-      expect(() => shop('Dar Duka', 'DarEsSalaam', { lat: -6.79, lng: 39.21 }, 'TZ')).toThrow(/No daughter company operates in TZ/);
+    it('refuses a shop in a country the network does not operate in, in words about the shop', () => {
+      // It used to say "No daughter company operates in TZ", which is a fact about our paperwork and not
+      // about their application. The refusal now names what is true of that COUNTRY, and it is asked of
+      // the presence rather than of the company register.
+      expect(() => shop('Dar Duka', 'DarEsSalaam', { lat: -6.79, lng: 39.21 }, 'TZ')).toThrow(/does not operate in this country yet/);
+    });
+
+    it('lets a shop stand where we MATCH but cannot bill, with no sister attached', () => {
+      // The binary this breaks: a country we have not incorporated in used to hold no shops at all, so
+      // there was no matching, no custody and no proof there either. A shop may now exist wherever goods
+      // may be taken in; whether its money runs through a sister of ours is a second question.
+      presence.set({ jurisdiction: 'TZ', level: 'matched' });
+      const tz = shop('Dar Duka', 'DarEsSalaam', { lat: -6.79, lng: 39.21 }, 'TZ');
+      expect(tz.country).toBe('TZ');
+      expect(tz.entityId).toBeUndefined();
+      // …and the money path still refuses, by name, at the moment money is actually asked for.
+      expect(() => agents.entityIdOf(tz)).toThrow(/cannot hold money in this country/i);
     });
 
     it('still resolves a shop registered before sites had a country', () => {

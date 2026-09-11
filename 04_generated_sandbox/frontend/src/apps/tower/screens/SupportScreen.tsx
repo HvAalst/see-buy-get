@@ -68,6 +68,10 @@ export function SupportScreen({ state, actions }: { state: TowerState; actions: 
               <span class="cons__panelt">{p.parcelId}</span>
               <span class="ctbl__sub">
                 <span class="ctag ctag--info">{String(p.status).replace(/_/g, ' ')}</span> {p.size ?? '—'} · {p.origin ?? '—'} → {p.destination ?? '—'}
+                {/* WHOSE PROMISE. An operator answering the phone about a parcel has to know whether this
+                    is ours to answer for or a carrier's — it decides what they may offer the person on
+                    the line. Absent on parcels taken in before the question was asked. */}
+                {p.takeInPromise ? <span class={p.takeInPromise === 'ours' ? 'ctag ctag--ok' : 'ctag ctag--warn'}>{t(p.takeInPromise === 'ours' ? 'tower.support.promiseOurs' : 'tower.support.promiseTheirs')}</span> : null}
               </span>
             </div>
 

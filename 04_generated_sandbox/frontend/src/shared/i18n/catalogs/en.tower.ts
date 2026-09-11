@@ -509,6 +509,7 @@ export const enTowerNetwork = {
   'tower.network.agent.draft': 'Not finished signing up',
   'tower.network.agent.unfunded': 'No float yet',
   'tower.network.agent.offline': 'Not checked in',
+  'tower.network.agent.noFloat': 'No float here',
   'tower.network.agent.lowBalance': 'Float too thin',
   'tower.network.agent.active': 'Working',
 
@@ -586,6 +587,8 @@ export const enTowerSupport = {
   'tower.support.col.when': 'When',
   'tower.support.locked': 'Release code locked',
   'tower.support.live': 'Release code is live',
+  'tower.support.promiseOurs': 'ours to answer for',
+  'tower.support.promiseTheirs': 'the carrier answers for this',
   'tower.support.reissue': 'Reissue the release code',
   'tower.support.reissueHint': 'The only way back from a code guessed to death. A parcel never carries its own release key and the shop handing it over never learns it — so nobody can read the old one out, and this replaces it rather than revealing it.',
   'tower.support.sentTitle': 'A new code is on its way',

@@ -10,6 +10,7 @@ import { GlosEvent } from '../../foundation/events/glos-events';
 import { WalletService } from '../m1/wallet/wallet.service';
 import { DEFAULT_BAG_BAYS, DEFAULT_PUDO_PRICE_PER_PARCEL, LOCK_THRESHOLD, MAX_BAG_BAYS, MIN_ANDROID_VERSION, MIN_OPEN_HOURS, MIN_SLOTS, NETWORK_JURISDICTION, TRADE_CREDIT_LIMIT } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
+import { PresenceService } from '../../foundation/presence/presence.service';
 import { BooksService } from '../../foundation/books/books.service';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
 import { Geocoder, GEOCODER } from './geocoder';
@@ -63,6 +64,7 @@ export class AgentService {
     private readonly events: EventBus,
     private readonly media: MediaService,
     private readonly entities: EntityService,
+    private readonly presence: PresenceService,
     private readonly books: BooksService,
     @Inject(GEOCODER) private readonly geocoder: Geocoder,
   ) {}
@@ -82,8 +84,25 @@ export class AgentService {
    * the deployment happens to run in. Those were the same answer while the network was one country and
    * are not the same question, which is what made a shop in Addis come out contracted to Nairobi.
    */
+  /**
+   * The sister that contracts this shop, or NOTHING where none does.
+   *
+   * For READS. Every path that moves money keeps asking , which refuses by name — the two
+   * exist separately so that a list can render a shop we cannot bill without a question about money
+   * taking the whole screen down.
+   */
+  entityIdOrNone(agent: Agent): string | undefined {
+    return agent.entityId ?? this.entities.forJurisdiction(this.countryOf(agent))?.entityId;
+  }
+
   entityIdOf(agent: Agent): string {
-    return agent.entityId ?? this.entities.requireForJurisdiction(this.countryOf(agent)).entityId;
+    if (agent.entityId) return agent.entityId;
+    // THE MONEY GATE, and the last line of defence rather than the first question. A shop can exist
+    // where no sister does; what it cannot do is have money run through one. Asked of the presence
+    // first so the refusal says what is true of that country rather than "no daughter company".
+    const country = this.countryOf(agent);
+    this.presence.require(country, 'holdFloat');
+    return this.entities.requireForJurisdiction(country).entityId;
   }
 
   /** The agent-eligibility filter (18.1). Returns the list of unmet hard requirements. */
@@ -101,11 +120,18 @@ export class AgentService {
 
   /** Capture shop + identity, run the eligibility filter + dedup, mint a DID, vault the Golden Record → DRAFT. */
   register(input: RegisterAgentInput): Agent {
-    // WHICH COUNTRY, asked before anything else is spent on this application. A shop the network cannot
-    // lawfully contract is refused here, by name — better than an approved shop discovering at its first
-    // payout that no company in its country was ever party to the deal.
+    // WHICH COUNTRY, asked before anything else is spent on this application — and asked of the
+    // PRESENCE rather than of the company register.
+    //
+    // This used to demand a sister company, which meant a country we had not incorporated in could hold
+    // no shops at all: no matching, no custody, no proof, nothing. That is the binary the ladder exists
+    // to break. A shop may now stand anywhere the network is allowed to take goods in, and whether its
+    // money runs through a sister of ours is a SECOND question with its own answer.
     const country = requireCountryCode(input.country);
-    const entity = this.entities.requireForJurisdiction(country);
+    this.presence.require(country, 'takeIn');
+    // Undefined where we are matching only. Every money path asks for it by name and refuses there;
+    // nothing else needs it.
+    const entity = this.entities.forJurisdiction(country);
 
     // Location: a map pin AND/OR a physical address — at least one. Geocode the address if no pin.
     if (!input.location && !input.physicalAddress?.trim()) throw new GlosError('ADDRESS_REQUIRED', 'Provide a map pin (location) and/or a physical address');
@@ -137,7 +163,7 @@ export class AgentService {
       // Where the shop IS, and the sister that follows from it. These are one decision written twice on
       // purpose: the country is the durable fact (a border is drawn from it), the entity is who invoices.
       country,
-      entityId: entity.entityId,
+      ...(entity ? { entityId: entity.entityId } : {}),
       location,
       physicalAddress: input.physicalAddress?.trim() || undefined,
       landmark: input.landmark,
@@ -248,7 +274,11 @@ export class AgentService {
     // Lock on what the shop can actually SPEND — its float plus the trade-credit line — not on the float
     // alone. An empty till with credit left is a shop that can still serve the customer in front of it;
     // the shutter comes down at the end of the line, which is where 'no money, no scan' now bites.
-    const balance = this.balance(did) + TRADE_CREDIT_LIMIT;
+    // A shop with no money rail has no float to lock ON: it never scans against a balance, so the
+    // shutter this computes has nothing to fall on. Left exactly as it stands.
+    const float = this.balance(did);
+    if (float === null) return agent;
+    const balance = float + TRADE_CREDIT_LIMIT;
     if ((agent.status === 'APPROVED_UNFUNDED' || agent.status === 'LOCKED') && balance >= LOCK_THRESHOLD) {
       this.transition(agent, 'ACTIVE');
       void this.events.publish(GlosEvent.Pudo.AgentActivated, { did, agentId: agent.agentId }, { source: 'pudo' }).catch(() => undefined);
@@ -345,10 +375,13 @@ export class AgentService {
   creditOwed(did: string): number {
     const agent = this.agents.get(did);
     if (!agent) return 0;
-    return this.books.balance(this.entityIdOf(agent), ACCOUNT_CODES.RECEIVABLE_AGENT, undefined, did) || 0;
+    // No money rail, no credit line. Nothing was ever lent here, so nothing is owed.
+    const entityId = this.entityIdOrNone(agent);
+    if (!entityId) return 0;
+    return this.books.balance(entityId, ACCOUNT_CODES.RECEIVABLE_AGENT, undefined, did) || 0;
   }
 
-  balance(did: string): number {
+  balance(did: string): number | null {
     // Derived from the books, not stored: the shop's balance IS its deposit account, and a deposit is a
     // liability of the sister (held negative), so it is flipped here at the presentation edge. One source
     // of truth — a cached figure that could disagree with the postings is the bug this whole slice removes.
@@ -356,7 +389,11 @@ export class AgentService {
     if (!agent) return 0;
     // Deposit less any trade credit drawn: a shop that scanned on an empty float reads NEGATIVE, which is
     // the truth — they are in debt to the sister, and their next top-up clears it before anything else.
-    const entityId = this.entityIdOf(agent);
+    // A SHOP WHERE WE HOLD NO MONEY HAS NO BALANCE — not a zero one. Answered here rather than thrown,
+    // because this is a READ: one shop in a matching-only country must never be able to refuse the
+    // operator the whole shop list. The money PATHS still go through entityIdOf and still refuse.
+    const entityId = this.entityIdOrNone(agent);
+    if (!entityId) return null;
     const deposit = -this.books.balance(entityId, ACCOUNT_CODES.DEPOSIT_AGENT, undefined, did);
     const credit = this.books.balance(entityId, ACCOUNT_CODES.RECEIVABLE_AGENT, undefined, did);
     return Math.round((deposit - credit) * 100) / 100 || 0;

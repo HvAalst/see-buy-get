@@ -8,6 +8,7 @@ import { GlosEvent } from '../../foundation/events/glos-events';
 import { LedgerService } from '../../foundation/ledger/ledger.service';
 import { DidService } from '../../foundation/did/did.service';
 import { AgentService } from './agent.service';
+import { PresenceService } from '../../foundation/presence/presence.service';
 import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
 import { ShelfService } from './shelf.service';
@@ -543,6 +544,7 @@ export class ParcelService implements OnApplicationBootstrap {
 
   constructor(
     private readonly agents: AgentService,
+    private readonly presence: PresenceService,
     private readonly gate: WalletGateService,
     private readonly corridors: CorridorService,
     private readonly shelf: ShelfService,
@@ -791,7 +793,31 @@ export class ParcelService implements OnApplicationBootstrap {
         );
       }
     }
+    /**
+     * THE DOOR: may goods be taken in here at all, and under WHOSE promise?
+     *
+     * Asked at the counter rather than trusted from registration, because a country can move down the
+     * ladder while a shop stands open. A walk-up is paid AT this counter, so the payer sits in the
+     * shop's own country and there is no second jurisdiction to weigh; a shipment paid for somewhere
+     * else is the other path, and it is P4.
+     */
+    const country = this.agents.countryOf(agent);
+    const promise = this.presence.takeInPromise(country);
+    if (promise === 'none') {
+      // One refusal, in words about THIS shop and THIS country — not about daughter companies, and not
+      // at the far end of a money path the shopkeeper cannot see.
+      throw new GlosError('FORBIDDEN', `Nothing can be taken in at ${agent.shopName}: the network does not operate in ${country} yet`);
+    }
+
     const mode: PaymentMode = input.paymentMode ?? 'cash';
+
+    /**
+     * WHERE THE PROMISE IS THE CARRIER’S, NO MONEY OF OURS MOVES — so there is nothing for us to
+     * charge. Cash at the counter is OUR cash: it consumes a platform credit and posts against a float
+     * we do not hold there. The carrier prices and collects its own work, so this refuses by name
+     * rather than booking a fee into a company that does not exist in that country.
+     */
+    if (promise === 'theirs' && mode === 'cash') this.presence.require(country, 'cashOnDelivery');
 
     // 'No money, no scan' gate applies to cash parcels (they consume a platform credit).
     if (mode === 'cash' && !this.gate.canTransact(input.agentDid).ok) {
@@ -831,7 +857,12 @@ export class ParcelService implements OnApplicationBootstrap {
       destZone: input.destZone,
       destAgentDid: input.destPudoDid, // optional nominated destination PUDO (else set at arrive)
       // R1 — a walk-up is paid at this counter, so the shop's own sister collects.
-      collectingEntityId: this.agents.entityIdOf(agent),
+      // Absent where the promise is the carrier’s: no sister of ours is party to it, and naming one
+      // would post into a company that does not operate in that country.
+      ...(promise === 'ours' ? { collectingEntityId: this.agents.entityIdOf(agent) } : {}),
+      // Kept on the parcel rather than derived later: a country can move while goods sit on a shelf,
+      // and the promise made at the counter is the promise that was made.
+      takeInPromise: promise,
       senderMobile: input.senderMobile,
       receiverMobile: input.receiverMobile,
       senderPhoneHash: hashPhone(input.senderMobile) || undefined,
@@ -865,18 +896,29 @@ export class ParcelService implements OnApplicationBootstrap {
     // S26: attach the drop-off proof to this parcel → shipment-proof bin (clock starts at terminal state).
     this.media.link(input.dropoffPhotoRef, { type: 'parcel', id: parcel.parcelId }, 'dropoff');
 
-    if (mode === 'cash') {
-      const rule = this.wholesaleTax(input.agentDid);
-      const bill = taxOn(WHOLESALE, rule.ratePct);
-      // Stamped, so the void refund reverses the rate this parcel was CHARGED at rather than whatever the
-      // sister's rate happens to be at the moment somebody voids it. `shipmentTax` deliberately stays
-      // unset: this parcel has no `shipmentCost`, and a tax stamped on a cost that does not exist is a
-      // figure nothing can be reconciled against.
-      parcel.taxPct = rule.ratePct;
-      parcel.taxLabel = rule.label;
-      this.gate.chargeShipping(input.agentDid, bill.gross, parcel.parcelId, bill.tax);
+    /**
+     * OUR MONEY MOVES ONLY WHERE OUR PROMISE STANDS.
+     *
+     * A parcel taken in under the carrier's promise is a RECORD, not a transaction: no shipping charged
+     * to a float we do not hold, no labour accrued by a company that does not operate there. What the
+     * network still does is the thing it went there to do — hold the custody chain, and prove it.
+     */
+    if (promise === 'ours') {
+      if (mode === 'cash') {
+        const rule = this.wholesaleTax(input.agentDid);
+        const bill = taxOn(WHOLESALE, rule.ratePct);
+        // Stamped, so the void refund reverses the rate this parcel was CHARGED at rather than whatever
+        // the sister's rate happens to be at the moment somebody voids it. `shipmentTax` deliberately
+        // stays unset: this parcel has no `shipmentCost`, and a tax stamped on a cost that does not exist
+        // is a figure nothing can be reconciled against.
+        parcel.taxPct = rule.ratePct;
+        parcel.taxLabel = rule.label;
+        this.gate.chargeShipping(input.agentDid, bill.gross, parcel.parcelId, bill.tax);
+      } else {
+        this.gate.payLabour(input.agentDid, LABOUR_FEE, parcel.parcelId, 'parcel', parcel.sellerEntityId);
+      }
     }
-    else this.gate.payLabour(input.agentDid, LABOUR_FEE, parcel.parcelId, 'parcel', parcel.sellerEntityId);
+
 
     void this.events.publish(GlosEvent.Pudo.ParcelAccepted, { parcelId: parcel.parcelId, agentDid: input.agentDid, destZone: input.destZone, mode }, { source: 'pudo' }).catch(() => undefined);
     return parcel;

@@ -182,6 +182,20 @@ export class MonitorService {
     const p = this.parcels.get(parcelId);
     // `releaseLockedAt` (never the secret itself) so the support desk can SEE why a customer at the
     // counter cannot collect, and reissue — the whole point of a lockout that a human can recover from.
-    return { parcelId: p.parcelId, status: p.status, size: p.size, origin: p.originZone, destination: p.destZone, dropoffPhotoRef: p.dropoffPhotoRef, deliveredPhotoRef: p.deliveredPhotoRef, releaseLockedAt: p.otpLockedAt, scans: p.scans };
+    // WHOSE PROMISE travels with it. A support desk answering the phone about a parcel has to know
+    // whether it is ours to answer for or a carrier's, because that decides what they may offer the
+    // person on the line — and a projection that drops the field turns this screen into a confident liar.
+    return {
+      parcelId: p.parcelId,
+      status: p.status,
+      size: p.size,
+      origin: p.originZone,
+      destination: p.destZone,
+      takeInPromise: p.takeInPromise,
+      dropoffPhotoRef: p.dropoffPhotoRef,
+      deliveredPhotoRef: p.deliveredPhotoRef,
+      releaseLockedAt: p.otpLockedAt,
+      scans: p.scans,
+    };
   }
 }

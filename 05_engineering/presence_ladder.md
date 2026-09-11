@@ -1,6 +1,6 @@
 # Presence — running the OS where we are not established
 
-> Status: **AGREED 2026-09-11, building from P1.** The presence ladder and the "say it out loud at
+> Status: **P1 + P2 SHIPPED 2026-09-11.** The presence ladder and the "say it out loud at
 > the counter" rule are decided. The fleet-line work (F1–F4) is built against this, not beside it.
 > Scope: SBG. This document governs every path that touches money, promises or take-in.
 
@@ -118,8 +118,10 @@ and what the cover is, in the same breath as the price.
   per-capability overrides, every change named. Established requires an entity. Unknown is Observed.
   Operator routes + the console screen under Setup. *(Nothing behaves differently yet — this is the
   fact everything else asks.)*
-- **P2. Refuse at the door.** Quote, take-in, mint and freight-post ask the capability before they
-  ask anything else, and refuse in the words of the person in front of the screen.
+- **P2. ~~Refuse at the door~~ DONE.** Registration and take-in ask the capability first and refuse in the
+  words of the person at the screen; a shop may now stand where we cannot bill, with no sister attached;
+  a take-in is stamped  or  and NOTHING of ours moves on . Left for P2b: the quote,
+  the mint and the freight post ask the same question (they still refuse late, through ).
 - **P3. Say it out loud.** The take-in screen names who answers for the goods (ours / theirs) and the
   cover that applies, before acceptance. Cover is zero by construction where there is no provision.
 - **P4. The journey decides.** MoR resolved from the payer's jurisdiction; a foreign leg becomes a

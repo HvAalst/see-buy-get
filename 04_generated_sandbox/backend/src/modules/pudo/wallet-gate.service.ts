@@ -170,7 +170,9 @@ export class WalletGateService {
    * low-literacy UI pick the right icon (top-up vs unlock) and `shortfall` names the exact gap.
    */
   canTransact(did: string): { ok: boolean; canTransact: boolean; code: string | null; balance: number; threshold: number; shortfall: number; credit: { limit: number; used: number; available: number } } {
-    const balance = this.agents.balance(did);
+    // Null where we hold no money in that country; the paths below are money paths, so it is refused
+    // upstream by entityIdOf before this is ever reached.
+    const balance = this.agents.balance(did) ?? 0;
     // What the shop can actually spend: its own float PLUS the trade-credit line. A customer paying cash
     // at the counter is not turned away for an empty float — the shop keeps scanning, on credit, up to a
     // bounded number of parcels. With the limit at zero this is exactly the old 'no money, no scan' rule.
@@ -219,7 +221,9 @@ export class WalletGateService {
   /** A parcel moves: the shop's deposit is drawn down and the sister finally EARNS it. On a cash walk-up
    *  the shop keeps the retail spread off-platform — we never see that money and never should. */
   chargeShipping(did: string, amount: number, parcelId: string, tax = 0, provision = 0): PudoLedgerEntry {
-    const balance = this.agents.balance(did);
+    // Null where we hold no money in that country; the paths below are money paths, so it is refused
+    // upstream by entityIdOf before this is ever reached.
+    const balance = this.agents.balance(did) ?? 0;
     // `amount` is the GROSS. The credit line is measured against it too: what a shop owes us is the whole
     // charge, and a tax we have already booked as payable is exactly as real a debt as the rest.
     if (balance - amount < -TRADE_CREDIT_LIMIT - 1e-9) {
@@ -470,7 +474,8 @@ export class WalletGateService {
     const byCurrency = new Map<string, number>();
     for (const agent of this.agents.list()) {
       const currency = this.entities.get(this.agents.entityIdOf(agent)).currency ?? NETWORK_CURRENCY;
-      byCurrency.set(currency, (byCurrency.get(currency) ?? 0) + this.agents.balance(agent.did));
+      // A shop we hold no float for adds nothing to the float we hold. Skipped, not counted as zero.
+      byCurrency.set(currency, (byCurrency.get(currency) ?? 0) + (this.agents.balance(agent.did) ?? 0));
     }
     return [...byCurrency.entries()]
       .map(([currency, amount]) => ({ currency, amount: Math.round(amount * 100) / 100 }))

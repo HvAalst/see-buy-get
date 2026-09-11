@@ -132,6 +132,9 @@ export interface ParcelView {
   size?: string;
   origin?: string;
   destination?: string;
+  /** WHO ANSWERS for these goods, decided when they were taken in. Absent on parcels born before the
+   *  ladder existed, which is a real state: nobody asked the question then. */
+  takeInPromise?: 'ours' | 'theirs';
   releaseLockedAt?: string;
   contentPhotoRef?: string;
   dropoffPhotoRef?: string;

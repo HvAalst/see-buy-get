@@ -690,6 +690,17 @@ export class Parcel {
    * Internal: it is an accounting fact, and appears on no consumer or public surface.
    */
   collectingEntityId?: string;
+  /**
+   * WHO ANSWERS FOR THESE GOODS — decided when they were taken in, and kept.
+   *
+   *   ours    a sister carries it: our cover, our claim, our money. The shop is OUR agent.
+   *   theirs  no sister can, so a carrier prices it, is paid for it and answers for it, while we
+   *           record custody and prove it. There is no collecting entity and no posting of ours.
+   *
+   * Stamped on the parcel rather than derived later, because a country’s standing can change while
+   * goods are on a shelf, and the promise made at the counter is the promise that was made.
+   */
+  takeInPromise?: 'ours' | 'theirs';
   senderMobile: string;
   receiverMobile: string;
   // S21: pseudonymous join keys to the person identity (peppered sha256 of the mobile, never the number).

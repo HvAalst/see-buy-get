@@ -94,6 +94,21 @@ export class PresenceService {
     return this.can(jurisdiction, 'claims') ? limit : 0;
   }
 
+  /**
+   * THE DOOR. Refuse here, in the words of whoever is standing at the screen.
+   *
+   * The refusal already existed — requireForJurisdiction throws "No daughter company operates in X
+   * yet" — but it arrived wherever the money path first touched it, which is to say at a shopkeeper
+   * holding a box, about a subject they cannot act on. This one is asked FIRST and says what is true of
+   * this country and this capability.
+   */
+  require(jurisdiction: string | undefined, capability: PresenceCapability): void {
+    const resolved = this.resolve(jurisdiction);
+    if (resolved.capabilities[capability]) return;
+    const where = resolved.jurisdiction || 'that country';
+    throw new GlosError('FORBIDDEN', REFUSAL[capability] + ` (${where}: ${LEVEL_WORD[resolved.level]})`);
+  }
+
   /** Every country on record, plus every one that has a sister — the operator's whole map. */
   list(): ResolvedPresence[] {
     const keys = new Set<string>([...this.presences.keys()]);
@@ -159,3 +174,25 @@ export function capabilitiesOf(level: PresenceLevel, overrides?: Partial<Record<
 function normalise(jurisdiction?: string): string {
   return (jurisdiction ?? '').trim().toUpperCase();
 }
+
+/**
+ * What a refusal SAYS. One sentence each, about the thing the person was trying to do — never about
+ * daughter companies, which is a fact about our paperwork and not about their parcel.
+ */
+const REFUSAL: Record<PresenceCapability, string> = {
+  takeIn: 'The network does not operate in this country yet, so nothing can be taken in here',
+  merchantOfRecord: 'We cannot charge customers in this country yet — a local carrier has to price and bill this',
+  holdFloat: 'We cannot hold money in this country yet, so a shop here cannot keep a float with us',
+  cashOnDelivery: 'We cannot handle cash in this country yet',
+  claims: 'We cannot pay a claim in this country yet, so nothing here can be covered',
+  tax: 'We do not collect tax in this country yet',
+  payouts: 'We cannot pay out in this country yet',
+};
+
+/** How a standing reads inside a refusal, so the message names the state and not only the country. */
+const LEVEL_WORD: Record<PresenceLevel, string> = {
+  observed: 'not operating',
+  matched: 'matching only',
+  partnered: 'local partner',
+  established: 'established',
+};
