@@ -114,7 +114,7 @@ and what the cover is, in the same breath as the price.
 
 ## 8. TODO — in the order it should be built
 
-- **P1. The presence record and the gate.** `Presence` per jurisdiction, level → default capabilities,
+- **P1. ~~The presence record and the gate~~ DONE.** `Presence` per jurisdiction, level → default capabilities,
   per-capability overrides, every change named. Established requires an entity. Unknown is Observed.
   Operator routes + the console screen under Setup. *(Nothing behaves differently yet — this is the
   fact everything else asks.)*
