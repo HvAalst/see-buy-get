@@ -493,3 +493,38 @@
   margin-top: 0;
   max-width: 70ch;
 }
+
+/* -------------------------------------------------------------- presence -- */
+
+/* Capabilities read as a row of short words, not a list: what a country MAY do is a glance, and the
+   ones deliberately switched off wear the warning tone so an absence somebody chose never looks like
+   an absence nobody got round to. */
+.twr-caps {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.twr-presedit {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(220px, 1fr);
+  gap: 0 16px;
+  padding: 14px 16px 16px;
+}
+
+.twr-presedit__note {
+  min-width: 0;
+}
+
+/* What the move would cost, directly under the picker that would cause it. */
+.twr-presedit__effect {
+  grid-column: 1 / -1;
+  max-width: 90ch;
+}
+
+.twr-presedit__act {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}

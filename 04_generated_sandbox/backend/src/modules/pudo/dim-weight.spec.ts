@@ -49,6 +49,7 @@ import { WalletService } from '../m1/wallet/wallet.service';
 import { DidService } from '../../foundation/did/did.service';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { EntityAdminService } from '../../foundation/entity/entity-admin.service';
+import { PresenceService } from '../../foundation/presence/presence.service';
 import { BooksService } from '../../foundation/books/books.service';
 import { FxService } from '../../foundation/money/fx.service';
 import { IdentityVault } from '../../foundation/data-firewall/identity-vault.service';
@@ -102,7 +103,7 @@ describe('dimensional weight', () => {
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         AccountService, OtpService, PersonService, InviteService, ApiKeyService, AuthService,
         WalletService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
-        EntityService, EntityAdminService, BooksService, FxService,
+        EntityService, EntityAdminService, PresenceService, BooksService, FxService,
         PayoutService, ReturnService, UnclaimedService, MerchantRatingService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
         GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder },

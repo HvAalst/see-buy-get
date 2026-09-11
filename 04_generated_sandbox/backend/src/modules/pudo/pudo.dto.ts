@@ -1,4 +1,5 @@
 import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsIn, IsNumber, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
+import { PRESENCE_LEVELS, type PresenceLevel } from '../../foundation/presence/presence.types';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { DRIVER_ISSUES, DriverIssue } from './rating.service';
@@ -182,6 +183,18 @@ export class PickupDto {
 export class VoidDto {
   @IsOptional() @IsString() agentDid?: string; // operator-override only; normal actors are pinned to their token
   @IsString() voidedPhotoRef!: string;
+}
+
+/**
+ * Setting a country's standing. The level is the headline; an override is a capability deliberately
+ * held down or lifted on its own, because money, tax, claims and payouts arrive on different days.
+ */
+export class PresenceDto {
+  @IsIn(PRESENCE_LEVELS as unknown as string[]) level!: PresenceLevel;
+  @IsOptional() @IsObject() overrides?: Record<string, boolean>;
+  /** Why. A country’s standing is a decision, and a decision with no reason cannot be reviewed. */
+  @IsOptional() @IsString() note?: string;
+  @IsOptional() @IsString() by?: string;
 }
 
 export class CorridorStatusDto {

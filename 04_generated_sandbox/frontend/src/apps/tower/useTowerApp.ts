@@ -7,13 +7,14 @@ import type { ConstraintView } from './logic';
 import type { EntityPricing, EntityRow } from './money';
 import type { ApprovalRow, ClaimDecision, ClaimRow, DisposalRow, StalledRow } from './queues';
 import { EMPTY_CORRIDOR_FORM, corridorName, type CorridorForm, type CorridorRow, type CouplingRow } from './corridors';
+import { EMPTY_COUNTRY_FORM, newCountryCode, overridesOf, type NewCountryForm, type PresenceLevel, type PresenceRow } from './presence';
 import type { AgentRow, CoverageCounts, FlagRow, HubRow, ToteRow } from './network';
 import { runSummary, type PayoutAction, type PayoutRow, type RunResult } from './settlement';
 import type { HelpOption } from './pictures';
 import { resolveBaseUrl } from '../../lib/sbg';
 
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
-export type Screen = 'network' | 'hazards' | 'claims' | 'disposal' | 'approvals' | 'support' | 'pictures' | 'money' | 'rates' | 'companies' | 'corridors';
+export type Screen = 'network' | 'hazards' | 'claims' | 'disposal' | 'approvals' | 'support' | 'pictures' | 'money' | 'rates' | 'companies' | 'corridors' | 'presence';
 
 export interface TowerState {
   phase: Phase;
@@ -68,6 +69,14 @@ export interface TowerState {
   lookup: ParcelView | null;
   /** A freshly rotated release code. Held until dismissed BY HAND — see the support screen. */
   reissued: { kind?: string; otp?: string } | null;
+
+  /* ---- presence: how established the network is, country by country ---- */
+  /** Every country with a company, plus every one an operator has decided about. Null while unread. */
+  presence: PresenceRow[] | null;
+  /** The row being changed. `level` empty means 'whatever that country already stands at'. */
+  presenceForm: { level: PresenceLevel | ''; note: string };
+  /** Recording a country that is not on the map yet — the only way the FIRST country we are not in gets one. */
+  countryForm: NewCountryForm;
 
   /* ---- the corridors: the routes the network runs buses on ---- */
   /** Every corridor, live and blocked. Null while unread. */
@@ -168,6 +177,10 @@ export interface TowerActions {
   revokeAdmin(entityId: string, adminId: string): Promise<void>;
   signOut(): void;
   go(screen: Screen): void;
+  setPresenceForm(patch: Partial<{ level: PresenceLevel; note: string }>): void;
+  setCountryForm(patch: Partial<NewCountryForm>): void;
+  recordCountry(): Promise<void>;
+  savePresence(jurisdiction: string): Promise<void>;
   setCorridorForm(patch: Partial<CorridorForm>): void;
   saveCorridor(): Promise<void>;
   setCorridorStatus(corridorId: string, status: 'active' | 'blocked'): Promise<void>;
@@ -222,6 +235,9 @@ const INITIAL: TowerState = {
   disposal: null,
   approvals: null,
   stalled: null,
+  presence: null,
+  presenceForm: { level: '', note: '' },
+  countryForm: { ...EMPTY_COUNTRY_FORM },
   corridors: null,
   couplings: null,
   corridorForm: { ...EMPTY_CORRIDOR_FORM },
@@ -460,6 +476,19 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       readAt: Date.now(),
     }));
   }, []);
+  /** The presence map. One read: it is a list of decisions, not a queue. */
+  const loadPresence = useCallback(async (client: TowerClient) => {
+    setState((s) => ({ ...s, loading: true }));
+    const { data, error } = await client.api.presence();
+    setState((s) => ({
+      ...s,
+      loading: false,
+      presence: error ? null : (narrow<{ items: PresenceRow[] }>(data)?.items ?? []),
+      queueError: error ? error.detail || error.title : null,
+      readAt: Date.now(),
+    }));
+  }, []);
+
   // Boot: a credential in this tab means the console picks up where it left off; nothing means sign-in.
   useEffect(() => {
     const creds = readCreds();
@@ -593,13 +622,14 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     else if (state.screen === 'money' && state.entityId) await loadMoney(client, state.entityId);
     else if (state.screen === 'pictures') await loadHelp(client, state.helpTopic);
     else if (state.screen === 'corridors') await loadCorridors(client);
+    else if (state.screen === 'presence') await loadPresence(client);
     else if (state.screen === 'support') {
       // Refreshing the support screen means re-reading the parcel somebody is on the phone about, not
       // reloading a list — there is no list here.
       if (state.lookup) await lookupParcel(state.lookup.parcelId);
     }
     else await loadHazards(client);
-  }, [loadHazards, loadQueues, loadNetwork, loadMoney, loadHelp, loadCorridors, lookupParcel, loadPricing, state.screen, state.entityId, state.lookup, state.helpTopic]);
+  }, [loadHazards, loadQueues, loadNetwork, loadMoney, loadHelp, loadCorridors, loadPresence, lookupParcel, loadPricing, state.screen, state.entityId, state.lookup, state.helpTopic]);
 
   const open = useCallback((constraintId: string | null) => {
     setState((s) => ({ ...s, openId: constraintId, clearError: null }));
@@ -677,6 +707,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         const client = clientRef.current;
         if (screen === 'pictures' && client && stateRef.current.help === null) void loadHelp(client, stateRef.current.helpTopic);
         if (screen === 'corridors' && client && stateRef.current.corridors === null) void loadCorridors(client);
+        if (screen === 'presence' && client && stateRef.current.presence === null) void loadPresence(client);
       },
       refresh,
       open,
@@ -686,6 +717,63 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         // Closing the open editor is not tidiness: its boxes hold another sister's numbers.
         setState((s) => ({ ...s, openId: null, saveError: null, done: null, pricing: null, rateImpact: null, books: null, payouts: null }));
         if (client) await loadPricing(client, entityId);
+      },
+      setCountryForm: (patch: Partial<NewCountryForm>) => setState((s) => ({ ...s, countryForm: { ...s.countryForm, ...patch }, queueError: null })),
+      /**
+       * Record a country the map does not list yet.
+       *
+       * Without this the map could only ever show countries that already had a company or a standing,
+       * which makes the first country we are NOT in unrecordable — the same gap the corridors had,
+       * where the only routes in existence were the ones a seed script happened to write.
+       */
+      recordCountry: async () => {
+        const client = clientRef.current;
+        if (!client) return;
+        const form = stateRef.current.countryForm;
+        const code = newCountryCode(form);
+        if (!code) return;
+        setState((s) => ({ ...s, busyId: 'country', queueError: null, done: null }));
+        const { error } = await client.api.setPresence(code, {
+          level: form.level,
+          ...(stateRef.current.who?.name ? { by: stateRef.current.who.name } : {}),
+          ...(form.note.trim() ? { note: form.note.trim() } : {}),
+        });
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, countryForm: { ...EMPTY_COUNTRY_FORM }, done: t('tower.presence.recorded', { country: code }) }));
+        await loadPresence(client);
+      },
+      setPresenceForm: (patch: Partial<{ level: PresenceLevel; note: string }>) =>
+        setState((s) => ({ ...s, presenceForm: { ...s.presenceForm, ...patch }, queueError: null })),
+      /**
+       * Move a country up or down the ladder.
+       *
+       * The capabilities somebody deliberately switched off are sent BACK with the new level, so a
+       * level change moves everything that was never argued about and leaves the arguments standing.
+       * Dropping them silently would quietly re-grant a permission a person had taken away.
+       */
+      savePresence: async (jurisdiction: string) => {
+        const client = clientRef.current;
+        if (!client) return;
+        const current = stateRef.current;
+        const row = current.presence?.find((p) => p.jurisdiction === jurisdiction);
+        const level = current.presenceForm.level || row?.level;
+        if (!row || !level) return;
+        setState((s) => ({ ...s, busyId: jurisdiction, queueError: null, done: null }));
+        const { error } = await client.api.setPresence(jurisdiction, {
+          level,
+          overrides: overridesOf(row) as Record<string, boolean>,
+          ...(current.who?.name ? { by: current.who.name } : {}),
+          ...(current.presenceForm.note.trim() ? { note: current.presenceForm.note.trim() } : {}),
+        });
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, openId: null, presenceForm: { level: '', note: '' }, done: t('tower.presence.moved', { country: jurisdiction }) }));
+        await loadPresence(client);
       },
       setCorridorForm: (patch: Partial<CorridorForm>) =>
         setState((s) => ({ ...s, corridorForm: { ...s.corridorForm, ...patch }, queueError: null })),

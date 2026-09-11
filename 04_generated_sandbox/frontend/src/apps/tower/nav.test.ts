@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { NAV_GROUPS, SCREEN_META, activeGroupKey, firstScreen, groupBadge, groupOf, groupsFor, opensSheet } from './nav';
 import type { Screen } from './useTowerApp';
 
-const ALL: Screen[] = ['network', 'hazards', 'claims', 'disposal', 'approvals', 'support', 'money', 'companies', 'rates', 'corridors', 'pictures'];
+const ALL: Screen[] = ['network', 'hazards', 'claims', 'disposal', 'approvals', 'support', 'money', 'companies', 'rates', 'corridors', 'presence', 'pictures'];
 
 /**
  * The console's navigation.

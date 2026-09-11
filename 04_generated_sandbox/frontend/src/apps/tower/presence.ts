@@ -1,0 +1,179 @@
+import type { MessageKey } from '../../shared/i18n';
+
+/**
+ * HOW ESTABLISHED THE NETWORK IS, COUNTRY BY COUNTRY — the operator's map of its own reach.
+ *
+ * The ladder is a privilege level, not a launch status. A country low on it still matches, carries and
+ * proves; what it cannot do is spend, charge, hold or promise. The screen's whole job is to make that
+ * difference impossible to misread, because every way of getting this wrong looks like generosity:
+ * a country inheriting a neighbour's permissions, a cover limit surviving where nothing can pay it, an
+ * "established" flag standing in for a company that was never registered.
+ */
+
+export const PRESENCE_LEVELS = ['observed', 'matched', 'partnered', 'established'] as const;
+export type PresenceLevel = (typeof PRESENCE_LEVELS)[number];
+
+export const PRESENCE_CAPABILITIES = ['takeIn', 'merchantOfRecord', 'holdFloat', 'cashOnDelivery', 'claims', 'tax', 'payouts'] as const;
+export type PresenceCapability = (typeof PRESENCE_CAPABILITIES)[number];
+
+export interface PresenceRow {
+  jurisdiction: string;
+  level: PresenceLevel;
+  capabilities: Record<PresenceCapability, boolean>;
+  /** Whether a transacting sister actually exists there. Established is derived from this, never typed. */
+  hasEntity: boolean;
+  /** False for a country that only appears because it has a company — nobody has decided anything yet. */
+  recorded: boolean;
+  note?: string;
+  setBy?: string;
+  setAt?: string;
+}
+
+/** What each level grants before anyone overrides anything — the same table the server derives from. */
+export const LEVEL_DEFAULTS: Record<PresenceLevel, Record<PresenceCapability, boolean>> = {
+  observed: { takeIn: false, merchantOfRecord: false, holdFloat: false, cashOnDelivery: false, claims: false, tax: false, payouts: false },
+  matched: { takeIn: true, merchantOfRecord: false, holdFloat: false, cashOnDelivery: false, claims: false, tax: false, payouts: false },
+  partnered: { takeIn: true, merchantOfRecord: false, holdFloat: false, cashOnDelivery: false, claims: false, tax: false, payouts: false },
+  established: { takeIn: true, merchantOfRecord: true, holdFloat: true, cashOnDelivery: true, claims: true, tax: true, payouts: true },
+};
+
+export const LEVEL_LABEL: Record<PresenceLevel, MessageKey> = {
+  observed: 'tower.presence.level.observed',
+  matched: 'tower.presence.level.matched',
+  partnered: 'tower.presence.level.partnered',
+  established: 'tower.presence.level.established',
+};
+
+export const CAPABILITY_LABEL: Record<PresenceCapability, MessageKey> = {
+  takeIn: 'tower.presence.cap.takeIn',
+  merchantOfRecord: 'tower.presence.cap.merchantOfRecord',
+  holdFloat: 'tower.presence.cap.holdFloat',
+  cashOnDelivery: 'tower.presence.cap.cashOnDelivery',
+  claims: 'tower.presence.cap.claims',
+  tax: 'tower.presence.cap.tax',
+  payouts: 'tower.presence.cap.payouts',
+};
+
+/**
+ * The map, strongest first.
+ *
+ * Where the network can do everything is where most of the work is, and a country that has slipped DOWN
+ * the ladder rises to the top of its band rather than hiding in an alphabet.
+ */
+export function presenceRows(rows: PresenceRow[]): PresenceRow[] {
+  return [...rows].sort((a, b) => PRESENCE_LEVELS.indexOf(b.level) - PRESENCE_LEVELS.indexOf(a.level) || a.jurisdiction.localeCompare(b.jurisdiction));
+}
+
+/** One capability, and whether it stands where its level put it or was deliberately moved. */
+export interface CapabilityState {
+  capability: PresenceCapability;
+  on: boolean;
+  /** True where this differs from the level's default — a decision somebody made about this capability. */
+  overridden: boolean;
+}
+
+/**
+ * What a country may actually do, with the deliberate exceptions marked.
+ *
+ * Marking them matters: "this country cannot hold float" reads very differently from "this country
+ * cannot hold float BECAUSE SOMEBODY TURNED IT OFF", and only one of those is worth asking about.
+ */
+export function capabilityStates(row: PresenceRow): CapabilityState[] {
+  return PRESENCE_CAPABILITIES.map((capability) => ({
+    capability,
+    on: row.capabilities[capability],
+    overridden: row.capabilities[capability] !== LEVEL_DEFAULTS[row.level][capability],
+  }));
+}
+
+/** The capabilities deliberately moved off their level's default, as a patch to send back. */
+export function overridesOf(row: PresenceRow): Partial<Record<PresenceCapability, boolean>> {
+  const patch: Partial<Record<PresenceCapability, boolean>> = {};
+  for (const state of capabilityStates(row)) if (state.overridden) patch[state.capability] = state.on;
+  return patch;
+}
+
+/**
+ * What stops this country being moved to this level — said before the server has to say it.
+ *
+ * Only one rule, and it is the one that matters: ESTABLISHED IS DERIVED. A flag must never be the thing
+ * that creates a Merchant of Record, a float and a claims provision that do not exist, so the screen
+ * refuses to offer it rather than letting somebody press it and read a 400.
+ */
+export function levelBlocker(row: PresenceRow, level: PresenceLevel): MessageKey | null {
+  if (level === 'established' && !row.hasEntity) return 'tower.presence.needsCompany';
+  return null;
+}
+
+/**
+ * What MOVING to this level would change, as the capabilities gained and lost.
+ *
+ * A level is a word, and the word is not the consequence. Dropping a country from established to
+ * matched stops it charging anybody, stops the float and takes the cover to zero — and an operator
+ * should read that list before they press it, not discover it in a claim.
+ */
+export function levelEffect(row: PresenceRow, level: PresenceLevel): { gained: PresenceCapability[]; lost: PresenceCapability[] } {
+  const next = LEVEL_DEFAULTS[level];
+  const gained: PresenceCapability[] = [];
+  const lost: PresenceCapability[] = [];
+  for (const capability of PRESENCE_CAPABILITIES) {
+    const now = row.capabilities[capability];
+    if (next[capability] && !now) gained.push(capability);
+    if (!next[capability] && now) lost.push(capability);
+  }
+  return { gained, lost };
+}
+
+/**
+ * WHO WOULD ANSWER for goods taken in here — the sentence the counter has to say out loud.
+ *
+ * Mirrored from the server so the console can show an operator what a shop in that country is being
+ * told. `ours` means a sister carries it; `theirs` means a carrier prices it, is paid for it and
+ * answers for it while we record custody; `none` means nothing may be taken in at all.
+ */
+export function takeInPromise(row: PresenceRow): 'ours' | 'theirs' | 'none' {
+  if (!row.capabilities.takeIn) return 'none';
+  return row.capabilities.merchantOfRecord ? 'ours' : 'theirs';
+}
+
+export const PROMISE_LABEL: Record<'ours' | 'theirs' | 'none', MessageKey> = {
+  ours: 'tower.presence.promise.ours',
+  theirs: 'tower.presence.promise.theirs',
+  none: 'tower.presence.promise.none',
+};
+
+export interface NewCountryForm {
+  jurisdiction: string;
+  level: PresenceLevel;
+  note: string;
+}
+
+export const EMPTY_COUNTRY_FORM: NewCountryForm = { jurisdiction: '', level: 'matched', note: '' };
+
+/**
+ * What stops a country being recorded — said before the server has to say it.
+ *
+ * The screen can only list countries that HAVE a standing or a company, so without this form the first
+ * country we are not yet in cannot be recorded at all: the same shape of gap the corridors had, where
+ * the only routes that existed were the ones a seed script happened to write.
+ */
+export function newCountryBlocker(form: NewCountryForm, rows: PresenceRow[]): MessageKey | null {
+  const code = form.jurisdiction.trim().toUpperCase();
+  if (!code) return 'tower.presence.needCode';
+  // ISO-3166 alpha-2, because every jurisdiction in the system is stored and compared as one. A free
+  // string would make ZM and ZMB two countries that never meet.
+  if (!/^[A-Z]{2}$/.test(code)) return 'tower.presence.badCode';
+  if (form.level === 'established' && !rows.some((r) => r.jurisdiction === code && r.hasEntity)) return 'tower.presence.needsCompany';
+  return null;
+}
+
+/** The country this form would act on, normalised the way the server stores it. */
+export function newCountryCode(form: NewCountryForm): string {
+  return form.jurisdiction.trim().toUpperCase();
+}
+
+/** True where recording this would CHANGE a country already on the map rather than add one. */
+export function alreadyListed(form: NewCountryForm, rows: PresenceRow[]): boolean {
+  const code = newCountryCode(form);
+  return Boolean(code) && rows.some((r) => r.jurisdiction === code);
+}

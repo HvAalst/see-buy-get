@@ -3854,6 +3854,81 @@
         }
       }
     },
+    "/v1/sbg/presence": {
+      "get": {
+        "operationId": "Sbg.listPresence",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/presence/{jurisdiction}": {
+      "get": {
+        "operationId": "Sbg.presenceFor",
+        "parameters": [
+          {
+            "name": "jurisdiction",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolvedPresence"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "Sbg.setPresence",
+        "summary": "",
+        "description": "Move a country up or down the ladder. Operator-only, and the change is NAMED: “we launched in\nZambia” must be a record with a person on it rather than a deploy.\n\nESTABLISHED cannot be claimed here without a sister that actually transacts there. The service\nrefuses it, because that claim would unlock a Merchant of Record, a float and a claims provision\nthat do not exist.",
+        "parameters": [
+          {
+            "name": "jurisdiction",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresenceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolvedPresence"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/entities": {
       "get": {
         "operationId": "Sbg.listEntities",
@@ -5577,6 +5652,8 @@
       },
       "get": {
         "operationId": "Sbg.listCorridors",
+        "summary": "",
+        "description": "Readable by everyone who has to work with them: the fleet app offers them, the agent app checks them.",
         "parameters": [],
         "responses": {
           "200": {
@@ -5598,6 +5675,8 @@
     "/v1/sbg/corridors/{id}/status": {
       "post": {
         "operationId": "Sbg.setCorridorStatus",
+        "summary": "",
+        "description": "Blocking one stops every cross-zone take-in it was serving. Operator only, for that reason.",
         "parameters": [
           {
             "name": "id",
@@ -5635,6 +5714,8 @@
     "/v1/sbg/drivers": {
       "post": {
         "operationId": "Sbg.addDriver",
+        "summary": "",
+        "description": "The corridor whitelist — a badge that may take a handover without being a fleet driver at all. Same\n reasoning as the corridor itself, and a stronger one: this is the list that says who may be handed\n other people's goods.",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -14578,6 +14659,119 @@
         "required": [
           "currency",
           "perBase"
+        ]
+      },
+      "PresenceCapabilities": {
+        "type": "object",
+        "properties": {
+          "merchantOfRecord": {
+            "type": "boolean",
+            "description": "May we contract with, and charge, a consumer here? Without it there is no redeemable quote."
+          },
+          "holdFloat": {
+            "type": "boolean",
+            "description": "May a shop's prepaid float sit with us? Holding other people's money is the regulated part."
+          },
+          "cashOnDelivery": {
+            "type": "boolean",
+            "description": "May cash we are answerable for pass across a counter?"
+          },
+          "claims": {
+            "type": "boolean",
+            "description": "Is there a provision that can actually pay an award? Where there is not, cover is ZERO by\n construction — never \"unset\", and never a limit nobody can honour."
+          },
+          "tax": {
+            "type": "boolean",
+            "description": "Do we collect and remit here?"
+          },
+          "payouts": {
+            "type": "boolean",
+            "description": "May money leave to a local supplier, in local currency?"
+          },
+          "takeIn": {
+            "type": "boolean",
+            "description": "May a shop here take goods into custody at all — and under whose promise? See `TakeInPromise`."
+          }
+        },
+        "required": [
+          "merchantOfRecord",
+          "holdFloat",
+          "cashOnDelivery",
+          "claims",
+          "tax",
+          "payouts",
+          "takeIn"
+        ]
+      },
+      "ResolvedPresence": {
+        "type": "object",
+        "properties": {
+          "jurisdiction": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "observed",
+              "matched",
+              "partnered",
+              "established"
+            ]
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/PresenceCapabilities"
+          },
+          "hasEntity": {
+            "type": "boolean",
+            "description": "True where a transacting sister actually exists. Established cannot be claimed without one."
+          },
+          "recorded": {
+            "type": "boolean",
+            "description": "Whether this country was ever recorded, or is simply unknown — which resolves to `observed`."
+          },
+          "note": {
+            "type": "string"
+          },
+          "setBy": {
+            "type": "string"
+          },
+          "setAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "jurisdiction",
+          "level",
+          "capabilities",
+          "hasEntity",
+          "recorded"
+        ]
+      },
+      "PresenceDto": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "string",
+            "enum": [
+              "observed",
+              "matched",
+              "partnered",
+              "established"
+            ]
+          },
+          "overrides": {
+            "type": "object"
+          },
+          "note": {
+            "type": "string",
+            "description": "Why. A country’s standing is a decision, and a decision with no reason cannot be reviewed."
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "level"
         ]
       },
       "Payout": {

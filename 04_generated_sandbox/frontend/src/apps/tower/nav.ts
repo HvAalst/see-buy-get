@@ -42,7 +42,7 @@ export const NAV_GROUPS: NavGroup[] = [
     screens: ['hazards', 'claims', 'disposal', 'approvals', 'support'],
   },
   { key: 'money', labelKey: 'tower.group.money', icon: 'wallet', screens: ['money'] },
-  { key: 'setup', labelKey: 'tower.group.setup', icon: 'edit', screens: ['companies', 'rates', 'corridors', 'pictures'] },
+  { key: 'setup', labelKey: 'tower.group.setup', icon: 'edit', screens: ['companies', 'rates', 'corridors', 'presence', 'pictures'] },
 ];
 
 /**
@@ -63,6 +63,7 @@ export const SCREEN_META: Record<Screen, { labelKey: MessageKey; icon: IconName 
   companies: { labelKey: 'tower.nav.companies', icon: 'grid' },
   rates: { labelKey: 'tower.nav.rates', icon: 'edit' },
   corridors: { labelKey: 'tower.nav.corridors', icon: 'route' },
+  presence: { labelKey: 'tower.nav.presence', icon: 'pin' },
   pictures: { labelKey: 'tower.nav.pictures', icon: 'camera' },
 };
 

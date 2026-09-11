@@ -5,6 +5,7 @@ import { Public } from '../../foundation/auth/public.decorator';
 import { Roles, Scopes } from '../../foundation/auth/scopes.decorator';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { actingDid, actingTenant, auditActor } from '../../foundation/auth/acting';
+import { PresenceService } from '../../foundation/presence/presence.service';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { AuthService } from '../../foundation/auth/auth.service';
 import { AgentService } from './agent.service';
@@ -33,7 +34,8 @@ import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
-import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto } from './pudo.dto';
+import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto,
+  PresenceDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { classifySize, MAX_CLAIM_AWARD, measuredFactor, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
@@ -102,6 +104,7 @@ export class SbgController {
     private readonly monitor: MonitorService,
     private readonly ratings: RatingService,
     private readonly entities: EntityService,
+    private readonly presence: PresenceService,
     private readonly entityAdmins: EntityAdminService,
     private readonly fx: FxService,
     private readonly apiKeys: ApiKeyService,
@@ -264,6 +267,45 @@ export class SbgController {
     if (actor?.role === 'operator') return;
     if (actor?.role === 'entity_admin' && this.entities.mayAdminister(actor.tenant, entityId)) return;
     throw new GlosError('NOT_FOUND', `No such company: ${entityId}`);
+  }
+
+  /* ------------------------------------------------- how established we are -- */
+
+  /**
+   * HOW ESTABLISHED THE NETWORK IS, COUNTRY BY COUNTRY.
+   *
+   * Read by everybody who has to know what may be promised where, so it is not operator-only: a shop
+   * asking whether it may take goods in, and under whose promise, is asking this. What it never
+   * carries is money — a level says what is permitted, never what is held.
+   */
+  @Get('presence')
+  listPresence() {
+    return { items: this.presence.list() };
+  }
+
+  @Get('presence/:jurisdiction')
+  presenceFor(@Param('jurisdiction') jurisdiction: string) {
+    return this.presence.resolve(jurisdiction);
+  }
+
+  /**
+   * Move a country up or down the ladder. Operator-only, and the change is NAMED: “we launched in
+   * Zambia” must be a record with a person on it rather than a deploy.
+   *
+   * ESTABLISHED cannot be claimed here without a sister that actually transacts there. The service
+   * refuses it, because that claim would unlock a Merchant of Record, a float and a claims provision
+   * that do not exist.
+   */
+  @Roles('operator')
+  @Post('presence/:jurisdiction')
+  setPresence(@Param('jurisdiction') jurisdiction: string, @Body() dto: PresenceDto, @Actor() actor: IntrospectionResult) {
+    return this.presence.set({
+      jurisdiction,
+      level: dto.level,
+      overrides: dto.overrides as never,
+      note: dto.note,
+      by: auditActor(actor, dto.by),
+    });
   }
 
   /**

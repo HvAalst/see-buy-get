@@ -162,6 +162,17 @@ export function createOperatorApi(sbg: SbgClient) {
       sbg.request((c) => c.POST('/v1/sbg/parcels/{id}/write-off', { params: { path: { id: parcelId } }, body: body as never })),
 
     /**
+     * HOW ESTABLISHED THE NETWORK IS, COUNTRY BY COUNTRY.
+     *
+     * A privilege level per jurisdiction: what may be promised, charged, held and taken in where.
+     * Read by anything that has to know what it may offer; only an operator may move one.
+     */
+    presence: () => sbg.request((c) => c.GET('/v1/sbg/presence', {})),
+
+    setPresence: (jurisdiction: string, body: { level: string; overrides?: Record<string, boolean>; note?: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/presence/{jurisdiction}', { params: { path: { jurisdiction } }, body: body as never })),
+
+    /**
      * THE CORRIDORS — the routes the network runs, and only the network may draw them.
      *
      * A corridor is the promise that a bus runs between two zones, and a shop may only take in a
