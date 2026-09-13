@@ -1,8 +1,8 @@
 import { Button, Card, Chip, CodeCard, ErrorNote, GlanceNumber, Icon, Note, OptionPicker, PlaceMap, Pill, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
 import { agentConfig } from '../api';
 import { useT, type Translate } from '../../../shared/i18n';
-import { BODY_HINTS, EXCLUDABLE_BODIES, NATURES, PACKAGING_HELP, acceptMissing, bookFreightMissing, chooseBodyHint, parcelStatusWord, pointDistance, selectablePoints, sizeMeta, toggleExcludedBody, type BodyHint, type PackagingChoice } from '../logic';
-import type { NetworkPoint } from '../types';
+import { BODY_HINTS, EXCLUDABLE_BODIES, NATURES, PACKAGING_HELP, acceptMissing, bookFreightMissing, chooseBodyHint, parcelStatusWord, pointDistance, selectablePoints, sizeMeta, takeInTermsNotice, termsBlock, toggleExcludedBody, type BodyHint, type PackagingChoice } from '../logic';
+import type { NetworkPoint, TakeInTerms } from '../types';
 import type { AgentActions, AgentState } from '../useAgentApp';
 import { PhotoField } from './PhotoField';
 
@@ -52,7 +52,10 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
   // A dedicated (P4+) walk-up no longer dead-ends (F2): it switches the tail to the "book as freight" flow.
   // So the parcel-accept block is just the missing walk-up fields; the freight branch owns its own block.
   const isDedicated = Boolean(state.acceptDerived?.dedicated);
-  const blockReason = acceptMissing(f, t);
+  // P3 — the terms are part of what must be complete before the goods are accepted, not a legend beside it.
+  const blockReason = acceptMissing(f, t) ?? termsBlock(state.takeInTerms, state.takeInTermsState, state.termsTold, t);
+  const terms = state.takeInTermsState === 'ready' ? state.takeInTerms : null;
+  const termsAloud = terms ? `${takeInTermsNotice(terms, t).title}. ${takeInTermsNotice(terms, t).detail} ` : '';
   const freightBlock = bookFreightMissing(f, Date.now(), t);
   // Only a SETTLED preview drives the confirm card — never a stale one still resolving under a new scan.
   const pm = state.preMintState === 'ready' ? state.preMint : null;
@@ -103,6 +106,8 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
             <Note tone="info" icon="wallet" title={t('agent.accept.prepaidTitle')} detail={t('agent.accept.prepaidDetail')} />
           )}
 
+          {pm.terms ? <TermsNote terms={pm.terms} /> : null}
+
           <Card label={pm.kind === 'peer_send' ? t('agent.accept.bookedInApp') : t('agent.accept.storeOrder')}>
             <div class="kv">
               <span>{t('agent.accept.goingTo')}</span>
@@ -124,7 +129,7 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
           <div class="scr__cta">
             <Button
               onClick={() => void actions.submitIntake()}
-              disabled={pm.kind === 'peer_send' && !state.intakePhotoRef}
+              disabled={(pm.kind === 'peer_send' && !state.intakePhotoRef) || pm.terms?.promise === 'none'}
               busy={state.busy === 'intake'}
             >
               {pm.kind === 'peer_send' ? t('agent.accept.collectAndTakeIn', { amount: pm.cashDue.toFixed(2) }) : t('agent.accept.takeIn')}
@@ -134,7 +139,10 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
 
           <div class="scr__foot">
             <ReadAloud
-              text={() => (pm.kind === 'peer_send' ? t('agent.accept.aloudBooked', { amount: pm.cashDue.toFixed(2) }) : t('agent.accept.aloudPrepaid'))}
+              text={() =>
+                (pm.terms ? `${takeInTermsNotice(pm.terms, t).title}. ${takeInTermsNotice(pm.terms, t).detail} ` : '') +
+                (pm.kind === 'peer_send' ? t('agent.accept.aloudBooked', { amount: pm.cashDue.toFixed(2) }) : t('agent.accept.aloudPrepaid'))
+              }
               label={t('agent.readAloud')}
             />
           </div>
@@ -257,6 +265,24 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
         <p class="card__note">{t('agent.accept.photoNote')}</p>
       </Card>
 
+      {/* P3 — said out loud before acceptance: whose promise, who answers, and the cover. Directly above the
+          button, so it is the last thing read before the goods change hands. */}
+      {state.takeInTermsState === 'error' ? (
+        <Note tone="warn" icon="warning" title={t('agent.accept.termsFailed')} detail="" />
+      ) : null}
+      {state.takeInTermsState === 'error' ? (
+        <Button variant="outline" chevron={false} onClick={actions.retryTerms}>
+          {t('agent.tryAgain')}
+        </Button>
+      ) : null}
+      {terms ? <TermsNote terms={terms} /> : null}
+      {terms?.promise === 'theirs' ? (
+        <label class="checkline" style="margin-top:12px">
+          <input type="checkbox" checked={state.termsTold} onChange={(e) => actions.setTermsTold(e.currentTarget.checked)} />
+          <span>{t('agent.accept.termsTheirsTick')}</span>
+        </label>
+      ) : null}
+
       <div class="scr__cta">
         <Button onClick={() => void actions.submitAccept()} disabled={Boolean(blockReason)} busy={state.busy === 'accept'}>
           {t('agent.accept.confirm')}
@@ -265,7 +291,7 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
       </div>
 
       <div class="scr__foot">
-        <ReadAloud text={() => blockReason ?? t('agent.accept.ready')} label={t('agent.accept.whatMissing')} />
+        <ReadAloud text={() => termsAloud + (blockReason ?? t('agent.accept.ready'))} label={t('agent.accept.whatMissing')} />
       </div>
         </>
       )}
@@ -582,6 +608,13 @@ function FreightBookingCard({ state, actions }: { state: AgentState; actions: Ag
       <p class="card__note">{t('agent.accept.customerPhoneNote')}</p>
     </Card>
   );
+}
+
+/** P3 — whose promise these goods are under, in the words the server's answer supplies. */
+function TermsNote({ terms }: { terms: TakeInTerms }) {
+  const t = useT();
+  const n = takeInTermsNotice(terms, t);
+  return <Note tone={n.tone} icon={n.icon} title={n.title} detail={n.detail} />;
 }
 
 function DestRow({ point, picked, away, onPick }: { point: NetworkPoint; picked: boolean; away: string | null; onPick: () => void }) {

@@ -205,6 +205,62 @@ describe('crossing a border', () => {
     });
   });
 
+  describe('P3 — saying it out loud, before the goods are accepted', () => {
+    const takeIn = (agentDid: string, parcelId: string, mode: 'cash' | 'credit') =>
+      parcels.accept({ parcelId, agentDid, destZone: 'Kisumu', size: 'M', paymentMode: mode, senderMobile: '+254700111', receiverMobile: '+254700222', dropoffPhotoRef: 'p.jpg' } as never);
+
+    it('OURS names the sister and the cover it gives — and the parcel is stamped with exactly that', () => {
+      const ke = shop('Mama Sarah P3', 'Nairobi', NAIROBI);
+      const keEntity = entities.requireForJurisdiction('KE');
+      entities.setInsurance(keEntity.entityId, { freeLimit: 5000 });
+
+      const terms = parcels.takeInTerms(ke.did);
+      expect(terms).toMatchObject({ promise: 'ours', answeredBy: keEntity.name, coverLimit: 5000, coverBasis: 'free-limit', cashAccepted: true });
+
+      // What the counter said is what a claim will be judged against — never a second computation.
+      const parcel = takeIn(ke.did, 'PUD-P3-1', 'credit');
+      expect(parcel.coverLimit).toBe(5000);
+    });
+
+    it('says "no stated limit" rather than inventing one where the sister has set none', () => {
+      const ke = shop('Mama Sarah P3b', 'Nairobi', NAIROBI);
+      expect(parcels.takeInTerms(ke.did)).toMatchObject({ promise: 'ours', coverLimit: 0, coverBasis: 'no-stated-limit' });
+    });
+
+    it('THEIRS: nobody of ours is named, cover is zero by construction, and no cash crosses our till', () => {
+      presence.set({ jurisdiction: 'TZ', level: 'matched' });
+      const tz = shop('Dar Duka P3', 'DarEsSalaam', { lat: -6.79, lng: 39.21 }, 'TZ');
+      const terms = parcels.takeInTerms(tz.did);
+      expect(terms).toMatchObject({ promise: 'theirs', jurisdiction: 'TZ', level: 'matched', coverLimit: 0, coverBasis: 'none', cashAccepted: false });
+      expect(terms.answeredBy).toBeUndefined();
+    });
+
+    it('NONE, where the country moved down while the shop stood open', () => {
+      presence.set({ jurisdiction: 'TZ', level: 'matched' });
+      const tz = shop('Dar Duka P3b', 'DarEsSalaam', { lat: -6.79, lng: 39.21 }, 'TZ');
+      presence.set({ jurisdiction: 'TZ', level: 'observed' });
+      expect(parcels.takeInTerms(tz.did).promise).toBe('none');
+    });
+
+    it('repeats a BOOKED parcel’s own stamped cover, not today’s free limit', () => {
+      const ke = shop('Mama Sarah P3c', 'Nairobi', NAIROBI);
+      const keEntity = entities.requireForJurisdiction('KE').entityId;
+      entities.setInsurance(keEntity, { freeLimit: 100 });
+      const terms = parcels.intakeTermsFor({ originAgentDid: ke.did, collectingEntityId: keEntity, coverLimit: 6000, declaredValue: 6000 } as never);
+      expect(terms).toMatchObject({ promise: 'ours', coverLimit: 6000, coverBasis: 'declared' });
+    });
+
+    it('refuses to award a claim on goods taken in under the carrier’s promise — and still lets it be closed', () => {
+      presence.set({ jurisdiction: 'TZ', level: 'matched' });
+      const tz = shop('Dar Duka P3c', 'DarEsSalaam', { lat: -6.79, lng: 39.21 }, 'TZ');
+      const parcel = parcels.accept({ parcelId: 'PUD-P3-TZ', agentDid: tz.did, destZone: 'DarEsSalaam2', size: 'M', paymentMode: 'credit', senderMobile: '+255700111', receiverMobile: '+255700222', dropoffPhotoRef: 'p.jpg' } as never);
+      Object.assign(parcels.get(parcel.parcelId), { status: 'Disputed', dispute: { state: 'open', origin: 'counter', fromStatus: 'At_PUDO', reason: 'crushed', raisedBy: tz.did, raisedAt: new Date().toISOString() } });
+
+      expect(() => parcels.resolveDispute(parcel.parcelId, { decision: 'upheld', award: 40, note: 'goodwill' })).toThrow(/carrier/);
+      expect(parcels.resolveDispute(parcel.parcelId, { decision: 'rejected', note: 'the carrier answers for this' }).dispute?.decision).toBe('rejected');
+    });
+  });
+
   describe('the sister follows from the country, not from the deployment', () => {
     it('contracts an Ethiopian shop to the Ethiopian sister and a Kenyan one to the Kenyan sister', () => {
       const ke = shop('Mama Sarah', 'Nairobi', NAIROBI);

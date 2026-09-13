@@ -707,6 +707,18 @@ export class SbgController {
     return { ...a, balance: this.agents.balance(did), currency: NETWORK_CURRENCY, rating: this.ratings.agentRating(did) };
   }
 
+  /**
+   * P3 — what this counter must SAY before it takes a walk-up in: whose promise the goods are under, who
+   * answers for them, and the cover. Asked when the take-in screen opens rather than learned from a
+   * refusal after the photo is taken. Owner-scoped: it names the sister behind this shop.
+   */
+  @Scopes('agent:read:self')
+  @Get('agents/:did/take-in-terms')
+  takeInTerms(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
+    this.assertAgentOwner(did, actor);
+    return this.parcels.takeInTerms(did);
+  }
+
   // --- pre-paid wallet (Light SSE) ---
 
   /**
@@ -1650,6 +1662,8 @@ export class SbgController {
       destZone: parcel.destZone,
       destShopName: parcel.destAgentDid ? this.agents.get(parcel.destAgentDid).shopName : undefined,
       cashDue: kind === 'peer_send' ? parcel.shipmentCost ?? 0 : 0,
+      // P3 — said in the same breath as the price: whose promise, who answers, and this parcel's own cover.
+      ...(parcel.originAgentDid ? { terms: this.parcels.intakeTermsFor(parcel) } : {}),
     };
   }
 

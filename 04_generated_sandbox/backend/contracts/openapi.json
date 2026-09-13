@@ -5058,6 +5058,35 @@
         }
       }
     },
+    "/v1/sbg/agents/{did}/take-in-terms": {
+      "get": {
+        "operationId": "Sbg.takeInTerms",
+        "summary": "",
+        "description": "P3 — what this counter must SAY before it takes a walk-up in: whose promise the goods are under, who\nanswers for them, and the cover. Asked when the take-in screen opens rather than learned from a\nrefusal after the photo is taken. Owner-scoped: it names the sister behind this shop.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/agents/{did}/can-transact": {
       "get": {
         "operationId": "Sbg.canTransact",

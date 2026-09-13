@@ -12,7 +12,53 @@
 
 import { distanceLabel, haversineKm, type GeoPoint } from '../../shared/geo';
 import type { MessageKey, Translate } from '../../shared/i18n';
-import type { AgentStatus, AgentView, Benchmark, CorridorRow, GateView, NetworkPoint, ParcelSize, ParcelStatus, ParcelView } from './types';
+import type { AgentStatus, AgentView, Benchmark, CorridorRow, GateView, NetworkPoint, ParcelSize, ParcelStatus, ParcelView, TakeInTerms } from './types';
+
+/* ---------------------------------------------------------- take-in terms -- */
+
+export interface TermsNotice {
+  tone: 'info' | 'warn' | 'danger';
+  icon: 'wallet' | 'warning';
+  title: string;
+  detail: string;
+}
+
+/**
+ * P3 — the words the counter reads out BEFORE the goods are accepted: whose promise, who answers, the cover.
+ * Worded from the server's answer, never recomputed here, so the screen and the claim that may follow
+ * cannot name two different promises.
+ */
+export function takeInTermsNotice(terms: TakeInTerms, t: Translate): TermsNotice {
+  const country = terms.jurisdiction || '—';
+  if (terms.promise === 'none') {
+    return { tone: 'danger', icon: 'warning', title: t('agent.accept.termsNoneTitle'), detail: t('agent.accept.termsNoneDetail', { country }) };
+  }
+  if (terms.promise === 'theirs') {
+    return { tone: 'warn', icon: 'warning', title: t('agent.accept.termsTheirsTitle'), detail: t('agent.accept.termsTheirsDetail', { country }) };
+  }
+  const sister = terms.answeredBy ?? t('agent.accept.termsOursUs');
+  const money = { sister, amount: terms.coverLimit.toFixed(2), currency: terms.currency };
+  const detail =
+    terms.coverBasis === 'declared'
+      ? t('agent.accept.termsOursDeclared', money)
+      : terms.coverBasis === 'free-limit'
+        ? t('agent.accept.termsOursLimit', money)
+        : t('agent.accept.termsOursNoLimit', { sister });
+  return { tone: 'info', icon: 'wallet', title: t('agent.accept.termsOursTitle', { sister }), detail };
+}
+
+/**
+ * Why a take-in may not be confirmed YET on account of its terms — or null. A shopkeeper cannot consent to a
+ * risk the screen never named, so terms still loading or failed to load block exactly like a refusal does,
+ * and the carrier's promise needs the customer told, not just the screen shown.
+ */
+export function termsBlock(terms: TakeInTerms | null, loadState: 'idle' | 'loading' | 'ready' | 'error', told: boolean, t: Translate): string | null {
+  if (loadState === 'error') return t('agent.accept.termsFailed');
+  if (!terms || loadState !== 'ready') return t('agent.accept.termsChecking');
+  if (terms.promise === 'none') return t('agent.accept.termsNoneTitle');
+  if (terms.promise === 'theirs' && !told) return t('agent.accept.termsTickFirst');
+  return null;
+}
 
 /* ------------------------------------------------------------------- gate -- */
 

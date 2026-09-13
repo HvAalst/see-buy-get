@@ -122,8 +122,14 @@ and what the cover is, in the same breath as the price.
   words of the person at the screen; a shop may now stand where we cannot bill, with no sister attached;
   a take-in is stamped  or  and NOTHING of ours moves on . Left for P2b: the quote,
   the mint and the freight post ask the same question (they still refuse late, through ).
-- **P3. Say it out loud.** The take-in screen names who answers for the goods (ours / theirs) and the
-  cover that applies, before acceptance. Cover is zero by construction where there is no provision.
+- **P3. ~~Say it out loud~~ DONE.** `GET agents/:did/take-in-terms` and the intake preview return one
+  answer — promise, the sister that answers (by name), the cover and its basis (declared / free-limit /
+  no-stated-limit / none), whether cash may cross the counter. The agent's take-in screen shows it directly
+  above the button, reads it aloud, and **blocks acceptance while the terms are loading, failed, `none`, or
+  `theirs` without a tick that the customer was told**. What was said is what is kept: a walk-up is stamped
+  with the stated cover, both booked intakes now ask the door and stamp the promise (P2 only asked the
+  walk-up), and a claim on goods taken in under the carrier's promise cannot be awarded — only rejected
+  with a reason.
 - **P4. The journey decides.** MoR resolved from the payer's jurisdiction; a foreign leg becomes a
   purchased service; cross-border take-in refuses where neither end can answer for it.
 - **F1–F4. The fleet's own routes** (see the corridors work): a fleet-owned line, propose → publish,

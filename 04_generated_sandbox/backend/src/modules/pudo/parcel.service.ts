@@ -529,6 +529,32 @@ export interface HandoverResult {
 }
 
 /**
+ * WHAT THE COUNTER SAYS OUT LOUD, before goods are accepted: whose promise this is, and what it covers.
+ *
+ * One answer for the walk-up form and the booked-parcel confirm card alike, because a shopkeeper cannot
+ * consent to a risk the screen never named — and a screen that computes the promise its own way is a
+ * screen that will one day name a different one from the claim that follows.
+ *
+ *   coverBasis  declared         the shipper declared a value and paid for it — covered to `coverLimit`
+ *               free-limit       nothing declared; the sister's free limit applies
+ *               no-stated-limit  a sister answers, but has stated no limit: claims are decided case by case
+ *               none             nobody of ours answers, so nothing is covered — ZERO by construction
+ */
+export interface TakeInTerms {
+  promise: 'ours' | 'theirs' | 'none';
+  /** The shop's country and its standing, so the words can name the state and not only the country. */
+  jurisdiction: string;
+  level: string;
+  /** The sister that answers — its name, never its id. Absent unless the promise is ours. */
+  answeredBy?: string;
+  coverLimit: number;
+  coverBasis: 'declared' | 'free-limit' | 'no-stated-limit' | 'none';
+  currency: string;
+  /** Whether cash we answer for may cross this counter. False wherever the promise is not ours. */
+  cashAccepted: boolean;
+}
+
+/**
  * ParcelService (P-005, ↔ M2/M4 light). The 3-screen agent flow on the backend:
  * Accept (QR + size + destination + mandatory drop-off photo → wallet charge → ledger anchor) →
  * Handover (scan driver badge → manifest, scan each parcel → On_Bus) → Arrive + Pickup (OTP to the
@@ -772,6 +798,72 @@ export class ParcelService implements OnApplicationBootstrap {
     return view;
   }
 
+  /**
+   * P3 — WHOSE PROMISE, WHO ANSWERS, AND WHAT IS COVERED, for goods taken in at this shop.
+   *
+   * Computed from the same presence the door refuses with, so the words on the counter and the refusal
+   * behind them cannot drift apart. Cover passes through `coverCeiling`: where no provision can pay an
+   * award, the figure is zero because nothing can honour a larger one — not because nobody set it.
+   */
+  takeInTerms(agentDid: string, payerJurisdiction?: string): TakeInTerms {
+    const agent = this.agents.get(agentDid);
+    const country = this.agents.countryOf(agent);
+    const promise = this.presence.takeInPromise(country, payerJurisdiction);
+    const level = this.presence.resolve(country).level;
+    if (promise !== 'ours') {
+      return { promise, jurisdiction: country, level, coverLimit: 0, coverBasis: 'none', currency: NETWORK_CURRENCY, cashAccepted: false };
+    }
+    // This country's sister where one exists; otherwise the payer's, the leg here being a service it bought.
+    const entityId = this.agents.entityIdOrNone(agent) ?? (payerJurisdiction ? this.entities.forJurisdiction(payerJurisdiction)?.entityId : undefined);
+    const entity = entityId ? this.entities.get(entityId) : undefined;
+    const limit = entity ? this.presence.coverCeiling(entity.jurisdiction, this.entities.insuranceFor(entity.entityId).freeLimit) : 0;
+    return {
+      promise,
+      jurisdiction: country,
+      level,
+      ...(entity ? { answeredBy: entity.name } : {}),
+      coverLimit: limit,
+      coverBasis: limit > 0 ? 'free-limit' : 'no-stated-limit',
+      currency: entity?.currency ?? NETWORK_CURRENCY,
+      cashAccepted: this.presence.can(country, 'cashOnDelivery'),
+    };
+  }
+
+  /**
+   * The same terms for a parcel booked BEFORE it reached the counter. Its cover was stamped when it was
+   * sold, so that figure — not today's free limit — is what the counter repeats.
+   */
+  intakeTermsFor(parcel: Parcel): TakeInTerms {
+    const terms = this.takeInTerms(parcel.originAgentDid!, this.payerJurisdictionOf(parcel));
+    if (terms.promise !== 'ours' || parcel.coverLimit == null) return terms;
+    const declared = Boolean(parcel.declaredValue) && parcel.coverLimit > 0;
+    return {
+      ...terms,
+      coverLimit: parcel.coverLimit,
+      coverBasis: declared ? 'declared' : parcel.coverLimit > 0 ? 'free-limit' : 'no-stated-limit',
+      currency: parcelCurrency(parcel),
+    };
+  }
+
+  /** Where the money for a booked parcel came from: the sister that sold it. Absent for a walk-up. */
+  private payerJurisdictionOf(parcel: Parcel): string | undefined {
+    const entityId = parcel.collectingEntityId ?? parcel.sellerEntityId;
+    return entityId ? this.entities.get(entityId).jurisdiction : undefined;
+  }
+
+  /**
+   * The door for a parcel booked elsewhere. P2 asked it only of the walk-up, so a country moved down the
+   * ladder still let a pre-paid parcel in; this asks the same question and stamps the same answer.
+   */
+  private admitBooked(parcel: Parcel, agentDid: string): void {
+    const agent = this.agents.get(agentDid);
+    const promise = this.presence.takeInPromise(this.agents.countryOf(agent), this.payerJurisdictionOf(parcel));
+    if (promise === 'none') {
+      throw new GlosError('FORBIDDEN', `Nothing can be taken in at ${agent.shopName}: the network does not operate in ${this.agents.countryOf(agent)} yet`);
+    }
+    parcel.takeInPromise = promise;
+  }
+
   /** Screen 1 — Accept Parcel (ingest). */
   accept(input: AcceptInput): Parcel {
     if (this.parcels.has(input.parcelId)) throw new GlosError('PARCEL_EXISTS', `Parcel ${input.parcelId} already exists`);
@@ -802,7 +894,9 @@ export class ParcelService implements OnApplicationBootstrap {
      * else is the other path, and it is P4.
      */
     const country = this.agents.countryOf(agent);
-    const promise = this.presence.takeInPromise(country);
+    // The terms the counter was shown (P3) — the same computation, so the stamp below is what was said.
+    const terms = this.takeInTerms(input.agentDid);
+    const promise = terms.promise;
     if (promise === 'none') {
       // One refusal, in words about THIS shop and THIS country — not about daughter companies, and not
       // at the far end of a money path the shopkeeper cannot see.
@@ -859,7 +953,9 @@ export class ParcelService implements OnApplicationBootstrap {
       // R1 — a walk-up is paid at this counter, so the shop's own sister collects.
       // Absent where the promise is the carrier’s: no sister of ours is party to it, and naming one
       // would post into a company that does not operate in that country.
-      ...(promise === 'ours' ? { collectingEntityId: this.agents.entityIdOf(agent) } : {}),
+      // …and the cover the counter STATED, so a claim is judged against the words the shopkeeper read out
+      // rather than a sanity bound nobody was told about. Zero keeps its meaning: no limit stated.
+      ...(promise === 'ours' ? { collectingEntityId: this.agents.entityIdOf(agent), coverLimit: terms.coverLimit } : {}),
       // Kept on the parcel rather than derived later: a country can move while goods sit on a shelf,
       // and the promise made at the counter is the promise that was made.
       takeInPromise: promise,
@@ -1555,6 +1651,7 @@ export class ParcelService implements OnApplicationBootstrap {
     if (parcel.status !== 'Created') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Created`);
     if (parcel.originAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Drop-off only at the shop the sender chose — the price is locked to that route');
     if (!dropoffPhotoRef) throw new GlosError('PHOTO_REQUIRED', 'A drop-off photo is mandatory (fraud defence)');
+    this.admitBooked(parcel, agentDid);
     const due = parcel.shipmentCost ?? 0;
     const gate = this.gate.canTransact(agentDid);
     if (!gate.ok || gate.balance < due) throw new GlosError('WALLET_INSUFFICIENT', 'Insufficient funds to remit this parcel — top up first.');
@@ -1580,6 +1677,7 @@ export class ParcelService implements OnApplicationBootstrap {
     if (parcel.status !== 'Created') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Created`);
     if (parcel.paidStatus !== 'ParcelPaid') throw new GlosError('SHIPMENT_NOT_PAID', 'Shipment is not paid — the vendor must prepay before the PUDO accepts it');
     if (parcel.originAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Intake only at the vendor-selected origin PUDO');
+    this.admitBooked(parcel, agentDid);
     parcel.status = 'At_PUDO';
     parcel.acceptedAt = new Date().toISOString();
     this.handTo(parcel, 'shop', agentDid, 'handed in at the counter');
@@ -1938,6 +2036,12 @@ export class ParcelService implements OnApplicationBootstrap {
     const award = input.decision === 'rejected' ? 0 : Math.round(Math.max(0, Number(input.award) || 0) * 100) / 100;
     if (input.decision !== 'rejected' && award <= 0) {
       throw new GlosError('INVALID_INPUT', 'Upholding a claim means awarding something — reject it instead of awarding nothing');
+    }
+    // WHAT THE COUNTER SAID, KEPT. Goods taken in under the carrier's promise were announced as covered by
+    // nothing of ours; awarding here would pay a claim the shopkeeper told the customer we would not, from
+    // books that do not exist in that country. A rejection still closes the case, with a reason shown.
+    if (award > 0 && parcel.takeInPromise === 'theirs') {
+      throw new GlosError('INVALID_STATE', 'These goods were taken in under the carrier’s promise, so the carrier answers for this claim, not us. Reject it with a reason that points the claimant to the carrier.');
     }
     // THE COVER IS THE CAP — a policy rather than a guardrail: the free limit this sister carries, raised
     // by whatever the shipper declared and paid a premium for.

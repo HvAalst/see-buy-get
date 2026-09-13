@@ -232,6 +232,10 @@ export function createAgentApi(sbg: SbgClient) {
      *  to the acting shop (WRONG_PUDO for a parcel booked elsewhere). */
     intakePreview: (id: string) => sbg.request((c) => c.GET('/v1/sbg/parcels/{id}/intake-preview', { params: { path: { id } } })),
 
+    /** P3 — whose promise a walk-up taken in here is under, who answers for it, and the cover. Asked when
+     *  the take-in screen opens, so it is said before the goods are accepted rather than after a refusal. */
+    takeInTerms: (did: string) => sbg.request((c) => c.GET('/v1/sbg/agents/{did}/take-in-terms', { params: { path: { did } } })),
+
     /** PG4 — take a PRE-MINTED parcel in: a peer send (collect the locked price in cash + proof photo)
      *  or a store order (prepaid, no photo). One scan surface; the parcel's record decides. */
     intake: (id: string, dropoffPhotoRef?: string) =>

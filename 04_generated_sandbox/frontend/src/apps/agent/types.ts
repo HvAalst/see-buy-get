@@ -198,6 +198,23 @@ export interface IntakePreview {
   destShopName?: string;
   /** The locked price the shop collects in cash — 0 for a prepaid store order. */
   cashDue: number;
+  /** P3 — whose promise, who answers, and this parcel's own cover. */
+  terms?: TakeInTerms;
+}
+
+/**
+ * P3 — WHAT THE COUNTER SAYS OUT LOUD before goods are accepted. The server computes it from the same
+ * presence its refusal uses, so the screen repeats it rather than working it out again.
+ */
+export interface TakeInTerms {
+  promise: 'ours' | 'theirs' | 'none';
+  jurisdiction: string;
+  level: string;
+  answeredBy?: string;
+  coverLimit: number;
+  coverBasis: 'declared' | 'free-limit' | 'no-stated-limit' | 'none';
+  currency: string;
+  cashAccepted: boolean;
 }
 
 export interface HandoverView {

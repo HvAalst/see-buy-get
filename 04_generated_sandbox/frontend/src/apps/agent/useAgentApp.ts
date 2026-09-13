@@ -16,7 +16,7 @@ import type { IconName } from '../../shared/ui/Icon';
 import { agentConfig, clearDid, createAgentClient, purgeAgentTokens, readDid, readEmail, saveDid, saveEmail } from './api';
 import { signal } from '../../shared/feedback';
 import { triggerDownload } from '../../shared/download';
-import { bodyHintValue, bookFreightMissing, EMPTY_ACCEPT, excludedBodiesValue, handoverRoute, otpValid, packagingValue, parseBudget, parseDims, plannedPickupIso, type AcceptForm, type DimsForm } from './logic';
+import { bodyHintValue, bookFreightMissing, EMPTY_ACCEPT, excludedBodiesValue, handoverRoute, otpValid, packagingValue, parseBudget, parseDims, plannedPickupIso, termsBlock, type AcceptForm, type DimsForm } from './logic';
 import type { GeoPoint } from '../../shared/geo';
 import type {
   AgentLedgerRow,
@@ -32,6 +32,7 @@ import type {
   GeocodeView,
   HandoverView,
   IntakePreview,
+  TakeInTerms,
   LedgerSummary,
   NetworkPoint,
   ParcelView,
@@ -205,6 +206,12 @@ export interface AgentState {
   intakePhotoRef: string;
   /** The last completed intake — drives the "taken in, cash collected" sheet. */
   intakeDone: { parcelId: string; kind: IntakePreview['kind']; cashDue: number; destShopName?: string } | null;
+  /** P3 — whose promise a walk-up taken in here is under. Re-asked every time the take-in screen opens,
+   *  because a country can move down the ladder while the shop stands open. */
+  takeInTerms: TakeInTerms | null;
+  takeInTermsState: 'idle' | 'loading' | 'ready' | 'error';
+  /** The shopkeeper ticked that the customer was TOLD the carrier answers (the carrier's promise only). */
+  termsTold: boolean;
   /** `missed` is the last server verdict of parcels for this bus still waiting (the S25 gate). */
   handover: { badge: string; selected: string[]; missed: string[] };
   release: { stickerId: string; parcel: ParcelView | null; otp: string; stars: number; photoRef: string };
@@ -271,6 +278,9 @@ const INITIAL: AgentState = {
   previewNonce: 0,
   intakePhotoRef: '',
   intakeDone: null,
+  takeInTerms: null,
+  takeInTermsState: 'idle',
+  termsTold: false,
   handover: { ...EMPTY_HANDOVER },
   release: { ...EMPTY_RELEASE },
   collect: { ...EMPTY_COLLECT },
@@ -574,6 +584,25 @@ export function useAgentApp() {
     setState((s) => ({ ...s, acceptPoints: narrow<NetworkPoint[]>(r.data) ?? [], acceptPointsState: 'ready' }));
   }, [client]);
 
+  /**
+   * P3 — whose promise, who answers, the cover. Never cached across visits: the answer is a fact about the
+   * country RIGHT NOW, and a stale "ours" is exactly the promise nobody stands behind.
+   */
+  const loadTakeInTerms = useCallback(async () => {
+    if (!client || !did) return;
+    if (stateRef.current.takeInTermsState === 'loading') return;
+    setState((s) => ({ ...s, takeInTermsState: 'loading', termsTold: false }));
+    const r = await client.api.takeInTerms(did);
+    if (r.error) {
+      setState((s) => ({ ...s, takeInTerms: null, takeInTermsState: 'error' }));
+      return;
+    }
+    setState((s) => ({ ...s, takeInTerms: narrow<TakeInTerms>(r.data), takeInTermsState: 'ready' }));
+  }, [client, did]);
+
+  const setTermsTold = useCallback((told: boolean) => setState((s) => ({ ...s, termsTold: told })), []);
+  const retryTerms = useCallback(() => void loadTakeInTerms(), [loadTakeInTerms]);
+
   const loadRates = useCallback(async () => {
     if (!client) return;
     setState((s) => ({ ...s, ratesState: 'loading' }));
@@ -742,12 +771,15 @@ export function useAgentApp() {
       if (screen === 'handover' || screen === 'void' || screen === 'bag') void loadShopParcels();
       if (screen === 'bag') void loadBagPlan();
       if (screen === 'rates') void loadRates();
-      if (screen === 'accept') void loadAcceptPoints();
+      if (screen === 'accept') {
+        void loadAcceptPoints();
+        void loadTakeInTerms();
+      }
       if (screen === 'consignments') void loadConsignments();
       if (screen === 'freight') void loadPosted();
       if (screen === 'shelf') void loadShelf();
     },
-    [loadShopParcels, loadBagPlan, loadRates, loadAcceptPoints, loadConsignments, loadShelf, loadPosted],
+    [loadShopParcels, loadBagPlan, loadRates, loadAcceptPoints, loadTakeInTerms, loadConsignments, loadShelf, loadPosted],
   );
 
   /* ---------------------------------------------------------------- forms */
@@ -1035,6 +1067,9 @@ export function useAgentApp() {
     const dims = parseDims(f.dims);
     // A dedicated (P4+) load can't ride the bus — the server refuses it, so don't even send it.
     if (!dims || !f.destPudoDid || stateRef.current.acceptDerived?.dedicated) return;
+    // P3 — the same gate the button shows: no take-in on terms nobody has been shown (or told).
+    const terms = stateRef.current.takeInTerms;
+    if (termsBlock(terms, stateRef.current.takeInTermsState, stateRef.current.termsTold, t)) return;
     await run('accept', async () => {
       const r = await client.api.accept({
         agentDid: did,
@@ -1051,6 +1086,9 @@ export function useAgentApp() {
         dropoffPhotoRef: f.photoRef,
         fragile: f.fragile || undefined,
         natureCode: f.natureCode,
+        // Cash at this counter is OUR cash. Where no cash of ours may cross it, the take-in books nothing of
+        // ours — the carrier prices and collects its own work — so it is not sent as a cash take-in.
+        ...(terms && !terms.cashAccepted ? { paymentMode: 'prepaid' as const } : {}),
       });
       if (r.error) return fail(r.error);
       buzz();
@@ -1734,6 +1772,8 @@ export function useAgentApp() {
       saveHours,
       saveShopfront,
       submitAccept,
+      setTermsTold,
+      retryTerms,
       dismissAcceptedLabel,
       submitBookFreight,
       dismissBookedFreight,
