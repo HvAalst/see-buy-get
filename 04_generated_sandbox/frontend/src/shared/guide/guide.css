@@ -1,0 +1,8 @@
+/* Help articles in a sheet — shared by every app, so it leans on currentColor rather than any one app's tokens. */
+.guide { display: grid; gap: 8px; margin-top: 12px; text-align: start; }
+.guide__item { border: 1px solid color-mix(in srgb, currentColor 16%, transparent); border-radius: 12px; padding: 10px 14px; }
+.guide__t { cursor: pointer; font-weight: 600; line-height: 1.4; }
+.guide__s { margin: 8px 0 4px; }
+.guide__steps { margin: 6px 0; padding-inline-start: 20px; list-style: decimal; }
+.guide__steps li { margin-bottom: 4px; }
+.guide__p { margin: 6px 0 0; opacity: 0.85; }

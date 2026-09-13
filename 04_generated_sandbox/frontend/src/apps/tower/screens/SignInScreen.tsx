@@ -1,3 +1,4 @@
+import { HelpLink } from '../../../shared/guide/HelpLink';
 import { useState } from 'preact/hooks';
 import { BrandMark } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
@@ -50,6 +51,9 @@ export function SignInScreen({ actions, error, busy }: { actions: TowerActions; 
         ) : (
           <OperatorForm actions={actions} error={error} busy={busy} />
         )}
+        <p style="margin-top:14px">
+          <HelpLink app="console" label="signin" buttonClass="cbtn cbtn--ghost cbtn--sm" />
+        </p>
       </div>
     </div>
   );

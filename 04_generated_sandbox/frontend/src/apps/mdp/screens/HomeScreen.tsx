@@ -1,3 +1,4 @@
+import { HelpLink } from '../../../shared/guide/HelpLink';
 import { mdpConfig } from '../api';
 import { ChangePasswordSheet } from '../../../shared/account/ChangePasswordSheet';
 import { useState } from 'preact/hooks';
@@ -118,6 +119,7 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
 
       <div class="scr__foot">
         <ReadAloud text={() => homeSummary(unsorted.length, filling.length, t)} label={t('mdp.readAloud')} />
+        <HelpLink app="mdp" />
         <Button variant="link" full={false} onClick={() => setPasswordOpen(true)}>
           {t('mdp.home.changePassword')}
         </Button>

@@ -1,3 +1,4 @@
+import { HelpLink } from '../../../shared/guide/HelpLink';
 import { Button, Card, Checklist, CodeBoxes, ErrorNote, Note, ReadAloud } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { canPickContact } from '../../../shared/device';
@@ -184,6 +185,7 @@ function EnrollView({ state, actions, busy }: { state: SendState; actions: SendA
       </Card>
       <div class="scr__foot">
         <Button variant="link" onClick={() => actions.setAuthMode('login')}>{t('send.auth.haveAccount')}</Button>
+        <HelpLink app="send" label="signin" />
       </div>
     </>
   );

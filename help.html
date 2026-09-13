@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SeeBuyGet help — signing in and keeping it safe</title>
+<!--
+  The same articles every app shows behind its Help link (frontend/src/shared/guide/articles.ts).
+  guide.test.ts fails when this page and that list disagree: change both in the same commit.
+-->
+<style>
+  :root {
+    --bg: #f7f7f5; --panel: #ffffff; --ink: #17181c; --muted: #6b6f76; --line: #e3e3df; --accent: #4c46e0;
+    --shadow: 0 1px 2px rgba(20,20,25,.06), 0 8px 24px rgba(20,20,25,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #121317; --panel: #1a1c21; --ink: #eceef2; --muted: #9aa0aa; --line: #2a2d34; --accent: #8f8bff; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35); }
+  }
+  :root[data-theme="dark"] { --bg: #121317; --panel: #1a1c21; --ink: #eceef2; --muted: #9aa0aa; --line: #2a2d34; --accent: #8f8bff; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35); }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 40px 24px 96px; }
+  .cols { display: grid; grid-template-columns: 1fr; gap: 32px; }
+  @media (min-width: 960px) { .cols { grid-template-columns: 260px 1fr; gap: 48px; align-items: start; } nav.toc { position: sticky; top: 32px; max-height: calc(100vh - 64px); overflow-y: auto; } }
+  h1 { font-size: 26px; letter-spacing: -.01em; margin: 0; text-wrap: balance; }
+  .sub { color: var(--muted); font-size: 15px; max-width: 68ch; margin: 10px 0 32px; }
+  nav.toc > ol { list-style: none; margin: 0; padding: 0; font-size: 14px; }
+  nav.toc > ol > li { margin-bottom: 14px; }
+  nav.toc ol ol { list-style: none; margin: 4px 0 0; padding: 0; }
+  nav.toc ol ol li { margin: 3px 0; }
+  nav.toc a { color: var(--muted); text-decoration: none; }
+  nav.toc a:hover, nav.toc a:focus-visible { color: var(--accent); text-decoration: underline; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 24px; margin-bottom: 20px; scroll-margin-top: 24px; }
+  section > h2 { margin: 0 0 4px; font-size: 19px; letter-spacing: -.01em; }
+  .in { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
+  p, li { max-width: 72ch; }
+  .lede { margin-top: 0; }
+  ol { padding-inline-start: 22px; }
+  li { margin-bottom: 6px; }
+  .note { color: var(--muted); font-size: 15px; }
+  footer { color: var(--muted); font-size: 14px; margin-top: 32px; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Signing in, and keeping it safe</h1>
+  <p class="sub">How to sign in to each SeeBuyGet app, what to do when you have forgotten a password, PIN or code, and how to change one. Every app shows the same help behind its Help link.</p>
+</header>
+<div class="cols">
+  <nav class="toc" aria-label="Help by app">
+    <ol>
+      <li><b>Shop app</b><ol><li><a href="#shop-sign-in">Signing in to a shop or a hub</a></li><li><a href="#change-password">Changing your password</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
+      <li><b>Hub app</b><ol><li><a href="#shop-sign-in">Signing in to a shop or a hub</a></li><li><a href="#change-password">Changing your password</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
+      <li><b>Fleet app</b><ol><li><a href="#fleet-sign-in">Signing in to a fleet</a></li><li><a href="#fleet-code">The fleet code, and issuing a new one</a></li><li><a href="#change-pin">Changing your PIN</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
+      <li><b>Driver app</b><ol><li><a href="#driver-sign-in">Signing in as a driver</a></li><li><a href="#change-pin">Changing your PIN</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
+      <li><b>Store app</b><ol><li><a href="#store-sign-in">Signing in to a store</a></li><li><a href="#store-secret">Rotating the signing secret</a></li><li><a href="#api-keys">Shipping API keys</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
+      <li><b>Send app</b><ol><li><a href="#change-pin">Changing your PIN</a></li><li><a href="#send-sign-in">Signing in to send or collect</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
+      <li><b>Front door</b><ol><li><a href="#which-sign-in">Which app, and what you sign in with</a></li><li><a href="#send-sign-in">Signing in to send or collect</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
+      <li><b>Operator console</b><ol><li><a href="#fleet-code">The fleet code, and issuing a new one</a></li><li><a href="#console-staff">Staff sign-in</a></li><li><a href="#console-setup-key">The setup key</a></li><li><a href="#console-company">Signing in for a company</a></li><li><a href="#two-person">Decisions that need two people</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
+    </ol>
+  </nav>
+  <main>
+<section class="article" id="which-sign-in">
+  <h2>Which app, and what you sign in with</h2>
+  <p class="in">Front door</p>
+  <p class="lede">Every app has its own sign-in, because the people using them hold different things.</p>
+  <ol>
+    <li>A shop or a hub: the email and password you signed up with.</li>
+    <li>A fleet: your company code, then your own phone number and PIN.</li>
+    <li>A driver: the phone number your fleet registered, and your PIN.</li>
+    <li>A store: your store ID and signing secret.</li>
+    <li>Sending or collecting a parcel: your phone number and a PIN you choose.</li>
+    <li>Network staff: the email and password a colleague set up for you.</li>
+  </ol>
+</section>
+
+<section class="article" id="shop-sign-in">
+  <h2>Signing in to a shop or a hub</h2>
+  <p class="in">Shop app · Hub app</p>
+  <p class="lede">Sign in with the email and password you chose when you signed up.</p>
+  <ol>
+    <li>Type your email and password, and tap Sign in.</li>
+    <li>Forgot it? Tap “I forgot my password”. A reset code is sent to your email; type it with a new password.</li>
+    <li>A sign-in lasts a working day. After that the app asks for your password again.</li>
+  </ol>
+</section>
+
+<section class="article" id="change-password">
+  <h2>Changing your password</h2>
+  <p class="in">Shop app · Hub app</p>
+  <p class="lede">Change it whenever it may have been seen — you need the current one to do it.</p>
+  <ol>
+    <li>Shop app: Home, then Shop settings, then Password.</li>
+    <li>Hub app: Home, then Change password at the bottom.</li>
+    <li>Type your current password, then the new one twice. It needs at least 8 characters.</li>
+  </ol>
+  <p class="note">Every other phone or computer still signed in with the old password is signed out at once. The one you used stays signed in.</p>
+</section>
+
+<section class="article" id="fleet-sign-in">
+  <h2>Signing in to a fleet</h2>
+  <p class="in">Fleet app</p>
+  <p class="lede">Two steps: the company code says which fleet, and your own phone and PIN say who you are.</p>
+  <ol>
+    <li>Type the company code (it looks like FM-1A2B3C). The app shows the company name, so you know it is the right one.</li>
+    <li>Type your phone number and your 4-digit PIN.</li>
+    <li>Forgot the code? Tap “Forgot the code? Sign in with your phone”, type your phone and PIN, and pick your fleet from the list.</li>
+  </ol>
+  <p class="note">Five wrong PINs lock the PIN for a while. Anybody who manages the fleet can see the code in the app.</p>
+</section>
+
+<section class="article" id="fleet-code">
+  <h2>The fleet code, and issuing a new one</h2>
+  <p class="in">Fleet app · Operator console</p>
+  <p class="lede">The code only names the fleet. Issue a new one if it has been shared with people who should no longer have it.</p>
+  <ol>
+    <li>Fleet app: Dashboard, then Fleet sign-in code. Tap Show to read it.</li>
+    <li>Tap “Issue a new code” and confirm. The old code stops working at once.</li>
+    <li>Tell the other managers of your fleet the new code. Nobody is signed out: their phone and PIN still work.</li>
+  </ol>
+  <p class="note">The card says when the code was last changed, and suggests a new one once it is over 90 days old.</p>
+  <p class="note">Network staff can issue a new code from the operator console: Overview, then The fleets, then New code.</p>
+</section>
+
+<section class="article" id="driver-sign-in">
+  <h2>Signing in as a driver</h2>
+  <p class="in">Driver app</p>
+  <p class="lede">Use the phone number your fleet registered you with, and your 4-digit PIN. Your driver ID alone does not sign you in.</p>
+  <ol>
+    <li>Type your phone number and PIN, and tap Sign in.</li>
+    <li>First time, or forgot your PIN? Tap “First time here, or forgot your PIN?”. We send a code to your phone; type it, then choose a PIN.</li>
+    <li>The app says “This phone is not registered to a driver”? Your PIN is fine: ask your fleet manager which number they registered.</li>
+  </ol>
+</section>
+
+<section class="article" id="change-pin">
+  <h2>Changing your PIN</h2>
+  <p class="in">Fleet app · Driver app · Send app</p>
+  <p class="lede">Your PIN is 4 digits. Change it with the current one — or, if you have forgotten it, with a code sent to your phone.</p>
+  <ol>
+    <li>Fleet app: Dashboard, then Change my PIN.</li>
+    <li>Send app: Account, then Change your PIN.</li>
+    <li>Driver app: tap “Not you? Sign out”, then “First time here, or forgot your PIN?”.</li>
+  </ol>
+  <p class="note">Changing your PIN signs out every other phone that PIN had opened, in every app.</p>
+</section>
+
+<section class="article" id="store-sign-in">
+  <h2>Signing in to a store</h2>
+  <p class="in">Store app</p>
+  <p class="lede">Sign in with your store ID and your signing secret. Both were shown when the store was created.</p>
+  <ol>
+    <li>Type the store ID (it starts with ven_) and the signing secret (it starts with whsec_).</li>
+    <li>Keep the secret in a password manager. It cannot be shown again, and a new one can only be made with the current one — so a lost secret cannot be recovered yet.</li>
+  </ol>
+</section>
+
+<section class="article" id="store-secret">
+  <h2>Rotating the signing secret</h2>
+  <p class="in">Store app</p>
+  <p class="lede">The secret signs you in and signs every status update we send your shop system. Rotate it whenever it may have been seen.</p>
+  <ol>
+    <li>My store, then Signing secret, then Rotate the secret.</li>
+    <li>Type the current secret to confirm.</li>
+    <li>The new secret is shown once. Save it before you close the sheet.</li>
+    <li>Update your shop system: updates we send from now on are signed with the new secret.</li>
+  </ol>
+  <p class="note">The card says when the secret was last changed, and suggests rotating it once it is over 90 days old.</p>
+</section>
+
+<section class="article" id="api-keys">
+  <h2>Shipping API keys</h2>
+  <p class="in">Store app</p>
+  <p class="lede">A publishable key can sit in your web page. A secret key belongs on your server only, and is shown once.</p>
+  <ol>
+    <li>My store, then Shipping API keys, then New key.</li>
+    <li>Choose publishable or secret, and test or live.</li>
+    <li>Lost a secret key, or not sure who has it? Make a new one, switch to it, then revoke the old one.</li>
+  </ol>
+  <p class="note">Secret keys show how old they are, and suggest replacing one that is over 90 days old.</p>
+</section>
+
+<section class="article" id="send-sign-in">
+  <h2>Signing in to send or collect</h2>
+  <p class="in">Send app · Front door</p>
+  <p class="lede">You do not need to sign in to get a price or track a parcel. To send, sign in with your phone and a PIN you choose.</p>
+  <ol>
+    <li>New here: type your phone number, type the code we send you, then choose a 4-digit PIN.</li>
+    <li>Coming back: tap “I already have an account” and type your phone and PIN.</li>
+    <li>Forgot your PIN? Sign in with a code again, and choose a new PIN.</li>
+  </ol>
+</section>
+
+<section class="article" id="console-staff">
+  <h2>Staff sign-in</h2>
+  <p class="in">Operator console</p>
+  <p class="lede">Everybody who works for the network has their own sign-in, so every decision carries a real name.</p>
+  <ol>
+    <li>Choose Network staff, then type the email and password a colleague gave you.</li>
+    <li>Change that password straight away: Change password, at the top.</li>
+    <li>Add a colleague: Overview, then Network staff, then Add a person. Their password is shown once — hand it over in person.</li>
+    <li>Somebody leaving: Take away. Their open sessions end at once; their decisions keep their name.</li>
+  </ol>
+</section>
+
+<section class="article" id="console-setup-key">
+  <h2>The setup key</h2>
+  <p class="in">Operator console</p>
+  <p class="lede">The one shared operator key, for creating the first staff accounts and for scripts.</p>
+  <p class="note">It has full operator rights but cannot say who is holding it, so the console marks your name “name not verified”.</p>
+  <p class="note">Outside a sandbox it cannot take a decision that needs two people.</p>
+</section>
+
+<section class="article" id="console-company">
+  <h2>Signing in for a company</h2>
+  <p class="in">Operator console</p>
+  <p class="lede">A company’s administrators sign in with an email and password created by whoever administers that company.</p>
+  <ol>
+    <li>Choose A company, then type your email and password.</li>
+    <li>Change the password you were given: Change password, at the top.</li>
+    <li>The company’s administrators are listed on its rates screen, where they can be added or taken away.</li>
+  </ol>
+</section>
+
+<section class="article" id="two-person">
+  <h2>Decisions that need two people</h2>
+  <p class="in">Operator console</p>
+  <p class="lede">Switching a country on and verifying a company’s documents each need a second, different person.</p>
+  <p class="note">The console compares the names your sign-ins carry, so both people must sign in as themselves.</p>
+</section>
+
+<section class="article" id="when-to-change">
+  <h2>When to change a password, PIN or key</h2>
+  <p class="in">Shop app · Hub app · Fleet app · Driver app · Store app · Send app · Front door · Operator console</p>
+  <p class="lede">We never make you change a password or PIN on a schedule — that only makes people pick weaker ones. Change one when it matters.</p>
+  <ol>
+    <li>Change it if somebody may have seen it, if you shared it, or if you lost a phone that was signed in.</li>
+    <li>Secrets that machines use — a store’s signing secret, a fleet code, a secret API key — are worth changing every 90 days. The app reminds you.</li>
+  </ol>
+  <p class="note">Changing any of them signs out the other devices it had opened.</p>
+</section>
+
+<footer>
+  <p>Demo sign-ins for a local sandbox are listed in <a href="progress.html">progress.html</a>. The shipping API has its own reference in <a href="shipping-api.html">shipping-api.html</a>.</p>
+</footer>
+  </main>
+</div>
+</div>
+</body>
+</html>

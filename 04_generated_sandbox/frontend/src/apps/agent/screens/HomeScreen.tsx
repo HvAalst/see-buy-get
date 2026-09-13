@@ -1,3 +1,4 @@
+import { HelpLink } from '../../../shared/guide/HelpLink';
 import { agentConfig } from '../api';
 import { ChangePasswordSheet } from '../../../shared/account/ChangePasswordSheet';
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -169,6 +170,7 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
 
       <div class="scr__foot">
         <ReadAloud text={() => homeSummary(state.agent, state.gate, t)} label={t('agent.readAloud')} />
+        <HelpLink app="agent" />
         <Button variant="link" full={false} onClick={actions.signOut}>
           {t('agent.home.signOut')}
         </Button>

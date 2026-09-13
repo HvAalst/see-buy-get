@@ -1,3 +1,4 @@
+import { HelpLink } from '../../../shared/guide/HelpLink';
 import { useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { Button, Card, Checklist, CodeBoxes, ErrorNote, Note, ReadAloud } from '../../../shared/ui';
@@ -147,6 +148,7 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
             {t('driver.signin.back')}
           </button>
         )}
+        <HelpLink app="driver" label="signin" />
         <ReadAloud text={() => t('driver.signin.aloud')} label={t('driver.readAloud')} />
       </div>
     </form>

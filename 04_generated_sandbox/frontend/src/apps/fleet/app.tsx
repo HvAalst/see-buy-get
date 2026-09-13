@@ -1,3 +1,4 @@
+import { HelpLink } from '../../shared/guide/HelpLink';
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { BottomNav, Button, Checklist, Icon, Pill, TopBar, type NavItem } from '../../shared/ui';
 import { useT } from '../../shared/i18n';
@@ -80,6 +81,7 @@ export function App() {
         ) : null}
         <ScreenRouter screen={state.screen} state={state} actions={actions} />
         <div class="scr__foot" style="padding:8px 0 4px">
+          <HelpLink app="fleet" />
           <Button variant="link" full={false} onClick={actions.signOut}>
             {t('fleet.signOut')}
           </Button>

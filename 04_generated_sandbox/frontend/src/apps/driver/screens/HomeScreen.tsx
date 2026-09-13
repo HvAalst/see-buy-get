@@ -1,3 +1,4 @@
+import { HelpLink } from '../../../shared/guide/HelpLink';
 import { useState } from 'preact/hooks';
 import { Button, Card, Checklist, ErrorNote, GlanceNumber, Icon, Note, Pill, QrBlock, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
@@ -146,6 +147,7 @@ function OffShift({ state, actions }: HomeScreenProps) {
 
       <div class="scr__foot">
         <ReadAloud text={() => offShiftSummary(t)} label={t('driver.readAloud')} />
+        <HelpLink app="driver" />
         <Button variant="link" full={false} onClick={actions.signOut}>
           {t('driver.home.notYou')}
         </Button>
@@ -421,6 +423,7 @@ function OnShift({ state, actions }: HomeScreenProps) {
 
       <div class="scr__foot">
         <ReadAloud text={() => shiftSummary(v.plate, state.remaining, state.claims.length, t)} />
+        <HelpLink app="driver" />
       </div>
 
       <Sheet open={badgeOpen} onClose={() => setBadgeOpen(false)} title={t('driver.home.badgeSheetTitle')}>

@@ -1,3 +1,4 @@
+import { HelpLink } from '../../../shared/guide/HelpLink';
 import { useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { Button, Card, Checklist, ErrorNote, ReadAloud, Sheet } from '../../../shared/ui';
@@ -81,6 +82,7 @@ export function SignInScreen({ actions, error, busy }: SignInScreenProps) {
         <Button variant="link" full={false} onClick={() => setHelp(true)}>
           {t('mdp.signin.forgot')}
         </Button>
+        <HelpLink app="mdp" label="signin" />
         <ReadAloud text={() => t('mdp.signin.spoken')} label={t('mdp.readAloud')} />
       </div>
 

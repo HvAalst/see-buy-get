@@ -1,3 +1,4 @@
+import { HelpLink } from '../../../shared/guide/HelpLink';
 import { Button, Icon, Pill, ReadAloud } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { ROLES, roleMeta } from '../logic';
@@ -57,6 +58,7 @@ export function SignInScreen({ actions }: SignInScreenProps) {
         <Button variant="link" full={false} onClick={() => actions.go('roles')}>
           {t('home.signin.noAccountYet')}
         </Button>
+        <HelpLink app="home" label="signin" />
         <ReadAloud text={() => t('home.signin.aloud')} label={t('home.readAloud')} />
       </div>
     </div>

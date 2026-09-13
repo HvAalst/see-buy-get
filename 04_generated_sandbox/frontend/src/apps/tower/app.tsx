@@ -1,3 +1,4 @@
+import { HelpLink } from '../../shared/guide/HelpLink';
 import { CompanyPasswordPanel } from './screens/CompanyPasswordPanel';
 import { useState } from 'preact/hooks';
 import { BrandMark } from '../../shared/ui';
@@ -139,6 +140,7 @@ export function App() {
               {t('tower.password.open')}
             </button>
           ) : null}
+          <HelpLink app="console" buttonClass="cbtn cbtn--ghost cbtn--sm" />
           <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={actions.signOut}>
             {t('tower.signOut')}
           </button>

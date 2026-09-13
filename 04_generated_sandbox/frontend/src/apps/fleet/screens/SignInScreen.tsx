@@ -1,3 +1,4 @@
+import { HelpLink } from '../../../shared/guide/HelpLink';
 import { useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { Button, Card, Checklist, ErrorNote, ReadAloud } from '../../../shared/ui';
@@ -194,6 +195,7 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
       </Card>
 
       <div class="scr__foot">
+        <HelpLink app="fleet" label="signin" />
         <ReadAloud text={() => t('fleet.signin.aloud')} label={t('fleet.readAloud')} />
       </div>
     </form>

@@ -1,3 +1,4 @@
+import { HelpLink } from '../../../shared/guide/HelpLink';
 import { useEffect, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { Button, Card, Checklist, ErrorNote, ReadAloud, Sheet } from '../../../shared/ui';
@@ -56,6 +57,7 @@ export function SignInScreen({ state, actions, error }: SignInScreenProps) {
     <form class="scr" onSubmit={submit}>
       <h1 class="scr__title">{t('vendor.signin.title')}</h1>
       <p class="scr__lede">{t('vendor.signin.lede')}</p>
+      <HelpLink app="vendor" label="signin" />
 
       {error ? <ErrorNote error={error} /> : null}
 

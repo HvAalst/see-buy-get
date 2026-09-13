@@ -1,3 +1,4 @@
+import { HelpLink } from '../../../shared/guide/HelpLink';
 import { CredentialAge } from '../../../shared/account/CredentialAge';
 import { pinChangeBlocker } from '../../../shared/account/password';
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -125,6 +126,10 @@ export function AccountScreen({ state, actions }: AccountScreenProps) {
       <Card title={t('common.language')}>
         <LanguageSwitcher />
       </Card>
+
+      <div class="scr__foot">
+        <HelpLink app="send" />
+      </div>
 
       <Card title={t('send.account.signInTitle')}>
         <div class="rows">

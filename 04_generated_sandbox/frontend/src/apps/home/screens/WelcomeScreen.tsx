@@ -1,3 +1,4 @@
+import { HelpLink } from '../../../shared/guide/HelpLink';
 import { Button, Card, Checklist, Icon, ReadAloud } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { welcomeSpoken } from '../logic';
@@ -82,6 +83,7 @@ export function WelcomeScreen({ actions }: WelcomeScreenProps) {
       </div>
 
       <div class="scr__foot">
+        <HelpLink app="home" />
         <ReadAloud text={() => welcomeSpoken(t)} label={t('home.readAloud')} />
       </div>
     </div>
