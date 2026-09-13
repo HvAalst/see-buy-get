@@ -1,4 +1,7 @@
-﻿import { CompanyDocumentService } from '../../foundation/entity/company-documents.service';
+﻿import { MAIL_SENDER } from '../../foundation/mail/mail.types';
+import { OutboxMailSender } from '../../foundation/mail/outbox-mail.sender';
+import { MailService } from '../../foundation/mail/mail.service';
+import { CompanyDocumentService } from '../../foundation/entity/company-documents.service';
 import { BorderRuleService } from './border-rules.service';
 import { CompanyReadinessService } from '../../foundation/entity/company-readiness.service';
 import { Test } from '@nestjs/testing';
@@ -100,6 +103,7 @@ describe('PUDO Light', () => {
   let accounts: AccountService;
   let otp: OtpService;
   let persons: PersonService;
+  let mailOutbox: OutboxMailSender;
   let invites: InviteService;
   let auth: AuthService;
   let graduation: GraduationService;
@@ -124,7 +128,7 @@ describe('PUDO Light', () => {
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
         GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, VehicleService, DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
-        WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus, EntityService, EntityAdminService, OperatorAccountService, PresenceService, CompanyDocumentService, CompanyReadinessService, BorderRuleService, BooksService, FxService, ApiKeyService,
+        WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus, EntityService, EntityAdminService, OperatorAccountService, MailService, OutboxMailSender, { provide: MAIL_SENDER, useExisting: OutboxMailSender }, PresenceService, CompanyDocumentService, CompanyReadinessService, BorderRuleService, BooksService, FxService, ApiKeyService,
         PayoutService, ReturnService, UnclaimedService, MerchantRatingService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
         GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder },
@@ -166,6 +170,7 @@ describe('PUDO Light', () => {
     accounts = moduleRef.get(AccountService);
     otp = moduleRef.get(OtpService);
     persons = moduleRef.get(PersonService);
+    mailOutbox = moduleRef.get(OutboxMailSender);
     invites = moduleRef.get(InviteService);
     auth = moduleRef.get(AuthService);
     graduation = moduleRef.get(GraduationService);
@@ -4553,6 +4558,32 @@ describe('PUDO Light', () => {
     it('still accepts a typed name on a laptop, so a demo can play both people', () => {
       delete process.env.GLOS_ENV;
       expect(() => controller.declinePresence('prop_nope', { by: 'Brian', reason: 'no' } as never, sharedKey)).not.toThrow(/named sign-in/);
+    });
+  });
+
+  describe('emails that answer an account action', () => {
+    const latest = (address: string, template: string) => mailOutbox.recent(address).find((m) => m.template === template);
+
+    it('welcomes, sends the reset code, and says when the password changed', () => {
+      const phone = '+254700990041';
+      const email = 'mail-hub@sbg.test';
+      otp.verify(phone, otp.request(phone).code);
+      accounts.signup({ role: 'mdp', email, password: 'first-pass', phone, profile: { mdp: { name: 'Mail Hub', zones: ['MZ'], country: 'KE', location: { lat: -1.2, lng: 36.8 } } } });
+      expect(latest(email, 'welcome')?.subject).toBe('Welcome to SeeBuyGet, Mail Hub');
+
+      const issued = accounts.forgot(email);
+      const reset = latest(email, 'password-reset');
+      expect(reset?.text).toContain(issued.resetToken!);
+      expect(reset?.html).toContain(issued.resetToken!);
+      expect(reset?.tracking).toBe(false);
+
+      accounts.reset(issued.resetToken!, 'second-pass');
+      expect(latest(email, 'password-changed')?.text).toMatch(/I forgot my password/);
+    });
+
+    it('sends nothing for an email nobody holds', () => {
+      accounts.forgot('nobody-at-all@sbg.test');
+      expect(mailOutbox.recent('nobody-at-all@sbg.test')).toHaveLength(0);
     });
   });
 

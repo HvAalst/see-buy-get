@@ -1,3 +1,4 @@
+import { MailService } from './foundation/mail/mail.service';
 import { Test } from '@nestjs/testing';
 import { AppModule } from './app.module';
 
@@ -19,6 +20,8 @@ describe('the application boots', () => {
     process.env.GLOS_PERSIST = 'off'; // a boot check must not write to disk
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     expect(moduleRef).toBeDefined();
+    // Mail is injected @Optional (so hand-listed specs keep working) — which is exactly why the real graph must have it.
+    expect(moduleRef.get(MailService)).toBeDefined();
     await moduleRef.close();
   }, 60_000);
 });

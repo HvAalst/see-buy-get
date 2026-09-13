@@ -1,4 +1,6 @@
-import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import type { MailApp } from '../../foundation/mail/mail.templates';
+import { MailService } from '../../foundation/mail/mail.service';
+import { Injectable, Logger, OnApplicationBootstrap, Optional } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { PersistentMap } from '../../foundation/store/persistent-map';
@@ -39,6 +41,10 @@ interface Account {
 
 const RESET_TTL_MS = 30 * 60 * 1000;
 
+/** Which app an account signs in to — where its emails send people. */
+const ACCOUNT_APP: Record<AccountRole, MailApp> = { pudo: 'agent', mdp: 'mdp', driver: 'driver' };
+const WELCOME_ROLE = { pudo: 'shop', mdp: 'hub', driver: 'driver' } as const;
+
 /**
  * AccountService — participant sign-in (email + password) for the PUDO field apps. Sign-up creates the
  * credential AND the underlying domain entity (a PUDO agent, a driver + optional own vehicle, or an MDP
@@ -63,6 +69,7 @@ export class AccountService implements OnApplicationBootstrap {
     private readonly auth: AuthService,
     private readonly persons: PersonService,
     private readonly dids: DidService,
+    @Optional() private readonly mail?: MailService,
   ) {}
 
   /**
@@ -119,6 +126,7 @@ export class AccountService implements OnApplicationBootstrap {
     const salt = randomBytes(16).toString('hex');
     const account: Account = { accountId: `acc_${randomBytes(8).toString('hex')}`, email, role: input.role, salt, hash: this.hash(input.password, salt), did, tenant, phoneHash: hashPhone(input.phone), createdAt: new Date().toISOString() };
     this.accounts.set(email, account);
+    void this.mail?.send('welcome', { address: email }, { name: welcomeName(input.role, input.profile), email, role: WELCOME_ROLE[input.role] });
     return { accountId: account.accountId, role: account.role, did, email, entityStatus, token: this.mint(account) };
   }
 
@@ -141,6 +149,7 @@ export class AccountService implements OnApplicationBootstrap {
     account.resetToken = `RST-${randomBytes(4).toString('hex').toUpperCase()}`;
     account.resetExpires = Date.now() + RESET_TTL_MS;
     this.accounts.set(account.email, account); // persist the reset token
+    void this.mail?.send('password-reset', { address: account.email }, { email: account.email, code: account.resetToken!, minutes: RESET_TTL_MS / 60_000, app: ACCOUNT_APP[account.role] });
     return { sent: true, resetToken: account.resetToken };
   }
 
@@ -161,6 +170,7 @@ export class AccountService implements OnApplicationBootstrap {
     account.resetExpires = undefined;
     this.accounts.set(account.email, account);
     this.auth.revokeAll(account.did);
+    this.tellPasswordChanged(account);
     return { accountId: account.accountId, role: account.role, did: account.did, email: account.email, token: this.mint(account) };
   }
 
@@ -176,10 +186,16 @@ export class AccountService implements OnApplicationBootstrap {
     this.accounts.set(account.email, account); // persist the new password hash
     // Whoever had the old password — which is presumably why it was reset — is signed out everywhere.
     this.auth.revokeAll(account.did);
+    this.tellPasswordChanged(account);
     return { ok: true };
   }
 
   // --- internals ---
+
+  /** A password changed — always said to its holder, with how to take the account back if it was not them. */
+  private tellPasswordChanged(account: Account): void {
+    void this.mail?.send('password-changed', { address: account.email }, { email: account.email, when: account.passwordChangedAt ?? new Date().toISOString(), app: ACCOUNT_APP[account.role], recovery: 'self-reset' });
+  }
 
   private provision(role: AccountRole, profile: Record<string, unknown>): { did: string; entityStatus?: string; tenant?: string } {
     if (role === 'pudo') {
@@ -216,4 +232,15 @@ export class AccountService implements OnApplicationBootstrap {
   has(email: string): boolean {
     return this.accounts.has((email || '').trim().toLowerCase());
   }
+}
+
+/** The name a welcome greets: the shop's or hub's name, or the driver's. */
+function welcomeName(role: AccountRole, profile: Record<string, unknown>): string {
+  const pick = (section: string, ...keys: string[]) => {
+    const block = (profile?.[section] ?? {}) as Record<string, unknown>;
+    for (const k of keys) if (typeof block[k] === 'string' && (block[k] as string).trim()) return (block[k] as string).trim();
+    return undefined;
+  };
+  const name = role === 'pudo' ? pick('agent', 'shopName') : role === 'mdp' ? pick('mdp', 'name') : pick('driver', 'displayName', 'fullName');
+  return name ?? 'there';
 }

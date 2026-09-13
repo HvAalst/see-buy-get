@@ -1,5 +1,6 @@
-﻿import { isSandbox } from '../../foundation/runtime/sandbox';
-import { Body, Controller, Delete, Get, Header, Inject, Param, Patch, Post, Query, Res, StreamableFile } from '@nestjs/common';
+﻿import { MailService } from '../../foundation/mail/mail.service';
+import { isSandbox } from '../../foundation/runtime/sandbox';
+import { Body, Controller, Delete, Get, Header, Inject, Param, Patch, Post, Query, Res, StreamableFile, Optional } from '@nestjs/common';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
 import { PRESENCE_CAPABILITIES, PRESENCE_LEVELS, type PresenceLevel } from '../../foundation/presence/presence.types';
 import { capabilitiesOf } from '../../foundation/presence/presence.service';
@@ -156,6 +157,7 @@ export class SbgController {
     private readonly cargo: CargoService,
     private readonly market: MarketPulseService,
     @Inject(GEOCODER) private readonly geocoder: Geocoder,
+    @Optional() private readonly mail?: MailService,
   ) {}
 
   // --- phone verification (mandatory at onboarding — control-tower contact + GPS) ---
@@ -736,7 +738,7 @@ export class SbgController {
   @Post('entities/:entityId/admins')
   createEntityAdmin(@Param('entityId') entityId: string, @Body() dto: EntityAdminDto, @Actor() actor: IntrospectionResult) {
     this.requireReach(actor, entityId);
-    return this.entityAdmins.create(entityId, { email: dto.email, name: dto.name });
+    return this.entityAdmins.create(entityId, { email: dto.email, name: dto.name }, auditActor(actor));
   }
 
   /** Who administers this company. Never a hash, never anybody else's company. */
@@ -752,7 +754,7 @@ export class SbgController {
   @Delete('entities/:entityId/admins/:adminId')
   revokeEntityAdmin(@Param('entityId') entityId: string, @Param('adminId') adminId: string, @Actor() actor: IntrospectionResult): EntityAdminView {
     this.requireReach(actor, entityId);
-    return this.entityAdmins.revoke(entityId, adminId);
+    return this.entityAdmins.revoke(entityId, adminId, auditActor(actor));
   }
 
   /* ------------------------------------------------------ who works for the network -- */
@@ -2493,6 +2495,8 @@ export class SbgController {
   rotateManagerCode(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
     if (actor?.role !== 'operator' && actingTenant(actor) !== did) throw new GlosError('FORBIDDEN', 'This fleet is not yours');
     const m = this.managers.rotateCode(did);
+    // The fleet's contact address hears about it — without the code, which only the Fleet app shows.
+    if (m.contactEmail) void this.mail?.send('fleet-code-issued', { address: m.contactEmail, name: m.companyName }, { company: m.companyName, when: m.codeRotatedAt!, byStaff: actor?.role === 'operator' });
     return { loginCode: m.loginCode, codeRotatedAt: m.codeRotatedAt };
   }
 

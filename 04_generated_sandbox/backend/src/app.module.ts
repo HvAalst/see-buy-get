@@ -6,6 +6,7 @@ import { CredentialModule } from './foundation/credentials/credential.module';
 import { LedgerModule } from './foundation/ledger/ledger.module';
 import { DidModule } from './foundation/did/did.module';
 import { EntityModule } from './foundation/entity/entity.module';
+import { MailModule } from './foundation/mail/mail.module';
 import { PresenceModule } from './foundation/presence/presence.module';
 import { BooksModule } from './foundation/books/books.module';
 import { PayoutsModule } from './foundation/payouts/payouts.module';
@@ -38,6 +39,7 @@ import { SseModule } from './modules/sse/sse.module';
     CredentialModule,
     LedgerModule,
     DidModule,
+    MailModule,
     EntityModule,
     PresenceModule,
     BooksModule,

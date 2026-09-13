@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { MailService } from '../mail/mail.service';
+import { Injectable, Optional } from '@nestjs/common';
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { GlosError } from '../http/glos-error';
 import { PersistentMap } from '../store/persistent-map';
@@ -36,6 +37,7 @@ export class EntityAdminService {
   constructor(
     private readonly auth: AuthService,
     private readonly entities: EntityService,
+    @Optional() private readonly mail?: MailService,
   ) {}
 
   /**
@@ -52,7 +54,7 @@ export class EntityAdminService {
    * mask's own comment carves out. The distinct name keeps the guard as tight as it was written to be,
    * and it says what this actually is: temporary, and meant to be changed.
    */
-  create(entityId: string, input: { email: string; name: string }): EntityAdminView & { temporaryPassword: string } {
+  create(entityId: string, input: { email: string; name: string }, by = 'SeeBuyGet staff'): EntityAdminView & { temporaryPassword: string } {
     const entity = this.entities.get(entityId); // throws NOT_FOUND for an entity that does not exist
     const email = (input.email || '').trim().toLowerCase();
     if (!email.includes('@')) throw new GlosError('VALIDATION_FAILED', 'An administrator needs a real email address to sign in with');
@@ -71,6 +73,8 @@ export class EntityAdminService {
       createdAt: new Date().toISOString(),
     };
     this.admins.set(email, admin);
+    // Told by email that the login exists — never the password, which is handed over in person.
+    void this.mail?.send('company-admin-added', { address: email, name: admin.name }, { name: admin.name, email, company: entity.name, addedBy: by });
     return { ...viewOf(admin), temporaryPassword: password };
   }
 
@@ -92,6 +96,7 @@ export class EntityAdminService {
     this.admins.set(admin.email, admin);
     // THIS administrator's other sessions end — not the company's, which every other administrator shares.
     this.auth.revokeAll(adminKey(admin.adminId));
+    void this.mail?.send('password-changed', { address: admin.email, name: admin.name }, { email: admin.email, when: admin.passwordChangedAt!, app: 'console', recovery: 'ask-admin' });
     return { ok: true };
   }
 
@@ -126,13 +131,15 @@ export class EntityAdminService {
    * Revoke a login. KEPT, not deleted: the record is what makes "who changed this rate in March" still
    * answerable after somebody leaves the company.
    */
-  revoke(entityId: string, adminId: string): EntityAdminView {
+  revoke(entityId: string, adminId: string, by = 'An administrator of your company'): EntityAdminView {
     const admin = [...this.admins.values()].find((a) => a.adminId === adminId && a.entityId === entityId);
     if (!admin) throw new GlosError('NOT_FOUND', 'No such administrator for this company');
     admin.revokedAt = new Date().toISOString();
     this.admins.set(admin.email, admin);
     // Revoking a login used to leave its open sessions working for the rest of their ten hours.
     this.auth.revokeAll(adminKey(admin.adminId));
+    const company = this.entities.get(admin.entityId).name;
+    void this.mail?.send('access-removed', { address: admin.email, name: admin.name }, { email: admin.email, what: `administrator login for ${company}`, removedBy: by, when: admin.revokedAt! });
     return viewOf(admin);
   }
 

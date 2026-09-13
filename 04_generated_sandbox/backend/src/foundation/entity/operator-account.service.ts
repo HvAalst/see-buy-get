@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { MailService } from '../mail/mail.service';
+import { Injectable, Optional } from '@nestjs/common';
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { GlosError } from '../http/glos-error';
 import { PersistentMap } from '../store/persistent-map';
@@ -26,7 +27,10 @@ export class OperatorAccountService {
   /** Keyed by the lower-cased email: one login per person. */
   private readonly accounts = new PersistentMap<string, OperatorAccount>('operator-accounts');
 
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    @Optional() private readonly mail?: MailService,
+  ) {}
 
   /** Create a staff account. The password is generated here and returned exactly once, as `temporaryPassword`. */
   create(input: { email: string; name: string }, createdBy: string): OperatorAccountView & { temporaryPassword: string } {
@@ -46,6 +50,7 @@ export class OperatorAccountService {
       createdBy,
     };
     this.accounts.set(email, account);
+    void this.mail?.send('staff-account-added', { address: email, name: account.name }, { name: account.name, email, addedBy: createdBy });
     return { ...viewOf(account), temporaryPassword: password };
   }
 
@@ -70,6 +75,7 @@ export class OperatorAccountService {
     account.passwordChangedAt = new Date().toISOString();
     this.accounts.set(account.email, account);
     this.auth.revokeAll(operatorKey(account.operatorId));
+    void this.mail?.send('password-changed', { address: account.email, name: account.name }, { email: account.email, when: account.passwordChangedAt!, app: 'console', recovery: 'ask-admin' });
     return { ok: true };
   }
 
@@ -89,6 +95,7 @@ export class OperatorAccountService {
     Object.assign(account, { revokedAt: new Date().toISOString(), revokedBy: by });
     this.accounts.set(account.email, account);
     this.auth.revokeAll(operatorKey(account.operatorId));
+    void this.mail?.send('access-removed', { address: account.email, name: account.name }, { email: account.email, what: 'network staff account', removedBy: by, when: account.revokedAt! });
     return viewOf(account);
   }
 

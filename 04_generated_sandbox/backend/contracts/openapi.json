@@ -50,6 +50,71 @@
         }
       }
     },
+    "/v1/mail/preview": {
+      "get": {
+        "operationId": "Mail.previewIndex",
+        "summary": "",
+        "description": "Every email, rendered with its sample data, on one page.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/mail/preview/{template}": {
+      "get": {
+        "operationId": "Mail.previewOne",
+        "summary": "",
+        "description": "One email, as the mail client would show it — or `?format=text` for the plain-text version.",
+        "parameters": [
+          {
+            "name": "template",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "format",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/mail/outbox": {
+      "get": {
+        "operationId": "Mail.outboxList",
+        "summary": "",
+        "description": "What this sandbox would have sent, newest first — the reset codes included.",
+        "parameters": [
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/auth/token": {
       "post": {
         "operationId": "Auth.token",
