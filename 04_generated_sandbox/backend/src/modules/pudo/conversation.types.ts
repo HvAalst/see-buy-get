@@ -36,7 +36,23 @@ export type SettleWhen = (typeof SETTLE_WHEN)[number];
  *   settlement          CV2 — a written-down arrangement for paying off-platform: a RECORD, never a posting
  *   settlement_agreed   CV2 — the other party agreeing to it
  */
-export type MessageKind = 'text' | 'quick' | 'proposal' | 'decision' | 'settlement' | 'settlement_agreed' | 'report_shared';
+export type MessageKind = 'text' | 'quick' | 'proposal' | 'decision' | 'settlement' | 'settlement_agreed' | 'report_shared' | 'voice';
+
+/**
+ * CV4 — A VOICE MESSAGE'S RECORDING, kept apart from the thread's messages so a thread's list stays small.
+ * Read only by those who may read the thread (and an operator, when a party put it in a shared report).
+ */
+export interface VoiceNote {
+  voiceId: string;
+  conversationId: string;
+  fromDid: string;
+  contentType: string;
+  /** The recording, base64. */
+  data: string;
+  size: number;
+  durationSec: number;
+  createdAt: string;
+}
 
 /**
  * CV3 — A REPORT OF CHOSEN MESSAGES, shared by a party with the network.
@@ -66,6 +82,9 @@ export interface DisputeReport {
     decision?: 'accepted' | 'declined';
     settlement?: { amount: number; method: SettleMethod; when: SettleWhen };
     refSeq?: number;
+    /** A voice message the party chose to include — the operator may play exactly this one. */
+    voiceId?: string;
+    durationSec?: number;
     at: string;
   }>;
   /**
@@ -118,6 +137,9 @@ export interface ConversationMessage {
   /** report_shared: the dispute report, and how many messages it holds — so the OTHER side is told. */
   reportRef?: string;
   seqCount?: number;
+  /** voice: the recording, and how long it runs. */
+  voiceId?: string;
+  durationSec?: number;
   at: string;
 }
 
@@ -150,6 +172,8 @@ export interface MessageView {
   settlement?: { amount: number; method: SettleMethod; when: SettleWhen; agreed: boolean };
   refSeq?: number;
   seqCount?: number;
+  /** CV4 — a voice message: fetched separately, by those who may read the thread. */
+  voice?: { voiceId: string; durationSec: number };
   at: string;
 }
 

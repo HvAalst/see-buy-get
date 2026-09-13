@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
+import { decodeAudio } from '../../foundation/media/decode-audio';
 import { DispatchService, commitModeOf } from './dispatch.service';
 import { DriverService } from './driver.service';
 import { NotificationService } from './notification.service';
@@ -21,7 +22,12 @@ import {
   type ReportReason,
   type SettleMethod,
   type SettleWhen,
+  type VoiceNote,
 } from './conversation.types';
+
+/** CV4 — a voice message is a message, not a recording session: about two minutes at a phone's bitrate. */
+export const MAX_VOICE_BYTES = 900_000;
+export const MAX_VOICE_SECONDS = 120;
 
 /** A message is a message, not a document. */
 export const MAX_MESSAGE_CHARS = 1000;
@@ -53,6 +59,8 @@ export class ConversationService {
   private readonly reports = new PersistentMap<string, MessageReport>('pudo-conversation-reports');
   /** CV3 — reports of chosen messages a party shared with the network. Fixed copies; never changed. */
   private readonly disputeReports = new PersistentMap<string, DisputeReport>('pudo-conversation-dispute-reports');
+  /** CV4 — voice recordings, apart from the messages so listing a thread never carries audio. */
+  private readonly voice = new PersistentMap<string, VoiceNote>('pudo-conversation-voice');
   /** Send times per sender for the hourly cap. In memory: a restart forgiving an hour of messages is harmless. */
   private readonly sentAt = new Map<string, number[]>();
 
@@ -213,6 +221,57 @@ export class ConversationService {
   }
 
   /**
+   * CV4 — A VOICE MESSAGE. For the driver with a load in both hands, and for anybody for whom writing is the
+   * hard part. The recording is checked by its bytes (decodeAudio), kept apart from the thread, and pushed as
+   * "a voice message arrived" — never with the recording or anything from it.
+   */
+  sendVoice(conversationId: string, did: string, input: { dataUrl: string; durationSec: number }, now = Date.now()): MessageView {
+    const thread = this.requireParty(conversationId, did);
+    this.requireOpen(thread, did);
+    const durationSec = Math.round(Number(input.durationSec));
+    if (!Number.isFinite(durationSec) || durationSec < 1 || durationSec > MAX_VOICE_SECONDS) {
+      throw new GlosError('INVALID_INPUT', `A voice message runs 1 to ${MAX_VOICE_SECONDS} seconds`);
+    }
+    const { contentType, bytes } = decodeAudio(input.dataUrl, MAX_VOICE_BYTES);
+    const note: VoiceNote = {
+      voiceId: `vn_${randomBytes(8).toString('hex')}`,
+      conversationId,
+      fromDid: did,
+      contentType,
+      data: bytes.toString('base64'),
+      size: bytes.length,
+      durationSec,
+      createdAt: new Date(now).toISOString(),
+    };
+    this.voice.set(note.voiceId, note);
+    try {
+      return this.append(thread, did, { kind: 'voice', voiceId: note.voiceId, durationSec }, now, 'New voice message about');
+    } catch (err) {
+      // Refused by the hourly cap: a recording nobody can reach must not stay behind.
+      this.voice.delete(note.voiceId);
+      throw err;
+    }
+  }
+
+  /** CV4 — play a voice message: those who may read the thread (a party, or a manager the driver shared it with). */
+  voiceFor(conversationId: string, voiceId: string, did: string): { contentType: string; bytes: Buffer } {
+    this.requireReader(conversationId, did);
+    const note = this.voice.get(voiceId);
+    // Another conversation's recording is as absent as one that never existed.
+    if (!note || note.conversationId !== conversationId) throw new GlosError('NOT_FOUND', 'Voice message not found');
+    return { contentType: note.contentType, bytes: Buffer.from(note.data, 'base64') };
+  }
+
+  /** CV4 — the operator plays a voice message a party put in a shared report. That one, and no other. */
+  voiceForReport(reportId: string, voiceId: string): { contentType: string; bytes: Buffer } {
+    const report = this.disputeReports.get(reportId);
+    if (!report || !report.messages.some((m) => m.voiceId === voiceId)) throw new GlosError('NOT_FOUND', 'Voice message not found in that report');
+    const note = this.voice.get(voiceId);
+    if (!note) throw new GlosError('NOT_FOUND', 'Voice message not found');
+    return { contentType: note.contentType, bytes: Buffer.from(note.data, 'base64') };
+  }
+
+  /**
    * CV3 — THE DRIVER SHARES THIS CONVERSATION WITH THEIR FLEET MANAGER, or stops sharing it.
    *
    * The driver's decision alone (user, 2026-09-13): the poster cannot share the driver's words onward, and a
@@ -271,6 +330,7 @@ export class ConversationService {
       ...(m.decision ? { decision: m.decision } : {}),
       ...(m.settlement ? { settlement: { ...m.settlement } } : {}),
       ...(m.refSeq !== undefined ? { refSeq: m.refSeq } : {}),
+      ...(m.voiceId ? { voiceId: m.voiceId, durationSec: m.durationSec } : {}),
       at: m.at,
     }));
     const report: DisputeReport = {
@@ -445,6 +505,7 @@ export class ConversationService {
     if (m.kind === 'settlement' && m.settlement) view.settlement = { ...m.settlement, agreed: agreed.has(m.seq) };
     if (m.refSeq !== undefined) view.refSeq = m.refSeq;
     if (m.kind === 'report_shared' && m.seqCount !== undefined) view.seqCount = m.seqCount;
+    if (m.kind === 'voice' && m.voiceId) view.voice = { voiceId: m.voiceId, durationSec: m.durationSec ?? 0 };
     return view;
   }
 

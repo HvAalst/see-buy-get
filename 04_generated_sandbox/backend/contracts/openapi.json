@@ -12796,6 +12796,105 @@
         }
       }
     },
+    "/v1/sbg/conversations/dispute-reports/{reportId}/voice/{voiceId}": {
+      "get": {
+        "operationId": "Conversation.disputeVoice",
+        "summary": "",
+        "description": "CV4 — the operator plays a voice message a party chose to include in a shared report.",
+        "parameters": [
+          {
+            "name": "reportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "voiceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/conversations/{id}/voice": {
+      "post": {
+        "operationId": "Conversation.sendVoice",
+        "summary": "",
+        "description": "CV4 — send a voice message.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoiceMessageDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/conversations/{id}/voice/{voiceId}": {
+      "get": {
+        "operationId": "Conversation.voice",
+        "summary": "",
+        "description": "CV4 — play a voice message: the thread's readers only. Never cached, never sniffed as something else.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "voiceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/conversations/{id}/share": {
       "post": {
         "operationId": "Conversation.share",
@@ -21685,6 +21784,23 @@
         },
         "required": [
           "freightId"
+        ]
+      },
+      "VoiceMessageDto": {
+        "type": "object",
+        "properties": {
+          "dataUrl": {
+            "type": "string"
+          },
+          "durationSec": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 120
+          }
+        },
+        "required": [
+          "dataUrl",
+          "durationSec"
         ]
       },
       "ShareConversationDto": {

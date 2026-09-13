@@ -43,6 +43,7 @@ describe('CV1 — reported messages', () => {
     expect(disputeLine({ seq: 4, from: 'poster', kind: 'settlement', settlement: { amount: 4500, method: 'mobile_money', when: 'on_delivery' }, at })).toBe('Settle 4500.00 by mobile money, on delivery');
     expect(shortHash('a'.repeat(64))).toBe('aaaaaaaaaaaa');
     expect(shortHash(undefined)).toBe('—');
+    expect(disputeLine({ seq: 5, from: 'driver', kind: 'voice', voiceId: 'vn_1', durationSec: 67, at })).toBe('Voice message (1:07)');
   });
 
   it('shortens an identity without losing its ends', () => {

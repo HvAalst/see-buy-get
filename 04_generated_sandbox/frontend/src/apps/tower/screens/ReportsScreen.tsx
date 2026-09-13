@@ -132,6 +132,20 @@ export function ReportsScreen({ state, actions }: { state: TowerState; actions: 
                     {d.messages.map((m) => (
                       <div key={m.seq} class="ctbl__sub" style="overflow-wrap:anywhere">
                         <b>{t(m.from === 'poster' ? 'tower.reports.fromPoster' : 'tower.reports.fromDriver')}</b> · {formatDate(m.at)} — {disputeLine(m)}
+                        {/* CV4 — the recording itself, fetched only when pressed. */}
+                        {m.voiceId ? (
+                          <button
+                            type="button"
+                            class="cbtn cbtn--ghost cbtn--sm"
+                            style="margin-left:6px"
+                            onClick={async () => {
+                              const blob = await actions.disputeVoice(d.reportId, m.voiceId!);
+                              if (blob) void new Audio(URL.createObjectURL(blob)).play();
+                            }}
+                          >
+                            {t('tower.reports.play')}
+                          </button>
+                        ) : null}
                       </div>
                     ))}
                   </td>

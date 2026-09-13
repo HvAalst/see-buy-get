@@ -66,6 +66,9 @@ export interface DisputeReportRow {
     price?: number;
     decision?: 'accepted' | 'declined';
     settlement?: { amount: number; method: string; when: string };
+    /** CV4 — a voice message the party included; the operator may play exactly this one. */
+    voiceId?: string;
+    durationSec?: number;
     at: string;
   }>;
   /** sha256 over the shared messages. Named so the server's credential mask (which strips `hash`) leaves it. */
@@ -80,6 +83,10 @@ export function disputeLine(m: DisputeReportRow['messages'][number]): string {
   if (m.kind === 'decision') return `${m.decision === 'accepted' ? 'Accepted' : 'Declined'} ${m.price?.toFixed(2) ?? '?'}`;
   if (m.kind === 'settlement' && m.settlement) return `Settle ${m.settlement.amount.toFixed(2)} by ${m.settlement.method.replace('_', ' ')}, ${m.settlement.when.replace('_', ' ')}${m.body ? ` — “${m.body}”` : ''}`;
   if (m.kind === 'settlement_agreed') return 'Agreed to the settlement';
+  if (m.kind === 'voice') {
+    const s = Math.max(0, Math.round(m.durationSec ?? 0));
+    return `Voice message (${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')})`;
+  }
   return m.body ?? '';
 }
 

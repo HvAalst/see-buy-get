@@ -13,6 +13,9 @@ import {
   canPropose,
   canShare,
   composeBlocker,
+  formatDuration,
+  MAX_VOICE_SECONDS,
+  pickAudioMime,
   lastSeqOf,
   mergeMessages,
   parseAmount,
@@ -90,6 +93,26 @@ export function ConversationSheet({
   const [selecting, setSelecting] = useState(false);
   const [picked, setPicked] = useState<number[]>([]);
   const [disputeNote, setDisputeNote] = useState('');
+  // CV4 — a voice message being recorded: when it started, and the recorder behind it.
+  const [recording, setRecording] = useState<{ startedAt: number } | null>(null);
+  const [recordSeconds, setRecordSeconds] = useState(0);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const discardRef = useRef(false);
+  const canRecord =
+    typeof window !== 'undefined' && typeof (window as { MediaRecorder?: unknown }).MediaRecorder !== 'undefined' && Boolean(globalThis.navigator?.mediaDevices?.getUserMedia);
+
+  // The recording clock, and the stop at the limit — a voice message is a message, not a recording session.
+  useEffect(() => {
+    if (!recording) return undefined;
+    const tick = window.setInterval(() => {
+      const elapsed = (Date.now() - recording.startedAt) / 1000;
+      setRecordSeconds(Math.floor(elapsed));
+      if (elapsed >= MAX_VOICE_SECONDS) stopRecording(false);
+    }, 250);
+    return () => window.clearInterval(tick);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recording]);
   const held = useRef<ChatMessage[]>([]);
   const id = thread?.conversationId ?? null;
 
@@ -132,7 +155,11 @@ export function ConversationSheet({
     if (!id) return undefined;
     void catchUp();
     const timer = window.setInterval(() => void catchUp(), POLL_MS);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearInterval(timer);
+      // Closing the sheet mid-recording throws the recording away and releases the microphone.
+      stopRecording(true);
+    };
     // Re-run only when a different thread opens; catchUp is stable for one thread.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -205,6 +232,52 @@ export function ConversationSheet({
     });
   };
 
+  /** CV4 — start recording. Asks for the microphone only now, when somebody pressed record. */
+  const startRecording = async () => {
+    if (!api || !id || recording) return;
+    setFailed(null);
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      setFailed(t('common.chat.voice.noMic'));
+      return;
+    }
+    const mime = pickAudioMime((type) => MediaRecorder.isTypeSupported(type));
+    const recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+    const startedAt = Date.now();
+    chunksRef.current = [];
+    discardRef.current = false;
+    recorder.ondataavailable = (e) => {
+      if (e.data && e.data.size) chunksRef.current.push(e.data);
+    };
+    recorder.onstop = () => {
+      for (const track of stream.getTracks()) track.stop();
+      const seconds = Math.max(1, Math.min(MAX_VOICE_SECONDS, Math.round((Date.now() - startedAt) / 1000)));
+      setRecording(null);
+      setRecordSeconds(0);
+      if (discardRef.current || !chunksRef.current.length) return;
+      const blob = new Blob(chunksRef.current, { type: recorder.mimeType || mime || 'audio/webm' });
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = String(reader.result ?? '');
+        void act('voice', () => api.sendVoice(id, { dataUrl, durationSec: seconds }));
+      };
+      reader.readAsDataURL(blob);
+    };
+    recorderRef.current = recorder;
+    recorder.start();
+    setRecording({ startedAt });
+  };
+
+  /** CV4 — stop recording: send it, or throw it away. */
+  const stopRecording = (discard: boolean) => {
+    discardRef.current = discard;
+    const recorder = recorderRef.current;
+    recorderRef.current = null;
+    if (recorder && recorder.state !== 'inactive') recorder.stop();
+  };
+
   const setBlocked = async (block: boolean) => {
     if (!api || !id) return;
     setConfirmBlock(false);
@@ -268,6 +341,7 @@ export function ConversationSheet({
     }
     if (m.kind === 'settlement_agreed') return <b>{t('common.chat.deal.agreedLine')}</b>;
     if (m.kind === 'report_shared') return <b>{t('common.chat.dispute.sharedLine', { n: m.seqCount ?? 0 })}</b>;
+    if (m.kind === 'voice' && m.voice && id) return <VoicePlayer api={api} conversationId={id} voiceId={m.voice.voiceId} durationSec={m.voice.durationSec} />;
     return m.body;
   };
 
@@ -416,6 +490,30 @@ export function ConversationSheet({
                   <Chip key={q} label={t(`common.chat.quick.${q}` as 'common.chat.quick.loaded')} active={false} onClick={() => send({ quick: q })} />
                 ))}
               </div>
+              {/* CV4 — a voice message, for a driver with a load in both hands or anybody for whom writing is the
+                  hard part. Offered only where the browser can record; the microphone is asked for on the tap. */}
+              {canRecord ? (
+                <div style="margin-top:12px">
+                  {recording ? (
+                    <>
+                      <p class="hint" aria-live="polite">
+                        {t('common.chat.voice.recording', { time: formatDuration(recordSeconds), max: formatDuration(MAX_VOICE_SECONDS) })}
+                      </p>
+                      <Button full={false} chevron={false} onClick={() => stopRecording(false)}>
+                        {t('common.chat.voice.stopSend')}
+                      </Button>
+                      <Button variant="link" full={false} onClick={() => stopRecording(true)}>
+                        {t('common.cancel')}
+                      </Button>
+                    </>
+                  ) : (
+                    <Button variant="outline" full={false} chevron={false} busy={busy === 'voice'} onClick={() => void startRecording()}>
+                      {t('common.chat.voice.record')}
+                    </Button>
+                  )}
+                </div>
+              ) : null}
+
               <div class="field" style="margin-top:12px">
                 <label class="sr-only" for="chat-text">
                   {t('common.chat.placeholder')}
@@ -559,6 +657,47 @@ export function ConversationSheet({
  * their drivers shared. Fetches its own list, so a screen mounts it without owning chat state; `refreshKey` lets
  * the host re-read after something changed.
  */
+/**
+ * CV4 — ONE VOICE MESSAGE. Fetched only when somebody presses play: a thread full of recordings must not
+ * download them all to show a list. Played from an object URL, because an <audio src> cannot carry the token
+ * the recording is protected by, and the URL is released when the message leaves the screen.
+ */
+function VoicePlayer({ api, conversationId, voiceId, durationSec }: { api: ConversationsApi | null; conversationId: string; voiceId: string; durationSec: number }) {
+  const t = useT();
+  const [url, setUrl] = useState<string | null>(null);
+  const [state, setState] = useState<'idle' | 'loading' | 'failed'>('idle');
+
+  useEffect(
+    () => () => {
+      if (url) URL.revokeObjectURL(url);
+    },
+    [url],
+  );
+
+  if (url) return <audio controls autoPlay src={url} style="width:100%; max-width:260px" />;
+  return (
+    <button
+      type="button"
+      class="linkbtn"
+      disabled={state === 'loading'}
+      onClick={async () => {
+        if (!api) return;
+        setState('loading');
+        const r = await api.voiceBlob(conversationId, voiceId);
+        const blob = (r.data ?? null) as unknown as Blob | null;
+        if (r.error || !blob) {
+          setState('failed');
+          return;
+        }
+        setUrl(URL.createObjectURL(blob));
+        setState('idle');
+      }}
+    >
+      <Icon name="speaker" size={18} /> {state === 'failed' ? t('common.chat.voice.failed') : t('common.chat.voice.play', { duration: formatDuration(durationSec) })}
+    </button>
+  );
+}
+
 export function ConversationList({
   api,
   freightId,
@@ -612,6 +751,7 @@ export function ConversationList({
     }
     if (m.kind === 'settlement_agreed') return t('common.chat.deal.agreedLine');
     if (m.kind === 'report_shared') return t('common.chat.dispute.sharedLine', { n: m.seqCount ?? 0 });
+    if (m.kind === 'voice' && m.voice) return t('common.chat.voice.preview', { duration: formatDuration(m.voice.durationSec) });
     return m.body ?? '';
   };
 

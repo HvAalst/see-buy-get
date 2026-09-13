@@ -194,6 +194,8 @@ export interface TowerActions {
   setCorridorStatus(corridorId: string, status: 'active' | 'blocked'): Promise<void>;
   /** F2 — make a fleet's proposed line real. */
   publishCorridor(corridorId: string): Promise<void>;
+  /** CV4 — the bytes of a voice message a party put in a shared report, or null. */
+  disputeVoice(reportId: string, voiceId: string): Promise<Blob | null>;
   refresh(): Promise<void>;
   open(rowId: string | null): void;
   clear(constraintId: string, reason: string, hazard: string): Promise<void>;
@@ -855,6 +857,13 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         }
         setState((s) => ({ ...s, busyId: null, done: t('tower.corridors.published') }));
         await loadCorridors(client);
+      },
+      /** CV4 — fetched on press, never ahead: a list of reports must not download every recording in them. */
+      disputeVoice: async (reportId: string, voiceId: string) => {
+        const client = clientRef.current;
+        if (!client) return null;
+        const r = await client.api.disputeVoice(reportId, voiceId);
+        return r.error ? null : ((r.data ?? null) as unknown as Blob | null);
       },
       signInAsCompany,
       showQueueError: (message: string) => setState((s) => ({ ...s, queueError: message })),

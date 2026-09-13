@@ -200,6 +200,10 @@ export function createOperatorApi(sbg: SbgClient) {
     /** CV3 — reports of chosen messages a party shared about a dispute: fixed copies with a fingerprint. */
     disputeReports: () => sbg.request((c) => c.GET('/v1/sbg/conversations/dispute-reports', {})),
 
+    /** CV4 — play a voice message a party put in a shared report. That one, and no other. */
+    disputeVoice: (reportId: string, voiceId: string) =>
+      sbg.request((c) => c.GET('/v1/sbg/conversations/dispute-reports/{reportId}/voice/{voiceId}', { params: { path: { reportId, voiceId } }, parseAs: 'blob' })),
+
     /** Shops waiting to be let onto the network. */
     kycQueue: () => sbg.request((c) => c.GET('/v1/sbg/agents/kyc-queue', {})),
 

@@ -139,6 +139,7 @@ export const enTower = {
   'tower.reports.sharedBy.driver': 'The driver',
   'tower.reports.fromPoster': 'Poster',
   'tower.reports.fromDriver': 'Driver',
+  'tower.reports.play': 'Play',
   'tower.rates.title': 'What each sister charges',
   'tower.rates.lede': 'Every sister prices for itself, per kind of work. The three layers are added, never compounded, and each one can be set for one lane or for everything.',
   'tower.rates.caveatLead': 'The split is ours alone.',

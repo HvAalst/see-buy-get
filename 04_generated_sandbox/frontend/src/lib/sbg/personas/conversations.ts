@@ -50,6 +50,14 @@ export function createConversationsApi(sbg: SbgClient) {
     agree: (id: string, seq: number) =>
       sbg.request((c) => c.POST('/v1/sbg/conversations/{id}/messages/{seq}/agree', { params: { path: { id, seq: String(seq) } as never } })),
 
+    /** CV4 — send a voice message: the recording as a data URL, and how long it runs. */
+    sendVoice: (id: string, voice: { dataUrl: string; durationSec: number }) =>
+      sbg.request((c) => c.POST('/v1/sbg/conversations/{id}/voice', { params: { path: { id } }, body: voice as never })),
+
+    /** CV4 — the recording's bytes, for the thread's readers only. Played from an object URL: an <audio src> carries no token. */
+    voiceBlob: (id: string, voiceId: string) =>
+      sbg.request((c) => c.GET('/v1/sbg/conversations/{id}/voice/{voiceId}', { params: { path: { id, voiceId } }, parseAs: 'blob' })),
+
     /** CV3 — a fleet manager's view: the conversations their drivers chose to share. Read-only. */
     shared: () => sbg.request((c) => c.GET('/v1/sbg/conversations/shared', {})),
 

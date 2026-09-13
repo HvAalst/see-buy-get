@@ -87,4 +87,11 @@ when, between whom — in a form that can be shown to somebody later.
   reader saw every message signed "the poster" (views now carry `from: poster|driver`), and **a key named
   `hash` is stripped from every response by ResponseMaskInterceptor** — the report arrived without its
   fingerprint and crashed the console screen.
-- **CV4. Voice notes** over the media store.
+- **CV4. ~~Voice notes~~ DONE, driven in the browser** (Chromium's fake microphone: record → send → the shop
+  plays it, the shared manager plays it, the operator plays it from a report). NOT over the media store, which is
+  images-only by design: `foundation/media/decode-audio.ts` checks WebM / Ogg / MP4 / MP3 by their bytes and
+  accepts a codec-parameterised type (`audio/webm;codecs=opus`); recordings live in their own store
+  (`pudo-conversation-voice`, 900 KB / 120 s server-side, 60 s in the app), apart from the messages so a thread
+  list never carries audio. `POST :id/voice`; `GET :id/voice/:voiceId` for the thread's readers;
+  `GET dispute-reports/:reportId/voice/:voiceId` for the operator, only for a voice id that report holds. Played
+  from an object URL — an `<audio src>` cannot carry the token. Not built: transcription.

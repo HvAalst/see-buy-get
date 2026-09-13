@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canAgree, canDecide, canPropose, canShare, composeBlocker, lastSeqOf, mergeMessages, parseAmount, threadsFor, toggleSeq, totalUnread, type ChatMessage, type ChatThread } from './logic';
+import { canAgree, canDecide, canPropose, canShare, composeBlocker, formatDuration, lastSeqOf, mergeMessages, parseAmount, pickAudioMime, threadsFor, toggleSeq, totalUnread, type ChatMessage, type ChatThread } from './logic';
 
 const msg = (seq: number, over: Partial<ChatMessage> = {}): ChatMessage => ({ seq, mine: false, kind: 'text', body: `m${seq}`, at: '2026-09-13T08:00:00Z', ...over });
 const thread = (over: Partial<ChatThread> = {}): ChatThread => ({
@@ -65,6 +65,20 @@ describe('CV1 — a conversation, client side', () => {
     expect(canShare(thread({ role: 'asker', shareable: false }))).toBe(false);
     expect(canShare(thread({ role: 'poster', shareable: true }))).toBe(false);
     expect(canShare(thread({ role: 'manager', shareable: true }))).toBe(false);
+  });
+
+  it('CV4 — records in the most compact format the browser supports, and reads a duration like a clock', () => {
+    expect(pickAudioMime((t) => t === 'audio/webm' || t === 'audio/mp4')).toBe('audio/webm');
+    expect(pickAudioMime((t) => t === 'audio/mp4')).toBe('audio/mp4'); // iOS Safari
+    expect(pickAudioMime(() => false)).toBeNull();
+    expect(
+      pickAudioMime(() => {
+        throw new Error('no');
+      }),
+    ).toBeNull();
+    expect(formatDuration(7)).toBe('0:07');
+    expect(formatDuration(65)).toBe('1:05');
+    expect(formatDuration(-3)).toBe('0:00');
   });
 
   it('adds up the badge and finds the threads about one load', () => {

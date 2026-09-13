@@ -39,6 +39,12 @@ export class ProposePriceInThreadDto {
   @ValidateNested() @Type(() => ThreadPositionDto) from!: ThreadPositionDto;
 }
 
+/** CV4 — a voice message: the recording as a data URL, and how long it runs. The bytes are checked server-side. */
+export class VoiceMessageDto {
+  @IsString() dataUrl!: string;
+  @IsNumber() @Min(1) @Max(120) durationSec!: number;
+}
+
 /** CV3 — the driver shares this conversation with their fleet manager, or stops. */
 export class ShareConversationDto {
   @IsBoolean() on!: boolean;

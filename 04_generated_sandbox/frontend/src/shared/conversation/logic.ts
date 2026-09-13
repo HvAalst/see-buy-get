@@ -21,7 +21,31 @@ export type SettleWhen = (typeof SETTLE_WHEN)[number];
 
 export const MAX_MESSAGE_CHARS = 1000;
 
-export type MessageKind = 'text' | 'quick' | 'proposal' | 'decision' | 'settlement' | 'settlement_agreed' | 'report_shared';
+export type MessageKind = 'text' | 'quick' | 'proposal' | 'decision' | 'settlement' | 'settlement_agreed' | 'report_shared' | 'voice';
+
+/** CV4 — the longest voice message the app records. The server allows a little more; this is the one people see. */
+export const MAX_VOICE_SECONDS = 60;
+
+/** CV4 — what to record in, most compact first. iOS Safari records only MP4; Chrome and Android prefer WebM/Opus. */
+export const AUDIO_MIME_PREFERENCE = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'] as const;
+
+/** CV4 — the first recording format this browser supports, or null to let the browser choose. */
+export function pickAudioMime(isSupported: (type: string) => boolean): string | null {
+  for (const type of AUDIO_MIME_PREFERENCE) {
+    try {
+      if (isSupported(type)) return type;
+    } catch {
+      /* a browser that throws on the question does not support the answer */
+    }
+  }
+  return null;
+}
+
+/** CV4 — "0:07", "1:05". */
+export function formatDuration(seconds: number): string {
+  const s = Math.max(0, Math.round(Number(seconds) || 0));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
 
 export interface ChatMessage {
   seq: number;
@@ -37,6 +61,8 @@ export interface ChatMessage {
   refSeq?: number;
   /** CV3 — report_shared: how many messages the report holds. */
   seqCount?: number;
+  /** CV4 — a voice message, fetched separately when somebody presses play. */
+  voice?: { voiceId: string; durationSec: number };
   at: string;
 }
 

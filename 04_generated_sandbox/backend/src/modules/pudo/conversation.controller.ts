@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, Post, Query, StreamableFile } from '@nestjs/common';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Roles } from '../../foundation/auth/scopes.decorator';
@@ -15,6 +15,7 @@ import {
   ReportMessageDto,
   SendMessageDto,
   ShareConversationDto,
+  VoiceMessageDto,
 } from './conversation.dto';
 
 /**
@@ -58,6 +59,31 @@ export class ConversationController {
   @Get('dispute-reports')
   disputeReports() {
     return { items: this.conversations.listDisputeReports() };
+  }
+
+  /** CV4 — the operator plays a voice message a party chose to include in a shared report. */
+  @Roles('operator')
+  @Get('dispute-reports/:reportId/voice/:voiceId')
+  @Header('Cache-Control', 'private, no-store')
+  @Header('X-Content-Type-Options', 'nosniff')
+  disputeVoice(@Param('reportId') reportId: string, @Param('voiceId') voiceId: string): StreamableFile {
+    const { contentType, bytes } = this.conversations.voiceForReport(reportId, voiceId);
+    return new StreamableFile(bytes, { type: contentType });
+  }
+
+  /** CV4 — send a voice message. */
+  @Post(':id/voice')
+  sendVoice(@Param('id') id: string, @Body() dto: VoiceMessageDto, @Actor() actor: IntrospectionResult) {
+    return this.conversations.sendVoice(id, didOf(actor), dto);
+  }
+
+  /** CV4 — play a voice message: the thread's readers only. Never cached, never sniffed as something else. */
+  @Get(':id/voice/:voiceId')
+  @Header('Cache-Control', 'private, no-store')
+  @Header('X-Content-Type-Options', 'nosniff')
+  voice(@Param('id') id: string, @Param('voiceId') voiceId: string, @Actor() actor: IntrospectionResult): StreamableFile {
+    const { contentType, bytes } = this.conversations.voiceFor(id, voiceId, didOf(actor));
+    return new StreamableFile(bytes, { type: contentType });
   }
 
   /** CV3 — the driver shares this conversation with their fleet manager, or stops sharing it. */

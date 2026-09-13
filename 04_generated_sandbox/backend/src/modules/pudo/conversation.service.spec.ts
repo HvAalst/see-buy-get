@@ -313,4 +313,53 @@ describe('conversations about a load', () => {
       expect(() => service.shareDisputeReport(conversationId, 'did:shop', [99])).toThrow(/not in this conversation/);
     });
   });
+
+  describe('CV4 — voice messages', () => {
+    const recording = Buffer.concat([Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), Buffer.alloc(60, 7)]);
+    const WEBM = `data:audio/webm;codecs=opus;base64,${recording.toString('base64')}`;
+
+    it('keeps a real recording as a voice message — and the push says only that one arrived', () => {
+      const { conversationId } = service.open('fr_1', 'did:drv:amos');
+      const sent = service.sendVoice(conversationId, 'did:drv:amos', { dataUrl: WEBM, durationSec: 7 });
+      expect(sent).toMatchObject({ kind: 'voice', mine: true, voice: { durationSec: 7 } });
+
+      const played = service.voiceFor(conversationId, sent.voice!.voiceId, 'did:shop');
+      expect(played.contentType).toBe('audio/webm');
+      expect(played.bytes.equals(recording)).toBe(true);
+
+      expect(notify).toHaveBeenCalledWith('did:shop', expect.objectContaining({ title: 'New voice message about FR-001' }));
+      expect(JSON.stringify(notify.mock.calls)).not.toContain(recording.toString('base64').slice(0, 20));
+      // Listing the thread never carries audio.
+      expect(JSON.stringify(service.messagesFor(conversationId, 'did:shop'))).not.toContain(recording.toString('base64').slice(0, 20));
+    });
+
+    it('refuses text dressed up as audio, a message outside 1–120 seconds, and a closed thread', () => {
+      const { conversationId } = service.open('fr_1', 'did:drv:amos');
+      const fake = `data:audio/webm;base64,${Buffer.from('<script>alert(1)</script>padding').toString('base64')}`;
+      expect(() => service.sendVoice(conversationId, 'did:drv:amos', { dataUrl: fake, durationSec: 3 })).toThrow(/not a real recording/);
+      expect(() => service.sendVoice(conversationId, 'did:drv:amos', { dataUrl: WEBM, durationSec: 500 })).toThrow(/1 to 120 seconds/);
+      service.block(conversationId, 'did:shop');
+      expect(() => service.sendVoice(conversationId, 'did:drv:amos', { dataUrl: WEBM, durationSec: 3 })).toThrow(/closed/);
+    });
+
+    it('plays only for the thread’s readers — not a stranger, not another conversation; a shared manager may', () => {
+      const a = service.open('fr_1', 'did:drv:amos');
+      const other = service.open('fr_neg', 'did:drv:amos');
+      const { voice } = service.sendVoice(a.conversationId, 'did:drv:amos', { dataUrl: WEBM, durationSec: 4 });
+      expect(() => service.voiceFor(a.conversationId, voice!.voiceId, 'did:drv:nosy')).toThrow(/not found/i);
+      expect(() => service.voiceFor(other.conversationId, voice!.voiceId, 'did:drv:amos')).toThrow(/not found/i);
+      expect(() => service.voiceFor(a.conversationId, voice!.voiceId, 'did:fleet:kilima')).toThrow(/not found/i);
+      service.setShared(a.conversationId, 'did:drv:amos', true);
+      expect(service.voiceFor(a.conversationId, voice!.voiceId, 'did:fleet:kilima').bytes.length).toBe(recording.length);
+    });
+
+    it('carries a voice message into a shared report, and lets the operator play exactly that one', () => {
+      const { conversationId } = service.open('fr_1', 'did:drv:amos');
+      const { voice } = service.sendVoice(conversationId, 'did:drv:amos', { dataUrl: WEBM, durationSec: 9 });
+      const { reportId } = service.shareDisputeReport(conversationId, 'did:shop', [1]);
+      expect(service.listDisputeReports()[0].messages[0]).toMatchObject({ kind: 'voice', voiceId: voice!.voiceId, durationSec: 9, from: 'driver' });
+      expect(service.voiceForReport(reportId, voice!.voiceId).contentType).toBe('audio/webm');
+      expect(() => service.voiceForReport(reportId, 'vn_not_in_it')).toThrow(/not found in that report/);
+    });
+  });
 });
