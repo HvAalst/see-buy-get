@@ -982,9 +982,10 @@ export class DispatchService {
     // platform fee from its prepaid balance. THREE distinct states, so an uncollected debt is never silent:
     //  - 'billed'         a known shipper whose prepaid balance covered the charge;
     //  - 'billing_failed' a known shipper whose balance fell SHORT — a real debt for a Local Admin to collect;
-    //  - 'unpaid'         a bulletin freight with no shipper, settled off-platform (the intended default).
+    //  - 'unpaid'         a bulletin freight with no shipper, or a store no sister of ours settles (it stands in a
+    //                     country we only match) — settled off-platform between shipper and carrier.
     // The driver is still paid on delivery in every case — labour done is owed regardless of shipper collection.
-    if (f.shipperDid && this.vendors.has(f.shipperDid)) {
+    if (f.shipperDid && this.vendors.has(f.shipperDid) && this.vendors.settlesWithUs(f.shipperDid)) {
       const bill = this.shipperBill(earning, f);
       const { paid } = this.vendors.billShipment(f.shipperDid, f.freightId, bill.gross, 0, bill.tax, bill.provision);
       f.paidStatus = paid ? 'billed' : 'billing_failed';

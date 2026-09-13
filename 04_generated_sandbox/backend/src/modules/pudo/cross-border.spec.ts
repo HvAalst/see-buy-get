@@ -363,6 +363,58 @@ describe('crossing a border', () => {
     });
   });
 
+  describe('everyone who moves or sends freight, where we only match', () => {
+    const DAR = { lat: -6.79, lng: 39.21 };
+
+    it('lets an independent courier register with no sister — and refuses paying them by name', () => {
+      presence.set({ jurisdiction: 'TZ', level: 'matched' });
+      const c = drivers.register({ displayName: 'Baraka', fullName: 'Baraka', nationalId: 'NID-BARAKA', mobile: '+255711000222', licenceClasses: ['motorcycle'], jurisdiction: 'TZ' } as never);
+      expect(c).toMatchObject({ jurisdiction: 'TZ' });
+      expect(c.entityId).toBeUndefined();
+      expect(() => drivers.settlingEntityIdOf(c)).toThrow(/cannot pay out in this country/i);
+      // A delivery still completes: nothing of ours pays, so nothing is booked.
+      expect(gate.driverPayout(c.did, 80)).toBeNull();
+    });
+
+    it('refuses a courier, a store and a hub where the network does not operate at all — before anything is kept', () => {
+      expect(() => drivers.register({ displayName: 'Z', fullName: 'Z', nationalId: 'NID-ZM-1', mobile: '+260977000111', licenceClasses: ['bike'], jurisdiction: 'ZM' } as never)).toThrow(/does not operate in ZM/);
+      // …and the refusal burned no fingerprint: the same person registers once the country is matched.
+      presence.set({ jurisdiction: 'ZM', level: 'matched' });
+      expect(drivers.register({ displayName: 'Z', fullName: 'Z', nationalId: 'NID-ZM-1', mobile: '+260977000111', licenceClasses: ['bike'], jurisdiction: 'ZM' } as never).entityId).toBeUndefined();
+      expect(() => vendors.register({ name: 'Lusaka Store', country: 'MW' })).toThrow(/does not operate in MW/);
+      expect(() => mdps.register({ name: 'Lilongwe Hub', zones: ['LL'], country: 'MW', location: DAR })).toThrow(/does not operate in MW/);
+    });
+
+    it('lets a store register with no till — every read answers, every money path refuses by name', () => {
+      presence.set({ jurisdiction: 'TZ', level: 'matched' });
+      const v = vendors.register({ name: 'Kariakoo Traders', country: 'TZ' });
+      expect(v.entityId).toBeUndefined();
+      // Null, not zero: having no till with us is a different fact from an empty one.
+      expect(v.balance).toBeNull();
+      expect(vendors.get(v.vendorId).balance).toBeNull();
+      expect(vendors.balanceOrNone(v.vendorId)).toBeNull();
+      expect(vendors.settlesWithUs(v.vendorId)).toBe(false);
+      expect(() => vendors.topUp(v.vendorId, 50)).toThrow(/cannot hold money in this country/i);
+      expect(() => vendors.balanceOf(v.vendorId)).toThrow(/cannot hold money in this country/i);
+    });
+
+    it('lets a hub register and sort with no sister, booking nothing for the work', () => {
+      presence.set({ jurisdiction: 'TZ', level: 'matched' });
+      const hub = mdps.register({ name: 'Dar Hub', zones: ['DAR'], country: 'TZ', location: DAR });
+      expect(hub.entityId).toBeUndefined();
+      expect(mdps.entityIdOrNone(hub)).toBeUndefined();
+      expect(() => mdps.entityIdOf(hub)).toThrow(/cannot pay out in this country/i);
+    });
+
+    it('keeps a store in an established country exactly as it was', () => {
+      const v = vendors.register({ name: 'Nairobi Store', country: 'KE' });
+      expect(v.entityId).toBe(entities.requireForJurisdiction('KE').entityId);
+      expect(v.balance).toBe(0);
+      expect(vendors.settlesWithUs(v.vendorId)).toBe(true);
+      expect(vendors.topUp(v.vendorId, 50).balance).toBe(50);
+    });
+  });
+
   describe('P3 — saying it out loud, before the goods are accepted', () => {
     const takeIn = (agentDid: string, parcelId: string, mode: 'cash' | 'credit') =>
       parcels.accept({ parcelId, agentDid, destZone: 'Kisumu', size: 'M', paymentMode: mode, senderMobile: '+254700111', receiverMobile: '+254700222', dropoffPhotoRef: 'p.jpg' } as never);

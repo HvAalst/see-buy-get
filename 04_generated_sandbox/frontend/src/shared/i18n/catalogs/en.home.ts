@@ -174,6 +174,7 @@ export const enHome = {
   // Country picker (JoinScreen CountryField) — shown only where there is more than one to choose from.
   'home.join.country.label': 'Country',
   'home.join.country.choose': 'Choose a country',
+  'home.join.country.noMoney': 'you settle with the carrier',
   'home.join.country.note': 'This is the company you will be paid by, so it has to be where you really are.',
   'home.join.country.unavailable': 'We could not load the countries just now — try again in a moment.',
   'home.join.about.fullName': 'Your full name',

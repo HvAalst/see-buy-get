@@ -111,6 +111,7 @@ describe('PUDO Light', () => {
   let vault: IdentityVault;
   let core: OperationalStore;
   let events: EventBus;
+  let presence: PresenceService;
 
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -130,6 +131,7 @@ describe('PUDO Light', () => {
     // registry the app seeds at boot, and everything that names an entity needs it present.
     entities = moduleRef.get(EntityService);
     entities.seed();
+    presence = moduleRef.get(PresenceService);
     moduleRef.get(FxService).seed(); // same reason as the entity seed: compile() runs no lifecycle hooks
     books = moduleRef.get(BooksService);
     bagPlans = moduleRef.get(BagPlanService);
@@ -855,10 +857,15 @@ describe('PUDO Light', () => {
 
   it('publishes where the network operates, and nothing more than that', () => {
     // The first question anybody asks before signing up, and the list a country picker is built from. It is
-    // DERIVED from the sisters, so it can never offer a country nobody could lawfully invoice in.
+    // DERIVED from the presence: every country where somebody may register, and whether money is ours there.
+    expect(controller.countries().map((c) => c.country).sort()).toEqual(['ET', 'KE']);
+    expect(controller.countries().find((c) => c.country === 'KE')).toEqual({ country: 'KE', name: 'SeeBuyGet Kenya', currency: 'KES', settles: true });
+    // A country we only match is offered — by its own name, with no currency, and saying no money is ours there.
+    presence.set({ jurisdiction: 'DE', level: 'matched' });
+    presence.set({ jurisdiction: 'ZM', level: 'observed' }); // recorded, but the network does not operate there
     const countries = controller.countries();
-    expect(countries.map((c) => c.country).sort()).toEqual(['ET', 'KE']);
-    expect(countries.find((c) => c.country === 'KE')).toEqual({ country: 'KE', name: 'SeeBuyGet Kenya', currency: 'KES' });
+    expect(countries.map((c) => c.country).sort()).toEqual(['DE', 'ET', 'KE']);
+    expect(countries.find((c) => c.country === 'DE')).toEqual({ country: 'DE', name: 'Germany', settles: false });
     // The entity's own id is the shape of the business and stays behind the operator-only /entities.
     expect(countries.every((c) => !('entityId' in c))).toBe(true);
   });
@@ -1710,9 +1717,9 @@ describe('PUDO Light', () => {
       const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: 'ORD-ENT', originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700', size: 'M', contentPhotoRef: 'c.jpg', shippingPolicy: vendor.shippingPolicy, quote });
       expect(parcel.collectingEntityId).toBe(ke.entityId);
 
-      // No daughter company in the Netherlands → registering a Dutch store is refused outright, rather
-      // than quietly settling its parcels through Nairobi.
-      expect(() => vendors.register({ name: 'Amsterdam Store', country: 'NL' })).toThrow(/No daughter company operates in NL/);
+      // The network does not operate in the Netherlands → registering a Dutch store is refused outright, rather
+      // than quietly settling its parcels through Nairobi. (Where we only match, it stands with no sister.)
+      expect(() => vendors.register({ name: 'Amsterdam Store', country: 'NL' })).toThrow(/does not operate in NL/);
     });
 
     it('names the sister owed each node fee on a quote', () => {
@@ -1764,11 +1771,11 @@ describe('PUDO Light', () => {
       expect(drivers.isIndependent(courier)).toBe(true);
       expect(drivers.settlingEntityIdOf(courier)).toBe(ke.entityId);
 
-      // A courier resident where no sister operates cannot be settled, so they cannot be onboarded —
-      // which is also what makes the nomad currency rule structural rather than a policy to police.
+      // A courier resident where the network does not OPERATE cannot be onboarded. Where we only match they may
+      // stand with no sister (cross-border.spec); a country nobody recorded is still refused, in those words.
       expect(() =>
         drivers.register({ displayName: 'Nomad', fullName: 'N N', nationalId: 'DRV-NOMAD', mobile: '+3190001', licenceClasses: ['bike'], jurisdiction: 'NL' }),
-      ).toThrow(/No daughter company operates in NL/);
+      ).toThrow(/does not operate in NL/);
     });
 
     it('lets a sister set its OWN margin, and refuses an implausible one', () => {
@@ -4358,6 +4365,29 @@ describe('PUDO Light', () => {
     pickupOk(f, d.did);
     deliverOk(f, d.did);
     expect(gate.entries({ type: 'DRIVER_PAYOUT' }).filter((e) => e.reference === d.did)).toHaveLength(1); // labour is owed regardless
+  });
+
+  it('a store no sister settles posts freight that is claimed UNPAID — settled off-platform, never billed, never a refusal', () => {
+    presence.set({ jurisdiction: 'DE', level: 'matched' });
+    const d = drivers.register({ displayName: 'OP', fullName: 'O', nationalId: 'ID-OP', mobile: '+254771001', licenceClasses: ['truck'], licenceNumber: 'L-OP', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const truck = vehicles.register({ plate: 'OP-1', vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 10_000, ownerName: 'X', equipment: ['TLT'], baseFee: 10, pricePerKm: 0.5 });
+    fleet.couple(d.did, truck.vehicleId);
+    const vendor = vendors.register({ name: 'Berliner Möbel', country: 'DE' });
+    expect(vendors.settlesWithUs(vendor.vendorId)).toBe(false);
+    const pickup = { lat: -1.2, lng: 36.8 };
+    const f = dispatch.registerFreight({ description: 'Wardrobe', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', destLocation: pickup, weightKg: 200, packaging: 'palletised', shipperDid: vendor.vendorId });
+    const noon = new Date('2026-07-22T11:00:00').getTime();
+    const [offer] = dispatch.suggest(d.did, { from: pickup, to: pickup }, noon);
+    dispatch.claim(offer.offerId, noon);
+    const claimed = dispatch.listFreight().find((x) => x.freightId === f.freightId)!;
+    expect(claimed.paidStatus).toBe('unpaid'); // not 'billing_failed': there is no debt to us, there is no till
+    expect(claimed.billed).toBeUndefined();
+    expect(vendors.balanceOrNone(vendor.vendorId)).toBeNull();
+    pickupOk(f, d.did);
+    deliverOk(f, d.did);
+    expect(dispatch.listFreight().find((x) => x.freightId === f.freightId)!.status).toBe('delivered');
   });
 
   it('S34: a bulletin freight with no shipper stays unpaid at claim but still pays the driver on delivery', () => {

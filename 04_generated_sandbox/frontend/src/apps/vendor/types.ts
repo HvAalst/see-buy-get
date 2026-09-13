@@ -50,7 +50,8 @@ export interface VendorView {
   /** Their own dock, if they have asked for one. Absent = they drop off at a PUDO like everyone else. */
   collection?: CollectionPointView;
   country: string;
-  balance: number;
+  /** Null where the store stands in a country we only match: it keeps no till with us. */
+  balance: number | null;
   shippingPolicy: ShippingPolicy;
   createdAt: string;
 }
@@ -185,7 +186,8 @@ export interface LedgerSummary {
   out: number;
   net: number;
   count: number;
-  balance: number;
+  /** Null where the store stands in a country we only match: it keeps no till with us. */
+  balance: number | null;
 }
 
 export interface CallbackRow {

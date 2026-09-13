@@ -168,6 +168,24 @@ and what the cover is, in the same breath as the price.
   and `driverPayout` books nothing (returns null) for a fleet no sister pays — a delivery must never fail on a
   money question. Driven: a Berlin fleet registered in DE (matched), activated, signed in, onboarded a vehicle.
   Not changed: an INDEPENDENT courier still needs a sister in their country of residence.
+- **~~Everyone who moves or sends freight, where we only match~~ DONE (user, 2026-09-13: "fleets, drivers, anyone
+  who initiates and moves freight should be unlocked").** One rule for all of them: joining and moving goods always
+  work, reads answer instead of refusing, money refuses by name only where money is asked, and freight settles
+  off-platform between shipper and carrier (the conversation's settlement card records it).
+  - *Independent couriers* register wherever the network operates (`takeIn`), asked before anything is fingerprinted
+    so a refusal burns no identity; `settlingEntityIdOf` refuses by name (cannot pay out); delivery books nothing.
+  - *Stores* register the same way with no sister and a **null** balance (no till with us — not an empty one).
+    `get()` used to recompute the balance through the money gate, so one such store would have refused every read,
+    API key, return, dock and conversation it touched; reads now answer, and top-up/billing/claims refuse by name
+    (`holdFloat`). A load such a store posts is claimed **unpaid**, never `billing_failed` — there is no debt to us.
+  - *Hubs* register and sort with no sister; sort labour books nothing (`entityIdOrNone`).
+  - *Freight doors* (the counter booking and the store's diverted heavy order) ask `takeIn`, not
+    `merchantOfRecord`. The parcel quote and mint are unchanged: those are sales, and still need a seller.
+  - *The front door* (`GET countries`, the store and home sign-up pickers) was derived from the sisters, so a matched
+    country could not be chosen at all. It now lists every country where the network operates, with `settles`, and
+    the picker says "you settle with the carrier" beside those.
+  Driven: DE courier, DE hub and a DE store signed up in the store app (no till shown, no Top up), its heavy order
+  diverted to freight, counter freight booked at a DE shop. Not driven: claiming that store's load (unit-tested).
 - **F3–F4. Sold capacity, then their own customers' loads on their own line** — both move money, and wait
   on the same decision as P4 (below).
 - **F1–F4. The fleet's own routes** (see the corridors work): a fleet-owned line, propose → publish,

@@ -159,22 +159,27 @@ export function OrdersScreen({ state, actions }: OrdersScreenProps) {
         </Card>
       ) : null}
 
-      <GlanceNumber
-        label={t('vendor.balanceLabel')}
-        value={money(state.vendor?.balance)}
-        sub={
-          !statsKnown
-            ? t('vendor.orders.balanceSubUnknown')
-            : unpaid
-              ? t(unpaid === 1 ? 'vendor.orders.balanceSubUnpaidOne' : 'vendor.orders.balanceSubUnpaidMany', { count: unpaid })
-              : t('vendor.orders.balanceSubPaid')
-        }
-        aside={
-          <Button variant="link" full={false} onClick={() => setTopupOpen(true)}>
-            {t('vendor.orders.topUp')}
-          </Button>
-        }
-      />
+      {state.vendor?.balance === null ? (
+        // A store where we only match keeps no till with us: a dash and the reason, never 0.00 and a Top up.
+        <GlanceNumber label={t('vendor.noTillLabel')} value="—" sub={t('vendor.noTillSub')} />
+      ) : (
+        <GlanceNumber
+          label={t('vendor.balanceLabel')}
+          value={money(state.vendor?.balance)}
+          sub={
+            !statsKnown
+              ? t('vendor.orders.balanceSubUnknown')
+              : unpaid
+                ? t(unpaid === 1 ? 'vendor.orders.balanceSubUnpaidOne' : 'vendor.orders.balanceSubUnpaidMany', { count: unpaid })
+                : t('vendor.orders.balanceSubPaid')
+          }
+          aside={
+            <Button variant="link" full={false} onClick={() => setTopupOpen(true)}>
+              {t('vendor.orders.topUp')}
+            </Button>
+          }
+        />
+      )}
 
       {state.checkouts.length ? (
         <Card title={t('vendor.waitingToShip')} aside={<span class="row__count">{state.checkouts.length}</span>}>

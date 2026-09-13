@@ -160,7 +160,7 @@ function CountryField({ id, state, actions }: JoinScreenProps & { id: string }) 
         <option value="">{t('home.join.country.choose')}</option>
         {countries.map((c) => (
           <option key={c.country} value={c.country}>
-            {c.name} ({c.country})
+            {c.name} ({c.country}){c.settles === false ? ` · ${t('home.join.country.noMoney')}` : ''}
           </option>
         ))}
       </select>

@@ -12,6 +12,7 @@ import { VEHICLE_SPEC, VehicleClass } from './fleet.config';
 import { DriverKyc, DriverRegistry, FleetDriver } from './fleet.types';
 import { FleetManagerService } from './fleet-manager.service';
 import { EntityService } from '../../foundation/entity/entity.service';
+import { PresenceService } from '../../foundation/presence/presence.service';
 import { NETWORK_JURISDICTION } from './pudo.config';
 
 interface RegisterDriverInput {
@@ -55,6 +56,7 @@ export class DriverService {
     private readonly events: EventBus,
     private readonly managers: FleetManagerService,
     private readonly entities: EntityService,
+    private readonly presence: PresenceService,
   ) {}
 
   /**
@@ -67,7 +69,12 @@ export class DriverService {
    */
   settlingEntityIdOf(driver: FleetDriver): string {
     if (driver.managerDid) return this.managers.entityIdOf(this.managers.get(driver.managerDid));
-    return driver.entityId ?? this.entities.requireForJurisdiction(driver.jurisdiction ?? NETWORK_JURISDICTION).entityId;
+    if (driver.entityId) return driver.entityId;
+    const country = driver.jurisdiction ?? NETWORK_JURISDICTION;
+    const sister = this.entities.forJurisdiction(country);
+    if (sister) return sister.entityId;
+    this.presence.require(country, 'payouts'); // refuses by name where we only match
+    return this.entities.requireForJurisdiction(country).entityId;
   }
 
   /**
@@ -141,6 +148,12 @@ export class DriverService {
     for (const c of input.licenceClasses) if (!VEHICLE_SPEC[c]) throw new GlosError('INVALID_VEHICLE_CLASS', `Unknown vehicle class: ${c}`);
     if (input.managerDid) this.managers.requireActive(input.managerDid);
     const registry = this.registryFor(input.licenceClasses);
+    // An INDEPENDENT courier is contracted where they legally reside — bicycle or truck, it makes no difference.
+    // A fleet-attached driver gets neither field: their fleet is the supplier, and the network has no business
+    // knowing where its suppliers' staff live. Asked before anything is fingerprinted, so a refusal costs nothing.
+    const independent = !input.managerDid;
+    const jurisdiction = independent ? (input.jurisdiction || NETWORK_JURISDICTION).toUpperCase() : undefined;
+    if (jurisdiction && !this.presence.can(jurisdiction, 'takeIn')) throw new GlosError('FORBIDDEN', `The network does not operate in ${jurisdiction} yet, so a courier cannot register there`);
 
     // Heavy registry requires a real licence (number + expiry, not already expired).
     if (registry === 'heavy') {
@@ -160,12 +173,8 @@ export class DriverService {
     this.core.upsert({ did, vaultRef, tier: 2, status: 'pending', capabilities: ['pudo-driver'], metadata: { registry, homeZone: input.homeZone } });
     for (const p of Object.values(prints)) this.fingerprints.add(p);
 
-    // An INDEPENDENT courier is contracted by the sister where they legally reside — bicycle or truck,
-    // it makes no difference. A fleet-attached driver gets neither field: their fleet is the supplier,
-    // and the network has no business knowing where its suppliers' staff live.
-    const independent = !input.managerDid;
-    const jurisdiction = independent ? (input.jurisdiction || NETWORK_JURISDICTION).toUpperCase() : undefined;
-    const entity = jurisdiction ? this.entities.requireForJurisdiction(jurisdiction) : undefined;
+    // Where we only match there is no sister: the courier stands without one, and is paid by whoever they carry for.
+    const entity = jurisdiction ? this.entities.forJurisdiction(jurisdiction) : undefined;
 
     const now = new Date().toISOString();
     const driver: FleetDriver = {

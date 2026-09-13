@@ -221,14 +221,25 @@ export class SbgController {
    * Public on purpose, and the counterpart of the open-data rates: a shop deciding whether to sign up, a
    * store wondering whether we reach its customers, and (soon) a vendor integrating the shipping API all
    * ask the same question first — and the sign-up wizard needs it before anyone can choose. It is derived
-   * from the sisters rather than listed, so a country cannot appear here that nobody could lawfully
-   * invoice in. Structural only: which country, what it is called, what it settles in. The entity's own id
-   * is the shape of the business and stays behind GET /entities, which is operator-only.
+   * from the presence rather than listed: every country where the network operates (goods may be taken in),
+   * which is exactly where a shop, store, hub, fleet or courier may register. `settles` says whether a sister
+   * of ours handles money there — where it does not, the form says so before anybody joins. Structural only:
+   * which country, what it is called, what it settles in. The entity's own id is the shape of the business and
+   * stays behind GET /entities, which is operator-only.
    */
   @Public()
   @Get('countries')
   countries() {
-    return this.entities.sisters().map((e) => ({ country: e.jurisdiction, name: e.name, currency: e.currency }));
+    const regionName = new Intl.DisplayNames(['en'], { type: 'region' });
+    return this.presence
+      .list()
+      .filter((p) => p.capabilities.takeIn)
+      .map((p) => {
+        const sister = this.entities.forJurisdiction(p.jurisdiction);
+        return sister
+          ? { country: p.jurisdiction, name: sister.name, currency: sister.currency, settles: true }
+          : { country: p.jurisdiction, name: regionName.of(p.jurisdiction) ?? p.jurisdiction, settles: false };
+      });
   }
 
   /**
@@ -885,9 +896,10 @@ export class SbgController {
     const origin = this.agents.get(agentDid); // 404 if the acting id is not an agent
     if (dto.destPudoDid === agentDid) throw new GlosError('INVALID_INPUT', 'A shipment cannot be sent to the shop booking it — pick a different destination.');
     const dest = this.agents.get(dto.destPudoDid); // 404 on an unknown destination
-    // P2b — a haul is work somebody of ours contracts and a driver is paid for. Asked at the counter, of both
-    // ends, rather than discovered when the delivery tries to pay the driver through a company that is not there.
-    for (const end of [origin, dest]) this.presence.require(this.agents.countryOf(end), 'merchantOfRecord');
+    // Freight moves wherever the network operates: asked at the counter, of both ends, is only whether goods may be
+    // taken in there. Where no sister stands the haul settles off-platform between shipper and carrier (the
+    // conversation's settlement card records it) and the delivery books nothing for the driver — never a refusal.
+    for (const end of [origin, dest]) this.presence.require(this.agents.countryOf(end), 'takeIn');
     const dimsCm: [number, number, number] = [dto.dimensionsCm.l, dto.dimensionsCm.w, dto.dimensionsCm.h];
     const cargoClass = this.cargo.classify({ kg: dto.weightKg, dimsCm });
     // Freight is the DEDICATED (P4+) lane only. A bus-sized load must be taken in as a normal parcel, not booked
@@ -1451,7 +1463,7 @@ export class SbgController {
   @Get('vendors/:id/settlement')
   vendorSettlement(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
     this.assertVendorOwner(id, actor);
-    return { balance: this.vendors.balanceOf(id), entries: this.vendors.settlementsFor(id) };
+    return { balance: this.vendors.balanceOrNone(id), entries: this.vendors.settlementsFor(id) };
   }
 
   /** The vendor's bookkeeping register (R3): their OWN ledger, server-side searched / filtered / sorted /
@@ -1469,7 +1481,7 @@ export class SbgController {
   @Get('vendors/:id/ledger/summary')
   vendorLedgerSummary(@Param('id') id: string, @Query() query: VendorLedgerQueryDto, @Actor() actor: IntrospectionResult) {
     this.assertVendorOwner(id, actor);
-    return { ...this.vendors.vendorLedgerSummary(id, query), balance: this.vendors.balanceOf(id) };
+    return { ...this.vendors.vendorLedgerSummary(id, query), balance: this.vendors.balanceOrNone(id) };
   }
 
   /** Export the WHOLE matching set (every page, current filters) as CSV — the vendor's OWN bookkeeping export.
@@ -1588,7 +1600,7 @@ export class SbgController {
     if (this.cargo.dedicatedRequired(cargoClass)) {
       const origin = this.agents.get(dto.originPudoDid);
       const dest = this.agents.get(destPudoDid);
-      for (const end of [origin, dest]) this.presence.require(this.agents.countryOf(end), 'merchantOfRecord'); // P2b — the same door as the parcel quote
+      for (const end of [origin, dest]) this.presence.require(this.agents.countryOf(end), 'takeIn'); // freight moves wherever goods may be taken in; a store no sister settles is not billed at claim
       const freight = this.dispatch.registerFreight({
         description: `Order ${dto.externalOrderId ?? handoff?.externalOrderId ?? vendor.name} — ${cargoClass} dedicated cargo`,
         pickupLocation: origin.location,

@@ -564,7 +564,9 @@ export class Vendor {
    * phone at registration, where it is already asked for.
    */
   contactMobile?: string;
-  balance: number; // prepaid balance held with the daughter company ('no prepay, no label' gate)
+  /** Prepaid balance held with the daughter company ('no prepay, no label' gate). NULL where the store stands in
+   *  a country we only match: having no till with us is a different fact from an empty one. */
+  balance: number | null;
   shippingPolicy: ShippingPolicy;
   createdAt: string;
 }

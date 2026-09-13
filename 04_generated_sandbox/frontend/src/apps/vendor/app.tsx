@@ -64,9 +64,11 @@ export function App() {
                 <Icon name="refresh" size={24} />
               </button>
             ) : null}
-            <Pill tone={(state.vendor?.balance ?? 0) > 0 ? 'ok' : 'idle'} dot>
-              {money(state.vendor?.balance)}
-            </Pill>
+            {state.vendor?.balance === null ? null : (
+              <Pill tone={(state.vendor?.balance ?? 0) > 0 ? 'ok' : 'idle'} dot>
+                {money(state.vendor?.balance)}
+              </Pill>
+            )}
           </>
         }
       />

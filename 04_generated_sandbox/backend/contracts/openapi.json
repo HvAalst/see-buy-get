@@ -3804,11 +3804,21 @@
       "get": {
         "operationId": "Sbg.countries",
         "summary": "",
-        "description": "Where this network can actually operate — one entry per country with a daughter company behind it.\n\nPublic on purpose, and the counterpart of the open-data rates: a shop deciding whether to sign up, a\nstore wondering whether we reach its customers, and (soon) a vendor integrating the shipping API all\nask the same question first — and the sign-up wizard needs it before anyone can choose. It is derived\nfrom the sisters rather than listed, so a country cannot appear here that nobody could lawfully\ninvoice in. Structural only: which country, what it is called, what it settles in. The entity's own id\nis the shape of the business and stays behind GET /entities, which is operator-only.",
+        "description": "Where this network can actually operate — one entry per country with a daughter company behind it.\n\nPublic on purpose, and the counterpart of the open-data rates: a shop deciding whether to sign up, a\nstore wondering whether we reach its customers, and (soon) a vendor integrating the shipping API all\nask the same question first — and the sign-up wizard needs it before anyone can choose. It is derived\nfrom the presence rather than listed: every country where the network operates (goods may be taken in),\nwhich is exactly where a shop, store, hub, fleet or courier may register. `settles` says whether a sister\nof ours handles money there — where it does not, the form says so before anybody joins. Structural only:\nwhich country, what it is called, what it settles in. The entity's own id is the shape of the business and\nstays behind GET /entities, which is operator-only.",
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -5870,7 +5880,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PudoLedgerEntry"
+                  "type": "object"
                 }
               }
             }
@@ -17635,7 +17645,9 @@
             "description": "Somebody to tell when a parcel is coming BACK.\n\nA store is a counterparty on the outbound leg and a RECEIVER on a return, and a receiver the network\ncannot reach is a parcel that arrives at a shop with nobody expecting it. Taken from the operator's\nphone at registration, where it is already asked for."
           },
           "balance": {
-            "type": "number"
+            "type": "number",
+            "nullable": true,
+            "description": "Prepaid balance held with the daughter company ('no prepay, no label' gate). NULL where the store stands in\n a country we only match: having no till with us is a different fact from an empty one."
           },
           "shippingPolicy": {
             "$ref": "#/components/schemas/ShippingPolicy"

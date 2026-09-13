@@ -9,6 +9,7 @@ import { DEFAULT_BAG_BAYS, DEFAULT_VENDOR_COUNTRY, MAX_BAG_BAYS, NETWORK_CURRENC
 import { countryOfSite, requireCountryCode } from './country';
 import { currencyForJurisdiction } from '../../foundation/money/currency';
 import { EntityService } from '../../foundation/entity/entity.service';
+import { PresenceService } from '../../foundation/presence/presence.service';
 import { BooksService } from '../../foundation/books/books.service';
 import { ACCOUNT_CODES, type AccountCode } from '../../foundation/books/books.types';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
@@ -175,15 +176,33 @@ export class VendorService {
     private readonly core: OperationalStore,
     private readonly entities: EntityService,
     private readonly books: BooksService,
+    private readonly presence: PresenceService,
   ) {}
 
   /**
    * The sister company that settles this vendor. Records written before entities existed carry no
    * entityId, so they resolve from the country they already recorded — the same shape as the currency
    * backfill, and for the same reason: the answer was always implied, it was just never named.
+   *
+   * This is the MONEY gate. A store standing in a country we only match has no sister, and the refusal is
+   * the presence's, by name: we cannot hold its money there.
    */
   entityIdOf(vendor: Vendor): string {
-    return vendor.entityId ?? this.entities.requireForJurisdiction(vendor.country).entityId;
+    const own = this.entityIdOrNone(vendor);
+    if (own) return own;
+    this.presence.require(vendor.country, 'holdFloat');
+    return this.entities.requireForJurisdiction(vendor.country).entityId;
+  }
+
+  /** The read-path twin: the sister, or nothing where the store stands in a country we only match. */
+  entityIdOrNone(vendor: Vendor): string | undefined {
+    return vendor.entityId ?? this.entities.forJurisdiction(vendor.country)?.entityId;
+  }
+
+  /** Does a sister of ours settle this store at all? Where none does, its freight settles off-platform. */
+  settlesWithUs(vendorId: string): boolean {
+    const vendor = this.vendors.get(vendorId);
+    return !!vendor && !!this.entityIdOrNone(vendor);
   }
 
   private static policy(p?: Partial<ShippingPolicy>): ShippingPolicy {
@@ -201,14 +220,16 @@ export class VendorService {
 
   register(input: { name: string; callbackUrl?: string; secret?: string; location?: { lat: number; lng: number }; address?: string; country?: string; ownerPhone?: string; shippingPolicy?: Partial<ShippingPolicy> }): Vendor {
     const country = requireCountryCode(input.country, DEFAULT_VENDOR_COUNTRY);
-    // Which sister company will settle this store — refused outright if the network has no daughter
-    // company there. Registering a vendor we cannot lawfully invoice is not a favour to anyone.
-    const entity = this.entities.requireForJurisdiction(country);
+    // The presence decides whether a store may stand here, not the existence of a sister. Where we only match,
+    // a store registers with no sister behind it: it posts freight and settles it with the carrier itself, and
+    // every money path refuses by name (entityIdOf). Where the network does not operate at all, it is refused.
+    if (!this.presence.can(country, 'takeIn')) throw new GlosError('FORBIDDEN', `The network does not operate in ${country} yet, so a store cannot register there`);
+    const entity = this.entities.forJurisdiction(country);
     // A real DID (S2 pattern — mdp got the same treatment): the vendorId stays the domain
     // key; the DID is what the vendors/login token binds to. No PII goes to the core.
     const did = this.dids.generate(`vendor:${input.name}`, { role: 'vendor' }).id;
     this.core.upsert({ did, tier: 2, status: 'active', capabilities: ['vendor'], metadata: { country } });
-    const vendor: Vendor = { vendorId: `ven_${randomBytes(6).toString('hex')}`, did, name: input.name, callbackUrl: input.callbackUrl, secret: input.secret ?? `whsec_${randomBytes(12).toString('hex')}`, location: input.location, address: input.address, country, entityId: entity.entityId, contactMobile: input.ownerPhone?.trim() || undefined, balance: 0, shippingPolicy: VendorService.policy(input.shippingPolicy), createdAt: new Date().toISOString() };
+    const vendor: Vendor = { vendorId: `ven_${randomBytes(6).toString('hex')}`, did, name: input.name, callbackUrl: input.callbackUrl, secret: input.secret ?? `whsec_${randomBytes(12).toString('hex')}`, location: input.location, address: input.address, country, ...(entity ? { entityId: entity.entityId } : {}), contactMobile: input.ownerPhone?.trim() || undefined, balance: entity ? 0 : null, shippingPolicy: VendorService.policy(input.shippingPolicy), createdAt: new Date().toISOString() };
     this.vendors.set(vendor.vendorId, vendor);
     return vendor;
   }
@@ -293,7 +314,7 @@ export class VendorService {
       ...(risk > 0 ? [{ code: ACCOUNT_CODES.PROVISION_CLAIMS, amount: -risk }] : []),
     ]);
     this.book(vendor, 'BILLING', '-', amount, parcelId, 'shipment', entryId);
-    return { paid: true, balance: this.syncBalance(vendor).balance };
+    return { paid: true, balance: this.syncBalance(vendor).balance ?? 0 }; // a store that was just billed has a sister, so a till
   }
 
   /**
@@ -361,8 +382,19 @@ export class VendorService {
     return this.derivedBalance(this.get(vendorId));
   }
 
+  /** The read-path twin: null where the store stands in a country we only match — having no till with us is a
+   *  different fact from an empty one, and a screen must be able to say which without being refused. */
+  balanceOrNone(vendorId: string): number | null {
+    return this.readBalance(this.get(vendorId));
+  }
+
   private derivedBalance(vendor: Vendor): number {
     return -this.books.balance(this.entityIdOf(vendor), ACCOUNT_CODES.DEPOSIT_VENDOR, undefined, vendor.vendorId) || 0;
+  }
+
+  private readBalance(vendor: Vendor): number | null {
+    const entityId = this.entityIdOrNone(vendor);
+    return entityId ? -this.books.balance(entityId, ACCOUNT_CODES.DEPOSIT_VENDOR, undefined, vendor.vendorId) || 0 : null;
   }
 
   /** Post to the sister that settles this store, returning the journal entry the register row points at. */
@@ -376,7 +408,7 @@ export class VendorService {
    * never show a figure the postings disagree with.
    */
   private syncBalance(vendor: Vendor): Vendor {
-    vendor.balance = this.derivedBalance(vendor);
+    vendor.balance = this.readBalance(vendor);
     this.vendors.set(vendor.vendorId, vendor);
     return vendor;
   }
@@ -484,7 +516,8 @@ export class VendorService {
     if (!vendor) throw new GlosError('NOT_FOUND', `Vendor not found: ${vendorId}`);
     // Read-repair the cached figure. The books are the money; a record written before them (or by a
     // path that somehow missed the sync) must never hand a console a number the postings disagree with.
-    const derived = this.derivedBalance(vendor);
+    // A store no sister settles reads as null — never a refusal, or every screen and API call it makes would fail.
+    const derived = this.readBalance(vendor);
     if (vendor.balance !== derived) {
       vendor.balance = derived;
       this.vendors.set(vendorId, vendor);

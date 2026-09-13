@@ -84,11 +84,15 @@ export function BooksScreen({ state, actions }: BooksScreenProps) {
     <div class="scr">
       {state.error ? <ErrorNote error={state.error} onRetry={() => actions.go('books')} /> : null}
 
-      <GlanceNumber
-        label={t('vendor.balanceLabel')}
-        value={money(state.vendor?.balance)}
-        sub={sum ? t('vendor.books.balanceSubSummary', { in: money(sum.in), out: money(sum.out), net: netLabel(sum.net) }) : t('vendor.books.balanceSubEmpty')}
-      />
+      {state.vendor?.balance === null ? (
+        <GlanceNumber label={t('vendor.noTillLabel')} value="—" sub={t('vendor.noTillSub')} />
+      ) : (
+        <GlanceNumber
+          label={t('vendor.balanceLabel')}
+          value={money(state.vendor?.balance)}
+          sub={sum ? t('vendor.books.balanceSubSummary', { in: money(sum.in), out: money(sum.out), net: netLabel(sum.net) }) : t('vendor.books.balanceSubEmpty')}
+        />
+      )}
 
       <Card title={t('vendor.books.title')} aside={<span class="row__count">{state.ledgerTotal}</span>}>
         <div class="reg__controls">

@@ -17,6 +17,7 @@ import { CargoNature, VehicleCapability } from './cargo.types';
 import { DEFAULT_MDP_PRICE_PER_PARCEL, MDP_SORT_FEE, TOTE_LOAD_FEE } from './pudo.config';
 import { countryOfSite, requireCountryCode } from './country';
 import { EntityService } from '../../foundation/entity/entity.service';
+import { PresenceService } from '../../foundation/presence/presence.service';
 import { Mdp, NextHop, Tote } from './pudo.types';
 
 /**
@@ -50,6 +51,7 @@ export class MdpService {
     private readonly core: OperationalStore,
     private readonly cargo: CargoService,
     private readonly entities: EntityService,
+    private readonly presence: PresenceService,
   ) {}
 
   /** The country this hub stands in — declared at registration, this deployment's home for older records. */
@@ -57,9 +59,18 @@ export class MdpService {
     return countryOfSite(mdp);
   }
 
-  /** The sister that contracts this hub, resolved from the country the hub is in (see AgentService). */
+  /** The sister that contracts this hub, resolved from the country the hub is in (see AgentService). The money
+   *  gate: a hub in a country we only match has none, and the refusal is the presence's, by name. */
   entityIdOf(mdp: Mdp): string {
-    return mdp.entityId ?? this.entities.requireForJurisdiction(this.countryOf(mdp)).entityId;
+    const own = this.entityIdOrNone(mdp);
+    if (own) return own;
+    this.presence.require(this.countryOf(mdp), 'payouts');
+    return this.entities.requireForJurisdiction(this.countryOf(mdp)).entityId;
+  }
+
+  /** The read-and-custody twin: the sister, or nothing where the hub stands in a country we only match. */
+  entityIdOrNone(mdp: Mdp): string | undefined {
+    return mdp.entityId ?? this.entities.forJurisdiction(this.countryOf(mdp))?.entityId;
   }
 
   // --- cargo helpers (S31): the tote path's view of what its parcels are + need ---
@@ -88,9 +99,11 @@ export class MdpService {
 
   register(input: { name: string; zones: string[]; country?: string; location: { lat: number; lng: number }; contactPhone?: string; address?: string; pricePerParcel?: number }): Mdp {
     if (!input.zones?.length) throw new GlosError('ZONES_REQUIRED', 'An MDP must cover at least one zone');
-    // Same question a shop answers, and the same refusal if the network has no company there.
+    // Same question a shop answers: does the network operate here at all? Where we only match, a hub stands with
+    // no sister behind it — it sorts and records custody, and nothing of ours is booked for the work.
     const country = requireCountryCode(input.country);
-    const entity = this.entities.requireForJurisdiction(country);
+    if (!this.presence.can(country, 'takeIn')) throw new GlosError('FORBIDDEN', `The network does not operate in ${country} yet, so a hub cannot register there`);
+    const entity = this.entities.forJurisdiction(country);
     // Real DID (S2) — an MDP worker is a first-class actor and their token binds to this, not to a
     // synthetic mdp_<hex> id. A pseudonymous operational profile makes it OperationalStore-resolvable
     // (tier/tokenVersion) like every other participant. No PII goes to the core (contact/address stay
@@ -102,7 +115,7 @@ export class MdpService {
       did,
       name: input.name,
       country, // where the hub stands — a leg into a hub in another country is a border crossing
-      entityId: entity.entityId, // the sister that contracts this hub, which follows from that country
+      ...(entity ? { entityId: entity.entityId } : {}), // the sister that contracts this hub, where one exists
       zones: input.zones,
       location: input.location,
       contactPhone: input.contactPhone,
@@ -462,7 +475,7 @@ export class MdpService {
     this.totes.add(tote.code, parcelId, parcel.size);
     parcel.toteId = tote.toteId; // bag ↔ parcel; stays At_MDP until the bag is loaded onward
     // MDP sort labour, recharged at cost when this hub's sister is not the one that sold the shipment.
-    this.gate.sortLabour(mdpId, MDP_SORT_FEE, parcelId, this.entityIdOf(this.require(mdpId)), parcel.sellerEntityId);
+    this.gate.sortLabour(mdpId, MDP_SORT_FEE, parcelId, this.entityIdOrNone(this.require(mdpId)), parcel.sellerEntityId);
 
     void this.events.publish(GlosEvent.Pudo.ParcelSorted, { parcelId, mdpId, nextDestinationId: next.id, nextDestinationType: next.type, toteCode: tote.code }, { source: 'pudo' }).catch(() => undefined);
     return { parcelId, nextDestination: next, toteCode: tote.code, toteId: tote.toteId, fillPct: this.totes.fillPct(tote) };

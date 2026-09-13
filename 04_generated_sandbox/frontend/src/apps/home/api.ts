@@ -71,6 +71,8 @@ export interface OperatingCountry {
   country: string;
   name: string;
   currency?: string;
+  /** False where the network operates but no company of ours handles money: you settle with the carrier. */
+  settles?: boolean;
 }
 
 /**

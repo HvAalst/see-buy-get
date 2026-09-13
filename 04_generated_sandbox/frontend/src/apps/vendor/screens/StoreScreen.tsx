@@ -77,7 +77,7 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
       </Card>
 
       <div class="scr__foot">
-        <ReadAloud text={() => `${t('vendor.store.balanceSpoken', { balance: money(v?.balance) })}${v ? policyLine(v.shippingPolicy, t) : ''}`} label={t('vendor.readAloud')} />
+        <ReadAloud text={() => `${v?.balance === null ? t('vendor.noTillSpoken') : t('vendor.store.balanceSpoken', { balance: money(v?.balance) })}${v ? policyLine(v.shippingPolicy, t) : ''}`} label={t('vendor.readAloud')} />
         <Button variant="link" full={false} onClick={actions.signOut}>
           {t('vendor.store.signOut')}
         </Button>

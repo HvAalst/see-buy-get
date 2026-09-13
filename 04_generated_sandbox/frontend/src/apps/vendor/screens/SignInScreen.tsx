@@ -147,7 +147,7 @@ function CreateSheet({ open, onClose, state, actions, error }: { open: boolean; 
             <option value="">{t('vendor.signin.countryChoose')}</option>
             {choices.map((c) => (
               <option key={c.country} value={c.country}>
-                {c.name} ({c.country})
+                {c.name} ({c.country}){c.settles === false ? ` · ${t('vendor.signin.countryNoMoney')}` : ''}
               </option>
             ))}
           </select>
