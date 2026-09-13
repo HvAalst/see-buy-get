@@ -62,6 +62,8 @@ export interface PersonView {
    *  person themselves, never in any counterparty projection. Absent until the person sets a profile. */
   displayName?: string;
   avatarMediaId?: string;
+  /** Self-view only: when the PIN was last changed. */
+  pinChangedAt?: string;
 }
 
 /**

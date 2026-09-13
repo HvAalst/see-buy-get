@@ -54,6 +54,8 @@ export interface VendorView {
   balance: number | null;
   shippingPolicy: ShippingPolicy;
   createdAt: string;
+  /** When the signing secret was last changed; absent if never, since the store was made. */
+  secretRotatedAt?: string;
 }
 
 /** What the dock should be bagging right now: paid parcels grouped by where they are going, the bags

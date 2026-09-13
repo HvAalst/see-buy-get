@@ -1,3 +1,4 @@
+import { CredentialAge } from '../../../shared/account/CredentialAge';
 import { pinChangeBlocker } from '../../../shared/account/password';
 import { useState, useEffect } from 'preact/hooks';
 import { Button, Card, ErrorNote, Icon, PlaceMap, Pill, ReadAloud, Sheet } from '../../../shared/ui';
@@ -144,6 +145,7 @@ function Tile({ value, label }: { value: string; label: string }) {
 function FleetCodeCard({ actions }: DashboardScreenProps) {
   const t = useT();
   const [code, setCode] = useState<string | null>(null);
+  const [changedAt, setChangedAt] = useState<string | undefined>(undefined);
   const [shown, setShown] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const [rotating, setRotating] = useState(false);
@@ -156,7 +158,10 @@ function FleetCodeCard({ actions }: DashboardScreenProps) {
   const pinBlocker = pinChangeBlocker({ current, next });
 
   useEffect(() => {
-    void actions.loadFleetCode().then(setCode);
+    void actions.loadFleetCode().then((loaded) => {
+      setCode(loaded?.code ?? null);
+      setChangedAt(loaded?.changedAt);
+    });
   }, [actions.loadFleetCode]);
 
   return (
@@ -167,6 +172,7 @@ function FleetCodeCard({ actions }: DashboardScreenProps) {
           {code === null ? t('fleet.code.loading') : shown ? code : '••••••••'}
         </p>
         {note ? <p class="card__note">{note}</p> : null}
+        <CredentialAge iso={changedAt} machine />
         <div class="btnrow">
           <Button variant="link" full={false} disabled={code === null} onClick={() => setShown((s) => !s)}>
             {t(shown ? 'fleet.code.hide' : 'fleet.code.show')}
@@ -184,6 +190,7 @@ function FleetCodeCard({ actions }: DashboardScreenProps) {
                   setConfirm(false);
                   if (fresh) {
                     setCode(fresh);
+                    setChangedAt(new Date().toISOString());
                     setShown(true);
                     setNote(t('fleet.code.rotated'));
                   }

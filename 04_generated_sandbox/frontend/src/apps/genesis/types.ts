@@ -158,6 +158,8 @@ export interface PersonView {
    *  Self-view only: these are never present on any counterparty projection. */
   displayName?: string;
   avatarMediaId?: string;
+  /** When the PIN was last changed. */
+  pinChangedAt?: string;
 }
 
 /** enroll/login response = a PersonView + isNew + the actor token to seed. */

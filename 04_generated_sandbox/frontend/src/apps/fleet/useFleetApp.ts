@@ -305,11 +305,14 @@ export function useFleetApp() {
   }, []);
 
   /** The fleet's own sign-in code — readable by the fleet itself only. */
-  const loadFleetCode = useCallback(async (): Promise<string | null> => {
+  const loadFleetCode = useCallback(async (): Promise<{ code: string; changedAt?: string } | null> => {
     const did = stateRef.current.manager?.did;
     if (!client || !did) return null;
     const r = await client.client.sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}', { params: { path: { did } } }));
-    return r.error ? null : ((r.data as unknown as { loginCode?: string })?.loginCode ?? null);
+    if (r.error) return null;
+    const m = r.data as unknown as { loginCode?: string; codeRotatedAt?: string; createdAt?: string };
+    // Never changed = as old as the fleet: the code was issued when it was registered.
+    return m?.loginCode ? { code: m.loginCode, changedAt: m.codeRotatedAt ?? m.createdAt } : null;
   }, [client]);
 
   /** Issue the fleet a new code. The old one stops naming the fleet at once; nobody is signed out. */

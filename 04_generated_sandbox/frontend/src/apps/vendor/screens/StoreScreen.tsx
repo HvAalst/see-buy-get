@@ -1,3 +1,4 @@
+import { CredentialAge } from '../../../shared/account/CredentialAge';
 import { useState } from 'preact/hooks';
 import { Button, Card, ErrorNote, PlaceMap, ReadAloud, Sheet, ShopDetailSheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
@@ -119,14 +120,18 @@ function KeysCard({ state, actions }: { state: VendorState; actions: VendorActio
         <p class="card__note">{t('vendor.keys.note')}</p>
         {state.storeState === 'ready' && live.length === 0 ? <p class="hint" style="margin-top:8px">{t('vendor.keys.none')}</p> : null}
         {live.map((k) => (
-          <div key={k.keyId} class="kv">
-            <span>
-              {k.label ? `${k.label} · ` : ''}
-              {t(k.kind === 'secret' ? 'vendor.keys.kindSecret' : 'vendor.keys.kindPublishable')}
-              {' · '}
-              {t(k.mode === 'live' ? 'vendor.keys.modeLive' : 'vendor.keys.modeTest')}
-            </span>
-            <b class="mono-t">{k.value ?? `…${k.hint}`}</b>
+          <div key={k.keyId}>
+            <div class="kv">
+              <span>
+                {k.label ? `${k.label} · ` : ''}
+                {t(k.kind === 'secret' ? 'vendor.keys.kindSecret' : 'vendor.keys.kindPublishable')}
+                {' · '}
+                {t(k.mode === 'live' ? 'vendor.keys.modeLive' : 'vendor.keys.modeTest')}
+              </span>
+              <b class="mono-t">{k.value ?? `…${k.hint}`}</b>
+            </div>
+            {/* A publishable key is public by design; only a secret one has an age worth watching. */}
+            {k.kind === 'secret' ? <CredentialAge iso={k.createdAt} machine class="hint" /> : null}
           </div>
         ))}
         {live.length ? (
@@ -356,6 +361,7 @@ function SecretCard({ state, actions }: { state: VendorState; actions: VendorAct
     <>
       <Card title={t('vendor.secret.title')}>
         <p class="card__note">{t('vendor.secret.body')}</p>
+        <CredentialAge iso={state.vendor?.secretRotatedAt ?? state.vendor?.createdAt} machine />
         <Button
           variant="outline"
           chevron={false}

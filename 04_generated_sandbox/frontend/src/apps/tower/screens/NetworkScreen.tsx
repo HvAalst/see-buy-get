@@ -1,3 +1,4 @@
+import { credentialAge } from '../../../shared/account/password';
 import type { StaffRow } from '../api';
 import { useState, useCallback, useEffect } from 'preact/hooks';
 import { Icon, PlaceMap } from '../../../shared/ui';
@@ -289,7 +290,7 @@ function Kpi({ label, value, risk }: { label: string; value: string; risk?: bool
 function FleetsPanel({ actions }: { actions: TowerActions }) {
   const t = useT();
   const client = actions.client();
-  const [rows, setRows] = useState<Array<{ did: string; companyName: string; status: string; loginCode?: string; codeRotatedAt?: string }> | null>(null);
+  const [rows, setRows] = useState<Array<{ did: string; companyName: string; status: string; loginCode?: string; codeRotatedAt?: string; createdAt?: string }> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -298,7 +299,7 @@ function FleetsPanel({ actions }: { actions: TowerActions }) {
     if (!client) return;
     const r = await client.api.fleets();
     if (r.error) setError(r.error.detail || r.error.title);
-    else setRows(((r.data as unknown as Array<{ did: string; companyName: string; status: string; loginCode?: string; codeRotatedAt?: string }>) ?? []).sort((a, b) => a.companyName.localeCompare(b.companyName)));
+    else setRows(((r.data as unknown as Array<{ did: string; companyName: string; status: string; loginCode?: string; codeRotatedAt?: string; createdAt?: string }>) ?? []).sort((a, b) => a.companyName.localeCompare(b.companyName)));
   }, [client]);
 
   useEffect(() => {
@@ -335,6 +336,7 @@ function FleetsPanel({ actions }: { actions: TowerActions }) {
                 <td>
                   <span class="ctbl__mono">{f.loginCode ?? '—'}</span>
                   {f.codeRotatedAt ? <div class="ctbl__sub">{t('tower.network.fleets.rotatedAt', { when: new Date(f.codeRotatedAt).toLocaleString() })}</div> : null}
+                  {credentialAge(f.codeRotatedAt ?? f.createdAt)?.due ? <span class="ctag ctag--warn">{t('tower.network.fleets.due')}</span> : null}
                 </td>
                 <td class="ctbl__num">
                   {f.status !== 'ACTIVE' ? null : confirm === f.did ? (

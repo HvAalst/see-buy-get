@@ -1,3 +1,4 @@
+import { CredentialAge } from '../../../shared/account/CredentialAge';
 import { pinChangeBlocker } from '../../../shared/account/password';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { AuthImage, Button, Card, CodeBoxes, ErrorNote, Icon, LanguageSwitcher, MediaLibrary, Note, Pill, ReadAloud, Sheet } from '../../../shared/ui';
@@ -132,6 +133,7 @@ export function AccountScreen({ state, actions }: AccountScreenProps) {
             <span class="row__body">
               <span class="row__t">{t('send.account.changePin')}</span>
               <span class="row__s">{t('send.account.changePinSub')}</span>
+              <CredentialAge iso={state.identity?.pinChangedAt} class="row__s" />
             </span>
             <span class="row__end"><Icon name="chevronRight" size={22} /></span>
           </button>

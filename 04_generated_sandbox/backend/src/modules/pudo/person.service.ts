@@ -176,7 +176,7 @@ export class PersonService {
 
   /** The full self-view: the PII-free projection plus the revealed profile. For the acting person ONLY. */
   view(person: Person): PersonView {
-    return { ...toView(person), ...this.profile(person) };
+    return { ...toView(person), ...this.profile(person), ...(person.pinChangedAt ? { pinChangedAt: person.pinChangedAt } : {}) };
   }
 
   // --- consumer auth (phone + OTP → PIN) ---

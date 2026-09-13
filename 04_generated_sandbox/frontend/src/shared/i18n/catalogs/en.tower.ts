@@ -43,6 +43,7 @@ export const enTower = {
   'tower.signIn.rejected': 'That key was not accepted.',
   'tower.signOut': 'Sign out',
   'tower.password.open': 'Change password',
+  'tower.network.fleets.due': 'Code over 90 days old',
   'tower.password.onlyCompany': 'The setup key has no password to change here.',
   'tower.staff.title': 'Network staff',
   'tower.staff.lede': 'One sign-in per person, so a decision that needs two people really takes two. The setup key makes the first account; after that, staff add each other.',

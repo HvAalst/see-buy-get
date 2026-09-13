@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { passwordChangeBlocker, pinChangeBlocker } from './password';
+import { credentialAge, credentialAgeKey, passwordChangeBlocker, pinChangeBlocker } from './password';
 
 describe('changing a password or a PIN', () => {
   it('asks for the current password, a long enough new one typed twice, and a real change', () => {
@@ -17,5 +17,26 @@ describe('changing a password or a PIN', () => {
     expect(pinChangeBlocker({ current: '1234', next: '5678', again: '5679' })).toBe('account.pin.mismatch');
     expect(pinChangeBlocker({ current: '1234', next: '1234' })).toBe('account.pin.same');
     expect(pinChangeBlocker({ current: '1234', next: '5678', again: '5678' })).toBeNull();
+  });
+});
+
+describe('how old a credential is', () => {
+  const now = Date.parse('2026-09-13T12:00:00Z');
+
+  it('counts whole days, and calls a machine secret due only after 90 of them', () => {
+    expect(credentialAge('2026-09-13T08:00:00Z', now)).toEqual({ days: 0, due: false });
+    expect(credentialAge('2026-06-15T12:00:00Z', now)).toEqual({ days: 90, due: false });
+    expect(credentialAge('2026-06-14T11:00:00Z', now)).toEqual({ days: 91, due: true });
+  });
+
+  it('says nothing rather than guessing when there is no date', () => {
+    expect(credentialAge(undefined, now)).toBeNull();
+    expect(credentialAge('not a date', now)).toBeNull();
+  });
+
+  it('words today and yesterday as people say them', () => {
+    expect(credentialAgeKey(0).key).toBe('account.age.today');
+    expect(credentialAgeKey(1).key).toBe('account.age.yesterday');
+    expect(credentialAgeKey(12)).toEqual({ key: 'account.age.days', n: 12 });
   });
 });
