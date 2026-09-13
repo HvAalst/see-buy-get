@@ -4256,6 +4256,21 @@ describe('PUDO Light', () => {
     expect(dispatch.proposalsFor(f.freightId)[0].status).toBe('open');
   });
 
+  it('CV2: refuses an offer the poster could never accept — at the door, to the driver', () => {
+    // Found in the browser pass: a driver on a small vehicle offered a price on a load it could not carry, and
+    // the shop only found out when it pressed Accept. The same checks acceptance makes are now asked first.
+    const tag = 'MOTO';
+    // A light-registry courier activates on registration — no KYC step to run.
+    const d = drivers.register({ displayName: tag, fullName: tag, nationalId: `ID-${tag}`, mobile: `+2547709${tag}`, licenceClasses: ['motorcycle'], licenceNumber: `L-${tag}`, licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    const moto = vehicles.register({ plate: `${tag}-1`, vehicleClass: 'motorcycle', capacityKg: 30, ownerName: 'X', baseFee: 1, pricePerKm: 0.2 });
+    fleet.couple(d.did, moto.vehicleId);
+    const f = negotiable(); // 400 kg, palletised
+
+    expect(() => dispatch.propose({ freightId: f.freightId, driverDid: d.did, from: pickupPt, price: 50 })).toThrow(/no room for this load/);
+    // Nothing was recorded for the poster to trip over.
+    expect(dispatch.proposalsFor(f.freightId)).toEqual([]);
+  });
+
   it('FB0c: acceptance re-checks the world as it is NOW — a de-coupled driver cannot be bound to an old price', () => {
     // A proposal is an offer to treat with a shelf life, not a reservation. The S31 mirror-at-claim lesson:
     // a second route to the same mutation must re-run every gate the first one does.

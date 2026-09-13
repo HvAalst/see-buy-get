@@ -1,5 +1,12 @@
-import { IsIn, IsInt, IsOptional, IsString, Min } from 'class-validator';
-import { QUICK_REPLIES, REPORT_REASONS } from './conversation.types';
+import { Type } from 'class-transformer';
+import { IsIn, IsInt, IsNumber, IsOptional, IsString, Max, Min, ValidateNested } from 'class-validator';
+import { QUICK_REPLIES, REPORT_REASONS, SETTLE_METHODS, SETTLE_WHEN } from './conversation.types';
+
+/** Where the driver is when naming a price. Declared here: pudo.dto's own GeoDto is not exported. */
+export class ThreadPositionDto {
+  @IsNumber() @Min(-90) @Max(90) lat!: number;
+  @IsNumber() @Min(-180) @Max(180) lng!: number;
+}
 
 /** CV1 — ask about a load. */
 export class OpenConversationDto {
@@ -20,4 +27,22 @@ export class ReadMarkerDto {
 /** Why a received message is being reported. */
 export class ReportMessageDto {
   @IsIn([...REPORT_REASONS]) reason!: string;
+}
+
+/**
+ * CV2 — the driver names a price in the thread. `from` is required for the same reason the negotiation requires
+ * it: an accepted haul must record a real empty run, never an invented zero.
+ */
+export class ProposePriceInThreadDto {
+  @IsNumber() @Min(0.01) price!: number;
+  @IsOptional() @IsString() note?: string;
+  @ValidateNested() @Type(() => ThreadPositionDto) from!: ThreadPositionDto;
+}
+
+/** CV2 — write down how a load the network does not pay will be settled. A record, never a posting. */
+export class RecordSettlementDto {
+  @IsNumber() @Min(0.01) amount!: number;
+  @IsIn([...SETTLE_METHODS]) method!: string;
+  @IsIn([...SETTLE_WHEN]) when!: string;
+  @IsOptional() @IsString() note?: string;
 }

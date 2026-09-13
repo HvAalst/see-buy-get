@@ -1222,6 +1222,22 @@ export class DispatchService {
     // accepted — a shipper reading bids they are not allowed to take is worse than an empty list.
     const vehicle = this.fleet.vehicleForDriver(input.driverDid);
     if (!vehicle) throw new GlosError('NOT_COUPLED', 'Couple to a vehicle before offering to carry a load');
+    // The same capacity and capability checks acceptance makes, asked at the door. Found in the browser pass:
+    // a driver on a bike offered a price on 600 kg, and the shop only learned it could never be taken when it
+    // pressed Accept. An offer that can never be accepted is refused to the person who could fix it — the
+    // driver — rather than delivered to the person who cannot. Accept still re-checks: coupling can change.
+    if (f.weightKg > this.remainingCapacity(input.driverDid)) {
+      throw new GlosError('CAPACITY_EXCEEDED', 'Your vehicle has no room for this load, so the poster could never accept an offer from it');
+    }
+    const need = this.loadRequirements('freight', f.freightId);
+    if (
+      need.capabilities.some((cap) => !vehicle[cap]) ||
+      !DispatchService.hasEquipmentFor(vehicle, need.equipment) ||
+      (need.bulk && !vehicle.carriesBulk) ||
+      (need.fragile && !vehicle.allowsFragile)
+    ) {
+      throw new GlosError('VEHICLE_MISSING_CAPABILITY', 'Your vehicle lacks something this load needs, so the poster could never accept an offer from it');
+    }
     if (belowFloor(this.ratings.driverRating(input.driverDid))) throw new GlosError('REPUTATION_BELOW_FLOOR', 'Your rating is below the network minimum — freight is paused until it recovers.');
 
     // One live proposal per driver per load: a driver changing their mind REPLACES their number rather than

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { composeBlocker, lastSeqOf, mergeMessages, threadsFor, totalUnread, type ChatMessage, type ChatThread } from './logic';
+import { canAgree, canDecide, canPropose, composeBlocker, lastSeqOf, mergeMessages, parseAmount, threadsFor, totalUnread, type ChatMessage, type ChatThread } from './logic';
 
 const msg = (seq: number, over: Partial<ChatMessage> = {}): ChatMessage => ({ seq, mine: false, kind: 'text', body: `m${seq}`, at: '2026-09-13T08:00:00Z', ...over });
 const thread = (over: Partial<ChatThread> = {}): ChatThread => ({
@@ -29,6 +29,32 @@ describe('CV1 — a conversation, client side', () => {
     expect(composeBlocker('hi', thread({ blocked: true }))).toBe('common.chat.blocked');
     expect(composeBlocker('x'.repeat(1001), thread())).toBe('common.chat.tooLong');
     expect(composeBlocker('hi', thread())).toBeNull();
+  });
+
+  it('CV2 — lets only the poster answer an OPEN offer, and only the other side agree to a settlement, once', () => {
+    const offer = msg(1, { kind: 'proposal', proposal: { proposalId: 'prp_1', price: 4500, status: 'open' } });
+    expect(canDecide(thread({ role: 'poster' }), offer)).toBe(true);
+    expect(canDecide(thread({ role: 'asker' }), offer)).toBe(false);
+    expect(canDecide(thread({ role: 'poster' }), { ...offer, proposal: { ...offer.proposal!, status: 'accepted' } })).toBe(false);
+    expect(canDecide(thread({ role: 'poster', blocked: true }), offer)).toBe(false);
+
+    const card = msg(2, { kind: 'settlement', settlement: { amount: 4500, method: 'cash', when: 'on_delivery', agreed: false } });
+    expect(canAgree(thread(), card)).toBe(true);
+    expect(canAgree(thread(), { ...card, mine: true })).toBe(false);
+    expect(canAgree(thread(), { ...card, settlement: { ...card.settlement!, agreed: true } })).toBe(false);
+  });
+
+  it('CV2 — offers a price only to the driver who asked, on a negotiated load', () => {
+    expect(canPropose(thread({ role: 'asker', negotiable: true }))).toBe(true);
+    expect(canPropose(thread({ role: 'poster', negotiable: true }))).toBe(false);
+    expect(canPropose(thread({ role: 'asker', negotiable: false }))).toBe(false);
+  });
+
+  it('CV2 — reads a typed amount, including a comma, and refuses nothing or less', () => {
+    expect(parseAmount('4500')).toBe(4500);
+    expect(parseAmount('12,5')).toBe(12.5);
+    expect(parseAmount('0')).toBeNull();
+    expect(parseAmount('abc')).toBeNull();
   });
 
   it('adds up the badge and finds the threads about one load', () => {

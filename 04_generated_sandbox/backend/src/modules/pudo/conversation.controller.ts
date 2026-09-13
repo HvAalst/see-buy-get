@@ -6,7 +6,7 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { ConversationService } from './conversation.service';
 // In a *.dto.ts file on purpose: the swagger plugin only introspects those, and a DTO declared here publishes
 // an empty request body to the contract (the gate caught exactly that).
-import { OpenConversationDto, ReadMarkerDto, ReportMessageDto, SendMessageDto } from './conversation.dto';
+import { OpenConversationDto, ProposePriceInThreadDto, ReadMarkerDto, RecordSettlementDto, ReportMessageDto, SendMessageDto } from './conversation.dto';
 
 /**
  * CV1 — CONVERSATIONS ABOUT A LOAD (05_engineering/conversations.md).
@@ -45,6 +45,35 @@ export class ConversationController {
   @Post(':id/messages')
   send(@Param('id') id: string, @Body() dto: SendMessageDto, @Actor() actor: IntrospectionResult) {
     return this.conversations.send(id, didOf(actor), dto);
+  }
+
+  /** CV2 — the driver names a price, through the load's own negotiation. */
+  @Post(':id/proposals')
+  propose(@Param('id') id: string, @Body() dto: ProposePriceInThreadDto, @Actor() actor: IntrospectionResult) {
+    return this.conversations.proposePrice(id, didOf(actor), dto);
+  }
+
+  /** CV2 — the poster accepts a price in the thread. Accepting claims the load for that driver. */
+  @Post(':id/proposals/:proposalId/accept')
+  acceptPrice(@Param('id') id: string, @Param('proposalId') proposalId: string, @Actor() actor: IntrospectionResult) {
+    return this.conversations.decideProposal(id, didOf(actor), proposalId, 'accept');
+  }
+
+  @Post(':id/proposals/:proposalId/decline')
+  declinePrice(@Param('id') id: string, @Param('proposalId') proposalId: string, @Actor() actor: IntrospectionResult) {
+    return this.conversations.decideProposal(id, didOf(actor), proposalId, 'decline');
+  }
+
+  /** CV2 — write down how a load the network does not pay will be settled. */
+  @Post(':id/settlements')
+  recordSettlement(@Param('id') id: string, @Body() dto: RecordSettlementDto, @Actor() actor: IntrospectionResult) {
+    return this.conversations.recordSettlement(id, didOf(actor), dto);
+  }
+
+  /** CV2 — the other party agrees to a written-down settlement. */
+  @Post(':id/messages/:seq/agree')
+  agreeSettlement(@Param('id') id: string, @Param('seq') seq: string, @Actor() actor: IntrospectionResult) {
+    return this.conversations.agreeSettlement(id, didOf(actor), Number(seq));
   }
 
   @Post(':id/read')

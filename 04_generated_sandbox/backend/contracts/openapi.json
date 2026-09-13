@@ -12815,6 +12815,193 @@
         }
       }
     },
+    "/v1/sbg/conversations/{id}/proposals": {
+      "post": {
+        "operationId": "Conversation.propose",
+        "summary": "",
+        "description": "CV2 — the driver names a price, through the load's own negotiation.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposePriceInThreadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/conversations/{id}/proposals/{proposalId}/accept": {
+      "post": {
+        "operationId": "Conversation.acceptPrice",
+        "summary": "",
+        "description": "CV2 — the poster accepts a price in the thread. Accepting claims the load for that driver.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "proposalId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/conversations/{id}/proposals/{proposalId}/decline": {
+      "post": {
+        "operationId": "Conversation.declinePrice",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "proposalId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/conversations/{id}/settlements": {
+      "post": {
+        "operationId": "Conversation.recordSettlement",
+        "summary": "",
+        "description": "CV2 — write down how a load the network does not pay will be settled.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordSettlementDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/conversations/{id}/messages/{seq}/agree": {
+      "post": {
+        "operationId": "Conversation.agreeSettlement",
+        "summary": "",
+        "description": "CV2 — the other party agrees to a written-down settlement.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "seq",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/conversations/{id}/read": {
       "post": {
         "operationId": "Conversation.read",
@@ -21411,6 +21598,78 @@
             ]
           }
         }
+      },
+      "ThreadPositionDto": {
+        "type": "object",
+        "properties": {
+          "lat": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "lng": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          }
+        },
+        "required": [
+          "lat",
+          "lng"
+        ]
+      },
+      "ProposePriceInThreadDto": {
+        "type": "object",
+        "properties": {
+          "price": {
+            "type": "number",
+            "minimum": 0.01
+          },
+          "note": {
+            "type": "string"
+          },
+          "from": {
+            "$ref": "#/components/schemas/ThreadPositionDto"
+          }
+        },
+        "required": [
+          "price",
+          "from"
+        ]
+      },
+      "RecordSettlementDto": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "minimum": 0.01
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "cash",
+              "mobile_money",
+              "bank",
+              "other"
+            ]
+          },
+          "when": {
+            "type": "string",
+            "enum": [
+              "on_pickup",
+              "on_delivery",
+              "after_delivery"
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "amount",
+          "method",
+          "when"
+        ]
       },
       "ReadMarkerDto": {
         "type": "object",

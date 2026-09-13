@@ -32,6 +32,24 @@ export function createConversationsApi(sbg: SbgClient) {
     /** Open it again — only the person who closed it may. */
     unblock: (id: string) => sbg.request((c) => c.POST('/v1/sbg/conversations/{id}/unblock', { params: { path: { id } } })),
 
+    /** CV2 — the driver names a price, through the load's own negotiation. `from` records the real empty run. */
+    propose: (id: string, offer: { price: number; note?: string; from: { lat: number; lng: number } }) =>
+      sbg.request((c) => c.POST('/v1/sbg/conversations/{id}/proposals', { params: { path: { id } }, body: offer as never })),
+
+    /** CV2 — the poster accepts (claiming the load for that driver) or declines a price. */
+    decide: (id: string, proposalId: string, decision: 'accept' | 'decline') =>
+      decision === 'accept'
+        ? sbg.request((c) => c.POST('/v1/sbg/conversations/{id}/proposals/{proposalId}/accept', { params: { path: { id, proposalId } } }))
+        : sbg.request((c) => c.POST('/v1/sbg/conversations/{id}/proposals/{proposalId}/decline', { params: { path: { id, proposalId } } })),
+
+    /** CV2 — write down how a load the network does not pay will be settled. A record, never a payment. */
+    settle: (id: string, settlement: { amount: number; method: string; when: string; note?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/conversations/{id}/settlements', { params: { path: { id } }, body: settlement as never })),
+
+    /** CV2 — agree to the other side's written-down settlement. */
+    agree: (id: string, seq: number) =>
+      sbg.request((c) => c.POST('/v1/sbg/conversations/{id}/messages/{seq}/agree', { params: { path: { id, seq: String(seq) } as never } })),
+
     /** Report a message you received. */
     report: (id: string, seq: number, reason: 'spam' | 'abuse' | 'scam') =>
       sbg.request((c) =>

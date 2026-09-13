@@ -69,8 +69,14 @@ when, between whom — in a form that can be shown to somebody later.
   there). Closing the vendor gap found an older defect: a store's diverted freight records its STORE ID as
   shipper while the store signs in as its DID, so no store could be addressed in a thread, answer a price, or
   see its own loads in the posted list — resolved to the DID in all three, billing untouched.
-- **CV2. The deal in the thread.** Proposal / accept / decline as structured cards over the existing
-  negotiation; the off-platform settlement card.
+- **CV2. ~~The deal in the thread~~ DONE, driven in the browser.** New message kinds `proposal`, `decision`,
+  `settlement`, `settlement_agreed`. A price is made through `dispatch.propose` (one fact with the price screen);
+  the poster accepts (second tap, claims the load) or declines on the card, and the card reads its status live.
+  A settlement (amount · cash / mobile money / bank / other · at pickup / on delivery / after delivery) may be
+  written down only where the load has no paying shipper, is agreed once by the OTHER side, and always says
+  the network does not hold or move that money. Found driving it: the negotiation let a driver offer on a load
+  their vehicle could never carry, and failed only at Accept — `propose` now makes acceptance's capacity and
+  capability checks first. Also: the thread list previewed a written settlement by the form's name.
 - **CV3. Sharing.** The driver's toggle to their fleet manager (+ the fleet app's read-only view), and the
   dispute report (select messages → hashed snapshot → the operator console).
 - **CV4. Voice notes** over the media store.

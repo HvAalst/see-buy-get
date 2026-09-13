@@ -37,7 +37,16 @@ export function FreightScreen({ state, actions }: FreightScreenProps) {
           emptyText={load ? t('common.chat.noQuestions') : undefined}
         />
       </Card>
-      <ConversationSheet api={actions.chatApi} thread={thread} onClose={() => setThread(null)} onChanged={() => setChatTick((n) => n + 1)} />
+      <ConversationSheet
+        api={actions.chatApi}
+        thread={thread}
+        onClose={() => setThread(null)}
+        onChanged={() => {
+          setChatTick((n) => n + 1);
+          // CV2 — accepting a price in the thread claims the load, so the posted list above must say so.
+          void actions.loadPosted();
+        }}
+      />
     </div>
   );
 }

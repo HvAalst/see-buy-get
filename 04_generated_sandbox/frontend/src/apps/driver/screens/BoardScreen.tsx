@@ -105,7 +105,14 @@ export function BoardScreen({ state, actions }: BoardScreenProps) {
 
       <OriginSheet state={state} actions={actions} open={picking} onClose={() => setPicking(false)} />
       <ProposeSheet row={proposing} state={state} actions={actions} onClose={() => setProposing(null)} />
-      <ConversationSheet api={actions.chatApi} thread={thread} onClose={() => setThread(null)} onChanged={() => setChatTick((n) => n + 1)} />
+      <ConversationSheet
+        api={actions.chatApi}
+        thread={thread}
+        onClose={() => setThread(null)}
+        onChanged={() => setChatTick((n) => n + 1)}
+        // CV2 — a price records the empty run from where the driver is; the market already knows that point.
+        positionFor={async () => state.boardFrom}
+      />
     </div>
   );
 }

@@ -2,13 +2,15 @@ import { Injectable } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
-import { DispatchService } from './dispatch.service';
+import { DispatchService, commitModeOf } from './dispatch.service';
 import { DriverService } from './driver.service';
 import { NotificationService } from './notification.service';
 import { VendorService } from './vendor.service';
 import {
   QUICK_REPLIES,
   REPORT_REASONS,
+  SETTLE_METHODS,
+  SETTLE_WHEN,
   type Conversation,
   type ConversationMessage,
   type ConversationView,
@@ -16,6 +18,8 @@ import {
   type MessageView,
   type QuickReply,
   type ReportReason,
+  type SettleMethod,
+  type SettleWhen,
 } from './conversation.types';
 
 /** A message is a message, not a document. */
@@ -31,7 +35,11 @@ const DAY_MS = 24 * HOUR_MS;
 const OPEN_TO_QUESTIONS = new Set(['available', 'scheduled']);
 
 /**
- * CV1 — THE THREAD. See conversation.types.ts and 05_engineering/conversations.md.
+ * CONVERSATIONS ABOUT A LOAD. See conversation.types.ts and 05_engineering/conversations.md.
+ *
+ * CV1 is the thread. CV2 puts the deal IN it: a price is named through the load's own negotiation (so the
+ * shop's price screen and the thread are one fact, not two copies that can disagree), and two people who settle
+ * a load the network does not pay can write down how — a record the network keeps and never acts on.
  *
  * The rate limits live here, keyed by the sender, rather than on the route: the route-level guard counts per
  * IP, and a whole depot behind one mobile carrier is one IP.
@@ -112,44 +120,92 @@ export class ConversationService {
   /** One thread's messages after a sequence number. `after = 0` is the whole thread. */
   messagesFor(conversationId: string, did: string, after = 0): { thread: ConversationView; items: MessageView[] } {
     const thread = this.requireParty(conversationId, did);
-    const items = (this.messages.get(conversationId) ?? []).filter((m) => m.seq > after).map((m) => viewOf(m, did));
+    const all = this.messages.get(conversationId) ?? [];
+    const agreed = agreedSeqs(all);
+    const items = all.filter((m) => m.seq > after).map((m) => this.viewOf(m, did, agreed));
     return { thread: this.viewFor(thread, did), items };
   }
 
   send(conversationId: string, fromDid: string, input: { body?: string; quick?: string }, now = Date.now()): MessageView {
     const thread = this.requireParty(conversationId, fromDid);
-    if (thread.blockedBy) {
-      throw new GlosError('FORBIDDEN', thread.blockedBy === fromDid ? 'You blocked this conversation — unblock it to write again' : 'This conversation is closed');
+    this.requireOpen(thread, fromDid);
+    return this.append(thread, fromDid, composed(input), now, 'New message about');
+  }
+
+  /**
+   * CV2 — THE DRIVER NAMES A PRICE, in the thread.
+   *
+   * Made through the load's own negotiation rather than beside it: the shop's price screen and this thread
+   * then show one proposal, and every rule the negotiation already enforces (a negotiable load, a coupled
+   * vehicle, a rating above the floor, one live price per driver) applies here without being restated.
+   */
+  proposePrice(conversationId: string, did: string, input: { price: number; note?: string; from: { lat: number; lng: number } }, now = Date.now()): MessageView {
+    const thread = this.requireParty(conversationId, did);
+    if (did !== thread.askerDid) throw new GlosError('FORBIDDEN', 'Only the driver who asked can name a price — the poster accepts or declines it');
+    this.requireOpen(thread, did);
+    const note = boundedNote(input.note);
+    const proposal = this.dispatch.propose({ freightId: thread.freightId, driverDid: did, from: input.from, price: Number(input.price), ...(note ? { note } : {}) }, now);
+    return this.append(thread, did, { kind: 'proposal', proposalId: proposal.proposalId, price: proposal.price, ...(note ? { body: note } : {}) }, now, 'New price offered on');
+  }
+
+  /**
+   * CV2 — THE POSTER ANSWERS A PRICE, in the thread. Accepting claims the load for that driver, exactly as the
+   * price screen does, because it IS the price screen's accept.
+   */
+  decideProposal(conversationId: string, did: string, proposalId: string, decision: 'accept' | 'decline', now = Date.now()): MessageView {
+    const thread = this.requireParty(conversationId, did);
+    if (did !== thread.posterDid) throw new GlosError('FORBIDDEN', 'Only the poster of the load can accept or decline a price');
+    this.requireOpen(thread, did);
+    const proposal = this.dispatch.requireProposalPublic(proposalId);
+    // A price from ANOTHER driver on the same load is not this conversation's to decide.
+    if (proposal.freightId !== thread.freightId || proposal.driverDid !== thread.askerDid) throw new GlosError('NOT_FOUND', 'No such price in this conversation');
+    const decided = decision === 'accept' ? this.dispatch.acceptProposal(proposalId, now).proposal : this.dispatch.declineProposal(proposalId, now);
+    return this.append(
+      thread,
+      did,
+      { kind: 'decision', proposalId, decision: decision === 'accept' ? 'accepted' : 'declined', price: decided.price },
+      now,
+      decision === 'accept' ? 'Price accepted on' : 'Price declined on',
+    );
+  }
+
+  /**
+   * CV2 — WRITE DOWN HOW YOU WILL SETTLE, for a load the network does not pay.
+   *
+   * A RECORD, never a posting: nothing here touches the books, in any country. Refused on a load the network
+   * pays for, because a second private arrangement beside a payout the platform already makes is how a driver
+   * gets paid twice — or a shop believes it has.
+   */
+  recordSettlement(conversationId: string, did: string, input: { amount: number; method: string; when: string; note?: string }, now = Date.now()): MessageView {
+    const thread = this.requireParty(conversationId, did);
+    this.requireOpen(thread, did);
+    if (!this.settlesOffPlatform(thread.freightId)) {
+      throw new GlosError('INVALID_STATE', 'This load is paid through the network, so there is nothing to settle between you — the driver is paid on delivery');
     }
-    const message = composed(input);
+    const amount = Math.round(Number(input.amount) * 100) / 100;
+    if (!Number.isFinite(amount) || amount <= 0) throw new GlosError('INVALID_INPUT', 'Name an amount above zero');
+    if (!SETTLE_METHODS.includes(input.method as SettleMethod)) throw new GlosError('INVALID_INPUT', `How it is paid: ${SETTLE_METHODS.join(', ')}`);
+    if (!SETTLE_WHEN.includes(input.when as SettleWhen)) throw new GlosError('INVALID_INPUT', `When it is paid: ${SETTLE_WHEN.join(', ')}`);
+    const note = boundedNote(input.note);
+    return this.append(
+      thread,
+      did,
+      { kind: 'settlement', settlement: { amount, method: input.method as SettleMethod, when: input.when as SettleWhen }, ...(note ? { body: note } : {}) },
+      now,
+      'A settlement was written down on',
+    );
+  }
 
-    const recent = (this.sentAt.get(fromDid) ?? []).filter((t) => now - t < HOUR_MS);
-    if (recent.length >= MESSAGES_PER_HOUR) throw new GlosError('FORBIDDEN', 'That is a lot of messages in one hour — wait a little before sending more');
-    this.sentAt.set(fromDid, [...recent, now]);
-
-    const at = new Date(now).toISOString();
-    const stored: ConversationMessage = { seq: thread.lastSeq + 1, fromDid, at, ...message };
-    this.messages.set(conversationId, [...(this.messages.get(conversationId) ?? []), stored]);
-    thread.lastSeq = stored.seq;
-    thread.lastAt = at;
-    thread.readSeq = { ...thread.readSeq, [fromDid]: stored.seq };
-    this.threads.set(conversationId, thread);
-
-    // DISCREET: the push says a message arrived and about which load — never what it says. A lock screen is
-    // read by whoever is holding the phone.
-    const other = fromDid === thread.posterDid ? thread.askerDid : thread.posterDid;
-    const code = this.freightCode(thread.freightId);
-    void this.notifications
-      .notify(other, {
-        kind: 'message',
-        title: `New message about ${code}`,
-        body: 'Open the conversation to read it.',
-        tag: `conv:${conversationId}`,
-        data: { conversationId, freightId: thread.freightId },
-      })
-      .catch(() => undefined);
-
-    return viewOf(stored, fromDid);
+  /** CV2 — the OTHER party agrees to a written-down settlement. Once; never by the one who wrote it. */
+  agreeSettlement(conversationId: string, did: string, seq: number, now = Date.now()): MessageView {
+    const thread = this.requireParty(conversationId, did);
+    this.requireOpen(thread, did);
+    const all = this.messages.get(conversationId) ?? [];
+    const target = all.find((m) => m.seq === Number(seq) && m.kind === 'settlement');
+    if (!target) throw new GlosError('NOT_FOUND', 'No such settlement in this conversation');
+    if (target.fromDid === did) throw new GlosError('INVALID_INPUT', 'The other side agrees to a settlement — not the one who wrote it down');
+    if (agreedSeqs(all).has(target.seq)) throw new GlosError('INVALID_STATE', 'This settlement is already agreed');
+    return this.append(thread, did, { kind: 'settlement_agreed', refSeq: target.seq }, now, 'A settlement was agreed on');
   }
 
   /** Move this party's read marker forward. Never backward, never past the end. */
@@ -206,9 +262,49 @@ export class ConversationService {
     return { reportId: record.reportId };
   }
 
-  /** Every report, newest first — for the operator (CV3 puts it on a screen). */
+  /** Every report, newest first — for the operator's Reported messages screen. */
   listReports(): MessageReport[] {
     return [...this.reports.values()].sort((a, b) => b.at.localeCompare(a.at));
+  }
+
+  /**
+   * ONE WAY A MESSAGE ENTERS A THREAD — text, a price, a decision or a settlement alike: the hourly cap, the
+   * next sequence number, the sender's own read marker, and a discreet push to the other party.
+   */
+  private append(thread: Conversation, fromDid: string, message: Omit<ConversationMessage, 'seq' | 'fromDid' | 'at'>, now: number, pushTitle: string): MessageView {
+    const recent = (this.sentAt.get(fromDid) ?? []).filter((t) => now - t < HOUR_MS);
+    if (recent.length >= MESSAGES_PER_HOUR) throw new GlosError('FORBIDDEN', 'That is a lot of messages in one hour — wait a little before sending more');
+    this.sentAt.set(fromDid, [...recent, now]);
+
+    const at = new Date(now).toISOString();
+    const stored: ConversationMessage = { seq: thread.lastSeq + 1, fromDid, at, ...message };
+    const all = [...(this.messages.get(thread.conversationId) ?? []), stored];
+    this.messages.set(thread.conversationId, all);
+    thread.lastSeq = stored.seq;
+    thread.lastAt = at;
+    thread.readSeq = { ...thread.readSeq, [fromDid]: stored.seq };
+    this.threads.set(thread.conversationId, thread);
+
+    // DISCREET: the push says what KIND of thing arrived and about which load — never what it says, and never
+    // an amount. A lock screen is read by whoever is holding the phone.
+    const other = fromDid === thread.posterDid ? thread.askerDid : thread.posterDid;
+    void this.notifications
+      .notify(other, {
+        kind: 'message',
+        title: `${pushTitle} ${this.freightCode(thread.freightId)}`,
+        body: 'Open the conversation to read it.',
+        tag: `conv:${thread.conversationId}`,
+        data: { conversationId: thread.conversationId, freightId: thread.freightId },
+      })
+      .catch(() => undefined);
+
+    return this.viewOf(stored, fromDid, agreedSeqs(all));
+  }
+
+  private requireOpen(thread: Conversation, did: string): void {
+    if (thread.blockedBy) {
+      throw new GlosError('FORBIDDEN', thread.blockedBy === did ? 'You blocked this conversation — unblock it to write again' : 'This conversation is closed');
+    }
   }
 
   /**
@@ -221,9 +317,30 @@ export class ConversationService {
     return thread;
   }
 
+  /** A message as one party reads it. A proposal carries where it stands NOW, read from the negotiation. */
+  private viewOf(m: ConversationMessage, did: string, agreed: Set<number>): MessageView {
+    const view: MessageView = { seq: m.seq, mine: m.fromDid === did, kind: m.kind, at: m.at };
+    if (m.body !== undefined) view.body = m.body;
+    if (m.quick) view.quick = m.quick;
+    if (m.kind === 'proposal' && m.proposalId) {
+      let status: string | undefined;
+      try {
+        status = this.dispatch.requireProposalPublic(m.proposalId).status;
+      } catch {
+        status = undefined;
+      }
+      view.proposal = { proposalId: m.proposalId, price: m.price ?? 0, ...(status ? { status } : {}) };
+    }
+    if (m.kind === 'decision' && m.proposalId && m.decision) view.decision = { proposalId: m.proposalId, decision: m.decision, price: m.price ?? 0 };
+    if (m.kind === 'settlement' && m.settlement) view.settlement = { ...m.settlement, agreed: agreed.has(m.seq) };
+    if (m.refSeq !== undefined) view.refSeq = m.refSeq;
+    return view;
+  }
+
   private viewFor(thread: Conversation, did: string): ConversationView {
     const role = did === thread.posterDid ? 'poster' : 'asker';
-    const last = (this.messages.get(thread.conversationId) ?? []).at(-1);
+    const all = this.messages.get(thread.conversationId) ?? [];
+    const last = all.at(-1);
     let counterpartName: string | undefined;
     if (role === 'poster') {
       try {
@@ -239,14 +356,33 @@ export class ConversationService {
       freightLabel: this.freightLabel(thread.freightId),
       role,
       ...(counterpartName ? { counterpartName } : {}),
+      negotiable: this.negotiable(thread.freightId),
+      settlesOffPlatform: this.settlesOffPlatform(thread.freightId),
       lastSeq: thread.lastSeq,
       unread: Math.max(0, thread.lastSeq - (thread.readSeq[did] ?? 0)),
-      ...(last ? { lastMessage: viewOf(last, did) } : {}),
+      ...(last ? { lastMessage: this.viewOf(last, did, agreedSeqs(all)) } : {}),
       ...(thread.lastAt ? { lastAt: thread.lastAt } : {}),
       createdAt: thread.createdAt,
       blocked: Boolean(thread.blockedBy),
       blockedByMe: thread.blockedBy === did,
     };
+  }
+
+  private negotiable(freightId: string): boolean {
+    try {
+      return commitModeOf(this.dispatch.requireFreightPublic(freightId)) === 'negotiate';
+    } catch {
+      return false;
+    }
+  }
+
+  /** A load with no paying shipper settles off-platform — the counter's cash booking, a bulletin load. */
+  private settlesOffPlatform(freightId: string): boolean {
+    try {
+      return !this.dispatch.requireFreightPublic(freightId).shipperDid;
+    } catch {
+      return false;
+    }
   }
 
   private freightCode(freightId: string): string {
@@ -267,8 +403,16 @@ export class ConversationService {
   }
 }
 
-function viewOf(m: ConversationMessage, did: string): MessageView {
-  return { seq: m.seq, mine: m.fromDid === did, kind: m.kind, ...(m.body !== undefined ? { body: m.body } : {}), ...(m.quick ? { quick: m.quick } : {}), at: m.at };
+/** The settlement messages somebody has agreed to. */
+function agreedSeqs(all: ConversationMessage[]): Set<number> {
+  return new Set(all.filter((m) => m.kind === 'settlement_agreed' && m.refSeq !== undefined).map((m) => m.refSeq!));
+}
+
+function boundedNote(note?: string): string | undefined {
+  const trimmed = note?.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.length > MAX_MESSAGE_CHARS) throw new GlosError('INVALID_INPUT', `Keep a note under ${MAX_MESSAGE_CHARS} characters`);
+  return trimmed;
 }
 
 /** Exactly one of a quick reply or some text — and text within bounds. */

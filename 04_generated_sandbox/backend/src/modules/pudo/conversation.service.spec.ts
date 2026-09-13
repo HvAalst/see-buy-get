@@ -1,26 +1,52 @@
 import { ConversationService, MESSAGES_PER_HOUR, NEW_THREADS_PER_DAY } from './conversation.service';
 
 /**
- * CV1 — two people, about one load.
+ * Conversations — two people, about one load.
  *
  * Constructed over stubs on purpose: the lesson that hand-listed providers break whole suites applies to any
- * spec that compiles the module, and this service needs three facts from its neighbours, not their modules.
+ * spec that compiles the module, and this service needs a few facts from its neighbours, not their modules.
  */
 describe('conversations about a load', () => {
   const loads: Record<string, Record<string, unknown>> = {};
+  const proposals = new Map<string, Record<string, unknown>>();
   let notify: jest.Mock;
+  let dispatch: Record<string, jest.Mock | ((...a: never[]) => unknown)>;
   let service: ConversationService;
 
   beforeEach(() => {
+    proposals.clear();
     loads.fr_1 = { freightId: 'fr_1', code: 'FR-001', status: 'available', postedByDid: 'did:shop', description: 'Maize', pickupLabel: 'Nakuru', destLabel: 'Nairobi' };
+    loads.fr_neg = { freightId: 'fr_neg', code: 'FR-004', status: 'available', commitMode: 'negotiate', postedByDid: 'did:shop', description: 'Cement', pickupLabel: 'A', destLabel: 'B' };
+    loads.fr_paid = { freightId: 'fr_paid', code: 'FR-005', status: 'available', commitMode: 'negotiate', shipperDid: 'ven_store', description: 'Order', pickupLabel: 'A', destLabel: 'B' };
     loads.fr_taken = { freightId: 'fr_taken', code: 'FR-002', status: 'claimed', claimedBy: 'did:drv:other', postedByDid: 'did:shop', description: 'Tiles', pickupLabel: 'A', destLabel: 'B' };
     loads.fr_orphan = { freightId: 'fr_orphan', code: 'FR-003', status: 'available', description: 'Sand', pickupLabel: 'A', destLabel: 'B' };
     notify = jest.fn(async () => ({}));
-    const dispatch = {
+    let n = 0;
+    dispatch = {
       requireFreightPublic: (id: string) => {
         if (!loads[id]) throw new Error('not found');
         return loads[id];
       },
+      propose: jest.fn((input: { freightId: string; driverDid: string; price: number }) => {
+        const p = { proposalId: `prp_${++n}`, freightId: input.freightId, driverDid: input.driverDid, price: input.price, status: 'open' };
+        proposals.set(p.proposalId, p);
+        return p;
+      }),
+      requireProposalPublic: (id: string) => {
+        const p = proposals.get(id);
+        if (!p) throw new Error('Proposal not found');
+        return p;
+      },
+      acceptProposal: jest.fn((id: string) => {
+        const p = proposals.get(id)!;
+        p.status = 'accepted';
+        return { proposal: p, freight: {} };
+      }),
+      declineProposal: jest.fn((id: string) => {
+        const p = proposals.get(id)!;
+        p.status = 'declined';
+        return p;
+      }),
     };
     const drivers = { canOperate: (did: string) => did.startsWith('did:drv'), get: () => ({ displayName: 'Amos K.' }) };
     const vendors = { has: (id: string) => id === 'ven_store', get: () => ({ did: 'did:store' }) };
@@ -76,8 +102,9 @@ describe('conversations about a load', () => {
   });
 
   it('carries no identity or contact detail in anything a party reads', () => {
-    const { conversationId } = service.open('fr_1', 'did:drv:amos');
+    const { conversationId } = service.open('fr_neg', 'did:drv:amos');
     service.send(conversationId, 'did:drv:amos', { body: 'hello' });
+    service.proposePrice(conversationId, 'did:drv:amos', { price: 4500, from: { lat: -1.3, lng: 36.8 } });
     const payload = JSON.stringify([service.listFor('did:shop'), service.messagesFor(conversationId, 'did:shop')]);
     expect(payload).not.toMatch(/did:drv|did:shop/);
     expect(service.listFor('did:shop')[0].counterpartName).toBe('Amos K.');
@@ -139,5 +166,75 @@ describe('conversations about a load', () => {
     }
     loads.fr_last = { ...loads.fr_1, freightId: 'fr_last' };
     expect(() => service.open('fr_last', 'did:drv:busy')).toThrow(/started 20 conversations today/);
+  });
+
+  describe('CV2 — the deal, in the thread', () => {
+    const FROM = { lat: -1.3, lng: 36.8 };
+
+    it('says what a thread allows: a price where the load is negotiated, a settlement where the network does not pay', () => {
+      expect(service.open('fr_neg', 'did:drv:amos')).toMatchObject({ negotiable: true, settlesOffPlatform: true });
+      expect(service.open('fr_paid', 'did:drv:amos')).toMatchObject({ negotiable: true, settlesOffPlatform: false });
+      expect(service.open('fr_1', 'did:drv:amos')).toMatchObject({ negotiable: false, settlesOffPlatform: true });
+    });
+
+    it('makes a driver’s price through the load’s own negotiation, so the thread and the price screen are one fact', () => {
+      const { conversationId } = service.open('fr_neg', 'did:drv:amos');
+      const offer = service.proposePrice(conversationId, 'did:drv:amos', { price: 4500, note: 'Empty past your gate on Thursday', from: FROM });
+      expect(dispatch.propose).toHaveBeenCalledWith(expect.objectContaining({ freightId: 'fr_neg', driverDid: 'did:drv:amos', price: 4500, from: FROM }), expect.any(Number));
+      expect(offer).toMatchObject({ kind: 'proposal', body: 'Empty past your gate on Thursday', proposal: { price: 4500, status: 'open' } });
+      expect(notify).toHaveBeenCalledWith('did:shop', expect.objectContaining({ title: 'New price offered on FR-004' }));
+      // The push names neither the amount nor the note.
+      expect(JSON.stringify(notify.mock.calls)).not.toMatch(/4500|Thursday/);
+      expect(() => service.proposePrice(conversationId, 'did:shop', { price: 1, from: FROM })).toThrow(/Only the driver who asked/);
+    });
+
+    it('lets only the poster accept — and accepting is the negotiation’s accept, shown on the offer it answers', () => {
+      const { conversationId } = service.open('fr_neg', 'did:drv:amos');
+      const { proposal } = service.proposePrice(conversationId, 'did:drv:amos', { price: 4500, from: FROM });
+      expect(() => service.decideProposal(conversationId, 'did:drv:amos', proposal!.proposalId, 'accept')).toThrow(/Only the poster/);
+
+      const decision = service.decideProposal(conversationId, 'did:shop', proposal!.proposalId, 'accept');
+      expect(dispatch.acceptProposal).toHaveBeenCalledWith(proposal!.proposalId, expect.any(Number));
+      expect(decision).toMatchObject({ kind: 'decision', decision: { decision: 'accepted', price: 4500 } });
+      // The offer itself cannot change, so where it stands is read live.
+      expect(service.messagesFor(conversationId, 'did:drv:amos').items[0].proposal?.status).toBe('accepted');
+    });
+
+    it('refuses deciding a price from ANOTHER driver on the same load inside this thread', () => {
+      const amos = service.open('fr_neg', 'did:drv:amos');
+      const grace = service.open('fr_neg', 'did:drv:grace');
+      const { proposal } = service.proposePrice(grace.conversationId, 'did:drv:grace', { price: 4000, from: FROM });
+      expect(() => service.decideProposal(amos.conversationId, 'did:shop', proposal!.proposalId, 'decline')).toThrow(/No such price/);
+      expect(service.decideProposal(grace.conversationId, 'did:shop', proposal!.proposalId, 'decline').decision?.decision).toBe('declined');
+    });
+
+    it('writes down an off-platform settlement as a record, agreed once and only by the other side', () => {
+      const { conversationId } = service.open('fr_neg', 'did:drv:amos');
+      const card = service.recordSettlement(conversationId, 'did:shop', { amount: 4500, method: 'mobile_money', when: 'on_delivery', note: 'to the till number on the receipt' });
+      expect(card).toMatchObject({ kind: 'settlement', settlement: { amount: 4500, method: 'mobile_money', when: 'on_delivery', agreed: false } });
+      expect(() => service.agreeSettlement(conversationId, 'did:shop', card.seq)).toThrow(/not the one who wrote it/);
+      expect(service.agreeSettlement(conversationId, 'did:drv:amos', card.seq)).toMatchObject({ kind: 'settlement_agreed', refSeq: card.seq });
+      expect(() => service.agreeSettlement(conversationId, 'did:drv:amos', card.seq)).toThrow(/already agreed/);
+      expect(service.messagesFor(conversationId, 'did:shop').items[0].settlement?.agreed).toBe(true);
+    });
+
+    it('refuses a private settlement on a load the network pays — that is how a driver gets paid twice', () => {
+      const { conversationId } = service.open('fr_paid', 'did:drv:amos');
+      expect(() => service.recordSettlement(conversationId, 'did:drv:amos', { amount: 100, method: 'cash', when: 'on_pickup' })).toThrow(/paid through the network/);
+    });
+
+    it('refuses a settlement with no amount, or a method and a moment it does not know', () => {
+      const { conversationId } = service.open('fr_neg', 'did:drv:amos');
+      expect(() => service.recordSettlement(conversationId, 'did:shop', { amount: 0, method: 'cash', when: 'on_pickup' })).toThrow(/above zero/);
+      expect(() => service.recordSettlement(conversationId, 'did:shop', { amount: 10, method: 'crypto', when: 'on_pickup' })).toThrow(/How it is paid/);
+      expect(() => service.recordSettlement(conversationId, 'did:shop', { amount: 10, method: 'cash', when: 'someday' })).toThrow(/When it is paid/);
+    });
+
+    it('keeps a blocked thread closed to prices and settlements too', () => {
+      const { conversationId } = service.open('fr_neg', 'did:drv:amos');
+      service.block(conversationId, 'did:shop');
+      expect(() => service.proposePrice(conversationId, 'did:drv:amos', { price: 1, from: FROM })).toThrow(/closed/);
+      expect(() => service.recordSettlement(conversationId, 'did:shop', { amount: 1, method: 'cash', when: 'on_pickup' })).toThrow(/unblock it/);
+    });
   });
 });

@@ -2,7 +2,25 @@ import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { narrow, type ConversationsApi } from '../../lib/sbg';
 import { formatDate, useT } from '../i18n';
 import { Button, Chip, ErrorNote, Icon, Note, Pill, Sheet } from '../ui';
-import { MAX_MESSAGE_CHARS, QUICK_REPLIES, REPORT_REASONS, composeBlocker, lastSeqOf, mergeMessages, type ChatMessage, type ChatThread, type ReportReason } from './logic';
+import {
+  MAX_MESSAGE_CHARS,
+  QUICK_REPLIES,
+  REPORT_REASONS,
+  SETTLE_METHODS,
+  SETTLE_WHEN,
+  canAgree,
+  canDecide,
+  canPropose,
+  composeBlocker,
+  lastSeqOf,
+  mergeMessages,
+  parseAmount,
+  type ChatMessage,
+  type ChatThread,
+  type ReportReason,
+  type SettleMethod,
+  type SettleWhen,
+} from './logic';
 
 /** Catch-up while a thread is open. Push says something arrived; this is what fetches it. Enough to start. */
 const POLL_MS = 8000;
@@ -19,48 +37,76 @@ function whenSent(at: string): string {
   return d.toDateString() === new Date().toDateString() ? time : `${formatDate(at)} ${time}`;
 }
 
+const money = (n: number) => n.toFixed(2);
+
 /**
- * CV1 — ONE CONVERSATION ABOUT ONE LOAD, in a sheet.
+ * ONE CONVERSATION ABOUT ONE LOAD, in a sheet.
  *
  * Shared by the driver asking and the shop or store answering, because it is the same conversation seen from
  * two ends. Nothing in it can be edited or deleted — the sheet says so in plain words, and says who can read
  * it, rather than claiming a privacy the network does not provide.
+ *
+ * CV2 puts the deal in the same place: a price the driver names and the poster answers, and — for a load the
+ * network does not pay — how the two of them will settle, written down and agreed. The settlement card says,
+ * every time, that the network neither holds nor moves that money.
  */
-export function ConversationSheet({ api, thread, onClose, onChanged }: { api: ConversationsApi | null; thread: ChatThread | null; onClose: () => void; onChanged?: () => void }) {
+export function ConversationSheet({
+  api,
+  thread,
+  onClose,
+  onChanged,
+  positionFor,
+}: {
+  api: ConversationsApi | null;
+  thread: ChatThread | null;
+  onClose: () => void;
+  onChanged?: () => void;
+  /** CV2 — where the driver is, for naming a price. Absent on the poster's side. */
+  positionFor?: () => Promise<{ lat: number; lng: number } | null>;
+}) {
   const t = useT();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [current, setCurrent] = useState<ChatThread | null>(thread);
   const [text, setText] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [confirmBlock, setConfirmBlock] = useState(false);
   const [reporting, setReporting] = useState<number | null>(null);
   const [reported, setReported] = useState<number[]>([]);
+  const [confirmAccept, setConfirmAccept] = useState<string | null>(null);
+  const [deal, setDeal] = useState<'price' | 'settle' | null>(null);
+  const [price, setPrice] = useState('');
+  const [priceNote, setPriceNote] = useState('');
+  const [amount, setAmount] = useState('');
+  const [method, setMethod] = useState<SettleMethod>('cash');
+  const [when, setWhen] = useState<SettleWhen>('on_delivery');
+  const [settleNote, setSettleNote] = useState('');
   const held = useRef<ChatMessage[]>([]);
   const id = thread?.conversationId ?? null;
 
-  const catchUp = useCallback(async () => {
-    if (!api || !id) return;
-    const after = lastSeqOf(held.current);
-    const r = await api.messages(id, after);
-    if (r.error) {
-      setFailed(r.error.detail || r.error.title || t('common.chat.loadFailed'));
-      return;
-    }
-    const data = narrow<{ thread: ChatThread; items: ChatMessage[] }>(r.data);
-    if (!data) return;
-    setFailed(null);
-    setCurrent(data.thread);
-    if (data.items.length) {
+  const catchUp = useCallback(
+    async (fromScratch = false) => {
+      if (!api || !id) return;
+      if (fromScratch) held.current = [];
+      const r = await api.messages(id, lastSeqOf(held.current));
+      if (r.error) {
+        setFailed(r.error.detail || r.error.title || t('common.chat.loadFailed'));
+        return;
+      }
+      const data = narrow<{ thread: ChatThread; items: ChatMessage[] }>(r.data);
+      if (!data) return;
+      setFailed(null);
+      setCurrent(data.thread);
       held.current = mergeMessages(held.current, data.items);
       setMessages(held.current);
-    }
-    const seq = lastSeqOf(held.current);
-    if (seq > 0 && data.thread.unread > 0) {
-      await api.read(id, seq);
-      onChanged?.();
-    }
-  }, [api, id, onChanged, t]);
+      const seq = lastSeqOf(held.current);
+      if (seq > 0 && data.thread.unread > 0) {
+        await api.read(id, seq);
+        onChanged?.();
+      }
+    },
+    [api, id, onChanged, t],
+  );
 
   useEffect(() => {
     held.current = [];
@@ -68,6 +114,8 @@ export function ConversationSheet({ api, thread, onClose, onChanged }: { api: Co
     setText('');
     setCurrent(thread);
     setReported([]);
+    setDeal(null);
+    setConfirmAccept(null);
     if (!id) return undefined;
     void catchUp();
     const timer = window.setInterval(() => void catchUp(), POLL_MS);
@@ -76,22 +124,56 @@ export function ConversationSheet({ api, thread, onClose, onChanged }: { api: Co
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  const send = async (message: { body?: string; quick?: string }) => {
-    if (!api || !id) return;
-    setBusy(true);
-    const r = await api.send(id, message);
-    setBusy(false);
+  /** Run one action against the thread, then re-read the whole thread: a decision changes an EARLIER card. */
+  const act = async (key: string, run: () => Promise<{ error: { detail?: string; title?: string } | null }>, after?: () => void) => {
+    setBusy(key);
+    const r = await run();
+    setBusy(null);
     if (r.error) {
       setFailed(r.error.detail || r.error.title || t('common.chat.loadFailed'));
       return;
     }
-    const sent = narrow<ChatMessage>(r.data);
-    if (sent) {
-      held.current = mergeMessages(held.current, [sent]);
-      setMessages(held.current);
-    }
-    if (message.body !== undefined) setText('');
+    setFailed(null);
+    after?.();
+    await catchUp(true);
     onChanged?.();
+  };
+
+  const send = (message: { body?: string; quick?: string }) => {
+    if (!api || !id) return;
+    void act('send', () => api.send(id, message), () => {
+      if (message.body !== undefined) setText('');
+    });
+  };
+
+  const offerPrice = async () => {
+    if (!api || !id) return;
+    const value = parseAmount(price);
+    if (value === null) return setFailed(t('common.chat.deal.priceNeeded'));
+    const from = positionFor ? await positionFor() : null;
+    if (!from) return setFailed(t('common.chat.deal.needPosition'));
+    void act('price', () => api.propose(id, { price: value, from, ...(priceNote.trim() ? { note: priceNote.trim() } : {}) }), () => {
+      setPrice('');
+      setPriceNote('');
+      setDeal(null);
+    });
+  };
+
+  const decide = (proposalId: string, decision: 'accept' | 'decline') => {
+    if (!api || !id) return;
+    setConfirmAccept(null);
+    void act(`${decision}:${proposalId}`, () => api.decide(id, proposalId, decision));
+  };
+
+  const recordSettlement = () => {
+    if (!api || !id) return;
+    const value = parseAmount(amount);
+    if (value === null) return setFailed(t('common.chat.deal.amountNeeded'));
+    void act('settle', () => api.settle(id, { amount: value, method, when, ...(settleNote.trim() ? { note: settleNote.trim() } : {}) }), () => {
+      setAmount('');
+      setSettleNote('');
+      setDeal(null);
+    });
   };
 
   const setBlocked = async (block: boolean) => {
@@ -114,6 +196,48 @@ export function ConversationSheet({ api, thread, onClose, onChanged }: { api: Co
   const blocker = composeBlocker(text, current);
   const closed = Boolean(current?.blocked);
   const who = current?.role === 'poster' ? current.counterpartName ?? t('common.chat.driver') : t('common.chat.poster');
+  const proposable = canPropose(current) && Boolean(positionFor);
+  const settleable = Boolean(current?.settlesOffPlatform) && !closed;
+
+  /** What a message SAYS, by kind. The deal cards are sentences, so they read aloud and translate like text. */
+  const content = (m: ChatMessage) => {
+    if (m.kind === 'quick' && m.quick) return <b>{t(`common.chat.quick.${m.quick}` as 'common.chat.quick.loaded')}</b>;
+    if (m.kind === 'proposal' && m.proposal) {
+      const status = m.proposal.status ?? 'open';
+      return (
+        <>
+          <b>{t('common.chat.deal.proposed', { amount: money(m.proposal.price) })}</b>
+          <span style="margin-left:6px">
+            <Pill tone={status === 'accepted' ? 'ok' : status === 'open' ? 'info' : 'idle'}>{t(`common.chat.deal.status.${status}` as 'common.chat.deal.status.open')}</Pill>
+          </span>
+          {m.body ? <div>“{m.body}”</div> : null}
+        </>
+      );
+    }
+    if (m.kind === 'decision' && m.decision) {
+      return <b>{t(m.decision.decision === 'accepted' ? 'common.chat.deal.acceptedLine' : 'common.chat.deal.declinedLine', { amount: money(m.decision.price) })}</b>;
+    }
+    if (m.kind === 'settlement' && m.settlement) {
+      return (
+        <>
+          <b>
+            {t('common.chat.deal.settleLine', {
+              amount: money(m.settlement.amount),
+              method: t(`common.chat.deal.method.${m.settlement.method}` as 'common.chat.deal.method.cash'),
+              when: t(`common.chat.deal.when.${m.settlement.when}` as 'common.chat.deal.when.on_delivery'),
+            })}
+          </b>
+          <span style="margin-left:6px">
+            <Pill tone={m.settlement.agreed ? 'ok' : 'info'}>{t(m.settlement.agreed ? 'common.chat.deal.agreed' : 'common.chat.deal.waitingAgree')}</Pill>
+          </span>
+          {m.body ? <div>“{m.body}”</div> : null}
+          <div class="hint" style="font-size:12px">{t('common.chat.deal.recordOnly')}</div>
+        </>
+      );
+    }
+    if (m.kind === 'settlement_agreed') return <b>{t('common.chat.deal.agreedLine')}</b>;
+    return m.body;
+  };
 
   return (
     <Sheet open={Boolean(thread)} onClose={onClose} title={thread ? t('common.chat.title', { code: thread.freightCode }) : ''}>
@@ -123,18 +247,58 @@ export function ConversationSheet({ api, thread, onClose, onChanged }: { api: Co
           <p class="hint">{t('common.chat.withWho', { who })}</p>
           {/* Said plainly, because it is the promise the thread makes: who can read it, and that it stays. */}
           <Note tone="info" icon="info" title={t('common.chat.privacyTitle')} detail={t('common.chat.privacy')} />
-          {failed ? <p class="hint" role="alert">{failed}</p> : null}
+          {failed ? (
+            <p class="hint" role="alert">
+              {failed}
+            </p>
+          ) : null}
 
           <div class="rows" role="log" aria-live="polite" style="margin-top:12px; gap:8px">
             {messages.length === 0 ? <p class="hint">{t('common.chat.empty')}</p> : null}
             {messages.map((m) => (
               <div
                 key={m.seq}
-                style={`align-self:${m.mine ? 'flex-end' : 'flex-start'}; max-width:85%; padding:8px 12px; border-radius:14px; background:${m.mine ? 'var(--brand-50, #eef0ff)' : 'var(--surface-2, #f2f2f5)'}`}
+                style={`align-self:${m.mine ? 'flex-end' : 'flex-start'}; max-width:85%; padding:8px 12px; border-radius:14px; background:${m.mine ? 'var(--brand-50, #eef0ff)' : 'var(--surface-2, #f2f2f5)'}${m.kind !== 'text' && m.kind !== 'quick' ? '; border:1px solid var(--line, #dcdce4)' : ''}`}
               >
                 <div class="t-body" style="white-space:pre-wrap; overflow-wrap:anywhere">
-                  {m.kind === 'quick' && m.quick ? <b>{t(`common.chat.quick.${m.quick}` as 'common.chat.quick.loaded')}</b> : m.body}
+                  {content(m)}
                 </div>
+
+                {/* CV2 — the poster answers an open price from the card itself. Accepting gives the load away,
+                    so it takes a second tap that says so. */}
+                {canDecide(current, m) && m.proposal ? (
+                  <div style="margin-top:6px">
+                    {confirmAccept === m.proposal.proposalId ? (
+                      <>
+                        <p class="hint">{t('common.chat.deal.acceptConfirm', { amount: money(m.proposal.price) })}</p>
+                        <Button full={false} chevron={false} busy={busy === `accept:${m.proposal.proposalId}`} onClick={() => decide(m.proposal!.proposalId, 'accept')}>
+                          {t('common.chat.deal.accept')}
+                        </Button>
+                        <Button variant="link" full={false} onClick={() => setConfirmAccept(null)}>
+                          {t('common.cancel')}
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button variant="outline" full={false} chevron={false} onClick={() => setConfirmAccept(m.proposal!.proposalId)}>
+                          {t('common.chat.deal.accept')}
+                        </Button>
+                        <Button variant="link" full={false} busy={busy === `decline:${m.proposal.proposalId}`} onClick={() => decide(m.proposal!.proposalId, 'decline')}>
+                          {t('common.chat.deal.decline')}
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                ) : null}
+
+                {canAgree(current, m) ? (
+                  <div style="margin-top:6px">
+                    <Button variant="outline" full={false} chevron={false} busy={busy === `agree:${m.seq}`} onClick={() => api && id && void act(`agree:${m.seq}`, () => api.agree(id, m.seq))}>
+                      {t('common.chat.deal.agree')}
+                    </Button>
+                  </div>
+                ) : null}
+
                 <div class="hint" style="margin-top:2px; font-size:12px">
                   {m.mine ? t('common.chat.you') : who} · {whenSent(m.at)}
                   {!m.mine && !reported.includes(m.seq) ? (
@@ -164,7 +328,7 @@ export function ConversationSheet({ api, thread, onClose, onChanged }: { api: Co
             <>
               <div class="chiprow" role="group" aria-label={t('common.chat.quickTitle')} style="margin-top:12px">
                 {QUICK_REPLIES.map((q) => (
-                  <Chip key={q} label={t(`common.chat.quick.${q}` as 'common.chat.quick.loaded')} active={false} onClick={() => void send({ quick: q })} />
+                  <Chip key={q} label={t(`common.chat.quick.${q}` as 'common.chat.quick.loaded')} active={false} onClick={() => send({ quick: q })} />
                 ))}
               </div>
               <div class="field" style="margin-top:12px">
@@ -182,9 +346,83 @@ export function ConversationSheet({ api, thread, onClose, onChanged }: { api: Co
                 />
                 {blocker ? <p class="hint">{t(blocker, { max: MAX_MESSAGE_CHARS })}</p> : null}
               </div>
-              <Button chevron={false} busy={busy} disabled={!text.trim() || blocker !== null} onClick={() => void send({ body: text })}>
+              <Button chevron={false} busy={busy === 'send'} disabled={!text.trim() || blocker !== null} onClick={() => send({ body: text })}>
                 {t('common.chat.send')}
               </Button>
+
+              {/* CV2 — the deal. Offered only where it applies: a price to the driver on a negotiated load, a
+                  settlement where the network does not pay. Nothing to choose from is not a control. */}
+              {proposable || settleable ? (
+                <div class="chiprow" style="margin-top:12px">
+                  {proposable ? <Chip label={t('common.chat.deal.proposeTitle')} active={deal === 'price'} onClick={() => setDeal(deal === 'price' ? null : 'price')} /> : null}
+                  {settleable ? <Chip label={t('common.chat.deal.settleTitle')} active={deal === 'settle'} onClick={() => setDeal(deal === 'settle' ? null : 'settle')} /> : null}
+                </div>
+              ) : null}
+
+              {deal === 'price' ? (
+                <div style="margin-top:10px">
+                  <div class="field">
+                    <label class="field__label" for="deal-price">
+                      {t('common.chat.deal.price')}
+                    </label>
+                    <input id="deal-price" class="input" type="number" inputMode="decimal" min="0" step="1" value={price} onInput={(e) => setPrice(e.currentTarget.value)} />
+                  </div>
+                  <div class="field" style="margin-top:8px">
+                    <label class="field__label" for="deal-price-note">
+                      {t('common.chat.deal.note')}
+                    </label>
+                    <input id="deal-price-note" class="input" value={priceNote} onInput={(e) => setPriceNote(e.currentTarget.value)} />
+                  </div>
+                  <Button chevron={false} busy={busy === 'price'} disabled={parseAmount(price) === null} onClick={() => void offerPrice()}>
+                    {t('common.chat.deal.send')}
+                  </Button>
+                </div>
+              ) : null}
+
+              {deal === 'settle' ? (
+                <div style="margin-top:10px">
+                  <p class="hint">{t('common.chat.deal.settleLede')}</p>
+                  <div class="field">
+                    <label class="field__label" for="deal-amount">
+                      {t('common.chat.deal.amount')}
+                    </label>
+                    <input id="deal-amount" class="input" type="number" inputMode="decimal" min="0" step="1" value={amount} onInput={(e) => setAmount(e.currentTarget.value)} />
+                  </div>
+                  <div class="field" style="margin-top:8px">
+                    <label class="field__label" for="deal-method">
+                      {t('common.chat.deal.method')}
+                    </label>
+                    <select id="deal-method" class="select" value={method} onChange={(e) => setMethod(e.currentTarget.value as SettleMethod)}>
+                      {SETTLE_METHODS.map((k) => (
+                        <option key={k} value={k}>
+                          {t(`common.chat.deal.method.${k}` as 'common.chat.deal.method.cash')}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div class="field" style="margin-top:8px">
+                    <label class="field__label" for="deal-when">
+                      {t('common.chat.deal.when')}
+                    </label>
+                    <select id="deal-when" class="select" value={when} onChange={(e) => setWhen(e.currentTarget.value as SettleWhen)}>
+                      {SETTLE_WHEN.map((k) => (
+                        <option key={k} value={k}>
+                          {t(`common.chat.deal.when.${k}` as 'common.chat.deal.when.on_delivery')}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div class="field" style="margin-top:8px">
+                    <label class="field__label" for="deal-settle-note">
+                      {t('common.chat.deal.note')}
+                    </label>
+                    <input id="deal-settle-note" class="input" value={settleNote} onInput={(e) => setSettleNote(e.currentTarget.value)} />
+                  </div>
+                  <Button chevron={false} busy={busy === 'settle'} disabled={parseAmount(amount) === null} onClick={recordSettlement}>
+                    {t('common.chat.deal.record')}
+                  </Button>
+                </div>
+              ) : null}
             </>
           )}
 
@@ -217,7 +455,7 @@ export function ConversationSheet({ api, thread, onClose, onChanged }: { api: Co
 }
 
 /**
- * The threads a person is part to — optionally only those about one load. Fetches its own list, so a screen
+ * The threads a person is party to — optionally only those about one load. Fetches its own list, so a screen
  * mounts it without owning chat state; `refreshKey` lets the host re-read after something changed.
  */
 export function ConversationList({
@@ -254,6 +492,24 @@ export function ConversationList({
   if (threads === null) return <p class="hint">{t('common.loading')}</p>;
   if (threads.length === 0) return <p class="hint">{emptyText ?? t('common.chat.listEmpty')}</p>;
 
+  /** The last message as one line — a deal card reads as what it did, not as an empty bubble. */
+  const preview = (m: ChatMessage): string => {
+    if (m.kind === 'quick' && m.quick) return t(`common.chat.quick.${m.quick}` as 'common.chat.quick.loaded');
+    if (m.kind === 'proposal' && m.proposal) return t('common.chat.deal.proposed', { amount: money(m.proposal.price) });
+    if (m.kind === 'decision' && m.decision) return t(m.decision.decision === 'accepted' ? 'common.chat.deal.acceptedLine' : 'common.chat.deal.declinedLine', { amount: money(m.decision.price) });
+    // The terms themselves, not the name of the form that wrote them: found in the browser pass, the list read
+    // "Write down how you will settle" beside a settlement that had already been written down.
+    if (m.kind === 'settlement' && m.settlement) {
+      return t('common.chat.deal.settleLine', {
+        amount: money(m.settlement.amount),
+        method: t(`common.chat.deal.method.${m.settlement.method}` as 'common.chat.deal.method.cash'),
+        when: t(`common.chat.deal.when.${m.settlement.when}` as 'common.chat.deal.when.on_delivery'),
+      });
+    }
+    if (m.kind === 'settlement_agreed') return t('common.chat.deal.agreedLine');
+    return m.body ?? '';
+  };
+
   return (
     <div class="rows" role="list">
       {threads.map((x) => (
@@ -265,11 +521,7 @@ export function ConversationList({
             <span class="row__t">
               {x.freightCode} · {x.role === 'poster' ? x.counterpartName ?? t('common.chat.driver') : t('common.chat.poster')}
             </span>
-            <span class="row__s">
-              {x.lastMessage
-                ? `${x.lastMessage.mine ? `${t('common.chat.you')}: ` : ''}${x.lastMessage.kind === 'quick' && x.lastMessage.quick ? t(`common.chat.quick.${x.lastMessage.quick}` as 'common.chat.quick.loaded') : x.lastMessage.body ?? ''}`
-                : x.freightLabel}
-            </span>
+            <span class="row__s">{x.lastMessage ? `${x.lastMessage.mine ? `${t('common.chat.you')}: ` : ''}${preview(x.lastMessage)}` : x.freightLabel}</span>
           </span>
           <span class="row__end">
             {x.blocked ? <Pill tone="idle">{t('common.chat.closedPill')}</Pill> : x.unread > 0 ? <Pill tone="warn" dot>{t('common.chat.unread', { n: x.unread })}</Pill> : <Icon name="chevronRight" size={22} />}
