@@ -15,6 +15,9 @@ export function createConversationsApi(sbg: SbgClient) {
     /** Ask about a load — or return to the thread already asked about it. */
     open: (freightId: string) => sbg.request((c) => c.POST('/v1/sbg/conversations', { body: { freightId } as never })),
 
+    /** CV5 — talk about a parcel waiting at a shop: the person collecting it, or the shop. Returns to the thread already open. */
+    openAboutParcel: (parcelId: string) => sbg.request((c) => c.POST('/v1/sbg/conversations', { body: { parcelId } as never })),
+
     /** Messages after a sequence number (0 = the whole thread). Catch-up is by seq, never by the phone's clock. */
     messages: (id: string, after: number) =>
       sbg.request((c) => c.GET('/v1/sbg/conversations/{id}/messages', { params: { path: { id }, query: { after: String(after) } as never } })),

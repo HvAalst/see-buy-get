@@ -7,8 +7,30 @@
  */
 
 /** Mirrored from backend conversation.types.ts — keep the two lists identical. */
-export const QUICK_REPLIES = ['on_my_way', 'loaded', 'arrived', 'delivered', 'paid', 'running_late'] as const;
+export const QUICK_REPLIES = ['on_my_way', 'loaded', 'arrived', 'delivered', 'paid', 'running_late', 'coming_today', 'coming_tomorrow', 'cannot_make_it', 'still_here', 'closing_soon'] as const;
 export type QuickReply = (typeof QUICK_REPLIES)[number];
+
+/** The quick replies about a LOAD — the words a driver needs with one thumb. */
+export const FREIGHT_QUICK_REPLIES: readonly QuickReply[] = ['on_my_way', 'loaded', 'arrived', 'delivered', 'paid', 'running_late'];
+/** CV5 — about a PARCEL waiting at a shop: what the person collecting says, and what the shop says. */
+export const PARCEL_QUICK_REPLIES: Record<'asker' | 'poster', readonly QuickReply[]> = {
+  asker: ['coming_today', 'coming_tomorrow', 'cannot_make_it'],
+  poster: ['still_here', 'closing_soon'],
+};
+
+/** Which quick replies fit this thread, for this side of it. */
+export function quickRepliesFor(thread: Pick<ChatThread, 'subject' | 'role'> | null): readonly QuickReply[] {
+  if (!thread) return FREIGHT_QUICK_REPLIES;
+  if (thread.subject === 'parcel') return thread.role === 'poster' ? PARCEL_QUICK_REPLIES.poster : PARCEL_QUICK_REPLIES.asker;
+  return FREIGHT_QUICK_REPLIES;
+}
+
+/** What to call the other side when no name is shown — by what the thread is about and which side you are. */
+export function counterpartKey(thread: Pick<ChatThread, 'subject' | 'role'> | null): 'common.chat.driver' | 'common.chat.poster' | 'common.chat.customer' | 'common.chat.shop' {
+  const parcel = thread?.subject === 'parcel';
+  if (thread?.role === 'poster') return parcel ? 'common.chat.customer' : 'common.chat.driver';
+  return parcel ? 'common.chat.shop' : 'common.chat.poster';
+}
 
 export const REPORT_REASONS = ['spam', 'abuse', 'scam'] as const;
 export type ReportReason = (typeof REPORT_REASONS)[number];
@@ -51,7 +73,7 @@ export interface ChatMessage {
   seq: number;
   mine: boolean;
   /** The role it came from — what a shared (read-only) reader goes by, since nothing is "mine" to them. */
-  from?: 'poster' | 'driver';
+  from?: 'poster' | 'asker';
   kind: MessageKind;
   body?: string;
   quick?: QuickReply;
@@ -68,7 +90,11 @@ export interface ChatMessage {
 
 export interface ChatThread {
   conversationId: string;
-  freightId: string;
+  /** CV5 — a posted load, or a parcel waiting at a shop. Older rows without it are load threads. */
+  subject?: 'freight' | 'parcel';
+  freightId?: string;
+  parcelId?: string;
+  /** The subject's code (a load's code, or the parcel id) and one-line label. */
   freightCode: string;
   freightLabel: string;
   /** `manager` — CV3: a fleet manager reading a thread their driver shared. */

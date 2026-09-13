@@ -101,3 +101,18 @@ when, between whom — in a form that can be shown to somebody later.
   until Send, record-again and discard upload nothing.
   **Decided (user, 2026-09-13): no transcription. Voice stays voice.** Speech-to-text good enough for Swahili and
   Amharic would mean a GPU or an outside service hearing messages the thread promises only two people can read.
+
+- **CV5. ~~A parcel waiting at a shop~~ DONE (2026-09-13).** The user: buyer and shop should be able to "inform and
+  remind in a non-automated way". A thread's SUBJECT is now a load OR a parcel (`Conversation.parcelId`,
+  `ConversationView.subject`). Poster = the parcel's collection shop; asker = the RECEIVER, as a person (the receiver
+  phone hash resolved to a person). Either side opens it (`POST sbg/conversations { parcelId }`), landing in the one
+  thread; a stranger on either side is told the parcel does not exist; the shop is told, in words, when the customer
+  has no account yet. No deal and no settlement in a parcel thread — there is nothing to agree but a time; quick
+  replies are the customer's ("coming tomorrow") and the shop's ("we close soon"). Reports work as before and name
+  the subject. `from`/`sharedBy` say `asker`, not `driver`, because the asker is not always one. Screens: Send
+  app parcel detail "Message the shop"; Shop app counter "Waiting to be collected" with Message beside each parcel.
+  Beside it, not in it: the two buyer EMAILS ("on its way", "ready to collect") now go to the email the buyer gave
+  the store, invite the sign-in, and never carry the code; the track screen invites the sign-in too; a store may
+  switch the code out of its `ready_for_pickup` callback (`Vendor.callbackCarriesCode`, default on for now).
+  **Not built:** a shop starting a thread with a customer who has no account (there is nobody to write to — the
+  email and the invitation are the answer); SMS.

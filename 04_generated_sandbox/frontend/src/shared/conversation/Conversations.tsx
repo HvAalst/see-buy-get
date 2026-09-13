@@ -4,7 +4,6 @@ import { formatDate, useT } from '../i18n';
 import { Button, Chip, ErrorNote, Icon, Note, Pill, Sheet } from '../ui';
 import {
   MAX_MESSAGE_CHARS,
-  QUICK_REPLIES,
   REPORT_REASONS,
   SETTLE_METHODS,
   SETTLE_WHEN,
@@ -13,6 +12,8 @@ import {
   canPropose,
   canShare,
   composeBlocker,
+  counterpartKey,
+  quickRepliesFor,
   formatDuration,
   MAX_VOICE_SECONDS,
   pickAudioMime,
@@ -320,9 +321,11 @@ export function ConversationSheet({
 
   const blocker = composeBlocker(text, current);
   const closed = Boolean(current?.blocked);
-  // A manager reads the driver's side of the thread, so the counterpart they see is the poster, named by role.
-  const who = current?.role === 'poster' ? current.counterpartName ?? t('common.chat.driver') : t('common.chat.poster');
-  const authorOf = (m: ChatMessage) => (readOnly ? (m.from === 'driver' ? t('common.chat.driver') : t('common.chat.poster')) : m.mine ? t('common.chat.you') : who);
+  // The other side by name where a name is shown, else by role — and the role depends on what the thread is about:
+  // a load's asker is a driver, a parcel's asker is the customer collecting it. A manager reads the driver's side of a
+  // shared load thread, so the counterpart they see is the poster, named by role.
+  const who = current?.counterpartName ?? t(counterpartKey(current));
+  const authorOf = (m: ChatMessage) => (readOnly ? (m.from === 'asker' ? t('common.chat.driver') : t('common.chat.poster')) : m.mine ? t('common.chat.you') : who);
   const proposable = !readOnly && canPropose(current) && Boolean(positionFor);
   const settleable = !readOnly && Boolean(current?.settlesOffPlatform) && !closed;
 
@@ -509,7 +512,7 @@ export function ConversationSheet({
           ) : (
             <>
               <div class="chiprow" role="group" aria-label={t('common.chat.quickTitle')} style="margin-top:12px">
-                {QUICK_REPLIES.map((q) => (
+                {quickRepliesFor(current).map((q) => (
                   <Chip key={q} label={t(`common.chat.quick.${q}` as 'common.chat.quick.loaded')} active={false} onClick={() => send({ quick: q })} />
                 ))}
               </div>
@@ -750,6 +753,7 @@ function VoicePlayer({ api, conversationId, voiceId, durationSec }: { api: Conve
 export function ConversationList({
   api,
   freightId,
+  subject,
   refreshKey = 0,
   onOpen,
   emptyText,
@@ -757,6 +761,8 @@ export function ConversationList({
 }: {
   api: ConversationsApi | null;
   freightId?: string;
+  /** CV5 — only threads about loads, or only about parcels. A shop has both, on different screens. */
+  subject?: 'freight' | 'parcel';
   refreshKey?: number;
   onOpen: (thread: ChatThread) => void;
   emptyText?: string;
@@ -772,9 +778,9 @@ export function ConversationList({
     const r = source === 'shared' ? await api.shared() : await api.mine();
     if (r.error) return setError(r.error);
     setError(null);
-    const all = narrow<ChatThread[]>(r.data) ?? [];
+    const all = (narrow<ChatThread[]>(r.data) ?? []).filter((x) => !subject || (x.subject ?? 'freight') === subject);
     setThreads(freightId ? all.filter((x) => x.freightId === freightId) : all);
-  }, [api, freightId, source]);
+  }, [api, freightId, subject, source]);
 
   useEffect(() => {
     void load();
@@ -813,7 +819,7 @@ export function ConversationList({
           </span>
           <span class="row__body">
             <span class="row__t">
-              {x.freightCode} · {x.role === 'asker' ? t('common.chat.poster') : x.counterpartName ?? t('common.chat.driver')}
+              {x.freightCode} · {x.counterpartName ?? t(counterpartKey(x))}
             </span>
             <span class="row__s">
               {x.lastMessage ? `${x.lastMessage.mine && x.role !== 'manager' ? `${t('common.chat.you')}: ` : ''}${preview(x.lastMessage)}` : x.freightLabel}

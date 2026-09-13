@@ -1,3 +1,7 @@
+import type { ChatThread } from '../../../shared/conversation/logic';
+import { ConversationList, ConversationSheet } from '../../../shared/conversation/Conversations';
+import { narrow } from '../../../lib/sbg';
+import { useState } from 'preact/hooks';
 import { Button, Card, Checklist, CodeBoxes, ErrorNote, Note, ReadAloud, ScanField } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { handoverRoute, otpValid, releaseBlockedDetail, releaseStage } from '../logic';
@@ -161,6 +165,8 @@ export function ReleaseScreen({ state, actions }: ReleaseScreenProps) {
         </Card>
       ) : null}
 
+      <WaitingCustomers state={state} actions={actions} />
+
       <div class="scr__foot">
         <ReadAloud
           text={() =>
@@ -180,5 +186,71 @@ export function ReleaseScreen({ state, actions }: ReleaseScreenProps) {
         />
       </div>
     </div>
+  );
+}
+
+/**
+ * CV5 — THE PARCELS WAITING ON THE SHELF, and a word with the people they are waiting for.
+ *
+ * The network reminds a receiver once, automatically. Everything after that is a person: "we close at six",
+ * "it has been here a week", "I come tomorrow". The shop can only reach a customer who signed in to the Send app
+ * with the phone they gave — and when there is nobody to reach, the screen says so and what to tell them.
+ */
+function WaitingCustomers({ state, actions }: ReleaseScreenProps) {
+  const t = useT();
+  const [thread, setThread] = useState<ChatThread | null>(null);
+  const [tick, setTick] = useState(0);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [failed, setFailed] = useState<{ parcelId: string; text: string } | null>(null);
+  // Longest waiting first: the one that has sat there a week is the one to write to.
+  const waiting = state.shopParcels.filter((x) => x.status === 'Ready_For_Pickup' || x.status === 'Unclaimed').sort((a, b) => (a.readyAt ?? '').localeCompare(b.readyAt ?? ''));
+
+  const message = async (parcelId: string) => {
+    if (!actions.chatApi) return;
+    setBusy(parcelId);
+    setFailed(null);
+    const r = await actions.chatApi.openAboutParcel(parcelId);
+    setBusy(null);
+    if (r.error) return setFailed({ parcelId, text: r.error.detail || r.error.title || t('agent.counter.messageFailed') });
+    const opened = narrow<ChatThread>(r.data);
+    if (opened) setThread(opened);
+  };
+
+  return (
+    <>
+      <Card title={t('agent.counter.waitingTitle')}>
+        <p class="card__note">{t('agent.counter.waitingBody')}</p>
+        {waiting.length === 0 ? (
+          <p class="hint">{t('agent.counter.waitingNone')}</p>
+        ) : (
+          <div class="rows" role="list">
+            {waiting.map((x) => (
+              <div key={x.parcelId} class="row row--static">
+                <span class="row__body">
+                  <span class="row__t">{x.parcelId}</span>
+                  <span class="row__s">
+                    {x.binSlot ? t('agent.counter.onShelf', { slot: x.binSlot }) : x.destZone}
+                    {x.readyAt ? ` · ${t('agent.counter.since', { when: new Date(x.readyAt).toLocaleDateString() })}` : ''}
+                    {x.status === 'Unclaimed' ? ` · ${t('agent.counter.unclaimed')}` : ''}
+                  </span>
+                  {failed?.parcelId === x.parcelId ? <span class="row__s">{failed.text}</span> : null}
+                </span>
+                <span class="row__end">
+                  <Button variant="link" full={false} chevron={false} busy={busy === x.parcelId} onClick={() => void message(x.parcelId)}>
+                    {t('agent.counter.message')}
+                  </Button>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      <Card title={t('agent.counter.messagesTitle')}>
+        <ConversationList api={actions.chatApi} subject="parcel" refreshKey={tick} onOpen={setThread} emptyText={t('agent.counter.messagesNone')} />
+      </Card>
+
+      <ConversationSheet api={actions.chatApi} thread={thread} onClose={() => setThread(null)} onChanged={() => setTick((n) => n + 1)} />
+    </>
   );
 }

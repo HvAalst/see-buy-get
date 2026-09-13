@@ -1,4 +1,7 @@
-import { Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { UNCOLLECTED_H } from './pudo.config';
+import { appUrl } from '../../foundation/mail/mail.templates';
+import { MailService } from '../../foundation/mail/mail.service';
+import { Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { NotificationService } from './notification.service';
@@ -57,6 +60,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     private readonly dispatch: DispatchService,
     private readonly unclaimed: UnclaimedService,
     private readonly vendors: VendorService,
+    /** The buyer's email — the channel that works before they have an account. Optional for the hand-built specs. */
+    @Optional() private readonly mail?: MailService,
   ) {}
 
   /** The uncollected sweep's timer. Self-unref'd: a reminder is never a reason to hold the process open. */
@@ -77,6 +82,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
 
   onModuleInit(): void {
     // Rule 1 (buyer) — a parcel reached its destination PUDO and is ready to collect.
+    this.events.subscribe<{ parcelId: string }>(GlosEvent.Pudo.InboundCreated, (e) => this.onOrderOnItsWay(e.payload.parcelId));
     this.events.subscribe<{ parcelId: string }>(GlosEvent.Pudo.ParcelReadyForPickup, (e) =>
       this.onParcelReadyForPickup(e.payload.parcelId),
     );
@@ -122,9 +128,49 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
    * person account, and push. A receiver with no account yet (never signed up) is silently skipped —
    * there is nowhere to push to, and the collection code is still delivered in-app when they sign in.
    */
+  /**
+   * A store's order has been handed to the network: tell the BUYER by email, if the store gave us one.
+   *
+   * Before an account exists, email is the one channel we hold ourselves — the alternative is that the buyer hears
+   * only what the store's own system tells them. The email invites the sign-in that makes the next message a push.
+   */
+  private async onOrderOnItsWay(parcelId: string): Promise<void> {
+    if (!this.mail) return;
+    try {
+      const parcel = this.parcels.get(parcelId);
+      if (!parcel.buyerEmail || !parcel.vendorId) return;
+      let store = 'Your store';
+      try {
+        store = this.vendors.get(parcel.vendorId).name;
+      } catch {
+        /* a store that cannot be read is still a store — the email just names it generically */
+      }
+      await this.mail.send('order-on-its-way', { address: parcel.buyerEmail }, {
+        store,
+        ...(parcel.externalOrderId ? { orderRef: parcel.externalOrderId } : {}),
+        shop: this.shopName(parcel.destAgentDid) ?? parcel.destZone ?? 'the shop you chose',
+        trackingUrl: parcel.trackingKey ? `${appUrl('send')}?track=${encodeURIComponent(parcel.trackingKey)}` : appUrl('send'),
+      });
+    } catch (err) {
+      this.logger.warn(`order-on-its-way mail failed for ${parcelId}: ${(err as Error).message}`);
+    }
+  }
+
   private async onParcelReadyForPickup(parcelId: string): Promise<void> {
     try {
       const parcel = this.parcels.get(parcelId);
+      // The email goes whether or not the buyer has an account: a push can be off, a phone can be flat, and the
+      // buyer expected mail from the store's checkout anyway. The code is NOT in it — the Send app is.
+      if (this.mail && parcel.buyerEmail) {
+        const shop = this.shop(parcel.destAgentDid);
+        const since = parcel.readyAt ?? new Date().toISOString();
+        void this.mail.send('ready-for-collection', { address: parcel.buyerEmail }, {
+          shop: shop?.shopName ?? parcel.destZone ?? 'your pickup point',
+          ...(shop?.physicalAddress || shop?.landmark ? { address: shop.physicalAddress ?? shop.landmark } : {}),
+          collectBy: new Date(Date.parse(since) + UNCOLLECTED_H * 3_600_000).toISOString(),
+          openUrl: `${appUrl('send')}?parcel=${encodeURIComponent(parcel.parcelId)}`,
+        });
+      }
       const hash = parcel.receiverPhoneHash;
       if (!hash) return; // no receiver identity on this parcel (e.g. a legacy record) — nothing to target
       const person = this.persons.findByHash(hash);
@@ -291,9 +337,13 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
 
   /** Best-effort human label for a PUDO — its shop name, else undefined (caller falls back to the zone). */
   private shopName(agentDid?: string): string | undefined {
+    return this.shop(agentDid)?.shopName;
+  }
+
+  private shop(agentDid?: string): { shopName: string; landmark?: string; physicalAddress?: string } | undefined {
     if (!agentDid) return undefined;
     try {
-      return this.agents.get(agentDid).shopName;
+      return this.agents.get(agentDid);
     } catch {
       return undefined;
     }

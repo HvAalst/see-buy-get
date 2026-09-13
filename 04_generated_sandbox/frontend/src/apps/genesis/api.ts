@@ -1,5 +1,6 @@
 import {
   createConsumerApi,
+  createConversationsApi,
   createNotificationsApi,
   createSeededClient,
   makeConfig,
@@ -7,6 +8,7 @@ import {
   purgeTokens,
   tokenKeyFor,
   type ConsumerApi,
+  type ConversationsApi,
   type NotificationsApi,
   type Result,
   type SbgConfig,
@@ -98,6 +100,8 @@ export interface ConsumerClient {
   client: SeededAppClient;
   /** Persona-agnostic Web Push controls, bound to the same token (N1). */
   notifications: NotificationsApi;
+  /** CV5 — a word with the shop holding a parcel of theirs. */
+  conversations: ConversationsApi;
 }
 
 /**
@@ -107,7 +111,7 @@ export interface ConsumerClient {
  */
 export function createConsumerClient(personDid: string): ConsumerClient {
   const client = createSeededClient(sendConfig(), tokenKeyFor(TOKEN_PREFIX, personDid));
-  return { api: createConsumerApi(client.sbg), client, notifications: createNotificationsApi(client.sbg) };
+  return { api: createConsumerApi(client.sbg), client, notifications: createNotificationsApi(client.sbg), conversations: createConversationsApi(client.sbg) };
 }
 
 export function purgeConsumerTokens(keepDid: string | null): void {

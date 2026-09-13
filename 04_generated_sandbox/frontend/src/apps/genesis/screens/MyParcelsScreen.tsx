@@ -1,3 +1,6 @@
+import type { ChatThread } from '../../../shared/conversation/logic';
+import { ConversationSheet } from '../../../shared/conversation/Conversations';
+import { narrow } from '../../../lib/sbg';
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, Checklist, CodeCard, ErrorNote, Icon, Note, Pill, ReadAloud, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
@@ -148,6 +151,21 @@ function ParcelDetail({ parcel, state, actions }: { parcel: ConsumerParcelView; 
   const [disputeOpen, setDisputeOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [photo, setPhoto] = useState('');
+  // CV5 — a word with the shop holding this parcel. The thread is the server's; this only opens it.
+  const [thread, setThread] = useState<ChatThread | null>(null);
+  const [chatBusy, setChatBusy] = useState(false);
+  const [chatFailed, setChatFailed] = useState<string | null>(null);
+  const canMessageShop = parcel.relation === 'received' && !['Voided', 'Returned'].includes(parcel.status as string) && Boolean(actions.chatApi);
+  const messageShop = async () => {
+    if (!actions.chatApi) return;
+    setChatBusy(true);
+    setChatFailed(null);
+    const r = await actions.chatApi.openAboutParcel(parcel.parcelId);
+    setChatBusy(false);
+    if (r.error) return setChatFailed(r.error.detail || r.error.title || t('common.chat.loadFailed'));
+    const opened = narrow<ChatThread>(r.data);
+    if (opened) setThread(opened);
+  };
   // Close the sheet once the dispute has landed (the twin flips to Disputed).
   useEffect(() => {
     if (parcel.status === 'Disputed') setDisputeOpen(false);
@@ -245,6 +263,19 @@ function ParcelDetail({ parcel, state, actions }: { parcel: ConsumerParcelView; 
           <p class="card__note">{t('send.notice.stillYours')}</p>
         </Card>
       ) : null}
+
+      {/* CV5 — the shop, in person. Below the code and the notice: the code is what collects, this is what you say
+          when you cannot come yet, or do not know when they are open. */}
+      {canMessageShop ? (
+        <Card title={t('send.parcels.messageShopTitle')}>
+          <p class="card__note">{t('send.parcels.messageShopSub')}</p>
+          {chatFailed ? <p class="hint" role="alert">{chatFailed}</p> : null}
+          <Button variant="outline" chevron={false} busy={chatBusy} onClick={() => void messageShop()}>
+            {t('send.parcels.messageShop')}
+          </Button>
+        </Card>
+      ) : null}
+      <ConversationSheet api={actions.chatApi} thread={thread} onClose={() => setThread(null)} />
 
       {/* The code for the person they named, beside their own rather than inside the notice.
 

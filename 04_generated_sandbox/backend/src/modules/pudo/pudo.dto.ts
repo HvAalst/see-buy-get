@@ -364,6 +364,8 @@ export class VendorLoginDto {
 
 export class UpdateVendorDto {
   @IsOptional() @IsString() callbackUrl?: string;
+  /** Include the collection code in the ready_for_pickup callback (default true — see Vendor). */
+  @IsOptional() @IsBoolean() callbackCarriesCode?: boolean;
   @IsOptional() @ValidateNested() @Type(() => GeoDto) location?: GeoDto;
   @IsOptional() @IsString() address?: string;
   @IsOptional() @ValidateNested() @Type(() => ShippingPolicyDto) shippingPolicy?: ShippingPolicyDto;

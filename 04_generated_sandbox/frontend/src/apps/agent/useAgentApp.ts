@@ -776,7 +776,8 @@ export function useAgentApp() {
         handover: screen === 'handover' ? { ...s.handover, missed: [] } : s.handover,
         void: screen === 'void' ? { parcelId: null, photoRef: '' } : s.void,
       }));
-      if (screen === 'handover' || screen === 'void' || screen === 'bag') void loadShopParcels();
+      // The counter lists what is waiting to be collected (CV5), so it needs the shelf too.
+      if (screen === 'handover' || screen === 'void' || screen === 'bag' || screen === 'release') void loadShopParcels();
       if (screen === 'bag') void loadBagPlan();
       if (screen === 'rates') void loadRates();
       if (screen === 'accept') {

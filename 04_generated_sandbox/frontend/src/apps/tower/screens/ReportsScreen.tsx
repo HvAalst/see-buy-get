@@ -125,13 +125,13 @@ export function ReportsScreen({ state, actions }: { state: TowerState; actions: 
                     </div>
                   </td>
                   <td>
-                    <span class="ctag">{t(d.sharedBy === 'poster' ? 'tower.reports.sharedBy.poster' : 'tower.reports.sharedBy.driver')}</span>
+                    <span class="ctag">{t(d.sharedBy === 'poster' ? 'tower.reports.sharedBy.poster' : 'tower.reports.sharedBy.asker')}</span>
                     {d.note ? <div class="ctbl__sub">“{d.note}”</div> : null}
                   </td>
                   <td>
                     {d.messages.map((m) => (
                       <div key={m.seq} class="ctbl__sub" style="overflow-wrap:anywhere">
-                        <b>{t(m.from === 'poster' ? 'tower.reports.fromPoster' : 'tower.reports.fromDriver')}</b> · {formatDate(m.at)} — {disputeLine(m)}
+                        <b>{t(m.from === 'poster' ? 'tower.reports.fromPoster' : 'tower.reports.fromAsker')}</b> · {formatDate(m.at)} — {disputeLine(m)}
                         {/* CV4 — the recording itself, fetched only when pressed. */}
                         {m.voiceId ? (
                           <button

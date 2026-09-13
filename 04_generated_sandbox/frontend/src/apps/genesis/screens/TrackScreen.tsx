@@ -142,6 +142,18 @@ export function TrackScreen({ state, actions }: TrackScreenProps) {
         </>
       ) : null}
 
+      {/* CV5 — the invitation, where the buyer already is. A tracking code is a stranger's view of a parcel; signing in
+          with the phone the store was given makes it theirs: told when it arrives, the code kept in the app, and a
+          word with the shop — so what they hear no longer depends on the store's own messages alone. */}
+      {res && !state.identity ? (
+        <Card title={t('send.track.signUpTitle')} tone="soft">
+          <p class="card__note">{t('send.track.signUpBody')}</p>
+          <Button variant="outline" chevron={false} onClick={() => actions.go('account')}>
+            {t('send.track.signUp')}
+          </Button>
+        </Card>
+      ) : null}
+
       {state.recent.length ? (
         <Card title={t('send.track.recentTitle')} tone="soft">
           <div class="rows" role="list">

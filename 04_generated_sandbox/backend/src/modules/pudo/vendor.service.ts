@@ -453,9 +453,10 @@ export class VendorService {
   }
 
   /** Update the store profile (map pin, address, callback URL, split/contribution policy). */
-  updateProfile(vendorId: string, patch: { callbackUrl?: string; location?: { lat: number; lng: number }; address?: string; shippingPolicy?: Partial<ShippingPolicy> }): Vendor {
+  updateProfile(vendorId: string, patch: { callbackUrl?: string; callbackCarriesCode?: boolean; location?: { lat: number; lng: number }; address?: string; shippingPolicy?: Partial<ShippingPolicy> }): Vendor {
     const vendor = this.get(vendorId);
     if (patch.callbackUrl !== undefined) vendor.callbackUrl = patch.callbackUrl || undefined;
+    if (patch.callbackCarriesCode !== undefined) vendor.callbackCarriesCode = patch.callbackCarriesCode;
     if (patch.location !== undefined) vendor.location = patch.location;
     if (patch.address !== undefined) vendor.address = patch.address || undefined;
     if (patch.shippingPolicy !== undefined) vendor.shippingPolicy = VendorService.policy({ ...vendor.shippingPolicy, ...patch.shippingPolicy });

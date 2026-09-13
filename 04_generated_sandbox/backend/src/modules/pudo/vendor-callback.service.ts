@@ -43,11 +43,13 @@ export class VendorCallbackService implements OnModuleInit {
       return;
     }
     if (parcel.direction !== 'inbound' || !parcel.vendorId || !this.vendors.has(parcel.vendorId)) return;
+    // The code rides along unless the store has said its buyers get it from the Send app instead.
+    const carriesCode = this.vendors.get(parcel.vendorId).callbackCarriesCode !== false;
     this.vendors.notify(parcel.vendorId, EVENT_STATUS[topic], {
       parcelId,
       externalOrderId: parcel.externalOrderId,
       status: parcel.status,
-      collectionCode: parcel.collectionCode,
+      ...(carriesCode ? { collectionCode: parcel.collectionCode } : {}),
       binSlot: parcel.binSlot,
       disputeReason: parcel.disputeReason,
     });

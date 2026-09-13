@@ -15,7 +15,7 @@
  * the reader's app in the reader's language, so "Loaded" sent in Swahili arrives in Amharic. Mirrored in
  * frontend/src/shared/conversation/logic.ts; keep the two lists identical.
  */
-export const QUICK_REPLIES = ['on_my_way', 'loaded', 'arrived', 'delivered', 'paid', 'running_late'] as const;
+export const QUICK_REPLIES = ['on_my_way', 'loaded', 'arrived', 'delivered', 'paid', 'running_late', 'coming_today', 'coming_tomorrow', 'cannot_make_it', 'still_here', 'closing_soon'] as const;
 export type QuickReply = (typeof QUICK_REPLIES)[number];
 
 export const REPORT_REASONS = ['spam', 'abuse', 'scam'] as const;
@@ -65,16 +65,20 @@ export interface VoiceNote {
 export interface DisputeReport {
   reportId: string;
   conversationId: string;
-  freightId: string;
+  /** CV5 — what the thread is about: a posted load, or a parcel waiting at a shop. */
+  subject: ConversationSubject;
+  freightId?: string;
+  parcelId?: string;
+  /** The subject's code — a load's code, or the parcel id. */
   freightCode: string;
   posterDid: string;
   askerDid: string;
   byDid: string;
-  sharedBy: 'poster' | 'driver';
+  sharedBy: 'poster' | 'asker';
   note?: string;
   messages: Array<{
     seq: number;
-    from: 'poster' | 'driver';
+    from: 'poster' | 'asker';
     kind: MessageKind;
     body?: string;
     quick?: QuickReply;
@@ -98,12 +102,21 @@ export interface DisputeReport {
   createdAt: string;
 }
 
+/**
+ * CV5 — WHAT A THREAD IS ABOUT. A posted load (CV1–CV4: a driver asking the poster), or a PARCEL waiting at a shop:
+ * the person collecting it and the shop holding it, saying "I come tomorrow" and "we close at six". The parcel
+ * thread carries no deal and no settlement — there is nothing to agree but a time.
+ */
+export type ConversationSubject = 'freight' | 'parcel';
+
 export interface Conversation {
   conversationId: string;
-  freightId: string;
-  /** Who posted the load and answers for it. */
+  /** Exactly one of the two: the load, or the parcel. */
+  freightId?: string;
+  parcelId?: string;
+  /** Who answers: the load's poster, or the parcel's collection shop. */
   posterDid: string;
-  /** The one who asked — an active driver. One thread per (load, asker). */
+  /** The one who asked — an active driver, or the parcel's receiver (a person). One thread per (subject, asker). */
   askerDid: string;
   createdAt: string;
   /** The last sequence number handed out. Catch-up asks for everything after a seq, never after a clock. */
@@ -162,7 +175,7 @@ export interface MessageView {
   mine: boolean;
   /** The role the message came from — never who. A shared reader is neither party, so "mine" says nothing to
    *  them: found in the browser pass, a manager saw their own driver's offer signed "the poster". */
-  from: 'poster' | 'driver';
+  from: 'poster' | 'asker';
   kind: MessageKind;
   body?: string;
   quick?: QuickReply;
@@ -180,13 +193,20 @@ export interface MessageView {
 /** A thread as one party sees it. Carries no DID and no contact detail of the other party. */
 export interface ConversationView {
   conversationId: string;
-  freightId: string;
+  subject: ConversationSubject;
+  freightId?: string;
+  parcelId?: string;
+  /** The subject's code: a load's code, or the parcel id. (Named for the load it was first built for.) */
   freightCode: string;
-  /** "Maize · Nakuru → Nairobi" — what the load is, so the list reads without opening each row. */
+  /** "Maize · Nakuru → Nairobi" for a load; "Collect at Mama Sarah Shop" for a parcel. Reads without opening the row. */
   freightLabel: string;
   /** `manager` — CV3: the driver's fleet manager reading a thread the driver shared. Never a writer. */
   role: 'poster' | 'asker' | 'manager';
-  /** The asker's display name, shown to the poster (and the manager). The poster is "the poster" to the asker. */
+  /**
+   * The other side's name, when there is one to show. A load: the asking driver's name, to the poster (and the
+   * manager) — the poster is "the poster" to the driver. A parcel: the shop's name to the person collecting; the
+   * person's own display name, if they set one, to the shop.
+   */
   counterpartName?: string;
   /** CV3 — the asker drives for a fleet, so there is a manager to share with. */
   shareable: boolean;

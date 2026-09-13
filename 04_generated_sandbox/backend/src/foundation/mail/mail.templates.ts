@@ -75,7 +75,7 @@ export interface MailParams {
   'fleet-code-issued': { company: string; when: string; byStaff: boolean };
   'fleet-code-due': { company: string; days: number };
   'order-on-its-way': { store: string; orderRef?: string; shop: string; trackingUrl: string };
-  'ready-for-collection': { shop: string; address?: string; collectBy: string };
+  'ready-for-collection': { shop: string; address?: string; collectBy: string; openUrl?: string };
 }
 
 export type MailTemplateId = keyof MailParams;
@@ -269,8 +269,8 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
 
   'order-on-its-way': {
     title: 'Order on its way (buyer)',
-    sentWhen: 'NOT SENT YET — designed for a store order handed to the network, to the buyer’s email.',
-    wired: false,
+    sentWhen: 'A store hands an order to the network, to the email the buyer gave the store.',
+    wired: true,
     sample: { store: 'Nairobi Threads', orderRef: '#10482', shop: 'Mama Sarah Shop', trackingUrl: 'http://localhost:5176/send/' },
     build: (p) => ({
       subject: `Your ${p.store} order is on its way`,
@@ -279,8 +279,11 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
         { kind: 'heading', text: 'Your order is on its way' },
         { kind: 'paragraph', text: `${p.store} has sent your order${p.orderRef ? ` ${p.orderRef}` : ''} to ${p.shop}, the shop you chose. We will email you again when it is ready to collect.` },
         { kind: 'button', label: 'Track your parcel', href: p.trackingUrl },
-        { kind: 'paragraph', text: 'To collect it you need your collection code. It is in the Send app: sign in with the phone number you gave the store. For your safety the code is never sent by email.' },
-        { kind: 'note', text: 'Nobody from SeeBuyGet or the shop will ask you for the code before you are at the counter.' },
+        {
+          kind: 'paragraph',
+          text: 'Sign in to the Send app with the phone number you gave the store, and this parcel is already there: you are told the moment it arrives, your collection code is kept safe in the app, and you can message the shop directly — to ask when they are open, or to say when you are coming.',
+        },
+        { kind: 'note', text: 'For your safety the code is never sent by email, and nobody from SeeBuyGet or the shop will ask you for it before you are at the counter.' },
       ],
       reason: `You are getting this email because you ordered from ${p.store} and chose to collect at a SeeBuyGet shop.`,
     }),
@@ -288,8 +291,8 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
 
   'ready-for-collection': {
     title: 'Ready to collect (buyer)',
-    sentWhen: 'NOT SENT YET — designed for a parcel shelved at the collection shop, to the buyer’s email.',
-    wired: false,
+    sentWhen: 'A parcel is shelved at the collection shop, to the email the buyer gave the store.',
+    wired: true,
     sample: { shop: 'Mama Sarah Shop', address: 'Biashara St 12, Nairobi', collectBy: '2026-09-20T18:00:00Z' },
     build: (p) => ({
       subject: `Your parcel is ready at ${p.shop}`,
@@ -298,8 +301,8 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
         { kind: 'heading', text: 'Your parcel is ready to collect' },
         { kind: 'facts', rows: [['Where', p.address ? `${p.shop}, ${p.address}` : p.shop], ['Collect by', formatDate(p.collectBy)]] },
         { kind: 'paragraph', text: 'Open the Send app with the phone number you gave the store, show your collection code at the counter, and the shopkeeper hands your parcel over.' },
-        { kind: 'button', label: 'Open the Send app', href: appUrl('send') },
-        { kind: 'note', text: 'The code is only in the app, never in an email. Cannot make it in time? The app shows what you can do.' },
+        { kind: 'button', label: 'Open the Send app', href: p.openUrl ?? appUrl('send') },
+        { kind: 'note', text: 'The code is only in the app, never in an email. Cannot make it in time, or not sure when the shop is open? Message the shop from the parcel in the app.' },
       ],
       reason: 'You are getting this email because a parcel for you is waiting at a SeeBuyGet shop.',
     }),

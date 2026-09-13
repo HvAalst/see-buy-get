@@ -34,9 +34,11 @@ export class ConversationController {
     return this.conversations.listFor(didOf(actor));
   }
 
-  /** Ask about a load, or return to the thread already asked. */
+  /** Ask about a load — or (CV5) talk about a parcel waiting at a shop. Either returns to the thread already open. */
   @Post()
   open(@Body() dto: OpenConversationDto, @Actor() actor: IntrospectionResult) {
+    if (dto.parcelId) return this.conversations.openAboutParcel(dto.parcelId, didOf(actor));
+    if (!dto.freightId) throw new GlosError('FIELD_REQUIRED', 'Say what the conversation is about: a load, or a parcel');
     return this.conversations.open(dto.freightId, didOf(actor));
   }
 

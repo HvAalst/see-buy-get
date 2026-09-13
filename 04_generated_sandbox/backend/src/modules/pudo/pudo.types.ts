@@ -547,6 +547,13 @@ export class Vendor {
   did: string;
   name: string;
   callbackUrl?: string; // GLOS pushes HMAC-signed status callbacks here
+  /**
+   * Whether the ready_for_pickup callback carries the buyer's collection code. It does by default, because today
+   * that callback is how many buyers learn the code (through the store's own email or text). A store whose buyers
+   * get it from the Send app switches this off, and the code then never leaves the network. The default is meant to
+   * flip once that is the common case.
+   */
+  callbackCarriesCode?: boolean;
   secret: string;
   /** When the signing secret was last rotated by the store. */
   secretRotatedAt?: string;

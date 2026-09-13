@@ -184,6 +184,8 @@ export const enVendor = {
   'vendor.store.callbackUrl': 'Callback URL',
   'vendor.store.save': 'Save',
   'vendor.store.nothingSent': 'Nothing sent yet.',
+  'vendor.store.callbackCode': 'Include the collection code in the ready_for_pickup callback',
+  'vendor.store.callbackCodeNote': 'On while your buyers learn the code from your own emails. Buyers who sign in to the Send app get it there — once yours do, switch this off and the code never leaves the network.',
   'vendor.store.settlementTitle': 'Settlement book',
   'vendor.store.gettingBooks': 'Getting the books…',
   'vendor.store.balanceSpoken': 'Balance {balance}. ',
@@ -480,6 +482,8 @@ export const enVendor = {
   'vendor.toast.booksExportedDetail': 'Saved bookkeeping.csv to your device.',
   'vendor.toast.policySaved': 'Policy saved',
   'vendor.toast.callbackSaved': 'Callback URL saved',
+  'vendor.toast.callbackCodeOn': 'The callback carries the collection code again',
+  'vendor.toast.callbackCodeOff': 'The collection code stays in the network',
   'vendor.toast.keyRevoked': 'Key revoked',
   'vendor.toast.callbackRemoved': 'Callback URL removed',
 };

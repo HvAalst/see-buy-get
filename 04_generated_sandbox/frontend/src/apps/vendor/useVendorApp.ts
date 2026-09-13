@@ -936,6 +936,20 @@ export function useVendorApp() {
     [client, creds, run, fail, pushToast, refresh],
   );
 
+  /** CV5 — whether our ready_for_pickup callback carries the buyer's collection code. */
+  const setCallbackCode = useCallback(
+    async (on: boolean) => {
+      if (!client || !creds) return;
+      await run('callback-code', async () => {
+        const r = await client.api.update(creds.vendorId, { callbackCarriesCode: on });
+        if (r.error) return fail(r.error);
+        pushToast({ tone: 'ok', icon: 'check', title: t(on ? 'vendor.toast.callbackCodeOn' : 'vendor.toast.callbackCodeOff') });
+        await refresh();
+      });
+    },
+    [client, creds, run, fail, pushToast, refresh],
+  );
+
   const saveCallback = useCallback(
     async (callbackUrl: string) => {
       if (!client || !creds) return;
@@ -1043,6 +1057,7 @@ export function useVendorApp() {
       savePolicy,
       answerReturn,
       saveCallback,
+      setCallbackCode,
       loadPoints,
       loadDock,
       enableDock,

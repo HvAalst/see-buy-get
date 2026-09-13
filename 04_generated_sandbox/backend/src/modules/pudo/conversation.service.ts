@@ -1,4 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { PersonService } from './person.service';
+import { ParcelService } from './parcel.service';
+import { AgentService } from './agent.service';
+import { Injectable, Optional } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
@@ -7,7 +10,7 @@ import { DispatchService, commitModeOf } from './dispatch.service';
 import { DriverService } from './driver.service';
 import { NotificationService } from './notification.service';
 import { VendorService } from './vendor.service';
-import {
+import { ConversationSubject,
   QUICK_REPLIES,
   REPORT_REASONS,
   SETTLE_METHODS,
@@ -69,6 +72,11 @@ export class ConversationService {
     private readonly drivers: DriverService,
     private readonly notifications: NotificationService,
     private readonly vendors: VendorService,
+    // CV5 — the parcel thread's three facts: the parcel, the person collecting it, the shop holding it. Optional so
+    // the specs that construct this service over four stubs keep working; the real module always provides them.
+    @Optional() private readonly parcels?: ParcelService,
+    @Optional() private readonly persons?: PersonService,
+    @Optional() private readonly agents?: AgentService,
   ) {}
 
   /**
@@ -120,6 +128,57 @@ export class ConversationService {
     return this.viewFor(thread, askerDid);
   }
 
+  /**
+   * CV5 — TALK ABOUT A PARCEL WAITING AT A SHOP: the person collecting it and the shop holding it.
+   *
+   * Either side may start it. The person collecting proves they are the receiver by being the person the parcel's
+   * receiver phone resolves to; the shop proves itself by being the parcel's collection shop. A stranger, on either
+   * side, is told the parcel does not exist — the thread must not confirm that a parcel is waiting for somebody.
+   *
+   * The shop can only reach a customer who HAS an account: a message needs a person to arrive at. Told plainly,
+   * with what to say to the customer, because the alternative — the shop typing a number into somebody else's
+   * messaging app — is exactly the third-party dependence this thread exists to remove.
+   */
+  openAboutParcel(parcelId: string, did: string, now = Date.now()): ConversationView {
+    if (!this.parcels || !this.persons) throw new GlosError('INVALID_STATE', 'Parcel conversations are not available here');
+    const parcel = this.parcels.get(parcelId); // NOT_FOUND for a parcel that does not exist
+    const shopDid = parcel.destAgentDid;
+    if (!shopDid) throw new GlosError('INVALID_STATE', 'This parcel has no collection shop yet, so there is nobody to talk to');
+    if (parcel.status === 'Voided' || parcel.status === 'Returned') throw new GlosError('INVALID_STATE', 'This parcel is no longer waiting at a shop');
+
+    let askerDid: string;
+    if (did === shopDid) {
+      const person = parcel.receiverPhoneHash ? this.persons.findByHash(parcel.receiverPhoneHash) : undefined;
+      if (!person) {
+        throw new GlosError('NOT_FOUND', 'This customer has no SeeBuyGet account yet, so there is nobody to message. They can sign in to the Send app with the phone number they gave, and the parcel will be there.');
+      }
+      askerDid = person.personDid;
+    } else {
+      const person = this.persons.findByDid(did);
+      if (!person || !parcel.receiverPhoneHash || person.phoneHash !== parcel.receiverPhoneHash) throw new GlosError('NOT_FOUND', 'Parcel not found');
+      askerDid = did;
+    }
+
+    const existing = [...this.threads.values()].find((c) => c.parcelId === parcelId && c.askerDid === askerDid);
+    if (existing) return this.viewFor(existing, did);
+
+    const startedToday = [...this.threads.values()].filter((c) => (c.askerDid === did || c.posterDid === did) && now - Date.parse(c.createdAt) < DAY_MS).length;
+    if (startedToday >= NEW_THREADS_PER_DAY) {
+      throw new GlosError('FORBIDDEN', `You have started ${NEW_THREADS_PER_DAY} conversations today — answer the ones you have, and try again tomorrow`);
+    }
+    const thread: Conversation = {
+      conversationId: `cv_${randomBytes(8).toString('hex')}`,
+      parcelId,
+      posterDid: shopDid,
+      askerDid,
+      createdAt: new Date(now).toISOString(),
+      lastSeq: 0,
+      readSeq: {},
+    };
+    this.threads.set(thread.conversationId, thread);
+    return this.viewFor(thread, did);
+  }
+
   /** Every thread this person is a party to, most recently active first. */
   listFor(did: string): ConversationView[] {
     return [...this.threads.values()]
@@ -155,8 +214,9 @@ export class ConversationService {
     const thread = this.requireParty(conversationId, did);
     if (did !== thread.askerDid) throw new GlosError('FORBIDDEN', 'Only the driver who asked can name a price — the poster accepts or declines it');
     this.requireOpen(thread, did);
+    const freightId = requireLoad(thread, 'A price is named on a load — a parcel waiting at a shop has nothing to price');
     const note = boundedNote(input.note);
-    const proposal = this.dispatch.propose({ freightId: thread.freightId, driverDid: did, from: input.from, price: Number(input.price), ...(note ? { note } : {}) }, now);
+    const proposal = this.dispatch.propose({ freightId, driverDid: did, from: input.from, price: Number(input.price), ...(note ? { note } : {}) }, now);
     return this.append(thread, did, { kind: 'proposal', proposalId: proposal.proposalId, price: proposal.price, ...(note ? { body: note } : {}) }, now, 'New price offered on');
   }
 
@@ -191,7 +251,7 @@ export class ConversationService {
   recordSettlement(conversationId: string, did: string, input: { amount: number; method: string; when: string; note?: string }, now = Date.now()): MessageView {
     const thread = this.requireParty(conversationId, did);
     this.requireOpen(thread, did);
-    if (!this.settlesOffPlatform(thread.freightId)) {
+    if (!thread.freightId || !this.settlesOffPlatform(thread.freightId)) {
       throw new GlosError('INVALID_STATE', 'This load is paid through the network, so there is nothing to settle between you — the driver is paid on delivery');
     }
     const amount = Math.round(Number(input.amount) * 100) / 100;
@@ -322,7 +382,7 @@ export class ConversationService {
 
     const messages: DisputeReport['messages'] = (picked as ConversationMessage[]).map((m) => ({
       seq: m.seq,
-      from: m.fromDid === thread.posterDid ? 'poster' : 'driver',
+      from: m.fromDid === thread.posterDid ? 'poster' : 'asker',
       kind: m.kind,
       ...(m.body !== undefined ? { body: m.body } : {}),
       ...(m.quick ? { quick: m.quick } : {}),
@@ -336,12 +396,14 @@ export class ConversationService {
     const report: DisputeReport = {
       reportId: `dr_${randomBytes(8).toString('hex')}`,
       conversationId,
-      freightId: thread.freightId,
-      freightCode: this.freightCode(thread.freightId),
+      subject: subjectOf(thread),
+      ...(thread.freightId ? { freightId: thread.freightId } : {}),
+      ...(thread.parcelId ? { parcelId: thread.parcelId } : {}),
+      freightCode: this.codeOf(thread),
       posterDid: thread.posterDid,
       askerDid: thread.askerDid,
       byDid: did,
-      sharedBy: did === thread.posterDid ? 'poster' : 'driver',
+      sharedBy: did === thread.posterDid ? 'poster' : 'asker',
       ...(cleanNote ? { note: cleanNote } : {}),
       messages,
       fingerprint: createHash('sha256').update(JSON.stringify(messages)).digest('hex'),
@@ -441,10 +503,10 @@ export class ConversationService {
     void this.notifications
       .notify(other, {
         kind: 'message',
-        title: `${pushTitle} ${this.freightCode(thread.freightId)}`,
+        title: `${pushTitle} ${this.codeOf(thread)}`,
         body: 'Open the conversation to read it.',
         tag: `conv:${thread.conversationId}`,
-        data: { conversationId: thread.conversationId, freightId: thread.freightId },
+        data: { conversationId: thread.conversationId, ...(thread.freightId ? { freightId: thread.freightId } : {}), ...(thread.parcelId ? { parcelId: thread.parcelId } : {}) },
       })
       .catch(() => undefined);
 
@@ -489,7 +551,7 @@ export class ConversationService {
 
   /** A message as one party reads it. A proposal carries where it stands NOW, read from the negotiation. */
   private viewOf(m: ConversationMessage, did: string, agreed: Set<number>, posterDid: string): MessageView {
-    const view: MessageView = { seq: m.seq, mine: m.fromDid === did, from: m.fromDid === posterDid ? 'poster' : 'driver', kind: m.kind, at: m.at };
+    const view: MessageView = { seq: m.seq, mine: m.fromDid === did, from: m.fromDid === posterDid ? 'poster' : 'asker', kind: m.kind, at: m.at };
     if (m.body !== undefined) view.body = m.body;
     if (m.quick) view.quick = m.quick;
     if (m.kind === 'proposal' && m.proposalId) {
@@ -513,23 +575,18 @@ export class ConversationService {
     const role: ConversationView['role'] = did === thread.posterDid ? 'poster' : did === thread.askerDid ? 'asker' : 'manager';
     const all = this.messages.get(thread.conversationId) ?? [];
     const last = all.at(-1);
-    let counterpartName: string | undefined;
-    if (role !== 'asker') {
-      try {
-        counterpartName = this.drivers.get(thread.askerDid).displayName;
-      } catch {
-        counterpartName = undefined;
-      }
-    }
+    const counterpartName = this.counterpartName(thread, role);
     return {
       conversationId: thread.conversationId,
-      freightId: thread.freightId,
-      freightCode: this.freightCode(thread.freightId),
-      freightLabel: this.freightLabel(thread.freightId),
+      subject: subjectOf(thread),
+      ...(thread.freightId ? { freightId: thread.freightId } : {}),
+      ...(thread.parcelId ? { parcelId: thread.parcelId } : {}),
+      freightCode: this.codeOf(thread),
+      freightLabel: this.labelOf(thread),
       role,
       ...(counterpartName ? { counterpartName } : {}),
-      negotiable: this.negotiable(thread.freightId),
-      settlesOffPlatform: this.settlesOffPlatform(thread.freightId),
+      negotiable: Boolean(thread.freightId) && this.negotiable(thread.freightId!),
+      settlesOffPlatform: Boolean(thread.freightId) && this.settlesOffPlatform(thread.freightId!),
       shareable: Boolean(this.managerOf(thread.askerDid)),
       sharedWithManager: Boolean(thread.sharedWithManagerDid) && thread.sharedWithManagerDid === this.managerOf(thread.askerDid),
       lastSeq: thread.lastSeq,
@@ -541,6 +598,33 @@ export class ConversationService {
       blocked: Boolean(thread.blockedBy),
       blockedByMe: thread.blockedBy === did,
     };
+  }
+
+  /** Who the other side is, by name, where a name may be shown — see ConversationView.counterpartName. */
+  private counterpartName(thread: Conversation, role: ConversationView['role']): string | undefined {
+    try {
+      if (thread.parcelId) {
+        if (role === 'asker') return this.agents?.get(thread.posterDid).shopName;
+        const person = this.persons?.findByDid(thread.askerDid);
+        return person ? this.persons?.profile(person).displayName : undefined;
+      }
+      return role !== 'asker' ? this.drivers.get(thread.askerDid).displayName : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private codeOf(thread: Conversation): string {
+    return thread.parcelId ?? this.freightCode(thread.freightId ?? '');
+  }
+
+  private labelOf(thread: Conversation): string {
+    if (!thread.parcelId) return this.freightLabel(thread.freightId ?? '');
+    try {
+      return `Collect at ${this.agents?.get(thread.posterDid).shopName ?? 'the shop'}`;
+    } catch {
+      return 'Collect at the shop';
+    }
   }
 
   private negotiable(freightId: string): boolean {
@@ -576,6 +660,16 @@ export class ConversationService {
       return '';
     }
   }
+}
+
+function subjectOf(thread: Pick<Conversation, 'parcelId'>): ConversationSubject {
+  return thread.parcelId ? 'parcel' : 'freight';
+}
+
+/** The load a deal is about — a parcel thread has none, and says so in the caller's words. */
+function requireLoad(thread: Pick<Conversation, 'freightId'>, reason: string): string {
+  if (!thread.freightId) throw new GlosError('INVALID_STATE', reason);
+  return thread.freightId;
 }
 
 /** The settlement messages somebody has agreed to. */

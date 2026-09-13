@@ -31,6 +31,7 @@ export function FreightScreen({ state, actions }: FreightScreenProps) {
       <Card title={load ? t('common.chat.questions') : t('common.chat.listTitle')}>
         <ConversationList
           api={actions.chatApi}
+          subject="freight"
           freightId={load?.freightId}
           refreshKey={chatTick}
           onOpen={setThread}

@@ -521,7 +521,10 @@ content-type: application/json
   <ul class="plain">
     <li><code>parcel_paid</code> — your prepaid balance covered it and the label is unblocked.</li>
     <li><code>ready_for_pickup</code> — it is on the shelf and the buyer can collect. <b>This is the one
-      that carries the collection code</b>, which is what you tell your buyer. A reissued code sends this
+      that carries the collection code</b>, which is what you tell your buyer — unless you have switched that off
+      on your store record (Store app → My store → Callbacks): buyers who sign in to the Send app with the phone
+      number they gave you read the code there, get told when the parcel arrives, and can message the shop, and
+      once yours do the code need never leave the network. A reissued code sends this
       event again with the new one: same status, new code, which is exactly what somebody standing at a
       counter unable to collect needs.</li>
     <li><code>collected</code> — the buyer has it. The order is closed.</li>

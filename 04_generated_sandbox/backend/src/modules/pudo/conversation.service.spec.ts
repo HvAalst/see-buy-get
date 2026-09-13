@@ -253,7 +253,7 @@ describe('conversations about a load', () => {
       expect(service.listShared('did:fleet:kilima')).toEqual([expect.objectContaining({ conversationId, role: 'manager', unread: 0, counterpartName: 'Amos K.' })]);
       expect(service.messagesFor(conversationId, 'did:fleet:kilima').items.map((m) => m.body)).toEqual(['Is the gate open at 6?']);
       // A shared reader is neither party, so each message says which ROLE it came from.
-      expect(service.messagesFor(conversationId, 'did:fleet:kilima').items[0]).toMatchObject({ mine: false, from: 'driver' });
+      expect(service.messagesFor(conversationId, 'did:fleet:kilima').items[0]).toMatchObject({ mine: false, from: 'asker' });
       // Reading, never writing — and never another fleet's.
       expect(() => service.send(conversationId, 'did:fleet:kilima', { body: 'hi' })).toThrow(/not found/i);
       expect(() => service.messagesFor(conversationId, 'did:fleet:other')).toThrow(/not found/i);
@@ -293,8 +293,8 @@ describe('conversations about a load', () => {
       // the report to the console without its fingerprint and crashed the screen.
       expect(Object.keys(report)).not.toContain('hash');
       expect(Object.keys(shared)).not.toContain('hash');
-      expect(report).toMatchObject({ sharedBy: 'driver', note: 'Paid less than agreed', posterDid: 'did:shop', askerDid: 'did:drv:amos' });
-      expect(report.messages.map((m) => [m.seq, m.from])).toEqual([[1, 'driver'], [3, 'poster']]);
+      expect(report).toMatchObject({ sharedBy: 'asker', note: 'Paid less than agreed', posterDid: 'did:shop', askerDid: 'did:drv:amos' });
+      expect(report.messages.map((m) => [m.seq, m.from])).toEqual([[1, 'asker'], [3, 'poster']]);
       expect(JSON.stringify(report.messages)).not.toMatch(/did:/);
       expect(report.messages[1].settlement).toEqual({ amount: 4500, method: 'cash', when: 'on_delivery' });
 
@@ -357,9 +357,87 @@ describe('conversations about a load', () => {
       const { conversationId } = service.open('fr_1', 'did:drv:amos');
       const { voice } = service.sendVoice(conversationId, 'did:drv:amos', { dataUrl: WEBM, durationSec: 9 });
       const { reportId } = service.shareDisputeReport(conversationId, 'did:shop', [1]);
-      expect(service.listDisputeReports()[0].messages[0]).toMatchObject({ kind: 'voice', voiceId: voice!.voiceId, durationSec: 9, from: 'driver' });
+      expect(service.listDisputeReports()[0].messages[0]).toMatchObject({ kind: 'voice', voiceId: voice!.voiceId, durationSec: 9, from: 'asker' });
       expect(service.voiceForReport(reportId, voice!.voiceId).contentType).toBe('audio/webm');
       expect(() => service.voiceForReport(reportId, 'vn_not_in_it')).toThrow(/not found in that report/);
+    });
+  });
+
+  /**
+   * CV5 — a parcel waiting at a shop: the person collecting it and the shop holding it.
+   */
+  describe('a conversation about a parcel waiting at a shop', () => {
+    const parcelsById: Record<string, Record<string, unknown>> = {};
+    const personsByDid: Record<string, { personDid: string; phoneHash: string; displayName?: string }> = {};
+    let parcelService: ConversationService;
+
+    beforeEach(() => {
+      parcelsById.PUD1 = { parcelId: 'PUD1', status: 'Ready_For_Pickup', destAgentDid: 'did:shop', receiverPhoneHash: 'h-amina' };
+      parcelsById.PUD2 = { parcelId: 'PUD2', status: 'Ready_For_Pickup', destAgentDid: 'did:shop', receiverPhoneHash: 'h-nobody' };
+      parcelsById.PUDX = { parcelId: 'PUDX', status: 'Voided', destAgentDid: 'did:shop', receiverPhoneHash: 'h-amina' };
+      personsByDid['did:person:amina'] = { personDid: 'did:person:amina', phoneHash: 'h-amina', displayName: 'Amina' };
+      personsByDid['did:person:other'] = { personDid: 'did:person:other', phoneHash: 'h-other' };
+      const parcels = {
+        get: (id: string) => {
+          if (!parcelsById[id]) throw new Error('Parcel not found');
+          return parcelsById[id];
+        },
+      };
+      const persons = {
+        findByDid: (did: string) => personsByDid[did],
+        findByHash: (hash: string) => Object.values(personsByDid).find((p) => p.phoneHash === hash),
+        profile: (p: { displayName?: string }) => ({ displayName: p.displayName }),
+      };
+      const agents = { get: (did: string) => ({ shopName: did === 'did:shop' ? 'Mama Sarah Shop' : 'Other Shop' }) };
+      const drivers = { canOperate: (did: string) => did.startsWith('did:drv'), get: (did: string) => ({ displayName: 'Amos K.', managerDid: managers[did] }) };
+      const vendors = { has: () => false, get: () => ({ did: '' }) };
+      parcelService = new ConversationService(dispatch as never, drivers as never, { notify } as never, vendors as never, parcels as never, persons as never, agents as never);
+    });
+
+    it('lets the person collecting open it, names the shop to them and them to the shop, and carries no deal', () => {
+      const mine = parcelService.openAboutParcel('PUD1', 'did:person:amina');
+      expect(mine).toMatchObject({ subject: 'parcel', parcelId: 'PUD1', role: 'asker', freightCode: 'PUD1', freightLabel: 'Collect at Mama Sarah Shop', counterpartName: 'Mama Sarah Shop', negotiable: false, settlesOffPlatform: false, shareable: false });
+      expect(mine.freightId).toBeUndefined();
+      parcelService.send(mine.conversationId, 'did:person:amina', { quick: 'coming_tomorrow' });
+      expect(notify).toHaveBeenCalledWith('did:shop', expect.objectContaining({ kind: 'message', title: 'New message about PUD1', data: expect.objectContaining({ parcelId: 'PUD1' }) }));
+
+      const shops = parcelService.listFor('did:shop');
+      expect(shops).toHaveLength(1);
+      expect(shops[0]).toMatchObject({ role: 'poster', counterpartName: 'Amina', unread: 1 });
+      expect(parcelService.messagesFor(mine.conversationId, 'did:shop').items[0]).toMatchObject({ from: 'asker', quick: 'coming_tomorrow', mine: false });
+    });
+
+    it('lets the shop start it too — and lands in the SAME thread', () => {
+      const fromShop = parcelService.openAboutParcel('PUD1', 'did:shop');
+      const fromPerson = parcelService.openAboutParcel('PUD1', 'did:person:amina');
+      expect(fromShop.conversationId).toBe(fromPerson.conversationId);
+      expect(fromShop.role).toBe('poster');
+    });
+
+    it('tells the shop, in so many words, when the customer has no account yet', () => {
+      expect(() => parcelService.openAboutParcel('PUD2', 'did:shop')).toThrow(/no SeeBuyGet account yet/);
+    });
+
+    it('tells a stranger the parcel does not exist — on either side', () => {
+      expect(() => parcelService.openAboutParcel('PUD1', 'did:person:other')).toThrow('Parcel not found');
+      expect(() => parcelService.openAboutParcel('PUD1', 'did:other-shop')).toThrow('Parcel not found');
+      expect(() => parcelService.openAboutParcel('PUD-none', 'did:person:amina')).toThrow('Parcel not found');
+    });
+
+    it('refuses a parcel that is no longer at a shop, and a price named in a parcel thread', () => {
+      expect(() => parcelService.openAboutParcel('PUDX', 'did:person:amina')).toThrow(/no longer waiting/);
+      const { conversationId } = parcelService.openAboutParcel('PUD1', 'did:person:amina');
+      expect(() => parcelService.proposePrice(conversationId, 'did:person:amina', { price: 100, from: { lat: 0, lng: 0 } })).toThrow(/nothing to price/);
+      expect(() => parcelService.recordSettlement(conversationId, 'did:person:amina', { amount: 5, method: 'cash', when: 'on_pickup' })).toThrow(/nothing to settle/);
+    });
+
+    it('keeps a shared report honest about what the thread was about', () => {
+      const { conversationId } = parcelService.openAboutParcel('PUD1', 'did:person:amina');
+      parcelService.send(conversationId, 'did:person:amina', { body: 'I came twice and you were closed' });
+      const { reportId } = parcelService.shareDisputeReport(conversationId, 'did:person:amina', [1]);
+      const report = parcelService.listDisputeReports().find((r) => r.reportId === reportId)!;
+      expect(report).toMatchObject({ subject: 'parcel', parcelId: 'PUD1', freightCode: 'PUD1', sharedBy: 'asker' });
+      expect(report.freightId).toBeUndefined();
     });
   });
 });

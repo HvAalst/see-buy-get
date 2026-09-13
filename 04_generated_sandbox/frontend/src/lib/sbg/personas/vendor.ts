@@ -49,6 +49,7 @@ export function createVendorApi(sbg: SbgClient) {
       vendorId: string,
       patch: {
         callbackUrl?: string;
+        callbackCarriesCode?: boolean;
         location?: { lat: number; lng: number };
         address?: string;
         shippingPolicy?: { mode?: 'full' | 'capped'; freeOverSubtotal?: number; buyerContributionCap?: number; maxTransportSpend?: number };

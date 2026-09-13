@@ -55,11 +55,11 @@ export interface DisputeReportRow {
   posterDid: string;
   askerDid: string;
   byDid: string;
-  sharedBy: 'poster' | 'driver';
+  sharedBy: 'poster' | 'asker';
   note?: string;
   messages: Array<{
     seq: number;
-    from: 'poster' | 'driver';
+    from: 'poster' | 'asker';
     kind: string;
     body?: string;
     quick?: string;

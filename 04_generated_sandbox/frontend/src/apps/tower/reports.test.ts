@@ -37,13 +37,13 @@ describe('CV1 — reported messages', () => {
 
   it('CV3 — reads every kind of shared message as a line, and shortens a fingerprint for comparing by eye', () => {
     const at = '2026-09-13T08:00:00Z';
-    expect(disputeLine({ seq: 1, from: 'driver', kind: 'text', body: 'Gate was shut', at })).toBe('Gate was shut');
-    expect(disputeLine({ seq: 2, from: 'driver', kind: 'proposal', price: 4500, body: 'empty past you', at })).toBe('Offered 4500.00 — “empty past you”');
+    expect(disputeLine({ seq: 1, from: 'asker', kind: 'text', body: 'Gate was shut', at })).toBe('Gate was shut');
+    expect(disputeLine({ seq: 2, from: 'asker', kind: 'proposal', price: 4500, body: 'empty past you', at })).toBe('Offered 4500.00 — “empty past you”');
     expect(disputeLine({ seq: 3, from: 'poster', kind: 'decision', decision: 'accepted', price: 4500, at })).toBe('Accepted 4500.00');
     expect(disputeLine({ seq: 4, from: 'poster', kind: 'settlement', settlement: { amount: 4500, method: 'mobile_money', when: 'on_delivery' }, at })).toBe('Settle 4500.00 by mobile money, on delivery');
     expect(shortHash('a'.repeat(64))).toBe('aaaaaaaaaaaa');
     expect(shortHash(undefined)).toBe('—');
-    expect(disputeLine({ seq: 5, from: 'driver', kind: 'voice', voiceId: 'vn_1', durationSec: 67, at })).toBe('Voice message (1:07)');
+    expect(disputeLine({ seq: 5, from: 'asker', kind: 'voice', voiceId: 'vn_1', durationSec: 67, at })).toBe('Voice message (1:07)');
   });
 
   it('shortens an identity without losing its ends', () => {

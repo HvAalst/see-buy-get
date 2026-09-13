@@ -13510,7 +13510,7 @@
       "post": {
         "operationId": "Conversation.open",
         "summary": "",
-        "description": "Ask about a load, or return to the thread already asked.",
+        "description": "Ask about a load — or (CV5) talk about a parcel waiting at a shop. Either returns to the thread already open.",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -19495,6 +19495,9 @@
           "callbackUrl": {
             "type": "string"
           },
+          "callbackCarriesCode": {
+            "type": "boolean"
+          },
           "secret": {
             "type": "string"
           },
@@ -19581,6 +19584,10 @@
         "properties": {
           "callbackUrl": {
             "type": "string"
+          },
+          "callbackCarriesCode": {
+            "type": "boolean",
+            "description": "Include the collection code in the ready_for_pickup callback (default true — see Vendor)."
           },
           "location": {
             "$ref": "#/components/schemas/GeoDto"
@@ -23819,11 +23826,11 @@
         "properties": {
           "freightId": {
             "type": "string"
+          },
+          "parcelId": {
+            "type": "string"
           }
-        },
-        "required": [
-          "freightId"
-        ]
+        }
       },
       "VoiceMessageDto": {
         "type": "object",
@@ -23884,7 +23891,12 @@
               "arrived",
               "delivered",
               "paid",
-              "running_late"
+              "running_late",
+              "coming_today",
+              "coming_tomorrow",
+              "cannot_make_it",
+              "still_here",
+              "closing_soon"
             ]
           }
         }

@@ -45,6 +45,8 @@ export interface VendorView {
   did: string;
   name: string;
   callbackUrl?: string;
+  /** Whether the ready_for_pickup callback carries the collection code (default true — see the store screen). */
+  callbackCarriesCode?: boolean;
   location?: { lat: number; lng: number };
   address?: string;
   /** Their own dock, if they have asked for one. Absent = they drop off at a PUDO like everyone else. */

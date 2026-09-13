@@ -253,6 +253,23 @@ export const ARTICLES: GuideArticle[] = [
     ]
   },
   {
+    id: "message-shop",
+    apps: [
+      "send",
+      "agent"
+    ],
+    title: "A word between a customer and the shop",
+    summary: "Somebody collecting a parcel and the shop holding it can message each other about it, inside SeeBuyGet.",
+    steps: [
+      "Send app: My parcels, open the parcel, then “Message the shop”. Say when you are coming, or ask when they are open.",
+      "Shop app: Hand over a parcel, then “Waiting to be collected”, then Message beside the parcel.",
+      "The shop can only reach a customer who has signed in to the Send app with the phone number they gave the store. If there is nobody to reach, the app says so."
+    ],
+    notes: [
+      "Only the two of you can read it, and nothing in it can be edited or deleted. The collection code is never sent in a message — it stays on the parcel in the Send app."
+    ]
+  },
+  {
     id: "when-to-change",
     apps: [
       "agent",

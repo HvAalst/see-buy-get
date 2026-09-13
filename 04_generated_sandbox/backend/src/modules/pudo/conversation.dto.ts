@@ -8,9 +8,10 @@ export class ThreadPositionDto {
   @IsNumber() @Min(-180) @Max(180) lng!: number;
 }
 
-/** CV1 — ask about a load. */
+/** CV1 — ask about a load; CV5 — or talk about a parcel waiting at a shop. Exactly one of the two. */
 export class OpenConversationDto {
-  @IsString() freightId!: string;
+  @IsOptional() @IsString() freightId?: string;
+  @IsOptional() @IsString() parcelId?: string;
 }
 
 /** Text, or a quick reply by its key — exactly one (the service refuses neither and both). */

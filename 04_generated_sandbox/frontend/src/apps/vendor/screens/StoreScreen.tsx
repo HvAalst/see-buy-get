@@ -1,6 +1,6 @@
 import { HelpLink } from '../../../shared/guide/HelpLink';
 import { CredentialAge } from '../../../shared/account/CredentialAge';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, ErrorNote, PlaceMap, ReadAloud, Sheet, ShopDetailSheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { toPlaceWords } from '../../../shared/placewords';
@@ -20,6 +20,9 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
   const [url, setUrl] = useState<string | null>(null);
   const v = state.vendor;
   const shownUrl = url ?? v?.callbackUrl ?? '';
+  // The code tick box answers at once and settles on what the server says once the store record reloads.
+  const [codeOn, setCodeOn] = useState<boolean | null>(null);
+  useEffect(() => setCodeOn(null), [v?.callbackCarriesCode]);
 
   return (
     <div class="scr">
@@ -49,6 +52,21 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
             {t('vendor.store.save')}
           </Button>
         </div>
+        {/* CV5 — the code rides along until the store's buyers get it from the Send app instead. A labelled tick
+            box: the register kit's Checkbox carries its words only for a screen reader. */}
+        <label class="checkline" style="margin-top:14px">
+          <input
+            type="checkbox"
+            checked={codeOn ?? v?.callbackCarriesCode !== false}
+            disabled={!v || state.busy === 'callback-code'}
+            onChange={(e) => {
+              setCodeOn(e.currentTarget.checked);
+              void actions.setCallbackCode(e.currentTarget.checked);
+            }}
+          />
+          <span>{t('vendor.store.callbackCode')}</span>
+        </label>
+        <p class="hint">{t('vendor.store.callbackCodeNote')}</p>
         {state.callbacks.length ? (
           <div style="margin-top:8px">
             {state.callbacks.slice(0, 6).map((c) => (
