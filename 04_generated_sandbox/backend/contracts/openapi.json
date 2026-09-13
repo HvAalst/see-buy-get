@@ -10070,6 +10070,29 @@
         }
       }
     },
+    "/v1/sbg/drivers/session": {
+      "post": {
+        "operationId": "Sbg.driverSignIn",
+        "summary": "",
+        "description": "A driver signs in with their phone and PIN.\n\nThe driver app used to mint its own token for whatever driver ID was typed in, which made the sign-in screen\ndecoration: the ID is printed on a badge, and anyone holding it could drive as that person. The PIN is the\ncredential now, checked by the identity spine that already counts wrong attempts and locks out; the token\ncarries the person, so a PIN change ends every session that PIN opened.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DriverSessionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/drivers": {
       "get": {
         "operationId": "Sbg.listFleetDrivers",
@@ -20936,6 +20959,24 @@
           "status",
           "createdAt",
           "lastSeenAt"
+        ]
+      },
+      "DriverSessionDto": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string"
+          },
+          "pin": {
+            "type": "string"
+          },
+          "did": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "phone",
+          "pin"
         ]
       },
       "DriverKycDto": {

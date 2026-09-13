@@ -1,18 +1,19 @@
 import {
-  Session,
-  clientError,
-  createDriverApi,
   createConversationsApi,
+  createDriverApi,
   createNotificationsApi,
-  createSbgClient,
-  type ConversationsApi,
+  createSeededClient,
   makeConfig,
-  toSbgError,
+  publicRequest,
+  type ConversationsApi,
   type DriverApi,
+  type MintedToken,
   type NotificationsApi,
-  type SbgClient,
-  type SbgError,
+  type Result,
+  type SeededAppClient,
 } from '../../lib/sbg';
+
+export { isMintSourced, isSignInRequired } from '../../lib/sbg';
 
 const APP_VERSION = '1.0.0';
 
@@ -58,161 +59,59 @@ export function purgeDriverTokens(keepDid: string | null): void {
   }
 }
 
-/**
- * Choose the error the user is actually told about.
- *
- * The mint runs inside openapi-fetch's `onRequest` middleware, which resolves BEFORE the injected
- * fetch is called — so a mint failure never reaches the library as an HTTP response, only as a
- * thrown value, and `normalize()` can only classify a throw as NETWORK (or TIMEOUT on an abort).
- * That told a driver who mistyped their DID that their phone had no signal, and set `stale: true`
- * on data that was never stale. When the mint recorded a real reason, it wins.
- *
- * Pure, and exported, because this is the whole of the lie: given an observed error and whatever
- * the mint recorded, which one is true.
- */
-export function preferMintFailure(observed: SbgError, mint: SbgError | null): SbgError {
-  if (!mint) return observed;
-  // Only the two client-synthesised codes are ever a cover story. A real 402/409 from the
-  // endpoint itself is the truth already and must not be overwritten by a stale mint note.
-  if (observed.code !== 'NETWORK' && observed.code !== 'TIMEOUT') return observed;
-  return mint;
-}
-
-/**
- * Marks an error as having come from the TOKEN MINT rather than from the endpoint the caller asked
- * for. This distinction is destructive if lost: `refresh()` signs the driver out and erases their
- * stored DID when the driver record is genuinely gone, and a mint-sourced 404 (a wrong
- * VITE_SBG_API, a moved proxy path, an HTML 404 page) is otherwise indistinguishable from that —
- * one misrouted deploy would log out every driver in the field and delete the ID they signed in with.
- */
-export function isMintSourced(error: SbgError | null | undefined): boolean {
-  return (error?.params as { source?: string } | undefined)?.source === 'mint';
-}
-
-function fromMint(error: SbgError): SbgError {
-  return { ...error, params: { ...(error.params ?? {}), source: 'mint' } };
-}
-
-/**
- * Does this mint failure mean the IDENTITY is wrong (as opposed to the network or the deployment)?
- *
- * The backend validates the DID on this path: POST /v1/auth/token with {role,did} routes to
- * mintActorToken -> issueToken({type:'did'}), which throws BadRequestException("Unknown DID") — a
- * 400, NOT a 404. So an unrecoverably mistyped ID arrives as BAD_REQUEST, which carries no
- * presentation entry and is not retryable: the driver used to be stranded on a generic
- * "Something went wrong" with no retry and no way back to sign-in. This is what routes them home.
- */
-export function isUnknownIdentity(error: SbgError | null | undefined): boolean {
-  if (!error || !isMintSourced(error)) return false;
-  return error.status === 400 || error.code === 'BAD_REQUEST';
-}
-
-/** An error the library's `normalize()` will classify as TIMEOUT rather than NETWORK. */
-function abortError(detail: string): Error {
-  const e = new Error(detail);
-  e.name = 'AbortError';
-  return e;
-}
-
 export interface DriverClient {
   api: DriverApi;
-  session: Session;
+  /** The seeded session: a sign-in hands it the token the server minted. */
+  client: SeededAppClient;
   /** Persona-agnostic Web Push controls, bound to the same token (N1). */
   notifications: NotificationsApi;
   /** CV1 — asking about a load, and the threads that follow. */
   conversations: ConversationsApi;
 }
 
+function driverConfig() {
+  return makeConfig('driver', APP_VERSION);
+}
+
+/**
+ * The driver's client. The token comes from a real sign-in (phone + PIN → `POST /v1/sbg/drivers/session`) and is
+ * seeded into a per-driver session; when it dies the shell gets `isSignInRequired` and returns to sign-in, because
+ * the PIN never lives on the phone.
+ *
+ * It used to mint its own token from `/v1/auth/token` for whatever driver ID was typed in — anyone who had read
+ * an ID off a badge could drive as that person. That grant is now closed outside a sandbox.
+ */
 export function createDriverClient(did: string): DriverClient {
-  const config = makeConfig('driver', APP_VERSION);
+  const client = createSeededClient(driverConfig(), tokenKeyFor(did));
+  return { api: createDriverApi(client.sbg), client, notifications: createNotificationsApi(client.sbg), conversations: createConversationsApi(client.sbg) };
+}
 
-  /**
-   * Why the mint failed, if it did. Set at the moment of failure, cleared at the start of every
-   * attempt and on success — so it can only ever describe the mint the failing request tried to
-   * use (no token means the next request mints again, which resets this first).
-   */
-  let mintFailure: SbgError | null = null;
+/* ------------------------------------------------------ signing in -- */
 
-  const session = new Session(tokenKeyFor(did), async () => {
-    mintFailure = null;
+export interface DriverSignIn {
+  did: string;
+  displayName: string;
+  status: string;
+  token: MintedToken;
+}
 
-    // The mint carries its OWN timeout. It is not covered by the library's: openapi-fetch awaits
-    // every onRequest middleware (where getToken() runs) before it ever calls the injected fetch,
-    // so the 15s AbortController inside `timeoutFetch` has not been armed yet. A hung mint socket
-    // used to leave `refreshing` true forever, `run()`'s finally unreached and `busy` stuck — every
-    // control on the screen disabled, permanently, with no way back but a reload.
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), config.timeoutMs);
+/** Phone + PIN → the driver this phone was registered to, and a token for them. */
+export function driverSession(phone: string, pin: string): Promise<Result<DriverSignIn>> {
+  return publicRequest<DriverSignIn>(driverConfig(), '/v1/sbg/drivers/session', { body: { phone, pin } });
+}
 
-    // The timer is cleared in ONE outer finally, so the abort window covers the response BODY too.
-    // Clearing it right after the fetch resolved left `await res.json()` unguarded: a server that
-    // sends headers and then stalls the body hung getToken() forever — the very wedge this timeout
-    // exists to prevent (refreshing stuck true, run()'s finally unreached, every control disabled).
-    try {
-      let res: Response;
-      try {
-        res = await fetch(`${config.baseUrl}/v1/auth/token`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ role: 'driver', did, type: 'client_credentials' }),
-          signal: ctl.signal,
-        });
-      } catch (e) {
-        if (ctl.signal.aborted) {
-          const detail = `Sign-in did not answer within ${config.timeoutMs} ms.`;
-          mintFailure = fromMint(clientError('TIMEOUT', detail));
-          throw abortError(detail);
-        }
-        const detail = String((e as Error)?.message ?? e);
-        mintFailure = fromMint(clientError('NETWORK', detail));
-        throw new Error(detail);
-      }
+/** First time, or a forgotten PIN: a one-time code to the phone (echoed back only in a sandbox). */
+export function requestPhoneCode(phone: string): Promise<Result<{ sent: boolean; code?: string }>> {
+  return publicRequest(driverConfig(), '/v1/sbg/auth/phone/request', { body: { phone } });
+}
 
-      // An HTTP rejection is NOT a network failure. Keep the status and the problem+json body so
-      // the shell can say "we could not find that, check the code" instead of "no signal".
-      if (!res.ok) {
-        const body: unknown = await res.json().catch(() => null);
-        mintFailure = fromMint(toSbgError(body, res.status));
-        throw new Error(`Token mint failed (${res.status})`);
-      }
+export function verifyPhoneCode(phone: string, code: string): Promise<Result<{ verified: boolean }>> {
+  return publicRequest(driverConfig(), '/v1/sbg/auth/phone/verify', { body: { phone, code } });
+}
 
-      const minted = (await res.json().catch(() => null)) as { access_token?: string; expires_in?: number } | null;
-      if (!minted?.access_token) {
-        // A 200 with no token would otherwise be persisted and sent as `Bearer undefined`.
-        mintFailure = fromMint(toSbgError({ code: 'INTERNAL', detail: 'Sign-in returned no token.' }, res.status));
-        throw new Error('Token mint returned no access_token');
-      }
-      // A missing lifetime falls back to an hour rather than 0: 0 would put the soft deadline in
-      // the past on arrival and re-mint on every single request. The 401 remains the real authority.
-      return { access_token: minted.access_token, expires_in: minted.expires_in ?? 3600 };
-    } catch (e) {
-      if (ctl.signal.aborted && !mintFailure) {
-        const detail = `Sign-in did not answer within ${config.timeoutMs} ms.`;
-        mintFailure = fromMint(clientError('TIMEOUT', detail));
-        throw abortError(detail);
-      }
-      throw e;
-    } finally {
-      clearTimeout(timer);
-    }
-  });
-
-  const sbg = createSbgClient({ config, session });
-
-  // One wrap point for the whole persona facade: every Result leaves here carrying the true
-  // reason it failed, so no screen has to know that the mint exists.
-  const truthful: SbgClient = {
-    raw: sbg.raw,
-    request: (fn) =>
-      sbg.request(fn).then((r) => {
-        if (!r.error) return r;
-        const error = preferMintFailure(r.error, mintFailure);
-        // `status` travels with the error it belongs to — a 404 envelope must not read 0.
-        return error === r.error ? r : { data: null, error, status: error.status };
-      }),
-  };
-
-  return { api: createDriverApi(truthful), session, notifications: createNotificationsApi(truthful), conversations: createConversationsApi(truthful) };
+/** Choose (or replace) the PIN for a phone that has just been verified by code. */
+export function choosePin(phone: string, pin: string): Promise<Result<unknown>> {
+  return publicRequest(driverConfig(), '/v1/sbg/identity/enroll', { body: { phone, pin } });
 }
 
 /**

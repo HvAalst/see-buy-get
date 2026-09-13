@@ -4505,6 +4505,34 @@ describe('PUDO Light', () => {
     });
   });
 
+  describe('a driver signs in with the phone they were registered with', () => {
+    it('links the registration to the person, and takes a PIN — not a driver ID', () => {
+      const phone = '+254700990021';
+      const d = controller.registerDriver({ displayName: 'Pin Rider', fullName: 'Pin Rider', nationalId: 'NID-PINRIDER', mobile: phone, licenceClasses: ['bike'] } as never);
+      // Registered, but no PIN chosen yet: nothing opens.
+      expect(() => controller.driverSignIn({ phone, pin: '1357' })).toThrow(/Wrong phone or PIN/);
+
+      otp.verify(phone, otp.request(phone).code);
+      persons.enroll(phone, true, '1357');
+      expect(() => controller.driverSignIn({ phone, pin: '0000' })).toThrow(/Wrong phone or PIN/);
+
+      const s = controller.driverSignIn({ phone, pin: '1357' });
+      expect(s.did).toBe(d.did);
+      expect(auth.introspect(s.token.access_token)).toMatchObject({ active: true, role: 'driver', did: d.did });
+
+      // The PIN is the credential: changing it ends the session it opened.
+      persons.changePin(phone, '1357', '2580');
+      expect(auth.introspect(s.token.access_token)).toMatchObject({ active: false, reason: 'revoked' });
+    });
+
+    it('refuses a person who holds no driver role, even with the right PIN', () => {
+      const phone = '+254700990022';
+      otp.verify(phone, otp.request(phone).code);
+      persons.enroll(phone, true, '4826');
+      expect(() => controller.driverSignIn({ phone, pin: '4826' })).toThrow(/not registered to a driver/);
+    });
+  });
+
   describe('one-time codes are handed back only in a sandbox', () => {
     const before = process.env.GLOS_ENV;
     afterEach(() => {

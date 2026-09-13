@@ -80,12 +80,24 @@ export class AccountService implements OnApplicationBootstrap {
       else skipped++;
     }
     if (linked || skipped) this.logger.log(`Person migration: linked ${linked} account(s), skipped ${skipped}.`);
+    // Drivers a FLEET registered have no account at all, and before phone sign-in they had no person either.
+    // Idempotent: attaching a link that already exists only refreshes it.
+    let drivers = 0;
+    for (const driver of this.drivers.list()) {
+      const phone = this.phoneForDid(driver.did);
+      if (phone && this.persons.tryAttachRole(phone, 'driver', driver.did, driver.managerDid)) drivers++;
+    }
+    if (drivers) this.logger.log(`Person migration: ${drivers} driver(s) can sign in by phone.`);
   }
 
   /** Best-effort raw phone for an account: the hash captured at signup can't be reversed, so fall back
    *  to the phone embedded in the linked entity's DID controller (`pudo:<mobile>` etc.). */
   private phoneForAccount(account: Account): string | undefined {
-    const controller = this.dids.resolve(account.did)?.controller ?? '';
+    return this.phoneForDid(account.did);
+  }
+
+  private phoneForDid(did: string): string | undefined {
+    const controller = this.dids.resolve(did)?.controller ?? '';
     const raw = controller.slice(controller.indexOf(':') + 1); // 'pudo-driver:+254…' → '+254…'
     return isPlausiblePhone(raw) ? raw : undefined;
   }

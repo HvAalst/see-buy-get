@@ -28,6 +28,21 @@ describe('AuthService', () => {
     profiles = moduleRef.get(OperationalStore);
   });
 
+  it('keeps the trusted-caller grant open only in a sandbox when no client secret is set', () => {
+    const subject = did.generate('pudo-driver:+254700990031');
+    const before = process.env.GLOS_ENV;
+    try {
+      delete process.env.GLOS_ENV;
+      expect(auth.mintActorTokenFor(undefined, { role: 'driver', did: subject.id }).access_token).toBeTruthy();
+      process.env.GLOS_ENV = 'production';
+      expect(() => auth.mintActorTokenFor(undefined, { role: 'driver', did: subject.id })).toThrow(/no client secret/);
+      expect(() => auth.mintOperatorToken(undefined)).toThrow(/no client secret/);
+    } finally {
+      if (before === undefined) delete process.env.GLOS_ENV;
+      else process.env.GLOS_ENV = before;
+    }
+  });
+
   it('issues and accepts a client-credentials token', () => {
     const { access_token } = auth.issueToken({ sub: 'client-1', type: 'client_credentials' });
     const result = auth.introspect(access_token);

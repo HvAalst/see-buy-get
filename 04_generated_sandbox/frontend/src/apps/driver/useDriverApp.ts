@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { SbgError } from '../../lib/sbg';
 import type { IconName } from '../../shared/ui/Icon';
-import { createDriverClient, isMintSourced, isUnknownIdentity, narrow, purgeDriverTokens } from './api';
+import { choosePin, createDriverClient, driverSession, isMintSourced, isSignInRequired, narrow, purgeDriverTokens, requestPhoneCode, verifyPhoneCode } from './api';
 import { adoptDidFromUrl, clearDid, saveDid, saveRadius, saveRoute, savedRadius, savedRoute } from './storage';
 import type {
   AgentRow,
@@ -290,6 +290,15 @@ export function useDriverApp() {
    * `finally` owns that lock, from first tap to last await, and nothing else may clear it.
    */
   const fail = useCallback((error: SbgError) => {
+    // A shift that ended (or a PIN changed on another phone) is not an error on this screen: back to sign-in,
+    // with nothing of the last driver's left behind on a phone that may be changing hands.
+    if (isSignInRequired(error)) {
+      purgeDriverTokens(null);
+      clearDid();
+      setDid(null);
+      setState((s) => ({ ...INITIAL, phase: 'signin', error, toasts: s.toasts }));
+      return;
+    }
     setState((s) => {
       const phase = phaseAfterFailure(s.phase, error.code);
       if (phase === 'outdated') return { ...s, phase, refreshing: false };
@@ -333,10 +342,10 @@ export function useDriverApp() {
          * 404 page looks identical to a deleted driver, and one misrouted deploy would then sign out
          * every driver in the field and delete the ID they signed in with.
          */
-        const identityGone = isUnknownIdentity(meR.error) || (meR.error.code === 'NOT_FOUND' && !isMintSourced(meR.error));
+        const identityGone = meR.error.code === 'NOT_FOUND' && !isMintSourced(meR.error);
         if (identityGone) {
           clearDid();
-          client.session.clear();
+          client.client.session.clear();
           purgeDriverTokens(null);
           setState((s) => ({ ...INITIAL, phase: 'signin', error: meR.error, toasts: s.toasts }));
           setDid(null);
@@ -547,20 +556,52 @@ export function useDriverApp() {
     // refresh is stable per (client, did)
   }, [client, did, refresh, openOfferFromLink]);
 
-  const signIn = useCallback((value: string) => {
-    const next = value.trim();
-    if (!next) return;
-    // An explicit sign-in always mints fresh: whatever is in sessionStorage belongs to whoever
-    // used this tab before — including an earlier DID of this same driver.
-    client?.session.clear();
+  /**
+   * Phone + PIN. The SERVER finds the driver this phone was registered to and mints the token; it is seeded into
+   * that driver's session. Resolves to whether it worked, so the screen can keep what was typed on a failure.
+   */
+  const signIn = useCallback(async (phone: string, pin: string): Promise<boolean> => {
+    if (!phone.trim() || !pin.trim()) return false;
+    const r = await driverSession(phone.trim(), pin.trim());
+    if (r.error) {
+      setState((s) => ({ ...s, error: r.error }));
+      return false;
+    }
+    const signedIn = r.data!;
+    // Whatever is in sessionStorage belongs to whoever used this phone before.
+    client?.client.session.clear();
     purgeDriverTokens(null);
-    saveDid(next);
-    setDid(next);
+    saveDid(signedIn.did);
+    await createDriverClient(signedIn.did).client.seed(signedIn.token);
     setState((s) => ({ ...INITIAL, phase: 'boot', toasts: s.toasts }));
+    setDid(signedIn.did);
+    return true;
   }, [client]);
 
+  /** First time, or a forgotten PIN: send a code. Resolves to the code itself in a sandbox, `''` when it was sent, null on failure. */
+  const sendPinCode = useCallback(async (phone: string): Promise<string | null> => {
+    const r = await requestPhoneCode(phone.trim());
+    if (r.error) {
+      setState((s) => ({ ...s, error: r.error }));
+      return null;
+    }
+    setState((s) => ({ ...s, error: null }));
+    return r.data?.code ?? '';
+  }, []);
+
+  /** The code proves the phone; the new PIN replaces any old one; then sign in with it. */
+  const setPinAndSignIn = useCallback(async (phone: string, code: string, pin: string): Promise<boolean> => {
+    const verified = await verifyPhoneCode(phone.trim(), code.trim());
+    const chosen = verified.error ? verified : await choosePin(phone.trim(), pin.trim());
+    if (chosen.error) {
+      setState((s) => ({ ...s, error: chosen.error }));
+      return false;
+    }
+    return signIn(phone, pin);
+  }, [signIn]);
+
   const signOut = useCallback(() => {
-    client?.session.clear();
+    client?.client.session.clear();
     purgeDriverTokens(null);
     clearDid();
     setDid(null);
@@ -1274,6 +1315,8 @@ export function useDriverApp() {
     actions: {
       refresh,
       signIn,
+      sendPinCode,
+      setPinAndSignIn,
       signOut,
       go,
       setForm,

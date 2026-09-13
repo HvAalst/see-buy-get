@@ -53,7 +53,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyRecordDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto } from './pudo.dto';
+  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { classifySize, MAX_CLAIM_AWARD, measuredFactor, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
@@ -2520,7 +2520,38 @@ export class SbgController {
   /** Register a driver. Bike/motorcycle → light registry (ACTIVE immediately); heavier → DRAFT + KYC. */
   @Post('drivers/onboard')
   registerDriver(@Body() dto: RegisterDriverDto) {
-    return this.drivers.register(dto as never);
+    const driver = this.drivers.register(dto as never);
+    // The phone the driver was registered with is how they sign in: link it to the person behind it now,
+    // so the driver's first sign-in is "verify your phone, choose a PIN" — never a DID read off a badge.
+    this.persons.tryAttachRole(dto.mobile, 'driver', driver.did, driver.managerDid);
+    return driver;
+  }
+
+  /**
+   * A driver signs in with their phone and PIN.
+   *
+   * The driver app used to mint its own token for whatever driver ID was typed in, which made the sign-in screen
+   * decoration: the ID is printed on a badge, and anyone holding it could drive as that person. The PIN is the
+   * credential now, checked by the identity spine that already counts wrong attempts and locks out; the token
+   * carries the person, so a PIN change ends every session that PIN opened.
+   */
+  @Public()
+  @Post('drivers/session')
+  driverSignIn(@Body() dto: DriverSessionDto) {
+    const { person } = this.persons.loginWithPin(dto.phone, dto.pin);
+    const held = person.roles
+      .filter((r) => r.role === 'driver' && r.status === 'active' && (!dto.did || r.entityDid === dto.did))
+      .flatMap((link) => {
+        try {
+          return [{ link, driver: this.drivers.get(link.entityDid) }];
+        } catch {
+          return []; // a link to a driver record that no longer exists names nobody
+        }
+      });
+    if (!held.length) throw new GlosError('ROLE_NOT_HELD', 'This phone is not registered to a driver. Ask your fleet to check the number they registered.');
+    const { link, driver } = held[held.length - 1]; // the most recent registration, when a phone drove for several
+    const token = this.auth.mintActorToken({ role: 'driver', did: driver.did, tenant: link.tenant, revocationKey: person.personDid });
+    return { did: driver.did, displayName: driver.displayName, status: driver.status, person: this.persons.view(person), token };
   }
 
   /** A fleet manager sees only their own drivers (actor.tenant); operator sees all. */

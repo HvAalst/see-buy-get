@@ -232,6 +232,21 @@ const run = async () => {
       'driver amos',
     );
   }
+  // Amos signs in the way every driver does: the phone the fleet registered, and a PIN. The phone is the one in
+  // his DID's controller (`pudo-driver:<mobile>`) — on a re-seed he already exists and nobody printed it.
+  const DRIVER_PIN = '1357';
+  const amosPhone = (need(await req('GET', `/v1/did/${encodeURIComponent(amos.did)}`), 'amos did').controller ?? '').replace(/^pudo-driver:/, '');
+  {
+    const signedIn = await req('POST', '/v1/sbg/drivers/session', { body: { phone: amosPhone, pin: DRIVER_PIN } });
+    if (!signedIn.ok) {
+      const r1 = await req('POST', '/v1/sbg/auth/phone/request', { body: { phone: amosPhone } });
+      need(await req('POST', '/v1/sbg/auth/phone/verify', { body: { phone: amosPhone, code: r1.data?.code } }), 'amos phone verify');
+      need(await req('POST', '/v1/sbg/identity/enroll', { body: { phone: amosPhone, pin: DRIVER_PIN } }), 'amos pin');
+      need(await req('POST', '/v1/sbg/drivers/session', { body: { phone: amosPhone, pin: DRIVER_PIN } }), 'amos sign-in');
+    }
+  }
+  say(`driver Amos K.   phone ${amosPhone} PIN ${DRIVER_PIN}`);
+
   let grace = drivers.find((d) => d.displayName === 'Grace M.');
   if (!grace) {
     grace = need(
@@ -629,7 +644,7 @@ const run = async () => {
   out.push('                        agent3@sbg.test / seebuyget   (Downtown Kiosk)');
   out.push('  Hub app     /mdp/     hub@sbg.test    / seebuyget   (Central Sort)');
   out.push(`  Fleet app   /fleet/   company ${fleetCode} · then ${mgr.contactPhone} PIN ${MGR_PIN}`);
-  out.push(`  Driver app  /driver/  driver ID ${amos.did}`);
+  out.push(`  Driver app  /driver/  phone ${amosPhone} PIN ${DRIVER_PIN}   (Amos K.)`);
   out.push('  Send app    /send/    no sign-in needed');
   out.push('  Operator    /tower/   your name + any key (no GLOS_CLIENT_SECRET set in a sandbox)');
   for (const a of companyAdmins) {

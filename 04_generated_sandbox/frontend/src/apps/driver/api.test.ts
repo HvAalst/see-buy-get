@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createDriverClient, isMintSourced, isUnknownIdentity, preferMintFailure, purgeDriverTokens, tokenKeyFor } from './api';
-import { clientError, toSbgError, type SbgError } from '../../lib/sbg';
+import { createDriverClient, isSignInRequired, purgeDriverTokens, tokenKeyFor } from './api';
 
 function mockStorage(): Storage {
   const m = new Map<string, string>();
@@ -71,138 +70,38 @@ describe('driver token storage', () => {
   });
 });
 
-/* -------------------------------------------------------- error selection -- */
-
-describe('preferMintFailure', () => {
-  const network = clientError('NETWORK', 'Failed to fetch');
-
-  it('replaces the cover story when the mint knows the real reason', () => {
-    const real = toSbgError({ code: 'NOT_FOUND', detail: 'Unknown driver' }, 404);
-    expect(preferMintFailure(network, real)).toBe(real);
-  });
-
-  it('leaves a genuine network failure alone when the mint did not fail', () => {
-    expect(preferMintFailure(network, null)).toBe(network);
-  });
-
-  it('never overwrites an error the endpoint itself returned', () => {
-    const business: SbgError = { code: 'WALLET_INSUFFICIENT', status: 402, title: '', detail: '', retryable: false };
-    const stale = toSbgError({ code: 'FORBIDDEN' }, 403);
-    expect(preferMintFailure(business, stale)).toBe(business);
-  });
-});
-
-/* -------------------------------------------------------------- the mint -- */
+/* ---------------------------------------------------------- the client -- */
 
 describe('createDriverClient', () => {
-  it('gives each driver their own token — B never rides on A’s bearer', async () => {
+  it('sends the token a sign-in seeded, and each driver keeps their own', async () => {
     const auth: (string | null)[] = [];
-    vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = urlOf(input);
-      if (url.endsWith('/v1/auth/token')) {
-        const body = JSON.parse(String(init?.body ?? '{}')) as { did: string };
-        return jsonResponse({ access_token: `tok:${body.did}`, expires_in: 3600 });
-      }
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL) => {
       auth.push((input as Request).headers.get('authorization'));
       return jsonResponse({ did: 'x' });
     });
 
-    // Same tab, same sessionStorage: the second client used to re-hydrate the first one's token.
-    await createDriverClient('did:a').api.me('did:a');
-    await createDriverClient('did:b').api.me('did:b');
+    const a = createDriverClient('did:a');
+    await a.client.seed({ access_token: 'tok:a', expires_in: 3600 });
+    await a.api.me('did:a');
+    const b = createDriverClient('did:b');
+    await b.client.seed({ access_token: 'tok:b', expires_in: 3600 });
+    await b.api.me('did:b');
 
-    expect(auth).toEqual(['Bearer tok:did:a', 'Bearer tok:did:b']);
-    expect(sessionStorage.getItem(tokenKeyFor('did:a'))).toBe('tok:did:a');
-    expect(sessionStorage.getItem(tokenKeyFor('did:b'))).toBe('tok:did:b');
+    expect(auth).toEqual(['Bearer tok:a', 'Bearer tok:b']);
+    expect(sessionStorage.getItem(tokenKeyFor('did:a'))).toContain('tok:a');
   });
 
-  it('reports an HTTP mint rejection truthfully, not as "no signal"', async () => {
+  it('never mints a token by itself — with no sign-in it asks for one, and calls nobody', async () => {
+    const urls: string[] = [];
     vi.stubGlobal('fetch', async (input: RequestInfo | URL) => {
-      if (urlOf(input).endsWith('/v1/auth/token')) return jsonResponse({ code: 'NOT_FOUND', detail: 'Unknown driver' }, 404);
-      return jsonResponse({ did: 'x' });
+      urls.push(urlOf(input));
+      return jsonResponse({ access_token: 'minted-by-a-driver-id' });
     });
 
-    const r = await createDriverClient('did:typo').api.me('did:typo');
+    const r = await createDriverClient('did:typed-off-a-badge').api.me('did:typed-off-a-badge');
 
-    expect(r.error?.code).toBe('NOT_FOUND'); // was NETWORK — "No signal right now" for a typo
-    expect(r.error?.status).toBe(404);
-    expect(r.status).toBe(404);
-  });
-
-  it('still reports a genuine network failure as NETWORK', async () => {
-    vi.stubGlobal('fetch', async () => {
-      throw new TypeError('Failed to fetch');
-    });
-
-    const r = await createDriverClient('did:a').api.me('did:a');
-    expect(r.error?.code).toBe('NETWORK');
-  });
-
-  it('times the mint out instead of wedging the app forever', async () => {
-    vi.useFakeTimers();
-    vi.stubGlobal(
-      'fetch',
-      (input: RequestInfo | URL, init?: RequestInit) =>
-        new Promise<Response>((_resolve, reject) => {
-          // A hung socket: answers nothing, only the abort.
-          if (urlOf(input).endsWith('/v1/auth/token')) {
-            const e = new Error('aborted');
-            e.name = 'AbortError';
-            init?.signal?.addEventListener('abort', () => reject(e));
-          }
-        }),
-    );
-
-    const pending = createDriverClient('did:a').api.me('did:a');
-    await vi.advanceTimersByTimeAsync(15_000); // config.timeoutMs
-    const r = await pending;
-
-    expect(r.error?.code).toBe('TIMEOUT');
-    expect(r.error?.retryable).toBe(true);
-  });
-
-  it('refuses a 200 that carries no token rather than sending "Bearer undefined"', async () => {
-    vi.stubGlobal('fetch', async (input: RequestInfo | URL) => {
-      if (urlOf(input).endsWith('/v1/auth/token')) return jsonResponse({});
-      return jsonResponse({ did: 'x' });
-    });
-
-    const r = await createDriverClient('did:a').api.me('did:a');
-    expect(r.error?.code).toBe('INTERNAL');
-    expect(sessionStorage.getItem(tokenKeyFor('did:a'))).toBeNull();
-  });
-});
-
-describe('identity vs deployment failures (the destructive sign-out guard)', () => {
-  const mintErr = (status: number, code: string): SbgError => ({
-    ...toSbgError({ code }, status),
-    params: { source: 'mint' },
-  });
-
-  it('recognises a mint-sourced error', () => {
-    expect(isMintSourced(mintErr(400, 'BAD_REQUEST'))).toBe(true);
-    expect(isMintSourced(toSbgError({ code: 'NOT_FOUND' }, 404))).toBe(false);
-    expect(isMintSourced(null)).toBe(false);
-  });
-
-  it('treats a mint 400 as an unknown identity — the backend rejects a bad DID with 400, not 404', () => {
-    // POST /v1/auth/token {role,did} -> mintActorToken -> issueToken({type:'did'}) throws
-    // BadRequestException('Unknown DID'). Without this the driver was stranded: BAD_REQUEST has no
-    // presentation entry and is not retryable, so no message, no retry, no way back to sign-in.
-    expect(isUnknownIdentity(mintErr(400, 'BAD_REQUEST'))).toBe(true);
-  });
-
-  it('never treats a mint-sourced 404/401/5xx as an unknown identity', () => {
-    // A wrong VITE_SBG_API, a moved proxy path or an HTML 404 page must NOT erase the driver's ID.
-    // One misrouted deploy would otherwise sign out every driver in the field.
-    expect(isUnknownIdentity(mintErr(404, 'NOT_FOUND'))).toBe(false);
-    expect(isUnknownIdentity(mintErr(401, 'UNAUTHORIZED'))).toBe(false);
-    expect(isUnknownIdentity(mintErr(500, 'INTERNAL'))).toBe(false);
-  });
-
-  it('does not treat an endpoint 404 as a mint failure (that one IS a real missing driver)', () => {
-    const fromEndpoint = toSbgError({ code: 'NOT_FOUND' }, 404);
-    expect(isUnknownIdentity(fromEndpoint)).toBe(false);
-    expect(isMintSourced(fromEndpoint)).toBe(false);
+    expect(isSignInRequired(r.error)).toBe(true);
+    expect(urls.some((u) => u.endsWith('/v1/auth/token'))).toBe(false);
+    expect(urls).toEqual([]);
   });
 });

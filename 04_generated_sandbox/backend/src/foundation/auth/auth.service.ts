@@ -58,8 +58,9 @@ export class AuthService {
     }
     if (!this.clientSecret) {
       this.logger.warn(
-        'GLOS_CLIENT_SECRET is not set — POST /v1/auth/token will mint a token for ANY subject. ' +
-          'Set it before deploying anywhere reachable.',
+        isSandbox()
+          ? 'GLOS_CLIENT_SECRET is not set — in this sandbox POST /v1/auth/token will mint a token for ANY subject.'
+          : 'GLOS_CLIENT_SECRET is not set — POST /v1/auth/token is closed to everyone until it is.',
       );
     }
   }
@@ -69,7 +70,12 @@ export class AuthService {
    * (see the boot warning above).
    */
   assertClientCredentials(supplied?: string): void {
-    if (!this.clientSecret) return;
+    if (!this.clientSecret) {
+      // Open on a laptop, so seeds and tests can act as anyone. Anywhere else, no secret means NOBODY may: an open
+      // grant would let any browser mint a token for any driver, shop or fleet by naming its DID.
+      if (isSandbox()) return;
+      throw new UnauthorizedException('The trusted-caller grant is closed: no client secret is configured');
+    }
     if (!supplied || !AuthService.safeEqual(supplied, this.clientSecret)) {
       throw new UnauthorizedException('Invalid client credentials');
     }

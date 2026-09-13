@@ -29,7 +29,7 @@ export function App() {
       <div class="app">
         <TopBar title={t('driver.appTitle')} subtitle={t('driver.signinSubtitle')} />
         <main class="app__scroll app__scroll--nonav">
-          <SignInScreen onSignIn={actions.signIn} error={state.error} />
+          <SignInScreen onSignIn={actions.signIn} onSendCode={actions.sendPinCode} onSetPin={actions.setPinAndSignIn} error={state.error} />
         </main>
         <Toasts state={state} actions={actions} noNav />
       </div>

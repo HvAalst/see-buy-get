@@ -850,6 +850,13 @@ export class ManagerChoicesDto {
   @IsString() pin!: string;
 }
 
+/** A driver signs in: the phone they were registered with, and their PIN. `did` only picks one if the phone drives for several. */
+export class DriverSessionDto {
+  @IsString() phone!: string;
+  @IsString() pin!: string;
+  @IsOptional() @IsString() did?: string;
+}
+
 // --- participant accounts (sign in / sign up) ---
 
 export class SignupDto {
