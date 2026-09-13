@@ -562,6 +562,8 @@ export function useFleetApp() {
       couple,
       uncouple,
       assignCorridor,
+      /** CV3 — read-only conversations the fleet's drivers shared (null until signed in). */
+      chatApi: client?.conversations ?? null,
       setLForm,
       proposeLine,
       pushToast,

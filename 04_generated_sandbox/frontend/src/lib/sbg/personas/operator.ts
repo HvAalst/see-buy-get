@@ -197,6 +197,9 @@ export function createOperatorApi(sbg: SbgClient) {
     /** CV1 — messages a party reported in a conversation, newest first, each with a copy of what was said. */
     conversationReports: () => sbg.request((c) => c.GET('/v1/sbg/conversations/reports', {})),
 
+    /** CV3 — reports of chosen messages a party shared about a dispute: fixed copies with a fingerprint. */
+    disputeReports: () => sbg.request((c) => c.GET('/v1/sbg/conversations/dispute-reports', {})),
+
     /** Shops waiting to be let onto the network. */
     kycQueue: () => sbg.request((c) => c.GET('/v1/sbg/agents/kyc-queue', {})),
 

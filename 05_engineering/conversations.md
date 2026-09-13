@@ -77,6 +77,14 @@ when, between whom — in a form that can be shown to somebody later.
   the network does not hold or move that money. Found driving it: the negotiation let a driver offer on a load
   their vehicle could never carry, and failed only at Accept — `propose` now makes acceptance's capacity and
   capability checks first. Also: the thread list previewed a written settlement by the form's name.
-- **CV3. Sharing.** The driver's toggle to their fleet manager (+ the fleet app's read-only view), and the
-  dispute report (select messages → hashed snapshot → the operator console).
+- **CV3. ~~Sharing~~ DONE, driven in the browser.** The asker (a driver in a fleet) ticks "share with my fleet
+  manager" → `sharedWithManagerDid`; the manager reads it under **Drivers** in the fleet app (`GET
+  conversations/shared`, fleet_manager only), never writes, and loses it if the driver leaves the fleet (the
+  reader is re-checked against the driver's CURRENT manager on every read). Either party ticks messages →
+  `POST :id/dispute-reports` → a fixed copy, roles instead of identities, sha256 **fingerprint**, a
+  `report_shared` line so the other side is told; allowed in a blocked thread. The console lists them under
+  Reported messages. Found driving it: the kit `Checkbox` has no visible label (a bare square), a shared
+  reader saw every message signed "the poster" (views now carry `from: poster|driver`), and **a key named
+  `hash` is stripped from every response by ResponseMaskInterceptor** — the report arrived without its
+  fingerprint and crashed the console screen.
 - **CV4. Voice notes** over the media store.

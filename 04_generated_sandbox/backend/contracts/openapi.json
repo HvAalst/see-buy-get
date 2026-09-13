@@ -12760,6 +12760,113 @@
         }
       }
     },
+    "/v1/sbg/conversations/shared": {
+      "get": {
+        "operationId": "Conversation.shared",
+        "summary": "",
+        "description": "CV3 — the conversations this fleet's drivers chose to share with it. Read-only.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/conversations/dispute-reports": {
+      "get": {
+        "operationId": "Conversation.disputeReports",
+        "summary": "",
+        "description": "CV3 — the reports of chosen messages that parties shared — the operator's side of a dispute.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/conversations/{id}/share": {
+      "post": {
+        "operationId": "Conversation.share",
+        "summary": "",
+        "description": "CV3 — the driver shares this conversation with their fleet manager, or stops sharing it.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShareConversationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/conversations/{id}/dispute-reports": {
+      "post": {
+        "operationId": "Conversation.shareDisputeReport",
+        "summary": "",
+        "description": "CV3 — a party shares a report of the messages they choose. The other side is told in the thread.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DisputeReportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/conversations/{id}/messages": {
       "get": {
         "operationId": "Conversation.messages",
@@ -21578,6 +21685,34 @@
         },
         "required": [
           "freightId"
+        ]
+      },
+      "ShareConversationDto": {
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "on"
+        ]
+      },
+      "DisputeReportDto": {
+        "type": "object",
+        "properties": {
+          "seqs": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "seqs"
         ]
       },
       "SendMessageDto": {

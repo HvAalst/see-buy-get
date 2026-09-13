@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { reportedText, reportsAgainst, reportsInOrder, shortId, type ReportRow } from './reports';
+import { disputeLine, reportedText, reportsAgainst, reportsInOrder, shortHash, shortId, type ReportRow } from './reports';
 
 const row = (over: Partial<ReportRow> = {}): ReportRow => ({
   reportId: 'rpt_1',
@@ -33,6 +33,16 @@ describe('CV1 — reported messages', () => {
     const rows = [row(), row({ reportId: 'rpt_2', seq: 2 }), row({ reportId: 'rpt_3', byDid: 'did:shop:b' })];
     expect(reportsAgainst(rows, 'did:drv:x')).toBe(2);
     expect(reportsAgainst(rows, 'did:drv:nobody')).toBe(0);
+  });
+
+  it('CV3 — reads every kind of shared message as a line, and shortens a fingerprint for comparing by eye', () => {
+    const at = '2026-09-13T08:00:00Z';
+    expect(disputeLine({ seq: 1, from: 'driver', kind: 'text', body: 'Gate was shut', at })).toBe('Gate was shut');
+    expect(disputeLine({ seq: 2, from: 'driver', kind: 'proposal', price: 4500, body: 'empty past you', at })).toBe('Offered 4500.00 — “empty past you”');
+    expect(disputeLine({ seq: 3, from: 'poster', kind: 'decision', decision: 'accepted', price: 4500, at })).toBe('Accepted 4500.00');
+    expect(disputeLine({ seq: 4, from: 'poster', kind: 'settlement', settlement: { amount: 4500, method: 'mobile_money', when: 'on_delivery' }, at })).toBe('Settle 4500.00 by mobile money, on delivery');
+    expect(shortHash('a'.repeat(64))).toBe('aaaaaaaaaaaa');
+    expect(shortHash(undefined)).toBe('—');
   });
 
   it('shortens an identity without losing its ends', () => {

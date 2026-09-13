@@ -11,10 +11,12 @@ import {
   canAgree,
   canDecide,
   canPropose,
+  canShare,
   composeBlocker,
   lastSeqOf,
   mergeMessages,
   parseAmount,
+  toggleSeq,
   type ChatMessage,
   type ChatThread,
   type ReportReason,
@@ -46,9 +48,9 @@ const money = (n: number) => n.toFixed(2);
  * two ends. Nothing in it can be edited or deleted — the sheet says so in plain words, and says who can read
  * it, rather than claiming a privacy the network does not provide.
  *
- * CV2 puts the deal in the same place: a price the driver names and the poster answers, and — for a load the
- * network does not pay — how the two of them will settle, written down and agreed. The settlement card says,
- * every time, that the network neither holds nor moves that money.
+ * CV2 puts the deal in the same place. CV3 adds the two ways a thread leaves its two parties, both by choice:
+ * the DRIVER may share it with their own fleet manager (who reads it and never writes), and EITHER party may
+ * share a report of messages they choose with the network — the other side is told in the thread.
  */
 export function ConversationSheet({
   api,
@@ -56,6 +58,7 @@ export function ConversationSheet({
   onClose,
   onChanged,
   positionFor,
+  readOnly = false,
 }: {
   api: ConversationsApi | null;
   thread: ChatThread | null;
@@ -63,6 +66,8 @@ export function ConversationSheet({
   onChanged?: () => void;
   /** CV2 — where the driver is, for naming a price. Absent on the poster's side. */
   positionFor?: () => Promise<{ lat: number; lng: number } | null>;
+  /** CV3 — a fleet manager reading a thread their driver shared: no composer, no deal, no report. */
+  readOnly?: boolean;
 }) {
   const t = useT();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -70,6 +75,7 @@ export function ConversationSheet({
   const [text, setText] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
   const [confirmBlock, setConfirmBlock] = useState(false);
   const [reporting, setReporting] = useState<number | null>(null);
   const [reported, setReported] = useState<number[]>([]);
@@ -81,6 +87,9 @@ export function ConversationSheet({
   const [method, setMethod] = useState<SettleMethod>('cash');
   const [when, setWhen] = useState<SettleWhen>('on_delivery');
   const [settleNote, setSettleNote] = useState('');
+  const [selecting, setSelecting] = useState(false);
+  const [picked, setPicked] = useState<number[]>([]);
+  const [disputeNote, setDisputeNote] = useState('');
   const held = useRef<ChatMessage[]>([]);
   const id = thread?.conversationId ?? null;
 
@@ -100,12 +109,13 @@ export function ConversationSheet({
       held.current = mergeMessages(held.current, data.items);
       setMessages(held.current);
       const seq = lastSeqOf(held.current);
-      if (seq > 0 && data.thread.unread > 0) {
+      // A reader who is not a party keeps no read marker in somebody else's conversation.
+      if (!readOnly && seq > 0 && data.thread.unread > 0) {
         await api.read(id, seq);
         onChanged?.();
       }
     },
-    [api, id, onChanged, t],
+    [api, id, onChanged, t, readOnly],
   );
 
   useEffect(() => {
@@ -116,6 +126,9 @@ export function ConversationSheet({
     setReported([]);
     setDeal(null);
     setConfirmAccept(null);
+    setSelecting(false);
+    setPicked([]);
+    setDone(null);
     if (!id) return undefined;
     void catchUp();
     const timer = window.setInterval(() => void catchUp(), POLL_MS);
@@ -176,6 +189,22 @@ export function ConversationSheet({
     });
   };
 
+  const toggleShare = (on: boolean) => {
+    if (!api || !id) return;
+    void act('share', () => api.share(id, on));
+  };
+
+  const shareReport = () => {
+    if (!api || !id) return;
+    if (!picked.length) return setFailed(t('common.chat.dispute.none'));
+    void act('dispute', () => api.disputeReport(id, picked, disputeNote.trim() || undefined), () => {
+      setSelecting(false);
+      setPicked([]);
+      setDisputeNote('');
+      setDone(t('common.chat.dispute.done'));
+    });
+  };
+
   const setBlocked = async (block: boolean) => {
     if (!api || !id) return;
     setConfirmBlock(false);
@@ -195,9 +224,11 @@ export function ConversationSheet({
 
   const blocker = composeBlocker(text, current);
   const closed = Boolean(current?.blocked);
+  // A manager reads the driver's side of the thread, so the counterpart they see is the poster, named by role.
   const who = current?.role === 'poster' ? current.counterpartName ?? t('common.chat.driver') : t('common.chat.poster');
-  const proposable = canPropose(current) && Boolean(positionFor);
-  const settleable = Boolean(current?.settlesOffPlatform) && !closed;
+  const authorOf = (m: ChatMessage) => (readOnly ? (m.from === 'driver' ? t('common.chat.driver') : t('common.chat.poster')) : m.mine ? t('common.chat.you') : who);
+  const proposable = !readOnly && canPropose(current) && Boolean(positionFor);
+  const settleable = !readOnly && Boolean(current?.settlesOffPlatform) && !closed;
 
   /** What a message SAYS, by kind. The deal cards are sentences, so they read aloud and translate like text. */
   const content = (m: ChatMessage) => {
@@ -236,6 +267,7 @@ export function ConversationSheet({
       );
     }
     if (m.kind === 'settlement_agreed') return <b>{t('common.chat.deal.agreedLine')}</b>;
+    if (m.kind === 'report_shared') return <b>{t('common.chat.dispute.sharedLine', { n: m.seqCount ?? 0 })}</b>;
     return m.body;
   };
 
@@ -244,14 +276,37 @@ export function ConversationSheet({
       {thread ? (
         <>
           <p class="hint">{thread.freightLabel}</p>
-          <p class="hint">{t('common.chat.withWho', { who })}</p>
-          {/* Said plainly, because it is the promise the thread makes: who can read it, and that it stays. */}
-          <Note tone="info" icon="info" title={t('common.chat.privacyTitle')} detail={t('common.chat.privacy')} />
+          {readOnly ? (
+            <Note tone="info" icon="info" title={t('common.chat.share.readOnlyTitle')} detail={t('common.chat.share.readOnly')} />
+          ) : (
+            <>
+              <p class="hint">{t('common.chat.withWho', { who })}</p>
+              {/* Said plainly, because it is the promise the thread makes: who can read it, and that it stays. */}
+              <Note tone="info" icon="info" title={t('common.chat.privacyTitle')} detail={t('common.chat.privacy')} />
+            </>
+          )}
+
+          {/* CV3 — the driver's own choice, and theirs alone: widen who may READ this, never who may write. */}
+          {!readOnly && canShare(current) ? (
+            <div style="margin-top:10px">
+              {/* A labelled tick box, not the register kit's Checkbox: that one carries its words only for a screen
+                  reader, and found in the browser pass a driver saw a bare square beside nothing. */}
+              <label class="checkline">
+                <input type="checkbox" checked={Boolean(current?.sharedWithManager)} disabled={busy === 'share'} onChange={(e) => toggleShare(e.currentTarget.checked)} />
+                <span>{t('common.chat.share.toggle')}</span>
+              </label>
+              <p class="hint">{t('common.chat.share.hint')}</p>
+            </div>
+          ) : null}
+
           {failed ? (
             <p class="hint" role="alert">
               {failed}
             </p>
           ) : null}
+          {done ? <Note tone="ok" icon="check" title={done} detail="" /> : null}
+
+          {selecting ? <p class="hint" style="margin-top:10px">{t('common.chat.dispute.lede')}</p> : null}
 
           <div class="rows" role="log" aria-live="polite" style="margin-top:12px; gap:8px">
             {messages.length === 0 ? <p class="hint">{t('common.chat.empty')}</p> : null}
@@ -260,13 +315,20 @@ export function ConversationSheet({
                 key={m.seq}
                 style={`align-self:${m.mine ? 'flex-end' : 'flex-start'}; max-width:85%; padding:8px 12px; border-radius:14px; background:${m.mine ? 'var(--brand-50, #eef0ff)' : 'var(--surface-2, #f2f2f5)'}${m.kind !== 'text' && m.kind !== 'quick' ? '; border:1px solid var(--line, #dcdce4)' : ''}`}
               >
+                {selecting ? (
+                  <label class="checkline">
+                    <input type="checkbox" checked={picked.includes(m.seq)} onChange={() => setPicked((xs) => toggleSeq(xs, m.seq))} />
+                    <span>{t('common.chat.dispute.pick')}</span>
+                  </label>
+                ) : null}
+
                 <div class="t-body" style="white-space:pre-wrap; overflow-wrap:anywhere">
                   {content(m)}
                 </div>
 
                 {/* CV2 — the poster answers an open price from the card itself. Accepting gives the load away,
                     so it takes a second tap that says so. */}
-                {canDecide(current, m) && m.proposal ? (
+                {!readOnly && !selecting && canDecide(current, m) && m.proposal ? (
                   <div style="margin-top:6px">
                     {confirmAccept === m.proposal.proposalId ? (
                       <>
@@ -291,7 +353,7 @@ export function ConversationSheet({
                   </div>
                 ) : null}
 
-                {canAgree(current, m) ? (
+                {!readOnly && !selecting && canAgree(current, m) ? (
                   <div style="margin-top:6px">
                     <Button variant="outline" full={false} chevron={false} busy={busy === `agree:${m.seq}`} onClick={() => api && id && void act(`agree:${m.seq}`, () => api.agree(id, m.seq))}>
                       {t('common.chat.deal.agree')}
@@ -300,8 +362,8 @@ export function ConversationSheet({
                 ) : null}
 
                 <div class="hint" style="margin-top:2px; font-size:12px">
-                  {m.mine ? t('common.chat.you') : who} · {whenSent(m.at)}
-                  {!m.mine && !reported.includes(m.seq) ? (
+                  {authorOf(m)} · {whenSent(m.at)}
+                  {!readOnly && !selecting && !m.mine && !reported.includes(m.seq) ? (
                     <>
                       {' · '}
                       <button type="button" class="linkbtn" onClick={() => setReporting(m.seq)}>
@@ -322,7 +384,30 @@ export function ConversationSheet({
             ))}
           </div>
 
-          {closed ? (
+          {readOnly ? null : selecting ? (
+            // CV3 — putting a report together: the chosen messages, why, and a send that says how many.
+            <div style="margin-top:12px">
+              <div class="field">
+                <label class="field__label" for="dispute-note">
+                  {t('common.chat.dispute.note')}
+                </label>
+                <input id="dispute-note" class="input" value={disputeNote} onInput={(e) => setDisputeNote(e.currentTarget.value)} />
+              </div>
+              <Button chevron={false} busy={busy === 'dispute'} disabled={!picked.length} onClick={shareReport}>
+                {t('common.chat.dispute.send', { n: picked.length })}
+              </Button>
+              <Button
+                variant="link"
+                full={false}
+                onClick={() => {
+                  setSelecting(false);
+                  setPicked([]);
+                }}
+              >
+                {t('common.cancel')}
+              </Button>
+            </div>
+          ) : closed ? (
             <Note tone="warn" icon="warning" title={t(current?.blockedByMe ? 'common.chat.blockedByMe' : 'common.chat.blocked')} detail="" />
           ) : (
             <>
@@ -426,28 +511,43 @@ export function ConversationSheet({
             </>
           )}
 
-          <div style="margin-top:12px">
-            {current?.blockedByMe ? (
-              <Button variant="link" full={false} onClick={() => void setBlocked(false)}>
-                {t('common.chat.unblock')}
-              </Button>
-            ) : !closed && !confirmBlock ? (
-              <Button variant="link" full={false} danger onClick={() => setConfirmBlock(true)}>
-                {t('common.chat.block')}
-              </Button>
-            ) : null}
-            {confirmBlock ? (
-              <>
-                <p class="hint">{t('common.chat.blockConfirm')}</p>
-                <Button variant="outline" full={false} chevron={false} danger onClick={() => void setBlocked(true)}>
+          {readOnly ? null : (
+            <div style="margin-top:12px">
+              {/* CV3 — offered in a blocked thread too: a dispute is most often what follows a falling-out. */}
+              {!selecting && messages.length > 0 ? (
+                <Button
+                  variant="link"
+                  full={false}
+                  onClick={() => {
+                    setSelecting(true);
+                    setDone(null);
+                  }}
+                >
+                  {t('common.chat.dispute.start')}
+                </Button>
+              ) : null}
+              {current?.blockedByMe ? (
+                <Button variant="link" full={false} onClick={() => void setBlocked(false)}>
+                  {t('common.chat.unblock')}
+                </Button>
+              ) : !closed && !confirmBlock && !selecting ? (
+                <Button variant="link" full={false} danger onClick={() => setConfirmBlock(true)}>
                   {t('common.chat.block')}
                 </Button>
-                <Button variant="link" full={false} onClick={() => setConfirmBlock(false)}>
-                  {t('common.cancel')}
-                </Button>
-              </>
-            ) : null}
-          </div>
+              ) : null}
+              {confirmBlock ? (
+                <>
+                  <p class="hint">{t('common.chat.blockConfirm')}</p>
+                  <Button variant="outline" full={false} chevron={false} danger onClick={() => void setBlocked(true)}>
+                    {t('common.chat.block')}
+                  </Button>
+                  <Button variant="link" full={false} onClick={() => setConfirmBlock(false)}>
+                    {t('common.cancel')}
+                  </Button>
+                </>
+              ) : null}
+            </div>
+          )}
         </>
       ) : null}
     </Sheet>
@@ -455,8 +555,9 @@ export function ConversationSheet({
 }
 
 /**
- * The threads a person is party to — optionally only those about one load. Fetches its own list, so a screen
- * mounts it without owning chat state; `refreshKey` lets the host re-read after something changed.
+ * The threads a person is party to — optionally only those about one load — or, for a fleet manager, the ones
+ * their drivers shared. Fetches its own list, so a screen mounts it without owning chat state; `refreshKey` lets
+ * the host re-read after something changed.
  */
 export function ConversationList({
   api,
@@ -464,12 +565,15 @@ export function ConversationList({
   refreshKey = 0,
   onOpen,
   emptyText,
+  source = 'mine',
 }: {
   api: ConversationsApi | null;
   freightId?: string;
   refreshKey?: number;
   onOpen: (thread: ChatThread) => void;
   emptyText?: string;
+  /** CV3 — `shared`: a fleet manager's read-only list of what their drivers shared. */
+  source?: 'mine' | 'shared';
 }) {
   const t = useT();
   const [threads, setThreads] = useState<ChatThread[] | null>(null);
@@ -477,12 +581,12 @@ export function ConversationList({
 
   const load = useCallback(async () => {
     if (!api) return;
-    const r = await api.mine();
+    const r = source === 'shared' ? await api.shared() : await api.mine();
     if (r.error) return setError(r.error);
     setError(null);
     const all = narrow<ChatThread[]>(r.data) ?? [];
     setThreads(freightId ? all.filter((x) => x.freightId === freightId) : all);
-  }, [api, freightId]);
+  }, [api, freightId, source]);
 
   useEffect(() => {
     void load();
@@ -507,6 +611,7 @@ export function ConversationList({
       });
     }
     if (m.kind === 'settlement_agreed') return t('common.chat.deal.agreedLine');
+    if (m.kind === 'report_shared') return t('common.chat.dispute.sharedLine', { n: m.seqCount ?? 0 });
     return m.body ?? '';
   };
 
@@ -519,9 +624,11 @@ export function ConversationList({
           </span>
           <span class="row__body">
             <span class="row__t">
-              {x.freightCode} · {x.role === 'poster' ? x.counterpartName ?? t('common.chat.driver') : t('common.chat.poster')}
+              {x.freightCode} · {x.role === 'asker' ? t('common.chat.poster') : x.counterpartName ?? t('common.chat.driver')}
             </span>
-            <span class="row__s">{x.lastMessage ? `${x.lastMessage.mine ? `${t('common.chat.you')}: ` : ''}${preview(x.lastMessage)}` : x.freightLabel}</span>
+            <span class="row__s">
+              {x.lastMessage ? `${x.lastMessage.mine && x.role !== 'manager' ? `${t('common.chat.you')}: ` : ''}${preview(x.lastMessage)}` : x.freightLabel}
+            </span>
           </span>
           <span class="row__end">
             {x.blocked ? <Pill tone="idle">{t('common.chat.closedPill')}</Pill> : x.unread > 0 ? <Pill tone="warn" dot>{t('common.chat.unread', { n: x.unread })}</Pill> : <Icon name="chevronRight" size={22} />}

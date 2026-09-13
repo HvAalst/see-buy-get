@@ -3,6 +3,9 @@ import { useT } from '../../../shared/i18n';
 import { driverAction, driverMissing, isHeavySelection, shortDid, statusTone, toggleClass } from '../logic';
 import { VEHICLE_CLASSES } from '../types';
 import type { FleetActions, FleetState } from '../useFleetApp';
+import { useState } from 'preact/hooks';
+import { ConversationList, ConversationSheet } from '../../../shared/conversation/Conversations';
+import type { ChatThread } from '../../../shared/conversation/logic';
 
 export interface DriversScreenProps {
   state: FleetState;
@@ -19,10 +22,18 @@ export function DriversScreen({ state, actions }: DriversScreenProps) {
   const f = state.dForm;
   const missing = driverMissing(f, t);
   const heavy = isHeavySelection(f.classes);
+  // CV3 — the thread a driver shared, open read-only.
+  const [thread, setThread] = useState<ChatThread | null>(null);
 
   return (
     <div class="scr">
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
+
+      {/* CV3 — only what a driver CHOSE to share, and only while they drive for this fleet. Read, never write. */}
+      <Card title={t('fleet.chat.title')}>
+        <ConversationList api={actions.chatApi} source="shared" onOpen={setThread} emptyText={t('fleet.chat.empty')} />
+      </Card>
+      <ConversationSheet api={actions.chatApi} thread={thread} onClose={() => setThread(null)} readOnly />
 
       <Card title={t('fleet.drivers.onboardTitle')}>
         <p class="card__note">{t('fleet.drivers.onboardNote')}</p>

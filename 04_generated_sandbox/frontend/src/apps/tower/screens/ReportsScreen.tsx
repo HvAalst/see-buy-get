@@ -1,6 +1,6 @@
 import { Icon } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
-import { REASON_KEY, reportedText, reportsAgainst, reportsInOrder, shortId } from '../reports';
+import { REASON_KEY, disputeLine, reportedText, reportsAgainst, reportsInOrder, shortHash, shortId } from '../reports';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
 /**
@@ -87,6 +87,59 @@ export function ReportsScreen({ state, actions }: { state: TowerState; actions: 
                   </tr>
                 );
               })}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      {/* CV3 — reports of chosen messages. A party decided what is shown; the copy is fixed and fingerprinted. */}
+      <section class="cons__panel">
+        <div class="cons__panelhead">
+          <span class="cons__panelt">
+            {state.disputeReports === null ? t('tower.queues.loading') : t('tower.reports.disputeCount', { n: state.disputeReports.length })}
+          </span>
+        </div>
+        <p class="cons__lede" style="margin:12px 16px">
+          {t('tower.reports.disputeLede')}
+        </p>
+        {state.disputeReports === null ? null : state.disputeReports.length === 0 ? (
+          <p class="cons__empty">{t('tower.reports.disputeEmpty')}</p>
+        ) : (
+          <table class="ctbl">
+            <thead>
+              <tr>
+                <th>{t('tower.reports.col.load')}</th>
+                <th>{t('tower.reports.col.sharedBy')}</th>
+                <th>{t('tower.reports.col.messages')}</th>
+                <th>{t('tower.reports.col.fingerprint')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {state.disputeReports.map((d) => (
+                <tr key={d.reportId}>
+                  <td>
+                    <div class="ctbl__strong">{d.freightCode}</div>
+                    <div class="ctbl__sub">{formatDate(d.createdAt)}</div>
+                    <div class="ctbl__mono">
+                      {shortId(d.posterDid)} ↔ {shortId(d.askerDid)}
+                    </div>
+                  </td>
+                  <td>
+                    <span class="ctag">{t(d.sharedBy === 'poster' ? 'tower.reports.sharedBy.poster' : 'tower.reports.sharedBy.driver')}</span>
+                    {d.note ? <div class="ctbl__sub">“{d.note}”</div> : null}
+                  </td>
+                  <td>
+                    {d.messages.map((m) => (
+                      <div key={m.seq} class="ctbl__sub" style="overflow-wrap:anywhere">
+                        <b>{t(m.from === 'poster' ? 'tower.reports.fromPoster' : 'tower.reports.fromDriver')}</b> · {formatDate(m.at)} — {disputeLine(m)}
+                      </div>
+                    ))}
+                  </td>
+                  <td class="ctbl__mono" title={d.fingerprint}>
+                    {shortHash(d.fingerprint)}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         )}

@@ -26,6 +26,9 @@ export const enFleet = {
   'fleet.nav.drivers': 'Drivers',
   'fleet.nav.sessions': 'Shifts',
   'fleet.nav.lines': 'Lines',
+  // CV3 — conversations a driver chose to share with this fleet.
+  'fleet.chat.title': 'Conversations your drivers shared',
+  'fleet.chat.empty': 'No driver has shared a conversation with you. A driver can share one from inside it, and you can read it here.',
 
   // F1 — a fleet's own lines.
   'fleet.lines.title': 'Your lines',

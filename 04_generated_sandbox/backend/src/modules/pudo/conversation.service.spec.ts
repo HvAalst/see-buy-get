@@ -9,6 +9,7 @@ import { ConversationService, MESSAGES_PER_HOUR, NEW_THREADS_PER_DAY } from './c
 describe('conversations about a load', () => {
   const loads: Record<string, Record<string, unknown>> = {};
   const proposals = new Map<string, Record<string, unknown>>();
+  const managers: Record<string, string | undefined> = {};
   let notify: jest.Mock;
   let dispatch: Record<string, jest.Mock | ((...a: never[]) => unknown)>;
   let service: ConversationService;
@@ -48,7 +49,9 @@ describe('conversations about a load', () => {
         return p;
       }),
     };
-    const drivers = { canOperate: (did: string) => did.startsWith('did:drv'), get: () => ({ displayName: 'Amos K.' }) };
+    // Amos drives for Kilima Logistics; Grace drives for herself.
+    managers['did:drv:amos'] = 'did:fleet:kilima';
+    const drivers = { canOperate: (did: string) => did.startsWith('did:drv'), get: (did: string) => ({ displayName: 'Amos K.', managerDid: managers[did] }) };
     const vendors = { has: (id: string) => id === 'ven_store', get: () => ({ did: 'did:store' }) };
     service = new ConversationService(dispatch as never, drivers as never, { notify } as never, vendors as never);
   });
@@ -235,6 +238,79 @@ describe('conversations about a load', () => {
       service.block(conversationId, 'did:shop');
       expect(() => service.proposePrice(conversationId, 'did:drv:amos', { price: 1, from: FROM })).toThrow(/closed/);
       expect(() => service.recordSettlement(conversationId, 'did:shop', { amount: 1, method: 'cash', when: 'on_pickup' })).toThrow(/unblock it/);
+    });
+  });
+
+  describe('CV3 — sharing, by the driver’s choice and the parties’ choice', () => {
+    it('lets only the driver share with THEIR fleet manager, who can read and never write', () => {
+      const { conversationId } = service.open('fr_1', 'did:drv:amos');
+      service.send(conversationId, 'did:drv:amos', { body: 'Is the gate open at 6?' });
+      expect(service.listFor('did:drv:amos')[0]).toMatchObject({ shareable: true, sharedWithManager: false });
+      expect(() => service.setShared(conversationId, 'did:shop', true)).toThrow(/Only the driver/);
+      expect(() => service.messagesFor(conversationId, 'did:fleet:kilima')).toThrow(/not found/i);
+
+      expect(service.setShared(conversationId, 'did:drv:amos', true).sharedWithManager).toBe(true);
+      expect(service.listShared('did:fleet:kilima')).toEqual([expect.objectContaining({ conversationId, role: 'manager', unread: 0, counterpartName: 'Amos K.' })]);
+      expect(service.messagesFor(conversationId, 'did:fleet:kilima').items.map((m) => m.body)).toEqual(['Is the gate open at 6?']);
+      // A shared reader is neither party, so each message says which ROLE it came from.
+      expect(service.messagesFor(conversationId, 'did:fleet:kilima').items[0]).toMatchObject({ mine: false, from: 'driver' });
+      // Reading, never writing — and never another fleet's.
+      expect(() => service.send(conversationId, 'did:fleet:kilima', { body: 'hi' })).toThrow(/not found/i);
+      expect(() => service.messagesFor(conversationId, 'did:fleet:other')).toThrow(/not found/i);
+      expect(service.listShared('did:fleet:other')).toEqual([]);
+    });
+
+    it('ends the share when the driver turns it off — or leaves the fleet', () => {
+      const { conversationId } = service.open('fr_1', 'did:drv:amos');
+      service.setShared(conversationId, 'did:drv:amos', true);
+      service.setShared(conversationId, 'did:drv:amos', false);
+      expect(service.listShared('did:fleet:kilima')).toEqual([]);
+
+      service.setShared(conversationId, 'did:drv:amos', true);
+      managers['did:drv:amos'] = 'did:fleet:newco'; // Amos moves to another fleet
+      expect(() => service.messagesFor(conversationId, 'did:fleet:kilima')).toThrow(/not found/i);
+      expect(service.listShared('did:fleet:kilima')).toEqual([]);
+    });
+
+    it('refuses a driver who drives for themselves — there is nobody to share with', () => {
+      const { conversationId } = service.open('fr_1', 'did:drv:grace');
+      expect(service.listFor('did:drv:grace')[0].shareable).toBe(false);
+      expect(() => service.setShared(conversationId, 'did:drv:grace', true)).toThrow(/drive for yourself/);
+    });
+
+    it('shares a FIXED, fingerprinted copy of the chosen messages — roles, not identities — and tells the other side', () => {
+      const { conversationId } = service.open('fr_neg', 'did:drv:amos');
+      service.send(conversationId, 'did:drv:amos', { body: 'I will collect at 6' });
+      service.send(conversationId, 'did:shop', { body: 'Gate opens at 7, not 6' });
+      service.recordSettlement(conversationId, 'did:shop', { amount: 4500, method: 'cash', when: 'on_delivery' });
+
+      const shared = service.shareDisputeReport(conversationId, 'did:drv:amos', [3, 1, 3], 'Paid less than agreed');
+      expect(shared.seqCount).toBe(2);
+      expect(shared.fingerprint).toMatch(/^[0-9a-f]{64}$/);
+
+      const [report] = service.listDisputeReports();
+      // Never a key named `hash`: the global response mask strips that name at every depth, which once delivered
+      // the report to the console without its fingerprint and crashed the screen.
+      expect(Object.keys(report)).not.toContain('hash');
+      expect(Object.keys(shared)).not.toContain('hash');
+      expect(report).toMatchObject({ sharedBy: 'driver', note: 'Paid less than agreed', posterDid: 'did:shop', askerDid: 'did:drv:amos' });
+      expect(report.messages.map((m) => [m.seq, m.from])).toEqual([[1, 'driver'], [3, 'poster']]);
+      expect(JSON.stringify(report.messages)).not.toMatch(/did:/);
+      expect(report.messages[1].settlement).toEqual({ amount: 4500, method: 'cash', when: 'on_delivery' });
+
+      // The other side is told, in the thread.
+      const told = service.messagesFor(conversationId, 'did:shop').items.at(-1);
+      expect(told).toMatchObject({ kind: 'report_shared', mine: false, seqCount: 2 });
+    });
+
+    it('allows a report in a blocked thread, and refuses a stranger, nothing chosen, or a message that is not there', () => {
+      const { conversationId } = service.open('fr_1', 'did:drv:amos');
+      service.send(conversationId, 'did:drv:amos', { body: 'send the money now' });
+      service.block(conversationId, 'did:shop');
+      expect(service.shareDisputeReport(conversationId, 'did:shop', [1]).seqCount).toBe(1);
+      expect(() => service.shareDisputeReport(conversationId, 'did:drv:nosy', [1])).toThrow(/not found/i);
+      expect(() => service.shareDisputeReport(conversationId, 'did:shop', [])).toThrow(/Choose the messages/);
+      expect(() => service.shareDisputeReport(conversationId, 'did:shop', [99])).toThrow(/not in this conversation/);
     });
   });
 });

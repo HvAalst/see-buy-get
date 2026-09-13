@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canAgree, canDecide, canPropose, composeBlocker, lastSeqOf, mergeMessages, parseAmount, threadsFor, totalUnread, type ChatMessage, type ChatThread } from './logic';
+import { canAgree, canDecide, canPropose, canShare, composeBlocker, lastSeqOf, mergeMessages, parseAmount, threadsFor, toggleSeq, totalUnread, type ChatMessage, type ChatThread } from './logic';
 
 const msg = (seq: number, over: Partial<ChatMessage> = {}): ChatMessage => ({ seq, mine: false, kind: 'text', body: `m${seq}`, at: '2026-09-13T08:00:00Z', ...over });
 const thread = (over: Partial<ChatThread> = {}): ChatThread => ({
@@ -55,6 +55,16 @@ describe('CV1 — a conversation, client side', () => {
     expect(parseAmount('12,5')).toBe(12.5);
     expect(parseAmount('0')).toBeNull();
     expect(parseAmount('abc')).toBeNull();
+  });
+
+  it('CV3 — builds a report selection in the thread’s order, and offers sharing only to a driver with a manager', () => {
+    expect(toggleSeq([], 3)).toEqual([3]);
+    expect(toggleSeq([3], 1)).toEqual([1, 3]);
+    expect(toggleSeq([1, 3], 3)).toEqual([1]);
+    expect(canShare(thread({ role: 'asker', shareable: true }))).toBe(true);
+    expect(canShare(thread({ role: 'asker', shareable: false }))).toBe(false);
+    expect(canShare(thread({ role: 'poster', shareable: true }))).toBe(false);
+    expect(canShare(thread({ role: 'manager', shareable: true }))).toBe(false);
   });
 
   it('adds up the badge and finds the threads about one load', () => {

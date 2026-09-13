@@ -6,7 +6,16 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { ConversationService } from './conversation.service';
 // In a *.dto.ts file on purpose: the swagger plugin only introspects those, and a DTO declared here publishes
 // an empty request body to the contract (the gate caught exactly that).
-import { OpenConversationDto, ProposePriceInThreadDto, ReadMarkerDto, RecordSettlementDto, ReportMessageDto, SendMessageDto } from './conversation.dto';
+import {
+  DisputeReportDto,
+  OpenConversationDto,
+  ProposePriceInThreadDto,
+  ReadMarkerDto,
+  RecordSettlementDto,
+  ReportMessageDto,
+  SendMessageDto,
+  ShareConversationDto,
+} from './conversation.dto';
 
 /**
  * CV1 — CONVERSATIONS ABOUT A LOAD (05_engineering/conversations.md).
@@ -35,6 +44,32 @@ export class ConversationController {
   @Get('reports')
   reports() {
     return { items: this.conversations.listReports() };
+  }
+
+  /** CV3 — the conversations this fleet's drivers chose to share with it. Read-only. */
+  @Roles('fleet_manager')
+  @Get('shared')
+  shared(@Actor() actor: IntrospectionResult) {
+    return this.conversations.listShared(didOf(actor));
+  }
+
+  /** CV3 — the reports of chosen messages that parties shared — the operator's side of a dispute. */
+  @Roles('operator')
+  @Get('dispute-reports')
+  disputeReports() {
+    return { items: this.conversations.listDisputeReports() };
+  }
+
+  /** CV3 — the driver shares this conversation with their fleet manager, or stops sharing it. */
+  @Post(':id/share')
+  share(@Param('id') id: string, @Body() dto: ShareConversationDto, @Actor() actor: IntrospectionResult) {
+    return this.conversations.setShared(id, didOf(actor), dto.on);
+  }
+
+  /** CV3 — a party shares a report of the messages they choose. The other side is told in the thread. */
+  @Post(':id/dispute-reports')
+  shareDisputeReport(@Param('id') id: string, @Body() dto: DisputeReportDto, @Actor() actor: IntrospectionResult) {
+    return this.conversations.shareDisputeReport(id, didOf(actor), dto.seqs, dto.note);
   }
 
   @Get(':id/messages')

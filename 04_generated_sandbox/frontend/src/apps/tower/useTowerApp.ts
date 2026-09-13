@@ -7,7 +7,7 @@ import type { ConstraintView } from './logic';
 import type { EntityPricing, EntityRow } from './money';
 import type { ApprovalRow, ClaimDecision, ClaimRow, DisposalRow, StalledRow } from './queues';
 import { EMPTY_CORRIDOR_FORM, corridorName, type CorridorForm, type CorridorRow, type CouplingRow } from './corridors';
-import type { ReportRow } from './reports';
+import type { DisputeReportRow, ReportRow } from './reports';
 import { EMPTY_COUNTRY_FORM, newCountryCode, overridesOf, type NewCountryForm, type PresenceLevel, type PresenceRow } from './presence';
 import type { AgentRow, CoverageCounts, FlagRow, HubRow, ToteRow } from './network';
 import { runSummary, type PayoutAction, type PayoutRow, type RunResult } from './settlement';
@@ -28,6 +28,8 @@ export interface TowerState {
   hazards: ConstraintView[] | null;
   /** CV1 — messages a party reported in a conversation. Null while unread. */
   reports: ReportRow[] | null;
+  /** CV3 — dispute reports a party shared. Null while unread. */
+  disputeReports: DisputeReportRow[] | null;
   loading: boolean;
   /** A failed READ. The screen keeps whatever it last knew and says the read failed. */
   error: SbgError | null;
@@ -224,6 +226,7 @@ const INITIAL: TowerState = {
   who: null,
   hazards: null,
   reports: null,
+  disputeReports: null,
   loading: false,
   error: null,
   signInError: null,
@@ -467,11 +470,13 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
   /** CV1 — reported messages. A failed read keeps what was known and says so, like every queue here. */
   const loadReports = useCallback(async (client: TowerClient) => {
     setState((s) => ({ ...s, loading: true }));
-    const { data, error } = await client.api.conversationReports();
+    const [reported, disputes] = await Promise.all([client.api.conversationReports(), client.api.disputeReports()]);
+    const error = reported.error ?? disputes.error;
     setState((s) => ({
       ...s,
       loading: false,
-      reports: error ? s.reports : (narrow<{ items: ReportRow[] }>(data)?.items ?? []),
+      reports: reported.error ? s.reports : (narrow<{ items: ReportRow[] }>(reported.data)?.items ?? []),
+      disputeReports: disputes.error ? s.disputeReports : (narrow<{ items: DisputeReportRow[] }>(disputes.data)?.items ?? []),
       queueError: error ? error.detail || error.title : null,
       readAt: Date.now(),
     }));

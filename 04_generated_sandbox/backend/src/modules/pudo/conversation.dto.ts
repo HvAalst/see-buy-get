@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsNumber, IsOptional, IsString, Max, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, Min, ValidateNested } from 'class-validator';
 import { QUICK_REPLIES, REPORT_REASONS, SETTLE_METHODS, SETTLE_WHEN } from './conversation.types';
 
 /** Where the driver is when naming a price. Declared here: pudo.dto's own GeoDto is not exported. */
@@ -37,6 +37,17 @@ export class ProposePriceInThreadDto {
   @IsNumber() @Min(0.01) price!: number;
   @IsOptional() @IsString() note?: string;
   @ValidateNested() @Type(() => ThreadPositionDto) from!: ThreadPositionDto;
+}
+
+/** CV3 — the driver shares this conversation with their fleet manager, or stops. */
+export class ShareConversationDto {
+  @IsBoolean() on!: boolean;
+}
+
+/** CV3 — the messages a party chooses to show the network, and why. */
+export class DisputeReportDto {
+  @IsArray() @ArrayMaxSize(200) @IsInt({ each: true }) seqs!: number[];
+  @IsOptional() @IsString() note?: string;
 }
 
 /** CV2 — write down how a load the network does not pay will be settled. A record, never a posting. */

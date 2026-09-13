@@ -50,6 +50,16 @@ export function createConversationsApi(sbg: SbgClient) {
     agree: (id: string, seq: number) =>
       sbg.request((c) => c.POST('/v1/sbg/conversations/{id}/messages/{seq}/agree', { params: { path: { id, seq: String(seq) } as never } })),
 
+    /** CV3 — a fleet manager's view: the conversations their drivers chose to share. Read-only. */
+    shared: () => sbg.request((c) => c.GET('/v1/sbg/conversations/shared', {})),
+
+    /** CV3 — the driver shares this conversation with their fleet manager, or stops. */
+    share: (id: string, on: boolean) => sbg.request((c) => c.POST('/v1/sbg/conversations/{id}/share', { params: { path: { id } }, body: { on } as never })),
+
+    /** CV3 — share a report of the chosen messages with SeeBuyGet. The other side is told in the thread. */
+    disputeReport: (id: string, seqs: number[], note?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/conversations/{id}/dispute-reports', { params: { path: { id } }, body: { seqs, ...(note ? { note } : {}) } as never })),
+
     /** Report a message you received. */
     report: (id: string, seq: number, reason: 'spam' | 'abuse' | 'scam') =>
       sbg.request((c) =>

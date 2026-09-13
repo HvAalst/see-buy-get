@@ -36,7 +36,48 @@ export type SettleWhen = (typeof SETTLE_WHEN)[number];
  *   settlement          CV2 — a written-down arrangement for paying off-platform: a RECORD, never a posting
  *   settlement_agreed   CV2 — the other party agreeing to it
  */
-export type MessageKind = 'text' | 'quick' | 'proposal' | 'decision' | 'settlement' | 'settlement_agreed';
+export type MessageKind = 'text' | 'quick' | 'proposal' | 'decision' | 'settlement' | 'settlement_agreed' | 'report_shared';
+
+/**
+ * CV3 — A REPORT OF CHOSEN MESSAGES, shared by a party with the network.
+ *
+ * The thread stays private; what the operator reads is exactly the messages one party chose, as a FIXED copy
+ * with a fingerprint over it, so nobody can later claim the report said something else. Identities are replaced
+ * by the role each message came from. The operator-only record keeps the parties' DIDs, because acting on a
+ * dispute means knowing who is in it.
+ */
+export interface DisputeReport {
+  reportId: string;
+  conversationId: string;
+  freightId: string;
+  freightCode: string;
+  posterDid: string;
+  askerDid: string;
+  byDid: string;
+  sharedBy: 'poster' | 'driver';
+  note?: string;
+  messages: Array<{
+    seq: number;
+    from: 'poster' | 'driver';
+    kind: MessageKind;
+    body?: string;
+    quick?: QuickReply;
+    price?: number;
+    decision?: 'accepted' | 'declined';
+    settlement?: { amount: number; method: SettleMethod; when: SettleWhen };
+    refSeq?: number;
+    at: string;
+  }>;
+  /**
+   * sha256 over the messages exactly as shared.
+   *
+   * NOT called `hash`: the global ResponseMaskInterceptor strips any key named `hash` from every response, at
+   * every depth (it is a credential name). Found in the browser pass — the report reached the console without
+   * its fingerprint, and the screen crashed for every operator the moment one report existed.
+   */
+  fingerprint: string;
+  createdAt: string;
+}
 
 export interface Conversation {
   conversationId: string;
@@ -54,6 +95,10 @@ export interface Conversation {
   /** Set when a party blocks: nobody writes until THAT party unblocks. The messages stay. */
   blockedBy?: string;
   blockedAt?: string;
+  /** CV3 — the driver's own fleet manager, when the driver chose to share. Read-only, and only while that
+   *  manager is still the driver's manager. */
+  sharedWithManagerDid?: string;
+  sharedAt?: string;
 }
 
 export interface ConversationMessage {
@@ -70,6 +115,9 @@ export interface ConversationMessage {
   settlement?: { amount: number; method: SettleMethod; when: SettleWhen };
   /** settlement_agreed: the settlement message being agreed to. */
   refSeq?: number;
+  /** report_shared: the dispute report, and how many messages it holds — so the OTHER side is told. */
+  reportRef?: string;
+  seqCount?: number;
   at: string;
 }
 
@@ -90,6 +138,9 @@ export interface MessageReport {
 export interface MessageView {
   seq: number;
   mine: boolean;
+  /** The role the message came from — never who. A shared reader is neither party, so "mine" says nothing to
+   *  them: found in the browser pass, a manager saw their own driver's offer signed "the poster". */
+  from: 'poster' | 'driver';
   kind: MessageKind;
   body?: string;
   quick?: QuickReply;
@@ -98,6 +149,7 @@ export interface MessageView {
   decision?: { proposalId: string; decision: 'accepted' | 'declined'; price: number };
   settlement?: { amount: number; method: SettleMethod; when: SettleWhen; agreed: boolean };
   refSeq?: number;
+  seqCount?: number;
   at: string;
 }
 
@@ -108,9 +160,14 @@ export interface ConversationView {
   freightCode: string;
   /** "Maize · Nakuru → Nairobi" — what the load is, so the list reads without opening each row. */
   freightLabel: string;
-  role: 'poster' | 'asker';
-  /** The asker's display name, shown to the poster. The poster is "the poster" to the asker. */
+  /** `manager` — CV3: the driver's fleet manager reading a thread the driver shared. Never a writer. */
+  role: 'poster' | 'asker' | 'manager';
+  /** The asker's display name, shown to the poster (and the manager). The poster is "the poster" to the asker. */
   counterpartName?: string;
+  /** CV3 — the asker drives for a fleet, so there is a manager to share with. */
+  shareable: boolean;
+  /** CV3 — the asker has shared this thread with that manager. */
+  sharedWithManager: boolean;
   /** CV2 — whether a price can be named in this thread: the load was posted to be negotiated. */
   negotiable: boolean;
   /** CV2 — whether the two may record a settlement here: the network does not pay for this load. */

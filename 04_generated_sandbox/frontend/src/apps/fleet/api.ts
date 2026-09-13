@@ -1,5 +1,7 @@
 import {
+  createConversationsApi,
   createFleetApi,
+  type ConversationsApi,
   createSeededClient,
   makeConfig,
   publicRequest,
@@ -49,11 +51,13 @@ export interface FleetClient {
   api: FleetApi;
   /** Seeded rather than self-minting — the server hands the token over on a real sign-in. */
   client: ReturnType<typeof createSeededClient>;
+  /** CV3 — the conversations this fleet's drivers chose to share. Read-only. */
+  conversations: ConversationsApi;
 }
 
 export function createFleetClient(managerDid: string): FleetClient {
   const client = createSeededClient(fleetConfig(), tokenKeyFor(TOKEN_PREFIX, managerDid));
-  return { api: createFleetApi(client.sbg), client };
+  return { api: createFleetApi(client.sbg), client, conversations: createConversationsApi(client.sbg) };
 }
 
 export function purgeFleetTokens(keepDid: string | null): void {

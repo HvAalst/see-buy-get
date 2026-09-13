@@ -21,11 +21,13 @@ export type SettleWhen = (typeof SETTLE_WHEN)[number];
 
 export const MAX_MESSAGE_CHARS = 1000;
 
-export type MessageKind = 'text' | 'quick' | 'proposal' | 'decision' | 'settlement' | 'settlement_agreed';
+export type MessageKind = 'text' | 'quick' | 'proposal' | 'decision' | 'settlement' | 'settlement_agreed' | 'report_shared';
 
 export interface ChatMessage {
   seq: number;
   mine: boolean;
+  /** The role it came from — what a shared (read-only) reader goes by, since nothing is "mine" to them. */
+  from?: 'poster' | 'driver';
   kind: MessageKind;
   body?: string;
   quick?: QuickReply;
@@ -33,6 +35,8 @@ export interface ChatMessage {
   decision?: { proposalId: string; decision: 'accepted' | 'declined'; price: number };
   settlement?: { amount: number; method: SettleMethod; when: SettleWhen; agreed: boolean };
   refSeq?: number;
+  /** CV3 — report_shared: how many messages the report holds. */
+  seqCount?: number;
   at: string;
 }
 
@@ -41,7 +45,12 @@ export interface ChatThread {
   freightId: string;
   freightCode: string;
   freightLabel: string;
-  role: 'poster' | 'asker';
+  /** `manager` — CV3: a fleet manager reading a thread their driver shared. */
+  role: 'poster' | 'asker' | 'manager';
+  /** CV3 — the driver drives for a fleet, so there is a manager to share with. */
+  shareable?: boolean;
+  /** CV3 — the driver shared this thread with that manager. */
+  sharedWithManager?: boolean;
   counterpartName?: string;
   /** CV2 — a price can be named here. */
   negotiable?: boolean;
@@ -100,6 +109,16 @@ export function canDecide(thread: Pick<ChatThread, 'role' | 'blocked'> | null, m
 /** CV2 — may this person agree to this settlement? Only the side that did NOT write it, and only once. */
 export function canAgree(thread: Pick<ChatThread, 'blocked'> | null, m: ChatMessage): boolean {
   return Boolean(thread && !thread.blocked && m.kind === 'settlement' && !m.mine && m.settlement && !m.settlement.agreed);
+}
+
+/** CV3 — add a message to the report being put together, or take it out again. Kept in the thread's order. */
+export function toggleSeq(selected: number[], seq: number): number[] {
+  return selected.includes(seq) ? selected.filter((s) => s !== seq) : [...selected, seq].sort((a, b) => a - b);
+}
+
+/** CV3 — may this person share the thread with their manager? Only the driver who asked, when they have one. */
+export function canShare(thread: Pick<ChatThread, 'role' | 'shareable'> | null): boolean {
+  return Boolean(thread && thread.role === 'asker' && thread.shareable);
 }
 
 /** CV2 — may this person name a price here? The driver who asked, on a negotiated load, in an open thread. */

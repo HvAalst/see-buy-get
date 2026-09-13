@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { DispatchService, commitModeOf } from './dispatch.service';
@@ -14,6 +14,7 @@ import {
   type Conversation,
   type ConversationMessage,
   type ConversationView,
+  type DisputeReport,
   type MessageReport,
   type MessageView,
   type QuickReply,
@@ -50,6 +51,8 @@ export class ConversationService {
   private readonly threads = new PersistentMap<string, Conversation>('pudo-conversations');
   private readonly messages = new PersistentMap<string, ConversationMessage[]>('pudo-conversation-messages');
   private readonly reports = new PersistentMap<string, MessageReport>('pudo-conversation-reports');
+  /** CV3 — reports of chosen messages a party shared with the network. Fixed copies; never changed. */
+  private readonly disputeReports = new PersistentMap<string, DisputeReport>('pudo-conversation-dispute-reports');
   /** Send times per sender for the hourly cap. In memory: a restart forgiving an hour of messages is harmless. */
   private readonly sentAt = new Map<string, number[]>();
 
@@ -119,10 +122,11 @@ export class ConversationService {
 
   /** One thread's messages after a sequence number. `after = 0` is the whole thread. */
   messagesFor(conversationId: string, did: string, after = 0): { thread: ConversationView; items: MessageView[] } {
-    const thread = this.requireParty(conversationId, did);
+    // A shared thread may be READ by the driver's manager; everything else below still needs a party.
+    const thread = this.requireReader(conversationId, did);
     const all = this.messages.get(conversationId) ?? [];
     const agreed = agreedSeqs(all);
-    const items = all.filter((m) => m.seq > after).map((m) => this.viewOf(m, did, agreed));
+    const items = all.filter((m) => m.seq > after).map((m) => this.viewOf(m, did, agreed, thread.posterDid));
     return { thread: this.viewFor(thread, did), items };
   }
 
@@ -206,6 +210,92 @@ export class ConversationService {
     if (target.fromDid === did) throw new GlosError('INVALID_INPUT', 'The other side agrees to a settlement — not the one who wrote it down');
     if (agreedSeqs(all).has(target.seq)) throw new GlosError('INVALID_STATE', 'This settlement is already agreed');
     return this.append(thread, did, { kind: 'settlement_agreed', refSeq: target.seq }, now, 'A settlement was agreed on');
+  }
+
+  /**
+   * CV3 — THE DRIVER SHARES THIS CONVERSATION WITH THEIR FLEET MANAGER, or stops sharing it.
+   *
+   * The driver's decision alone (user, 2026-09-13): the poster cannot share the driver's words onward, and a
+   * manager cannot ask for them. Read-only, and it follows the fleet — a driver who leaves takes the share with
+   * them, because the reader is checked against the driver's CURRENT manager on every read.
+   */
+  setShared(conversationId: string, did: string, on: boolean, now = Date.now()): ConversationView {
+    const thread = this.requireParty(conversationId, did);
+    if (did !== thread.askerDid) throw new GlosError('FORBIDDEN', 'Only the driver in this conversation can share it with their fleet manager');
+    if (on) {
+      const managerDid = this.managerOf(did);
+      if (!managerDid) throw new GlosError('INVALID_STATE', 'You drive for yourself, so there is no fleet manager to share this with');
+      thread.sharedWithManagerDid = managerDid;
+      thread.sharedAt = new Date(now).toISOString();
+    } else {
+      delete thread.sharedWithManagerDid;
+      delete thread.sharedAt;
+    }
+    this.threads.set(conversationId, thread);
+    return this.viewFor(thread, did);
+  }
+
+  /** CV3 — the threads this manager's drivers shared with them, most recently active first. */
+  listShared(managerDid: string): ConversationView[] {
+    return [...this.threads.values()]
+      .filter((c) => this.isSharedWith(c, managerDid))
+      .sort((a, b) => (b.lastAt ?? b.createdAt).localeCompare(a.lastAt ?? a.createdAt))
+      .map((c) => this.viewFor(c, managerDid));
+  }
+
+  /**
+   * CV3 — A PARTY SHARES A REPORT OF CHOSEN MESSAGES with the network.
+   *
+   * The party decides what is shown (user, 2026-09-13); the thread itself stays private. A fixed copy with a
+   * sha256 fingerprint, identities replaced by the role each message came from, and a line in the thread so
+   * the OTHER side knows a report was shared. Allowed in a blocked thread: a dispute is most often what comes
+   * after two people stopped talking.
+   */
+  shareDisputeReport(conversationId: string, did: string, seqs: number[], note?: string, now = Date.now()): { reportId: string; fingerprint: string; seqCount: number } {
+    const thread = this.requireParty(conversationId, did);
+    const chosen = [...new Set((seqs ?? []).map((s) => Number(s)))].filter((s) => Number.isInteger(s)).sort((a, b) => a - b);
+    if (!chosen.length) throw new GlosError('INVALID_INPUT', 'Choose the messages that show what happened');
+    if (chosen.length > 200) throw new GlosError('INVALID_INPUT', 'A report can hold up to 200 messages');
+    const all = this.messages.get(conversationId) ?? [];
+    const picked = chosen.map((s) => all.find((m) => m.seq === s));
+    if (picked.some((m) => !m)) throw new GlosError('NOT_FOUND', 'One of those messages is not in this conversation');
+    const cleanNote = boundedNote(note);
+
+    const messages: DisputeReport['messages'] = (picked as ConversationMessage[]).map((m) => ({
+      seq: m.seq,
+      from: m.fromDid === thread.posterDid ? 'poster' : 'driver',
+      kind: m.kind,
+      ...(m.body !== undefined ? { body: m.body } : {}),
+      ...(m.quick ? { quick: m.quick } : {}),
+      ...(m.price !== undefined ? { price: m.price } : {}),
+      ...(m.decision ? { decision: m.decision } : {}),
+      ...(m.settlement ? { settlement: { ...m.settlement } } : {}),
+      ...(m.refSeq !== undefined ? { refSeq: m.refSeq } : {}),
+      at: m.at,
+    }));
+    const report: DisputeReport = {
+      reportId: `dr_${randomBytes(8).toString('hex')}`,
+      conversationId,
+      freightId: thread.freightId,
+      freightCode: this.freightCode(thread.freightId),
+      posterDid: thread.posterDid,
+      askerDid: thread.askerDid,
+      byDid: did,
+      sharedBy: did === thread.posterDid ? 'poster' : 'driver',
+      ...(cleanNote ? { note: cleanNote } : {}),
+      messages,
+      fingerprint: createHash('sha256').update(JSON.stringify(messages)).digest('hex'),
+      createdAt: new Date(now).toISOString(),
+    };
+    this.disputeReports.set(report.reportId, report);
+    // Told in the thread, never done behind the other side's back.
+    this.append(thread, did, { kind: 'report_shared', reportRef: report.reportId, seqCount: chosen.length }, now, 'A report was shared about');
+    return { reportId: report.reportId, fingerprint: report.fingerprint, seqCount: chosen.length };
+  }
+
+  /** CV3 — every dispute report, newest first — for the operator. */
+  listDisputeReports(): DisputeReport[] {
+    return [...this.disputeReports.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
   /** Move this party's read marker forward. Never backward, never past the end. */
@@ -298,7 +388,7 @@ export class ConversationService {
       })
       .catch(() => undefined);
 
-    return this.viewOf(stored, fromDid, agreedSeqs(all));
+    return this.viewOf(stored, fromDid, agreedSeqs(all), thread.posterDid);
   }
 
   private requireOpen(thread: Conversation, did: string): void {
@@ -317,9 +407,29 @@ export class ConversationService {
     return thread;
   }
 
+  /** A party — or the driver's CURRENT manager on a thread the driver shared. Reading only. */
+  private requireReader(conversationId: string, did: string): Conversation {
+    const thread = this.threads.get(conversationId);
+    if (thread && (thread.posterDid === did || thread.askerDid === did || this.isSharedWith(thread, did))) return thread;
+    throw new GlosError('NOT_FOUND', 'Conversation not found');
+  }
+
+  /** Shared with this manager, and that manager still manages the driver. */
+  private isSharedWith(thread: Conversation, managerDid: string): boolean {
+    return Boolean(thread.sharedWithManagerDid) && thread.sharedWithManagerDid === managerDid && this.managerOf(thread.askerDid) === managerDid;
+  }
+
+  private managerOf(driverDid: string): string | undefined {
+    try {
+      return this.drivers.get(driverDid).managerDid ?? undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
   /** A message as one party reads it. A proposal carries where it stands NOW, read from the negotiation. */
-  private viewOf(m: ConversationMessage, did: string, agreed: Set<number>): MessageView {
-    const view: MessageView = { seq: m.seq, mine: m.fromDid === did, kind: m.kind, at: m.at };
+  private viewOf(m: ConversationMessage, did: string, agreed: Set<number>, posterDid: string): MessageView {
+    const view: MessageView = { seq: m.seq, mine: m.fromDid === did, from: m.fromDid === posterDid ? 'poster' : 'driver', kind: m.kind, at: m.at };
     if (m.body !== undefined) view.body = m.body;
     if (m.quick) view.quick = m.quick;
     if (m.kind === 'proposal' && m.proposalId) {
@@ -334,15 +444,16 @@ export class ConversationService {
     if (m.kind === 'decision' && m.proposalId && m.decision) view.decision = { proposalId: m.proposalId, decision: m.decision, price: m.price ?? 0 };
     if (m.kind === 'settlement' && m.settlement) view.settlement = { ...m.settlement, agreed: agreed.has(m.seq) };
     if (m.refSeq !== undefined) view.refSeq = m.refSeq;
+    if (m.kind === 'report_shared' && m.seqCount !== undefined) view.seqCount = m.seqCount;
     return view;
   }
 
   private viewFor(thread: Conversation, did: string): ConversationView {
-    const role = did === thread.posterDid ? 'poster' : 'asker';
+    const role: ConversationView['role'] = did === thread.posterDid ? 'poster' : did === thread.askerDid ? 'asker' : 'manager';
     const all = this.messages.get(thread.conversationId) ?? [];
     const last = all.at(-1);
     let counterpartName: string | undefined;
-    if (role === 'poster') {
+    if (role !== 'asker') {
       try {
         counterpartName = this.drivers.get(thread.askerDid).displayName;
       } catch {
@@ -358,9 +469,12 @@ export class ConversationService {
       ...(counterpartName ? { counterpartName } : {}),
       negotiable: this.negotiable(thread.freightId),
       settlesOffPlatform: this.settlesOffPlatform(thread.freightId),
+      shareable: Boolean(this.managerOf(thread.askerDid)),
+      sharedWithManager: Boolean(thread.sharedWithManagerDid) && thread.sharedWithManagerDid === this.managerOf(thread.askerDid),
       lastSeq: thread.lastSeq,
-      unread: Math.max(0, thread.lastSeq - (thread.readSeq[did] ?? 0)),
-      ...(last ? { lastMessage: this.viewOf(last, did, agreedSeqs(all)) } : {}),
+      // A manager reads a shared thread; they keep no read marker in somebody else's conversation.
+      unread: role === 'manager' ? 0 : Math.max(0, thread.lastSeq - (thread.readSeq[did] ?? 0)),
+      ...(last ? { lastMessage: this.viewOf(last, did, agreedSeqs(all), thread.posterDid) } : {}),
       ...(thread.lastAt ? { lastAt: thread.lastAt } : {}),
       createdAt: thread.createdAt,
       blocked: Boolean(thread.blockedBy),

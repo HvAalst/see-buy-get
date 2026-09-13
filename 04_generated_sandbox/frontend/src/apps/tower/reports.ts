@@ -43,6 +43,52 @@ export function reportsAgainst(rows: ReportRow[], did: string): number {
   return new Set(rows.filter((r) => r.reportedDid === did).map((r) => r.byDid)).size;
 }
 
+/**
+ * CV3 — A DISPUTE REPORT a party shared: the messages they chose, as a fixed copy with a fingerprint.
+ * The operator sees the parties' identities, because acting on a dispute means knowing who is in it.
+ */
+export interface DisputeReportRow {
+  reportId: string;
+  conversationId: string;
+  freightId: string;
+  freightCode: string;
+  posterDid: string;
+  askerDid: string;
+  byDid: string;
+  sharedBy: 'poster' | 'driver';
+  note?: string;
+  messages: Array<{
+    seq: number;
+    from: 'poster' | 'driver';
+    kind: string;
+    body?: string;
+    quick?: string;
+    price?: number;
+    decision?: 'accepted' | 'declined';
+    settlement?: { amount: number; method: string; when: string };
+    at: string;
+  }>;
+  /** sha256 over the shared messages. Named so the server's credential mask (which strips `hash`) leaves it. */
+  fingerprint: string;
+  createdAt: string;
+}
+
+/** One shared message as a line an operator can read, whatever kind it was. */
+export function disputeLine(m: DisputeReportRow['messages'][number]): string {
+  if (m.kind === 'quick') return `[${m.quick ?? ''}]`;
+  if (m.kind === 'proposal') return `Offered ${m.price?.toFixed(2) ?? '?'}${m.body ? ` — “${m.body}”` : ''}`;
+  if (m.kind === 'decision') return `${m.decision === 'accepted' ? 'Accepted' : 'Declined'} ${m.price?.toFixed(2) ?? '?'}`;
+  if (m.kind === 'settlement' && m.settlement) return `Settle ${m.settlement.amount.toFixed(2)} by ${m.settlement.method.replace('_', ' ')}, ${m.settlement.when.replace('_', ' ')}${m.body ? ` — “${m.body}”` : ''}`;
+  if (m.kind === 'settlement_agreed') return 'Agreed to the settlement';
+  return m.body ?? '';
+}
+
+/** The first characters of a fingerprint — enough to compare two copies by eye. */
+export function shortHash(fingerprint: string | undefined): string {
+  // A missing fingerprint shows as a dash rather than taking the whole screen down with it.
+  return fingerprint ? fingerprint.slice(0, 12) : '—';
+}
+
 /** Enough of an identity to tell two apart on screen, not a whole one. */
 export function shortId(did: string): string {
   return did.length > 18 ? `${did.slice(0, 10)}…${did.slice(-6)}` : did;
