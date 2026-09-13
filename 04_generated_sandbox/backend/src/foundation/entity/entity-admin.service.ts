@@ -88,7 +88,10 @@ export class EntityAdminService {
     if ((next ?? '').length < 10) throw new GlosError('VALIDATION_FAILED', 'A password for a console that sets prices needs at least 10 characters');
     admin.salt = randomBytes(16).toString('hex');
     admin.hash = this.hash(next, admin.salt);
+    admin.passwordChangedAt = new Date().toISOString();
     this.admins.set(admin.email, admin);
+    // THIS administrator's other sessions end — not the company's, which every other administrator shares.
+    this.auth.revokeAll(adminKey(admin.adminId));
     return { ok: true };
   }
 
@@ -107,7 +110,7 @@ export class EntityAdminService {
       ...viewOf(admin),
       // The DID is the ENTITY's own — an entity is a first-class actor in this system, and this person
       // is acting as the company rather than as themselves. Their NAME is what the audit trail carries.
-      token: this.auth.mintActorToken({ role: 'entity_admin', did: entity.did, tenant: entity.entityId, actorName: admin.name }),
+      token: this.auth.mintActorToken({ role: 'entity_admin', did: entity.did, tenant: entity.entityId, actorName: admin.name, revocationKey: adminKey(admin.adminId) }),
     };
   }
 
@@ -128,6 +131,8 @@ export class EntityAdminService {
     if (!admin) throw new GlosError('NOT_FOUND', 'No such administrator for this company');
     admin.revokedAt = new Date().toISOString();
     this.admins.set(admin.email, admin);
+    // Revoking a login used to leave its open sessions working for the rest of their ten hours.
+    this.auth.revokeAll(adminKey(admin.adminId));
     return viewOf(admin);
   }
 
@@ -157,4 +162,9 @@ function viewOf(a: EntityAdmin): EntityAdminView {
     ...(a.lastSeenAt ? { lastSeenAt: a.lastSeenAt } : {}),
     ...(a.revokedAt ? { revokedAt: a.revokedAt } : {}),
   };
+}
+
+/** The sign-out key of one administrator — their sessions share the company's DID, so the DID alone is too coarse. */
+function adminKey(adminId: string): string {
+  return `entity-admin:${adminId}`;
 }

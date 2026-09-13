@@ -47,6 +47,15 @@ export interface IssueTokenInput {
   tier?: Tier;
   /** Revocation counter, copied from the actor's profile at mint; compared on introspect. */
   tokenVersion?: number;
+  /**
+   * A SECOND thing this token can be signed out by, when the DID alone is too coarse: every administrator of a
+   * company shares the company's DID, so one of them changing a password must not sign out the others — their own
+   * key (`entity-admin:<id>`) is what is bumped. A token a PERSON obtained with their PIN carries the person's DID
+   * here, so a PIN change also ends the fleet or driver sessions that PIN opened.
+   */
+  revocationKey?: string;
+  /** The key's counter at mint; the token is revoked once the key has moved past it. */
+  revocationVersion?: number;
 }
 
 export interface AccessToken {
@@ -91,4 +100,6 @@ export interface TokenClaims {
   actorName?: string;
   tier?: Tier;
   tokenVersion?: number;
+  revocationKey?: string;
+  revocationVersion?: number;
 }

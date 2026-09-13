@@ -1,3 +1,5 @@
+import { PersistentMap } from '../store/persistent-map';
+import { isSandbox } from '../runtime/sandbox';
 import { BadRequestException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { DidService } from '../did/did.service';
@@ -38,11 +40,22 @@ export class AuthService {
    * /auth/token at all. A secret embedded in a public PWA is not a secret.
    */
   private readonly clientSecret = process.env.GLOS_CLIENT_SECRET;
+  /**
+   * Sign-out counters that do not depend on an operational profile. Only some DIDs have a profile (shops, hubs,
+   * fleets, drivers, stores); a PERSON and a COMPANY do not, so bumping "their" profile did nothing and a PIN change
+   * could not sign anybody out. Durable: a restart must not quietly bring a signed-out session back.
+   */
+  private readonly revocations = new PersistentMap<string, number>('auth-revocations');
 
   constructor(
     private readonly didService: DidService,
     private readonly profiles: OperationalStore,
   ) {
+    if (!isSandbox()) {
+      // Codes are no longer handed back outside a sandbox, and nothing sends them yet: without an SMS/email sender
+      // a person can neither verify a phone nor reset a password. Said at boot, not discovered by a locked-out user.
+      this.logger.warn('GLOS_ENV=production: phone codes and password-reset tokens are not returned to callers, and no SMS or email sender is configured — they cannot reach anyone until one is added.');
+    }
     if (!this.clientSecret) {
       this.logger.warn(
         'GLOS_CLIENT_SECRET is not set — POST /v1/auth/token will mint a token for ANY subject. ' +
@@ -89,6 +102,8 @@ export class AuthService {
       actorName: input.actorName,
       tier: input.tier,
       tokenVersion: input.tokenVersion,
+      revocationKey: input.revocationKey,
+      revocationVersion: input.revocationVersion,
     };
     return { access_token: this.sign(claims), token_type: 'Bearer', expires_in: ttl };
   }
@@ -119,7 +134,7 @@ export class AuthService {
    * replacement for the ?agent=<did> URL-param "session" — the token now carries who you are and
    * what you may do, verifiably. The DID must already be registered (issueToken enforces it).
    */
-  mintActorToken(input: { role: ActorRole; did: string; tenant?: string; tier?: Tier; actorName?: string }): AccessToken {
+  mintActorToken(input: { role: ActorRole; did: string; tenant?: string; tier?: Tier; actorName?: string; revocationKey?: string }): AccessToken {
     const profile = this.profiles.get(input.did);
     return this.issueToken({
       sub: input.did,
@@ -130,7 +145,8 @@ export class AuthService {
       tenant: input.tenant,
       actorName: input.actorName,
       tier: input.tier ?? profile?.tier,
-      tokenVersion: profile?.tokenVersion ?? 0,
+      tokenVersion: this.versionOf(input.did),
+      ...(input.revocationKey ? { revocationKey: input.revocationKey, revocationVersion: this.revocations.get(input.revocationKey) ?? 0 } : {}),
       ttlSeconds: SHIFT_TTL_SECONDS,
     });
   }
@@ -140,8 +156,13 @@ export class AuthService {
    * old sign-in must stop working. A token minted AFTER this carries the new version, so the device that made the
    * change can be handed a fresh one and stay in.
    */
-  revokeAll(did: string): void {
-    this.profiles.bumpTokenVersion(did);
+  revokeAll(key: string): void {
+    this.revocations.set(key, (this.revocations.get(key) ?? 0) + 1);
+  }
+
+  /** A DID's sign-out counter: its profile's (shops, fleets, stores…) plus the one kept here (anything at all). */
+  private versionOf(did: string): number {
+    return (this.profiles.get(did)?.tokenVersion ?? 0) + (this.revocations.get(did) ?? 0);
   }
 
   introspect(token: string): IntrospectionResult {
@@ -153,9 +174,12 @@ export class AuthService {
       return { active: false, reason: 'did_not_found' };
     }
     // Revocation: if the actor's profile tokenVersion has moved past the token's, it was signed out.
-    if (claims.tokenVersion != null && claims.did) {
-      const current = this.profiles.get(claims.did)?.tokenVersion ?? 0;
-      if (current > claims.tokenVersion) return { active: false, reason: 'revoked' };
+    if (claims.tokenVersion != null && claims.did && this.versionOf(claims.did) > claims.tokenVersion) {
+      return { active: false, reason: 'revoked' };
+    }
+    // …or its own key has: one administrator, or everything a person's PIN opened.
+    if (claims.revocationKey && (this.revocations.get(claims.revocationKey) ?? 0) > (claims.revocationVersion ?? 0)) {
+      return { active: false, reason: 'revoked' };
     }
     // WHITELIST PROJECTION — every actor field must be copied here or the guard never sees it.
     return {

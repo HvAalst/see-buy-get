@@ -3522,7 +3522,14 @@
         },
         "responses": {
           "201": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       }
@@ -3598,7 +3605,7 @@
       "post": {
         "operationId": "Sbg.authForgot",
         "summary": "",
-        "description": "Request a password reset (the token is returned for the sandbox; emailed in production).",
+        "description": "Request a password reset. The token comes back in the answer ONLY in a sandbox: anywhere else it is the\ncredential itself, and returning it would let anyone reset anyone's password. Outside a sandbox the answer is\nalso the same for an email nobody holds, so this route cannot be used to find out which accounts exist.",
         "parameters": [],
         "requestBody": {
           "required": true,

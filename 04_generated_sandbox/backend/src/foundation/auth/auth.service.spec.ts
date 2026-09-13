@@ -96,6 +96,25 @@ describe('AuthService', () => {
     expect(r.reason).toBe('revoked');
   });
 
+  it('signs out an actor with no operational profile — a person or a company', () => {
+    const person = did.generate('person:+254702');
+    const { access_token } = auth.mintActorToken({ role: 'consumer', did: person.id });
+    expect(auth.introspect(access_token).active).toBe(true);
+    auth.revokeAll(person.id);
+    expect(auth.introspect(access_token)).toMatchObject({ active: false, reason: 'revoked' });
+    // A sign-in AFTER the change carries the new counter, so the device that made it stays in.
+    expect(auth.introspect(auth.mintActorToken({ role: 'consumer', did: person.id }).access_token).active).toBe(true);
+  });
+
+  it('signs out ONE holder of a shared DID by their own key, and leaves the others', () => {
+    const company = did.generate('entity:sbg-ke');
+    const amina = auth.mintActorToken({ role: 'entity_admin', did: company.id, revocationKey: 'entity-admin:adm_amina' }).access_token;
+    const brian = auth.mintActorToken({ role: 'entity_admin', did: company.id, revocationKey: 'entity-admin:adm_brian' }).access_token;
+    auth.revokeAll('entity-admin:adm_amina');
+    expect(auth.introspect(amina)).toMatchObject({ active: false, reason: 'revoked' });
+    expect(auth.introspect(brian).active).toBe(true);
+  });
+
   it('gates the public grant on the client secret once one is configured', () => {
     expect(() => auth.assertClientCredentials(undefined)).not.toThrow(); // unset in tests → open
 

@@ -142,6 +142,8 @@ export interface EntityAdmin {
   hash: string;
   createdAt: string;
   lastSeenAt?: string;
+  /** When this administrator last changed their password. */
+  passwordChangedAt?: string;
   /** Revoked logins are KEPT: "who changed this rate in March" must stay answerable after they leave. */
   revokedAt?: string;
 }

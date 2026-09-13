@@ -4445,11 +4445,13 @@ describe('PUDO Light', () => {
 
     it('changes a PIN only with the current one, and a wrong current PIN counts toward the lockout', () => {
       const phone = '+254700333444';
-      persons.enroll(phone, true, '1234');
+      const enrolled = persons.enroll(phone, true, '1234');
       expect(() => identity.changePin({ phone, pin: '9999', newPin: '5678' })).toThrow(/Wrong phone or PIN/);
       expect(() => identity.changePin({ phone, pin: '1234', newPin: '1234' })).toThrow(/different from the current one/);
       const r = identity.changePin({ phone, pin: '1234', newPin: '5678' });
       expect(r.token.access_token).toBeTruthy();
+      expect(auth.introspect(enrolled.token.access_token)).toMatchObject({ active: false, reason: 'revoked' }); // the old session really ends
+      expect(auth.introspect(r.token.access_token).active).toBe(true);
       expect(() => persons.loginWithPin(phone, '1234')).toThrow(/Wrong phone or PIN/);
       expect(persons.loginWithPin(phone, '5678').token.access_token).toBeTruthy();
     });
@@ -4500,6 +4502,30 @@ describe('PUDO Light', () => {
       expect(rotated.loginCode).not.toBe(code);
       expect(() => managers.login(code)).toThrow(/Unknown sign-in code/);
       expect(managers.login(rotated.loginCode!).did).toBe(m.did);
+    });
+  });
+
+  describe('one-time codes are handed back only in a sandbox', () => {
+    const before = process.env.GLOS_ENV;
+    afterEach(() => {
+      if (before === undefined) delete process.env.GLOS_ENV;
+      else process.env.GLOS_ENV = before;
+    });
+
+    it('echoes the phone code and the reset token on a laptop, and neither in production', () => {
+      const phone = '+254700990013';
+      otp.verify(phone, otp.request(phone).code);
+      accounts.signup({ role: 'mdp', email: 'forgot-prod@sbg.test', password: 'first-pass', phone, profile: { mdp: { name: 'Forgot Hub', zones: ['FZ'], country: 'KE', location: { lat: -1.2, lng: 36.8 } } } });
+
+      delete process.env.GLOS_ENV;
+      expect(controller.phoneRequest({ phone: '+254700990011' } as never)).toHaveProperty('code');
+      expect(controller.authForgot({ email: 'forgot-prod@sbg.test' } as never)).toHaveProperty('resetToken');
+
+      process.env.GLOS_ENV = 'production';
+      expect(controller.phoneRequest({ phone: '+254700990012' } as never)).toEqual({ sent: true });
+      expect(controller.authForgot({ email: 'forgot-prod@sbg.test' } as never)).toEqual({ sent: true });
+      // …and an email nobody holds gets the very same answer, so the route cannot be used to find accounts.
+      expect(controller.authForgot({ email: 'nobody-here@sbg.test' } as never)).toEqual({ sent: true });
     });
   });
 

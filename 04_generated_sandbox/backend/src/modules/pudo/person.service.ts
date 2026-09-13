@@ -269,7 +269,8 @@ export class PersonService {
     if (!link) throw new GlosError('ROLE_NOT_HELD', `You do not hold an active ${role} role`);
     const token = role === 'consumer'
       ? this.mintConsumerToken(person)
-      : this.auth.mintActorToken({ role: ROLE_TO_ACTOR[role], did: link.entityDid, tenant: link.tenant });
+      : // Carries the person, so changing their PIN also ends the role sessions that PIN opened.
+        this.auth.mintActorToken({ role: ROLE_TO_ACTOR[role], did: link.entityDid, tenant: link.tenant, revocationKey: person.personDid });
     return { role, entityDid: link.entityDid, token };
   }
 

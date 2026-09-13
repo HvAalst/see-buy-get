@@ -185,4 +185,23 @@ describe('company administrators', () => {
       expect(entities.pricingFor(ke(), ['pudo']).editable).toBe(false);
     });
   });
+  describe('signing out', () => {
+    it('ends that administrator’s other sessions when they change their password, and nobody else’s', () => {
+      const amina = admins.create(ke(), { email: 'amina@sbg-ke.test', name: 'Amina' });
+      const brian = admins.create(ke(), { email: 'brian@sbg-ke.test', name: 'Brian' });
+      const aminaTablet = admins.login('amina@sbg-ke.test', amina.temporaryPassword).token.access_token;
+      const brianLaptop = admins.login('brian@sbg-ke.test', brian.temporaryPassword).token.access_token;
+      admins.changePassword('amina@sbg-ke.test', amina.temporaryPassword, 'a-much-better-password');
+      expect(auth.introspect(aminaTablet)).toMatchObject({ active: false, reason: 'revoked' });
+      expect(auth.introspect(brianLaptop).active).toBe(true);
+      expect(auth.introspect(admins.login('amina@sbg-ke.test', 'a-much-better-password').token.access_token).active).toBe(true);
+    });
+
+    it('ends a revoked administrator’s open sessions at once', () => {
+      const leaver = admins.create(ke(), { email: 'leaver@sbg-ke.test', name: 'Leaver' });
+      const session = admins.login('leaver@sbg-ke.test', leaver.temporaryPassword).token.access_token;
+      admins.revoke(ke(), leaver.adminId);
+      expect(auth.introspect(session)).toMatchObject({ active: false, reason: 'revoked' });
+    });
+  });
 });

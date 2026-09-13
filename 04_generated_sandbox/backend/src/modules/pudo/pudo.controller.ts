@@ -1,4 +1,5 @@
-﻿import { Body, Controller, Delete, Get, Header, Inject, Param, Patch, Post, Query, Res, StreamableFile } from '@nestjs/common';
+﻿import { isSandbox } from '../../foundation/runtime/sandbox';
+import { Body, Controller, Delete, Get, Header, Inject, Param, Patch, Post, Query, Res, StreamableFile } from '@nestjs/common';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
 import { PRESENCE_CAPABILITIES, PRESENCE_LEVELS, type PresenceLevel } from '../../foundation/presence/presence.types';
 import { capabilitiesOf } from '../../foundation/presence/presence.service';
@@ -160,11 +161,15 @@ export class SbgController {
   // they have signed up or logged in, and once GLOS_CLIENT_SECRET gates /auth/token (S0) the browser
   // can no longer mint a machine token to reach them either. They must be reachable unauthenticated.
 
-  /** Issue a verification code for a phone (returned for the sandbox; SMS'd in production). */
+  /**
+   * Issue a verification code for a phone. The code comes back in the answer ONLY in a sandbox: anywhere else,
+   * handing it to whoever asked would let anyone verify anyone's phone — it has to reach the phone itself.
+   */
   @Public()
   @Post('auth/phone/request')
   phoneRequest(@Body() dto: PhoneRequestDto) {
-    return this.otp.request(dto.phone);
+    const issued = this.otp.request(dto.phone);
+    return isSandbox() ? issued : { sent: issued.sent };
   }
 
   /** Confirm the code → marks the phone verified for sign-up. */
@@ -190,11 +195,16 @@ export class SbgController {
     return this.accounts.login(dto.email, dto.password);
   }
 
-  /** Request a password reset (the token is returned for the sandbox; emailed in production). */
+  /**
+   * Request a password reset. The token comes back in the answer ONLY in a sandbox: anywhere else it is the
+   * credential itself, and returning it would let anyone reset anyone's password. Outside a sandbox the answer is
+   * also the same for an email nobody holds, so this route cannot be used to find out which accounts exist.
+   */
   @Public()
   @Post('auth/forgot')
   authForgot(@Body() dto: ForgotDto) {
-    return this.accounts.forgot(dto.email);
+    const issued = this.accounts.forgot(dto.email);
+    return isSandbox() ? issued : { sent: true };
   }
 
   @Public()
@@ -2385,7 +2395,8 @@ export class SbgController {
     const holds = person.roles.some((r) => r.role === 'fleet_manager' && r.entityDid === m.did && r.status === 'active');
     // Not FORBIDDEN: telling somebody "right PIN, wrong company" confirms both the account and the code.
     if (!holds) throw new GlosError('AUTH_FAILED', 'That account cannot manage this fleet');
-    const token = this.auth.mintActorToken({ role: 'fleet_manager', did: m.did, tenant: m.did });
+    // Carries the PERSON: every manager of this fleet shares its DID, and a PIN change must end only this person's sessions.
+    const token = this.auth.mintActorToken({ role: 'fleet_manager', did: m.did, tenant: m.did, revocationKey: person.personDid });
     return { ...m, person: this.persons.view(person), token };
   }
 
