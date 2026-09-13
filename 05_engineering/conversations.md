@@ -94,4 +94,6 @@ when, between whom — in a form that can be shown to somebody later.
   (`pudo-conversation-voice`, 900 KB / 120 s server-side, 60 s in the app), apart from the messages so a thread
   list never carries audio. `POST :id/voice`; `GET :id/voice/:voiceId` for the thread's readers;
   `GET dispute-reports/:reportId/voice/:voiceId` for the operator, only for a voice id that report holds. Played
-  from an object URL — an `<audio src>` cannot carry the token. Not built: transcription.
+  from an object URL — an `<audio src>` cannot carry the token.
+  **Decided (user, 2026-09-13): no transcription. Voice stays voice.** Speech-to-text good enough for Swahili and
+  Amharic would mean a GPU or an outside service hearing messages the thread promises only two people can read.
