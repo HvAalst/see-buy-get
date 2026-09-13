@@ -1,12 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import {
   LEVEL_DEFAULTS,
+  approvalBlocker,
   capabilityStates,
+  countryNameOf,
   levelBlocker,
   levelEffect,
+  needsSecondPerson,
+  newCountryBlocker,
   overridesOf,
+  pendingFor,
   presenceRows,
+  samePerson,
   takeInPromise,
+  type CatalogueCountry,
+  type PresenceProposalRow,
   type PresenceRow,
 } from './presence';
 
@@ -79,6 +87,77 @@ describe('moving a country', () => {
     const zm = row({ capabilities: { ...LEVEL_DEFAULTS.matched, payouts: true } });
     expect(levelEffect(zm, 'established').gained).not.toContain('payouts');
     expect(levelEffect(zm, 'established').gained).toContain('claims');
+  });
+});
+
+const catalogue = (over: Partial<CatalogueCountry> = {}): CatalogueCountry => ({
+  code: 'ZM',
+  name: 'Zambia',
+  currency: 'ZMW',
+  dialCode: '+260',
+  drivingSide: 'left',
+  languages: ['en'],
+  postalCode: true,
+  idDocuments: ['nrc'],
+  priceable: true,
+  level: 'observed',
+  ...over,
+});
+
+const proposal = (over: Partial<PresenceProposalRow> = {}): PresenceProposalRow => ({
+  proposalId: 'pp_1',
+  jurisdiction: 'ZM',
+  level: 'matched',
+  gains: ['takeIn'],
+  proposedBy: 'Amina',
+  proposedAt: '2026-09-13T08:00:00Z',
+  expiresAt: '2026-09-20T08:00:00Z',
+  status: 'pending',
+  ...over,
+});
+
+describe('CA1 — a country comes from the catalogue', () => {
+  const form = (jurisdiction: string, level: PresenceRow['level'] = 'matched') => ({ jurisdiction, level, note: '' });
+
+  it('refuses two letters that are not a country', () => {
+    expect(newCountryBlocker(form(''), [], [catalogue()])).toBe('tower.presence.needCode');
+    expect(newCountryBlocker(form('ZZ'), [], [catalogue()])).toBe('tower.presence.badCode');
+    expect(newCountryBlocker(form('ZM'), [], [catalogue()])).toBeNull();
+  });
+
+  it('will not switch on a country the rate book cannot price in', () => {
+    expect(newCountryBlocker(form('ZM'), [], [catalogue({ priceable: false })])).toBe('tower.presence.needsRate');
+    // Recording it as merely observed switches nothing on, so no rate is needed.
+    expect(newCountryBlocker(form('ZM', 'observed'), [], [catalogue({ priceable: false })])).toBeNull();
+    // A country already taking goods in is not being switched on.
+    expect(newCountryBlocker(form('ZM', 'partnered'), [row()], [catalogue({ priceable: false })])).toBeNull();
+  });
+
+  it('names a country from the catalogue, and falls back to its code', () => {
+    expect(countryNameOf('ZM', [catalogue()])).toBe('Zambia');
+    expect(countryNameOf('ZM', null)).toBe('ZM');
+  });
+});
+
+describe('CA2 — two people switch a country on', () => {
+  it('never lets the proposer approve their own change, however they spell their name', () => {
+    expect(approvalBlocker(proposal(), 'Amina')).toBe('tower.presence.ownProposal');
+    expect(approvalBlocker(proposal(), '  amina ')).toBe('tower.presence.ownProposal');
+    expect(approvalBlocker(proposal(), 'Brian')).toBeNull();
+    expect(approvalBlocker(proposal(), '')).toBe('tower.presence.needName');
+    expect(approvalBlocker(proposal({ status: 'approved' }), 'Brian')).toBe('tower.presence.alreadyDecided');
+  });
+
+  it('asks for a second person only when the change gives the country something', () => {
+    expect(needsSecondPerson(row({ level: 'observed', capabilities: { ...LEVEL_DEFAULTS.observed } }), 'matched')).toBe(true);
+    expect(needsSecondPerson(row(), 'observed')).toBe(false); // a lowering: one person, recorded
+    expect(samePerson('A  B', 'a b')).toBe(true);
+    expect(samePerson('', '')).toBe(false);
+  });
+
+  it('finds the change waiting on a country', () => {
+    expect(pendingFor([proposal({ status: 'declined' }), proposal({ proposalId: 'pp_2' })], 'ZM')?.proposalId).toBe('pp_2');
+    expect(pendingFor(null, 'ZM')).toBeUndefined();
   });
 });
 

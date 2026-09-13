@@ -13,6 +13,7 @@
  */
 
 import { GlosError } from '../http/glos-error';
+import { catalogueEntry } from '../countries/catalogue';
 
 export type CurrencyCode = string;
 
@@ -31,7 +32,8 @@ export const FALLBACK_CURRENCY: CurrencyCode = 'USD';
 
 /** The currency a jurisdiction settles in; FALLBACK_CURRENCY when the jurisdiction is unknown/absent. */
 export function currencyForJurisdiction(jurisdiction?: string): CurrencyCode {
-  return (jurisdiction && CURRENCY_BY_JURISDICTION[jurisdiction.toUpperCase()]) || FALLBACK_CURRENCY;
+  // The catalogue knows what every real country settles in; the fallback is left for codes that are not a country.
+  return (jurisdiction && (CURRENCY_BY_JURISDICTION[jurisdiction.toUpperCase()] ?? catalogueEntry(jurisdiction)?.currency)) || FALLBACK_CURRENCY;
 }
 
 /**
@@ -43,7 +45,9 @@ export function currencyForJurisdiction(jurisdiction?: string): CurrencyCode {
  * adding the country to the table is a deliberate step, like recording its presence.
  */
 export function requireCurrencyFor(jurisdiction?: string): CurrencyCode {
-  const code = jurisdiction ? CURRENCY_BY_JURISDICTION[jurisdiction.toUpperCase()] : undefined;
+  // Every real country's currency is known now (the catalogue). Whether the network can PRICE in it is a separate
+  // question — a rate on the rate book — asked by whoever prices.
+  const code = jurisdiction ? (CURRENCY_BY_JURISDICTION[jurisdiction.toUpperCase()] ?? catalogueEntry(jurisdiction)?.currency) : undefined;
   if (!code) {
     throw new GlosError('INVALID_STATE', `No currency is recorded for ${jurisdiction || 'that country'}, so nothing can be priced there yet`);
   }

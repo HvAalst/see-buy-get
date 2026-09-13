@@ -26,6 +26,8 @@ export interface PresenceRow {
   recorded: boolean;
   note?: string;
   setBy?: string;
+  /** CA2 — the second person who approved the change that raised this country. */
+  approvedBy?: string;
   setAt?: string;
 }
 
@@ -150,21 +152,86 @@ export interface NewCountryForm {
 
 export const EMPTY_COUNTRY_FORM: NewCountryForm = { jurisdiction: '', level: 'matched', note: '' };
 
+/** CA1 — one country from the catalogue: what the network knows of it, and whether it can price in its money. */
+export interface CatalogueCountry {
+  code: string;
+  name: string;
+  currency: string;
+  dialCode: string;
+  drivingSide: 'left' | 'right';
+  languages: string[];
+  postalCode: boolean;
+  idDocuments: string[];
+  /** Whether the rate book can convert its currency — switching a country on requires it. */
+  priceable: boolean;
+  level: PresenceLevel;
+}
+
+/** CA2 — a change that raises a country, waiting for (or decided by) a second person. */
+export interface PresenceProposalRow {
+  proposalId: string;
+  jurisdiction: string;
+  level: PresenceLevel;
+  overrides?: Partial<Record<PresenceCapability, boolean>>;
+  note?: string;
+  gains: PresenceCapability[];
+  proposedBy: string;
+  proposedAt: string;
+  expiresAt: string;
+  status: 'pending' | 'approved' | 'declined' | 'expired';
+  decidedBy?: string;
+  decidedAt?: string;
+  reason?: string;
+}
+
 /**
  * What stops a country being recorded — said before the server has to say it.
  *
- * The screen can only list countries that HAVE a standing or a company, so without this form the first
- * country we are not yet in cannot be recorded at all: the same shape of gap the corridors had, where
- * the only routes that existed were the ones a seed script happened to write.
+ * CA1: a country is CHOSEN from the catalogue, never typed, so ZM and ZMB can never become two countries that
+ * never meet — and switching one on waits until the rate book can convert its money.
  */
-export function newCountryBlocker(form: NewCountryForm, rows: PresenceRow[]): MessageKey | null {
+export function newCountryBlocker(form: NewCountryForm, rows: PresenceRow[], catalogue: CatalogueCountry[] = []): MessageKey | null {
   const code = form.jurisdiction.trim().toUpperCase();
   if (!code) return 'tower.presence.needCode';
-  // ISO-3166 alpha-2, because every jurisdiction in the system is stored and compared as one. A free
-  // string would make ZM and ZMB two countries that never meet.
-  if (!/^[A-Z]{2}$/.test(code)) return 'tower.presence.badCode';
-  if (form.level === 'established' && !rows.some((r) => r.jurisdiction === code && r.hasEntity)) return 'tower.presence.needsCompany';
+  const country = catalogue.find((c) => c.code === code);
+  if (!country) return 'tower.presence.badCode';
+  const listed = rows.find((r) => r.jurisdiction === code);
+  if (form.level === 'established' && !listed?.hasEntity) return 'tower.presence.needsCompany';
+  const switchingOn = form.level !== 'observed' && !listed?.capabilities.takeIn;
+  if (switchingOn && !country.priceable) return 'tower.presence.needsRate';
   return null;
+}
+
+/** Two names are one person when they differ only in case and spacing — the same rule the server applies. */
+export function samePerson(a: string | undefined, b: string | undefined): boolean {
+  const n = (s: string | undefined) => (s ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return Boolean(n(a)) && n(a) === n(b);
+}
+
+/**
+ * CA2 — may this person approve this change? Never the one who proposed it: two people switch a country on.
+ * Returns the reason they may not, or null.
+ */
+export function approvalBlocker(proposal: PresenceProposalRow, who: string | undefined): MessageKey | null {
+  if (proposal.status !== 'pending') return 'tower.presence.alreadyDecided';
+  if (!who?.trim()) return 'tower.presence.needName';
+  if (samePerson(who, proposal.proposedBy)) return 'tower.presence.ownProposal';
+  return null;
+}
+
+/** Does moving this country to this level need a second person? Only a change that GIVES it something does. */
+export function needsSecondPerson(row: PresenceRow, level: PresenceLevel): boolean {
+  return levelEffect(row, level).gained.length > 0;
+}
+
+/** The waiting change for a country, if there is one — the table marks the row rather than hiding it. */
+export function pendingFor(proposals: PresenceProposalRow[] | null, jurisdiction: string): PresenceProposalRow | undefined {
+  return (proposals ?? []).find((p) => p.status === 'pending' && p.jurisdiction === jurisdiction);
+}
+
+/** A country's name from the catalogue, or its code where the catalogue has not been read yet. */
+export function countryNameOf(code: string, catalogue: CatalogueCountry[] | null): string {
+  return catalogue?.find((c) => c.code === code)?.name ?? code;
 }
 
 /** The country this form would act on, normalised the way the server stores it. */

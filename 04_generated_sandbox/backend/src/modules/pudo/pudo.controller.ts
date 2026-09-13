@@ -1,4 +1,5 @@
 ﻿import { Body, Controller, Delete, Get, Header, Inject, Param, Patch, Post, Query } from '@nestjs/common';
+import { COUNTRY_CATALOGUE, catalogueEntry } from '../../foundation/countries/catalogue';
 import { ApiQuery } from '@nestjs/swagger';
 import { GlosError } from '../../foundation/http/glos-error';
 import { Public } from '../../foundation/auth/public.decorator';
@@ -36,7 +37,8 @@ import { PersonService } from './person.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
 import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto,
   ProposeLineDto,
-  PresenceDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto } from './pudo.dto';
+  PresenceDto,
+  PresenceDecisionDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { classifySize, MAX_CLAIM_AWARD, measuredFactor, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
@@ -230,7 +232,6 @@ export class SbgController {
   @Public()
   @Get('countries')
   countries() {
-    const regionName = new Intl.DisplayNames(['en'], { type: 'region' });
     return this.presence
       .list()
       .filter((p) => p.capabilities.takeIn)
@@ -238,8 +239,21 @@ export class SbgController {
         const sister = this.entities.forJurisdiction(p.jurisdiction);
         return sister
           ? { country: p.jurisdiction, name: sister.name, currency: sister.currency, settles: true }
-          : { country: p.jurisdiction, name: regionName.of(p.jurisdiction) ?? p.jurisdiction, settles: false };
+          : { country: p.jurisdiction, name: catalogueEntry(p.jurisdiction)?.name ?? p.jurisdiction, settles: false };
       });
+  }
+
+  /**
+   * CA1 — every country that exists, with what the network knows of it and where it stands. Public: it is the
+   * atlas, not a decision. `priceable` says whether the rate book can convert its currency, which is what
+   * switching a country on requires.
+   */
+  @Public()
+  @Get('country-catalogue')
+  countryCatalogue() {
+    return {
+      items: COUNTRY_CATALOGUE.map((c) => ({ ...c, priceable: Boolean(this.fx.point(c.currency)), level: this.presence.resolve(c.code).level })),
+    };
   }
 
   /**
@@ -295,6 +309,42 @@ export class SbgController {
     return { items: this.presence.list() };
   }
 
+  /**
+   * CA1 — a country is switched on only from the catalogue, and only once the network can price in its money:
+   * "refuse until mapped", asked of the person deciding instead of discovered at the first price.
+   */
+  private requirePriceableSwitchOn(jurisdiction: string, level: string): void {
+    const country = catalogueEntry(jurisdiction);
+    if (!country) throw new GlosError('INVALID_INPUT', `${jurisdiction.toUpperCase()} is not a country in the catalogue`);
+    const switchingOn = !this.presence.can(country.code, 'takeIn') && level !== 'observed';
+    if (switchingOn && !this.fx.point(country.currency)) {
+      throw new GlosError('INVALID_STATE', `There is no exchange rate for ${country.currency} yet — put one on the rate book before switching ${country.name} on`);
+    }
+  }
+
+  /** CA2 — changes to a country waiting for a second person, and the ones already decided. Operator-only. */
+  @Roles('operator')
+  @Get('presence/proposals')
+  presenceProposals() {
+    return { items: this.presence.listProposals() };
+  }
+
+  /** CA2 — the second person approves. Never the proposer; the rate book is asked again if this switches a country on. */
+  @Roles('operator')
+  @Post('presence/proposals/:proposalId/approve')
+  approvePresence(@Param('proposalId') proposalId: string, @Body() dto: PresenceDecisionDto, @Actor() actor: IntrospectionResult) {
+    const proposal = this.presence.listProposals().find((p) => p.proposalId === proposalId);
+    if (proposal?.status === 'pending') this.requirePriceableSwitchOn(proposal.jurisdiction, proposal.level);
+    return this.presence.approve(proposalId, auditActor(actor, dto.by));
+  }
+
+  /** CA2 — anyone declines (the proposer withdrawing included), always with a reason. */
+  @Roles('operator')
+  @Post('presence/proposals/:proposalId/decline')
+  declinePresence(@Param('proposalId') proposalId: string, @Body() dto: PresenceDecisionDto, @Actor() actor: IntrospectionResult) {
+    return this.presence.decline(proposalId, auditActor(actor, dto.by), dto.reason);
+  }
+
   @Get('presence/:jurisdiction')
   presenceFor(@Param('jurisdiction') jurisdiction: string) {
     return this.presence.resolve(jurisdiction);
@@ -311,7 +361,9 @@ export class SbgController {
   @Roles('operator')
   @Post('presence/:jurisdiction')
   setPresence(@Param('jurisdiction') jurisdiction: string, @Body() dto: PresenceDto, @Actor() actor: IntrospectionResult) {
-    return this.presence.set({
+    this.requirePriceableSwitchOn(jurisdiction, dto.level);
+    // CA2 — a change that raises the country becomes a proposal for a second person; a lowering is applied now.
+    return this.presence.propose({
       jurisdiction,
       level: dto.level,
       overrides: dto.overrides as never,

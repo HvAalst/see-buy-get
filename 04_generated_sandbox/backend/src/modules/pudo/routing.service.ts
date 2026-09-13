@@ -297,8 +297,9 @@ export class RoutingService {
       s.own
         ? { ...s, entityId: s.own, purchased: false, currency: this.currencyOf(s.own) }
         : // P4 — the seller owes this shop directly, in the shop's own money. An unmapped country refuses
-          // by name rather than silently becoming dollars (user, 2026-09-13).
-          { ...s, entityId: sellerId, purchased: true, currency: requireCurrencyFor(s.country) },
+          // by name rather than silently becoming dollars (user, 2026-09-13) — and "mapped" now means the rate book
+          // can convert it: every real country's currency is known, not every one is priceable.
+          { ...s, entityId: sellerId, purchased: true, currency: this.priceableCurrencyOf(s.country) },
     );
     const entityIds = [...new Set(stops.map((n) => n.entityId))];
     const legs = plan.legs.map((l) => ({ from: l.from, to: l.to, km: l.distanceKm }));
@@ -411,6 +412,15 @@ export class RoutingService {
   }
 
   /** The money a sister is owed in — from the company, never from a deployment default. */
+  /** A purchased stop's own money — refused by name until the rate book can convert it ("refuse until mapped"). */
+  private priceableCurrencyOf(country: string): string {
+    const currency = requireCurrencyFor(country);
+    if (!this.fx.point(currency)) {
+      throw new GlosError('INVALID_STATE', `No exchange rate for ${currency} is on the rate book, so nothing can be priced in ${country} yet`);
+    }
+    return currency;
+  }
+
   private currencyOf(entityId: string): string {
     const entity = this.entities.get(entityId);
     return entity.currency ?? currencyForJurisdiction(entity.jurisdiction);

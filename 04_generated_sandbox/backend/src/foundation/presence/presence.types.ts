@@ -78,7 +78,38 @@ export class Presence {
   /** Why this was set. Kept because a country's standing is a decision, not configuration drift. */
   @ApiPropertyOptional() note?: string;
   @ApiPropertyOptional() setBy?: string;
+  /** CA2 — the second person, on a change that raised the country. Absent on a lowering, which one person may make. */
+  @ApiPropertyOptional() approvedBy?: string;
   @ApiProperty() setAt: string;
+}
+
+/**
+ * CA2 — TWO PEOPLE SWITCH A COUNTRY ON (user, 2026-09-13: "an important rule").
+ *
+ * A change that RAISES a country — any capability it would gain — is a proposal until a different named person
+ * approves it. Until then nothing behaves differently. A proposal nobody decides expires, and the expiry is kept
+ * like any other outcome. A lowering is applied at once by one person, recorded: refusing money is the safe
+ * direction, and a lapsed licence must not wait for a second signature.
+ */
+export const PROPOSAL_STATUSES = ['pending', 'approved', 'declined', 'expired'] as const;
+export type ProposalStatus = (typeof PROPOSAL_STATUSES)[number];
+
+export class PresenceProposal {
+  @ApiProperty() proposalId: string;
+  @ApiProperty() jurisdiction: string;
+  @ApiProperty({ enum: PRESENCE_LEVELS }) level: PresenceLevel;
+  @ApiPropertyOptional() overrides?: Partial<Record<PresenceCapability, boolean>>;
+  @ApiPropertyOptional() note?: string;
+  /** What the country would be able to do that it cannot now — the reason this needs a second person. */
+  @ApiProperty({ enum: PRESENCE_CAPABILITIES, isArray: true }) gains: PresenceCapability[];
+  @ApiProperty() proposedBy: string;
+  @ApiProperty() proposedAt: string;
+  @ApiProperty() expiresAt: string;
+  @ApiProperty({ enum: PROPOSAL_STATUSES }) status: ProposalStatus;
+  @ApiPropertyOptional() decidedBy?: string;
+  @ApiPropertyOptional() decidedAt?: string;
+  /** Why it was declined. Required there, because a refusal nobody can read cannot be argued with. */
+  @ApiPropertyOptional() reason?: string;
 }
 
 /** What a country's standing permits right now, level and overrides resolved together. */
@@ -92,6 +123,8 @@ export class ResolvedPresence {
   @ApiProperty() recorded: boolean;
   @ApiPropertyOptional() note?: string;
   @ApiPropertyOptional() setBy?: string;
+  /** CA2 — the second person who approved the change that raised this country. */
+  @ApiPropertyOptional() approvedBy?: string;
   @ApiPropertyOptional() setAt?: string;
 }
 

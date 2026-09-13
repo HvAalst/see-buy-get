@@ -1,3 +1,4 @@
+import { useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import {
@@ -6,13 +7,18 @@ import {
   PRESENCE_LEVELS,
   PROMISE_LABEL,
   alreadyListed,
+  approvalBlocker,
   capabilityStates,
+  countryNameOf,
   levelBlocker,
-  newCountryBlocker,
   levelEffect,
+  needsSecondPerson,
+  newCountryBlocker,
+  pendingFor,
   presenceRows,
   takeInPromise,
   type PresenceLevel,
+  type PresenceProposalRow,
   type PresenceRow,
 } from '../presence';
 import type { TowerActions, TowerState } from '../useTowerApp';
@@ -25,10 +31,14 @@ import type { TowerActions, TowerState } from '../useTowerApp';
  * which. Everything here is built so the difference cannot be misread: a country shows what it may do
  * AND what somebody deliberately switched off, a level change shows what it would cost before it is
  * pressed, and "established" cannot be typed at all where no company transacts.
+ *
+ * CA1 + CA2: a country is chosen from the catalogue, never typed, and a change that gives a country anything it
+ * cannot do now is only a PROPOSAL until a different named person approves it.
  */
 export function PresenceScreen({ state, actions }: { state: TowerState; actions: TowerActions }) {
   const t = useT();
   const rows = state.presence ? presenceRows(state.presence) : null;
+  const decided = (state.proposals ?? []).filter((p) => p.status !== 'pending').slice(0, 5);
 
   return (
     <>
@@ -44,6 +54,21 @@ export function PresenceScreen({ state, actions }: { state: TowerState; actions:
         </span>
       </p>
 
+      {state.done ? (
+        <p class="twr-done">
+          <Icon name="check" size={16} />
+          {state.done}
+        </p>
+      ) : null}
+
+      {state.queueError ? (
+        <p class="cerr" style="margin:12px 0">
+          {state.queueError}
+        </p>
+      ) : null}
+
+      <Waiting state={state} actions={actions} />
+
       <section class="cons__panel">
         <div class="cons__panelhead">
           <span class="cons__panelt">{rows === null ? t('tower.queues.loading') : t('tower.presence.count', { n: rows.length })}</span>
@@ -55,19 +80,6 @@ export function PresenceScreen({ state, actions }: { state: TowerState; actions:
             </button>
           </span>
         </div>
-
-        {state.done ? (
-          <p class="twr-done">
-            <Icon name="check" size={16} />
-            {state.done}
-          </p>
-        ) : null}
-
-        {state.queueError ? (
-          <p class="cerr" style="margin:12px 16px">
-            {state.queueError}
-          </p>
-        ) : null}
 
         {rows === null ? (
           <p class="cons__empty">{t('tower.queues.loading')}</p>
@@ -93,23 +105,133 @@ export function PresenceScreen({ state, actions }: { state: TowerState; actions:
       </section>
 
       <RecordCountry state={state} actions={actions} />
+
+      {decided.length ? (
+        <section class="cons__panel">
+          <div class="cons__panelhead">
+            <span class="cons__panelt">{t('tower.presence.decidedTitle')}</span>
+          </div>
+          <table class="ctbl">
+            <tbody>
+              {decided.map((p) => (
+                <tr key={p.proposalId}>
+                  <td>
+                    <div class="ctbl__strong">{countryNameOf(p.jurisdiction, state.catalogue)}</div>
+                    <div class="ctbl__sub">{t(LEVEL_LABEL[p.level])}</div>
+                  </td>
+                  <td class="ctbl__sub">{t('tower.presence.proposal.by', { who: p.proposedBy, when: when(p.proposedAt), expires: when(p.expiresAt) })}</td>
+                  <td class="ctbl__sub">
+                    {p.status === 'approved'
+                      ? t('tower.presence.status.approved', { who: p.decidedBy ?? '' })
+                      : p.status === 'declined'
+                        ? t('tower.presence.status.declined', { who: p.decidedBy ?? '', reason: p.reason ?? '' })
+                        : t('tower.presence.status.expired')}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      ) : null}
     </>
   );
 }
 
+const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+
 /**
- * Record a country that is not on the map yet.
+ * CA2 — the changes a second person has to decide.
  *
- * The table can only show countries that already have a company or a standing, which would make the
- * FIRST country we are not established in impossible to record — and a map of where we operate that
- * cannot describe where we are going is a map of the past.
+ * Shown above the map, not beside it: a change nobody seconds expires, and a country an operator believes they
+ * switched on is not switched on until somebody else has pressed Approve.
+ */
+function Waiting({ state, actions }: { state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const pending = (state.proposals ?? []).filter((p) => p.status === 'pending');
+
+  return (
+    <section class="cons__panel">
+      <div class="cons__panelhead">
+        <span class="cons__panelt">{t('tower.presence.waitingTitle')}</span>
+        {pending.length ? <span class="ctag ctag--warn">{t('tower.presence.waitingCount', { n: pending.length })}</span> : null}
+      </div>
+      {pending.length === 0 ? (
+        <p class="cons__empty">{t('tower.presence.waitingNone')}</p>
+      ) : (
+        <table class="ctbl">
+          <tbody>
+            {pending.map((p) => (
+              <ProposalView key={p.proposalId} proposal={p} state={state} actions={actions} />
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
+
+function ProposalView({ proposal, state, actions }: { proposal: PresenceProposalRow; state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const [declining, setDeclining] = useState(false);
+  const [reason, setReason] = useState('');
+  const blocker = approvalBlocker(proposal, state.who?.name);
+  const busy = state.busyId === proposal.proposalId;
+
+  return (
+    <tr>
+      <td>
+        <div class="ctbl__strong">{countryNameOf(proposal.jurisdiction, state.catalogue)}</div>
+        <div class="ctbl__sub">{proposal.jurisdiction}</div>
+      </td>
+      <td>
+        <div>{t('tower.presence.proposal.line', { level: t(LEVEL_LABEL[proposal.level]), gains: proposal.gains.map((c) => t(CAPABILITY_LABEL[c])).join(', ') })}</div>
+        <div class="ctbl__sub">{t('tower.presence.proposal.by', { who: proposal.proposedBy, when: when(proposal.proposedAt), expires: when(proposal.expiresAt) })}</div>
+        {proposal.note ? <div class="ctbl__sub">{proposal.note}</div> : null}
+      </td>
+      <td class="ctbl__num">
+        {declining ? (
+          <span class="twr-panelend">
+            <input class="cinput" value={reason} placeholder={t('tower.presence.declineReason')} aria-label={t('tower.presence.declineReason')} onInput={(e) => setReason(e.currentTarget.value)} />
+            <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy || !reason.trim()} onClick={() => void actions.declineProposal(proposal.proposalId, reason.trim())}>
+              {t('tower.presence.decline')}
+            </button>
+            <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setDeclining(false)}>
+              {t('tower.presence.cancel')}
+            </button>
+          </span>
+        ) : (
+          <span class="twr-panelend">
+            <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy || blocker !== null} onClick={() => void actions.approveProposal(proposal.proposalId)}>
+              {t('tower.presence.approve')}
+            </button>
+            <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => setDeclining(true)}>
+              {t('tower.presence.decline')}
+            </button>
+          </span>
+        )}
+        {blocker && !declining ? <div class="chint">{t(blocker)}</div> : null}
+      </td>
+    </tr>
+  );
+}
+
+/**
+ * Switch a country on — chosen from the catalogue.
+ *
+ * The table can only show countries that already have a company or a standing, which would make the FIRST country
+ * we are not established in impossible to record. CA1: it is picked from every country that exists, with its money
+ * and whether the rate book can price in it, so nothing here can be a typo.
  */
 function RecordCountry({ state, actions }: { state: TowerState; actions: TowerActions }) {
   const t = useT();
   const form = state.countryForm;
   const rows = state.presence ?? [];
-  const blocker = newCountryBlocker(form, rows);
+  const catalogue = state.catalogue ?? [];
+  const blocker = newCountryBlocker(form, rows, catalogue);
   const listed = alreadyListed(form, rows);
+  const chosen = catalogue.find((c) => c.code === form.jurisdiction);
+  const listedRow = rows.find((r) => r.jurisdiction === form.jurisdiction);
+  const secondPerson = chosen && form.level !== 'observed' && (!listedRow || needsSecondPerson(listedRow, form.level));
 
   return (
     <section class="cons__panel twr-corridornew">
@@ -120,13 +242,19 @@ function RecordCountry({ state, actions }: { state: TowerState; actions: TowerAc
       <div class="twr-corridorform">
         <label class="cfield">
           <span class="cfield__label">{t('tower.presence.f.country')}</span>
-          <input
-            class="cinput"
-            value={form.jurisdiction}
-            placeholder={t('tower.presence.f.countryPlaceholder')}
-            maxLength={2}
-            onInput={(e) => actions.setCountryForm({ jurisdiction: e.currentTarget.value })}
-          />
+          <select class="cinput" value={form.jurisdiction} onChange={(e) => actions.setCountryForm({ jurisdiction: e.currentTarget.value })}>
+            <option value="">{t('tower.presence.f.countryPlaceholder')}</option>
+            {catalogue.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.name} ({c.code}){c.priceable ? '' : ` · ${t('tower.presence.noRate')}`}
+              </option>
+            ))}
+          </select>
+          {chosen ? (
+            <span class="chint">
+              {t('tower.presence.countryFacts', { currency: chosen.currency, dial: chosen.dialCode, side: t(chosen.drivingSide === 'left' ? 'tower.presence.side.left' : 'tower.presence.side.right') })}
+            </span>
+          ) : null}
         </label>
         <label class="cfield">
           <span class="cfield__label">{t('tower.presence.f.level')}</span>
@@ -145,17 +273,13 @@ function RecordCountry({ state, actions }: { state: TowerState; actions: TowerAc
       </div>
 
       <div class="twr-corridorsave">
-        <button
-          type="button"
-          class="cbtn cbtn--primary"
-          disabled={blocker !== null || state.busyId === 'country'}
-          onClick={() => void actions.recordCountry()}
-        >
-          {t('tower.presence.record')}
+        <button type="button" class="cbtn cbtn--primary" disabled={blocker !== null || state.busyId === 'country'} onClick={() => void actions.recordCountry()}>
+          {t(secondPerson ? 'tower.presence.propose' : 'tower.presence.record')}
         </button>
         {blocker ? <span class="chint">{t(blocker)}</span> : null}
-        {/* Typing a country already on the map is an EDIT, and saying so is cheaper than undoing one. */}
-        {!blocker && listed ? <span class="chint">{t('tower.presence.wouldChange')}</span> : null}
+        {!blocker && secondPerson ? <span class="chint">{t('tower.presence.needsSecond')}</span> : null}
+        {/* Choosing a country already on the map is an EDIT, and saying so is cheaper than undoing one. */}
+        {!blocker && !secondPerson && listed ? <span class="chint">{t('tower.presence.wouldChange')}</span> : null}
       </div>
     </section>
   );
@@ -167,17 +291,20 @@ function PresenceRowView({ row, state, actions }: { row: PresenceRow; state: Tow
   const promise = takeInPromise(row);
   const granted = capabilityStates(row).filter((s) => s.on);
   const switchedOff = capabilityStates(row).filter((s) => !s.on && s.overridden);
+  const waiting = pendingFor(state.proposals, row.jurisdiction);
 
   return (
     <>
       <tr class={open ? 'is-open' : undefined}>
         <td>
-          <div class="ctbl__strong">{row.jurisdiction}</div>
+          <div class="ctbl__strong">{countryNameOf(row.jurisdiction, state.catalogue)}</div>
+          <div class="ctbl__sub">{row.jurisdiction}</div>
           {/* A country listed only because it has a company has had nothing DECIDED about it. */}
           {row.recorded ? null : <div class="ctbl__sub">{t('tower.presence.derived')}</div>}
         </td>
         <td>
           <span class={`ctag ${row.level === 'established' ? 'ctag--ok' : row.level === 'observed' ? 'ctag--quiet' : 'ctag--info'}`}>{t(LEVEL_LABEL[row.level])}</span>
+          {waiting ? <div class="ctag ctag--warn" style="margin-top:4px">{t('tower.presence.pendingTag')}</div> : null}
         </td>
         <td class="ctbl__sub">{t(PROMISE_LABEL[promise])}</td>
         <td class="ctbl__sub">
@@ -199,6 +326,7 @@ function PresenceRowView({ row, state, actions }: { row: PresenceRow; state: Tow
         </td>
         <td class="ctbl__sub">
           {row.setBy ? t('tower.presence.by', { who: row.setBy }) : '—'}
+          {row.approvedBy ? <div class="ctbl__sub">{t('tower.presence.approvedBy', { who: row.approvedBy })}</div> : null}
           {row.note ? <div class="ctbl__sub">{row.note}</div> : null}
         </td>
         <td class="ctbl__num">
@@ -224,7 +352,8 @@ function PresenceRowView({ row, state, actions }: { row: PresenceRow; state: Tow
  *
  * The level picker shows what each move would COST — a level is a word, and the word is not the
  * consequence — and `established` is not offered at all where no company transacts, because a flag must
- * never be the thing that conjures a Merchant of Record, a float and a claims provision.
+ * never be the thing that conjures a Merchant of Record, a float and a claims provision. A move that GIVES the
+ * country something is proposed for a second person; a move that takes something away is applied now.
  */
 function PresenceEditor({ row, state, actions }: { row: PresenceRow; state: TowerState; actions: TowerActions }) {
   const t = useT();
@@ -233,6 +362,7 @@ function PresenceEditor({ row, state, actions }: { row: PresenceRow; state: Towe
   const blocker = levelBlocker(row, level);
   const { gained, lost } = levelEffect(row, level);
   const busy = state.busyId === row.jurisdiction;
+  const second = needsSecondPerson(row, level);
 
   return (
     <div class="twr-presedit">
@@ -269,18 +399,14 @@ function PresenceEditor({ row, state, actions }: { row: PresenceRow; state: Towe
               </p>
             ) : null}
             {!lost.length && !gained.length ? <p class="chint">{t('tower.presence.sameCapabilities')}</p> : null}
+            {second ? <p class="chint">{t('tower.presence.needsSecond')}</p> : null}
           </>
         )}
       </div>
 
       <div class="twr-presedit__act">
-        <button
-          type="button"
-          class="cbtn cbtn--primary"
-          disabled={busy || blocker !== null || level === row.level}
-          onClick={() => void actions.savePresence(row.jurisdiction)}
-        >
-          {t('tower.presence.save')}
+        <button type="button" class="cbtn cbtn--primary" disabled={busy || blocker !== null || level === row.level} onClick={() => void actions.savePresence(row.jurisdiction)}>
+          {t(second ? 'tower.presence.propose' : 'tower.presence.save')}
         </button>
         <button type="button" class="cbtn cbtn--ghost" onClick={() => actions.open(null)}>
           {t('tower.presence.cancel')}

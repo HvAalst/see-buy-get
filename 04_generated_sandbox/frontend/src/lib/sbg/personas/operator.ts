@@ -169,8 +169,23 @@ export function createOperatorApi(sbg: SbgClient) {
      */
     presence: () => sbg.request((c) => c.GET('/v1/sbg/presence', {})),
 
+    /** Answers `{ applied }` for a change that gives the country nothing, `{ proposal }` for one a second person must approve. */
     setPresence: (jurisdiction: string, body: { level: string; overrides?: Record<string, boolean>; note?: string; by?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/presence/{jurisdiction}', { params: { path: { jurisdiction } }, body: body as never })),
+
+    /** CA1 — every country that exists, and whether the rate book can price in its money. */
+    countryCatalogue: () => sbg.request((c) => c.GET('/v1/sbg/country-catalogue', {})),
+
+    /** CA2 — changes waiting for a second person, and the ones already decided. */
+    presenceProposals: () => sbg.request((c) => c.GET('/v1/sbg/presence/proposals', {})),
+
+    approvePresence: (proposalId: string, by?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/presence/proposals/{proposalId}/approve', { params: { path: { proposalId } }, body: { ...(by ? { by } : {}) } })),
+
+    declinePresence: (proposalId: string, reason: string, by?: string) =>
+      sbg.request((c) =>
+        c.POST('/v1/sbg/presence/proposals/{proposalId}/decline', { params: { path: { proposalId } }, body: { reason, ...(by ? { by } : {}) } }),
+      ),
 
     /**
      * THE CORRIDORS — the routes the network runs, and only the network may draw them.

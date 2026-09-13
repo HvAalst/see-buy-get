@@ -274,12 +274,12 @@ describe('crossing a border', () => {
       expect(quote.nodes[0].purchased).toBeUndefined();
     });
 
-    it('refuses to price where no currency is recorded, rather than silently pricing in dollars', () => {
+    it('refuses to price where the rate book cannot convert the currency, rather than silently pricing in dollars', () => {
       presence.set({ jurisdiction: 'TZ', level: 'matched' });
       const ke = shop('Nairobi CBD P4b', 'Nairobi', NAIROBI, 'KE', 55);
       const tz = shop('Dar Duka P4', 'DarEsSalaam', { lat: -6.79, lng: 39.21 }, 'TZ');
       corridors.addCorridor({ name: 'Nairobi–Dar', originZone: 'Nairobi', destZone: 'DarEsSalaam' });
-      expect(() => routing.quoteShipment(ke.did, tz.did)).toThrow(/No currency is recorded for TZ/);
+      expect(() => routing.quoteShipment(ke.did, tz.did)).toThrow(/No exchange rate for TZS/);
     });
 
     it('books the work of a shop with no sister as a debt of the seller — and nothing where nobody of ours sold it', () => {

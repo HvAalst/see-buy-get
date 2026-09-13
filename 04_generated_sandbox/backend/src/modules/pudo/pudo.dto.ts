@@ -197,6 +197,13 @@ export class PresenceDto {
   @IsOptional() @IsString() by?: string;
 }
 
+/** CA2 — the second person's answer on a proposed change to a country. */
+export class PresenceDecisionDto {
+  @IsOptional() @IsString() by?: string;
+  /** Required to decline: a refusal is kept with its reason. */
+  @IsOptional() @IsString() reason?: string;
+}
+
 export class CorridorStatusDto {
   @IsIn(['active', 'blocked']) status!: 'active' | 'blocked';
 }

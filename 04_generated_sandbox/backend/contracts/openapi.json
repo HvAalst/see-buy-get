@@ -3823,6 +3823,19 @@
         }
       }
     },
+    "/v1/sbg/country-catalogue": {
+      "get": {
+        "operationId": "Sbg.countryCatalogue",
+        "summary": "",
+        "description": "CA1 — every country that exists, with what the network knows of it and where it stands. Public: it is the\natlas, not a decision. `priceable` says whether the rate book can convert its currency, which is what\nswitching a country on requires.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/fx": {
       "get": {
         "operationId": "Sbg.fxRates",
@@ -3871,6 +3884,90 @@
         "responses": {
           "200": {
             "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/presence/proposals": {
+      "get": {
+        "operationId": "Sbg.presenceProposals",
+        "summary": "",
+        "description": "CA2 — changes to a country waiting for a second person, and the ones already decided. Operator-only.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/presence/proposals/{proposalId}/approve": {
+      "post": {
+        "operationId": "Sbg.approvePresence",
+        "summary": "",
+        "description": "CA2 — the second person approves. Never the proposer; the rate book is asked again if this switches a country on.",
+        "parameters": [
+          {
+            "name": "proposalId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresenceDecisionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/presence/proposals/{proposalId}/decline": {
+      "post": {
+        "operationId": "Sbg.declinePresence",
+        "summary": "",
+        "description": "CA2 — anyone declines (the proposer withdrawing included), always with a reason.",
+        "parameters": [
+          {
+            "name": "proposalId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresenceDecisionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresenceProposal"
+                }
+              }
+            }
           }
         }
       }
@@ -3927,14 +4024,7 @@
         },
         "responses": {
           "201": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ResolvedPresence"
-                }
-              }
-            }
+            "description": ""
           }
         }
       }
@@ -15398,6 +15488,98 @@
           "perBase"
         ]
       },
+      "PresenceDecisionDto": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Required to decline: a refusal is kept with its reason."
+          }
+        }
+      },
+      "PresenceProposal": {
+        "type": "object",
+        "properties": {
+          "proposalId": {
+            "type": "string"
+          },
+          "jurisdiction": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "observed",
+              "matched",
+              "partnered",
+              "established"
+            ]
+          },
+          "overrides": {
+            "type": "object"
+          },
+          "note": {
+            "type": "string"
+          },
+          "gains": {
+            "type": "array",
+            "description": "What the country would be able to do that it cannot now — the reason this needs a second person.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "merchantOfRecord",
+                "holdFloat",
+                "cashOnDelivery",
+                "claims",
+                "tax",
+                "payouts",
+                "takeIn"
+              ]
+            }
+          },
+          "proposedBy": {
+            "type": "string"
+          },
+          "proposedAt": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "declined",
+              "expired"
+            ]
+          },
+          "decidedBy": {
+            "type": "string"
+          },
+          "decidedAt": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why it was declined. Required there, because a refusal nobody can read cannot be argued with."
+          }
+        },
+        "required": [
+          "proposalId",
+          "jurisdiction",
+          "level",
+          "gains",
+          "proposedBy",
+          "proposedAt",
+          "expiresAt",
+          "status"
+        ]
+      },
       "PresenceCapabilities": {
         "type": "object",
         "properties": {
@@ -15471,6 +15653,10 @@
           },
           "setBy": {
             "type": "string"
+          },
+          "approvedBy": {
+            "type": "string",
+            "description": "CA2 — the second person who approved the change that raised this country."
           },
           "setAt": {
             "type": "string"

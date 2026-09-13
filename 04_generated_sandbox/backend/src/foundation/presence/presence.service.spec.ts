@@ -156,4 +156,61 @@ describe('presence', () => {
       expect(map.find((p) => p.jurisdiction === 'ZM')?.level).toBe('matched');
     });
   });
+
+  describe('CA1 — only a country that exists', () => {
+    it('refuses two letters that are not a country', () => {
+      expect(() => presence.set({ jurisdiction: 'ZZ', level: 'matched' })).toThrow(/not a country in the catalogue/);
+      expect(() => presence.propose({ jurisdiction: 'ZZ', level: 'matched', by: 'Amina' })).toThrow(/not a country in the catalogue/);
+    });
+  });
+
+  describe('CA2 — two people switch a country on', () => {
+    const DAY = 86_400_000;
+
+    it('holds a change that raises a country until a DIFFERENT person approves it', () => {
+      const { proposal, applied } = presence.propose({ jurisdiction: 'ZM', level: 'matched', note: 'Lusaka partners ready', by: 'Amina' });
+      expect(applied).toBeUndefined();
+      expect(proposal).toMatchObject({ jurisdiction: 'ZM', status: 'pending', proposedBy: 'Amina', gains: ['takeIn'] });
+      // Nothing behaves differently yet.
+      expect(presence.resolve('ZM').level).toBe('observed');
+
+      // The proposer cannot second their own change — not even by changing the case of their name.
+      expect(() => presence.approve(proposal!.proposalId, ' amina ')).toThrow(/different person must approve/);
+      expect(() => presence.approve(proposal!.proposalId, '')).toThrow(/Say who you are/);
+
+      const { presence: after } = presence.approve(proposal!.proposalId, 'Brian');
+      expect(after).toMatchObject({ level: 'matched', setBy: 'Amina', approvedBy: 'Brian' });
+      expect(() => presence.approve(proposal!.proposalId, 'Chege')).toThrow(/already approved/);
+    });
+
+    it('applies a lowering at once, by one named person — refusing is the safe direction', () => {
+      presence.set({ jurisdiction: 'ZM', level: 'matched' });
+      const { applied, proposal } = presence.propose({ jurisdiction: 'ZM', level: 'observed', note: 'Regulator letter', by: 'Amina' });
+      expect(proposal).toBeUndefined();
+      expect(applied).toMatchObject({ level: 'observed', setBy: 'Amina' });
+      expect(applied?.approvedBy).toBeUndefined();
+    });
+
+    it('allows one waiting change per country, and a decline needs a reason that is kept', () => {
+      const { proposal } = presence.propose({ jurisdiction: 'ZM', level: 'matched', by: 'Amina' });
+      expect(() => presence.propose({ jurisdiction: 'ZM', level: 'partnered', by: 'Brian' })).toThrow(/already waiting for a second person/);
+      expect(() => presence.decline(proposal!.proposalId, 'Brian')).toThrow(/Say why/);
+      expect(presence.decline(proposal!.proposalId, 'Brian', 'Not before the rate book has kwacha')).toMatchObject({ status: 'declined', reason: 'Not before the rate book has kwacha' });
+      expect(presence.resolve('ZM').level).toBe('observed');
+    });
+
+    it('expires a change nobody decided, and keeps that on the record', () => {
+      const t0 = Date.parse('2026-09-13T08:00:00Z');
+      const { proposal } = presence.propose({ jurisdiction: 'ZM', level: 'matched', by: 'Amina' }, t0);
+      const later = t0 + 8 * DAY;
+      expect(() => presence.approve(proposal!.proposalId, 'Brian', later)).toThrow(/already expired/);
+      expect(presence.listProposals(later)[0]).toMatchObject({ status: 'expired' });
+      // …and a fresh proposal may be made once the old one has lapsed.
+      expect(presence.propose({ jurisdiction: 'ZM', level: 'matched', by: 'Amina' }, later).proposal?.status).toBe('pending');
+    });
+
+    it('still refuses to establish a country no company transacts in, even with two people', () => {
+      expect(() => presence.propose({ jurisdiction: 'ZM', level: 'established', by: 'Amina' })).toThrow(/cannot be established/);
+    });
+  });
 });

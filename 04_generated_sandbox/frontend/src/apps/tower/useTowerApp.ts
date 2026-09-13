@@ -8,7 +8,7 @@ import type { EntityPricing, EntityRow } from './money';
 import type { ApprovalRow, ClaimDecision, ClaimRow, DisposalRow, StalledRow } from './queues';
 import { EMPTY_CORRIDOR_FORM, corridorName, type CorridorForm, type CorridorRow, type CouplingRow } from './corridors';
 import type { DisputeReportRow, ReportRow } from './reports';
-import { EMPTY_COUNTRY_FORM, newCountryCode, overridesOf, type NewCountryForm, type PresenceLevel, type PresenceRow } from './presence';
+import { EMPTY_COUNTRY_FORM, newCountryCode, overridesOf, type CatalogueCountry, type NewCountryForm, type PresenceLevel, type PresenceProposalRow, type PresenceRow } from './presence';
 import type { AgentRow, CoverageCounts, FlagRow, HubRow, ToteRow } from './network';
 import { runSummary, type PayoutAction, type PayoutRow, type RunResult } from './settlement';
 import type { HelpOption } from './pictures';
@@ -82,6 +82,10 @@ export interface TowerState {
   presenceForm: { level: PresenceLevel | ''; note: string };
   /** Recording a country that is not on the map yet — the only way the FIRST country we are not in gets one. */
   countryForm: NewCountryForm;
+  /** CA1 — every country that exists. Null while unread. */
+  catalogue: CatalogueCountry[] | null;
+  /** CA2 — changes waiting for a second person, and the ones decided. Null while unread. */
+  proposals: PresenceProposalRow[] | null;
 
   /* ---- the corridors: the routes the network runs buses on ---- */
   /** Every corridor, live and blocked. Null while unread. */
@@ -189,6 +193,9 @@ export interface TowerActions {
   setCountryForm(patch: Partial<NewCountryForm>): void;
   recordCountry(): Promise<void>;
   savePresence(jurisdiction: string): Promise<void>;
+  /** CA2 — the second person approves a change. The server refuses the proposer; so does the screen. */
+  approveProposal(proposalId: string): Promise<void>;
+  declineProposal(proposalId: string, reason: string): Promise<void>;
   setCorridorForm(patch: Partial<CorridorForm>): void;
   saveCorridor(): Promise<void>;
   setCorridorStatus(corridorId: string, status: 'active' | 'blocked'): Promise<void>;
@@ -252,6 +259,8 @@ const INITIAL: TowerState = {
   presence: null,
   presenceForm: { level: '', note: '' },
   countryForm: { ...EMPTY_COUNTRY_FORM },
+  catalogue: null,
+  proposals: null,
   corridors: null,
   couplings: null,
   corridorForm: { ...EMPTY_CORRIDOR_FORM },
@@ -508,11 +517,15 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
   /** The presence map. One read: it is a list of decisions, not a queue. */
   const loadPresence = useCallback(async (client: TowerClient) => {
     setState((s) => ({ ...s, loading: true }));
-    const { data, error } = await client.api.presence();
+    // CA1 + CA2 — the map, the countries it may grow into, and the changes waiting for a second person, read together.
+    const [map, catalogue, proposals] = await Promise.all([client.api.presence(), client.api.countryCatalogue(), client.api.presenceProposals()]);
+    const error = map.error ?? catalogue.error ?? proposals.error;
     setState((s) => ({
       ...s,
       loading: false,
-      presence: error ? null : (narrow<{ items: PresenceRow[] }>(data)?.items ?? []),
+      presence: map.error ? null : (narrow<{ items: PresenceRow[] }>(map.data)?.items ?? []),
+      catalogue: catalogue.error ? s.catalogue : (narrow<{ items: CatalogueCountry[] }>(catalogue.data)?.items ?? []),
+      proposals: proposals.error ? s.proposals : (narrow<{ items: PresenceProposalRow[] }>(proposals.data)?.items ?? []),
       queueError: error ? error.detail || error.title : null,
       readAt: Date.now(),
     }));
@@ -764,7 +777,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         const code = newCountryCode(form);
         if (!code) return;
         setState((s) => ({ ...s, busyId: 'country', queueError: null, done: null }));
-        const { error } = await client.api.setPresence(code, {
+        const { data, error } = await client.api.setPresence(code, {
           level: form.level,
           ...(stateRef.current.who?.name ? { by: stateRef.current.who.name } : {}),
           ...(form.note.trim() ? { note: form.note.trim() } : {}),
@@ -773,7 +786,13 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
           setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
           return;
         }
-        setState((s) => ({ ...s, busyId: null, countryForm: { ...EMPTY_COUNTRY_FORM }, done: t('tower.presence.recorded', { country: code }) }));
+        const proposed = Boolean(narrow<{ proposal?: unknown }>(data)?.proposal);
+        setState((s) => ({
+          ...s,
+          busyId: null,
+          countryForm: { ...EMPTY_COUNTRY_FORM },
+          done: proposed ? t('tower.presence.proposed', { country: code }) : t('tower.presence.recorded', { country: code }),
+        }));
         await loadPresence(client);
       },
       setPresenceForm: (patch: Partial<{ level: PresenceLevel; note: string }>) =>
@@ -793,7 +812,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         const level = current.presenceForm.level || row?.level;
         if (!row || !level) return;
         setState((s) => ({ ...s, busyId: jurisdiction, queueError: null, done: null }));
-        const { error } = await client.api.setPresence(jurisdiction, {
+        const { data, error } = await client.api.setPresence(jurisdiction, {
           level,
           overrides: overridesOf(row) as Record<string, boolean>,
           ...(current.who?.name ? { by: current.who.name } : {}),
@@ -803,7 +822,39 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
           setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
           return;
         }
-        setState((s) => ({ ...s, busyId: null, openId: null, presenceForm: { level: '', note: '' }, done: t('tower.presence.moved', { country: jurisdiction }) }));
+        const proposed = Boolean(narrow<{ proposal?: unknown }>(data)?.proposal);
+        setState((s) => ({
+          ...s,
+          busyId: null,
+          openId: null,
+          presenceForm: { level: '', note: '' },
+          done: proposed ? t('tower.presence.proposed', { country: jurisdiction }) : t('tower.presence.moved', { country: jurisdiction }),
+        }));
+        await loadPresence(client);
+      },
+      approveProposal: async (proposalId: string) => {
+        const client = clientRef.current;
+        if (!client) return;
+        const proposal = stateRef.current.proposals?.find((p) => p.proposalId === proposalId);
+        setState((s) => ({ ...s, busyId: proposalId, queueError: null, done: null }));
+        const { error } = await client.api.approvePresence(proposalId, stateRef.current.who?.name);
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, done: t('tower.presence.approved', { country: proposal?.jurisdiction ?? '' }) }));
+        await loadPresence(client);
+      },
+      declineProposal: async (proposalId: string, reason: string) => {
+        const client = clientRef.current;
+        if (!client) return;
+        setState((s) => ({ ...s, busyId: proposalId, queueError: null, done: null }));
+        const { error } = await client.api.declinePresence(proposalId, reason, stateRef.current.who?.name);
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, done: t('tower.presence.declined') }));
         await loadPresence(client);
       },
       setCorridorForm: (patch: Partial<CorridorForm>) =>
