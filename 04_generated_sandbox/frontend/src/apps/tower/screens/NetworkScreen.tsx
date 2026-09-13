@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks';
+import { useState, useCallback, useEffect } from 'preact/hooks';
 import { Icon, PlaceMap } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import {
@@ -212,6 +212,8 @@ export function NetworkScreen({ state, actions }: { state: TowerState; actions: 
         )}
       </section>
 
+      {state.who?.mode === 'operator' ? <FleetsPanel actions={actions} /> : null}
+
       <section class="cons__panel" style="margin-top:18px">
         <div class="cons__panelhead">
           <span class="cons__panelt">{t('tower.network.hubsTitle')}</span>
@@ -274,5 +276,98 @@ function Kpi({ label, value, risk }: { label: string; value: string; risk?: bool
       <div class="twr-kpi__v">{value}</div>
       <div class="twr-kpi__l">{label}</div>
     </div>
+  );
+}
+
+/**
+ * The fleets, with each one's sign-in code — which only network staff and the fleet itself may see. A fleet that has
+ * lost or leaked its code is issued a new one here; the old one stops naming the fleet at once, and nobody is signed
+ * out, because the code names the company and each manager signs in as themselves.
+ */
+function FleetsPanel({ actions }: { actions: TowerActions }) {
+  const t = useT();
+  const client = actions.client();
+  const [rows, setRows] = useState<Array<{ did: string; companyName: string; status: string; loginCode?: string; codeRotatedAt?: string }> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    if (!client) return;
+    const r = await client.api.fleets();
+    if (r.error) setError(r.error.detail || r.error.title);
+    else setRows(((r.data as unknown as Array<{ did: string; companyName: string; status: string; loginCode?: string; codeRotatedAt?: string }>) ?? []).sort((a, b) => a.companyName.localeCompare(b.companyName)));
+  }, [client]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  return (
+    <section class="cons__panel" style="margin-top:18px">
+      <div class="cons__panelhead">
+        <span class="cons__panelt">{t('tower.network.fleetsTitle')}</span>
+      </div>
+      {error ? <p class="cerr" style="margin:12px 16px">{error}</p> : null}
+      {rows === null ? (
+        <p class="cons__empty">{t('tower.queues.loading')}</p>
+      ) : rows.length === 0 ? (
+        <p class="cons__empty">{t('tower.network.fleetsNone')}</p>
+      ) : (
+        <table class="ctbl">
+          <thead>
+            <tr>
+              <th>{t('tower.network.fleets.company')}</th>
+              <th>{t('tower.network.fleets.status')}</th>
+              <th>{t('tower.network.fleets.code')}</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((f) => (
+              <tr key={f.did}>
+                <td class="ctbl__strong">{f.companyName}</td>
+                <td>
+                  <span class={`ctag ${f.status === 'ACTIVE' ? 'ctag--ok' : 'ctag--quiet'}`}>{f.status}</span>
+                </td>
+                <td>
+                  <span class="ctbl__mono">{f.loginCode ?? '—'}</span>
+                  {f.codeRotatedAt ? <div class="ctbl__sub">{t('tower.network.fleets.rotatedAt', { when: new Date(f.codeRotatedAt).toLocaleString() })}</div> : null}
+                </td>
+                <td class="ctbl__num">
+                  {f.status !== 'ACTIVE' ? null : confirm === f.did ? (
+                    <span class="twr-panelend">
+                      <button
+                        type="button"
+                        class="cbtn cbtn--primary cbtn--sm"
+                        disabled={busy === f.did}
+                        onClick={async () => {
+                          if (!client) return;
+                          setBusy(f.did);
+                          const r = await client.api.rotateFleetCode(f.did);
+                          setBusy(null);
+                          setConfirm(null);
+                          if (r.error) setError(r.error.detail || r.error.title);
+                          else await load();
+                        }}
+                      >
+                        {t('tower.network.fleets.rotateConfirm')}
+                      </button>
+                      <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setConfirm(null)}>
+                        {t('tower.presence.cancel')}
+                      </button>
+                    </span>
+                  ) : (
+                    <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setConfirm(f.did)}>
+                      {t('tower.network.fleets.rotate')}
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
   );
 }

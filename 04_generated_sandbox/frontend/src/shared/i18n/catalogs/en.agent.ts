@@ -224,6 +224,8 @@ export const enAgent = {
   'agent.home.sayWords': 'Say my three words',
   'agent.home.topUpFirst': 'Top up your wallet first',
   'agent.home.signOut': 'Sign out of this shop',
+  'agent.home.passwordRow': 'Password',
+  'agent.home.passwordSub': 'Change the password this shop signs in with',
   'agent.home.jobAcceptSub': 'A customer drops something off',
   'agent.home.jobCounterSub': 'Any customer collecting anything',
   'agent.home.jobHandoverSub': 'Give waiting parcels to the driver',

@@ -30,6 +30,7 @@ export {
   purgeTokens,
   sbgForgot,
   sbgLogin,
+  sbgChangePassword,
   sbgReset,
   tokenKeyFor,
   type AppClient,

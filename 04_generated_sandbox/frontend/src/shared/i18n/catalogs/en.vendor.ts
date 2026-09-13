@@ -252,6 +252,16 @@ export const enVendor = {
 
   // Merchant API keys (StoreScreen KeysCard) — the credentials the shipping API sees.
   'vendor.keys.title': 'Shipping API keys',
+  'vendor.secret.title': 'Signing secret',
+  'vendor.secret.body': 'Your secret opens this console and signs every status update we send your shop system. Rotate it regularly, and whenever it may have been seen.',
+  'vendor.secret.rotate': 'Rotate the secret',
+  'vendor.secret.sheetTitle': 'Rotate your signing secret',
+  'vendor.secret.warn': 'From the moment you rotate, status updates are signed with the new secret — give it to your shop system straight away. Other devices signed in with the old one are signed out.',
+  'vendor.secret.current': 'Current secret',
+  'vendor.secret.confirm': 'Rotate now',
+  'vendor.secret.newTitle': 'Your new secret',
+  'vendor.secret.newBody': 'This is the only time it is shown. Save it where your shop system and your team can find it, then close.',
+  'vendor.secret.saved': 'I have saved it',
   'vendor.keys.note': 'What the shipping API sees when your site calls it. You do not need one to ask for prices — a key gives you your own rate limit, the cost breakdown, and the right to create shipments.',
   'vendor.keys.none': 'No keys yet.',
   'vendor.keys.new': 'New key',

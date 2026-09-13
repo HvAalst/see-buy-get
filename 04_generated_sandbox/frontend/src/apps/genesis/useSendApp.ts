@@ -14,6 +14,7 @@ import {
   fetchTrack,
   handoffToRole,
   pinLogin,
+  changePinWithCurrent,
   previewInvite,
   purgeConsumerTokens,
   readDid,
@@ -878,16 +879,23 @@ export function useSendApp() {
     [client],
   );
 
+  /**
+   * Change the PIN — proven with the CURRENT one, never with the open session (a phone left unlocked is not proof of
+   * who holds it). The server signs every other session out and hands this one a fresh sign-in, seeded here.
+   */
   const changePin = useCallback(
-    async (pin: string) => {
-      if (!client || !codeReady(pin, 4)) return;
+    async (currentPin: string, pin: string): Promise<boolean> => {
+      const phone = readPhone();
+      if (!client || !phone || !codeReady(pin, 4) || !codeReady(currentPin, 4)) return false;
       setState((s) => ({ ...s, accountBusy: true, accountError: null, accountNote: null }));
-      const r = await client.api.setPin(pin);
-      if (r.error) {
-        setState((s) => ({ ...s, accountBusy: false, accountError: r.error }));
-        return;
+      const r = await changePinWithCurrent(phone, currentPin, pin);
+      if (r.error || !r.data) {
+        setState((s) => ({ ...s, accountBusy: false, accountError: r.error ?? null }));
+        return false;
       }
+      await client.client.seed({ access_token: r.data.token.access_token, expires_in: r.data.token.expires_in ?? 3600 });
       setState((s) => ({ ...s, accountBusy: false, accountNote: t('send.toast.pinUpdated'), identity: s.identity ? { ...s.identity, hasPin: true } : s.identity }));
+      return true;
     },
     [client],
   );

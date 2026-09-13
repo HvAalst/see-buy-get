@@ -235,6 +235,20 @@ export class VendorService {
   }
 
   /**
+   * Rotate the store's signing secret — proven with the CURRENT secret. The old one stops opening the console at
+   * once, every session holding it is signed out, and every callback from now on is signed with the new one (so the
+   * store's own system must be given it). Shown to the store exactly once, like the first.
+   */
+  rotateSecret(vendorId: string, current: string): Vendor {
+    const vendor = this.login(vendorId, current);
+    vendor.secret = `whsec_${randomBytes(12).toString('hex')}`;
+    vendor.secretRotatedAt = new Date().toISOString();
+    this.vendors.set(vendor.vendorId, vendor);
+    this.core.bumpTokenVersion(vendor.did);
+    return vendor;
+  }
+
+  /**
    * Sign a merchant console in: vendorId + the signing secret (issued once, at registration).
    * One AUTH_FAILED for both an unknown id and a wrong secret — no oracle for guessing ids.
    * Constant-time compare, same as the account service's password check.

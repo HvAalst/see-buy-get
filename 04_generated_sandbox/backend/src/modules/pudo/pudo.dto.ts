@@ -837,7 +837,15 @@ export class ManagerLoginDto {
  * counts wrong attempts and locks out — protection the fleet code never had.
  */
 export class ManagerSessionDto {
-  @IsString() code!: string;
+  /** The fleet code — or `did`, the fleet chosen after phone + PIN (fleet/managers/mine). Either only names the fleet. */
+  @IsOptional() @IsString() code?: string;
+  @IsOptional() @IsString() did?: string;
+  @IsString() phone!: string;
+  @IsString() pin!: string;
+}
+
+/** Forgot the fleet code: phone + PIN name the fleets this person manages. */
+export class ManagerChoicesDto {
   @IsString() phone!: string;
   @IsString() pin!: string;
 }
@@ -859,6 +867,25 @@ export class PhoneRequestDto {
 export class PhoneVerifyDto {
   @IsString() phone!: string;
   @IsString() code!: string;
+}
+
+/** Change your own password, proven with the current one. */
+export class ChangePasswordDto {
+  @IsString() @MaxLength(120) email!: string;
+  @IsString() @MaxLength(200) password!: string;
+  @IsString() @MaxLength(200) newPassword!: string;
+}
+
+/** Change your own PIN, proven with the current one. */
+export class ChangePinDto {
+  @IsString() phone!: string;
+  @IsString() pin!: string;
+  @IsString() newPin!: string;
+}
+
+/** Rotate a store's signing secret, proven with the current one. */
+export class RotateSecretDto {
+  @IsString() @MaxLength(200) secret!: string;
 }
 
 export class LoginDto {

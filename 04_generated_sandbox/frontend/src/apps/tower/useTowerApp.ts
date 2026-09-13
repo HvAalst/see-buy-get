@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { narrow, type SbgError } from '../../lib/sbg';
 import { downscaleImage } from '../../shared/media';
 import { t } from '../../shared/i18n'; // plain t(): these strings are built at action time
-import { clearCreds, companyLogin, createTowerClient, readCreds, saveCreds, type TowerClient, type TowerCreds } from './api';
+import { changeCompanyPassword, clearCreds, companyLogin, createTowerClient, readCreds, saveCreds, type TowerClient, type TowerCreds } from './api';
 import type { ConstraintView } from './logic';
 import type { EntityPricing, EntityRow } from './money';
 import type { ApprovalRow, ClaimDecision, ClaimRow, DisposalRow, StalledRow } from './queues';
@@ -191,6 +191,8 @@ export interface TowerActions {
   signInAsCompany(email: string, password: string): Promise<void>;
   addAdmin(entityId: string, email: string, name: string): Promise<void>;
   dismissNewAdmin(): void;
+  /** A company administrator changes their password; null when done, else the refusal to show. */
+  changeCompanyPassword(current: string, next: string): Promise<string | null>;
   revokeAdmin(entityId: string, adminId: string): Promise<void>;
   signOut(): void;
   go(screen: Screen): void;
@@ -373,12 +375,14 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     );
     // CA3/CA5 — the catalogue for creating a company, and what is lapsing. Operator-only reads: a company
     // administrator gets neither, and the screen draws neither panel for them.
-    const [catalogue, expiring] = await Promise.all([client.api.countryCatalogue(), client.api.expiringCompanyPapers()]);
+    // Asked only by network staff: a company administrator would be refused both, and a refusal is noise.
+    const staff = stateRef.current.who?.mode === 'operator';
+    const [catalogue, expiring] = staff ? await Promise.all([client.api.countryCatalogue(), client.api.expiringCompanyPapers()]) : [null, null];
     setState((s) => ({
       ...s,
       companies: results,
-      catalogue: catalogue.error ? s.catalogue : (narrow<{ items: CatalogueCountry[] }>(catalogue.data)?.items ?? []),
-      expiring: expiring.error ? null : (narrow<{ items: ExpiringItem[] }>(expiring.data)?.items ?? []),
+      catalogue: !catalogue || catalogue.error ? s.catalogue : (narrow<{ items: CatalogueCountry[] }>(catalogue.data)?.items ?? []),
+      expiring: !expiring || expiring.error ? null : (narrow<{ items: ExpiringItem[] }>(expiring.data)?.items ?? []),
     }));
   }, []);
 
@@ -1020,6 +1024,18 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         if (!listed.error) setState((s) => ({ ...s, admins: narrow<{ items: EntityAdminRow[] }>(listed.data)?.items ?? [] }));
       },
       dismissNewAdmin: () => setState((s) => ({ ...s, newAdmin: null })),
+      changeCompanyPassword: async (current: string, next: string) => {
+        const creds = stateRef.current.creds;
+        if (!creds || creds.mode !== 'company') return t('tower.password.onlyCompany');
+        const { error } = await changeCompanyPassword(creds.email, current, next);
+        if (error) return error.detail || error.title;
+        // The console re-signs itself in with what it keeps, so it must keep the NEW password, not the old one.
+        const fresh: TowerCreds = { mode: 'company', email: creds.email, password: next };
+        saveCreds(fresh);
+        clientRef.current = createTowerClient(fresh);
+        setState((s) => ({ ...s, creds: fresh }));
+        return null;
+      },
       revokeAdmin: async (entityId: string, adminId: string) => {
         const client = clientRef.current;
         if (!client) return;

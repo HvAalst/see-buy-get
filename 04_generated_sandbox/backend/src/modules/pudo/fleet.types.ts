@@ -48,6 +48,8 @@ export class FleetManager {
   kyc?: FleetManagerKyc;
   bondPaid: boolean; // refundable operating bond (activation gate)
   loginCode?: string; // issued on activation — the manager signs into the fleet console with it
+  /** When the fleet last rotated its code. */
+  codeRotatedAt?: string;
   status: FleetManagerStatus;
   createdAt: string;
 }

@@ -33,6 +33,8 @@ interface Account {
   createdAt: string;
   resetToken?: string;
   resetExpires?: number;
+  /** When the password was last changed by its holder — for "change it regularly", and for review. */
+  passwordChangedAt?: string;
 }
 
 const RESET_TTL_MS = 30 * 60 * 1000;
@@ -130,6 +132,26 @@ export class AccountService implements OnApplicationBootstrap {
     return { sent: true, resetToken: account.resetToken };
   }
 
+  /**
+   * Change your own password — proven with the CURRENT one, never with a session: a tablet left signed in at a
+   * counter is not proof that the person at it holds the account. Every other session is signed out, and the
+   * device that made the change is handed a fresh sign-in.
+   */
+  changePassword(email: string, current: string, next: string): { accountId: string; role: AccountRole; did: string; email: string; token: AccessToken } {
+    const account = this.accounts.get((email || '').trim().toLowerCase());
+    if (!account || !this.verify(current, account)) throw new GlosError('AUTH_FAILED', 'Wrong email or password');
+    if ((next || '').length < 8) throw new GlosError('PASSWORD_TOO_SHORT', 'A new password needs at least 8 characters');
+    if (this.verify(next, account)) throw new GlosError('VALIDATION_FAILED', 'Choose a password different from the current one');
+    account.salt = randomBytes(16).toString('hex');
+    account.hash = this.hash(next, account.salt);
+    account.passwordChangedAt = new Date().toISOString();
+    account.resetToken = undefined;
+    account.resetExpires = undefined;
+    this.accounts.set(account.email, account);
+    this.auth.revokeAll(account.did);
+    return { accountId: account.accountId, role: account.role, did: account.did, email: account.email, token: this.mint(account) };
+  }
+
   reset(token: string, password: string): { ok: boolean } {
     if ((password || '').length < 6) throw new GlosError('PASSWORD_TOO_SHORT', 'Password must be at least 6 characters');
     const account = [...this.accounts.values()].find((a) => a.resetToken && a.resetToken === (token || '').trim().toUpperCase());
@@ -138,7 +160,10 @@ export class AccountService implements OnApplicationBootstrap {
     account.hash = this.hash(password, account.salt);
     account.resetToken = undefined;
     account.resetExpires = undefined;
+    account.passwordChangedAt = new Date().toISOString();
     this.accounts.set(account.email, account); // persist the new password hash
+    // Whoever had the old password — which is presumably why it was reset — is signed out everywhere.
+    this.auth.revokeAll(account.did);
     return { ok: true };
   }
 

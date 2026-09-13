@@ -1,3 +1,5 @@
+import { CompanyPasswordPanel } from './screens/CompanyPasswordPanel';
+import { useState } from 'preact/hooks';
 import { BrandMark } from '../../shared/ui';
 import { useT } from '../../shared/i18n';
 import { CompaniesScreen } from './screens/CompaniesScreen';
@@ -39,6 +41,7 @@ export function App() {
   // Asked before the early returns, because a hook cannot be called conditionally — and read here rather
   // than left to CSS, because a stylesheet can move a menu but cannot swap it for a different one.
   const wide = useWideScreen();
+  const [passwordOpen, setPasswordOpen] = useState(false);
 
   if (state.phase === 'boot') return <div class="twr-boot" aria-busy="true" />;
 
@@ -128,6 +131,11 @@ export function App() {
                 and the difference has to be visible from the masthead, not inferred from the table. */}
             {state.who?.entityId ? <span class="ctag ctag--quiet twr-whoco">{companyName(state)}</span> : null}
           </span>
+          {state.who?.mode === 'company' ? (
+            <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setPasswordOpen((open) => !open)}>
+              {t('tower.password.open')}
+            </button>
+          ) : null}
           <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={actions.signOut}>
             {t('tower.signOut')}
           </button>
@@ -138,6 +146,7 @@ export function App() {
         {wide ? <ConsoleRail groups={groups} screen={state.screen} counts={counts} onGo={actions.go} /> : null}
 
         <main class="cons__main">
+          {passwordOpen && state.who?.mode === 'company' ? <CompanyPasswordPanel actions={actions} onClose={() => setPasswordOpen(false)} /> : null}
           {state.screen === 'presence' ? (
             <PresenceScreen state={state} actions={actions} />
           ) : state.screen === 'corridors' ? (

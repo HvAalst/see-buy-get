@@ -4,7 +4,7 @@ import type { MediaKind } from '../../lib/sbg/personas/media';
 import { t } from '../../shared/i18n';
 import { downscaleImage } from '../../shared/media';
 import type { IconName } from '../../shared/ui/Icon';
-import { clearManager, createFleetClient, managerLookup, managerSession, purgeFleetTokens, readManager, saveManager } from './api';
+import { clearManager, createFleetClient, managerLookup, managerSession, managerChoices, managerSessionByFleet, changeManagerPin, purgeFleetTokens, readManager, saveManager } from './api';
 import { EMPTY_DRIVER, EMPTY_LINE, EMPTY_VEHICLE, isHeavySelection, lineBlocker, type DriverForm, type LineForm, type VehicleForm } from './logic';
 import type {
   AssignmentRow,
@@ -273,6 +273,59 @@ export function useFleetApp() {
     await createFleetClient(m.did).client.seed(m.token);
     setState((s) => ({ ...INITIAL, phase: 'boot', manager: { did: m.did, company: m.companyName }, toasts: s.toasts }));
     setManagerDid(m.did);
+  }, []);
+
+  /** Forgot the code: phone + PIN name the fleets this person manages. Nothing is stored and nothing is minted. */
+  const findMyFleets = useCallback(async (phone: string, pin: string) => {
+    if (!phone.trim() || !pin.trim()) return null;
+    setState((s) => ({ ...s, busy: 'signin', error: null }));
+    const r = await managerChoices(phone.trim(), pin.trim());
+    if (r.error) {
+      setState((s) => ({ ...s, busy: null, error: r.error }));
+      return null;
+    }
+    setState((s) => ({ ...s, busy: null, error: null }));
+    return r.data!.fleets;
+  }, []);
+
+  /** Sign in to the fleet CHOSEN from that list — the server checks the PIN and the manager role again. */
+  const signInToFleet = useCallback(async (did: string, phone: string, pin: string) => {
+    setState((s) => ({ ...s, busy: 'signin', error: null }));
+    const r = await managerSessionByFleet(did, phone.trim(), pin.trim());
+    if (r.error) {
+      setState((s) => ({ ...s, busy: null, error: r.error }));
+      return;
+    }
+    const m = r.data!;
+    purgeFleetTokens(null);
+    saveManager(m.did, m.companyName);
+    await createFleetClient(m.did).client.seed(m.token);
+    setState((s) => ({ ...INITIAL, phase: 'boot', manager: { did: m.did, company: m.companyName }, toasts: s.toasts }));
+    setManagerDid(m.did);
+  }, []);
+
+  /** The fleet's own sign-in code — readable by the fleet itself only. */
+  const loadFleetCode = useCallback(async (): Promise<string | null> => {
+    const did = stateRef.current.manager?.did;
+    if (!client || !did) return null;
+    const r = await client.client.sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}', { params: { path: { did } } }));
+    return r.error ? null : ((r.data as unknown as { loginCode?: string })?.loginCode ?? null);
+  }, [client]);
+
+  /** Issue the fleet a new code. The old one stops naming the fleet at once; nobody is signed out. */
+  const rotateFleetCode = useCallback(async (): Promise<string | null> => {
+    const did = stateRef.current.manager?.did;
+    if (!client || !did) return null;
+    const r = await client.client.sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/code/rotate', { params: { path: { did } } }));
+    setState((s) => ({ ...s, error: r.error ?? null }));
+    return r.error ? null : ((r.data as unknown as { loginCode?: string })?.loginCode ?? null);
+  }, [client]);
+
+  /** Change the manager's own PIN, proven with the current one. */
+  const changeMyPin = useCallback(async (phone: string, pin: string, newPin: string): Promise<boolean> => {
+    const r = await changeManagerPin(phone.trim(), pin, newPin);
+    setState((s) => ({ ...s, error: r.error ?? null }));
+    return !r.error;
   }, []);
 
   const signOut = useCallback(() => {
@@ -547,6 +600,11 @@ export function useFleetApp() {
       findCompany,
       clearCompany,
       signOut,
+      findMyFleets,
+      signInToFleet,
+      loadFleetCode,
+      rotateFleetCode,
+      changeMyPin,
       go,
       setVForm,
       setDForm,

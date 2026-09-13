@@ -1,4 +1,5 @@
-import { useState } from 'preact/hooks';
+import { pinChangeBlocker } from '../../../shared/account/password';
+import { useState, useEffect } from 'preact/hooks';
 import { Button, Card, ErrorNote, Icon, PlaceMap, Pill, ReadAloud, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { dashboardSummary, hoursLabel, vehiclePins } from '../logic';
@@ -40,6 +41,8 @@ export function DashboardScreen({ state, actions }: DashboardScreenProps) {
 
           Pins are INFO-ONLY — no onPick — because there is nothing to choose here. A tappable vehicle
           that did nothing would be a dead tap on every dot. */}
+      <FleetCodeCard state={state} actions={actions} />
+
       <Card title={t('fleet.dash.mapTitle')} label={t('fleet.dash.mapLabel')}>
         <p class="card__note">{pins.length === 0 ? t('fleet.dash.mapNoneNote') : t('fleet.dash.mapNote')}</p>
         <PlaceMap
@@ -130,5 +133,131 @@ function Tile({ value, label }: { value: string; label: string }) {
       <span class="tile__v tile__v--sm">{value}</span>
       <span class="tile__l">{label}</span>
     </div>
+  );
+}
+
+/**
+ * The fleet's sign-in code, shown to the fleet itself — hidden until asked for, because a code read over a
+ * shoulder is a code somebody else has. Rotate it whenever it may have been seen; it only names the fleet, so
+ * nobody is signed out. And the manager's own PIN, changed with the current one.
+ */
+function FleetCodeCard({ actions }: DashboardScreenProps) {
+  const t = useT();
+  const [code, setCode] = useState<string | null>(null);
+  const [shown, setShown] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+  const [rotating, setRotating] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const [pinOpen, setPinOpen] = useState(false);
+  const [phone, setPhone] = useState('');
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [pinBusy, setPinBusy] = useState(false);
+  const pinBlocker = pinChangeBlocker({ current, next });
+
+  useEffect(() => {
+    void actions.loadFleetCode().then(setCode);
+  }, [actions.loadFleetCode]);
+
+  return (
+    <>
+      <Card title={t('fleet.code.title')}>
+        <p class="card__note">{t('fleet.code.note')}</p>
+        <p class="mono-t" style="font-size:1.25rem;letter-spacing:.08em">
+          {code === null ? t('fleet.code.loading') : shown ? code : '••••••••'}
+        </p>
+        {note ? <p class="card__note">{note}</p> : null}
+        <div class="btnrow">
+          <Button variant="link" full={false} disabled={code === null} onClick={() => setShown((s) => !s)}>
+            {t(shown ? 'fleet.code.hide' : 'fleet.code.show')}
+          </Button>
+          {confirm ? (
+            <>
+              <Button
+                variant="link"
+                full={false}
+                busy={rotating}
+                onClick={async () => {
+                  setRotating(true);
+                  const fresh = await actions.rotateFleetCode();
+                  setRotating(false);
+                  setConfirm(false);
+                  if (fresh) {
+                    setCode(fresh);
+                    setShown(true);
+                    setNote(t('fleet.code.rotated'));
+                  }
+                }}
+              >
+                {t('fleet.code.rotateConfirm')}
+              </Button>
+              <Button variant="link" full={false} onClick={() => setConfirm(false)}>
+                {t('common.cancel')}
+              </Button>
+            </>
+          ) : (
+            <Button variant="link" full={false} onClick={() => setConfirm(true)}>
+              {t('fleet.code.rotate')}
+            </Button>
+          )}
+        </div>
+        {confirm ? <p class="card__note">{t('fleet.code.rotateWarn')}</p> : null}
+        <div class="btnrow">
+          <Button
+            variant="link"
+            full={false}
+            onClick={() => {
+              setPhone('');
+              setCurrent('');
+              setNext('');
+              setPinOpen(true);
+            }}
+          >
+            {t('fleet.code.changePin')}
+          </Button>
+        </div>
+      </Card>
+
+      <Sheet open={pinOpen} onClose={() => setPinOpen(false)} title={t('fleet.code.pinTitle')}>
+        <div class="field">
+          <label class="field__label" for="pin-phone">
+            {t('fleet.signin.phoneLabel')}
+          </label>
+          <input id="pin-phone" class="input input--mono" type="tel" autocomplete="username" value={phone} onInput={(e) => setPhone(e.currentTarget.value)} />
+        </div>
+        <div class="field">
+          <label class="field__label" for="pin-current">
+            {t('fleet.code.currentPin')}
+          </label>
+          <input id="pin-current" class="input input--mono" type="password" inputMode="numeric" autocomplete="current-password" value={current} onInput={(e) => setCurrent(e.currentTarget.value)} />
+        </div>
+        <div class="field">
+          <label class="field__label" for="pin-new">
+            {t('fleet.code.newPin')}
+          </label>
+          <input id="pin-new" class="input input--mono" type="password" inputMode="numeric" autocomplete="new-password" value={next} onInput={(e) => setNext(e.currentTarget.value)} />
+        </div>
+        {pinBlocker && (current || next) ? <p class="card__note">{t(pinBlocker)}</p> : null}
+        <Button
+          chevron={false}
+          disabled={pinBlocker !== null || !phone.trim()}
+          busy={pinBusy}
+          onClick={async () => {
+            setPinBusy(true);
+            const ok = await actions.changeMyPin(phone, current, next);
+            setPinBusy(false);
+            if (ok) {
+              setPinOpen(false);
+              setNote(t('fleet.code.pinDone'));
+            }
+          }}
+        >
+          {t('fleet.code.savePin')}
+        </Button>
+        <Button variant="link" onClick={() => setPinOpen(false)}>
+          {t('common.cancel')}
+        </Button>
+      </Sheet>
+    </>
   );
 }

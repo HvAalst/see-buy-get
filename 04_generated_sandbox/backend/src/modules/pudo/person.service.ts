@@ -203,6 +203,7 @@ export class PersonService {
     person.pinHash = this.hashPin(pin, person.pinSalt);
     person.pinAttempts = 0;
     person.pinLockedUntil = undefined;
+    person.pinChangedAt = new Date().toISOString();
     this.save(person);
   }
 
@@ -236,6 +237,19 @@ export class PersonService {
       this.save(person);
     }
     return { person, token: this.mintConsumerToken(person) };
+  }
+
+  /**
+   * Change your PIN — proven with the CURRENT PIN, through the same check sign-in uses, so a wrong guess here counts
+   * toward the lockout exactly as it would at the door. Every other session is signed out; this device gets a fresh one.
+   */
+  changePin(phone: string, currentPin: string, newPin: string): { person: Person; token: AccessToken } {
+    const { person } = this.loginWithPin(phone, currentPin);
+    if (currentPin === newPin) throw new GlosError('PIN_INVALID', 'Choose a PIN different from the current one');
+    this.setPin(person.personDid, newPin);
+    this.auth.revokeAll(person.personDid);
+    const updated = this.requireByDid(person.personDid);
+    return { person: updated, token: this.mintConsumerToken(updated) };
   }
 
   // --- role switching ---

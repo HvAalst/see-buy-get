@@ -1,3 +1,5 @@
+import { mdpConfig } from '../api';
+import { ChangePasswordSheet } from '../../../shared/account/ChangePasswordSheet';
 import { useState } from 'preact/hooks';
 import { Button, Card, ErrorNote, ReadAloud, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
@@ -18,6 +20,7 @@ export interface HomeScreenProps {
 export function HomeScreen({ state, actions }: HomeScreenProps) {
   const t = useT();
   const [priceOpen, setPriceOpen] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
   const hub = state.hub;
   const unsorted = hub ? unsortedAt(state.inbound, hub.mdpId) : [];
   const filling = fillingBags(state.totes);
@@ -115,12 +118,16 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
 
       <div class="scr__foot">
         <ReadAloud text={() => homeSummary(unsorted.length, filling.length, t)} label={t('mdp.readAloud')} />
+        <Button variant="link" full={false} onClick={() => setPasswordOpen(true)}>
+          {t('mdp.home.changePassword')}
+        </Button>
         <Button variant="link" full={false} onClick={actions.signOut}>
           {t('mdp.home.signOut')}
         </Button>
       </div>
 
       <PriceSheet open={priceOpen} onClose={() => setPriceOpen(false)} state={state} actions={actions} />
+      <ChangePasswordSheet open={passwordOpen} onClose={() => setPasswordOpen(false)} config={mdpConfig()} email={actions.readEmail()} onChanged={actions.adoptToken} />
     </div>
   );
 }

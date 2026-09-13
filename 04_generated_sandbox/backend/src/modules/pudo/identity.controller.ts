@@ -14,7 +14,7 @@ import { RoutingService } from './routing.service';
 import { classifySize, measuredFactor } from './pudo.config';
 import { InviteService } from './invite.service';
 import { toInviteView } from './invite.types';
-import { BuyerDisputeDto, CollectionResponseDto, RateMerchantDto, ConsumerSendDto, CreateInviteDto, EnrollDto, NominateCollectorDto, PinLoginDto, PodDto, ProfileDto, SetPinDto, SwitchRoleDto } from './pudo.dto';
+import { BuyerDisputeDto, CollectionResponseDto, RateMerchantDto, ConsumerSendDto, CreateInviteDto, EnrollDto, NominateCollectorDto, PinLoginDto, PodDto, ProfileDto, SetPinDto, ChangePinDto, SwitchRoleDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 
@@ -73,6 +73,17 @@ export class IdentityController {
   setPin(@Body() dto: SetPinDto, @Actor() actor: IntrospectionResult) {
     this.persons.setPin(actor.did!, dto.pin);
     return { ok: true };
+  }
+
+  /**
+   * Change your PIN — proven with the CURRENT PIN, not with a session (a phone left unlocked is not proof of who
+   * holds it). A wrong current PIN counts toward the lockout. Other sessions end; this one gets a fresh sign-in.
+   */
+  @Public()
+  @Post('pin/change')
+  changePin(@Body() dto: ChangePinDto) {
+    const { person, token } = this.persons.changePin(dto.phone, dto.pin, dto.newPin);
+    return { ...this.persons.view(person), token };
   }
 
   /** The signed-in person + every role they hold (the role switcher reads this) + their self profile. */

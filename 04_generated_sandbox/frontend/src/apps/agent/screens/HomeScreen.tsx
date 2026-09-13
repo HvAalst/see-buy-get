@@ -1,3 +1,5 @@
+import { agentConfig } from '../api';
+import { ChangePasswordSheet } from '../../../shared/account/ChangePasswordSheet';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { AuthImage, Button, Card, ErrorNote, GlanceNumber, Icon, Note, Pill, PlaceMap, ReadAloud, Sheet, type IconName } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
@@ -47,7 +49,7 @@ type SheetKind = 'topup' | 'price' | 'close' | 'photo' | 'location' | 'hours' | 
  */
 export function HomeScreen({ state, actions }: HomeScreenProps) {
   const t = useT();
-  const [sheet, setSheet] = useState<SheetKind>(null);
+  const [sheet, setSheet] = useState<SheetKind | 'password' | null>(null);
   const agent = state.agent;
   const gate = gateNotice(agent, state.gate, t);
   const onboarding = statusNotice(agent?.status, t);
@@ -161,6 +163,7 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
           <SettingRow icon="clock" title={t('agent.home.hoursRow')} sub={t('agent.home.hoursSub')} onClick={() => setSheet('hours')} />
           <SettingRow icon="scale" title={t('agent.home.changePrice')} sub={t('agent.home.priceSub', { price: money(agent?.pricePerParcel) })} onClick={() => setSheet('price')} />
           <SettingRow icon="grid" title={t('agent.home.shelfLink')} sub={t('agent.home.shelfSub')} onClick={() => actions.go('shelf')} />
+          <SettingRow icon="keypad" title={t('agent.home.passwordRow')} sub={t('agent.home.passwordSub')} onClick={() => setSheet('password')} />
         </div>
       </Card>
 
@@ -176,6 +179,7 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
       <PhotoSheet open={sheet === 'photo'} onClose={() => setSheet(null)} state={state} actions={actions} />
       <LocationSheet open={sheet === 'location'} onClose={() => setSheet(null)} state={state} actions={actions} />
       <HoursSheet open={sheet === 'hours'} onClose={() => setSheet(null)} state={state} actions={actions} />
+      <ChangePasswordSheet open={sheet === 'password'} onClose={() => setSheet(null)} config={agentConfig()} email={actions.readEmail()} onChanged={actions.adoptToken} />
 
       <Sheet open={sheet === 'close'} onClose={() => setSheet(null)} title={t('agent.home.closeSheetTitle')}>
         <p class="t-body">{t('agent.home.closeSheetBody')}</p>

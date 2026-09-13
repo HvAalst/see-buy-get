@@ -510,7 +510,8 @@ export function useVendorApp() {
     setState((s) => ({
       ...s,
       storeState: 'ready',
-      settlement: setR.error ? s.settlement : (narrow<SettlementRow[]>(setR.data) ?? []),
+      // The route answers { balance, entries } — reading the whole answer as the list made My store throw on .slice.
+      settlement: setR.error ? s.settlement : settlementRowsOf(setR.data),
       callbacks: cbR.error ? s.callbacks : (narrow<CallbackRow[]>(cbR.data) ?? []),
       apiKeys: keyR.error ? s.apiKeys : (narrow<ApiKeyRow[]>(keyR.data) ?? []),
     }));
@@ -968,6 +969,30 @@ export function useVendorApp() {
     [client, creds, run, fail, loadStore],
   );
 
+  /**
+   * Rotate the store's signing secret with the current one. The new secret replaces the stored credential on this
+   * device (so the console keeps opening), a fresh sign-in is seeded, and the secret is returned for the screen to
+   * show ONCE. Every other session holding the old secret is signed out by the server.
+   */
+  const rotateSecret = useCallback(
+    async (current: string): Promise<string | null> => {
+      if (!client || !creds) return null;
+      let fresh: string | null = null;
+      await run('rotate-secret', async () => {
+        const r = await client.client.sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/secret/rotate', { params: { path: { id: creds.vendorId } }, body: { secret: current } }));
+        if (r.error) return fail(r.error);
+        const data = r.data as unknown as { secret: string; token: { access_token: string; expires_in?: number } };
+        saveCreds(creds.vendorId, data.secret);
+        purgeVendorTokens(null);
+        // The client signs itself in again with the SAVED secret, which is now the new one — nothing to seed by hand.
+        fresh = data.secret;
+        setCreds({ vendorId: creds.vendorId, secret: data.secret });
+      });
+      return fresh;
+    },
+    [client, creds, run, fail],
+  );
+
   /** Forget the one-time secret. Nothing to undo — it was never stored on our side either. */
   const dismissIssuedKey = useCallback(() => setState((s) => ({ ...s, issuedKey: null })), []);
 
@@ -992,6 +1017,7 @@ export function useVendorApp() {
       chatApi: client?.conversations ?? null,
       issueApiKey,
       dismissIssuedKey,
+      rotateSecret,
       revokeApiKey,
       queryOrders,
       queryLedger,
@@ -1028,6 +1054,13 @@ export function useVendorApp() {
       dismissToast,
     },
   };
+}
+
+/** The settlement book from GET vendors/:id/settlement — { balance, entries }, or a bare list from an older server. */
+function settlementRowsOf(data: unknown): SettlementRow[] {
+  if (Array.isArray(data)) return data as SettlementRow[];
+  const entries = (data as { entries?: unknown } | null)?.entries;
+  return Array.isArray(entries) ? (entries as SettlementRow[]) : [];
 }
 
 export type VendorActions = ReturnType<typeof useVendorApp>['actions'];

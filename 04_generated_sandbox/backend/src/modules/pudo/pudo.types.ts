@@ -548,6 +548,8 @@ export class Vendor {
   name: string;
   callbackUrl?: string; // GLOS pushes HMAC-signed status callbacks here
   secret: string;
+  /** When the signing secret was last rotated by the store. */
+  secretRotatedAt?: string;
   location?: GeoPoint; // store map pin — origin-PUDO suggestions are ranked from here
   address?: string;
   /** Their own dock, if they have asked for one. Absent = they drop off at a PUDO like everyone else. */

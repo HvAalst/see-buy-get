@@ -47,6 +47,21 @@ export function managerSession(code: string, phone: string, pin: string): Promis
   return publicRequest(fleetConfig(), '/v1/sbg/fleet/managers/session', { body: { code, phone, pin } });
 }
 
+/** Forgot the fleet code: phone + PIN name the fleets this person manages. Mints nothing. */
+export function managerChoices(phone: string, pin: string): Promise<Result<{ fleets: Array<{ did: string; companyName: string; status: string }> }>> {
+  return publicRequest(fleetConfig(), '/v1/sbg/fleet/managers/mine', { body: { phone, pin } });
+}
+
+/** Sign in to a fleet CHOSEN after phone + PIN — the PIN and the manager role are checked again. */
+export function managerSessionByFleet(did: string, phone: string, pin: string): Promise<Result<ManagerView & { token: MintedToken }>> {
+  return publicRequest(fleetConfig(), '/v1/sbg/fleet/managers/session', { body: { did, phone, pin } });
+}
+
+/** Change your own PIN, proven with the current one. Other sessions end. */
+export function changeManagerPin(phone: string, pin: string, newPin: string): Promise<Result<{ token: MintedToken }>> {
+  return publicRequest(fleetConfig(), '/v1/sbg/identity/pin/change', { body: { phone, pin, newPin } });
+}
+
 export interface FleetClient {
   api: FleetApi;
   /** Seeded rather than self-minting — the server hands the token over on a real sign-in. */

@@ -228,17 +228,49 @@ export class FleetManagerService {
    * a copy, so a field added later is exposed only if somebody decides it should be.
    */
   listScoped(tenant: string | undefined, isOperator: boolean): Array<FleetManager | Partial<FleetManager>> {
-    return this.list().map((m) => {
-      if (isOperator || (tenant && m.did === tenant)) return m;
-      const view: Partial<FleetManager> = { ...m };
-      delete view.loginCode; // the console credential — never anybody else's business
-      delete view.vaultRef; // the pointer into the identity vault
-      delete view.contactPhone;
-      delete view.requirements; // registration number, transport licence, tax id
-      delete view.depotAddress;
-      delete view.kyc;
-      return view;
-    });
+    return this.list().map((m) => this.viewFor(m, tenant, isOperator));
+  }
+
+  /**
+   * One fleet as THIS caller may see it — the whole record for the fleet itself and for network staff, the outside
+   * view for everybody else. The single-fleet read used to return the raw record to any signed-in account that
+   * knew the DID, which is the same hole the list had, one route over.
+   */
+  viewFor(m: FleetManager, tenant: string | undefined, isOperator: boolean): FleetManager | Partial<FleetManager> {
+    if (isOperator || (tenant && m.did === tenant)) return m;
+    const view: Partial<FleetManager> = { ...m };
+    delete view.loginCode; // the console credential — never anybody else's business
+    delete view.vaultRef; // the pointer into the identity vault
+    delete view.contactPhone;
+    delete view.requirements; // registration number, transport licence, tax id
+    delete view.depotAddress;
+    delete view.kyc;
+    return view;
+  }
+
+  /**
+   * The fleet a person CHOSE after proving themselves with phone + PIN — so a forgotten code locks nobody out.
+   * A DID is not a secret and is not treated as one: it only names the fleet, exactly as the code does now, and the
+   * session is still granted only to a person holding the manager role for it.
+   */
+  requireSignInByDid(did?: string): FleetManager {
+    if (!did?.trim()) throw new GlosError('FIELD_REQUIRED', 'Give the fleet code, or choose the fleet');
+    const m = this.managers.get(did.trim());
+    if (!m) throw new GlosError('AUTH_CODE_INVALID', 'Unknown fleet');
+    if (m.status !== 'ACTIVE') throw new GlosError('AUTH_NOT_ACTIVE', `Fleet manager is ${m.status} — not yet active`);
+    return m;
+  }
+
+  /** Issue the fleet a new code. The old one stops naming the fleet at once; sessions are the person's and stay. */
+  rotateCode(did: string): FleetManager {
+    const m = this.requireActive(did);
+    let code: string;
+    do code = `FM-${randomBytes(3).toString('hex').toUpperCase()}`;
+    while ([...this.managers.values()].some((x) => x.loginCode === code));
+    m.loginCode = code;
+    m.codeRotatedAt = new Date().toISOString();
+    this.managers.set(m.did, m);
+    return m;
   }
 
   // --- internals ---

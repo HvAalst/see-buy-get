@@ -4424,6 +4424,85 @@ describe('PUDO Light', () => {
     expect(() => dispatch.claim(offer.offerId, noon)).toThrow(/may not carry a load inside Tanzania/);
   });
 
+  describe('credentials anybody can change — and a fleet code that is nobody else’s business', () => {
+    it('changes a hub password only with the current one, and signs out every session holding the old one', () => {
+      const email = 'rotate-hub@sbg.test';
+      otp.verify('+254700111222', otp.request('+254700111222').code); // sign-up asks for a verified phone, as a person would
+      const hub = accounts.signup({ role: 'mdp', email, password: 'first-pass', phone: '+254700111222', profile: { mdp: { name: 'Rotate Hub', zones: ['RZ'], country: 'KE', location: { lat: -1.2, lng: 36.8 } } } });
+      const old = hub.token.access_token;
+      expect(auth.introspect(old).active).toBe(true);
+
+      expect(() => controller.changeAccountPassword({ email, password: 'wrong-pass', newPassword: 'second-pass-1' })).toThrow(/Wrong email or password/);
+      expect(() => controller.changeAccountPassword({ email, password: 'first-pass', newPassword: 'short' })).toThrow(/at least 8/);
+      expect(() => controller.changeAccountPassword({ email, password: 'first-pass', newPassword: 'first-pass' })).toThrow(/different from the current one/);
+
+      const changed = controller.changeAccountPassword({ email, password: 'first-pass', newPassword: 'second-pass-1' });
+      expect(auth.introspect(old).active).toBe(false); // every other device holding the old sign-in is out
+      expect(auth.introspect(changed.token.access_token).active).toBe(true); // the one that changed it stays in
+      expect(() => accounts.login(email, 'first-pass')).toThrow(/Wrong email or password/);
+      expect(accounts.login(email, 'second-pass-1').did).toBe(hub.did);
+    });
+
+    it('changes a PIN only with the current one, and a wrong current PIN counts toward the lockout', () => {
+      const phone = '+254700333444';
+      persons.enroll(phone, true, '1234');
+      expect(() => identity.changePin({ phone, pin: '9999', newPin: '5678' })).toThrow(/Wrong phone or PIN/);
+      expect(() => identity.changePin({ phone, pin: '1234', newPin: '1234' })).toThrow(/different from the current one/);
+      const r = identity.changePin({ phone, pin: '1234', newPin: '5678' });
+      expect(r.token.access_token).toBeTruthy();
+      expect(() => persons.loginWithPin(phone, '1234')).toThrow(/Wrong phone or PIN/);
+      expect(persons.loginWithPin(phone, '5678').token.access_token).toBeTruthy();
+    });
+
+    it('rotates a store’s signing secret only with the current one, and only for the store itself', () => {
+      const store = vendors.register({ name: 'Rotating Store' });
+      const first = store.secret;
+      const self = { role: 'genesis', did: store.did } as never;
+      expect(() => controller.rotateVendorSecret(store.vendorId, { secret: 'whsec_wrong' }, self)).toThrow(/Wrong store ID or secret/);
+      const other = vendors.register({ name: 'Other Store' });
+      expect(() => controller.rotateVendorSecret(store.vendorId, { secret: first }, { role: 'genesis', did: other.did } as never)).toThrow(/not yours/);
+
+      const r = controller.rotateVendorSecret(store.vendorId, { secret: first }, self);
+      expect(r.secret).toMatch(/^whsec_/);
+      expect(r.secret).not.toBe(first);
+      expect(r.secretRotatedAt).toBeTruthy();
+      expect(() => vendors.login(store.vendorId, first)).toThrow(/Wrong store ID or secret/);
+      expect(vendors.login(store.vendorId, r.secret).vendorId).toBe(store.vendorId);
+    });
+
+    it('shows a fleet its code, hides it from everyone else, lets a manager in without it, and rotates it', () => {
+      const phone = '+254800950777';
+      const m = managers.register({ companyName: 'Rotate Haulage', contactPhone: phone, ownerFullName: 'R R', ownerNationalId: 'MGR-ROT', location: { lat: -1.2, lng: 36.8 }, requirements: { businessRegistrationNo: 'BRN-ROT', transportOperatorLicence: 'TOL-ROT', taxId: 'TAX-ROT' } });
+      managers.submitKyc(m.did, { businessRegCertRef: 'r.jpg', operatorLicenceRef: 'l.jpg', ownerIdRef: 'i.jpg', proofOfAddressRef: 'a.jpg' });
+      managers.decideKyc(m.did, true);
+      const active = managers.recordBond(m.did);
+      const code = active.loginCode!;
+      persons.enroll(phone, true, '2468');
+      controller.managerLookup({ code } as never); // links the registered phone to the fleet, as a first sign-in does
+
+      // The hole: any signed-in account could read a fleet's code, tax id and licences by its DID.
+      const shop = { role: 'pudo', did: 'did:glos:some-shop' } as never;
+      const self = { role: 'fleet_manager', did: m.did, tenant: m.did } as never;
+      const outside = controller.getManager(m.did, shop) as Record<string, unknown>;
+      for (const hidden of ['loginCode', 'requirements', 'contactPhone', 'kyc', 'vaultRef']) expect(outside).not.toHaveProperty(hidden);
+      expect(controller.getManager(m.did, self)).toHaveProperty('loginCode', code);
+
+      // Forgot the code: phone + PIN names the fleets this person manages, and a chosen one signs in.
+      expect(() => controller.managerChoices({ phone, pin: '0000' })).toThrow(/Wrong phone or PIN/);
+      expect(controller.managerChoices({ phone, pin: '2468' }).fleets).toEqual([{ did: m.did, companyName: 'Rotate Haulage', status: 'ACTIVE' }]);
+      expect(controller.managerSession({ did: m.did, phone, pin: '2468' } as never).token).toBeDefined();
+      expect(() => controller.managerSession({ phone, pin: '2468' } as never)).toThrow(/fleet code, or choose the fleet/);
+
+      // Rotating: the old code stops naming the fleet; only the fleet itself (or an operator) may do it.
+      expect(() => controller.rotateManagerCode(m.did, shop)).toThrow(/not yours/);
+      const rotated = controller.rotateManagerCode(m.did, self);
+      expect(rotated.loginCode).toMatch(/^FM-[0-9A-F]{6}$/);
+      expect(rotated.loginCode).not.toBe(code);
+      expect(() => managers.login(code)).toThrow(/Unknown sign-in code/);
+      expect(managers.login(rotated.loginCode!).did).toBe(m.did);
+    });
+  });
+
   it('S34: a bulletin freight with no shipper stays unpaid at claim but still pays the driver on delivery', () => {
     const d = drivers.register({ displayName: 'BL', fullName: 'B', nationalId: 'ID-BL', mobile: '+254770888', licenceClasses: ['truck'], licenceNumber: 'L-BL', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
     drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });

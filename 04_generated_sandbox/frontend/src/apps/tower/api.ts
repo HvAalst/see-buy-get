@@ -81,6 +81,11 @@ export function mintOperatorToken(key: string): Promise<Result<{ access_token: s
 }
 
 /** A company administrator signs in. @Public, like every other login: it cannot require what it issues. */
+/** A company administrator changes their own password, proven with the current one. */
+export function changeCompanyPassword(email: string, password: string, newPassword: string): Promise<Result<{ ok: true }>> {
+  return publicRequest<{ ok: true }>(towerConfig(), '/v1/sbg/entities/admins/password', { body: { email, password, newPassword } });
+}
+
 export function companyLogin(email: string, password: string): Promise<Result<EntityAdminLogin>> {
   return publicRequest<EntityAdminLogin>(towerConfig(), '/v1/sbg/entities/admins/login', { body: { email, password } });
 }

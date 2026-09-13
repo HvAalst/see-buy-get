@@ -193,6 +193,14 @@ export function sbgLogin(config: SbgConfig, email: string, password: string, f?:
   return publicRequest<LoginView>(config, '/v1/sbg/auth/login', { body: { email, password }, fetch: f });
 }
 
+/**
+ * Change your own password, proven with the CURRENT one. Every other session holding the old password is signed
+ * out; the answer carries a fresh sign-in for this device, which the caller seeds so it stays in.
+ */
+export function sbgChangePassword(config: SbgConfig, email: string, password: string, newPassword: string, f?: typeof fetch): Promise<Result<LoginView>> {
+  return publicRequest<LoginView>(config, '/v1/sbg/auth/password', { body: { email, password, newPassword }, fetch: f });
+}
+
 export function sbgForgot(config: SbgConfig, email: string, f?: typeof fetch): Promise<Result<{ sent: boolean; resetToken?: string }>> {
   return publicRequest(config, '/v1/sbg/auth/forgot', { body: { email }, fetch: f });
 }

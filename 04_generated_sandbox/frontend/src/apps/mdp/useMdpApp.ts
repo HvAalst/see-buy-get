@@ -268,6 +268,14 @@ export function useMdpApp() {
     setDid(login.did);
   }, []);
 
+  /** After a password change: the server signed every session out and handed this device a fresh sign-in. */
+  const adoptToken = useCallback(
+    async (token: { access_token: string; expires_in?: number }) => {
+      await client?.client.seed({ access_token: token.access_token, expires_in: token.expires_in ?? 3600 });
+    },
+    [client],
+  );
+
   const signOut = useCallback(() => {
     client?.client.session.clear();
     purgeMdpTokens(null);
@@ -464,6 +472,7 @@ export function useMdpApp() {
       refresh,
       signIn,
       signOut,
+      adoptToken,
       forgot,
       reset,
       go,

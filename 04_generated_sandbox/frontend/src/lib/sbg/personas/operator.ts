@@ -203,6 +203,12 @@ export function createOperatorApi(sbg: SbgClient) {
     /** CA5 — licences and policies lapsing soon (or already), across every company. */
     expiringCompanyPapers: (withinDays = 60) => sbg.request((c) => c.GET('/v1/sbg/companies/expiring', { params: { query: { withinDays: String(withinDays) } } })),
 
+    /** The fleets on the network — with their sign-in codes, which only network staff and the fleet itself see. */
+    fleets: () => sbg.request((c) => c.GET('/v1/sbg/fleet/managers', {})),
+
+    /** Issue a fleet a new code — for the fleet that has lost or leaked its own. */
+    rotateFleetCode: (did: string) => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/code/rotate', { params: { path: { did } } })),
+
     /** CA9 — what lowering or closing a country would leave behind, read before anybody presses it. */
     presenceImpact: (jurisdiction: string, level: string) =>
       sbg.request((c) => c.GET('/v1/sbg/presence/{jurisdiction}/impact', { params: { path: { jurisdiction }, query: { level } } as never })),

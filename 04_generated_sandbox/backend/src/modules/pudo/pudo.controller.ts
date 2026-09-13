@@ -52,7 +52,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyRecordDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto } from './pudo.dto';
+  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { classifySize, MAX_CLAIM_AWARD, measuredFactor, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
@@ -201,6 +201,16 @@ export class SbgController {
   @Post('auth/reset')
   authReset(@Body() dto: ResetDto) {
     return this.accounts.reset(dto.token, dto.password);
+  }
+
+  /**
+   * Change your own password — shop, hub, courier account. @Public because it proves itself with the CURRENT
+   * password, never with a session. Every other session is signed out; the answer carries a fresh sign-in.
+   */
+  @Public()
+  @Post('auth/password')
+  changeAccountPassword(@Body() dto: ChangePasswordDto) {
+    return this.accounts.changePassword(dto.email, dto.password, dto.newPassword);
   }
 
   @Get('module-info')
@@ -1294,6 +1304,17 @@ export class SbgController {
     return { ...VendorService.publicView(vendor), token: this.auth.mintActorToken({ role: 'genesis', did: vendor.did }) };
   }
 
+  /**
+   * Rotate the store's signing secret. The store's own token AND the current secret — a console left open is not
+   * enough on its own. The new secret is returned exactly once, with a fresh sign-in for this device.
+   */
+  @Post('vendors/:id/secret/rotate')
+  rotateVendorSecret(@Param('id') id: string, @Body() dto: RotateSecretDto, @Actor() actor: IntrospectionResult) {
+    this.assertVendorOwner(id, actor);
+    const vendor = this.vendors.rotateSecret(id, dto.secret);
+    return { vendorId: vendor.vendorId, secret: vendor.secret, secretRotatedAt: vendor.secretRotatedAt, token: this.auth.mintActorToken({ role: 'genesis', did: vendor.did }) };
+  }
+
   @Get('vendors')
   listVendors() {
     return this.vendors.list();
@@ -2359,7 +2380,7 @@ export class SbgController {
   @Public()
   @Post('fleet/managers/session')
   managerSession(@Body() dto: ManagerSessionDto) {
-    const m = this.managers.login(dto.code);
+    const m = dto.code ? this.managers.login(dto.code) : this.managers.requireSignInByDid(dto.did);
     const { person } = this.persons.loginWithPin(dto.phone, dto.pin);
     const holds = person.roles.some((r) => r.role === 'fleet_manager' && r.entityDid === m.did && r.status === 'active');
     // Not FORBIDDEN: telling somebody "right PIN, wrong company" confirms both the account and the code.
@@ -2375,9 +2396,40 @@ export class SbgController {
     return this.managers.kycQueue();
   }
 
+  /** One fleet — whole for the fleet itself and network staff, the outside view for anybody else. */
   @Get('fleet/managers/:did')
-  getManager(@Param('did') did: string) {
-    return this.managers.get(did);
+  getManager(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
+    return this.managers.viewFor(this.managers.get(did), actingTenant(actor), actor?.role === 'operator');
+  }
+
+  /**
+   * Forgot the fleet code? Phone + PIN name the fleets this person manages, so they can choose one. Mints nothing:
+   * the session is still granted by `fleet/managers/session`, which checks the PIN and the role again.
+   */
+  @Public()
+  @Post('fleet/managers/mine')
+  managerChoices(@Body() dto: ManagerChoicesDto) {
+    const { person } = this.persons.loginWithPin(dto.phone, dto.pin);
+    const fleets = person.roles
+      .filter((r) => r.role === 'fleet_manager' && r.status === 'active')
+      .flatMap((r) => {
+        try {
+          const m = this.managers.get(r.entityDid);
+          return [{ did: m.did, companyName: m.companyName, status: m.status }];
+        } catch {
+          return [];
+        }
+      });
+    return { fleets };
+  }
+
+  /** Issue the fleet a new code — the fleet itself, or network staff. The old code stops working at once. */
+  @Roles('fleet_manager', 'operator')
+  @Post('fleet/managers/:did/code/rotate')
+  rotateManagerCode(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
+    if (actor?.role !== 'operator' && actingTenant(actor) !== did) throw new GlosError('FORBIDDEN', 'This fleet is not yours');
+    const m = this.managers.rotateCode(did);
+    return { loginCode: m.loginCode, codeRotatedAt: m.codeRotatedAt };
   }
 
   /** Upload business KYC (registration cert, operator licence, owner ID, proof of address) → KYC_PENDING. */

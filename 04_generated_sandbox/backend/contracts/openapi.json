@@ -3638,6 +3638,29 @@
         }
       }
     },
+    "/v1/sbg/auth/password": {
+      "post": {
+        "operationId": "Sbg.changeAccountPassword",
+        "summary": "",
+        "description": "Change your own password — shop, hub, courier account.  because it proves itself with the CURRENT\npassword, never with a session. Every other session is signed out; the answer carries a fresh sign-in.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/module-info": {
       "get": {
         "operationId": "Sbg.info",
@@ -6765,6 +6788,38 @@
         }
       }
     },
+    "/v1/sbg/vendors/{id}/secret/rotate": {
+      "post": {
+        "operationId": "Sbg.rotateVendorSecret",
+        "summary": "",
+        "description": "Rotate the store's signing secret. The store's own token AND the current secret — a console left open is not\nenough on its own. The new secret is returned exactly once, with a fresh sign-in for this device.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RotateSecretDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/vendors/{id}": {
       "get": {
         "operationId": "Sbg.getVendor",
@@ -9566,6 +9621,8 @@
     "/v1/sbg/fleet/managers/{did}": {
       "get": {
         "operationId": "Sbg.getManager",
+        "summary": "",
+        "description": "One fleet — whole for the fleet itself and network staff, the outside view for anybody else.",
         "parameters": [
           {
             "name": "did",
@@ -9582,10 +9639,55 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FleetManager"
+                  "type": "object"
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/mine": {
+      "post": {
+        "operationId": "Sbg.managerChoices",
+        "summary": "",
+        "description": "Forgot the fleet code? Phone + PIN name the fleets this person manages, so they can choose one. Mints nothing:\nthe session is still granted by `fleet/managers/session`, which checks the PIN and the role again.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManagerChoicesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/code/rotate": {
+      "post": {
+        "operationId": "Sbg.rotateManagerCode",
+        "summary": "",
+        "description": "Issue the fleet a new code — the fleet itself, or network staff. The old code stops working at once.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
           }
         }
       }
@@ -12283,6 +12385,29 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/SetPinDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/identity/pin/change": {
+      "post": {
+        "operationId": "Identity.changePin",
+        "summary": "",
+        "description": "Change your PIN — proven with the CURRENT PIN, not with a session (a phone left unlocked is not proof of who\nholds it). A wrong current PIN counts toward the lockout. Other sessions end; this one gets a fresh sign-in.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePinDto"
               }
             }
           }
@@ -15453,6 +15578,28 @@
         "required": [
           "token",
           "password"
+        ]
+      },
+      "ChangePasswordDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "newPassword": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "email",
+          "password",
+          "newPassword"
         ]
       },
       "GeoDto": {
@@ -19103,6 +19250,10 @@
           "secret": {
             "type": "string"
           },
+          "secretRotatedAt": {
+            "type": "string",
+            "description": "When the signing secret was last rotated by the store."
+          },
           "location": {
             "$ref": "#/components/schemas/GeoPoint"
           },
@@ -19162,6 +19313,18 @@
         },
         "required": [
           "vendorId",
+          "secret"
+        ]
+      },
+      "RotateSecretDto": {
+        "type": "object",
+        "properties": {
+          "secret": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": [
           "secret"
         ]
       },
@@ -20323,6 +20486,9 @@
           "loginCode": {
             "type": "string"
           },
+          "codeRotatedAt": {
+            "type": "string"
+          },
           "status": {
             "type": "object"
           },
@@ -20358,6 +20524,10 @@
         "type": "object",
         "properties": {
           "code": {
+            "type": "string",
+            "description": "The fleet code — or `did`, the fleet chosen after phone + PIN (fleet/managers/mine). Either only names the fleet."
+          },
+          "did": {
             "type": "string"
           },
           "phone": {
@@ -20368,7 +20538,21 @@
           }
         },
         "required": [
-          "code",
+          "phone",
+          "pin"
+        ]
+      },
+      "ManagerChoicesDto": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string"
+          },
+          "pin": {
+            "type": "string"
+          }
+        },
+        "required": [
           "phone",
           "pin"
         ]
@@ -22919,6 +23103,25 @@
         },
         "required": [
           "pin"
+        ]
+      },
+      "ChangePinDto": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string"
+          },
+          "pin": {
+            "type": "string"
+          },
+          "newPin": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "phone",
+          "pin",
+          "newPin"
         ]
       },
       "ProfileDto": {

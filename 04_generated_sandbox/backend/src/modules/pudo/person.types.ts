@@ -41,6 +41,8 @@ export interface Person {
   /** Brute-force defence on the 4-digit PIN: wrong attempts, and a lockout window once exceeded. */
   pinAttempts?: number;
   pinLockedUntil?: number;
+  /** When the PIN was last set or changed. */
+  pinChangedAt?: string;
   /** Identity Vault reference for the person's cleartext PII (phone + displayName; later address). */
   vaultRef?: string;
   /** Opaque handle to the person's avatar image (S29). The bytes are owner-gated in MediaService; the

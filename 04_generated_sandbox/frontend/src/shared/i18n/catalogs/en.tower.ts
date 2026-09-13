@@ -37,6 +37,8 @@ export const enTower = {
   'tower.signIn.needKey': 'The operator key is required.',
   'tower.signIn.rejected': 'That key was not accepted.',
   'tower.signOut': 'Sign out',
+  'tower.password.open': 'Change password',
+  'tower.password.onlyCompany': 'Only a company sign-in has a password here.',
   'tower.signedInAs': 'Signed in as',
 
   // The masthead's live line: what is waiting, never who is looking.
@@ -779,6 +781,14 @@ export const enTowerNetwork = {
   'tower.network.agent.active': 'Working',
 
   'tower.network.hubsTitle': 'The sort hubs',
+  'tower.network.fleetsTitle': 'The fleets',
+  'tower.network.fleetsNone': 'No fleets have registered yet.',
+  'tower.network.fleets.company': 'Company',
+  'tower.network.fleets.status': 'Status',
+  'tower.network.fleets.code': 'Sign-in code',
+  'tower.network.fleets.rotatedAt': 'issued {when}',
+  'tower.network.fleets.rotate': 'New code',
+  'tower.network.fleets.rotateConfirm': 'Issue it',
   'tower.network.bagsOnRoad': '{n} bags on the road',
   'tower.network.freeBags': '{n} empty bags on hand',
   'tower.network.noOpenBags': 'No bags open here.',

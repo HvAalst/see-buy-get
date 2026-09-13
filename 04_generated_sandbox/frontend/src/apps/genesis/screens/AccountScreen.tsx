@@ -1,7 +1,8 @@
+import { pinChangeBlocker } from '../../../shared/account/password';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { AuthImage, Button, Card, CodeBoxes, ErrorNote, Icon, LanguageSwitcher, MediaLibrary, Note, Pill, ReadAloud, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
-import { codeReady, roleMeta } from '../logic';
+import { roleMeta } from '../logic';
 import { ROLE_APPS } from '../api';
 import { InviteSheet } from './InviteSheet';
 import type { PersonView, RoleLinkView } from '../types';
@@ -22,6 +23,7 @@ export function AccountScreen({ state, actions }: AccountScreenProps) {
   const t = useT(); // re-render this screen's translated strings when the language changes
   const [pinOpen, setPinOpen] = useState(false);
   const [newPin, setNewPin] = useState('');
+  const [currentPin, setCurrentPin] = useState('');
   const [inviteOpen, setInviteOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
@@ -125,7 +127,7 @@ export function AccountScreen({ state, actions }: AccountScreenProps) {
 
       <Card title={t('send.account.signInTitle')}>
         <div class="rows">
-          <button type="button" class="row" onClick={() => { setNewPin(''); setPinOpen(true); }}>
+          <button type="button" class="row" onClick={() => { setNewPin(''); setCurrentPin(''); setPinOpen(true); }}>
             <span class="row__ic"><Icon name="keypad" size={24} /></span>
             <span class="row__body">
               <span class="row__t">{t('send.account.changePin')}</span>
@@ -148,16 +150,19 @@ export function AccountScreen({ state, actions }: AccountScreenProps) {
 
       <Sheet open={pinOpen} onClose={() => setPinOpen(false)} title={t('send.account.changePin')}>
         <div class="field">
+          <span class="field__label">{t('send.currentPin')}</span>
+          <CodeBoxes id="current-pin" label={t('send.currentPin')} length={4} value={currentPin} onInput={setCurrentPin} disabled={state.accountBusy} />
+        </div>
+        <div class="field">
           <span class="field__label">{t('send.newPin')}</span>
           <CodeBoxes id="change-pin" label={t('send.newPin')} length={4} value={newPin} onInput={setNewPin} disabled={state.accountBusy} />
         </div>
         <Button
           chevron={false}
-          disabled={!codeReady(newPin, 4)}
+          disabled={pinChangeBlocker({ current: currentPin, next: newPin }) !== null}
           busy={state.accountBusy}
           onClick={async () => {
-            await actions.changePin(newPin);
-            setPinOpen(false);
+            if (await actions.changePin(currentPin, newPin)) setPinOpen(false);
           }}
         >
           {t('send.account.savePin')}

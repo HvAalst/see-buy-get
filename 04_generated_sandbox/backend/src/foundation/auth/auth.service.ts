@@ -135,6 +135,15 @@ export class AuthService {
     });
   }
 
+  /**
+   * End every live session of one actor — after a password, PIN or secret changes, the devices still holding the
+   * old sign-in must stop working. A token minted AFTER this carries the new version, so the device that made the
+   * change can be handed a fresh one and stay in.
+   */
+  revokeAll(did: string): void {
+    this.profiles.bumpTokenVersion(did);
+  }
+
   introspect(token: string): IntrospectionResult {
     const claims = this.verify(token);
     if (!claims) return { active: false, reason: 'invalid_signature_or_format' };

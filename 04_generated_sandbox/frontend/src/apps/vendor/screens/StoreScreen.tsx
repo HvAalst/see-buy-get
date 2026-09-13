@@ -65,6 +65,8 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
 
       <KeysCard state={state} actions={actions} />
 
+      <SecretCard state={state} actions={actions} />
+
       <Card title={t('vendor.store.settlementTitle')}>
         {state.storeState === 'loading' ? <p class="hint">{t('vendor.store.gettingBooks')}</p> : null}
         {state.settlement.length === 0 && state.storeState === 'ready' ? <p class="hint">{t('vendor.noEntriesYet')}</p> : null}
@@ -335,5 +337,88 @@ function PolicySheet({ open, onClose, state, actions }: { open: boolean; onClose
         {t('vendor.store.keepPolicy')}
       </Button>
     </Sheet>
+  );
+}
+
+/**
+ * The store's signing secret — it opens this console AND signs every status callback the store receives. Rotating
+ * it regularly is good practice; it takes the current secret (an open console is not proof on its own), signs every
+ * other session out, and the new secret is on screen exactly once, like the first.
+ */
+function SecretCard({ state, actions }: { state: VendorState; actions: VendorActions }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const [current, setCurrent] = useState('');
+  const [fresh, setFresh] = useState<string | null>(null);
+  const busy = state.busy === 'rotate-secret';
+
+  return (
+    <>
+      <Card title={t('vendor.secret.title')}>
+        <p class="card__note">{t('vendor.secret.body')}</p>
+        <Button
+          variant="outline"
+          chevron={false}
+          onClick={() => {
+            setCurrent('');
+            setFresh(null);
+            setOpen(true);
+          }}
+        >
+          {t('vendor.secret.rotate')}
+        </Button>
+      </Card>
+
+      <Sheet
+        open={open}
+        onClose={() => {
+          // The new secret is the only copy: the sheet closes by the button that says it was saved, never by a tap outside.
+          if (!fresh) setOpen(false);
+        }}
+        title={t(fresh ? 'vendor.secret.newTitle' : 'vendor.secret.sheetTitle')}
+      >
+        {fresh ? (
+          <>
+            <p class="t-body">{t('vendor.secret.newBody')}</p>
+            <p class="mono-t" style="word-break:break-all">
+              {fresh}
+            </p>
+            <Button
+              chevron={false}
+              onClick={() => {
+                setFresh(null);
+                setOpen(false);
+              }}
+            >
+              {t('vendor.secret.saved')}
+            </Button>
+          </>
+        ) : (
+          <>
+            <p class="card__note">{t('vendor.secret.warn')}</p>
+            <div class="field">
+              <label class="field__label" for="secret-current">
+                {t('vendor.secret.current')}
+              </label>
+              <input id="secret-current" class="input input--mono" type="password" autocomplete="off" value={current} onInput={(e) => setCurrent(e.currentTarget.value)} />
+            </div>
+            <Button
+              chevron={false}
+              disabled={!current.trim()}
+              busy={busy}
+              onClick={async () => {
+                const secret = await actions.rotateSecret(current.trim());
+                if (secret) setFresh(secret);
+              }}
+            >
+              {t('vendor.secret.confirm')}
+            </Button>
+            <Button variant="link" onClick={() => setOpen(false)}>
+              {t('common.cancel')}
+            </Button>
+          </>
+        )}
+      </Sheet>
+    </>
   );
 }

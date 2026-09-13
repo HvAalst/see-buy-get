@@ -80,6 +80,11 @@ export function previewInvite(token: string): Promise<Result<{ valid: boolean }>
 }
 
 /** Reopen with phone + 4-digit PIN (no OTP). */
+/** Change your PIN, proven with the CURRENT one — a phone left unlocked is not proof of who holds it. */
+export function changePinWithCurrent(phone: string, pin: string, newPin: string): Promise<Result<AuthResult>> {
+  return publicRequest<AuthResult>(sendConfig(), '/v1/sbg/identity/pin/change', { body: { phone, pin, newPin } });
+}
+
 export function pinLogin(phone: string, pin: string): Promise<Result<AuthResult>> {
   return publicRequest<AuthResult>(sendConfig(), '/v1/sbg/identity/login', { body: { phone, pin } });
 }
