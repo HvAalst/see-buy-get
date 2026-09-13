@@ -92,6 +92,13 @@ export function createFleetApi(sbg: SbgClient) {
     corridors: () => sbg.request((c) => c.GET('/v1/sbg/corridors', {})),
 
     /**
+     * F1 — propose a line this fleet's own vehicles will run. It lands PROPOSED: nothing routes on it until
+     * the network publishes it, and once published only this fleet's drivers may be put on it.
+     */
+    proposeLine: (body: { originZone: string; destZone: string; name?: string; vehicleType?: 'bus' | 'truck'; schedule?: string; note?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/lines', { body: body as never })),
+
+    /**
      * Put a shift ALREADY RUNNING onto a corridor, or move it to another one.
      *
      * The corridor is chosen when the shift starts and may be left empty, which is right for local and

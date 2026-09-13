@@ -296,6 +296,52 @@ export function fleetWorkLine(
  */
 export type CorridorState = { kind: 'none' } | { kind: 'on' | 'blocked' | 'gone'; name: string };
 
+/**
+ * F1 — the corridors a shift of THIS fleet may be put on: published, not closed, and either the network's
+ * or this fleet's own line. Another fleet's line and a proposal waiting for the network are never offered —
+ * the server refuses both, and a picker offering what the server refuses is a mis-tap waiting to happen.
+ */
+export function usableCorridors(corridors: CorridorRow[], managerDid: string | undefined): CorridorRow[] {
+  return corridors.filter((c) => c.status === 'active' && (!c.owner || c.owner.managerDid === managerDid));
+}
+
+/** F1 — this fleet's own lines, the ones waiting for the network first. */
+export function ownLines(corridors: CorridorRow[], managerDid: string | undefined): CorridorRow[] {
+  const rank = (s: string) => (s === 'proposed' ? 0 : s === 'blocked' ? 2 : 1);
+  return corridors
+    .filter((c) => managerDid !== undefined && c.owner?.managerDid === managerDid)
+    .sort((a, b) => rank(a.status) - rank(b.status) || a.originZone.localeCompare(b.originZone));
+}
+
+export interface LineForm {
+  name: string;
+  originZone: string;
+  destZone: string;
+  vehicleType: 'bus' | 'truck';
+  schedule: string;
+  note: string;
+}
+
+export const EMPTY_LINE: LineForm = { name: '', originZone: '', destZone: '', vehicleType: 'bus', schedule: '', note: '' };
+
+/**
+ * Why this line cannot be proposed yet — said before the server has to. Only what is certain from the list
+ * this fleet can see: both ends, two zones, and a pair nothing already runs or waits to run on.
+ */
+export function lineBlocker(form: LineForm, corridors: CorridorRow[]): 'fleet.lines.needZones' | 'fleet.lines.sameZone' | 'fleet.lines.duplicate' | null {
+  const origin = form.originZone.trim();
+  const dest = form.destZone.trim();
+  if (!origin || !dest) return 'fleet.lines.needZones';
+  if (origin === dest) return 'fleet.lines.sameZone';
+  if (corridors.some((c) => c.status !== 'blocked' && c.originZone === origin && c.destZone === dest)) return 'fleet.lines.duplicate';
+  return null;
+}
+
+/** Zones worth suggesting: every end of every corridor this fleet can see. Suggestions, never a closed list. */
+export function lineZones(corridors: CorridorRow[]): string[] {
+  return [...new Set(corridors.flatMap((c) => [c.originZone, c.destZone]).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+}
+
 export function corridorState(assignment: AssignmentRow, corridors: CorridorRow[]): CorridorState {
   if (!assignment.corridorId) return { kind: 'none' };
   const corridor = corridors.find((c) => c.corridorId === assignment.corridorId);

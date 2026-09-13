@@ -5740,6 +5740,65 @@
         }
       }
     },
+    "/v1/sbg/corridors/{id}/publish": {
+      "post": {
+        "operationId": "Sbg.publishCorridor",
+        "summary": "",
+        "description": "F2 — the network publishes a fleet's proposed line. Operator only, for the same reason as drawing one:\na published line changes what every shop in its origin zone may take in.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Corridor"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/lines": {
+      "post": {
+        "operationId": "Sbg.proposeLine",
+        "summary": "",
+        "description": "F1 — a fleet proposes a line its own vehicles will run. In a country where we only MATCH, the fleet is\nthe local operator, and this is how its routes enter the network at all. Pinned to the fleet on the\ntoken: nobody proposes a line in somebody else's name.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposeLineDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Corridor"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/drivers": {
       "post": {
         "operationId": "Sbg.addDriver",
@@ -15628,6 +15687,39 @@
           },
           "status": {
             "type": "object"
+          },
+          "owner": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "required": true,
+                "type": "string"
+              },
+              "managerDid": {
+                "required": true,
+                "type": "string"
+              },
+              "company": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
+          "proposedBy": {
+            "type": "string"
+          },
+          "proposedAt": {
+            "type": "string"
+          },
+          "publishedBy": {
+            "type": "string"
+          },
+          "publishedAt": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string",
+            "description": "Why the fleet wants it. Read by the operator deciding whether to publish."
           }
         },
         "required": [
@@ -15637,7 +15729,8 @@
           "destZone",
           "vehicleType",
           "schedule",
-          "status"
+          "status",
+          "owner"
         ]
       },
       "CorridorStatusDto": {
@@ -15653,6 +15746,38 @@
         },
         "required": [
           "status"
+        ]
+      },
+      "ProposeLineDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "originZone": {
+            "type": "string"
+          },
+          "destZone": {
+            "type": "string"
+          },
+          "vehicleType": {
+            "type": "string",
+            "enum": [
+              "bus",
+              "truck"
+            ]
+          },
+          "schedule": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string",
+            "description": "Why this line — read by the operator deciding whether to publish it."
+          }
+        },
+        "required": [
+          "originZone",
+          "destZone"
         ]
       },
       "DriverDto": {

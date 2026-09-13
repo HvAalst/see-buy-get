@@ -80,7 +80,7 @@ export class FleetService {
     if (!this.drivers.clearedFor(driverDid, vehicle.vehicleClass)) throw new GlosError('CANNOT_COUPLE', `Driver is not licence-cleared for a ${vehicle.vehicleClass}`);
     if (this.activeForDriver(driverDid)) throw new GlosError('ALREADY_COUPLED', 'Driver is already coupled to a vehicle — uncouple first');
     if (this.activeForVehicle(vehicleId)) throw new GlosError('ALREADY_COUPLED', 'Vehicle is already coupled to a driver — uncouple first');
-    if (corridorId) this.corridors.requireCorridor(corridorId);
+    if (corridorId) this.corridors.requireUsableBy(corridorId, driver.managerDid);
 
     const assignment: Assignment = {
       assignmentId: `asg_${randomBytes(6).toString('hex')}`,
@@ -360,7 +360,8 @@ export class FleetService {
   assignCorridor(driverDid: string, corridorId: string): Assignment {
     const active = this.activeForDriver(driverDid);
     if (!active) throw new GlosError('NOT_COUPLED', 'Driver is not currently coupled to a vehicle');
-    this.corridors.requireCorridor(corridorId);
+    // A fleet's own line carries only that fleet's drivers, and a proposal carries nobody yet.
+    this.corridors.requireUsableBy(corridorId, this.drivers.get(driverDid).managerDid);
     active.corridorId = corridorId;
     return active;
   }

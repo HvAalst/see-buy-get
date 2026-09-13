@@ -83,10 +83,14 @@ export function CorridorsScreen({ state, actions }: { state: TowerState; actions
             <tbody>
               {rows.map((row) => {
                 const blocked = row.status === 'blocked';
+                const proposed = row.status === 'proposed';
                 return (
                   <tr key={row.corridorId}>
                     <td>
                       <div class="ctbl__strong">{row.name}</div>
+                      {/* Whose bus — the network's own, or a fleet's line that only its drivers run. */}
+                      <div class="ctbl__sub">{row.owner ? t('tower.corridors.ownedBy', { company: row.owner.company }) : t('tower.corridors.network')}</div>
+                      {row.note ? <div class="ctbl__sub">{row.note}</div> : null}
                       <div class="ctbl__mono">{row.corridorId}</div>
                     </td>
                     <td>{`${row.originZone} → ${row.destZone}`}</td>
@@ -97,13 +101,25 @@ export function CorridorsScreen({ state, actions }: { state: TowerState; actions
                     {/* The number that changes what blocking MEANS. */}
                     <td class="ctbl__num">{row.shifts}</td>
                     <td>
-                      {blocked ? (
+                      {proposed ? (
+                        <span class="ctag">{t('tower.corridors.proposed')}</span>
+                      ) : blocked ? (
                         <span class="ctag ctag--warn">{t('tower.corridors.blocked')}</span>
                       ) : (
                         <span class="ctag ctag--ok">{t('tower.corridors.active')}</span>
                       )}
                     </td>
                     <td class="ctbl__num">
+                      {proposed ? (
+                        <button
+                          type="button"
+                          class="cbtn cbtn--sm cbtn--primary"
+                          disabled={state.busyId === row.corridorId}
+                          onClick={() => void actions.publishCorridor(row.corridorId)}
+                        >
+                          {t('tower.corridors.publish')}
+                        </button>
+                      ) : (
                       <button
                         type="button"
                         class={`cbtn cbtn--sm ${blocked ? 'cbtn--primary' : 'cbtn--ghost'}`}
@@ -112,6 +128,7 @@ export function CorridorsScreen({ state, actions }: { state: TowerState; actions
                       >
                         {t(blocked ? 'tower.corridors.reopen' : 'tower.corridors.block')}
                       </button>
+                      )}
                     </td>
                   </tr>
                 );

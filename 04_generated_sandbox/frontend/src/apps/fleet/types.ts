@@ -69,7 +69,13 @@ export interface CorridorRow {
   name: string;
   originZone: string;
   destZone: string;
+  /** proposed (a fleet's line waiting for the network) · active · blocked */
   status: string;
+  /** Absent for the network's own corridors. */
+  owner?: { kind: 'fleet'; managerDid: string; company: string };
+  vehicleType?: 'bus' | 'truck';
+  schedule?: string;
+  note?: string;
 }
 
 export interface SubtypeRow {

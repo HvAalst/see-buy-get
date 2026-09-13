@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks';
 import { Button, Card, ErrorNote, Pill, ReadAloud } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
-import { corridorState, freeDrivers, freeVehicles, shortDid } from '../logic';
+import { corridorState, freeDrivers, freeVehicles, shortDid, usableCorridors } from '../logic';
 import type { AssignmentRow, CorridorRow } from '../types';
 import type { FleetActions, FleetState } from '../useFleetApp';
 
@@ -26,9 +26,10 @@ export function SessionsScreen({ state, actions }: SessionsScreenProps) {
   const f = state.cForm;
   const drivers = freeDrivers(state.drivers, state.assignments);
   const vehicles = freeVehicles(state.vehicles, state.assignments);
-  // Only live corridors are offered. A blocked one is still shown on a shift that is already on it —
-  // that is a warning — but it must never be something a manager can newly choose.
-  const live = state.corridors.filter((c) => c.status !== 'blocked');
+  // Only live corridors this fleet may run are offered: the network's, and our own published lines. A blocked
+  // one is still shown on a shift already on it — that is a warning — but never something to newly choose,
+  // and neither is another fleet's line or our own proposal still waiting for the network.
+  const live = usableCorridors(state.corridors, state.manager?.did);
 
   return (
     <div class="scr">

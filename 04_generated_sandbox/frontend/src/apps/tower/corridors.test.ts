@@ -23,6 +23,24 @@ const corridor = (over: Partial<CorridorRow> = {}): CorridorRow => ({
 
 const form = (over: Partial<typeof EMPTY_CORRIDOR_FORM> = {}) => ({ ...EMPTY_CORRIDOR_FORM, originZone: 'Z-A', destZone: 'Z-B', ...over });
 
+describe('a fleet’s proposed line', () => {
+  it('sorts first, because it is the one row waiting on a decision — and closed ones still last', () => {
+    const rows = corridorViews(
+      [
+        corridor({ corridorId: 'cor_open', originZone: 'Z-A' }),
+        corridor({ corridorId: 'cor_closed', originZone: 'Z-A', status: 'blocked' }),
+        corridor({ corridorId: 'cor_plan', originZone: 'Z-Z', status: 'proposed', owner: { kind: 'fleet', managerDid: 'did:f', company: 'Alpha' } }),
+      ],
+      [],
+    );
+    expect(rows.map((r) => r.corridorId)).toEqual(['cor_plan', 'cor_open', 'cor_closed']);
+  });
+
+  it('occupies its pair, so the network is not invited to draw a line nobody would reach', () => {
+    expect(corridorBlocker(form(), [corridor({ status: 'proposed' })])).toBe('tower.corridors.duplicate');
+  });
+});
+
 describe('the table', () => {
   it('says how many shifts are running on each one', () => {
     // Blocking a corridor with four buses on it is a different decision from blocking an idle one, and

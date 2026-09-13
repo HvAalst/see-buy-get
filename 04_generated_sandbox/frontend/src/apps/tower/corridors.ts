@@ -25,6 +25,9 @@ export interface CorridorRow {
   vehicleType?: 'bus' | 'truck';
   schedule?: string;
   status: string;
+  /** Absent for the network's own. A fleet's line names the fleet that proposed it and runs it. */
+  owner?: { kind: 'fleet'; managerDid: string; company: string };
+  note?: string;
 }
 
 /** A driver↔vehicle coupling, which is what a shift IS. Only its corridor matters here. */
@@ -52,11 +55,13 @@ export function corridorViews(corridors: CorridorRow[], couplings: CouplingRow[]
   for (const c of couplings) {
     if (c.corridorId) shiftsOn.set(c.corridorId, (shiftsOn.get(c.corridorId) ?? 0) + 1);
   }
+  // A fleet's proposal first: it is the one row here waiting on a decision. Closed ones last.
+  const rank = (status: string) => (status === 'proposed' ? 0 : status === 'blocked' ? 2 : 1);
   return corridors
     .map((c) => ({ ...c, shifts: shiftsOn.get(c.corridorId) ?? 0 }))
     .sort(
       (a, b) =>
-        Number(a.status === 'blocked') - Number(b.status === 'blocked') ||
+        rank(a.status) - rank(b.status) ||
         a.originZone.localeCompare(b.originZone) ||
         a.destZone.localeCompare(b.destZone),
     );

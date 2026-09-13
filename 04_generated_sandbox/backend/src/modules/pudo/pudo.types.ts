@@ -1001,7 +1001,21 @@ export class Corridor {
   destZone: string;
   vehicleType: 'bus' | 'truck';
   schedule: string; // e.g. 'North-South Express, 08:00'
-  status: 'active' | 'blocked';
+  /**
+   * proposed  a fleet asked to run this line; nothing routes on it until the network publishes it
+   * active    published — shops in the origin zone may take parcels in for it
+   * blocked   closed by the network, and kept so that "closed" never reads as "never existed"
+   */
+  status: 'proposed' | 'active' | 'blocked';
+  /** Absent for the network's own corridors. A fleet's line names the fleet that runs it — and only its
+   *  own drivers may be put on it. */
+  owner?: { kind: 'fleet'; managerDid: string; company: string };
+  proposedBy?: string;
+  proposedAt?: string;
+  publishedBy?: string;
+  publishedAt?: string;
+  /** Why the fleet wants it. Read by the operator deciding whether to publish. */
+  note?: string;
 }
 
 export class Driver {

@@ -35,6 +35,7 @@ import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
 import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto,
+  ProposeLineDto,
   PresenceDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
@@ -806,8 +807,9 @@ export class SbgController {
 
   /** Readable by everyone who has to work with them: the fleet app offers them, the agent app checks them. */
   @Get('corridors')
-  listCorridors() {
-    return this.corridors.listCorridors();
+  listCorridors(@Actor() actor: IntrospectionResult) {
+    // A fleet's PROPOSED line is its plan, not yet geography: its own fleet and the operator see it.
+    return this.corridors.visibleTo(actingTenant(actor), actor?.role === 'operator');
   }
 
   /** Blocking one stops every cross-zone take-in it was serving. Operator only, for that reason. */
@@ -815,6 +817,31 @@ export class SbgController {
   @Post('corridors/:id/status')
   setCorridorStatus(@Param('id') id: string, @Body() dto: CorridorStatusDto) {
     return this.corridors.setStatus(id, dto.status);
+  }
+
+  /**
+   * F2 — the network publishes a fleet's proposed line. Operator only, for the same reason as drawing one:
+   * a published line changes what every shop in its origin zone may take in.
+   */
+  @Roles('operator')
+  @Post('corridors/:id/publish')
+  publishCorridor(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    return this.corridors.publish(id, auditActor(actor, undefined));
+  }
+
+  /**
+   * F1 — a fleet proposes a line its own vehicles will run. In a country where we only MATCH, the fleet is
+   * the local operator, and this is how its routes enter the network at all. Pinned to the fleet on the
+   * token: nobody proposes a line in somebody else's name.
+   */
+  @Roles('fleet_manager')
+  @Post('fleet/lines')
+  proposeLine(@Body() dto: ProposeLineDto, @Actor() actor: IntrospectionResult) {
+    const managerDid = actingTenant(actor);
+    const manager = managerDid ? this.managers.list().find((m) => m.did === managerDid) : undefined;
+    if (!manager) throw new GlosError('FORBIDDEN', 'Only a fleet can propose a line of its own');
+    if (manager.status !== 'ACTIVE') throw new GlosError('FORBIDDEN', `${manager.companyName} is not active on the network, so it cannot propose a line yet`);
+    return this.corridors.proposeLine({ ...dto, managerDid: manager.did, company: manager.companyName });
   }
 
   /** The corridor whitelist — a badge that may take a handover without being a fleet driver at all. Same
@@ -2241,13 +2268,26 @@ export class SbgController {
 
   /** Couple a driver to a vehicle (optionally on a corridor). Re-assignable. */
   @Post('fleet/drivers/:did/couple')
-  couple(@Param('did') did: string, @Body() dto: CoupleDto) {
+  couple(@Param('did') did: string, @Body() dto: CoupleDto, @Actor() actor: IntrospectionResult) {
+    this.assertDriverInFleet(did, actor);
     return this.fleet.couple(did, dto.vehicleId, dto.corridorId, dto.leg);
   }
 
   @Post('fleet/drivers/:did/uncouple')
-  uncouple(@Param('did') did: string) {
+  uncouple(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
+    this.assertDriverInFleet(did, actor);
     return this.fleet.uncouple(did);
+  }
+
+  /**
+   * A fleet moves only its own drivers. These routes carried no label and no owner check, so any valid token
+   * could couple, end or re-route anybody's shift — found while giving fleets lines of their own, which is
+   * the moment "whose driver is this" started to decide which routes they may run.
+   */
+  private assertDriverInFleet(did: string, actor: IntrospectionResult): void {
+    if (actor?.role === 'operator' || actor?.did === did) return;
+    const driver = this.drivers.get(did);
+    if (!driver.managerDid || driver.managerDid !== actor?.tenant) throw new GlosError('FORBIDDEN', 'That driver is not in your fleet');
   }
 
   /** Driver starts a shift by scanning the vehicle's dashboard QR → couples them for the day. */
@@ -2361,7 +2401,8 @@ export class SbgController {
   }
 
   @Post('fleet/drivers/:did/assign-corridor')
-  assignDriverCorridor(@Param('did') did: string, @Body() dto: AssignCorridorDto) {
+  assignDriverCorridor(@Param('did') did: string, @Body() dto: AssignCorridorDto, @Actor() actor: IntrospectionResult) {
+    this.assertDriverInFleet(did, actor);
     return this.fleet.assignCorridor(did, dto.corridorId);
   }
 

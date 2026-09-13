@@ -187,6 +187,8 @@ export interface TowerActions {
   setCorridorForm(patch: Partial<CorridorForm>): void;
   saveCorridor(): Promise<void>;
   setCorridorStatus(corridorId: string, status: 'active' | 'blocked'): Promise<void>;
+  /** F2 — make a fleet's proposed line real. */
+  publishCorridor(corridorId: string): Promise<void>;
   refresh(): Promise<void>;
   open(rowId: string | null): void;
   clear(constraintId: string, reason: string, hazard: string): Promise<void>;
@@ -815,6 +817,19 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
           return;
         }
         setState((s) => ({ ...s, busyId: null, done: t(status === 'blocked' ? 'tower.corridors.closed' : 'tower.corridors.reopened') }));
+        await loadCorridors(client);
+      },
+      /** Publish a fleet's proposed line. From then on shops in its origin zone may take parcels in for it. */
+      publishCorridor: async (corridorId: string) => {
+        const client = clientRef.current;
+        if (!client) return;
+        setState((s) => ({ ...s, busyId: corridorId, queueError: null, done: null }));
+        const { error } = await client.api.publishCorridor(corridorId);
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, done: t('tower.corridors.published') }));
         await loadCorridors(client);
       },
       signInAsCompany,

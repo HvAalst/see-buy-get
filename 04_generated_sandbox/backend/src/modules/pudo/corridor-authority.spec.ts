@@ -57,3 +57,70 @@ describe('what blocking one does', () => {
     expect(s.forZones('Z-B', 'Z-A')).toBeUndefined();
   });
 });
+
+describe('F1/F2 — a fleet’s own line: proposed by the fleet, published by the network', () => {
+  const service = () => new CorridorService();
+  const propose = (s: CorridorService, managerDid = 'did:fleet:a', company = 'Alpha Haulage') =>
+    s.proposeLine({ managerDid, company, originZone: 'Z-A', destZone: 'Z-B', note: 'we run this road daily' });
+
+  it('lets only a fleet propose one, and only an operator publish it', () => {
+    expect(Reflect.getMetadata(ROLES_KEY, SbgController.prototype.proposeLine)).toEqual(['fleet_manager']);
+    expect(Reflect.getMetadata(ROLES_KEY, SbgController.prototype.publishCorridor)).toEqual(['operator']);
+  });
+
+  it('routes NOTHING on a proposal until the network publishes it', () => {
+    const s = service();
+    const line = propose(s);
+    expect(line).toMatchObject({ status: 'proposed', owner: { kind: 'fleet', managerDid: 'did:fleet:a', company: 'Alpha Haulage' } });
+    expect(s.forZones('Z-A', 'Z-B')).toBeUndefined();
+
+    s.publish(line.corridorId, 'ops@glos');
+    expect(s.forZones('Z-A', 'Z-B')?.corridorId).toBe(line.corridorId);
+    expect(s.requireCorridor(line.corridorId).publishedBy).toBe('ops@glos');
+  });
+
+  it('never opens a proposal through the close/reopen switch — publishing is its own decision', () => {
+    const s = service();
+    const line = propose(s);
+    expect(() => s.setStatus(line.corridorId, 'active')).toThrow(/publish it/);
+  });
+
+  it('refuses a second line on a pair already run or waiting — the lookup only ever finds the first', () => {
+    const s = service();
+    propose(s);
+    expect(() => propose(s, 'did:fleet:b', 'Beta')).toThrow(/waits to run/);
+    const fresh = service();
+    const line = propose(fresh);
+    fresh.addCorridor({ name: 'Network A → B', originZone: 'Z-A', destZone: 'Z-B' }); // drawn after the proposal
+    expect(() => fresh.publish(line.corridorId)).toThrow(/already runs/);
+  });
+
+  it('carries only its own fleet’s drivers, and hides the proposal from everybody else', () => {
+    const s = service();
+    const line = propose(s);
+    const network = s.addCorridor({ name: 'B → C', originZone: 'Z-B', destZone: 'Z-C' });
+
+    expect(() => s.requireUsableBy(line.corridorId, 'did:fleet:a')).toThrow(/not been published/);
+    s.publish(line.corridorId);
+    expect(s.requireUsableBy(line.corridorId, 'did:fleet:a').corridorId).toBe(line.corridorId);
+    expect(() => s.requireUsableBy(line.corridorId, 'did:fleet:b')).toThrow(/Alpha Haulage’s line/);
+    expect(() => s.requireUsableBy(line.corridorId, undefined)).toThrow(/only its own drivers/);
+    expect(s.requireUsableBy(network.corridorId, 'did:fleet:b').corridorId).toBe(network.corridorId);
+
+    const other = service();
+    const plan = propose(other);
+    expect(other.visibleTo('did:fleet:b', false).map((c) => c.corridorId)).not.toContain(plan.corridorId);
+    expect(other.visibleTo('did:fleet:a', false).map((c) => c.corridorId)).toContain(plan.corridorId);
+    expect(other.visibleTo(undefined, true).map((c) => c.corridorId)).toContain(plan.corridorId);
+  });
+
+  it('checks that a fleet moves only its own drivers', () => {
+    // The couple / uncouple / assign routes carried no label and no owner check before this.
+    const controller = Object.create(SbgController.prototype) as { assertDriverInFleet: (did: string, actor: unknown) => void; drivers: unknown };
+    controller.drivers = { get: (did: string) => ({ did, managerDid: 'did:fleet:a' }) };
+    expect(() => controller.assertDriverInFleet('did:drv', { role: 'fleet_manager', tenant: 'did:fleet:b' })).toThrow(/not in your fleet/);
+    expect(() => controller.assertDriverInFleet('did:drv', { role: 'fleet_manager', tenant: 'did:fleet:a' })).not.toThrow();
+    expect(() => controller.assertDriverInFleet('did:drv', { role: 'operator' })).not.toThrow();
+    expect(() => controller.assertDriverInFleet('did:drv', { role: 'driver', did: 'did:drv' })).not.toThrow();
+  });
+});

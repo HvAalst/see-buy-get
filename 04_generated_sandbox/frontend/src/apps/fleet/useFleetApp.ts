@@ -5,7 +5,7 @@ import { t } from '../../shared/i18n';
 import { downscaleImage } from '../../shared/media';
 import type { IconName } from '../../shared/ui/Icon';
 import { clearManager, createFleetClient, managerLookup, managerSession, purgeFleetTokens, readManager, saveManager } from './api';
-import { EMPTY_DRIVER, EMPTY_VEHICLE, isHeavySelection, type DriverForm, type VehicleForm } from './logic';
+import { EMPTY_DRIVER, EMPTY_LINE, EMPTY_VEHICLE, isHeavySelection, lineBlocker, type DriverForm, type LineForm, type VehicleForm } from './logic';
 import type {
   AssignmentRow,
   CorridorRow,
@@ -15,7 +15,7 @@ import type {
   VehicleRow,
 } from './types';
 
-export type Screen = 'dash' | 'vehicles' | 'drivers' | 'sessions';
+export type Screen = 'dash' | 'vehicles' | 'drivers' | 'sessions' | 'lines';
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
 
 export interface Toast {
@@ -48,6 +48,8 @@ export interface FleetState {
   vForm: VehicleForm;
   dForm: DriverForm;
   cForm: { driverDid: string; vehicleId: string; corridorId: string };
+  /** F1 — the line this fleet is about to propose. */
+  lForm: LineForm;
 }
 
 const EMPTY_COUPLE = { driverDid: '', vehicleId: '', corridorId: '' };
@@ -74,6 +76,7 @@ const INITIAL: FleetState = {
   vForm: { ...EMPTY_VEHICLE },
   dForm: { ...EMPTY_DRIVER },
   cForm: { ...EMPTY_COUPLE },
+  lForm: { ...EMPTY_LINE },
 };
 
 const isOffline = (e: SbgError) => e.code === 'NETWORK' || e.code === 'TIMEOUT';
@@ -497,6 +500,32 @@ export function useFleetApp() {
     [client, run, fail, pushToast, refresh],
   );
 
+  const setLForm = useCallback((p: Partial<LineForm>) => setState((s) => ({ ...s, lForm: { ...s.lForm, ...p } })), []);
+
+  /**
+   * F1 — propose a line this fleet runs. Re-reads afterwards: the line comes back PROPOSED, and the list is
+   * where the fleet sees it waiting for the network rather than assuming it is live.
+   */
+  const proposeLine = useCallback(async () => {
+    if (!client) return;
+    const f = stateRef.current.lForm;
+    if (lineBlocker(f, stateRef.current.corridors)) return;
+    await run('line', async () => {
+      const r = await client.api.proposeLine({
+        originZone: f.originZone.trim(),
+        destZone: f.destZone.trim(),
+        vehicleType: f.vehicleType,
+        ...(f.name.trim() ? { name: f.name.trim() } : {}),
+        ...(f.schedule.trim() ? { schedule: f.schedule.trim() } : {}),
+        ...(f.note.trim() ? { note: f.note.trim() } : {}),
+      });
+      if (r.error) return fail(r.error);
+      setState((s) => ({ ...s, lForm: { ...EMPTY_LINE } }));
+      pushToast({ tone: 'ok', icon: 'route', title: t('fleet.toast.lineProposed'), detail: t('fleet.toast.lineProposedDetail') });
+      await refresh();
+    });
+  }, [client, run, fail, pushToast, refresh]);
+
   const uncouple = useCallback(
     async (driverDid: string) => {
       if (!client) return;
@@ -533,6 +562,8 @@ export function useFleetApp() {
       couple,
       uncouple,
       assignCorridor,
+      setLForm,
+      proposeLine,
       pushToast,
       dismissToast,
     },

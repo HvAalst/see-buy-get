@@ -201,6 +201,17 @@ export class CorridorStatusDto {
   @IsIn(['active', 'blocked']) status!: 'active' | 'blocked';
 }
 
+/** F1 — a fleet proposes a line of its own. Nothing routes on it until the network publishes it. */
+export class ProposeLineDto {
+  @IsOptional() @IsString() name?: string;
+  @IsString() originZone!: string;
+  @IsString() destZone!: string;
+  @IsOptional() @IsIn(['bus', 'truck']) vehicleType?: 'bus' | 'truck';
+  @IsOptional() @IsString() schedule?: string;
+  /** Why this line — read by the operator deciding whether to publish it. */
+  @IsOptional() @IsString() note?: string;
+}
+
 export class PingDto {
   @IsOptional() @IsObject() meta?: Record<string, unknown>;
 }

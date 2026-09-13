@@ -140,6 +140,17 @@ and what the cover is, in the same breath as the price.
   with a reason.
 - **P4. The journey decides.** MoR resolved from the payer's jurisdiction; a foreign leg becomes a
   purchased service; cross-border take-in refuses where neither end can answer for it.
+- **F1 + F2. ~~A fleet-owned line, propose → publish~~ DONE.** A corridor now has an owner (absent = the
+  network) and a `proposed` status. A fleet proposes a line from the fleet app's new **Lines** tab
+  (`POST fleet/lines`, fleet_manager only, pinned to the token's fleet); nothing routes on it until an
+  operator presses **Publish** on the console's Corridors screen (`POST corridors/:id/publish`), where
+  proposals sort first. The close/reopen switch refuses a proposal, so publishing is always a named
+  decision. Once published, only that fleet's drivers may be coupled or assigned to it, and another fleet
+  never sees a competitor's proposal on the open list. Found on the way: corridors were an in-memory Map
+  (an operator-drawn route vanished on restart — now durable), and the couple / uncouple / assign-corridor
+  routes had no owner check (any valid token could move anybody's shift — now a fleet moves only its own).
+- **F3–F4. Sold capacity, then their own customers' loads on their own line** — both move money, and wait
+  on the same decision as P4 (below).
 - **F1–F4. The fleet's own routes** (see the corridors work): a fleet-owned line, propose → publish,
   sold capacity, and finally their own customers' loads on their own line. In a Matched country the
   fleet *is* the local operator, which is what makes this the entry mechanism for every market where

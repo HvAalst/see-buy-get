@@ -188,6 +188,9 @@ export function createOperatorApi(sbg: SbgClient) {
     setCorridorStatus: (corridorId: string, status: 'active' | 'blocked') =>
       sbg.request((c) => c.POST('/v1/sbg/corridors/{id}/status', { params: { path: { id: corridorId } }, body: { status } as never })),
 
+    /** F2 — publish a fleet's proposed line. Nothing routes on it until this is pressed. */
+    publishCorridor: (corridorId: string) => sbg.request((c) => c.POST('/v1/sbg/corridors/{id}/publish', { params: { path: { id: corridorId } } })),
+
     /** Every driver↔vehicle coupling running right now — which is to say, every shift. */
     couplings: () => sbg.request((c) => c.GET('/v1/sbg/fleet/assignments', { params: { query: { status: 'active' } } })),
 

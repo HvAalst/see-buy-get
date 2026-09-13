@@ -3,6 +3,7 @@ import { BottomNav, Button, Checklist, Icon, Pill, TopBar, type NavItem } from '
 import { useT } from '../../shared/i18n';
 import { DashboardScreen } from './screens/DashboardScreen';
 import { DriversScreen } from './screens/DriversScreen';
+import { LinesScreen } from './screens/LinesScreen';
 import { SessionsScreen } from './screens/SessionsScreen';
 import { SignInScreen } from './screens/SignInScreen';
 import { VehiclesScreen } from './screens/VehiclesScreen';
@@ -39,6 +40,7 @@ export function App() {
     { key: 'vehicles', label: t('fleet.nav.vehicles'), icon: 'truck' },
     { key: 'drivers', label: t('fleet.nav.drivers'), icon: 'person' },
     { key: 'sessions', label: t('fleet.nav.sessions'), icon: 'route', badge: onShift || undefined },
+    { key: 'lines', label: t('fleet.nav.lines'), icon: 'repeat' },
   ];
 
   return (
@@ -99,6 +101,8 @@ function ScreenRouter({ screen, state, actions }: { screen: Screen; state: Fleet
       return <DriversScreen state={state} actions={actions} />;
     case 'sessions':
       return <SessionsScreen state={state} actions={actions} />;
+    case 'lines':
+      return <LinesScreen state={state} actions={actions} />;
     default:
       return <DashboardScreen state={state} actions={actions} />;
   }

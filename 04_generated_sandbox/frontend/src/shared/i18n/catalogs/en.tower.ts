@@ -428,6 +428,11 @@ export const enTowerQueues = {
   'tower.corridors.drawn': 'Corridor drawn — shops in that zone can take parcels for it now.',
   'tower.corridors.closed': 'Corridor closed — no shop can take in new parcels for that pair.',
   'tower.corridors.reopened': 'Corridor reopened.',
+  'tower.corridors.network': 'The network',
+  'tower.corridors.ownedBy': '{company}’s own line',
+  'tower.corridors.proposed': 'Proposed',
+  'tower.corridors.publish': 'Publish',
+  'tower.corridors.published': 'Line published — shops in that zone can take parcels for it now, and only that fleet’s drivers run it.',
 
   // ---- and the shops that started and stopped: a chase list, not a queue ----
   'tower.stalled.title': 'Started signing up and stopped',
