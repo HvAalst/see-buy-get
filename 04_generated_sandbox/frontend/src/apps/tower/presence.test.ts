@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   LEVEL_DEFAULTS,
   approvalBlocker,
+  impactIsEmpty,
   capabilityStates,
   countryNameOf,
   levelBlocker,
@@ -138,6 +139,28 @@ describe('CA1 — a country comes from the catalogue', () => {
   it('names a country from the catalogue, and falls back to its code', () => {
     expect(countryNameOf('ZM', [catalogue()])).toBe('Zambia');
     expect(countryNameOf('ZM', null)).toBe('ZM');
+  });
+});
+
+describe('CA9 — what winding a country down leaves behind', () => {
+  const empty = {
+    jurisdiction: 'ZM',
+    toLevel: 'observed' as const,
+    lost: [],
+    gained: [],
+    closing: false,
+    shelves: { total: 0, ours: 0, theirs: 0, unstamped: 0 },
+    inTransit: 0,
+    freight: { open: 0, claimed: 0 },
+    owed: [],
+    registered: { shops: 0, stores: 0, hubs: 0, fleets: 0, couriers: 0 },
+  };
+
+  it('is empty only when nothing at all would be left behind', () => {
+    expect(impactIsEmpty(empty)).toBe(true);
+    expect(impactIsEmpty({ ...empty, closing: true })).toBe(false);
+    expect(impactIsEmpty({ ...empty, registered: { ...empty.registered, couriers: 1 } })).toBe(false);
+    expect(impactIsEmpty({ ...empty, owed: [{ entityId: 'sbg-ke', name: 'K', currency: 'KES', amount: 5, suppliers: 1 }] })).toBe(false);
   });
 });
 

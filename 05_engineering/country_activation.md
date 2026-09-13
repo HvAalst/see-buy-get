@@ -1,6 +1,7 @@
 # Country activation — which countries exist, and who may switch one on
 
-> Status: **DECIDED 2026-09-13, not built.** Builds on the presence ladder (`presence_ladder.md`).
+> Status: **DECIDED AND BUILT 2026-09-13 — CA1–CA9 all shipped** (`9c0fc48`, `7aebbe9`, `e9ae0a4`, and the CA9 commit).
+> Builds on the presence ladder (`presence_ladder.md`).
 > Scope: SBG. Governs how a country enters the network, how a company of ours is recorded there, and the
 > evidence that stands behind every level above Matched.
 
@@ -117,26 +118,50 @@ presence screen already does:
 
 ## 10. TODO — in the order it should be built
 
-- **CA1. The country catalogue.** Data file of every country (§3); the presence refuses a code not in it;
-  switching on refuses a country with no mapped currency or rate; development seeds several countries.
-- **CA2. Two people switch it on.** Proposals, approval by a different person, expiry; the console's
-  *Where we operate* screen proposes and approves instead of setting.
-- **CA3. The company record.** Create a company from the super-admin side with the §5 fields; seeds become
-  development-only; Established derives from a complete, verified record.
-- **CA4. Documents.** Upload, fingerprint, versions, second-person verification.
-- **CA5. Expiry watch.** Reminders ahead; a lapse lowers the capability it supports, recorded.
-- **CA6. Cross-border rules.** Crossings, hours, permits, regional insurance, size limits, cabotage enforced in
-  dispatch.
-- **CA7. Partner companies.** The same record for the Partnered level.
-- **CA8. Local obligations.** E-invoicing and data-protection registration as activation checklist items.
-- **CA9. Wind-down.** The cost of lowering or closing a country, shown before it is pressed.
+- **CA1. ~~The country catalogue~~ DONE (`9c0fc48`).** 243 countries as data (`foundation/countries`): currency,
+  dialling code, driving side, languages, postal codes, identity documents. A standing is refused for a code not in
+  it; switching a country on is refused until the rate book has its currency; a purchased stop refuses to price
+  without that rate ("refuse until mapped" now means "until the rate book can convert it"). Development seeds TZ, UG,
+  RW and DE; `GLOS_ENV=production` seeds nothing. The console picks a country from the list, never types it.
+- **CA2. ~~Two people switch it on~~ DONE (`9c0fc48`).** A change that gives a country anything is a proposal; a
+  different named person approves (case and spacing do not make a second person); one waiting change per country;
+  expiry after 7 days, kept; a decline needs a reason. A lowering is applied at once by one person, recorded.
+  Console: *Waiting for a second person* on *Where we operate*; the approver is named on the map.
+- **CA3. ~~The company record~~ DONE (`7aebbe9`).** A company of ours or a partner is created from the console as a
+  DRAFT that no money path finds (`forJurisdiction` and `canTransact` see active companies only). The record holds
+  §5. Readiness is the server's checklist; Established/Partnered can only be proposed and approved once the company
+  is ready, and the approval switches it on. Sister seeds are development-only.
+- **CA4. ~~Documents~~ DONE (`7aebbe9`).** PDF/PNG/JPEG checked by signature, sha256 fingerprint kept (the field is
+  `fingerprint`, never `hash`), versions never overwritten, verified only by somebody other than the uploader, the
+  stored bytes re-checked against the fingerprint at verification. The upload route alone takes a 12 MB body.
+- **CA5. ~~Expiry watch~~ DONE (`7aebbe9`).** A licence or policy records what it supports (defaults by kind: courier
+  → charge customers, money handling → float and cash, goods in transit → claims). The day after it lapses that
+  capability is off in its country and the standing names the paper (`lapses`). The Companies screen lists what
+  lapses in the next 60 days. Push reminders to company administrators are NOT built — they have no inbox yet.
+- **CA6. ~~Cross-border rules~~ DONE (`e9ae0a4`).** Rules per direction with crossings and hours, permits, regional
+  insurance, a weight limit, and cabotage. No rule means no permission. Freight records the country at each end where
+  it is known; dispatch asks at offer, claim, proposal and acceptance; the board marks it; a cross-border offer tells
+  the driver where to cross and what to carry — or that nobody has recorded the crossing. Console: *Borders*. A
+  vehicle's country is its fleet's, else the courier's own. Length/height limits are recorded but not enforced
+  (vehicles carry no dimensions yet).
+- **CA7. ~~Partner companies~~ DONE (`7aebbe9`).** The same record and readiness (no bank account required); never a
+  party to our books; Partnered requires one.
+- **CA8. ~~Local obligations~~ DONE (`7aebbe9`).** The catalogue carries each country's obligations (e-invoicing and
+  data-protection registration for KE, TZ, UG, RW, ZM, ET, DE, GB; data protection everywhere else); readiness
+  requires each with its paper.
+- **CA9. ~~Wind-down~~ DONE.** `GET presence/:jurisdiction/impact` — parcels on shelves and whose promise, parcels on
+  their way in, open and claimed freight, what our companies still owe suppliers there, who is registered there. The
+  country editor shows it the moment a lowering is chosen, before anything is pressed.
 
 ## 11. Open
 
-- **Who is the super admin?** Today the operator role sets presence for everyone. Group-level super admin
-  over the companies is already on the console backlog; this epic likely needs it.
-- Lowering by one person (§4) is proposed, not decided.
-- Where documents are stored in production (the media store is local disk in development).
+- **Who is the super admin?** Built on the operator role, with the two-person rule enforced by NAME. The operator
+  key is still shared, so two names are two people only as far as people are honest — per-person operator accounts
+  are what make it real, and remain a slice of their own.
+- **Lowering by one person** was built as proposed (§4); say if it should need two as well.
+- **Where documents live in production.** Development keeps the bytes in the persistent store beside the metadata.
+- **Reminders ahead of a lapse** reach the console only; company administrators have no inbox to send them to.
+- **Telling participants** in a wound-down country: the impact counts them; nothing messages them yet.
 
 ## 12. Related
 

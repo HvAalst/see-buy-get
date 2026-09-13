@@ -240,6 +240,33 @@ export function pendingFor(proposals: PresenceProposalRow[] | null, jurisdiction
   return (proposals ?? []).find((p) => p.status === 'pending' && p.jurisdiction === jurisdiction);
 }
 
+/** CA9 — `GET presence/:jurisdiction/impact`: what lowering or closing a country would leave behind. */
+export interface CountryImpactView {
+  jurisdiction: string;
+  toLevel: PresenceLevel;
+  lost: PresenceCapability[];
+  gained: PresenceCapability[];
+  closing: boolean;
+  shelves: { total: number; ours: number; theirs: number; unstamped: number };
+  inTransit: number;
+  freight: { open: number; claimed: number };
+  owed: Array<{ entityId: string; name: string; currency: string; amount: number; suppliers: number }>;
+  registered: { shops: number; stores: number; hubs: number; fleets: number; couriers: number };
+}
+
+/** Nothing left behind at all — no closing, no parcels, loads, debts or participants. Said as such, not as a blank. */
+export function impactIsEmpty(impact: CountryImpactView): boolean {
+  return (
+    !impact.closing &&
+    impact.shelves.total === 0 &&
+    impact.inTransit === 0 &&
+    impact.freight.open === 0 &&
+    impact.freight.claimed === 0 &&
+    impact.owed.length === 0 &&
+    Object.values(impact.registered).every((n) => n === 0)
+  );
+}
+
 /** A country's name from the catalogue, or its code where the catalogue has not been read yet. */
 export function countryNameOf(code: string, catalogue: CatalogueCountry[] | null): string {
   return catalogue?.find((c) => c.code === code)?.name ?? code;

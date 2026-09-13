@@ -3888,6 +3888,43 @@
         }
       }
     },
+    "/v1/sbg/presence/{jurisdiction}/impact": {
+      "get": {
+        "operationId": "Sbg.presenceImpact",
+        "summary": "",
+        "description": "CA9 — what lowering or closing a country would leave behind, read BEFORE anybody presses it: parcels on shelves\nthere and whose promise they were taken in under, loads starting or ending there, what our companies still owe\nsuppliers there, and who is registered there. Operator-only.",
+        "parameters": [
+          {
+            "name": "jurisdiction",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "level",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CountryImpact"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/presence/proposals": {
       "get": {
         "operationId": "Sbg.presenceProposals",
@@ -15797,6 +15834,178 @@
         "required": [
           "currency",
           "perBase"
+        ]
+      },
+      "ShelfImpact": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number"
+          },
+          "ours": {
+            "type": "number"
+          },
+          "theirs": {
+            "type": "number"
+          },
+          "unstamped": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "total",
+          "ours",
+          "theirs",
+          "unstamped"
+        ]
+      },
+      "FreightImpact": {
+        "type": "object",
+        "properties": {
+          "open": {
+            "type": "number"
+          },
+          "claimed": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "open",
+          "claimed"
+        ]
+      },
+      "OwedImpact": {
+        "type": "object",
+        "properties": {
+          "entityId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "suppliers": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "entityId",
+          "name",
+          "currency",
+          "amount",
+          "suppliers"
+        ]
+      },
+      "RegisteredImpact": {
+        "type": "object",
+        "properties": {
+          "shops": {
+            "type": "number"
+          },
+          "stores": {
+            "type": "number"
+          },
+          "hubs": {
+            "type": "number"
+          },
+          "fleets": {
+            "type": "number"
+          },
+          "couriers": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "shops",
+          "stores",
+          "hubs",
+          "fleets",
+          "couriers"
+        ]
+      },
+      "CountryImpact": {
+        "type": "object",
+        "properties": {
+          "jurisdiction": {
+            "type": "string"
+          },
+          "toLevel": {
+            "type": "string",
+            "enum": [
+              "observed",
+              "matched",
+              "partnered",
+              "established"
+            ]
+          },
+          "lost": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "merchantOfRecord",
+                "holdFloat",
+                "cashOnDelivery",
+                "claims",
+                "tax",
+                "payouts",
+                "takeIn"
+              ]
+            }
+          },
+          "gained": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "merchantOfRecord",
+                "holdFloat",
+                "cashOnDelivery",
+                "claims",
+                "tax",
+                "payouts",
+                "takeIn"
+              ]
+            }
+          },
+          "closing": {
+            "type": "boolean"
+          },
+          "shelves": {
+            "$ref": "#/components/schemas/ShelfImpact"
+          },
+          "inTransit": {
+            "type": "number"
+          },
+          "freight": {
+            "$ref": "#/components/schemas/FreightImpact"
+          },
+          "owed": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OwedImpact"
+            }
+          },
+          "registered": {
+            "$ref": "#/components/schemas/RegisteredImpact"
+          }
+        },
+        "required": [
+          "jurisdiction",
+          "toLevel",
+          "lost",
+          "gained",
+          "closing",
+          "shelves",
+          "inTransit",
+          "freight",
+          "owed",
+          "registered"
         ]
       },
       "PresenceDecisionDto": {

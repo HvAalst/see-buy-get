@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import {
@@ -10,6 +10,8 @@ import {
   approvalBlocker,
   capabilityStates,
   countryNameOf,
+  impactIsEmpty,
+  type CountryImpactView,
   levelBlocker,
   levelEffect,
   needsSecondPerson,
@@ -404,6 +406,9 @@ function PresenceEditor({ row, state, actions }: { row: PresenceRow; state: Towe
         )}
       </div>
 
+      {/* CA9 — a move that takes something away shows what it leaves behind, before it is pressed. */}
+      {level !== row.level && lost.length ? <Impact jurisdiction={row.jurisdiction} level={level} actions={actions} /> : null}
+
       <div class="twr-presedit__act">
         <button type="button" class="cbtn cbtn--primary" disabled={busy || blocker !== null || level === row.level} onClick={() => void actions.savePresence(row.jurisdiction)}>
           {t(second ? 'tower.presence.propose' : 'tower.presence.save')}
@@ -412,6 +417,83 @@ function PresenceEditor({ row, state, actions }: { row: PresenceRow; state: Towe
           {t('tower.presence.cancel')}
         </button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * CA9 — WHAT THIS LEAVES BEHIND.
+ *
+ * Lowering a country takes one person and one click, because refusing is the safe direction. That is exactly why
+ * the cost is read first: what is on shelves there and whose promise it was taken in under, the loads that start or
+ * end there, what our companies still owe there, and everybody registered there who will meet the change.
+ */
+function Impact({ jurisdiction, level, actions }: { jurisdiction: string; level: PresenceLevel; actions: TowerActions }) {
+  const t = useT();
+  const client = actions.client();
+  const [impact, setImpact] = useState<CountryImpactView | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    setImpact(null);
+    setFailed(false);
+    if (!client) return undefined;
+    void client.api.presenceImpact(jurisdiction, level).then((r) => {
+      if (!live) return;
+      if (r.error) setFailed(true);
+      else setImpact(r.data as unknown as CountryImpactView);
+    });
+    return () => {
+      live = false;
+    };
+  }, [client, jurisdiction, level]);
+
+  if (failed) return <p class="chint twr-presedit__effect">{t('tower.presence.impact.failed')}</p>;
+
+  return (
+    <div class="twr-presedit__effect">
+      <p class="chint">
+        <b>{t('tower.presence.impact.title')}</b>
+      </p>
+      {!impact ? (
+        <p class="chint">{t('tower.presence.impact.loading')}</p>
+      ) : impactIsEmpty(impact) ? (
+        <p class="chint">{t('tower.presence.impact.none')}</p>
+      ) : (
+        <ul class="twr-checklist">
+          {impact.closing ? (
+            <li class="is-missing">
+              <Icon name="warning" size={14} /> {t('tower.presence.impact.closing')}
+            </li>
+          ) : null}
+          {impact.shelves.total ? (
+            <li class={impact.shelves.ours ? 'is-missing' : undefined}>
+              <Icon name="box" size={14} /> {t('tower.presence.impact.shelves', { total: impact.shelves.total, ours: impact.shelves.ours, theirs: impact.shelves.theirs })}
+            </li>
+          ) : null}
+          {impact.inTransit ? (
+            <li>
+              <Icon name="route" size={14} /> {t('tower.presence.impact.transit', { n: impact.inTransit })}
+            </li>
+          ) : null}
+          {impact.freight.open || impact.freight.claimed ? (
+            <li>
+              <Icon name="route" size={14} /> {t('tower.presence.impact.freight', { open: impact.freight.open, claimed: impact.freight.claimed })}
+            </li>
+          ) : null}
+          {impact.owed.map((o) => (
+            <li key={o.entityId} class="is-missing">
+              <Icon name="wallet" size={14} /> {t('tower.presence.impact.owed', { amount: o.amount.toLocaleString(), currency: o.currency, company: o.name, n: o.suppliers })}
+            </li>
+          ))}
+          {Object.values(impact.registered).some((n) => n > 0) ? (
+            <li>
+              <Icon name="badge" size={14} /> {t('tower.presence.impact.registered', { ...impact.registered })}
+            </li>
+          ) : null}
+        </ul>
+      )}
     </div>
   );
 }

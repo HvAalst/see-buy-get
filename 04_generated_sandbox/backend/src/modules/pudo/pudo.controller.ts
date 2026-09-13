@@ -1,4 +1,8 @@
 ﻿import { Body, Controller, Delete, Get, Header, Inject, Param, Patch, Post, Query, Res, StreamableFile } from '@nestjs/common';
+import { ACCOUNT_CODES } from '../../foundation/books/books.types';
+import { PRESENCE_CAPABILITIES, PRESENCE_LEVELS, type PresenceLevel } from '../../foundation/presence/presence.types';
+import { capabilitiesOf } from '../../foundation/presence/presence.service';
+import { countryImpactOf } from './country-impact';
 import { BorderRuleService } from './border-rules.service';
 import type { Response } from 'express';
 import { CompanyDocumentService } from '../../foundation/entity/company-documents.service';
@@ -342,6 +346,34 @@ export class SbgController {
     if (switchingOn && !this.fx.point(country.currency)) {
       throw new GlosError('INVALID_STATE', `There is no exchange rate for ${country.currency} yet — put one on the rate book before switching ${country.name} on`);
     }
+  }
+
+  /**
+   * CA9 — what lowering or closing a country would leave behind, read BEFORE anybody presses it: parcels on shelves
+   * there and whose promise they were taken in under, loads starting or ending there, what our companies still owe
+   * suppliers there, and who is registered there. Operator-only.
+   */
+  @Roles('operator')
+  @Get('presence/:jurisdiction/impact')
+  presenceImpact(@Param('jurisdiction') jurisdiction: string, @Query('level') level?: string) {
+    const toLevel = (PRESENCE_LEVELS as readonly string[]).includes(level ?? '') ? (level as PresenceLevel) : 'observed';
+    const code = jurisdiction.trim().toUpperCase();
+    const current = this.presence.resolve(code).capabilities;
+    const next = capabilitiesOf(toLevel);
+    return countryImpactOf({
+      jurisdiction: code,
+      toLevel,
+      lost: PRESENCE_CAPABILITIES.filter((c) => current[c] && !next[c]),
+      gained: PRESENCE_CAPABILITIES.filter((c) => !current[c] && next[c]),
+      shops: this.agents.list().map((a) => ({ did: a.did, country: this.agents.countryOf(a) })),
+      parcels: this.parcels.list(),
+      stores: this.vendors.list().map((v) => ({ country: v.country })),
+      hubs: this.mdps.list().map((m) => ({ did: m.did, country: this.mdps.countryOf(m) })),
+      fleets: this.managers.list().map((m) => ({ did: m.did, jurisdiction: m.jurisdiction })),
+      couriers: this.drivers.list().map((d) => ({ did: d.did, jurisdiction: d.jurisdiction, managerDid: d.managerDid })),
+      freight: this.dispatch.listFreight(),
+      payables: this.entities.sisters().map((e) => ({ entityId: e.entityId, name: e.name, currency: e.currency ?? '', outstanding: this.books.outstanding(e.entityId, ACCOUNT_CODES.PAYABLE_PROVIDER) })),
+    });
   }
 
   /** CA2 — changes to a country waiting for a second person, and the ones already decided. Operator-only. */
