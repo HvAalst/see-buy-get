@@ -858,6 +858,9 @@ export class SbgController {
     const origin = this.agents.get(agentDid); // 404 if the acting id is not an agent
     if (dto.destPudoDid === agentDid) throw new GlosError('INVALID_INPUT', 'A shipment cannot be sent to the shop booking it — pick a different destination.');
     const dest = this.agents.get(dto.destPudoDid); // 404 on an unknown destination
+    // P2b — a haul is work somebody of ours contracts and a driver is paid for. Asked at the counter, of both
+    // ends, rather than discovered when the delivery tries to pay the driver through a company that is not there.
+    for (const end of [origin, dest]) this.presence.require(this.agents.countryOf(end), 'merchantOfRecord');
     const dimsCm: [number, number, number] = [dto.dimensionsCm.l, dto.dimensionsCm.w, dto.dimensionsCm.h];
     const cargoClass = this.cargo.classify({ kg: dto.weightKg, dimsCm });
     // Freight is the DEDICATED (P4+) lane only. A bus-sized load must be taken in as a normal parcel, not booked
@@ -1558,6 +1561,7 @@ export class SbgController {
     if (this.cargo.dedicatedRequired(cargoClass)) {
       const origin = this.agents.get(dto.originPudoDid);
       const dest = this.agents.get(destPudoDid);
+      for (const end of [origin, dest]) this.presence.require(this.agents.countryOf(end), 'merchantOfRecord'); // P2b — the same door as the parcel quote
       const freight = this.dispatch.registerFreight({
         description: `Order ${dto.externalOrderId ?? handoff?.externalOrderId ?? vendor.name} — ${cargoClass} dedicated cargo`,
         pickupLocation: origin.location,

@@ -122,6 +122,14 @@ and what the cover is, in the same breath as the price.
   words of the person at the screen; a shop may now stand where we cannot bill, with no sister attached;
   a take-in is stamped  or  and NOTHING of ours moves on . Left for P2b: the quote,
   the mint and the freight post ask the same question (they still refuse late, through ).
+- **P2b. ~~The quote, the mint and the freight post~~ DONE.** Every quote (`quoteShipment`, `quoteWithPlan`,
+  `quoteShipmentFrom`) asks `merchantOfRecord` of both ends before the route is planned and of every hop
+  before a fee resolves, so a buyer hears "we cannot charge customers in this country" instead of a refusal
+  about a float. Both mints ask again (`requireSellable`) because a held quote is redeemed without being
+  priced again; the counter's freight booking and the vendor's dedicated path ask of both ends. The map's
+  quote options already refuse per pin, so one matched shop never blanks the list. Not asked yet: bulletin
+  freight posted with no shop at either end, and the cooperative lot — both carry locations, not sites.
+  *Indicative* pricing in a Matched country is not built: it needs a rate source that is not a sister's.
 - **P3. ~~Say it out loud~~ DONE.** `GET agents/:did/take-in-terms` and the intake preview return one
   answer — promise, the sister that answers (by name), the cover and its basis (declared / free-limit /
   no-stated-limit / none), whether cash may cross the counter. The agent's take-in screen shows it directly

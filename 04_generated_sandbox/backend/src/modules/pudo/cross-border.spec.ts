@@ -205,6 +205,36 @@ describe('crossing a border', () => {
     });
   });
 
+  describe('P2b — the quote, the mint and the freight refuse at the door', () => {
+    it('refuses to PRICE a shipment where we cannot charge anyone — in words about charging, not about a float', () => {
+      presence.set({ jurisdiction: 'TZ', level: 'matched' });
+      const a = shop('Dar Duka Q1', 'DarEsSalaam', { lat: -6.79, lng: 39.21 }, 'TZ');
+      const b = shop('Dar Duka Q2', 'DarEsSalaam', { lat: -6.8, lng: 39.28 }, 'TZ');
+      let caught: Error | undefined;
+      try {
+        routing.quoteShipment(a.did, b.did);
+      } catch (e) {
+        caught = e as Error;
+      }
+      expect(caught?.message).toMatch(/cannot charge customers in this country/);
+      expect(caught?.message).toMatch(/TZ: matching only/);
+      // The late refusal this replaces spoke about holding money — true, and no use to a buyer.
+      expect(caught?.message).not.toMatch(/float/);
+    });
+
+    it('asks again at the MINT, because a held quote is redeemed without being priced again', () => {
+      const a = shop('Mama Sarah Q3', 'Nairobi', NAIROBI);
+      const b = shop('Mama Sarah Q4', 'Nairobi', { lat: -1.3, lng: 36.85 });
+      const keEntity = entities.requireForJurisdiction('KE').entityId;
+      const heldQuote = { nodes: [{ country: 'KE' }], sellerEntityId: keEntity, crossesBorder: false, crossings: [] } as never;
+      // The country moved down between the quote and its redemption.
+      presence.set({ jurisdiction: 'KE', level: 'matched' });
+      expect(() =>
+        parcels.createConsumerSend({ senderPersonDid: 'did:p', senderPhoneHash: 'h', receiverMobile: '+254700999', originAgentDid: a.did, destAgentDid: b.did, dimensionsCm: { l: 10, w: 10, h: 10 }, weightKg: 1, quote: heldQuote }),
+      ).toThrow(/cannot charge customers in this country/);
+    });
+  });
+
   describe('P3 — saying it out loud, before the goods are accepted', () => {
     const takeIn = (agentDid: string, parcelId: string, mode: 'cash' | 'credit') =>
       parcels.accept({ parcelId, agentDid, destZone: 'Kisumu', size: 'M', paymentMode: mode, senderMobile: '+254700111', receiverMobile: '+254700222', dropoffPhotoRef: 'p.jpg' } as never);

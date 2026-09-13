@@ -864,6 +864,17 @@ export class ParcelService implements OnApplicationBootstrap {
     parcel.takeInPromise = promise;
   }
 
+  /**
+   * P2b — THE MINT'S DOOR. A quote asked its own door when it was priced, but a HELD quote is redeemed
+   * without being priced again, and a country can move down the ladder in between. So the mint asks again:
+   * may we charge anyone anywhere on this route, and may the shops at its ends take goods in at all.
+   */
+  private requireSellable(quote: ShipmentQuote, shopDids: Array<string | undefined>): void {
+    for (const node of quote.nodes ?? []) this.presence.require(node.country, 'merchantOfRecord');
+    if (quote.sellerEntityId) this.presence.require(this.entities.get(quote.sellerEntityId).jurisdiction, 'merchantOfRecord');
+    for (const did of shopDids) if (did) this.presence.require(this.agents.countryOf(this.agents.get(did)), 'takeIn');
+  }
+
   /** Screen 1 — Accept Parcel (ingest). */
   accept(input: AcceptInput): Parcel {
     if (this.parcels.has(input.parcelId)) throw new GlosError('PARCEL_EXISTS', `Parcel ${input.parcelId} already exists`);
@@ -1309,6 +1320,7 @@ export class ParcelService implements OnApplicationBootstrap {
    */
   createInbound(input: { vendorId: string; externalOrderId?: string; originAgentDid?: string; originZone?: string; destAgentDid: string; buyerMobile: string; buyerEmail?: string; size?: ParcelSize; dimensionsCm?: { l: number; w: number; h: number }; weightKg?: number; contentPhotoRef: string; fragile?: boolean; natureCode?: CargoNature; items?: Array<{ name: string; qty: number }>; subtotal?: number; declaredValue?: number; shippingPolicy: ShippingPolicy; routeMode?: 'flexible' | 'locked'; quote: ShipmentQuote }): { parcel: Parcel; label: PhygitalLabel | null; paid: boolean } {
     const dest = this.agents.get(input.destAgentDid);
+    this.requireSellable(input.quote, [input.originAgentDid, input.destAgentDid]);
     const vendor = this.vendors.get(input.vendorId); // the store IS the birthplace — read it, don't infer it
     // A parcel handed in at a shop names that shop; one collected from the store's own dock names none,
     // and takes its zone from the dock. It is not origin-LESS — it is born at the store either way — it
@@ -1480,6 +1492,7 @@ export class ParcelService implements OnApplicationBootstrap {
     const origin = this.agents.get(input.originAgentDid);
     const dest = this.agents.get(input.destAgentDid);
     if (input.originAgentDid === input.destAgentDid) throw new GlosError('INVALID_INPUT', 'Drop-off and collection shop must be two different shops');
+    this.requireSellable(input.quote, [input.originAgentDid, input.destAgentDid]);
     // A person sending from a counter declares nothing — the flow asks for a size and a photo, not a
     // contents list and a value — so a crossing cannot be papered. Refusing is the honest answer: the
     // alternative is minting an undeclared international shipment and letting a border post discover it.

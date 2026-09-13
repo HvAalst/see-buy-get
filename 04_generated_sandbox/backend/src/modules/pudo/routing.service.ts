@@ -7,7 +7,8 @@ import { MdpService } from './mdp.service';
 import { VehicleService } from './vehicle.service';
 import { Router, ROUTER } from './router';
 import { isOpenAt, nextOpenAt } from './hours';
-import { BORDER_DWELL_H, DISPATCH_BUFFER_H, HANDOVER_BUFFER_H, SIZE_LANE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, taxOn, VEHICLE_SPEED_KMH, withPlatformFee } from './pudo.config';
+import { PresenceService } from '../../foundation/presence/presence.service';
+import { BORDER_DWELL_H, DISPATCH_BUFFER_H, HANDOVER_BUFFER_H, NETWORK_JURISDICTION, SIZE_LANE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, taxOn, VEHICLE_SPEED_KMH, withPlatformFee } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { ResolvedInsurance, ResolvedRates, ResolvedTax } from '../../foundation/entity/entity.types';
 import { currencyForJurisdiction } from '../../foundation/money/currency';
@@ -201,6 +202,7 @@ export class RoutingService {
     private readonly mdps: MdpService,
     private readonly vehicles: VehicleService,
     private readonly entities: EntityService,
+    private readonly presence: PresenceService,
     private readonly fx: FxService,
     @Inject(ROUTER) private readonly router: Router,
   ) {}
@@ -212,6 +214,7 @@ export class RoutingService {
    * (the over-hold is rebated on delivery); `locked` is the cheapest carrier if the vendor commits the route.
    */
   quoteShipment(originAgentDid: string, destAgentDid: string, size: ParcelSize = 'M', measured?: number): ShipmentQuote {
+    this.doorFor([originAgentDid, destAgentDid]);
     return this.quoteJourney(this.planJourney({ originAgentDid, destAgentDid, weightKg: SIZE_WEIGHT_KG[size] }), size, undefined, measured);
   }
 
@@ -222,7 +225,8 @@ export class RoutingService {
    * route twice to get them is work a public endpoint should not be doing on a stranger's behalf.
    */
   quoteWithPlan(originAgentDid: string, destAgentDid: string, size: ParcelSize = 'M', measured?: number): { plan: ReturnType<RoutingService['planJourney']>; quote: ShipmentQuote } {
-    const plan = this.planJourney({ originAgentDid, destAgentDid, weightKg: SIZE_WEIGHT_KG[size] });
+    this.doorFor([originAgentDid, destAgentDid]);
+    const plan =this.planJourney({ originAgentDid, destAgentDid, weightKg: SIZE_WEIGHT_KG[size] });
     return { plan, quote: this.quoteJourney(plan, size, undefined, measured) };
   }
 
@@ -234,7 +238,17 @@ export class RoutingService {
    * store's own), which is who the margin belongs to when there is no origin shop to take it from.
    */
   quoteShipmentFrom(from: RouteEnd, destAgentDid: string, size: ParcelSize = 'M', sellerEntityId?: string, measured?: number): ShipmentQuote {
+    this.doorFor([destAgentDid]);
     return this.quoteJourney(this.planJourney({ from, destAgentDid, weightKg: SIZE_WEIGHT_KG[size] }), size, sellerEntityId, measured);
+  }
+
+  /**
+   * P2b — THE QUOTE'S DOOR. A price is a promise to perform and to be paid, so it is asked first whether
+   * we may charge anyone at either end — before the route is planned, and long before a shop's fee resolves
+   * to a sister that does not exist and refuses in words about a float the buyer has never heard of.
+   */
+  private doorFor(agentDids: string[]): void {
+    for (const did of agentDids) this.presence.require(this.agents.countryOf(this.agents.get(did)), 'merchantOfRecord');
   }
 
   private quoteJourney(plan: ReturnType<RoutingService['planJourney']>, size: ParcelSize, sellerEntityId?: string, measured?: number): ShipmentQuote {
@@ -244,6 +258,9 @@ export class RoutingService {
     // A DOCK is on the route but not in the stack: it is where the parcel was, not somebody who handled it.
     // Each stop, what it is owed, and IN WHAT. The native amount is the shop's own advertised rate in its
     // own money; the fee the price is built from comes after, once we know what money the price is in.
+    // P2b — and of every hop in between: a hub in a country we cannot bill in is owed a fee nobody of ours
+    // can pay. Asked before a single fee is resolved, so the refusal names the country, not a float.
+    for (const h of plan.hops) this.presence.require(h.country ?? NETWORK_JURISDICTION, 'merchantOfRecord');
     const stops = plan.hops.filter((h): h is typeof h & { type: 'pudo' | 'mdp' } => h.type !== 'dock').map((h) => {
       const isHub = h.type === 'mdp';
       const site = isHub ? this.mdps.require(h.id) : this.agents.get(h.id);
