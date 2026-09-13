@@ -2,6 +2,7 @@ import { BrandMark } from '../../shared/ui';
 import { useT } from '../../shared/i18n';
 import { CompaniesScreen } from './screens/CompaniesScreen';
 import { CompanyRecordScreen } from './screens/CompanyRecordScreen';
+import { BordersScreen } from './screens/BordersScreen';
 import { CorridorsScreen } from './screens/CorridorsScreen';
 import { PresenceScreen } from './screens/PresenceScreen';
 import { HazardsScreen } from './screens/HazardsScreen';
@@ -72,7 +73,7 @@ export function App() {
   const isOperator = state.who?.mode === 'operator';
   const manyCompanies = (state.entities?.length ?? 0) > 1;
   const available: Screen[] = [
-    ...(isOperator ? (['network', 'hazards', 'claims', 'disposal', 'approvals', 'reports', 'support', 'corridors', 'presence', 'pictures', 'company'] as Screen[]) : []),
+    ...(isOperator ? (['network', 'hazards', 'claims', 'disposal', 'approvals', 'reports', 'support', 'corridors', 'presence', 'pictures', 'company', 'borders'] as Screen[]) : []),
     ...(manyCompanies ? (['companies'] as Screen[]) : []),
     'money',
     'rates',
@@ -149,6 +150,8 @@ export function App() {
             <MoneyScreen state={state} actions={actions} />
           ) : state.screen === 'network' ? (
             <NetworkScreen state={state} actions={actions} />
+          ) : state.screen === 'borders' ? (
+            <BordersScreen state={state} actions={actions} />
           ) : state.screen === 'company' ? (
             <CompanyRecordScreen state={state} actions={actions} />
           ) : state.screen === 'companies' ? (

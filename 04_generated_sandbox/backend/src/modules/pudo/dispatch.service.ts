@@ -1,4 +1,6 @@
-﻿import { Inject, Injectable } from '@nestjs/common';
+﻿import { Inject, Injectable, Optional } from '@nestjs/common';
+import { BorderRuleService } from './border-rules.service';
+import type { BorderAdvice, BorderRefusal } from './border-rules.types';
 import { GlosError } from '../../foundation/http/glos-error';
 import { randomBytes } from 'crypto';
 import { EventBus } from '../../foundation/events/event-bus.service';
@@ -217,6 +219,9 @@ export class DispatchService {
     // and where profit-on-risk is actually earned.
     private readonly entities: EntityService,
     @Inject(ROUTER) private readonly router: Router,
+    // CA6 — the rules of crossing a border. Optional so the many specs that build dispatch by hand keep working;
+    // the app always provides it, and app.boot.spec is what would catch it missing.
+    @Optional() private readonly borders?: BorderRuleService,
   ) {
     this.freightSeq = [...this.freights.values()].length; // continue the human FRT-NNN sequence after a restart
   }
@@ -279,7 +284,7 @@ export class DispatchService {
     return { code: t.code, status: t.status };
   }
 
-  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean }, now: number = Date.now()): Freight {
+  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string }, now: number = Date.now()): Freight {
     this.freightSeq += 1;
     // A future pickup date parks the load for later; a past/absent date ships now. A supplied-but-unparseable
     // date is a CALLER ERROR — fail closed (never silently ship-now what was meant to be scheduled). Store the
@@ -356,6 +361,9 @@ export class DispatchService {
       requiredEquipment,
       equipmentGaps,
       shipperDid: input.shipperDid,
+      // CA6 — the country at each end, where it is known (a shop's), so the rules of crossing can be asked.
+      ...(input.pickupCountry ? { pickupCountry: input.pickupCountry.toUpperCase() } : {}),
+      ...(input.destCountry ? { destCountry: input.destCountry.toUpperCase() } : {}),
       // S32d — keep the buyer joined to their diverted order by phone HASH only (never the cleartext number:
       // the raw Freight goes to drivers/operators). Plus a public tracking key + the order ref. Only when a
       // buyer is known (a diverted order; not a bulletin freight).
@@ -501,7 +509,7 @@ export class DispatchService {
     const matches = this.availableLoads()
       .filter((load) => !(freightBarred && load.kind === 'freight'))
       .map((load) => ({ load, detour: this.router.detourKm(route.from, load.pickupLocation, route.to), minutesAway: this.minutes(route.from, load.pickupLocation) }))
-      .filter(({ load, detour, minutesAway }) => detour <= DISPATCH_MAX_DETOUR_KM && minutesAway <= DISPATCH_MAX_PICKUP_MIN && this.vehicleCanCarry(vehicle, load, remaining, remainingTotes))
+      .filter(({ load, detour, minutesAway }) => detour <= DISPATCH_MAX_DETOUR_KM && minutesAway <= DISPATCH_MAX_PICKUP_MIN && this.vehicleCanCarry(vehicle, load, remaining, remainingTotes) && this.borderRefusals(vehicle, driverDid, load).length === 0)
       .sort((a, b) => a.detour - b.detour || a.minutesAway - b.minutesAway);
 
     const out: Offer[] = [];
@@ -568,6 +576,7 @@ export class DispatchService {
       weightKg: load.weightKg,
       detourKm: detour,
       minutesAway,
+      ...(this.borderAdviceFor(load) ? { border: this.borderAdviceFor(load) } : {}),
       message: `≈${minutesAway} min from ${load.pickupLabel}: a ${load.weightKg} kg shipment to ${load.destLabel} is ready. Claim it?`,
       price,
       earn,
@@ -865,6 +874,7 @@ export class DispatchService {
     ) {
       throw new GlosError('VEHICLE_MISSING_CAPABILITY', 'Your current vehicle lacks a capability or equipment this load requires — re-couple to a suitable vehicle');
     }
+    this.requireBorderAllows(vehicle, offer.driverDid, offer.kind, offer.ref);
 
     if (offer.kind === 'tote') {
       this.totes.markClaimed(offer.ref, offer.driverDid);
@@ -1081,7 +1091,10 @@ export class DispatchService {
             to: f.destLocation,
             grossWeightKg: f.weightKg,
             hazmat: (f.requiredCapabilities ?? []).includes('hazmat'),
-          }),
+          }).concat(
+            // CA6 — what the law says about this vehicle carrying this load, marked like any other reason it cannot.
+            vehicle && input.driverDid ? this.borderRefusals(vehicle, input.driverDid, this.wrapFreight(f)).map((r) => ({ kind: 'physical' as const, code: r.code, message: r.message })) : [],
+          ),
         },
       );
       rows.push({
@@ -1239,6 +1252,7 @@ export class DispatchService {
     ) {
       throw new GlosError('VEHICLE_MISSING_CAPABILITY', 'Your vehicle lacks something this load needs, so the poster could never accept an offer from it');
     }
+    this.requireBorderAllows(vehicle, input.driverDid, 'freight', f.freightId);
     if (belowFloor(this.ratings.driverRating(input.driverDid))) throw new GlosError('REPUTATION_BELOW_FLOOR', 'Your rating is below the network minimum — freight is paused until it recovers.');
 
     // One live proposal per driver per load: a driver changing their mind REPLACES their number rather than
@@ -1349,6 +1363,7 @@ export class DispatchService {
     ) {
       throw new GlosError('VEHICLE_MISSING_CAPABILITY', "That driver's current vehicle lacks a capability or equipment this load requires");
     }
+    this.requireBorderAllows(vehicle, p.driverDid, 'freight', f.freightId);
 
     // The commit runs first: if it throws (budget, status, rating) nothing is marked accepted and the
     // negotiation is left exactly as it was, so the poster can raise a cap and try the same price again.
@@ -1766,7 +1781,26 @@ export class DispatchService {
   private wrapFreight(f: Freight): Claimable {
     // S32: freight now carries its cargo model, so it matches vehicles on capability AND equipment like a tote.
     // S32b: status lets the driver app drive the claimed → picked-up → delivered flow in-app.
-    return { kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached };
+    return { kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry };
+  }
+
+  /** CA6 — why the law does not let this vehicle carry this load (cabotage, a crossing's weight limit). Empty = it may. */
+  private borderRefusals(vehicle: Vehicle, driverDid: string, load: Claimable): BorderRefusal[] {
+    if (!this.borders || load.kind !== 'freight') return [];
+    return this.borders.refusalsFor(load, this.drivers.homeCountryOf(driverDid, vehicle.managerDid));
+  }
+
+  /** CA6 — asked again at every point a load is taken, because coupling (and so the vehicle's country) can change. */
+  private requireBorderAllows(vehicle: Vehicle, driverDid: string, kind: ClaimableKind, ref: string): void {
+    if (kind !== 'freight') return;
+    const refusal = this.borderRefusals(vehicle, driverDid, this.wrapFreight(this.requireFreight(ref)))[0];
+    if (refusal) throw new GlosError('FORBIDDEN', refusal.message);
+  }
+
+  /** CA6 — for a load that crosses a border: where it may cross, when, what to carry, and the limits. */
+  private borderAdviceFor(load: Claimable): BorderAdvice | undefined {
+    if (!this.borders || load.kind !== 'freight' || !load.pickupCountry || !load.destCountry || load.pickupCountry === load.destCountry) return undefined;
+    return this.borders.adviceFor(load.pickupCountry, load.destCountry);
   }
 
   private vehicleCanCarry(vehicle: Vehicle, load: Claimable, remainingKg: number, remainingTotes = Number.POSITIVE_INFINITY): boolean {

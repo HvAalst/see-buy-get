@@ -1,4 +1,5 @@
 ﻿import { CompanyDocumentService } from '../../foundation/entity/company-documents.service';
+import { BorderRuleService } from './border-rules.service';
 import { CompanyReadinessService } from '../../foundation/entity/company-readiness.service';
 import { Test } from '@nestjs/testing';
 import { AgentService } from './agent.service';
@@ -114,6 +115,7 @@ describe('PUDO Light', () => {
   let core: OperationalStore;
   let events: EventBus;
   let presence: PresenceService;
+  let borders: BorderRuleService;
 
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -121,7 +123,7 @@ describe('PUDO Light', () => {
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
         GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, VehicleService, DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
-        WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus, EntityService, EntityAdminService, PresenceService, CompanyDocumentService, CompanyReadinessService, BooksService, FxService, ApiKeyService,
+        WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus, EntityService, EntityAdminService, PresenceService, CompanyDocumentService, CompanyReadinessService, BorderRuleService, BooksService, FxService, ApiKeyService,
         PayoutService, ReturnService, UnclaimedService, MerchantRatingService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
         GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder },
@@ -134,6 +136,7 @@ describe('PUDO Light', () => {
     entities = moduleRef.get(EntityService);
     entities.seed();
     presence = moduleRef.get(PresenceService);
+    borders = moduleRef.get(BorderRuleService);
     moduleRef.get(FxService).seed(); // same reason as the entity seed: compile() runs no lifecycle hooks
     books = moduleRef.get(BooksService);
     bagPlans = moduleRef.get(BagPlanService);
@@ -4390,6 +4393,35 @@ describe('PUDO Light', () => {
     pickupOk(f, d.did);
     deliverOk(f, d.did);
     expect(dispatch.listFreight().find((x) => x.freightId === f.freightId)!.status).toBe('delivered');
+  });
+
+  it('CA6: a foreign truck is never offered a load inside another country unless a rule allows it — and a crossing says what to carry', () => {
+    const d = drivers.register({ displayName: 'CB', fullName: 'C', nationalId: 'ID-CB', mobile: '+254771002', licenceClasses: ['truck'], licenceNumber: 'L-CB', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const truck = vehicles.register({ plate: 'CB-1', vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 10_000, ownerName: 'X', equipment: ['TLT'], baseFee: 10, pricePerKm: 0.5 });
+    fleet.couple(d.did, truck.vehicleId);
+    expect(drivers.homeCountryOf(d.did)).toBe('KE');
+    const pickup = { lat: -1.2, lng: 36.8 };
+    const noon = new Date('2026-07-22T11:00:00').getTime();
+    const offered = (freightId: string) => dispatch.suggest(d.did, { from: pickup, to: pickup }, noon).find((o) => o.ref === freightId);
+
+    const domesticTz = dispatch.registerFreight({ description: 'Cement', pickupLocation: pickup, pickupLabel: 'Arusha yard', destLabel: 'Moshi site', destLocation: pickup, weightKg: 200, packaging: 'palletised', pickupCountry: 'TZ', destCountry: 'TZ' });
+    expect(offered(domesticTz.freightId)).toBeUndefined();
+
+    borders.set({ from: 'KE', to: 'TZ', cabotage: 'allowed', crossings: [{ name: 'Namanga', hours: '06:00–22:00' }], regionalInsurance: ['COMESA Yellow Card'], maxWeightKg: 150 }, 'Amina');
+    expect(offered(domesticTz.freightId)).toBeDefined();
+
+    const light = dispatch.registerFreight({ description: 'Tiles', pickupLocation: pickup, pickupLabel: 'Nairobi yard', destLabel: 'Arusha site', destLocation: pickup, weightKg: 100, packaging: 'palletised', pickupCountry: 'KE', destCountry: 'TZ' });
+    expect(offered(light.freightId)?.border).toMatchObject({ recorded: true, crossings: [{ name: 'Namanga', hours: '06:00–22:00' }], regionalInsurance: ['COMESA Yellow Card'], maxWeightKg: 150 });
+
+    const heavy = dispatch.registerFreight({ description: 'Steel', pickupLocation: pickup, pickupLabel: 'Nairobi yard', destLabel: 'Arusha site', destLocation: pickup, weightKg: 200, packaging: 'palletised', pickupCountry: 'KE', destCountry: 'TZ' });
+    expect(offered(heavy.freightId)).toBeUndefined();
+
+    // Claiming re-asks: a rule withdrawn after the offer was made is refused at the claim, by name.
+    const offer = offered(domesticTz.freightId)!;
+    borders.set({ from: 'KE', to: 'TZ', cabotage: 'forbidden' }, 'Brian');
+    expect(() => dispatch.claim(offer.offerId, noon)).toThrow(/may not carry a load inside Tanzania/);
   });
 
   it('S34: a bulletin freight with no shipper stays unpaid at claim but still pays the driver on delivery', () => {

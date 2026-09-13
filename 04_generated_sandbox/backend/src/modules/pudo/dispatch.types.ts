@@ -2,6 +2,7 @@
 // A→B; the platform offers full/aged totes (and bulk freight) that sit near that route, sized to the
 // remaining capacity of the driver's coupled vehicle. The driver claims, ignores, or lets it lapse.
 
+import { BorderAdvice } from './border-rules.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { GeoPoint } from './pudo.types';
 import { CARGO_CLASS_CODES, CARGO_NATURES, CargoClass, CargoNature, EQUIPMENT, Equipment, VEHICLE_CAPABILITIES, VehicleCapability } from './cargo.types';
@@ -139,6 +140,9 @@ export class Freight {
    *  when both ends are equipped (or their equipment is unknown, e.g. a bulletin freight with only geo labels). */
   equipmentGaps: Array<'origin' | 'dest'>;
   shipperDid?: string;
+  /** CA6 — the country at each end, where it is known (a shop's), so the rules of crossing can be asked. */
+  @ApiPropertyOptional() pickupCountry?: string;
+  @ApiPropertyOptional() destCountry?: string;
   // S34c — the shipper's budget: the most they will pay (the all-in shipperCharge = earning + platform fee) for
   // this haul. Dispatch will not OFFER or let a driver CLAIM the job above it — the load waits for a cheaper
   // vehicle or a cooler market. The driver owns their [min,max] corridor; the shipper owns this ceiling. Undefined
@@ -537,6 +541,9 @@ export class Claimable {
   status?: string;
   /** F1 — a booked-for-later freight's pickup date, so the driver's offer reads "reserve now, pick up on <date>". */
   scheduledPickupAt?: string;
+  /** CA6 — the country at each end of a freight, where it is known. */
+  pickupCountry?: string;
+  destCountry?: string;
   /**
    * BAGS ONLY — how many parcels are inside, and how full it is against a bag's capacity.
    *
@@ -590,6 +597,8 @@ export class Offer {
   destLocation?: GeoPoint;
   weightKg: number;
   detourKm: number;
+  /** CA6 — for a load that crosses a border: where it may cross, when, what to carry, and the limits. */
+  @ApiPropertyOptional({ type: BorderAdvice }) border?: BorderAdvice;
   minutesAway: number;
   /**
    * WHAT THIS JOB COSTS THE DRIVER, IN MINUTES — the two figures a decision at the wheel is actually made

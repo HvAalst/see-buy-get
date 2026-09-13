@@ -133,6 +133,22 @@ export class DriverService {
     return { payeeDid, paidToMe: payeeDid === driver.did, ...payouts.forPayee(payeeDid) };
   }
 
+  /**
+   * CA6 — the country a vehicle is registered in, as far as the network knows: its fleet's, else the courier's own.
+   * Undefined where neither is known, and a rule is then never applied on a guess.
+   */
+  homeCountryOf(driverDid: string, vehicleManagerDid?: string): string | undefined {
+    const managerDid = vehicleManagerDid ?? this.drivers.get(driverDid)?.managerDid;
+    if (managerDid) {
+      try {
+        return this.managers.get(managerDid).jurisdiction ?? NETWORK_JURISDICTION;
+      } catch {
+        return undefined;
+      }
+    }
+    return this.drivers.get(driverDid)?.jurisdiction;
+  }
+
   /** Whether the network contracts this driver directly (an independent courier) or through a fleet. */
   isIndependent(driver: FleetDriver): boolean {
     return !driver.managerDid;

@@ -251,6 +251,22 @@ export class DocumentDecisionDto {
   @IsOptional() @IsString() reason?: string;
 }
 
+/** CA6 — the rule for crossing from one country into another. Absent a rule, a foreign vehicle may not carry inside. */
+export class BorderRuleDto {
+  @IsString() from!: string;
+  @IsString() to!: string;
+  /** Each `{ name, hours?, note? }`. */
+  @IsOptional() @IsArray() crossings?: Record<string, unknown>[];
+  @IsOptional() @IsArray() @IsString({ each: true }) permits?: string[];
+  @IsOptional() @IsArray() @IsString({ each: true }) regionalInsurance?: string[];
+  @IsOptional() @IsNumber() maxWeightKg?: number;
+  @IsOptional() @IsNumber() maxLengthM?: number;
+  @IsOptional() @IsNumber() maxHeightM?: number;
+  @ApiPropertyOptional({ enum: ['allowed', 'forbidden'] }) @IsOptional() @IsIn(['allowed', 'forbidden']) cabotage?: 'allowed' | 'forbidden';
+  @IsOptional() @IsString() note?: string;
+  @IsOptional() @IsString() by?: string;
+}
+
 export class CorridorStatusDto {
   @IsIn(['active', 'blocked']) status!: 'active' | 'blocked';
 }
@@ -1098,6 +1114,9 @@ export class SuggestRouteDto {
 
 export class RegisterFreightDto {
   @IsString() description!: string;
+  /** CA6 — the country at each end, where the poster knows it; the rules of crossing are only asked of a known country. */
+  @IsOptional() @IsString() pickupCountry?: string;
+  @IsOptional() @IsString() destCountry?: string;
   @ValidateNested() @Type(() => GeoDto) pickupLocation!: GeoDto;
   @IsString() pickupLabel!: string;
   @IsString() destLabel!: string;

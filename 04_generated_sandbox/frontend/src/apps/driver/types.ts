@@ -1,3 +1,4 @@
+import type { BorderAdviceView } from './border';
 /**
  * Local view types for the driver app.
  *
@@ -290,6 +291,8 @@ export interface OfferView {
    *  from one worth a fifth of it. */
   parcels?: number;
   fillPct?: number;
+  /** CA6 — for a load that crosses a border: where to cross, what to carry, the limit. */
+  border?: BorderAdviceView;
   createdAt: string;
   expiresAt: string;
   status: string;

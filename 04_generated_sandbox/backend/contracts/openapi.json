@@ -4029,6 +4029,45 @@
         }
       }
     },
+    "/v1/sbg/border-rules": {
+      "get": {
+        "operationId": "Sbg.borderRuleList",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "operationId": "Sbg.setBorderRule",
+        "summary": "",
+        "description": "CA6 — record or replace the rule for one direction. Operator-only, and named. Absent a rule, nothing is permitted.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BorderRuleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BorderRule"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/entities": {
       "post": {
         "operationId": "Sbg.createCompany",
@@ -16023,6 +16062,149 @@
           "level"
         ]
       },
+      "BorderRuleDto": {
+        "type": "object",
+        "properties": {
+          "cabotage": {
+            "type": "string",
+            "enum": [
+              "allowed",
+              "forbidden"
+            ]
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "crossings": {
+            "description": "Each `{ name, hours?, note? }`.",
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "permits": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "regionalInsurance": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "maxWeightKg": {
+            "type": "number"
+          },
+          "maxLengthM": {
+            "type": "number"
+          },
+          "maxHeightM": {
+            "type": "number"
+          },
+          "note": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ]
+      },
+      "BorderCrossingPoint": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "hours": {
+            "type": "string",
+            "description": "Opening hours as the post states them (\"06:00–22:00\", \"24 hours\")."
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "BorderRule": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "The country the vehicle comes FROM (and is registered in, for cabotage)."
+          },
+          "to": {
+            "type": "string",
+            "description": "The country it enters."
+          },
+          "crossings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BorderCrossingPoint"
+            }
+          },
+          "permits": {
+            "description": "Transit permits a vehicle needs to cross (named as the authority names them).",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "regionalInsurance": {
+            "description": "Regional insurance it must carry — e.g. the COMESA Yellow Card.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "maxWeightKg": {
+            "type": "number"
+          },
+          "maxLengthM": {
+            "type": "number"
+          },
+          "maxHeightM": {
+            "type": "number"
+          },
+          "cabotage": {
+            "type": "string",
+            "description": "May a vehicle from `from` carry a load that starts and ends inside `to`?",
+            "enum": [
+              "allowed",
+              "forbidden"
+            ]
+          },
+          "note": {
+            "type": "string"
+          },
+          "setBy": {
+            "type": "string"
+          },
+          "setAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "crossings",
+          "permits",
+          "regionalInsurance",
+          "cabotage",
+          "setBy",
+          "setAt"
+        ]
+      },
       "CreateCompanyDto": {
         "type": "object",
         "properties": {
@@ -20643,6 +20825,13 @@
           "description": {
             "type": "string"
           },
+          "pickupCountry": {
+            "type": "string",
+            "description": "CA6 — the country at each end, where the poster knows it; the rules of crossing are only asked of a known country."
+          },
+          "destCountry": {
+            "type": "string"
+          },
           "pickupLocation": {
             "$ref": "#/components/schemas/GeoDto"
           },
@@ -20987,6 +21176,13 @@
               "ODR",
               "HUM"
             ]
+          },
+          "pickupCountry": {
+            "type": "string",
+            "description": "CA6 — the country at each end, where it is known (a shop's), so the rules of crossing can be asked."
+          },
+          "destCountry": {
+            "type": "string"
           },
           "priceOrigin": {
             "type": "string",
@@ -22303,9 +22499,70 @@
           "lng"
         ]
       },
+      "BorderAdvice": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "recorded": {
+            "type": "boolean",
+            "description": "False where nobody has recorded the crossing: the driver is told that, rather than told nothing."
+          },
+          "crossings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BorderCrossingPoint"
+            }
+          },
+          "permits": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "regionalInsurance": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "maxWeightKg": {
+            "type": "number"
+          },
+          "maxLengthM": {
+            "type": "number"
+          },
+          "maxHeightM": {
+            "type": "number"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "recorded",
+          "crossings",
+          "permits",
+          "regionalInsurance"
+        ]
+      },
       "Offer": {
         "type": "object",
         "properties": {
+          "border": {
+            "description": "CA6 — for a load that crosses a border: where it may cross, when, what to carry, and the limits.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BorderAdvice"
+              }
+            ]
+          },
           "offerId": {
             "type": "string"
           },

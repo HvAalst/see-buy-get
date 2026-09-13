@@ -1,3 +1,4 @@
+import { borderLines } from '../border';
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, Checklist, ErrorNote, Icon, Note, OpenInMaps, Pill, ReadAloud, Sheet, SwipeDeck } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
@@ -130,6 +131,7 @@ export function OffersScreen({ state, actions }: OffersScreenProps) {
                 t('driver.offers.fits', { kg: active.weightKg }),
                 t('driver.offers.detour', { km: active.detourKm }),
                 t('driver.offers.dropAt', { dest: active.destLabel }),
+                ...borderLines(active.border, t),
               ]}
             />
             <Button
@@ -244,6 +246,13 @@ function OfferCard({ offer, now }: { offer: OfferView; now: number }) {
             {t('driver.offers.metaDetour')} <b>{offer.detourKm} km</b> {t('driver.offers.metaAbout')} <b>{offer.minutesAway} min</b> {t('driver.offers.metaAway')}
           </span>
         </p>
+        {/* CA6 — a load that crosses a border says so on the card, before anybody reaches for Claim. */}
+        {offer.border ? (
+          <p class="meta">
+            <Icon name="warning" size={21} class="meta__ic" />
+            <span>{borderLines(offer.border, t).join(' · ')}</span>
+          </p>
+        ) : null}
         {/* A bag only: what the money above is made of, and what a slot in the hold is being spent on. A
             near-empty bag still costs a whole space, so a driver with two left should be able to see that
             before they agree rather than when they open it. */}

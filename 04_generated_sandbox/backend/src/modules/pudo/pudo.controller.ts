@@ -1,4 +1,5 @@
 ﻿import { Body, Controller, Delete, Get, Header, Inject, Param, Patch, Post, Query, Res, StreamableFile } from '@nestjs/common';
+import { BorderRuleService } from './border-rules.service';
 import type { Response } from 'express';
 import { CompanyDocumentService } from '../../foundation/entity/company-documents.service';
 import { CompanyReadinessService } from '../../foundation/entity/company-readiness.service';
@@ -46,7 +47,8 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CreateCompanyDto,
   CompanyRecordDto,
   CompanyDocumentDto,
-  DocumentDecisionDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto } from './pudo.dto';
+  DocumentDecisionDto,
+  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { classifySize, MAX_CLAIM_AWARD, measuredFactor, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
@@ -118,6 +120,7 @@ export class SbgController {
     private readonly presence: PresenceService,
     private readonly companyDocuments: CompanyDocumentService,
     private readonly readiness: CompanyReadinessService,
+    private readonly borderRules: BorderRuleService,
     private readonly entityAdmins: EntityAdminService,
     private readonly fx: FxService,
     private readonly apiKeys: ApiKeyService,
@@ -395,6 +398,22 @@ export class SbgController {
       note: dto.note,
       by: auditActor(actor, dto.by),
     });
+  }
+
+  /* ----------------------------------------------- CA6: the rules of crossing a border -- */
+
+  /** CA6 — every recorded rule between two countries. Read by anybody signed in: a driver needs it as much as staff. */
+  @Get('border-rules')
+  borderRuleList() {
+    return { items: this.borderRules.list() };
+  }
+
+  /** CA6 — record or replace the rule for one direction. Operator-only, and named. Absent a rule, nothing is permitted. */
+  @Roles('operator')
+  @Post('border-rules')
+  setBorderRule(@Body() dto: BorderRuleDto, @Actor() actor: IntrospectionResult) {
+    const { by, ...rule } = dto;
+    return this.borderRules.set(rule as never, auditActor(actor, by));
   }
 
   /* ----------------------------------- CA3–CA5, CA7, CA8: a company, recorded properly -- */
@@ -1109,6 +1128,9 @@ export class SbgController {
       // no wallet is billed — the customer's cash cap is the money, held by the agent (the F2 model the user chose).
       originEquipment: origin.equipment,
       destEquipment: dest.equipment,
+      // CA6 — the country at each end, so the rules of crossing a border can be asked of this load.
+      pickupCountry: this.agents.countryOf(origin),
+      destCountry: this.agents.countryOf(dest),
       postedByDid: agentDid, // FB0c — the booking shop negotiates for it, even though the cash settles off-platform
       commitMode: dto.commitMode,
       // FB2c — the two facts only a person standing at the load can supply. They reach canonicalBody() inside
@@ -1803,6 +1825,9 @@ export class SbgController {
         // with only manual handling can't take a pallet), flagging a gap advisory for a Local Admin to resolve.
         originEquipment: origin.equipment,
         destEquipment: dest.equipment,
+        // CA6 — the country at each end, so the rules of crossing a border can be asked of this load.
+        pickupCountry: this.agents.countryOf(origin),
+        destCountry: this.agents.countryOf(dest),
         // S32d: keep the buyer joined to their order so it stays in their "my shipments" with a tracking key.
         buyerMobile: dto.buyerMobile ?? handoff?.buyerMobile,
         externalOrderId: dto.externalOrderId ?? handoff?.externalOrderId,

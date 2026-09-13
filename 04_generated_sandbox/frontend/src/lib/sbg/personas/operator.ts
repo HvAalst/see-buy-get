@@ -203,6 +203,11 @@ export function createOperatorApi(sbg: SbgClient) {
     /** CA5 — licences and policies lapsing soon (or already), across every company. */
     expiringCompanyPapers: (withinDays = 60) => sbg.request((c) => c.GET('/v1/sbg/companies/expiring', { params: { query: { withinDays: String(withinDays) } } })),
 
+    /** CA6 — the rules of crossing a border, one direction at a time. */
+    borderRules: () => sbg.request((c) => c.GET('/v1/sbg/border-rules', {})),
+
+    setBorderRule: (body: Record<string, unknown>) => sbg.request((c) => c.POST('/v1/sbg/border-rules', { body: body as never })),
+
     /** CA1 — every country that exists, and whether the rate book can price in its money. */
     countryCatalogue: () => sbg.request((c) => c.GET('/v1/sbg/country-catalogue', {})),
 
