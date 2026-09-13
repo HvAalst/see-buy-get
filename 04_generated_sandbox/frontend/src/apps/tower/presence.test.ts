@@ -130,12 +130,25 @@ describe('CA1 — a country comes from the catalogue', () => {
     // Recording it as merely observed switches nothing on, so no rate is needed.
     expect(newCountryBlocker(form('ZM', 'observed'), [], [catalogue({ priceable: false })])).toBeNull();
     // A country already taking goods in is not being switched on.
-    expect(newCountryBlocker(form('ZM', 'partnered'), [row()], [catalogue({ priceable: false })])).toBeNull();
+    expect(newCountryBlocker(form('ZM', 'matched'), [row()], [catalogue({ priceable: false })])).toBeNull();
+    // …and Partnered still needs a partner, whatever the rate book holds (CA7).
+    expect(newCountryBlocker(form('ZM', 'partnered'), [row()], [catalogue({ priceable: false })])).toBe('tower.presence.needsPartner');
   });
 
   it('names a country from the catalogue, and falls back to its code', () => {
     expect(countryNameOf('ZM', [catalogue()])).toBe('Zambia');
     expect(countryNameOf('ZM', null)).toBe('ZM');
+  });
+});
+
+describe('CA3 + CA7 — a real company before Established or Partnered', () => {
+  it('offers Established on a ready draft company, and Partnered only with a partner', () => {
+    const draft = (ready: boolean, kind: 'sister' | 'partner' = 'sister') => row({ companies: [{ entityId: 'x', name: 'X', kind, status: 'draft', ready }] });
+    expect(levelBlocker(draft(false), 'established')).toBe('tower.presence.needsCompany');
+    expect(levelBlocker(draft(true), 'established')).toBeNull();
+    expect(levelBlocker(row(), 'partnered')).toBe('tower.presence.needsPartner');
+    expect(levelBlocker(draft(true, 'partner'), 'partnered')).toBeNull();
+    expect(levelBlocker(row({ companies: [{ entityId: 'p', name: 'P', kind: 'partner', status: 'active', ready: false }] }), 'partnered')).toBeNull();
   });
 });
 

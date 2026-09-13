@@ -528,3 +528,32 @@
   gap: 8px;
   margin-top: 12px;
 }
+
+/* CA3 — a company's readiness: one line per item, the icon beside its sentence, what is missing in the warning colour. */
+.twr-checklist {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.twr-checklist li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.4;
+}
+
+.twr-checklist li svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.twr-checklist li.is-met {
+  color: var(--ok, #1f7a3a);
+}
+
+.twr-checklist li.is-missing {
+  color: var(--warn-ink, #9a4a00);
+}

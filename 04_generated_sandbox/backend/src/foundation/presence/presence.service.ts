@@ -10,6 +10,7 @@ import {
   PRESENCE_CAPABILITIES,
   type Presence,
   type PresenceProposal,
+  type CapabilityLapse,
   type PresenceCapabilities,
   type PresenceCapability,
   type PresenceLevel,
@@ -57,15 +58,18 @@ export class PresenceService implements OnApplicationBootstrap {
    * that happens to be generous. A country nobody recorded is a country we are not in — and inheriting
    * a neighbour's permissions is the precise failure this whole design exists to prevent.
    */
-  resolve(jurisdiction?: string): ResolvedPresence {
+  resolve(jurisdiction?: string, now = Date.now()): ResolvedPresence {
     const key = normalise(jurisdiction);
     const record = key ? this.presences.get(key) : undefined;
     const hasEntity = key ? this.hasTransactingEntity(key) : false;
     const level = record?.level ?? (hasEntity ? 'established' : 'observed');
+    // CA5 — a lapsed licence or policy switches off what it supported, whatever the level says.
+    const lapses = key ? this.entities.lapsesFor(key, now) : [];
     return {
       jurisdiction: key || '',
       level,
-      capabilities: capabilitiesOf(level, record?.overrides),
+      capabilities: withoutLapses(capabilitiesOf(level, record?.overrides), lapses),
+      lapses,
       hasEntity,
       recorded: Boolean(record),
       note: record?.note,
@@ -133,7 +137,8 @@ export class PresenceService implements OnApplicationBootstrap {
     const keys = new Set<string>([...this.presences.keys()]);
     for (const entity of this.entities.list()) {
       const key = normalise(entity.jurisdiction);
-      if (key && canTransact(entity)) keys.add(key);
+      // Drafts and partners too: a country where a company is being prepared belongs on the map.
+      if (key && entity.kind !== 'group') keys.add(key);
     }
     return [...keys].sort((a, b) => a.localeCompare(b)).map((k) => this.resolve(k));
   }
@@ -182,7 +187,7 @@ export class PresenceService implements OnApplicationBootstrap {
   ): { applied?: ResolvedPresence; proposal?: PresenceProposal } {
     const by = input.by?.trim();
     if (!by) throw new GlosError('FIELD_REQUIRED', 'Say who you are — every change to a country names the person who made it');
-    const key = this.check(input.jurisdiction, input.level, input.overrides);
+    const key = this.check(input.jurisdiction, input.level, input.overrides, true);
     const gains = this.gainsOf(key, input.level, input.overrides);
     if (!gains.length) return { applied: this.set({ ...input, jurisdiction: key, by }) };
     const waiting = this.pendingFor(key, now);
@@ -208,12 +213,8 @@ export class PresenceService implements OnApplicationBootstrap {
 
   /** The second person says yes. Never the first: a person who proposed a change cannot approve it. */
   approve(proposalId: string, by?: string, now = Date.now()): { proposal: PresenceProposal; presence: ResolvedPresence } {
-    const proposal = this.requirePending(proposalId, now);
-    const who = by?.trim();
-    if (!who) throw new GlosError('FIELD_REQUIRED', 'Say who you are — the second person is named just like the first');
-    if (samePerson(who, proposal.proposedBy)) {
-      throw new GlosError('FORBIDDEN', 'You proposed this change — a different person must approve it');
-    }
+    const proposal = this.assertApprovable(proposalId, by, now);
+    const who = by!.trim();
     // Asked again: the world may have moved since it was proposed (a company closed, a record lapsed).
     const presence = this.set({
       jurisdiction: proposal.jurisdiction,
@@ -226,6 +227,20 @@ export class PresenceService implements OnApplicationBootstrap {
     Object.assign(proposal, { status: 'approved', decidedBy: who, decidedAt: new Date(now).toISOString() });
     this.proposals.set(proposal.proposalId, proposal);
     return { proposal, presence };
+  }
+
+  /**
+   * May this person approve this proposal right now? Throws the reason they may not. Asked on its own by the
+   * caller that has to prepare something first (activating a company) before the approval is applied.
+   */
+  assertApprovable(proposalId: string, by?: string, now = Date.now()): PresenceProposal {
+    const proposal = this.requirePending(proposalId, now);
+    const who = by?.trim();
+    if (!who) throw new GlosError('FIELD_REQUIRED', 'Say who you are — the second person is named just like the first');
+    if (samePerson(who, proposal.proposedBy)) {
+      throw new GlosError('FORBIDDEN', 'You proposed this change — a different person must approve it');
+    }
+    return proposal;
   }
 
   /** Say no — anyone, including the proposer withdrawing it — and always with a reason that is kept. */
@@ -254,16 +269,22 @@ export class PresenceService implements OnApplicationBootstrap {
   }
 
   /** The rules every standing obeys, asked by a proposal and again when it is applied. */
-  private check(jurisdiction: string, level: PresenceLevel, overrides?: Partial<Record<PresenceCapability, boolean>>): string {
+  private check(jurisdiction: string, level: PresenceLevel, overrides?: Partial<Record<PresenceCapability, boolean>>, proposing = false): string {
     const key = normalise(jurisdiction);
     if (!key) throw new GlosError('INVALID_INPUT', 'A presence needs the country it is about');
     // Only a country that exists may have a standing. Two letters are not a country.
     if (!catalogueEntry(key)) throw new GlosError('INVALID_INPUT', `${key} is not a country in the catalogue`);
-    if (level === 'established' && !this.hasTransactingEntity(key)) {
+    // Established and Partnered are what a real company MEANS. A proposal may name a company still in draft — the
+    // approval activates it once its record is ready (CA3) — but a standing is never SET on one that is not active.
+    const ours = proposing ? Boolean(this.entities.sisterRecordFor(key)) : this.hasTransactingEntity(key);
+    if (level === 'established' && !ours) {
       throw new GlosError(
         'INVALID_STATE',
         `${key} cannot be established: no daughter company transacts there. Register the company first — this flag does not create one.`,
       );
+    }
+    if (level === 'partnered' && !this.entities.partnerFor(key, { includeDraft: proposing })) {
+      throw new GlosError('INVALID_STATE', `${key} cannot be partnered: no partner company is recorded there. Record the partner first — this flag does not create one.`);
     }
     // An override for a capability that does not exist is a silent no-op, and a silent no-op on a
     // permission is how somebody believes they granted something they did not.
@@ -295,6 +316,13 @@ export class PresenceService implements OnApplicationBootstrap {
     const entity = this.entities.forJurisdiction(jurisdiction);
     return Boolean(entity && canTransact(entity));
   }
+}
+
+/** CA5 — the capabilities a lapsed licence or policy supported are off, whatever the level granted. */
+function withoutLapses(capabilities: PresenceCapabilities, lapses: CapabilityLapse[]): PresenceCapabilities {
+  const out = { ...capabilities };
+  for (const lapse of lapses) out[lapse.capability] = false;
+  return out;
 }
 
 /** A change to a country waits this long for a second person, then expires on the record. */

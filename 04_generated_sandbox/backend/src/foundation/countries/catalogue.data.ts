@@ -274,3 +274,48 @@ export const ID_DOCUMENTS: Record<string, string[]> = {
 };
 
 export const DEFAULT_ID_DOCUMENTS = ['passport', 'national_id', 'driving_licence'];
+
+/**
+ * CA8 — what a country requires of anybody operating a company there, beyond incorporation and tax. Checklist items
+ * on activation: a company of ours or a partner is not ready until each is registered and its paper verified.
+ * Where a country's specifics are not recorded here, the one obligation every country now has stands.
+ */
+export interface LocalObligation {
+  key: string;
+  name: string;
+  authority?: string;
+}
+
+export const DEFAULT_OBLIGATIONS: LocalObligation[] = [{ key: 'data_protection_registration', name: 'Registration with the data-protection regulator' }];
+
+export const OBLIGATIONS: Record<string, LocalObligation[]> = {
+  KE: [
+    { key: 'e_invoicing', name: 'eTIMS electronic tax invoicing', authority: 'Kenya Revenue Authority' },
+    { key: 'data_protection_registration', name: 'Registration as a data controller and processor', authority: 'Office of the Data Protection Commissioner' },
+  ],
+  TZ: [
+    { key: 'e_invoicing', name: 'Electronic fiscal device (EFD/VFD) receipting', authority: 'Tanzania Revenue Authority' },
+    { key: 'data_protection_registration', name: 'Registration as a data controller', authority: 'Personal Data Protection Commission' },
+  ],
+  UG: [
+    { key: 'e_invoicing', name: 'EFRIS electronic invoicing', authority: 'Uganda Revenue Authority' },
+    { key: 'data_protection_registration', name: 'Registration as a data collector and processor', authority: 'Personal Data Protection Office' },
+  ],
+  RW: [
+    { key: 'e_invoicing', name: 'Electronic billing machine (EBM) invoicing', authority: 'Rwanda Revenue Authority' },
+    { key: 'data_protection_registration', name: 'Registration as a data controller', authority: 'National Cyber Security Authority' },
+  ],
+  ZM: [
+    { key: 'e_invoicing', name: 'Smart Invoice electronic invoicing', authority: 'Zambia Revenue Authority' },
+    { key: 'data_protection_registration', name: 'Registration as a data controller', authority: 'Office of the Data Protection Commissioner' },
+  ],
+  ET: [
+    { key: 'e_invoicing', name: 'Sales registration machine and electronic invoicing', authority: 'Ministry of Revenues' },
+    { key: 'data_protection_registration', name: 'Registration as a data controller', authority: 'Ethiopian Communications Authority' },
+  ],
+  DE: [
+    { key: 'e_invoicing', name: 'E-Rechnung — receiving and issuing structured invoices (XRechnung / ZUGFeRD)' },
+    { key: 'data_protection_registration', name: 'Data protection officer notified to the supervisory authority' },
+  ],
+  GB: [{ key: 'data_protection_registration', name: 'Data protection fee and registration', authority: 'Information Commissioner’s Office' }],
+};

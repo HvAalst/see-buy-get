@@ -1,3 +1,5 @@
+import { CompanyDocumentService } from '../../foundation/entity/company-documents.service';
+import { CompanyReadinessService } from '../../foundation/entity/company-readiness.service';
 import { Test } from '@nestjs/testing';
 import { AgentService } from './agent.service';
 import { MdpService } from './mdp.service';
@@ -103,7 +105,7 @@ describe('dimensional weight', () => {
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         AccountService, OtpService, PersonService, InviteService, ApiKeyService, AuthService,
         WalletService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
-        EntityService, EntityAdminService, PresenceService, BooksService, FxService,
+        EntityService, EntityAdminService, PresenceService, CompanyDocumentService, CompanyReadinessService, BooksService, FxService,
         PayoutService, ReturnService, UnclaimedService, MerchantRatingService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
         GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder },

@@ -4030,11 +4030,283 @@
       }
     },
     "/v1/sbg/entities": {
+      "post": {
+        "operationId": "Sbg.createCompany",
+        "summary": "",
+        "description": "CA3/CA7 — create a company of ours or a partner, as a draft. Operator-only: the super-admin side.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCompanyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Entity"
+                }
+              }
+            }
+          }
+        }
+      },
       "get": {
         "operationId": "Sbg.listEntities",
         "summary": "",
         "description": "The group and its sister companies — who is registered where, and which of them may transact.\nOperator-only: it is the shape of the business, not a public directory. Structural facts only;\nno balances, no accounts (those belong to the sisters' books, which do not exist yet).",
         "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/record": {
+      "get": {
+        "operationId": "Sbg.companyRecord",
+        "summary": "",
+        "description": "CA3 — everything about one company: the record, whether it is ready, its papers, what lapsed, what changed.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "operationId": "Sbg.saveCompanyRecord",
+        "summary": "",
+        "description": "CA3 — save sections of a company's record. Operator-only.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompanyRecordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Entity"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/documents": {
+      "post": {
+        "operationId": "Sbg.uploadCompanyDocument",
+        "summary": "",
+        "description": "CA4 — put a document on record: fingerprinted, versioned, waiting for a second person to verify it.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompanyDocumentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyDocument"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/documents/{documentId}/file": {
+      "get": {
+        "operationId": "Sbg.companyDocumentFile",
+        "summary": "",
+        "description": "CA4 — the file itself, with the fingerprint it was kept under and whether the stored bytes still match it.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "documentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/documents/{documentId}/verify": {
+      "post": {
+        "operationId": "Sbg.verifyCompanyDocument",
+        "summary": "",
+        "description": "CA4 — a second person verifies a document. Never the uploader.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "documentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentDecisionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyDocument"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/documents/{documentId}/reject": {
+      "post": {
+        "operationId": "Sbg.rejectCompanyDocument",
+        "summary": "",
+        "description": "CA4 — reject a document, always with a reason.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "documentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentDecisionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyDocument"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/companies/expiring": {
+      "get": {
+        "operationId": "Sbg.expiringCompanyPapers",
+        "summary": "",
+        "description": "CA5 — licences and policies lapsing soon, or already lapsed, across every company. Soonest first.",
+        "parameters": [
+          {
+            "name": "withinDays",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": ""
@@ -15622,6 +15894,52 @@
           "takeIn"
         ]
       },
+      "CapabilityLapse": {
+        "type": "object",
+        "properties": {
+          "capability": {
+            "type": "string",
+            "enum": [
+              "merchantOfRecord",
+              "holdFloat",
+              "cashOnDelivery",
+              "claims",
+              "tax",
+              "payouts",
+              "takeIn"
+            ]
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "licence",
+              "insurance"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string",
+            "description": "The licence or policy number."
+          },
+          "expiredAt": {
+            "type": "string",
+            "description": "The last day it was good for (YYYY-MM-DD)."
+          }
+        },
+        "required": [
+          "capability",
+          "entityId",
+          "source",
+          "kind",
+          "reference",
+          "expiredAt"
+        ]
+      },
       "ResolvedPresence": {
         "type": "object",
         "properties": {
@@ -15643,6 +15961,13 @@
           "hasEntity": {
             "type": "boolean",
             "description": "True where a transacting sister actually exists. Established cannot be claimed without one."
+          },
+          "lapses": {
+            "description": "CA5 — capabilities switched off because a licence or policy lapsed, each naming the paper that did it.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CapabilityLapse"
+            }
           },
           "recorded": {
             "type": "boolean",
@@ -15667,6 +15992,7 @@
           "level",
           "capabilities",
           "hasEntity",
+          "lapses",
           "recorded"
         ]
       },
@@ -15696,6 +16022,652 @@
         "required": [
           "level"
         ]
+      },
+      "CreateCompanyDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "sister",
+              "partner"
+            ]
+          },
+          "jurisdiction": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "jurisdiction",
+          "name"
+        ]
+      },
+      "CompanyAddress": {
+        "type": "object",
+        "properties": {
+          "line1": {
+            "type": "string"
+          },
+          "line2": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "postalCode": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string",
+            "description": "ISO-3166 — a registered address may sit in another country (a branch of a foreign company)."
+          }
+        },
+        "required": [
+          "line1",
+          "city",
+          "country"
+        ]
+      },
+      "Representative": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "signing": {
+            "type": "string",
+            "enum": [
+              "alone",
+              "jointly",
+              "none"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "role",
+          "signing"
+        ]
+      },
+      "BeneficialOwner": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "sharePct": {
+            "type": "number",
+            "description": "Percentage held, above zero and at most a hundred; all owners together never exceed a hundred."
+          },
+          "nationality": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "sharePct"
+        ]
+      },
+      "TaxRegistration": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "vat",
+              "corporate_income",
+              "withholding",
+              "payroll",
+              "customs",
+              "other"
+            ]
+          },
+          "number": {
+            "type": "string"
+          },
+          "authority": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "number"
+        ]
+      },
+      "BankAccount": {
+        "type": "object",
+        "properties": {
+          "bankName": {
+            "type": "string"
+          },
+          "accountName": {
+            "type": "string"
+          },
+          "accountNumber": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "payouts",
+              "collections",
+              "general"
+            ]
+          }
+        },
+        "required": [
+          "bankName",
+          "accountName",
+          "accountNumber",
+          "currency",
+          "purpose"
+        ]
+      },
+      "CompanyLicence": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "courier",
+              "postal",
+              "transport_operator",
+              "customs_broker",
+              "money_handling",
+              "other"
+            ]
+          },
+          "number": {
+            "type": "string"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "description": "YYYY-MM-DD. A licence with no expiry is not accepted: the watch cannot guard what it cannot date."
+          },
+          "supports": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "merchantOfRecord",
+                "holdFloat",
+                "cashOnDelivery",
+                "claims",
+                "tax",
+                "payouts",
+                "takeIn"
+              ]
+            }
+          }
+        },
+        "required": [
+          "kind",
+          "number",
+          "issuer",
+          "expiresAt",
+          "supports"
+        ]
+      },
+      "InsurancePolicy": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "goods_in_transit",
+              "claims_provision",
+              "public_liability",
+              "motor_fleet",
+              "other"
+            ]
+          },
+          "insurer": {
+            "type": "string"
+          },
+          "policyNumber": {
+            "type": "string"
+          },
+          "coverAmount": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string"
+          },
+          "supports": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "merchantOfRecord",
+                "holdFloat",
+                "cashOnDelivery",
+                "claims",
+                "tax",
+                "payouts",
+                "takeIn"
+              ]
+            }
+          }
+        },
+        "required": [
+          "kind",
+          "insurer",
+          "policyNumber",
+          "expiresAt",
+          "supports"
+        ]
+      },
+      "ObligationRecord": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "registeredAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "reference"
+        ]
+      },
+      "CompanyRecord": {
+        "type": "object",
+        "properties": {
+          "legalName": {
+            "type": "string"
+          },
+          "tradingName": {
+            "type": "string"
+          },
+          "legalForm": {
+            "type": "string",
+            "enum": [
+              "private_limited",
+              "public_limited",
+              "branch_of_foreign_company",
+              "partnership",
+              "sole_proprietorship",
+              "cooperative",
+              "other"
+            ]
+          },
+          "registrationNumber": {
+            "type": "string"
+          },
+          "registrationDate": {
+            "type": "string"
+          },
+          "registeredAddress": {
+            "$ref": "#/components/schemas/CompanyAddress"
+          },
+          "operatingAddress": {
+            "$ref": "#/components/schemas/CompanyAddress"
+          },
+          "representatives": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Representative"
+            }
+          },
+          "beneficialOwners": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BeneficialOwner"
+            }
+          },
+          "taxRegistrations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaxRegistration"
+            }
+          },
+          "bankAccounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BankAccount"
+            }
+          },
+          "licences": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CompanyLicence"
+            }
+          },
+          "insurance": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InsurancePolicy"
+            }
+          },
+          "obligations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObligationRecord"
+            }
+          }
+        },
+        "required": [
+          "representatives",
+          "beneficialOwners",
+          "taxRegistrations",
+          "bankAccounts",
+          "licences",
+          "insurance",
+          "obligations"
+        ]
+      },
+      "Entity": {
+        "type": "object",
+        "properties": {
+          "entityId": {
+            "type": "string"
+          },
+          "did": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "object"
+          },
+          "name": {
+            "type": "string"
+          },
+          "jurisdiction": {
+            "type": "string",
+            "description": "ISO-3166-alpha-2. Required for a sister (it is what makes it the merchant of record there);\n absent on the group, whose country of incorporation nothing in the system depends on."
+          },
+          "currency": {
+            "type": "string",
+            "description": "The currency this entity settles in, derived from its jurisdiction. A group has none: it holds\n no custody account, so there is no balance for a currency to describe."
+          },
+          "feePct": {
+            "type": "number",
+            "description": "The margin this sister charges on top of provider costs, as a fraction (0.02 = 2%). A knob each\nmarket turns for itself rather than a constant of the network — Nairobi and Amsterdam do not have to\nprice alike. Absent means \"the network default\"; read it through EntityService.feePctOf(), never\noff the record, so a sister created before the knob existed still answers.\n\nSUPERSEDED BY `rates` and kept as its input: a sister that only ever set this one number is read as\nhaving set that number as its MARGIN. It is not migrated on write, because a value that rewrites\nitself the first time anything reads it makes the record's history unreadable."
+          },
+          "rates": {
+            "type": "object",
+            "description": "What this sister charges, in the three layers a business actually decides separately.\n\nOne blended percentage cannot answer \"are we earning because the market is good, or because we are\ncarrying risk nobody is paying us for?\" — and that is the question the knobs exist to answer."
+          },
+          "ratesByLane": {
+            "type": "object",
+            "description": "Per-lane overrides, keyed by the CALLER'S vocabulary (today a CargoLane: pudo | mdp | dedicated).\n\nA plain string map because the lane taxonomy belongs to the pudo module and this is foundation — the\nbooks must not learn what a parcel is in order to hold a number. The caller validates the key; this\nonly ever validates the rates.\n\nAbsent lane → the sister's own `rates` → `feePct` as a margin → the network default. Four steps, each\none a real state some sister is in."
+          },
+          "taxRegistration": {
+            "type": "string",
+            "description": "The registration this sister collects tax under — its VAT/TIN/GST number in its own country.\n\nNot the same thing as being incorporated there, which `jurisdiction` already says: a company can be\nregistered to trade and not registered to collect, and below a turnover threshold that is the normal\nstate. So this is separate, and absent means \"not registered to collect\" rather than \"unknown\"."
+          },
+          "tax": {
+            "type": "object",
+            "description": "What this sister charges in tax on everything it sells. Absent means none — the network default, and\nthe state every sister is in until an operator deliberately says otherwise."
+          },
+          "taxByLane": {
+            "type": "object",
+            "description": "Per-lane tax overrides, keyed by the caller's vocabulary exactly as `ratesByLane` is.\n\nHere for a reason narrower than it looks: tax rates vary by what is SUPPLIED, and lane is the only\nsupply-type axis this system has. A jurisdiction that zero-rates one kind of transport and standard-\nrates another can express that; everyone else sets one rate and never touches this."
+          },
+          "insurance": {
+            "type": "object",
+            "description": "What this sister covers when it breaks something, and what it charges to cover more.\n\nAbsent means the network default — no free cover and no premium charged, which is where every sister\nstarts. Read it through EntityService.insuranceFor(), never off the record."
+          },
+          "insuranceByLane": {
+            "type": "object"
+          },
+          "parentEntityId": {
+            "type": "string",
+            "description": "Sisters point at the group they belong to."
+          },
+          "status": {
+            "type": "object",
+            "description": "CA3 — a company created from the console starts as a DRAFT: recorded, documented, and able to do nothing at all\nuntil its record is ready and two people approve the country up to it. Absent means active (the seeds)."
+          },
+          "record": {
+            "description": "CA3 — the legal record: form, registration, representatives, owners, tax numbers, bank, licences, insurance.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CompanyRecord"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "entityId",
+          "did",
+          "kind",
+          "name",
+          "createdAt"
+        ]
+      },
+      "CompanyRecordDto": {
+        "type": "object",
+        "properties": {
+          "legalName": {
+            "type": "string"
+          },
+          "tradingName": {
+            "type": "string"
+          },
+          "legalForm": {
+            "type": "string"
+          },
+          "registrationNumber": {
+            "type": "string"
+          },
+          "registrationDate": {
+            "type": "string"
+          },
+          "registeredAddress": {
+            "type": "object"
+          },
+          "operatingAddress": {
+            "type": "object"
+          },
+          "representatives": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "beneficialOwners": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "taxRegistrations": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "bankAccounts": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "licences": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "insurance": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "obligations": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "by": {
+            "type": "string"
+          }
+        }
+      },
+      "CompanyDocumentDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "dataUrl": {
+            "type": "string"
+          },
+          "relatesTo": {
+            "type": "string",
+            "description": "Which licence, policy (its number) or obligation (its key) this paper is for."
+          },
+          "expiresAt": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "title",
+          "dataUrl"
+        ]
+      },
+      "CompanyDocument": {
+        "type": "object",
+        "properties": {
+          "documentId": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "certificate_of_incorporation",
+              "memorandum_and_articles",
+              "tax_registration_certificate",
+              "bank_confirmation",
+              "licence",
+              "insurance_policy",
+              "representative_id",
+              "beneficial_ownership",
+              "obligation_registration",
+              "other"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "relatesTo": {
+            "type": "string"
+          },
+          "version": {
+            "type": "number"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "size": {
+            "type": "number"
+          },
+          "uploadedBy": {
+            "type": "string"
+          },
+          "uploadedAt": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "awaiting_verification",
+              "verified",
+              "rejected",
+              "superseded"
+            ]
+          },
+          "verifiedBy": {
+            "type": "string"
+          },
+          "verifiedAt": {
+            "type": "string"
+          },
+          "rejectedBy": {
+            "type": "string"
+          },
+          "rejectedAt": {
+            "type": "string"
+          },
+          "rejectionReason": {
+            "type": "string"
+          },
+          "supersededBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "documentId",
+          "entityId",
+          "kind",
+          "title",
+          "version",
+          "fingerprint",
+          "contentType",
+          "size",
+          "uploadedBy",
+          "uploadedAt",
+          "status"
+        ]
+      },
+      "DocumentDecisionDto": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
       },
       "Payout": {
         "type": "object",
@@ -15933,7 +16905,10 @@
               "rates",
               "tax",
               "cover",
-              "fee"
+              "fee",
+              "created",
+              "record",
+              "activated"
             ]
           },
           "lane": {
@@ -15998,7 +16973,8 @@
             "type": "string",
             "enum": [
               "group",
-              "sister"
+              "sister",
+              "partner"
             ]
           },
           "jurisdiction": {
@@ -16171,76 +17147,6 @@
         },
         "required": [
           "feePct"
-        ]
-      },
-      "Entity": {
-        "type": "object",
-        "properties": {
-          "entityId": {
-            "type": "string"
-          },
-          "did": {
-            "type": "string"
-          },
-          "kind": {
-            "type": "object"
-          },
-          "name": {
-            "type": "string"
-          },
-          "jurisdiction": {
-            "type": "string",
-            "description": "ISO-3166-alpha-2. Required for a sister (it is what makes it the merchant of record there);\n absent on the group, whose country of incorporation nothing in the system depends on."
-          },
-          "currency": {
-            "type": "string",
-            "description": "The currency this entity settles in, derived from its jurisdiction. A group has none: it holds\n no custody account, so there is no balance for a currency to describe."
-          },
-          "feePct": {
-            "type": "number",
-            "description": "The margin this sister charges on top of provider costs, as a fraction (0.02 = 2%). A knob each\nmarket turns for itself rather than a constant of the network — Nairobi and Amsterdam do not have to\nprice alike. Absent means \"the network default\"; read it through EntityService.feePctOf(), never\noff the record, so a sister created before the knob existed still answers.\n\nSUPERSEDED BY `rates` and kept as its input: a sister that only ever set this one number is read as\nhaving set that number as its MARGIN. It is not migrated on write, because a value that rewrites\nitself the first time anything reads it makes the record's history unreadable."
-          },
-          "rates": {
-            "type": "object",
-            "description": "What this sister charges, in the three layers a business actually decides separately.\n\nOne blended percentage cannot answer \"are we earning because the market is good, or because we are\ncarrying risk nobody is paying us for?\" — and that is the question the knobs exist to answer."
-          },
-          "ratesByLane": {
-            "type": "object",
-            "description": "Per-lane overrides, keyed by the CALLER'S vocabulary (today a CargoLane: pudo | mdp | dedicated).\n\nA plain string map because the lane taxonomy belongs to the pudo module and this is foundation — the\nbooks must not learn what a parcel is in order to hold a number. The caller validates the key; this\nonly ever validates the rates.\n\nAbsent lane → the sister's own `rates` → `feePct` as a margin → the network default. Four steps, each\none a real state some sister is in."
-          },
-          "taxRegistration": {
-            "type": "string",
-            "description": "The registration this sister collects tax under — its VAT/TIN/GST number in its own country.\n\nNot the same thing as being incorporated there, which `jurisdiction` already says: a company can be\nregistered to trade and not registered to collect, and below a turnover threshold that is the normal\nstate. So this is separate, and absent means \"not registered to collect\" rather than \"unknown\"."
-          },
-          "tax": {
-            "type": "object",
-            "description": "What this sister charges in tax on everything it sells. Absent means none — the network default, and\nthe state every sister is in until an operator deliberately says otherwise."
-          },
-          "taxByLane": {
-            "type": "object",
-            "description": "Per-lane tax overrides, keyed by the caller's vocabulary exactly as `ratesByLane` is.\n\nHere for a reason narrower than it looks: tax rates vary by what is SUPPLIED, and lane is the only\nsupply-type axis this system has. A jurisdiction that zero-rates one kind of transport and standard-\nrates another can express that; everyone else sets one rate and never touches this."
-          },
-          "insurance": {
-            "type": "object",
-            "description": "What this sister covers when it breaks something, and what it charges to cover more.\n\nAbsent means the network default — no free cover and no premium charged, which is where every sister\nstarts. Read it through EntityService.insuranceFor(), never off the record."
-          },
-          "insuranceByLane": {
-            "type": "object"
-          },
-          "parentEntityId": {
-            "type": "string",
-            "description": "Sisters point at the group they belong to."
-          },
-          "createdAt": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "entityId",
-          "did",
-          "kind",
-          "name",
-          "createdAt"
         ]
       },
       "EntityRatesDto": {

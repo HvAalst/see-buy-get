@@ -9,13 +9,14 @@ import type { ApprovalRow, ClaimDecision, ClaimRow, DisposalRow, StalledRow } fr
 import { EMPTY_CORRIDOR_FORM, corridorName, type CorridorForm, type CorridorRow, type CouplingRow } from './corridors';
 import type { DisputeReportRow, ReportRow } from './reports';
 import { EMPTY_COUNTRY_FORM, newCountryCode, overridesOf, type CatalogueCountry, type NewCountryForm, type PresenceLevel, type PresenceProposalRow, type PresenceRow } from './presence';
+import type { ExpiringItem } from './company';
 import type { AgentRow, CoverageCounts, FlagRow, HubRow, ToteRow } from './network';
 import { runSummary, type PayoutAction, type PayoutRow, type RunResult } from './settlement';
 import type { HelpOption } from './pictures';
 import { resolveBaseUrl } from '../../lib/sbg';
 
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
-export type Screen = 'network' | 'hazards' | 'claims' | 'disposal' | 'approvals' | 'reports' | 'support' | 'pictures' | 'money' | 'rates' | 'companies' | 'corridors' | 'presence';
+export type Screen = 'network' | 'hazards' | 'claims' | 'disposal' | 'approvals' | 'reports' | 'support' | 'pictures' | 'money' | 'rates' | 'companies' | 'company' | 'corridors' | 'presence';
 
 export interface TowerState {
   phase: Phase;
@@ -109,6 +110,10 @@ export interface TowerState {
   /** Who administers the company being looked at, and the ONE-TIME password a new login just produced. */
   admins: EntityAdminRow[] | null;
   newAdmin: (EntityAdminRow & { password: string }) | null;
+  /** CA3 — which company's record is open. Null until one is chosen. */
+  companyId: string | null;
+  /** CA5 — licences and policies lapsing across every company. Null while unread, or for a company administrator. */
+  expiring: ExpiringItem[] | null;
 }
 
 /** One company on the side-by-side view: what it charges, and what its books say. */
@@ -193,6 +198,12 @@ export interface TowerActions {
   setCountryForm(patch: Partial<NewCountryForm>): void;
   recordCountry(): Promise<void>;
   savePresence(jurisdiction: string): Promise<void>;
+  /** CA3 — open one company's record. */
+  openCompany(entityId: string): void;
+  /** CA3/CA7 — create a draft company of ours or a partner; true when it was created. */
+  createCompany(kind: 'sister' | 'partner', jurisdiction: string, name: string): Promise<boolean>;
+  /** The API client, for a screen that owns its own reads (the company record). Null before sign-in. */
+  client(): TowerClient | null;
   /** CA2 — the second person approves a change. The server refuses the proposer; so does the screen. */
   approveProposal(proposalId: string): Promise<void>;
   declineProposal(proposalId: string, reason: string): Promise<void>;
@@ -252,6 +263,8 @@ const INITIAL: TowerState = {
   companies: null,
   admins: null,
   newAdmin: null,
+  companyId: null,
+  expiring: null,
   claims: null,
   disposal: null,
   approvals: null,
@@ -358,7 +371,15 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         };
       }),
     );
-    setState((s) => ({ ...s, companies: results }));
+    // CA3/CA5 — the catalogue for creating a company, and what is lapsing. Operator-only reads: a company
+    // administrator gets neither, and the screen draws neither panel for them.
+    const [catalogue, expiring] = await Promise.all([client.api.countryCatalogue(), client.api.expiringCompanyPapers()]);
+    setState((s) => ({
+      ...s,
+      companies: results,
+      catalogue: catalogue.error ? s.catalogue : (narrow<{ items: CatalogueCountry[] }>(catalogue.data)?.items ?? []),
+      expiring: expiring.error ? null : (narrow<{ items: ExpiringItem[] }>(expiring.data)?.items ?? []),
+    }));
   }, []);
 
   /**
@@ -666,6 +687,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     else if (state.screen === 'corridors') await loadCorridors(client);
     else if (state.screen === 'reports') await loadReports(client);
     else if (state.screen === 'presence') await loadPresence(client);
+    else if (state.screen === 'companies') await loadEntities(client);
     else if (state.screen === 'support') {
       // Refreshing the support screen means re-reading the parcel somebody is on the phone about, not
       // reloading a list — there is no list here.
@@ -752,6 +774,8 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         if (screen === 'corridors' && client && stateRef.current.corridors === null) void loadCorridors(client);
         if (screen === 'reports' && client) void loadReports(client);
         if (screen === 'presence' && client && stateRef.current.presence === null) void loadPresence(client);
+        // CA5 — the lapsing list is only worth reading fresh: a policy that lapsed since sign-in must show.
+        if (screen === 'companies' && client) void loadEntities(client);
       },
       refresh,
       open,
@@ -831,6 +855,22 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
           done: proposed ? t('tower.presence.proposed', { country: jurisdiction }) : t('tower.presence.moved', { country: jurisdiction }),
         }));
         await loadPresence(client);
+      },
+      openCompany: (entityId: string) => setState((s) => ({ ...s, screen: 'company', companyId: entityId || null, done: null, queueError: null })),
+      client: () => clientRef.current,
+      createCompany: async (kind: 'sister' | 'partner', jurisdiction: string, name: string) => {
+        const client = clientRef.current;
+        if (!client) return false;
+        setState((s) => ({ ...s, busyId: 'company', queueError: null, done: null }));
+        const { data, error } = await client.api.createCompany({ kind, jurisdiction, name, ...(stateRef.current.who?.name ? { by: stateRef.current.who.name } : {}) });
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return false;
+        }
+        const created = narrow<{ entityId: string; name: string }>(data);
+        setState((s) => ({ ...s, busyId: null, done: t('tower.companies.created', { name: created?.name ?? name }) }));
+        await loadEntities(client);
+        return true;
       },
       approveProposal: async (proposalId: string) => {
         const client = clientRef.current;

@@ -29,6 +29,10 @@ export interface PresenceRow {
   /** CA2 — the second person who approved the change that raised this country. */
   approvedBy?: string;
   setAt?: string;
+  /** CA3/CA7 — the companies standing (or being prepared) in this country, and whether each is ready. */
+  companies?: Array<{ entityId: string; name: string; kind: 'sister' | 'partner'; status: 'draft' | 'active'; ready: boolean }>;
+  /** CA5 — capabilities switched off by a lapsed licence or policy. */
+  lapses?: Array<{ capability: PresenceCapability; entityId: string; source: 'licence' | 'insurance'; kind: string; reference: string; expiredAt: string }>;
 }
 
 /** What each level grants before anyone overrides anything — the same table the server derives from. */
@@ -103,7 +107,11 @@ export function overridesOf(row: PresenceRow): Partial<Record<PresenceCapability
  * refuses to offer it rather than letting somebody press it and read a 400.
  */
 export function levelBlocker(row: PresenceRow, level: PresenceLevel): MessageKey | null {
-  if (level === 'established' && !row.hasEntity) return 'tower.presence.needsCompany';
+  // CA3 — a company of ours still in draft may be proposed up to Established once its record is READY; the
+  // approval switches it on. A draft that is not ready, or no company at all, is refused here first.
+  if (level === 'established' && !row.hasEntity && !(row.companies ?? []).some((c) => c.kind === 'sister' && c.ready)) return 'tower.presence.needsCompany';
+  // CA7 — Partnered means a recorded partner: active, or a draft whose record is ready.
+  if (level === 'partnered' && !(row.companies ?? []).some((c) => c.kind === 'partner' && (c.status === 'active' || c.ready))) return 'tower.presence.needsPartner';
   return null;
 }
 
@@ -196,7 +204,10 @@ export function newCountryBlocker(form: NewCountryForm, rows: PresenceRow[], cat
   const country = catalogue.find((c) => c.code === code);
   if (!country) return 'tower.presence.badCode';
   const listed = rows.find((r) => r.jurisdiction === code);
-  if (form.level === 'established' && !listed?.hasEntity) return 'tower.presence.needsCompany';
+  if (form.level === 'established' || form.level === 'partnered') {
+    const blocked = levelBlocker(listed ?? { jurisdiction: code, level: 'observed', capabilities: { ...LEVEL_DEFAULTS.observed }, hasEntity: false, recorded: false }, form.level);
+    if (blocked) return blocked;
+  }
   const switchingOn = form.level !== 'observed' && !listed?.capabilities.takeIn;
   if (switchingOn && !country.priceable) return 'tower.presence.needsRate';
   return null;

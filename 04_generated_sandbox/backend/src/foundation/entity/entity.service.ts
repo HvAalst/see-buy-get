@@ -1,4 +1,7 @@
 import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
+import { catalogueEntry } from '../countries/catalogue';
+import type { CapabilityLapse } from '../presence/presence.types';
+import { datedItemsOf, emptyRecord, lapsesAt, lapsesOf, normaliseRecordPatch, type CompanyRecord } from './company-record.types';
 import { GlosError } from '../http/glos-error';
 import { PersistentMap } from '../store/persistent-map';
 import { DidService } from '../did/did.service';
@@ -72,6 +75,8 @@ export class EntityService implements OnApplicationBootstrap {
         createdAt: new Date().toISOString(),
       });
     }
+    // Development only: in production a company of ours is created from the super-admin side (CA3), never from code.
+    if ((process.env.GLOS_ENV ?? '').toLowerCase() === 'production') return;
     for (const seed of SISTER_SEEDS) {
       if (this.entities.has(seed.entityId)) continue;
       this.entities.set(seed.entityId, {
@@ -90,7 +95,8 @@ export class EntityService implements OnApplicationBootstrap {
   }
 
   sisters(): Entity[] {
-    return this.list().filter((e) => e.kind === 'sister');
+    // Active only: a company still in draft is on the register (companies()) and nowhere near the money.
+    return this.list().filter((e) => canTransact(e));
   }
 
   /** The mother. Present from boot; her absence would mean the seed never ran. */
@@ -135,7 +141,12 @@ export class EntityService implements OnApplicationBootstrap {
   requireTransacting(entityId: string): Entity {
     const entity = this.get(entityId);
     if (!canTransact(entity)) {
-      throw new GlosError('FORBIDDEN', `${entity.name} is a holding company: it cannot be a party to a transaction`);
+      throw new GlosError(
+        'FORBIDDEN',
+        entity.status === 'draft'
+          ? `${entity.name} is still a draft: it cannot be a party to a transaction until two people switch it on`
+          : `${entity.name} is ${entity.kind === 'partner' ? 'a partner company' : 'a holding company'}: it cannot be a party to a transaction`,
+      );
     }
     return entity;
   }
@@ -457,6 +468,130 @@ export class EntityService implements OnApplicationBootstrap {
    * inspection, because a wrong label here is worse than no label: it tells an operator a number is
    * inherited when they in fact own it.
    */
+  /* ------------------------------------------- CA3 + CA7: companies created on purpose -- */
+
+  /** Every company of ours and every partner, drafts included — the register of who stands where. Never the money. */
+  companies(): Entity[] {
+    return this.list().filter((e) => e.kind !== 'group');
+  }
+
+  /** Our company in a country, draft or active — for the record screens and the activation, never for money. */
+  sisterRecordFor(jurisdiction?: string): Entity | undefined {
+    const code = jurisdiction?.trim().toUpperCase();
+    return code ? this.list().find((e) => e.kind === 'sister' && e.jurisdiction === code) : undefined;
+  }
+
+  /** A partner company in a country — active only, unless drafts are asked for. */
+  partnerFor(jurisdiction?: string, opts?: { includeDraft?: boolean }): Entity | undefined {
+    const code = jurisdiction?.trim().toUpperCase();
+    if (!code) return undefined;
+    const found = this.list().filter((e) => e.kind === 'partner' && e.jurisdiction === code);
+    return found.find((e) => e.status !== 'draft') ?? (opts?.includeDraft ? found[0] : undefined);
+  }
+
+  /**
+   * Create a company of ours, or a partner, in a country from the catalogue — as a DRAFT.
+   *
+   * A draft can do nothing: it is not a party to any transaction, holds no custody and is not found by any money
+   * path. It exists so its record and papers can be put together, and it is switched on only when two people
+   * approve the country up to it with that record ready.
+   */
+  createCompany(input: { kind: 'sister' | 'partner'; jurisdiction: string; name: string }, by?: string): Entity {
+    const who = by?.trim();
+    if (!who) throw new GlosError('FIELD_REQUIRED', 'Say who is creating this company — the register names the person');
+    if (input.kind !== 'sister' && input.kind !== 'partner') throw new GlosError('VALIDATION_FAILED', 'A company is either ours (sister) or a partner');
+    const country = catalogueEntry(input.jurisdiction);
+    if (!country) throw new GlosError('INVALID_INPUT', `${(input.jurisdiction ?? '').toUpperCase()} is not a country in the catalogue`);
+    const name = input.name?.trim();
+    if (!name) throw new GlosError('FIELD_REQUIRED', 'Give the company its name');
+    const existing = input.kind === 'sister' ? this.sisterRecordFor(country.code) : undefined;
+    if (existing) throw new GlosError('CONFLICT', `${country.name} already has a company of ours: ${existing.name}`);
+
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'partner';
+    const base = input.kind === 'sister' ? `sbg-${country.code.toLowerCase()}` : `partner-${country.code.toLowerCase()}-${slug}`;
+    let entityId = base;
+    for (let n = 2; this.entities.has(entityId); n += 1) entityId = `${base}-${n}`;
+    const now = new Date().toISOString();
+    const entity: Entity = {
+      entityId,
+      name,
+      kind: input.kind,
+      jurisdiction: country.code,
+      currency: country.currency,
+      status: 'draft',
+      record: emptyRecord(),
+      did: this.dids.generate(`entity:${entityId}`, { role: 'entity', kind: input.kind, jurisdiction: country.code }).id,
+      ...(input.kind === 'sister' ? { parentEntityId: GROUP_SEED.entityId } : {}),
+      createdAt: now,
+    };
+    this.entities.set(entityId, entity);
+    this.record(entityId, { at: now, by: who, what: 'created', from: '—', to: `${input.kind === 'sister' ? 'company of ours' : 'partner'} in ${country.name}, draft` });
+    return entity;
+  }
+
+  /** A company's legal record, with every list present (an older record may predate a section). */
+  recordOf(entityId: string): CompanyRecord {
+    return { ...emptyRecord(), ...(this.get(entityId).record ?? {}) };
+  }
+
+  /** Save sections of a company's record. Each section sent replaces the one on record, the way a form is saved. */
+  updateRecord(entityId: string, patch: Record<string, unknown>, by?: string): Entity {
+    const entity = this.get(entityId);
+    if (entity.kind === 'group') throw new GlosError('FORBIDDEN', 'The group keeps no operating record here — it is a party to nothing');
+    const who = by?.trim();
+    if (!who) throw new GlosError('FIELD_REQUIRED', 'Say who is changing this record');
+    const clean = normaliseRecordPatch(patch ?? {}, { jurisdiction: entity.jurisdiction ?? '' });
+    const sections = Object.keys(clean);
+    if (!sections.length) throw new GlosError('VALIDATION_FAILED', 'Nothing to change');
+    entity.record = { ...this.recordOf(entityId), ...clean };
+    this.entities.set(entityId, entity);
+    this.record(entityId, { at: new Date().toISOString(), by: who, what: 'record', from: '—', to: sections.join(', ') });
+    return entity;
+  }
+
+  /** Switch a draft company on. Called only once two people have approved the country up to it (see the controller). */
+  activate(entityId: string, by?: string): Entity {
+    const entity = this.get(entityId);
+    if (entity.kind === 'group') throw new GlosError('FORBIDDEN', 'The group is not switched on or off');
+    if (entity.status !== 'draft') return entity;
+    entity.status = 'active';
+    this.entities.set(entityId, entity);
+    this.record(entityId, { at: new Date().toISOString(), by: by?.trim() || 'unknown', what: 'activated', from: 'draft', to: 'active' });
+    return entity;
+  }
+
+  /** CA5 — what lapsed licences and policies of the active companies in a country switch off there. */
+  lapsesFor(jurisdiction?: string, now = Date.now()): CapabilityLapse[] {
+    const code = jurisdiction?.trim().toUpperCase();
+    if (!code) return [];
+    return this.companies()
+      .filter((e) => e.jurisdiction === code && e.status !== 'draft')
+      .flatMap((e) => lapsesOf(e.entityId, e.record, now));
+  }
+
+  /** CA5 — every licence and policy lapsing within the window (or already lapsed), soonest first — the reminder list. */
+  expiring(
+    now = Date.now(),
+    withinDays = 60,
+  ): Array<{ entityId: string; name: string; jurisdiction?: string; source: 'licence' | 'insurance'; kind: string; reference: string; expiresAt: string; supports: string[]; lapsed: boolean; daysLeft: number }> {
+    const DAY = 86_400_000;
+    const horizon = now + withinDays * DAY;
+    return this.companies()
+      .flatMap((e) =>
+        datedItemsOf(e.record)
+          .filter((item) => lapsesAt(item.expiresAt) <= horizon)
+          .map((item) => ({
+            entityId: e.entityId,
+            name: e.name,
+            jurisdiction: e.jurisdiction,
+            ...item,
+            lapsed: lapsesAt(item.expiresAt) <= now,
+            daysLeft: Math.ceil((lapsesAt(item.expiresAt) - now) / DAY) - 1,
+          })),
+      )
+      .sort((a, b) => a.expiresAt.localeCompare(b.expiresAt));
+  }
+
   /* ------------------------------------------------------------------ who may -- */
 
   /**
@@ -560,7 +695,7 @@ export class EntityService implements OnApplicationBootstrap {
       kind: entity.kind,
       jurisdiction: entity.jurisdiction,
       currency: entity.currency,
-      transacting: entity.kind === 'sister',
+      transacting: canTransact(entity),
       taxRegistration: entity.taxRegistration,
       // The default first: every lane row below is read against it, and a table whose fallback row is
       // buried in the middle makes "inherited from where?" a question you have to hunt for.
@@ -568,7 +703,7 @@ export class EntityService implements OnApplicationBootstrap {
       recentChanges: this.changes(entity.entityId, 8),
       // A screen that renders controls it cannot use is a screen that lies about what you may do. The
       // caller's reach is decided by the guard; this only reports it, so the UI never has to guess.
-      editable: (opts?.editable ?? false) && entity.kind === 'sister',
+      editable: (opts?.editable ?? false) && canTransact(entity),
       bounds: {
         minRatePct: MIN_PLATFORM_FEE_PCT,
         maxRatePct: MAX_PLATFORM_FEE_PCT,

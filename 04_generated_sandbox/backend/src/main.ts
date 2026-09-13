@@ -14,6 +14,9 @@ async function bootstrap() {
   // S26 media upload: a base64 image data URL (client-downscaled to <200 KB) inflates ~33%, so the
   // default 100 KB JSON limit is too small. 2 MB gives headroom without inviting large payloads (the
   // MediaService still hard-caps decoded bytes at MEDIA_MAX_BYTES).
+  // CA4 — a company document (a certificate scan, a licence) arrives as base64 and may run to 8 MB of bytes. Only that
+  // route gets the larger body; it is registered first, so the global parser below leaves an already-parsed body alone.
+  app.use(/^\/v1\/sbg\/entities\/[^/]+\/documents$/, json({ limit: '12mb' }));
   app.use(json({ limit: '2mb' }));
 
   // Global input validation — every DTO is validated at the edge.

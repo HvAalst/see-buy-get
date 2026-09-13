@@ -1,4 +1,8 @@
-﻿import { Body, Controller, Delete, Get, Header, Inject, Param, Patch, Post, Query } from '@nestjs/common';
+﻿import { Body, Controller, Delete, Get, Header, Inject, Param, Patch, Post, Query, Res, StreamableFile } from '@nestjs/common';
+import type { Response } from 'express';
+import { CompanyDocumentService } from '../../foundation/entity/company-documents.service';
+import { CompanyReadinessService } from '../../foundation/entity/company-readiness.service';
+import type { Entity } from '../../foundation/entity/entity.types';
 import { COUNTRY_CATALOGUE, catalogueEntry } from '../../foundation/countries/catalogue';
 import { ApiQuery } from '@nestjs/swagger';
 import { GlosError } from '../../foundation/http/glos-error';
@@ -38,7 +42,11 @@ import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
 import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto,
   ProposeLineDto,
   PresenceDto,
-  PresenceDecisionDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto } from './pudo.dto';
+  PresenceDecisionDto,
+  CreateCompanyDto,
+  CompanyRecordDto,
+  CompanyDocumentDto,
+  DocumentDecisionDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { classifySize, MAX_CLAIM_AWARD, measuredFactor, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
@@ -108,6 +116,8 @@ export class SbgController {
     private readonly ratings: RatingService,
     private readonly entities: EntityService,
     private readonly presence: PresenceService,
+    private readonly companyDocuments: CompanyDocumentService,
+    private readonly readiness: CompanyReadinessService,
     private readonly entityAdmins: EntityAdminService,
     private readonly fx: FxService,
     private readonly apiKeys: ApiKeyService,
@@ -306,7 +316,16 @@ export class SbgController {
    */
   @Get('presence')
   listPresence() {
-    return { items: this.presence.list() };
+    // CA3/CA7 — each country carries the companies standing (or being prepared) there, and whether each is ready.
+    return {
+      items: this.presence.list().map((p) => ({
+        ...p,
+        companies: this.entities
+          .companies()
+          .filter((c) => c.jurisdiction === p.jurisdiction)
+          .map((c) => ({ entityId: c.entityId, name: c.name, kind: c.kind, status: c.status ?? 'active', ready: this.readiness.readinessOf(c.entityId).ready })),
+      })),
+    };
   }
 
   /**
@@ -333,9 +352,14 @@ export class SbgController {
   @Roles('operator')
   @Post('presence/proposals/:proposalId/approve')
   approvePresence(@Param('proposalId') proposalId: string, @Body() dto: PresenceDecisionDto, @Actor() actor: IntrospectionResult) {
-    const proposal = this.presence.listProposals().find((p) => p.proposalId === proposalId);
-    if (proposal?.status === 'pending') this.requirePriceableSwitchOn(proposal.jurisdiction, proposal.level);
-    return this.presence.approve(proposalId, auditActor(actor, dto.by));
+    const by = auditActor(actor, dto.by);
+    // Everything that could refuse is asked BEFORE anything changes: the second person, the rate book, and — for
+    // Established or Partnered — whether the company is ready. Only then is a draft company switched on.
+    const proposal = this.presence.assertApprovable(proposalId, by);
+    this.requirePriceableSwitchOn(proposal.jurisdiction, proposal.level);
+    const company = this.requireReadyCompanyFor(proposal.jurisdiction, proposal.level);
+    if (company) this.entities.activate(company.entityId, by);
+    return this.presence.approve(proposalId, by);
   }
 
   /** CA2 — anyone declines (the proposer withdrawing included), always with a reason. */
@@ -362,6 +386,7 @@ export class SbgController {
   @Post('presence/:jurisdiction')
   setPresence(@Param('jurisdiction') jurisdiction: string, @Body() dto: PresenceDto, @Actor() actor: IntrospectionResult) {
     this.requirePriceableSwitchOn(jurisdiction, dto.level);
+    this.requireReadyCompanyFor(jurisdiction, dto.level);
     // CA2 — a change that raises the country becomes a proposal for a second person; a lowering is applied now.
     return this.presence.propose({
       jurisdiction,
@@ -370,6 +395,113 @@ export class SbgController {
       note: dto.note,
       by: auditActor(actor, dto.by),
     });
+  }
+
+  /* ----------------------------------- CA3–CA5, CA7, CA8: a company, recorded properly -- */
+
+  /**
+   * The readiness gate for Established (a company of ours) and Partnered (a partner), asked when the change is
+   * proposed and again when it is approved. A company already active has been switched on before and is not asked
+   * again; a country with no company at all is refused by the presence, by name.
+   */
+  private requireReadyCompanyFor(jurisdiction: string, level: string): Entity | undefined {
+    if (level !== 'established' && level !== 'partnered') return undefined;
+    const company = level === 'established' ? this.entities.sisterRecordFor(jurisdiction) : this.entities.partnerFor(jurisdiction, { includeDraft: true });
+    if (!company || company.status !== 'draft') return undefined;
+    const readiness = this.readiness.readinessOf(company.entityId);
+    if (!readiness.ready) {
+      const missing = readiness.items.filter((i) => !i.met).map((i) => i.label);
+      throw new GlosError('INVALID_STATE', `${company.name} is not ready to be switched on. Still missing: ${missing.join('; ')}`);
+    }
+    return company;
+  }
+
+  /** CA3/CA7 — create a company of ours or a partner, as a draft. Operator-only: the super-admin side. */
+  @Roles('operator')
+  @Post('entities')
+  createCompany(@Body() dto: CreateCompanyDto, @Actor() actor: IntrospectionResult) {
+    return this.entities.createCompany({ kind: dto.kind, jurisdiction: dto.jurisdiction, name: dto.name }, auditActor(actor, dto.by));
+  }
+
+  /** CA3 — everything about one company: the record, whether it is ready, its papers, what lapsed, what changed. */
+  @Roles('operator', 'entity_admin')
+  @Get('entities/:entityId/record')
+  companyRecord(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult) {
+    this.requireReach(actor, entityId);
+    const entity = this.entities.get(entityId);
+    return {
+      entity: { entityId: entity.entityId, name: entity.name, kind: entity.kind, jurisdiction: entity.jurisdiction, currency: entity.currency, status: entity.status ?? 'active' },
+      record: this.entities.recordOf(entityId),
+      readiness: entity.kind === 'group' ? null : this.readiness.readinessOf(entityId),
+      documents: this.companyDocuments.list(entityId),
+      obligations: catalogueEntry(entity.jurisdiction)?.obligations ?? [],
+      lapses: this.entities.lapsesFor(entity.jurisdiction).filter((l) => l.entityId === entityId),
+      changes: this.entities.changes(entityId, 50),
+    };
+  }
+
+  /** CA3 — save sections of a company's record. Operator-only. */
+  @Roles('operator')
+  @Post('entities/:entityId/record')
+  saveCompanyRecord(@Param('entityId') entityId: string, @Body() dto: CompanyRecordDto, @Actor() actor: IntrospectionResult) {
+    const { by, ...patch } = dto;
+    return this.entities.updateRecord(entityId, patch as Record<string, unknown>, auditActor(actor, by));
+  }
+
+  /** CA4 — put a document on record: fingerprinted, versioned, waiting for a second person to verify it. */
+  @Roles('operator')
+  @Post('entities/:entityId/documents')
+  uploadCompanyDocument(@Param('entityId') entityId: string, @Body() dto: CompanyDocumentDto, @Actor() actor: IntrospectionResult) {
+    return this.companyDocuments.upload({
+      entityId,
+      kind: dto.kind,
+      title: dto.title,
+      dataUrl: dto.dataUrl,
+      relatesTo: dto.relatesTo,
+      expiresAt: dto.expiresAt,
+      by: auditActor(actor, dto.by),
+    });
+  }
+
+  /** CA4 — the file itself, with the fingerprint it was kept under and whether the stored bytes still match it. */
+  @Roles('operator', 'entity_admin')
+  @Get('entities/:entityId/documents/:documentId/file')
+  @Header('Cache-Control', 'private, no-store')
+  @Header('X-Content-Type-Options', 'nosniff')
+  companyDocumentFile(
+    @Param('entityId') entityId: string,
+    @Param('documentId') documentId: string,
+    @Actor() actor: IntrospectionResult,
+    @Res({ passthrough: true }) res: Response,
+  ): StreamableFile {
+    this.requireReach(actor, entityId);
+    const file = this.companyDocuments.file(entityId, documentId);
+    res.setHeader('X-Fingerprint', file.fingerprint);
+    res.setHeader('X-Fingerprint-Intact', String(file.intact));
+    res.setHeader('Access-Control-Expose-Headers', 'X-Fingerprint, X-Fingerprint-Intact');
+    return new StreamableFile(file.bytes, { type: file.contentType });
+  }
+
+  /** CA4 — a second person verifies a document. Never the uploader. */
+  @Roles('operator')
+  @Post('entities/:entityId/documents/:documentId/verify')
+  verifyCompanyDocument(@Param('entityId') entityId: string, @Param('documentId') documentId: string, @Body() dto: DocumentDecisionDto, @Actor() actor: IntrospectionResult) {
+    return this.companyDocuments.verify(entityId, documentId, auditActor(actor, dto.by));
+  }
+
+  /** CA4 — reject a document, always with a reason. */
+  @Roles('operator')
+  @Post('entities/:entityId/documents/:documentId/reject')
+  rejectCompanyDocument(@Param('entityId') entityId: string, @Param('documentId') documentId: string, @Body() dto: DocumentDecisionDto, @Actor() actor: IntrospectionResult) {
+    return this.companyDocuments.reject(entityId, documentId, auditActor(actor, dto.by), dto.reason);
+  }
+
+  /** CA5 — licences and policies lapsing soon, or already lapsed, across every company. Soonest first. */
+  @Roles('operator')
+  @Get('companies/expiring')
+  expiringCompanyPapers(@Query('withinDays') withinDays?: string) {
+    const days = Number(withinDays);
+    return { items: this.entities.expiring(Date.now(), Number.isFinite(days) && days > 0 ? Math.min(days, 365) : 60) };
   }
 
   /**

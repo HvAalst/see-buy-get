@@ -22,10 +22,12 @@ export type RuleOrigin = LanePricing['taxOrigin'];
 export interface EntityRow {
   entityId: string;
   name: string;
-  kind: 'group' | 'sister';
+  kind: 'group' | 'sister' | 'partner';
   jurisdiction?: string;
   currency?: string;
   holdsCustody?: boolean;
+  /** CA3 — a company created from the console is a draft until two people switch its country on. Absent = active. */
+  status?: 'draft' | 'active';
 }
 
 /** The lanes, in the order the table shows them, with the key each one is stored under. */

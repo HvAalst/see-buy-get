@@ -112,6 +112,24 @@ export class PresenceProposal {
   @ApiPropertyOptional() reason?: string;
 }
 
+/**
+ * CA5 — A CAPABILITY SWITCHED OFF BY A LAPSED PAPER.
+ *
+ * A licence or policy is recorded with what it supports. The day after it expires, that capability is off in its
+ * country, whatever the level grants — and the standing says which paper did it, so nobody has to guess why a
+ * country stopped charging customers.
+ */
+export class CapabilityLapse {
+  @ApiProperty({ enum: PRESENCE_CAPABILITIES }) capability: PresenceCapability;
+  @ApiProperty() entityId: string;
+  @ApiProperty({ enum: ['licence', 'insurance'] }) source: 'licence' | 'insurance';
+  @ApiProperty() kind: string;
+  /** The licence or policy number. */
+  @ApiProperty() reference: string;
+  /** The last day it was good for (YYYY-MM-DD). */
+  @ApiProperty() expiredAt: string;
+}
+
 /** What a country's standing permits right now, level and overrides resolved together. */
 export class ResolvedPresence {
   @ApiProperty() jurisdiction: string;
@@ -119,6 +137,8 @@ export class ResolvedPresence {
   @ApiProperty() capabilities: PresenceCapabilities;
   /** True where a transacting sister actually exists. Established cannot be claimed without one. */
   @ApiProperty() hasEntity: boolean;
+  /** CA5 — capabilities switched off because a licence or policy lapsed, each naming the paper that did it. */
+  @ApiProperty({ type: [CapabilityLapse] }) lapses: CapabilityLapse[];
   /** Whether this country was ever recorded, or is simply unknown — which resolves to `observed`. */
   @ApiProperty() recorded: boolean;
   @ApiPropertyOptional() note?: string;

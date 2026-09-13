@@ -1,7 +1,7 @@
 import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsIn, IsNumber, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
 import { PRESENCE_LEVELS, type PresenceLevel } from '../../foundation/presence/presence.types';
 import { Type } from 'class-transformer';
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
 import { DRIVER_ISSUES, DriverIssue } from './rating.service';
 import { MERCHANT_TAGS, MerchantTag } from './merchant-rating.service';
 import { TRUCK_SUBTYPES } from './fleet.config';
@@ -201,6 +201,53 @@ export class PresenceDto {
 export class PresenceDecisionDto {
   @IsOptional() @IsString() by?: string;
   /** Required to decline: a refusal is kept with its reason. */
+  @IsOptional() @IsString() reason?: string;
+}
+
+/** CA3/CA7 — create a company of ours (sister) or a partner, as a draft, in a country from the catalogue. */
+export class CreateCompanyDto {
+  @ApiProperty({ enum: ['sister', 'partner'] }) @IsIn(['sister', 'partner']) kind!: 'sister' | 'partner';
+  @IsString() jurisdiction!: string;
+  @IsString() name!: string;
+  @IsOptional() @IsString() by?: string;
+}
+
+/**
+ * CA3 — sections of a company's legal record. Each section sent replaces the one on record; the service checks every
+ * field (forms, dates, shares, signing authority, what a licence supports) and says which one is wrong.
+ */
+export class CompanyRecordDto {
+  @IsOptional() @IsString() legalName?: string;
+  @IsOptional() @IsString() tradingName?: string;
+  @IsOptional() @IsString() legalForm?: string;
+  @IsOptional() @IsString() registrationNumber?: string;
+  @IsOptional() @IsString() registrationDate?: string;
+  @IsOptional() @IsObject() registeredAddress?: Record<string, unknown>;
+  @IsOptional() @IsObject() operatingAddress?: Record<string, unknown>;
+  @IsOptional() @IsArray() representatives?: Record<string, unknown>[];
+  @IsOptional() @IsArray() beneficialOwners?: Record<string, unknown>[];
+  @IsOptional() @IsArray() taxRegistrations?: Record<string, unknown>[];
+  @IsOptional() @IsArray() bankAccounts?: Record<string, unknown>[];
+  @IsOptional() @IsArray() licences?: Record<string, unknown>[];
+  @IsOptional() @IsArray() insurance?: Record<string, unknown>[];
+  @IsOptional() @IsArray() obligations?: Record<string, unknown>[];
+  @IsOptional() @IsString() by?: string;
+}
+
+/** CA4 — a company document, as a base64 data URL (PDF, PNG or JPEG), fingerprinted on arrival. */
+export class CompanyDocumentDto {
+  @IsString() kind!: string;
+  @IsString() title!: string;
+  @IsString() dataUrl!: string;
+  /** Which licence, policy (its number) or obligation (its key) this paper is for. */
+  @IsOptional() @IsString() relatesTo?: string;
+  @IsOptional() @IsString() expiresAt?: string;
+  @IsOptional() @IsString() by?: string;
+}
+
+/** CA4 — verifying or rejecting a document. A rejection needs its reason. */
+export class DocumentDecisionDto {
+  @IsOptional() @IsString() by?: string;
   @IsOptional() @IsString() reason?: string;
 }
 

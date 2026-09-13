@@ -107,8 +107,9 @@ describe('presence', () => {
 
     it('keeps only the exceptions, so a later level change still moves everything else', () => {
       presence.set({ jurisdiction: 'ZM', level: 'matched', overrides: { payouts: true } });
-      const raised = presence.set({ jurisdiction: 'ZM', level: 'partnered' });
-      expect(raised.capabilities.payouts).toBe(false); // the override was not carried forward silently
+      // (Partnered now needs a real partner company — CA7 — so the level change here is a lowering.)
+      const moved = presence.set({ jurisdiction: 'ZM', level: 'observed' });
+      expect(moved.capabilities.payouts).toBe(false); // the override was not carried forward silently
     });
   });
 
@@ -193,7 +194,7 @@ describe('presence', () => {
 
     it('allows one waiting change per country, and a decline needs a reason that is kept', () => {
       const { proposal } = presence.propose({ jurisdiction: 'ZM', level: 'matched', by: 'Amina' });
-      expect(() => presence.propose({ jurisdiction: 'ZM', level: 'partnered', by: 'Brian' })).toThrow(/already waiting for a second person/);
+      expect(() => presence.propose({ jurisdiction: 'ZM', level: 'matched', overrides: { payouts: true }, by: 'Brian' })).toThrow(/already waiting for a second person/);
       expect(() => presence.decline(proposal!.proposalId, 'Brian')).toThrow(/Say why/);
       expect(presence.decline(proposal!.proposalId, 'Brian', 'Not before the rate book has kwacha')).toMatchObject({ status: 'declined', reason: 'Not before the rate book has kwacha' });
       expect(presence.resolve('ZM').level).toBe('observed');

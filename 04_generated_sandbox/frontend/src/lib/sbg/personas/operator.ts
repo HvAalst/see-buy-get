@@ -173,6 +173,36 @@ export function createOperatorApi(sbg: SbgClient) {
     setPresence: (jurisdiction: string, body: { level: string; overrides?: Record<string, boolean>; note?: string; by?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/presence/{jurisdiction}', { params: { path: { jurisdiction } }, body: body as never })),
 
+    /** CA3/CA7 — create a company of ours or a partner, as a draft. */
+    createCompany: (body: { kind: 'sister' | 'partner'; jurisdiction: string; name: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities', { body: body as never })),
+
+    /** CA3 — one company's record, readiness, papers, lapses and changes. */
+    companyRecord: (entityId: string) => sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/record', { params: { path: { entityId } } })),
+
+    saveCompanyRecord: (entityId: string, body: Record<string, unknown>) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/record', { params: { path: { entityId } }, body: body as never })),
+
+    /** CA4 — papers: fingerprinted on arrival, verified by a second person. */
+    uploadCompanyDocument: (entityId: string, body: { kind: string; title: string; dataUrl: string; relatesTo?: string; expiresAt?: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/documents', { params: { path: { entityId } }, body: body as never })),
+
+    companyDocumentFile: (entityId: string, documentId: string) =>
+      sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/documents/{documentId}/file', { params: { path: { entityId, documentId } }, parseAs: 'blob' })),
+
+    verifyCompanyDocument: (entityId: string, documentId: string, by?: string) =>
+      sbg.request((c) =>
+        c.POST('/v1/sbg/entities/{entityId}/documents/{documentId}/verify', { params: { path: { entityId, documentId } }, body: { ...(by ? { by } : {}) } }),
+      ),
+
+    rejectCompanyDocument: (entityId: string, documentId: string, reason: string, by?: string) =>
+      sbg.request((c) =>
+        c.POST('/v1/sbg/entities/{entityId}/documents/{documentId}/reject', { params: { path: { entityId, documentId } }, body: { reason, ...(by ? { by } : {}) } }),
+      ),
+
+    /** CA5 — licences and policies lapsing soon (or already), across every company. */
+    expiringCompanyPapers: (withinDays = 60) => sbg.request((c) => c.GET('/v1/sbg/companies/expiring', { params: { query: { withinDays: String(withinDays) } } })),
+
     /** CA1 — every country that exists, and whether the rate book can price in its money. */
     countryCatalogue: () => sbg.request((c) => c.GET('/v1/sbg/country-catalogue', {})),
 

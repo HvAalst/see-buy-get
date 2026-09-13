@@ -1,4 +1,6 @@
-import { COUNTRY_LINES, DEFAULT_ID_DOCUMENTS, ID_DOCUMENTS, NO_POSTAL_CODE } from './catalogue.data';
+import { COUNTRY_LINES, DEFAULT_ID_DOCUMENTS, DEFAULT_OBLIGATIONS, ID_DOCUMENTS, NO_POSTAL_CODE, OBLIGATIONS, type LocalObligation } from './catalogue.data';
+
+export type { LocalObligation } from './catalogue.data';
 
 /**
  * THE COUNTRIES THAT EXIST — the only place a new jurisdiction may come from.
@@ -19,6 +21,8 @@ export interface CatalogueCountry {
   postalCode: boolean;
   /** The identity documents vetting accepts there. */
   idDocuments: string[];
+  /** CA8 — what the country requires of a company operating there, beyond incorporation and tax. */
+  obligations: LocalObligation[];
 }
 
 const regionName = new Intl.DisplayNames(['en'], { type: 'region' });
@@ -36,6 +40,7 @@ export const COUNTRY_CATALOGUE: readonly CatalogueCountry[] = COUNTRY_LINES.trim
       languages: languages.split(','),
       postalCode: !NO_POSTAL_CODE.has(code),
       idDocuments: ID_DOCUMENTS[code] ?? DEFAULT_ID_DOCUMENTS,
+      obligations: OBLIGATIONS[code] ?? DEFAULT_OBLIGATIONS,
     } satisfies CatalogueCountry;
   });
 

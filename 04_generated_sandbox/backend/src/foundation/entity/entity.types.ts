@@ -1,3 +1,4 @@
+import type { CompanyRecord } from './company-record.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 /**
@@ -15,7 +16,8 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
  * and `jurisdiction` are optional here: a company that settles nothing needs neither.
  */
 
-export type EntityKind = 'group' | 'sister';
+/** CA7 — a partner is a local company that contracts where we are Partnered: recorded like ours, never a party to our books. */
+export type EntityKind = 'group' | 'sister' | 'partner';
 
 /**
  * What a sister charges on top of what a shipment COST it, in three layers it decides separately.
@@ -170,8 +172,8 @@ export class EntityChange {
   at: string;
   /** The name the token carried, or the DID when a machine did it. Never a string from a request body. */
   by: string;
-  @ApiProperty({ enum: ['rates', 'tax', 'cover', 'fee'] })
-  what: 'rates' | 'tax' | 'cover' | 'fee';
+  @ApiProperty({ enum: ['rates', 'tax', 'cover', 'fee', 'created', 'record', 'activated'] })
+  what: 'rates' | 'tax' | 'cover' | 'fee' | 'created' | 'record' | 'activated';
   /** The lane it applies to; absent means the company's default for everything. */
   @ApiPropertyOptional()
   lane?: string;
@@ -252,7 +254,7 @@ export class PricingBounds {
 export class EntityPricing {
   entityId: string;
   name: string;
-  @ApiProperty({ enum: ['group', 'sister'] })
+  @ApiProperty({ enum: ['group', 'sister', 'partner'] })
   kind: EntityKind;
   @ApiPropertyOptional()
   jurisdiction?: string;
@@ -348,15 +350,22 @@ export class Entity {
   insuranceByLane?: Record<string, InsuranceRule>;
   /** Sisters point at the group they belong to. */
   parentEntityId?: string;
+  /**
+   * CA3 — a company created from the console starts as a DRAFT: recorded, documented, and able to do nothing at all
+   * until its record is ready and two people approve the country up to it. Absent means active (the seeds).
+   */
+  status?: 'draft' | 'active';
+  /** CA3 — the legal record: form, registration, representatives, owners, tax numbers, bank, licences, insurance. */
+  record?: CompanyRecord;
   createdAt: string;
 }
 
 /** Only a sister may be named as the collector or performer on a transaction. */
 export function canTransact(entity: Entity): boolean {
-  return entity.kind === 'sister';
+  return entity.kind === 'sister' && entity.status !== 'draft';
 }
 
 /** Only a sister may hold a settlement account. The group's isolation is exactly this. */
 export function canHoldCustody(entity: Entity): boolean {
-  return entity.kind === 'sister';
+  return entity.kind === 'sister' && entity.status !== 'draft';
 }
