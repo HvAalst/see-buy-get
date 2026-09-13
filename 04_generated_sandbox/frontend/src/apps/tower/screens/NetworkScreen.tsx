@@ -1,3 +1,4 @@
+import type { StaffRow } from '../api';
 import { useState, useCallback, useEffect } from 'preact/hooks';
 import { Icon, PlaceMap } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
@@ -213,6 +214,7 @@ export function NetworkScreen({ state, actions }: { state: TowerState; actions: 
       </section>
 
       {state.who?.mode === 'operator' ? <FleetsPanel actions={actions} /> : null}
+      {state.who?.mode === 'operator' ? <StaffPanel actions={actions} /> : null}
 
       <section class="cons__panel" style="margin-top:18px">
         <div class="cons__panelhead">
@@ -360,6 +362,154 @@ function FleetsPanel({ actions }: { actions: TowerActions }) {
                   ) : (
                     <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setConfirm(f.did)}>
                       {t('tower.network.fleets.rotate')}
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
+
+/**
+ * Who works for the network — one sign-in each. The panel exists so that "a different person must approve this" can
+ * be true: until the first account is made, everybody holds the one setup key and every name is typed.
+ */
+function StaffPanel({ actions }: { actions: TowerActions }) {
+  const t = useT();
+  const client = actions.client();
+  const [rows, setRows] = useState<StaffRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<string | null>(null);
+  // Shown until it is closed BY HAND: this is the only time this password exists anywhere.
+  const [made, setMade] = useState<{ name: string; email: string; temporaryPassword: string } | null>(null);
+
+  const load = useCallback(async () => {
+    if (!client) return;
+    const r = await client.api.staff();
+    if (r.error) setError(r.error.detail || r.error.title);
+    else setRows((r.data as unknown as { items?: StaffRow[] })?.items ?? []);
+  }, [client]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const create = async () => {
+    if (!client) return;
+    setBusy('create');
+    setError(null);
+    const r = await client.api.createStaff({ email: email.trim(), name: name.trim() });
+    setBusy(null);
+    if (r.error) return setError(r.error.detail || r.error.title);
+    setMade(r.data as unknown as { name: string; email: string; temporaryPassword: string });
+    setName('');
+    setEmail('');
+    setOpen(false);
+    await load();
+  };
+
+  return (
+    <section class="cons__panel" style="margin-top:18px">
+      <div class="cons__panelhead">
+        <span class="cons__panelt">{t('tower.staff.title')}</span>
+        <button type="button" class="cbtn cbtn--ghost cbtn--sm" aria-expanded={open} onClick={() => setOpen(!open)}>
+          {open ? t('common.close') : t('tower.staff.add')}
+        </button>
+      </div>
+      <p class="ctbl__sub" style="margin:10px 16px 0">{t('tower.staff.lede')}</p>
+      {error ? <p class="cerr" style="margin:12px 16px">{error}</p> : null}
+
+      {made ? (
+        <div class="twr-reveal">
+          <p class="twr-clear__t">{t('tower.staff.revealTitle', { name: made.name })}</p>
+          <p class="twr-clear__b">{t('tower.staff.revealBody')}</p>
+          <p class="twr-reveal__creds">
+            <span class="ctbl__mono">{made.email}</span>
+            <span class="ctbl__mono twr-reveal__pw">{made.temporaryPassword}</span>
+          </p>
+          <button type="button" class="cbtn cbtn--primary" onClick={() => setMade(null)}>
+            {t('tower.staff.revealDone')}
+          </button>
+        </div>
+      ) : null}
+
+      {open ? (
+        <div class="twr-knobs" style="padding:12px 16px">
+          <div class="twr-knobs__row">
+            <div class="twr-knob">
+              <label class="cfield">
+                <span class="cfield__label">{t('tower.staff.name')}</span>
+                <input class="cinput" value={name} onInput={(e) => setName((e.target as HTMLInputElement).value)} />
+                <span class="chint">{t('tower.staff.nameHint')}</span>
+              </label>
+              <label class="cfield">
+                <span class="cfield__label">{t('tower.staff.email')}</span>
+                <input class="cinput" type="email" value={email} onInput={(e) => setEmail((e.target as HTMLInputElement).value)} />
+              </label>
+              <button type="button" class="cbtn cbtn--primary" disabled={busy === 'create' || !email.trim() || !name.trim()} onClick={() => void create()}>
+                {t('tower.staff.create')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {rows === null ? (
+        <p class="cons__empty">{t('tower.queues.loading')}</p>
+      ) : rows.length === 0 ? (
+        <p class="cons__empty">{t('tower.staff.none')}</p>
+      ) : (
+        <table class="ctbl">
+          <thead>
+            <tr>
+              <th>{t('tower.staff.col.who')}</th>
+              <th>{t('tower.staff.col.email')}</th>
+              <th>{t('tower.staff.col.lastSeen')}</th>
+              <th>{t('tower.staff.col.password')}</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((a) => (
+              <tr key={a.operatorId}>
+                <td class="ctbl__strong">{a.name}</td>
+                <td class="ctbl__mono">{a.email}</td>
+                <td class="ctbl__sub">{a.lastSeenAt ? new Date(a.lastSeenAt).toLocaleString() : t('tower.staff.never')}</td>
+                <td class="ctbl__sub">{a.passwordChangedAt ? new Date(a.passwordChangedAt).toLocaleDateString() : t('tower.staff.never')}</td>
+                <td class="ctbl__num">
+                  {confirm === a.operatorId ? (
+                    <span class="twr-panelend">
+                      <button
+                        type="button"
+                        class="cbtn cbtn--primary cbtn--sm"
+                        disabled={busy === a.operatorId}
+                        onClick={async () => {
+                          if (!client) return;
+                          setBusy(a.operatorId);
+                          const r = await client.api.revokeStaff(a.operatorId);
+                          setBusy(null);
+                          setConfirm(null);
+                          if (r.error) setError(r.error.detail || r.error.title);
+                          else await load();
+                        }}
+                      >
+                        {t('tower.staff.revokeConfirm')}
+                      </button>
+                      <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setConfirm(null)}>
+                        {t('tower.presence.cancel')}
+                      </button>
+                    </span>
+                  ) : (
+                    <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setConfirm(a.operatorId)}>
+                      {t('tower.staff.revoke')}
                     </button>
                   )}
                 </td>

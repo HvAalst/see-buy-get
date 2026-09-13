@@ -125,6 +125,24 @@ export class AuthService {
   }
 
   /**
+   * An operator token for ONE PERSON — a staff account signed in. Same rights as the shared key's token, plus the
+   * two things that token can never have: the name the account was created with, and a key that signs out this
+   * person's sessions alone.
+   */
+  mintOperatorSession(input: { name: string; revocationKey: string }): AccessToken {
+    return this.issueToken({
+      sub: input.revocationKey,
+      type: 'client_credentials',
+      role: 'operator',
+      scopes: ['*'],
+      actorName: input.name,
+      revocationKey: input.revocationKey,
+      revocationVersion: this.revocations.get(input.revocationKey) ?? 0,
+      ttlSeconds: SHIFT_TTL_SECONDS,
+    });
+  }
+
+  /**
    * Impersonate a participant — mint an actor token for an arbitrary registered DID. Trusted-caller
    * only (client secret). Used by the seed and ops tooling to act AS an entity they provisioned
    * without a password. In dev (no secret configured) this is open, like every grant.

@@ -19,7 +19,7 @@ import type { TowerActions } from '../useTowerApp';
  */
 export function SignInScreen({ actions, error, busy }: { actions: TowerActions; error: string | null; busy: boolean }) {
   const t = useT();
-  const [mode, setMode] = useState<'company' | 'operator'>('company');
+  const [mode, setMode] = useState<'company' | 'staff' | 'operator'>('company');
 
   return (
     <div class="twr-signin">
@@ -35,12 +35,21 @@ export function SignInScreen({ actions, error, busy }: { actions: TowerActions; 
           <button type="button" class={`twr-mode${mode === 'company' ? ' twr-mode--on' : ''}`} aria-pressed={mode === 'company'} onClick={() => setMode('company')}>
             {t('tower.signIn.asCompany')}
           </button>
+          <button type="button" class={`twr-mode${mode === 'staff' ? ' twr-mode--on' : ''}`} aria-pressed={mode === 'staff'} onClick={() => setMode('staff')}>
+            {t('tower.signIn.asStaff')}
+          </button>
           <button type="button" class={`twr-mode${mode === 'operator' ? ' twr-mode--on' : ''}`} aria-pressed={mode === 'operator'} onClick={() => setMode('operator')}>
             {t('tower.signIn.asOperator')}
           </button>
         </div>
 
-        {mode === 'company' ? <CompanyForm actions={actions} error={error} busy={busy} /> : <OperatorForm actions={actions} error={error} busy={busy} />}
+        {mode === 'company' ? (
+          <CompanyForm actions={actions} error={error} busy={busy} />
+        ) : mode === 'staff' ? (
+          <AccountForm actions={actions} error={error} busy={busy} staff />
+        ) : (
+          <OperatorForm actions={actions} error={error} busy={busy} />
+        )}
       </div>
     </div>
   );
@@ -48,6 +57,14 @@ export function SignInScreen({ actions, error, busy }: { actions: TowerActions; 
 
 /** A company's own administrator: an ordinary account, and the console works out the rest from the token. */
 function CompanyForm({ actions, error, busy }: { actions: TowerActions; error: string | null; busy: boolean }) {
+  return <AccountForm actions={actions} error={error} busy={busy} />;
+}
+
+/**
+ * Email + password — a company's administrator, or (`staff`) a member of network staff. The same two fields, but
+ * two different doors: which one you came through decides what the console shows you.
+ */
+function AccountForm({ actions, error, busy, staff }: { actions: TowerActions; error: string | null; busy: boolean; staff?: boolean }) {
   const t = useT();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -57,13 +74,13 @@ function CompanyForm({ actions, error, busy }: { actions: TowerActions; error: s
     e.preventDefault();
     if (!email.trim() || !password) return setLocal(t('tower.signIn.needBoth'));
     setLocal(null);
-    void actions.signInAsCompany(email, password);
+    void (staff ? actions.signInAsStaff(email, password) : actions.signInAsCompany(email, password));
   };
 
   return (
     <form onSubmit={submit}>
-      <h1 class="cons__title">{t('tower.signIn.companyTitle')}</h1>
-      <p class="cons__lede">{t('tower.signIn.companyLede')}</p>
+      <h1 class="cons__title">{t(staff ? 'tower.signIn.staffTitle' : 'tower.signIn.companyTitle')}</h1>
+      <p class="cons__lede">{t(staff ? 'tower.signIn.staffLede' : 'tower.signIn.companyLede')}</p>
 
       <label class="cfield" style="margin-top:18px">
         <span class="cfield__label">{t('tower.signIn.email')}</span>
@@ -73,7 +90,7 @@ function CompanyForm({ actions, error, busy }: { actions: TowerActions; error: s
       <label class="cfield">
         <span class="cfield__label">{t('tower.signIn.password')}</span>
         <input class="cinput" type="password" value={password} autocomplete="current-password" onInput={(e) => setPassword((e.target as HTMLInputElement).value)} />
-        <span class="chint">{t('tower.signIn.companyHint')}</span>
+        <span class="chint">{t(staff ? 'tower.signIn.staffHint' : 'tower.signIn.companyHint')}</span>
       </label>
 
       {local || error ? <p class="cerr">{local ?? error}</p> : null}

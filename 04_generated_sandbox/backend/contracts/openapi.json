@@ -4782,6 +4782,127 @@
         }
       }
     },
+    "/v1/sbg/operators": {
+      "post": {
+        "operationId": "Sbg.createOperator",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityAdminDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "Sbg.listOperators",
+        "summary": "",
+        "description": "Every staff account that can still sign in.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/operators/{operatorId}": {
+      "delete": {
+        "operationId": "Sbg.revokeOperator",
+        "summary": "",
+        "description": "Take a staff login away; its open sessions end at once. The record is kept.",
+        "parameters": [
+          {
+            "name": "operatorId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperatorAccountView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/operators/login": {
+      "post": {
+        "operationId": "Sbg.operatorLogin",
+        "summary": "",
+        "description": "A staff member signs in. The token carries their name, so nothing has to be typed beside it.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityAdminLoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/operators/password": {
+      "post": {
+        "operationId": "Sbg.changeOperatorPassword",
+        "summary": "",
+        "description": "A staff member changes their own password, proven with the current one.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityAdminPasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/entities/admins/login": {
       "post": {
         "operationId": "Sbg.entityAdminLogin",
@@ -17664,6 +17785,38 @@
           "email",
           "name",
           "entityId",
+          "createdAt"
+        ]
+      },
+      "OperatorAccountView": {
+        "type": "object",
+        "properties": {
+          "lastSeenAt": {
+            "type": "string"
+          },
+          "passwordChangedAt": {
+            "type": "string"
+          },
+          "revokedAt": {
+            "type": "string"
+          },
+          "operatorId": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "operatorId",
+          "email",
+          "name",
           "createdAt"
         ]
       },

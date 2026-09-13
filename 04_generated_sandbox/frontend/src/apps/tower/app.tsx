@@ -130,8 +130,11 @@ export function App() {
             {/* Which COMPANY, when it is one — an administrator of two sister companies signs in twice,
                 and the difference has to be visible from the masthead, not inferred from the table. */}
             {state.who?.entityId ? <span class="ctag ctag--quiet twr-whoco">{companyName(state)}</span> : null}
+            {/* Said in the masthead, where every decision is taken: a name typed beside the setup key proves nothing. */}
+            {state.creds?.mode === 'operator' ? <span class="ctag ctag--quiet twr-whoco">{t('tower.signIn.unverified')}</span> : null}
           </span>
-          {state.who?.mode === 'company' ? (
+          {/* The setup key has no password of its own to change; everybody with an account does. */}
+          {state.creds && state.creds.mode !== 'operator' ? (
             <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setPasswordOpen((open) => !open)}>
               {t('tower.password.open')}
             </button>
@@ -146,7 +149,7 @@ export function App() {
         {wide ? <ConsoleRail groups={groups} screen={state.screen} counts={counts} onGo={actions.go} /> : null}
 
         <main class="cons__main">
-          {passwordOpen && state.who?.mode === 'company' ? <CompanyPasswordPanel actions={actions} onClose={() => setPasswordOpen(false)} /> : null}
+          {passwordOpen && state.creds && state.creds.mode !== 'operator' ? <CompanyPasswordPanel actions={actions} onClose={() => setPasswordOpen(false)} /> : null}
           {state.screen === 'presence' ? (
             <PresenceScreen state={state} actions={actions} />
           ) : state.screen === 'corridors' ? (

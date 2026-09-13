@@ -300,6 +300,10 @@ export function createOperatorApi(sbg: SbgClient) {
     /** Take a login away. The record is kept, so past changes still have a name on them. */
     revokeAdmin: (entityId: string, adminId: string) =>
       sbg.request((c) => c.DELETE('/v1/sbg/entities/{entityId}/admins/{adminId}', { params: { path: { entityId, adminId } } })),
+    /** Network staff, one account each. */
+    staff: () => sbg.request((c) => c.GET('/v1/sbg/operators')),
+    createStaff: (body: { email: string; name: string }) => sbg.request((c) => c.POST('/v1/sbg/operators', { body })),
+    revokeStaff: (operatorId: string) => sbg.request((c) => c.DELETE('/v1/sbg/operators/{operatorId}', { params: { path: { operatorId } } })),
 
     /**
      * What a rate change actually DID — the shipments either side of it, as a timeline of spells.

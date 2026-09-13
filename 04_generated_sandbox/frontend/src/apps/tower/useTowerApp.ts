@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { narrow, type SbgError } from '../../lib/sbg';
 import { downscaleImage } from '../../shared/media';
 import { t } from '../../shared/i18n'; // plain t(): these strings are built at action time
-import { changeCompanyPassword, clearCreds, companyLogin, createTowerClient, readCreds, saveCreds, type TowerClient, type TowerCreds } from './api';
+import { changeCompanyPassword, changeStaffPassword, clearCreds, companyLogin, createTowerClient, readCreds, saveCreds, staffLogin, type TowerClient, type TowerCreds } from './api';
 import type { ConstraintView } from './logic';
 import type { EntityPricing, EntityRow } from './money';
 import type { ApprovalRow, ClaimDecision, ClaimRow, DisposalRow, StalledRow } from './queues';
@@ -24,7 +24,7 @@ export interface TowerState {
   creds: TowerCreds | null;
   /** WHO the network says this is, once a token exists. Drives the rail: an operator sees the whole
    *  network, a company administrator sees their own company and whatever sits under it. */
-  who: { mode: 'operator' | 'company'; name: string; entityId?: string } | null;
+  who: { mode: 'operator' | 'company'; name: string; entityId?: string; /** The name came from an account, not from a field beside the shared key. */ named?: boolean } | null;
   /** The disputed queue, longest wait first — the server's order, kept as it arrives. */
   hazards: ConstraintView[] | null;
   /** CV1 — messages a party reported in a conversation. Null while unread. */
@@ -189,6 +189,8 @@ export interface RateImpactView {
 export interface TowerActions {
   signIn(name: string, key: string): Promise<void>;
   signInAsCompany(email: string, password: string): Promise<void>;
+  /** A member of network staff, with an account of their own. */
+  signInAsStaff(email: string, password: string): Promise<void>;
   addAdmin(entityId: string, email: string, name: string): Promise<void>;
   dismissNewAdmin(): void;
   /** A company administrator changes their password; null when done, else the refusal to show. */
@@ -573,6 +575,22 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       void loadEntities(client);
       return;
     }
+    if (creds.mode === 'staff') {
+      // Asked again, like a company login: the stored credential says how to sign in, never who this is.
+      void staffLogin(creds.email, creds.password).then(({ data, error }) => {
+        if (error || !data) {
+          clearCreds();
+          setState((s) => ({ ...s, phase: 'signin', signInError: error?.detail ?? null }));
+          return;
+        }
+        setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'operator', name: data.name, named: true } }));
+        void loadHazards(client);
+        void loadQueues(client);
+        void loadNetwork(client);
+        void loadEntities(client);
+      });
+      return;
+    }
     // A company login has to ask the server who it is again — the stored credential says how to sign in,
     // never what it may reach, and a console that assumed the second would be guessing at somebody's
     // authority from a value in their own browser.
@@ -643,6 +661,31 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       await loadEntities(client);
     },
     [loadEntities],
+  );
+
+  /**
+   * A member of network staff signs in. Operator rights, like the setup key — but the name comes from their account,
+   * so nothing is typed beside it and a two-person rule can tell two people apart.
+   */
+  const signInAsStaff = useCallback(
+    async (email: string, password: string) => {
+      setState((s) => ({ ...s, loading: true, signInError: null }));
+      const { data, error } = await staffLogin(email.trim(), password);
+      if (error || !data) {
+        setState((s) => ({ ...s, loading: false, signInError: error?.detail || t('tower.signIn.rejected') }));
+        return;
+      }
+      const creds: TowerCreds = { mode: 'staff', email: email.trim(), password };
+      const client = createTowerClient(creds);
+      clientRef.current = client;
+      saveCreds(creds);
+      setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'operator', name: data.name, named: true }, screen: 'network', signInError: null, loading: false }));
+      await loadHazards(client);
+      await loadQueues(client);
+      await loadNetwork(client);
+      await loadEntities(client);
+    },
+    [loadHazards, loadQueues, loadNetwork, loadEntities],
   );
 
   const signOut = useCallback(() => {
@@ -961,6 +1004,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         return r.error ? null : ((r.data ?? null) as unknown as Blob | null);
       },
       signInAsCompany,
+      signInAsStaff,
       showQueueError: (message: string) => setState((s) => ({ ...s, queueError: message })),
       /**
        * Decide a claim. The note travels on every ending, including a rejection.
@@ -1026,11 +1070,11 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       dismissNewAdmin: () => setState((s) => ({ ...s, newAdmin: null })),
       changeCompanyPassword: async (current: string, next: string) => {
         const creds = stateRef.current.creds;
-        if (!creds || creds.mode !== 'company') return t('tower.password.onlyCompany');
-        const { error } = await changeCompanyPassword(creds.email, current, next);
+        if (!creds || creds.mode === 'operator') return t('tower.password.onlyCompany');
+        const { error } = await (creds.mode === 'staff' ? changeStaffPassword : changeCompanyPassword)(creds.email, current, next);
         if (error) return error.detail || error.title;
         // The console re-signs itself in with what it keeps, so it must keep the NEW password, not the old one.
-        const fresh: TowerCreds = { mode: 'company', email: creds.email, password: next };
+        const fresh: TowerCreds = { mode: creds.mode, email: creds.email, password: next };
         saveCreds(fresh);
         clientRef.current = createTowerClient(fresh);
         setState((s) => ({ ...s, creds: fresh }));

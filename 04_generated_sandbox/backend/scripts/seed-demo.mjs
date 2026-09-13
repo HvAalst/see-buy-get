@@ -87,6 +87,23 @@ const run = async () => {
   /* ---------------------------------------------------------- operator ---- */
   const op = need(await req('POST', '/v1/auth/token', { body: { role: 'operator' } }), 'operator mint').access_token;
 
+  // Two NAMED staff accounts: the two-person rules (a country switched on, a company's papers verified) are about
+  // people, and the console can now show two real ones instead of two names typed beside one key.
+  const STAFF_PASSWORD = 'seebuyget-staff';
+  for (const [email, name] of [
+    ['ops1@sbg.test', 'Amina Otieno'],
+    ['ops2@sbg.test', 'Brian Kamau'],
+  ]) {
+    if ((await req('POST', '/v1/sbg/operators/login', { body: { email, password: STAFF_PASSWORD } })).ok) continue;
+    const made = await req('POST', '/v1/sbg/operators', { token: op, body: { email, name } });
+    if (!made.ok) {
+      say(`  (staff account ${email} exists with a password this seeder did not set — left alone)`);
+      continue;
+    }
+    need(await req('POST', '/v1/sbg/operators/password', { body: { email, password: made.data.temporaryPassword, newPassword: STAFF_PASSWORD } }), `staff password ${email}`);
+    say(`staff account ${email} (${name}) created`);
+  }
+
   /* ---------------------------------------------------------- corridors --- */
   const corridors = need(await req('GET', '/v1/sbg/corridors', { token: op }), 'corridors');
   for (const [o, d] of [
@@ -646,7 +663,8 @@ const run = async () => {
   out.push(`  Fleet app   /fleet/   company ${fleetCode} · then ${mgr.contactPhone} PIN ${MGR_PIN}`);
   out.push(`  Driver app  /driver/  phone ${amosPhone} PIN ${DRIVER_PIN}   (Amos K.)`);
   out.push('  Send app    /send/    no sign-in needed');
-  out.push('  Operator    /tower/   your name + any key (no GLOS_CLIENT_SECRET set in a sandbox)');
+  out.push('  Operator    /tower/   ops1@sbg.test / seebuyget-staff (Amina Otieno) · ops2@sbg.test (Brian Kamau), same password');
+  out.push('              /tower/   or the setup key: your name + any key (no GLOS_CLIENT_SECRET set in a sandbox)');
   for (const a of companyAdmins) {
     out.push(`              /tower/   ${a.email.padEnd(18)} / ${a.password}   (${a.kind === 'group' ? 'the group: sees every sister' : 'this company only'})`);
   }

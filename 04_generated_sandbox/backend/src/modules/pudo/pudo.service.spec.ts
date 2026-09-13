@@ -52,6 +52,7 @@ import { AuthService } from '../../foundation/auth/auth.service';
 import { DidService } from '../../foundation/did/did.service';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { EntityAdminService } from '../../foundation/entity/entity-admin.service';
+import { OperatorAccountService } from '../../foundation/entity/operator-account.service';
 import { PresenceService } from '../../foundation/presence/presence.service';
 import { BooksService } from '../../foundation/books/books.service';
 import { FxService } from '../../foundation/money/fx.service';
@@ -123,7 +124,7 @@ describe('PUDO Light', () => {
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
         GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, VehicleService, DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
-        WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus, EntityService, EntityAdminService, PresenceService, CompanyDocumentService, CompanyReadinessService, BorderRuleService, BooksService, FxService, ApiKeyService,
+        WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus, EntityService, EntityAdminService, OperatorAccountService, PresenceService, CompanyDocumentService, CompanyReadinessService, BorderRuleService, BooksService, FxService, ApiKeyService,
         PayoutService, ReturnService, UnclaimedService, MerchantRatingService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
         GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder },
@@ -4530,6 +4531,28 @@ describe('PUDO Light', () => {
       otp.verify(phone, otp.request(phone).code);
       persons.enroll(phone, true, '4826');
       expect(() => controller.driverSignIn({ phone, pin: '4826' })).toThrow(/not registered to a driver/);
+    });
+  });
+
+  describe('two-person rules need named people outside a sandbox', () => {
+    const before = process.env.GLOS_ENV;
+    afterEach(() => {
+      if (before === undefined) delete process.env.GLOS_ENV;
+      else process.env.GLOS_ENV = before;
+    });
+    const sharedKey = { active: true, role: 'operator', sub: 'glos-operator', scopes: ['*'] } as never;
+    const named = { active: true, role: 'operator', sub: 'operator:opr_x', scopes: ['*'], actorName: 'Amina Otieno' } as never;
+
+    it('refuses the shared key in production, and lets a named staff member through to the real check', () => {
+      process.env.GLOS_ENV = 'production';
+      expect(() => controller.declinePresence('prop_nope', { by: 'Brian', reason: 'no' } as never, sharedKey)).toThrow(/named sign-in/);
+      expect(() => controller.verifyCompanyDocument('ent_nope', 'doc_nope', { by: 'Brian' } as never, sharedKey)).toThrow(/named sign-in/);
+      expect(() => controller.declinePresence('prop_nope', { reason: 'no' } as never, named)).not.toThrow(/named sign-in/);
+    });
+
+    it('still accepts a typed name on a laptop, so a demo can play both people', () => {
+      delete process.env.GLOS_ENV;
+      expect(() => controller.declinePresence('prop_nope', { by: 'Brian', reason: 'no' } as never, sharedKey)).not.toThrow(/named sign-in/);
     });
   });
 

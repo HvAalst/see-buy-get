@@ -148,6 +148,39 @@ export interface EntityAdmin {
   revokedAt?: string;
 }
 
+/** A person who works for the NETWORK (operator rights), with a login of their own. */
+export interface OperatorAccount {
+  operatorId: string;
+  /** The login, lower-cased. */
+  email: string;
+  /** What every decision they make is recorded against. Set at creation, carried in the token. */
+  name: string;
+  salt: string;
+  hash: string;
+  createdAt: string;
+  /** Who created it — another staff member's name, or the setup key. */
+  createdBy: string;
+  lastSeenAt?: string;
+  passwordChangedAt?: string;
+  /** Revoked logins are KEPT: a decision still needs the name of whoever made it. */
+  revokedAt?: string;
+  revokedBy?: string;
+}
+
+/** A staff account as the console reads it — no salt, no hash, ever. */
+export class OperatorAccountView {
+  operatorId: string;
+  email: string;
+  name: string;
+  createdAt: string;
+  @ApiPropertyOptional()
+  lastSeenAt?: string;
+  @ApiPropertyOptional()
+  passwordChangedAt?: string;
+  @ApiPropertyOptional()
+  revokedAt?: string;
+}
+
 /** An administrator as anybody may read them — no salt, no hash, no password, ever. */
 export class EntityAdminView {
   adminId: string;

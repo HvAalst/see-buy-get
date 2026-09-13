@@ -34,7 +34,7 @@ const TOKEN_KEY = 'sbg:tower:token';
  * actually authenticated, and they reach their own company and nothing else. A sister's admin sees its
  * own terms; the group's sees the group and every sister under it.
  */
-export type TowerMode = 'operator' | 'company';
+export type TowerMode = 'operator' | 'company' | 'staff';
 
 export interface OperatorCreds {
   mode: 'operator';
@@ -50,7 +50,36 @@ export interface CompanyCreds {
   password: string;
 }
 
-export type TowerCreds = OperatorCreds | CompanyCreds;
+/**
+ * A member of NETWORK STAFF with an account of their own: operator rights, and a name the network established —
+ * so a decision that needs two people really takes two. The shared key (`OperatorCreds`) stays for creating the
+ * first of these accounts and for scripts.
+ */
+export interface StaffCreds {
+  mode: 'staff';
+  email: string;
+  password: string;
+}
+
+export type TowerCreds = OperatorCreds | CompanyCreds | StaffCreds;
+
+/** What a staff login answers with. */
+export interface StaffLogin {
+  operatorId: string;
+  email: string;
+  name: string;
+  token: { access_token: string; expires_in?: number };
+}
+
+/** A staff account as the console lists it. */
+export interface StaffRow {
+  operatorId: string;
+  email: string;
+  name: string;
+  createdAt: string;
+  lastSeenAt?: string;
+  passwordChangedAt?: string;
+}
 
 /** What a company login answers with — the person, and the company they administer. */
 export interface EntityAdminLogin {
@@ -86,6 +115,16 @@ export function changeCompanyPassword(email: string, password: string, newPasswo
   return publicRequest<{ ok: true }>(towerConfig(), '/v1/sbg/entities/admins/password', { body: { email, password, newPassword } });
 }
 
+/** A member of network staff signs in. */
+export function staffLogin(email: string, password: string): Promise<Result<StaffLogin>> {
+  return publicRequest<StaffLogin>(towerConfig(), '/v1/sbg/operators/login', { body: { email, password } });
+}
+
+/** A member of network staff changes their own password, proven with the current one. */
+export function changeStaffPassword(email: string, password: string, newPassword: string): Promise<Result<{ ok: true }>> {
+  return publicRequest<{ ok: true }>(towerConfig(), '/v1/sbg/operators/password', { body: { email, password, newPassword } });
+}
+
 export function companyLogin(email: string, password: string): Promise<Result<EntityAdminLogin>> {
   return publicRequest<EntityAdminLogin>(towerConfig(), '/v1/sbg/entities/admins/login', { body: { email, password } });
 }
@@ -105,7 +144,12 @@ export interface TowerClient {
 export function createTowerClient(creds: TowerCreds): TowerClient {
   // Both modes hold their credential for as long as the tab lives, so both re-mint by themselves rather
   // than bouncing somebody to sign-in mid-decision. What differs is only what the credential IS.
-  const login = creds.mode === 'operator' ? () => mintOperatorToken(creds.key) : () => companyLogin(creds.email, creds.password);
+  const login =
+    creds.mode === 'operator'
+      ? () => mintOperatorToken(creds.key)
+      : creds.mode === 'staff'
+        ? () => staffLogin(creds.email, creds.password)
+        : () => companyLogin(creds.email, creds.password);
   const client = createCredentialedClient(towerConfig(), TOKEN_KEY, login);
   return { api: createOperatorApi(client.sbg), client };
 }
@@ -121,6 +165,7 @@ export function readCreds(): TowerCreds | null {
     const parsed = JSON.parse(raw) as { mode?: string; name?: string; key?: string; email?: string; password?: string };
     // A stored shape from before there were two modes reads as the operator one, which is what it was.
     if (parsed?.mode === 'company') return parsed.email && parsed.password ? { mode: 'company', email: parsed.email, password: parsed.password } : null;
+    if (parsed?.mode === 'staff') return parsed.email && parsed.password ? { mode: 'staff', email: parsed.email, password: parsed.password } : null;
     return parsed?.name && parsed?.key ? { mode: 'operator', name: parsed.name, key: parsed.key } : null;
   } catch {
     return null;

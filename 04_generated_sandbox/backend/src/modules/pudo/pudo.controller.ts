@@ -58,8 +58,9 @@ import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { classifySize, MAX_CLAIM_AWARD, measuredFactor, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
-import { EntityAdminView, EntityChanges, EntityPricing } from '../../foundation/entity/entity.types';
+import { EntityAdminView, OperatorAccountView, EntityChanges, EntityPricing } from '../../foundation/entity/entity.types';
 import { EntityAdminService } from '../../foundation/entity/entity-admin.service';
+import { OperatorAccountService } from '../../foundation/entity/operator-account.service';
 import { CARGO_LANES } from './cargo.types';
 import { ReturnService } from './return.service';
 import { PayoutService } from '../../foundation/payouts/payout.service';
@@ -127,6 +128,7 @@ export class SbgController {
     private readonly readiness: CompanyReadinessService,
     private readonly borderRules: BorderRuleService,
     private readonly entityAdmins: EntityAdminService,
+    private readonly operatorAccounts: OperatorAccountService,
     private readonly fx: FxService,
     private readonly apiKeys: ApiKeyService,
     private readonly books: BooksService,
@@ -326,6 +328,20 @@ export class SbgController {
    * A company an admin does not reach answers NOT FOUND rather than FORBIDDEN: "you may not touch this"
    * confirms it exists, and which companies a group owns is not a stranger's business.
    */
+  /**
+   * The name a TWO-PERSON rule records — and outside a sandbox, only a name the network established at sign-in.
+   *
+   * The shared operator key cannot say who holds it, so its token carries no name and the console used to send one
+   * typed beside it. Two typed names are not two people: one person holding the key could approve their own change
+   * by typing a colleague's name. On a laptop the typed name is still accepted, so a demo can play both people.
+   */
+  private namedActor(actor: IntrospectionResult, typed?: string): string {
+    if (!isSandbox() && !actor?.actorName) {
+      throw new GlosError('FORBIDDEN', 'A decision that needs two people needs a named sign-in — the shared operator key cannot say who is at the keyboard');
+    }
+    return auditActor(actor, typed);
+  }
+
   private requireReach(actor: IntrospectionResult, entityId: string): void {
     if (actor?.role === 'operator') return;
     if (actor?.role === 'entity_admin' && this.entities.mayAdminister(actor.tenant, entityId)) return;
@@ -407,7 +423,7 @@ export class SbgController {
   @Roles('operator')
   @Post('presence/proposals/:proposalId/approve')
   approvePresence(@Param('proposalId') proposalId: string, @Body() dto: PresenceDecisionDto, @Actor() actor: IntrospectionResult) {
-    const by = auditActor(actor, dto.by);
+    const by = this.namedActor(actor, dto.by);
     // Everything that could refuse is asked BEFORE anything changes: the second person, the rate book, and — for
     // Established or Partnered — whether the company is ready. Only then is a draft company switched on.
     const proposal = this.presence.assertApprovable(proposalId, by);
@@ -421,7 +437,7 @@ export class SbgController {
   @Roles('operator')
   @Post('presence/proposals/:proposalId/decline')
   declinePresence(@Param('proposalId') proposalId: string, @Body() dto: PresenceDecisionDto, @Actor() actor: IntrospectionResult) {
-    return this.presence.decline(proposalId, auditActor(actor, dto.by), dto.reason);
+    return this.presence.decline(proposalId, this.namedActor(actor, dto.by), dto.reason);
   }
 
   @Get('presence/:jurisdiction')
@@ -448,7 +464,7 @@ export class SbgController {
       level: dto.level,
       overrides: dto.overrides as never,
       note: dto.note,
-      by: auditActor(actor, dto.by),
+      by: this.namedActor(actor, dto.by),
     });
   }
 
@@ -530,7 +546,7 @@ export class SbgController {
       dataUrl: dto.dataUrl,
       relatesTo: dto.relatesTo,
       expiresAt: dto.expiresAt,
-      by: auditActor(actor, dto.by),
+      by: this.namedActor(actor, dto.by),
     });
   }
 
@@ -557,14 +573,14 @@ export class SbgController {
   @Roles('operator')
   @Post('entities/:entityId/documents/:documentId/verify')
   verifyCompanyDocument(@Param('entityId') entityId: string, @Param('documentId') documentId: string, @Body() dto: DocumentDecisionDto, @Actor() actor: IntrospectionResult) {
-    return this.companyDocuments.verify(entityId, documentId, auditActor(actor, dto.by));
+    return this.companyDocuments.verify(entityId, documentId, this.namedActor(actor, dto.by));
   }
 
   /** CA4 — reject a document, always with a reason. */
   @Roles('operator')
   @Post('entities/:entityId/documents/:documentId/reject')
   rejectCompanyDocument(@Param('entityId') entityId: string, @Param('documentId') documentId: string, @Body() dto: DocumentDecisionDto, @Actor() actor: IntrospectionResult) {
-    return this.companyDocuments.reject(entityId, documentId, auditActor(actor, dto.by), dto.reason);
+    return this.companyDocuments.reject(entityId, documentId, this.namedActor(actor, dto.by), dto.reason);
   }
 
   /** CA5 — licences and policies lapsing soon, or already lapsed, across every company. Soonest first. */
@@ -737,6 +753,43 @@ export class SbgController {
   revokeEntityAdmin(@Param('entityId') entityId: string, @Param('adminId') adminId: string, @Actor() actor: IntrospectionResult): EntityAdminView {
     this.requireReach(actor, entityId);
     return this.entityAdmins.revoke(entityId, adminId);
+  }
+
+  /* ------------------------------------------------------ who works for the network -- */
+
+  /** Create a staff account. Operator rights only — the setup key creates the first; staff create each other. */
+  @Roles('operator')
+  @Post('operators')
+  createOperator(@Body() dto: EntityAdminDto, @Actor() actor: IntrospectionResult) {
+    return this.operatorAccounts.create({ email: dto.email, name: dto.name }, auditActor(actor));
+  }
+
+  /** Every staff account that can still sign in. */
+  @Roles('operator')
+  @Get('operators')
+  listOperators(): { items: OperatorAccountView[] } {
+    return { items: this.operatorAccounts.list() };
+  }
+
+  /** Take a staff login away; its open sessions end at once. The record is kept. */
+  @Roles('operator')
+  @Delete('operators/:operatorId')
+  revokeOperator(@Param('operatorId') operatorId: string, @Actor() actor: IntrospectionResult): OperatorAccountView {
+    return this.operatorAccounts.revoke(operatorId, auditActor(actor));
+  }
+
+  /** A staff member signs in. The token carries their name, so nothing has to be typed beside it. */
+  @Public()
+  @Post('operators/login')
+  operatorLogin(@Body() dto: EntityAdminLoginDto) {
+    return this.operatorAccounts.login(dto.email, dto.password);
+  }
+
+  /** A staff member changes their own password, proven with the current one. */
+  @Public()
+  @Post('operators/password')
+  changeOperatorPassword(@Body() dto: EntityAdminPasswordDto) {
+    return this.operatorAccounts.changePassword(dto.email, dto.password, dto.newPassword);
   }
 
   /**
