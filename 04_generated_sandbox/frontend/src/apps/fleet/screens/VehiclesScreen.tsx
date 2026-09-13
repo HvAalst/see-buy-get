@@ -223,12 +223,44 @@ export function VehiclesScreen({ state, actions }: VehiclesScreenProps) {
           </div>
           <div class="field">
             <span class="field__label">{t('fleet.vehicles.multiplierRange')}</span>
+            {/* A figure in the box and what it multiplies beside it — a bare "0.8" read as a price, not a factor. */}
             <div class="grid2">
-              <input aria-label={t('fleet.vehicles.minMultiplierAria')} class="input" type="number" inputMode="decimal" min="0.1" step="0.1" placeholder={t('fleet.vehicles.minPh')} value={f.minMultiplier} onInput={(e) => actions.setVForm({ minMultiplier: e.currentTarget.value })} />
-              <input aria-label={t('fleet.vehicles.maxMultiplierAria')} class="input" type="number" inputMode="decimal" min="0.1" step="0.1" placeholder={t('fleet.vehicles.maxPh')} value={f.maxMultiplier} onInput={(e) => actions.setVForm({ maxMultiplier: e.currentTarget.value })} />
+              {(
+                [
+                  ['minMultiplier', 'fleet.vehicles.minMultiplierAria', 'fleet.vehicles.minPh'],
+                  ['maxMultiplier', 'fleet.vehicles.maxMultiplierAria', 'fleet.vehicles.maxPh'],
+                ] as const
+              ).map(([key, aria, ph]) => (
+                <div key={key} style="position:relative">
+                  <input
+                    aria-label={t(aria)}
+                    class="input"
+                    style="padding-right:84px"
+                    type="number"
+                    inputMode="decimal"
+                    min="0.1"
+                    step="0.1"
+                    placeholder={t(ph)}
+                    value={f[key]}
+                    onInput={(e) => actions.setVForm({ [key]: e.currentTarget.value } as never)}
+                  />
+                  <span class="hint" aria-hidden="true" style="position:absolute; right:12px; top:50%; transform:translateY(-50%); margin:0; pointer-events:none">
+                    {t('fleet.vehicles.multiplierUnit')}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
+        {/* The multipliers turned into money, once there is a rate to multiply. */}
+        {Number(f.pricePerKm) > 0 && Number(f.minMultiplier) > 0 && Number(f.maxMultiplier) > 0 ? (
+          <p class="hint" style="margin-top:6px">
+            {t('fleet.vehicles.multiplierRates', {
+              low: (Number(f.pricePerKm) * Number(f.minMultiplier)).toFixed(2),
+              high: (Number(f.pricePerKm) * Number(f.maxMultiplier)).toFixed(2),
+            })}
+          </p>
+        ) : null}
         <p class="hint" style="margin-top:6px">{t('fleet.vehicles.multiplierHint')}</p>
         <div style="margin-top:12px">
           <PhotoPad

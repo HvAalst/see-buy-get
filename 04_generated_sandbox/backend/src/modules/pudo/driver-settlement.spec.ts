@@ -157,7 +157,8 @@ describe('what the network owes its drivers', () => {
       // THE BUG. Before this, the line below produced a ledger row a driver could read and nothing at all
       // in the books — the sister's own accounts said it owed the drivers nothing.
       const d = courier();
-      const row = gate.driverPayout(d.did, 12.5);
+      // Nullable now — a fleet standing where no sister does is not paid by us — but a Kenyan courier always is.
+      const row = gate.driverPayout(d.did, 12.5)!;
       expect(row.entryId).toBeDefined();
       expect(owedTo(d.did)).toBe(12.5);
       // …and the expense is recognised in the same breath, which is what makes the entry balance.
@@ -194,7 +195,7 @@ describe('what the network owes its drivers', () => {
       // day was worth even though the money goes to their employer — and a register keyed to the payee
       // would show them somebody else's work, or nothing at all.
       const { driver } = employed();
-      const row = gate.driverPayout(driver.did, 30);
+      const row = gate.driverPayout(driver.did, 30)!;
       expect(row.reference).toBe(driver.did);
       expect(row.refType).toBe('driver');
       expect(row.amount).toBe(30);

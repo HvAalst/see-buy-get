@@ -10,6 +10,7 @@ import { GlosEvent } from '../../foundation/events/glos-events';
 import { Geocoder, GEOCODER } from './geocoder';
 import { FleetManager, FleetManagerKyc, FleetManagerRequirements, FleetManagerStatus } from './fleet.types';
 import { EntityService } from '../../foundation/entity/entity.service';
+import { PresenceService } from '../../foundation/presence/presence.service';
 import { NETWORK_JURISDICTION } from './pudo.config';
 
 interface RegisterManagerInput {
@@ -48,12 +49,28 @@ export class FleetManagerService {
     private readonly core: OperationalStore,
     private readonly events: EventBus,
     private readonly entities: EntityService,
+    private readonly presence: PresenceService,
     @Inject(GEOCODER) private readonly geocoder: Geocoder,
   ) {}
 
-  /** The sister that contracts and pays this fleet; pre-entity records resolve from the jurisdiction. */
+  /**
+   * The sister that contracts and pays this fleet — THE MONEY GATE, refusing by name.
+   *
+   * A fleet may now stand where no sister does (the presence ladder: in a country we only match, the fleet IS
+   * the local operator). What it cannot do there is be paid by us, and this says so in those words rather than
+   * "no daughter company".
+   */
   entityIdOf(manager: FleetManager): string {
-    return manager.entityId ?? this.entities.requireForJurisdiction(manager.jurisdiction ?? NETWORK_JURISDICTION).entityId;
+    const own = this.entityIdOrNone(manager);
+    if (own) return own;
+    const country = manager.jurisdiction ?? NETWORK_JURISDICTION;
+    this.presence.require(country, 'payouts');
+    return this.entities.requireForJurisdiction(country).entityId;
+  }
+
+  /** The sister behind this fleet, or nothing — for read paths, which must answer rather than refuse. */
+  entityIdOrNone(manager: FleetManager): string | undefined {
+    return manager.entityId ?? this.entities.forJurisdiction(manager.jurisdiction ?? NETWORK_JURISDICTION)?.entityId;
   }
 
   /** The fleet-manager eligibility filter. Returns the list of unmet hard requirements. */
@@ -70,10 +87,16 @@ export class FleetManagerService {
   register(input: RegisterManagerInput): FleetManager {
     const unmet = this.unmetRequirements(input);
     if (unmet.length) throw new GlosError('REQUIREMENTS_NOT_MET', `Does not meet fleet-manager requirements: ${unmet.join('; ')}`);
-    // Where this company is incorporated decides which sister contracts it — and a country with no
-    // sister cannot pay anyone, so onboarding a fleet we could never invoice is refused here.
+    // Where this company is incorporated decides which sister contracts it. It used to REFUSE a country with no
+    // sister — which made the presence ladder's central promise false: in a country we only match, the fleet is
+    // the local operator, and a fleet that cannot register there cannot be matched there. So the question is now
+    // the one the shops were asked (P2): does the network operate here at all? Where it does and no sister
+    // exists, the fleet stands with no entity, and the money gate (entityIdOf) refuses by name if money is asked.
     const jurisdiction = (input.jurisdiction || NETWORK_JURISDICTION).toUpperCase();
-    const entity = this.entities.requireForJurisdiction(jurisdiction);
+    if (!this.presence.can(jurisdiction, 'takeIn')) {
+      throw new GlosError('FORBIDDEN', `The network does not operate in ${jurisdiction} yet, so a fleet cannot register there`);
+    }
+    const entity = this.entities.forJurisdiction(jurisdiction);
     const location = input.location ?? this.geocoder.geocode(input.depotAddress!).location;
 
     // Dedup — one business registration / tax ID / operator licence across the network.
@@ -93,7 +116,8 @@ export class FleetManagerService {
       vaultRef,
       companyName: input.companyName,
       jurisdiction,
-      entityId: entity.entityId,
+      // Absent where no sister operates: nothing of ours contracts or pays this fleet there.
+      ...(entity ? { entityId: entity.entityId } : {}),
       tradingName: input.tradingName,
       contactPhone: input.contactPhone,
       contactEmail: input.contactEmail,

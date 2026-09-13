@@ -82,6 +82,18 @@ export class DriverService {
    * answers, and collapsing them would either hide a fleet driver's own record from them or quietly turn
    * their earnings into their employer's ledger row.
    */
+  /**
+   * The sister that settles this driver's work, or nothing — where the driver's fleet stands in a country we only
+   * match. For paths that must answer rather than refuse: a delivery must not fail because nobody of ours pays.
+   */
+  payeeOrNone(did: string): { entityId?: string; payeeDid: string } {
+    const driver = this.require(did);
+    const entityId = driver.managerDid
+      ? this.managers.entityIdOrNone(this.managers.get(driver.managerDid))
+      : driver.entityId ?? this.entities.forJurisdiction(driver.jurisdiction ?? NETWORK_JURISDICTION)?.entityId;
+    return { ...(entityId ? { entityId } : {}), payeeDid: driver.managerDid ?? driver.did };
+  }
+
   payeeOf(did: string): { entityId: string; payeeDid: string } {
     const driver = this.require(did);
     return { entityId: this.settlingEntityIdOf(driver), payeeDid: driver.managerDid ?? driver.did };
@@ -108,7 +120,9 @@ export class DriverService {
     currency?: string;
   } {
     const driver = this.require(did);
-    const { payeeDid } = this.payeeOf(did);
+    // WHO is paid is a fact about the contract, not about money — so it is read without asking which sister
+    // pays, which would refuse for a driver whose fleet stands where no sister does (a read must answer).
+    const payeeDid = driver.managerDid ?? driver.did;
     return { payeeDid, paidToMe: payeeDid === driver.did, ...payouts.forPayee(payeeDid) };
   }
 

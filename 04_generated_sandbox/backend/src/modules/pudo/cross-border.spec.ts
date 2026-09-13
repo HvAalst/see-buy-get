@@ -72,6 +72,8 @@ describe('crossing a border', () => {
   let parcels: ParcelService;
   let gate: WalletGateService;
   let books: BooksService;
+  let managers: FleetManagerService;
+  let drivers: DriverService;
 
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -102,6 +104,8 @@ describe('crossing a border', () => {
     parcels = moduleRef.get(ParcelService);
     gate = moduleRef.get(WalletGateService);
     books = moduleRef.get(BooksService);
+    managers = moduleRef.get(FleetManagerService);
+    drivers = moduleRef.get(DriverService);
     books.reset(); // each test starts on clean books — the money is derived from them
   });
 
@@ -313,6 +317,49 @@ describe('crossing a border', () => {
       shop('Kiez Kiosk 5', 'Berlin', BERLIN, 'DE', 2);
       shop('Nairobi CBD P4d', 'Nairobi', NAIROBI, 'KE', 55);
       expect(() => gate.floats()).not.toThrow();
+    });
+  });
+
+  describe('a fleet where we only match — the local operator', () => {
+    const DAR = { lat: -6.79, lng: 39.21 };
+    let seqF = 0;
+    const fleetIn = (country: string) => {
+      seqF += 1;
+      const m = managers.register({
+        companyName: `Dar Haulage ${seqF}`,
+        contactPhone: `+2557000${seqF}`,
+        ownerFullName: 'Owner',
+        ownerNationalId: `NID-TZ-${seqF}`,
+        location: DAR,
+        jurisdiction: country,
+        requirements: { businessRegistrationNo: `BR-TZ-${seqF}`, transportOperatorLicence: `TOL-TZ-${seqF}`, taxId: `TAX-TZ-${seqF}` },
+      } as never);
+      managers.submitKyc(m.did, { businessRegCertRef: 'r', operatorLicenceRef: 'l', ownerIdRef: 'i', proofOfAddressRef: 'p' });
+      managers.decideKyc(m.did, true);
+      return managers.recordBond(m.did);
+    };
+
+    it('lets a fleet register and activate in a country we only match — with no sister attached', () => {
+      presence.set({ jurisdiction: 'TZ', level: 'matched' });
+      const m = fleetIn('TZ');
+      expect(m).toMatchObject({ status: 'ACTIVE', jurisdiction: 'TZ' });
+      expect(m.entityId).toBeUndefined();
+      // …and the money gate still refuses, by name, the moment money is asked for.
+      expect(() => managers.entityIdOf(m)).toThrow(/cannot pay out in this country/i);
+    });
+
+    it('still refuses a fleet where the network does not operate at all', () => {
+      expect(() => fleetIn('ZM')).toThrow(/does not operate in ZM/);
+    });
+
+    it('never fails a delivery or an earnings screen for its driver — nothing of ours pays, so nothing is booked', () => {
+      presence.set({ jurisdiction: 'TZ', level: 'matched' });
+      const m = fleetIn('TZ');
+      const d = drivers.register({ displayName: 'Juma', fullName: 'Juma', nationalId: 'NID-JUMA', mobile: '+255711000111', licenceClasses: ['motorcycle'], managerDid: m.did } as never);
+      // The earnings read answers — who is paid is the fleet — rather than refusing for want of a sister.
+      expect(drivers.settlementFor(d.did, { forPayee: () => ({ settled: 0, inFlight: 0 }) })).toMatchObject({ payeeDid: m.did, paidToMe: false });
+      // A payout at delivery records nothing, and throws nothing.
+      expect(gate.driverPayout(d.did, 120)).toBeNull();
     });
   });
 

@@ -424,8 +424,12 @@ export class WalletGateService {
    * The REGISTER row stays keyed to the driver even when the money goes to their fleet — see
    * `DriverService.payeeOf` for why those are deliberately two different keys.
    */
-  driverPayout(driverId: string, amount: number): PudoLedgerEntry {
-    const { entityId, payeeDid } = this.drivers.payeeOf(driverId);
+  driverPayout(driverId: string, amount: number): PudoLedgerEntry | null {
+    const { entityId, payeeDid } = this.drivers.payeeOrNone(driverId);
+    // A fleet standing where no sister does is not paid by us: the job settles between the two parties, off the
+    // platform, and nothing is accrued. Returning null rather than refusing, because this runs at DELIVERY — a
+    // custody event must not fail because a money question has no answer (the P2 lesson, again).
+    if (!entityId) return null;
     const entryId = this.books.post({
       entityId,
       kind: 'driver-payout',

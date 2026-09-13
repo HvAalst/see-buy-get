@@ -160,6 +160,14 @@ and what the cover is, in the same breath as the price.
   never sees a competitor's proposal on the open list. Found on the way: corridors were an in-memory Map
   (an operator-drawn route vanished on restart — now durable), and the couple / uncouple / assign-corridor
   routes had no owner check (any valid token could move anybody's shift — now a fleet moves only its own).
+- **F3–F4 prerequisite: ~~a fleet can register where we only match~~ DONE.** `FleetManagerService.register`
+  demanded a sister, which made "in a Matched country the fleet IS the local operator" false. It now asks the
+  presence (the network operates there, `takeIn`), stands with no `entityId` where no sister exists, and
+  `entityIdOf` stays the money gate (refusing by name: cannot pay out). The two money paths reached from custody
+  and reads answer instead of refusing: a driver's earnings screen names the payee without asking for a sister,
+  and `driverPayout` books nothing (returns null) for a fleet no sister pays — a delivery must never fail on a
+  money question. Driven: a Berlin fleet registered in DE (matched), activated, signed in, onboarded a vehicle.
+  Not changed: an INDEPENDENT courier still needs a sister in their country of residence.
 - **F3–F4. Sold capacity, then their own customers' loads on their own line** — both move money, and wait
   on the same decision as P4 (below).
 - **F1–F4. The fleet's own routes** (see the corridors work): a fleet-owned line, propose → publish,

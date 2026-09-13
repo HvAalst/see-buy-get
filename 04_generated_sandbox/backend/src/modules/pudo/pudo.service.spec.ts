@@ -1732,10 +1732,12 @@ describe('PUDO Light', () => {
       expect(fleet.jurisdiction).toBe('KE');
       expect(fleet.entityId).toBe(ke.entityId);
 
-      // A fleet incorporated where no sister operates cannot be paid, so it cannot be onboarded.
+      // A fleet incorporated where the network does not OPERATE cannot be onboarded. The question used to be
+      // "is there a sister?"; it is now the presence ladder's — in a country we only match a fleet may stand
+      // with no sister (cross-border.spec), and a country nobody recorded is still refused, in those words.
       expect(() =>
         managers.register({ companyName: 'Rotterdam Haulage', jurisdiction: 'NL', contactPhone: '+3180090', ownerFullName: 'N N', ownerNationalId: 'MGR-NL', location: { lat: 51.9, lng: 4.5 }, requirements: { businessRegistrationNo: 'BRN-NL', transportOperatorLicence: 'TOL-NL', taxId: 'TAX-NL' } }),
-      ).toThrow(/No daughter company operates in NL/);
+      ).toThrow(/does not operate in NL/);
     });
 
     it('pays a fleet driver through their FLEET, and never asks where they live', () => {
