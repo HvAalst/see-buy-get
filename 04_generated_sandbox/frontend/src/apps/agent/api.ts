@@ -1,6 +1,8 @@
 import {
   createAgentApi,
+  createConversationsApi,
   createNotificationsApi,
+  type ConversationsApi,
   createSeededClient,
   makeConfig,
   purgeTokens,
@@ -29,6 +31,8 @@ export interface AgentClient {
   client: SeededAppClient;
   /** Persona-agnostic Web Push controls, bound to the same token (N1). */
   notifications: NotificationsApi;
+  /** CV1 — the conversations about the loads this shop posted. */
+  conversations: ConversationsApi;
 }
 
 /**
@@ -39,7 +43,7 @@ export interface AgentClient {
  */
 export function createAgentClient(did: string): AgentClient {
   const client = createSeededClient(agentConfig(), tokenKeyFor(TOKEN_PREFIX, did));
-  return { api: createAgentApi(client.sbg), client, notifications: createNotificationsApi(client.sbg) };
+  return { api: createAgentApi(client.sbg), client, notifications: createNotificationsApi(client.sbg), conversations: createConversationsApi(client.sbg) };
 }
 
 export function purgeAgentTokens(keepDid: string | null): void {

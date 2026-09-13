@@ -19,6 +19,7 @@ const KIND_ICON: Record<string, IconName> = {
   bus_inbound: 'bag',
   intake_expected: 'box',
   bag_ready_to_close: 'bag',
+  message: 'send',
   test: 'bell',
 };
 

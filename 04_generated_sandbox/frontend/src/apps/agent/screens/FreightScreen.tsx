@@ -1,6 +1,8 @@
 import { useState } from 'preact/hooks';
 import { Button, Card, Checklist, ErrorNote, Icon, Pill, Sheet } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
+import { ConversationList, ConversationSheet } from '../../../shared/conversation/Conversations';
+import type { ChatThread } from '../../../shared/conversation/logic';
 import type { AgentActions, AgentState, FreightPrice, PostedFreight } from '../useAgentApp';
 
 export interface FreightScreenProps {
@@ -15,10 +17,27 @@ export interface FreightScreenProps {
  * being decided. A shop clerk answering a driver's number does not need a second tab to get back.
  */
 export function FreightScreen({ state, actions }: FreightScreenProps) {
+  const t = useT();
   const load = state.posted.find((p) => p.freightId === state.pricesFor) ?? null;
+  // CV1 — the thread open in the sheet, and a counter that makes every list re-read after something changed.
+  const [thread, setThread] = useState<ChatThread | null>(null);
+  const [chatTick, setChatTick] = useState(0);
   return (
     <div class="scr">
       {load ? <Prices load={load} state={state} actions={actions} /> : <PostedList state={state} actions={actions} />}
+
+      {/* CV1 — the people asking about these loads. Before a match, on purpose: a question answered is how a
+          load finds the right driver, and in a country we only match it is where the payment is agreed. */}
+      <Card title={load ? t('common.chat.questions') : t('common.chat.listTitle')}>
+        <ConversationList
+          api={actions.chatApi}
+          freightId={load?.freightId}
+          refreshKey={chatTick}
+          onOpen={setThread}
+          emptyText={load ? t('common.chat.noQuestions') : undefined}
+        />
+      </Card>
+      <ConversationSheet api={actions.chatApi} thread={thread} onClose={() => setThread(null)} onChanged={() => setChatTick((n) => n + 1)} />
     </div>
   );
 }

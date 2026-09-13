@@ -12698,6 +12698,252 @@
         }
       }
     },
+    "/v1/sbg/conversations": {
+      "get": {
+        "operationId": "Conversation.mine",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "Conversation.open",
+        "summary": "",
+        "description": "Ask about a load, or return to the thread already asked.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenConversationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/conversations/reports": {
+      "get": {
+        "operationId": "Conversation.reports",
+        "summary": "",
+        "description": "Reported messages, newest first — the operator's review list (CV3 gives it a screen).",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/conversations/{id}/messages": {
+      "get": {
+        "operationId": "Conversation.messages",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "operationId": "Conversation.send",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendMessageDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/conversations/{id}/read": {
+      "post": {
+        "operationId": "Conversation.read",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadMarkerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/conversations/{id}/block": {
+      "post": {
+        "operationId": "Conversation.block",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/conversations/{id}/unblock": {
+      "post": {
+        "operationId": "Conversation.unblock",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/conversations/{id}/messages/{seq}/report": {
+      "post": {
+        "operationId": "Conversation.report",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "seq",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportMessageDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/settlement/module-info": {
       "get": {
         "operationId": "Sse.info",
@@ -21135,6 +21381,64 @@
             "maxLength": 200
           }
         }
+      },
+      "OpenConversationDto": {
+        "type": "object",
+        "properties": {
+          "freightId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "freightId"
+        ]
+      },
+      "SendMessageDto": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "quick": {
+            "type": "string",
+            "enum": [
+              "on_my_way",
+              "loaded",
+              "arrived",
+              "delivered",
+              "paid",
+              "running_late"
+            ]
+          }
+        }
+      },
+      "ReadMarkerDto": {
+        "type": "object",
+        "properties": {
+          "seq": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seq"
+        ]
+      },
+      "ReportMessageDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": [
+              "spam",
+              "abuse",
+              "scam"
+            ]
+          }
+        },
+        "required": [
+          "reason"
+        ]
       },
       "MilestoneTermDto": {
         "type": "object",

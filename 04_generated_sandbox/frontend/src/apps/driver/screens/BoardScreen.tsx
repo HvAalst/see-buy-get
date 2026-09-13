@@ -1,6 +1,9 @@
 import { useState } from 'preact/hooks';
 import { Button, Card, ErrorNote, Icon, Note, OpenInMaps, PlacePicker, Pill, ReadAloud, Sheet, type PlaceNote } from '../../../shared/ui';
 import { formatDate, useT, type Translate } from '../../../shared/i18n';
+import { narrow } from '../../../lib/sbg';
+import { ConversationList, ConversationSheet } from '../../../shared/conversation/Conversations';
+import type { ChatThread } from '../../../shared/conversation/logic';
 import { blockerTone, boardDistanceLine, boardSummary, money, originReady, unlocks } from '../logic';
 import type { BoardRow } from '../types';
 import { BOARD_REACHES, type BoardReach, type DriverActions, type DriverState } from '../useDriverApp';
@@ -22,6 +25,18 @@ export function BoardScreen({ state, actions }: BoardScreenProps) {
   const t = useT();
   const [proposing, setProposing] = useState<BoardRow | null>(null);
   const [picking, setPicking] = useState(false);
+  // CV1 — the thread open in the sheet, why asking failed (if it did), and a tick to re-read the list.
+  const [thread, setThread] = useState<ChatThread | null>(null);
+  const [askFailed, setAskFailed] = useState<string | null>(null);
+  const [chatTick, setChatTick] = useState(0);
+  const ask = async (row: BoardRow) => {
+    if (!actions.chatApi) return;
+    setAskFailed(null);
+    const r = await actions.chatApi.open(row.freightId);
+    if (r.error) return setAskFailed(r.error.detail || r.error.title);
+    setThread(narrow<ChatThread>(r.data));
+    setChatTick((n) => n + 1);
+  };
   const rows = state.board;
   const can = rows.filter((r) => r.canTake).length;
   const opportunities = unlocks(rows);
@@ -36,6 +51,13 @@ export function BoardScreen({ state, actions }: BoardScreenProps) {
       <p class="scr__lede">{t('driver.board.lede')}</p>
 
       {state.error ? <ErrorNote error={state.error} /> : null}
+      {askFailed ? <Note tone="warn" icon="warning" title={askFailed} detail="" /> : null}
+
+      {/* CV1 — the questions this driver has asked, and the answers waiting. Above the market, because an
+          answer is usually the next thing to act on. */}
+      <Card title={t('common.chat.listTitle')}>
+        <ConversationList api={actions.chatApi} refreshKey={chatTick} onOpen={setThread} />
+      </Card>
 
       <Origin state={state} actions={actions} onPick={() => setPicking(true)} />
       <Reach value={state.boardReach} onChange={actions.setBoardReach} />
@@ -65,7 +87,7 @@ export function BoardScreen({ state, actions }: BoardScreenProps) {
 
           <div class="rows board__list" role="list">
             {rows.map((row) => (
-              <BoardCard key={row.freightId} row={row} onPropose={() => setProposing(row)} />
+              <BoardCard key={row.freightId} row={row} onPropose={() => setProposing(row)} onAsk={() => void ask(row)} />
             ))}
           </div>
         </>
@@ -83,6 +105,7 @@ export function BoardScreen({ state, actions }: BoardScreenProps) {
 
       <OriginSheet state={state} actions={actions} open={picking} onClose={() => setPicking(false)} />
       <ProposeSheet row={proposing} state={state} actions={actions} onClose={() => setProposing(null)} />
+      <ConversationSheet api={actions.chatApi} thread={thread} onClose={() => setThread(null)} onChanged={() => setChatTick((n) => n + 1)} />
     </div>
   );
 }
@@ -226,7 +249,7 @@ function Unlocks({ items }: { items: ReturnType<typeof unlocks> }) {
   );
 }
 
-function BoardCard({ row, onPropose }: { row: BoardRow; onPropose: () => void }) {
+function BoardCard({ row, onPropose, onAsk }: { row: BoardRow; onPropose: () => void; onAsk: () => void }) {
   const t = useT();
   const body = row.bodyDerived;
   return (
@@ -304,6 +327,11 @@ function BoardCard({ row, onPropose }: { row: BoardRow; onPropose: () => void })
             {t('driver.board.negotiate')}
           </Button>
         ) : null}
+        {/* CV1 — ask before you commit. Offered on every load, blocked or not: the question is often exactly
+            about the thing in the way ("can you load it by hand?"). */}
+        <Button variant="link" full={false} onClick={onAsk}>
+          {t('common.chat.ask')}
+        </Button>
       </div>
     </article>
   );

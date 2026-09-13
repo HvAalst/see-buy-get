@@ -1772,6 +1772,8 @@ export function useAgentApp() {
       saveHours,
       saveShopfront,
       submitAccept,
+      /** CV1 — the conversations API for this shop (null until signed in). */
+      chatApi: client?.conversations ?? null,
       setTermsTold,
       retryTerms,
       dismissAcceptedLabel,

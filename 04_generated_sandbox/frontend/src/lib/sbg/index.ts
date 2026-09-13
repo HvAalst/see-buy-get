@@ -43,5 +43,6 @@ export { createFleetApi, type FleetApi } from './personas/fleet';
 export { createVendorApi, type VendorApi } from './personas/vendor';
 export { createConsumerApi, type ConsumerApi, type PersonRole } from './personas/consumer';
 export { createNotificationsApi, type NotificationsApi } from './personas/notifications';
+export { createConversationsApi, type ConversationsApi } from './personas/conversations';
 export { createOperatorApi, type OperatorApi } from './personas/operator';
 export type { paths, components, operations } from './schema';

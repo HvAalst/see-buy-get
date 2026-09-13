@@ -2,8 +2,10 @@ import {
   Session,
   clientError,
   createDriverApi,
+  createConversationsApi,
   createNotificationsApi,
   createSbgClient,
+  type ConversationsApi,
   makeConfig,
   toSbgError,
   type DriverApi,
@@ -117,6 +119,8 @@ export interface DriverClient {
   session: Session;
   /** Persona-agnostic Web Push controls, bound to the same token (N1). */
   notifications: NotificationsApi;
+  /** CV1 — asking about a load, and the threads that follow. */
+  conversations: ConversationsApi;
 }
 
 export function createDriverClient(did: string): DriverClient {
@@ -208,7 +212,7 @@ export function createDriverClient(did: string): DriverClient {
       }),
   };
 
-  return { api: createDriverApi(truthful), session, notifications: createNotificationsApi(truthful) };
+  return { api: createDriverApi(truthful), session, notifications: createNotificationsApi(truthful), conversations: createConversationsApi(truthful) };
 }
 
 /**

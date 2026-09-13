@@ -1295,6 +1295,8 @@ export function useDriverApp() {
       applyBoardOrigin,
       useMyPosition,
       proposePrice,
+      /** CV1 — the conversations API for the signed-in driver (null until signed in). */
+      chatApi: client?.conversations ?? null,
       exportJobs,
       loadNodes,
       startShift,
