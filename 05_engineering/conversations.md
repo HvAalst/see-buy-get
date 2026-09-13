@@ -95,5 +95,9 @@ when, between whom — in a form that can be shown to somebody later.
   list never carries audio. `POST :id/voice`; `GET :id/voice/:voiceId` for the thread's readers;
   `GET dispute-reports/:reportId/voice/:voiceId` for the operator, only for a voice id that report holds. Played
   from an object URL — an `<audio src>` cannot carry the token.
+  **Listen before sending (user, 2026-09-13, as BondBridge does):** stopping a recording no longer sends it. The
+  recording stays on the phone with a player — Send, Record again, or Discard — because a message that can never
+  be deleted deserves a listen first; the one-minute stop lands in the same review. Driven: nothing is uploaded
+  until Send, record-again and discard upload nothing.
   **Decided (user, 2026-09-13): no transcription. Voice stays voice.** Speech-to-text good enough for Swahili and
   Amharic would mean a GPU or an outside service hearing messages the thread promises only two people can read.

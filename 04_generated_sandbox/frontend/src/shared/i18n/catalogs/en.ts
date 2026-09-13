@@ -128,7 +128,11 @@ export const en = {
   // CV4 — voice messages.
   'common.chat.voice.record': 'Record a voice message',
   'common.chat.voice.recording': 'Recording {time} (up to {max})',
-  'common.chat.voice.stopSend': 'Stop and send',
+  'common.chat.voice.stopListen': 'Stop and listen',
+  'common.chat.voice.review': 'Listen before you send it ({duration}). Nothing has been sent yet.',
+  'common.chat.voice.send': 'Send voice message',
+  'common.chat.voice.again': 'Record again',
+  'common.chat.voice.discard': 'Discard',
   'common.chat.voice.play': 'Play voice message ({duration})',
   'common.chat.voice.failed': 'Could not play this voice message',
   'common.chat.voice.noMic': 'The microphone is not available. Allow it for this app, or type the message instead.',

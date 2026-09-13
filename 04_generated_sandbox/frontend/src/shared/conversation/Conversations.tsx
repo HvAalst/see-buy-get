@@ -99,6 +99,10 @@ export function ConversationSheet({
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const discardRef = useRef(false);
+  // CV4 — a finished recording waiting to be listened to. Nothing leaves the phone until Send: a message that can
+  // never be deleted deserves a listen first (user, 2026-09-13 — as BondBridge does).
+  const [draft, setDraft] = useState<{ blob: Blob; url: string; seconds: number } | null>(null);
+  const draftRef = useRef<{ url: string } | null>(null);
   const canRecord =
     typeof window !== 'undefined' && typeof (window as { MediaRecorder?: unknown }).MediaRecorder !== 'undefined' && Boolean(globalThis.navigator?.mediaDevices?.getUserMedia);
 
@@ -157,8 +161,10 @@ export function ConversationSheet({
     const timer = window.setInterval(() => void catchUp(), POLL_MS);
     return () => {
       window.clearInterval(timer);
-      // Closing the sheet mid-recording throws the recording away and releases the microphone.
+      // Closing the sheet mid-recording throws the recording away and releases the microphone — and a recording
+      // waiting to be listened to goes with it, so another thread never opens with somebody else's draft.
       stopRecording(true);
+      discardDraft();
     };
     // Re-run only when a different thread opens; catchUp is stable for one thread.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -257,13 +263,11 @@ export function ConversationSheet({
       setRecording(null);
       setRecordSeconds(0);
       if (discardRef.current || !chunksRef.current.length) return;
+      // Kept on the phone to be listened to — sent only when the person presses Send.
       const blob = new Blob(chunksRef.current, { type: recorder.mimeType || mime || 'audio/webm' });
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUrl = String(reader.result ?? '');
-        void act('voice', () => api.sendVoice(id, { dataUrl, durationSec: seconds }));
-      };
-      reader.readAsDataURL(blob);
+      const url = URL.createObjectURL(blob);
+      draftRef.current = { url };
+      setDraft({ blob, url, seconds });
     };
     recorderRef.current = recorder;
     recorder.start();
@@ -276,6 +280,25 @@ export function ConversationSheet({
     const recorder = recorderRef.current;
     recorderRef.current = null;
     if (recorder && recorder.state !== 'inactive') recorder.stop();
+  };
+
+  /** CV4 — throw the listened-to recording away. Its object URL is released with it. */
+  const discardDraft = () => {
+    if (draftRef.current) URL.revokeObjectURL(draftRef.current.url);
+    draftRef.current = null;
+    setDraft(null);
+  };
+
+  /** CV4 — send the recording the person has listened to. */
+  const sendDraft = () => {
+    if (!api || !id || !draft) return;
+    const { blob, seconds } = draft;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result ?? '');
+      void act('voice', () => api.sendVoice(id, { dataUrl, durationSec: seconds }), discardDraft);
+    };
+    reader.readAsDataURL(blob);
   };
 
   const setBlocked = async (block: boolean) => {
@@ -500,11 +523,37 @@ export function ConversationSheet({
                         {t('common.chat.voice.recording', { time: formatDuration(recordSeconds), max: formatDuration(MAX_VOICE_SECONDS) })}
                       </p>
                       <Button full={false} chevron={false} onClick={() => stopRecording(false)}>
-                        {t('common.chat.voice.stopSend')}
+                        {t('common.chat.voice.stopListen')}
                       </Button>
                       <Button variant="link" full={false} onClick={() => stopRecording(true)}>
                         {t('common.cancel')}
                       </Button>
+                    </>
+                  ) : draft ? (
+                    // Listen first. Send, record it again, or throw it away — nothing has left the phone yet.
+                    <>
+                      <p class="hint">{t('common.chat.voice.review', { duration: formatDuration(draft.seconds) })}</p>
+                      <audio controls src={draft.url} style="width:100%; max-width:300px" />
+                      <div style="margin-top:6px">
+                        <Button full={false} chevron={false} busy={busy === 'voice'} onClick={sendDraft}>
+                          {t('common.chat.voice.send')}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          full={false}
+                          chevron={false}
+                          disabled={busy === 'voice'}
+                          onClick={() => {
+                            discardDraft();
+                            void startRecording();
+                          }}
+                        >
+                          {t('common.chat.voice.again')}
+                        </Button>
+                        <Button variant="link" full={false} disabled={busy === 'voice'} onClick={discardDraft}>
+                          {t('common.chat.voice.discard')}
+                        </Button>
+                      </div>
                     </>
                   ) : (
                     <Button variant="outline" full={false} chevron={false} busy={busy === 'voice'} onClick={() => void startRecording()}>
