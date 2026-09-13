@@ -188,6 +188,22 @@ describe('crossing a border', () => {
       expect(agents.balance(ke.did)).toBe(0);
       expect(agents.list().map((a) => a.did)).toEqual(expect.arrayContaining([tz.did, ke.did]));
     });
+    it('activates a shop we hold no float for on approval — "unfunded" is not a step it can ever leave', () => {
+      // Found by driving it: approved, then stuck forever with "top up your wallet first", because only a
+      // float reaching the threshold ever moved a shop to ACTIVE.
+      presence.set({ jurisdiction: 'TZ', level: 'matched' });
+      const tz = shop('Dar Duka Active', 'DarEsSalaam', { lat: -6.79, lng: 39.21 }, 'TZ');
+      const docs = { idCopyRef: 'id.jpg', tradingLicenceRef: 'tl.jpg', shopPhotoRefs: ['front.jpg'] };
+      agents.submitKyc(tz.did, docs);
+      expect(agents.decideKyc(tz.did, true).status).toBe('ACTIVE');
+      expect(agents.canScan(tz.did)).toBe(true);
+
+      // …and a shop with a float still waits for its first top-up, exactly as before.
+      const ke = shop('Mama Sarah Unfunded', 'Nairobi', NAIROBI);
+      agents.submitKyc(ke.did, docs);
+      expect(agents.decideKyc(ke.did, true).status).toBe('APPROVED_UNFUNDED');
+    });
+
     it('refuses CASH at a counter whose promise is the carrier’s', () => {
       // Cash at the counter is OUR cash: it consumes a platform credit and posts against a float we do
       // not hold there. The carrier prices and collects its own work.

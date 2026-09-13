@@ -206,7 +206,11 @@ export class AgentService {
     if (unmet.length) throw new GlosError('APPROVAL_BLOCKED', `Cannot approve: ${unmet.join('; ')}`);
     this.wallet.provision(did, { jurisdiction: 'US' });
     this.core.upsert({ did, vaultRef: agent.vaultRef, tier: 2, status: 'active', capabilities: ['pudo-agent'], metadata: { zone: agent.zone, by } });
-    return this.transition(agent, 'APPROVED_UNFUNDED');
+    this.transition(agent, 'APPROVED_UNFUNDED');
+    // A shop we hold no money for has no float to fund, so "unfunded" is not a step it can ever leave —
+    // found by driving it: a shop in a matching-only country was approved and then stuck forever. Only
+    // that shop is re-derived here; a shop with a float still waits for its first top-up, as before.
+    return this.balance(did) === null ? this.refreshLock(did) : agent;
   }
 
   /** Record the $50 refundable equipment/starter-kit deposit (18.3). */
@@ -277,7 +281,16 @@ export class AgentService {
     // A shop with no money rail has no float to lock ON: it never scans against a balance, so the
     // shutter this computes has nothing to fall on. Left exactly as it stands.
     const float = this.balance(did);
-    if (float === null) return agent;
+    if (float === null) {
+      // NO FLOAT, NOT AN EMPTY ONE. 'No money, no scan' guards money of ours at the counter; where none can
+      // move (the carrier's promise, or work a sister buys) there is nothing to fund, so an approved shop is
+      // active. It still cannot take cash — the take-in door refuses that by country, not by balance.
+      if (agent.status === 'APPROVED_UNFUNDED' || agent.status === 'LOCKED') {
+        this.transition(agent, 'ACTIVE');
+        void this.events.publish(GlosEvent.Pudo.AgentActivated, { did, agentId: agent.agentId }, { source: 'pudo' }).catch(() => undefined);
+      }
+      return agent;
+    }
     const balance = float + TRADE_CREDIT_LIMIT;
     if ((agent.status === 'APPROVED_UNFUNDED' || agent.status === 'LOCKED') && balance >= LOCK_THRESHOLD) {
       this.transition(agent, 'ACTIVE');
@@ -291,6 +304,10 @@ export class AgentService {
 
   /** 'No money, no scan' gate for accepting parcels (UDIW-043 light). */
   canScan(did: string): boolean {
+    const agent = this.require(did);
+    // A shop approved before a float-less shop could activate is still sitting in APPROVED_UNFUNDED, and no
+    // money movement will ever reach it to re-derive that. Asked where the gate is asked, it moves on.
+    if (agent.status !== 'ACTIVE' && this.balance(did) === null) this.refreshLock(did);
     return this.require(did).status === 'ACTIVE';
   }
 

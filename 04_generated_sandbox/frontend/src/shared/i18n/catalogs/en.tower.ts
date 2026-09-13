@@ -396,7 +396,7 @@ export const enTowerQueues = {
   // ---- the corridors: the routes the network runs buses on ----
   'tower.corridors.title': 'Corridors',
   'tower.corridors.lede':
-    'The bus routes this network runs, between one zone and another. Nothing else can draw one: a fleet manager chooses among them, and a shop reads them without knowing they exist.',
+    'The bus routes this network runs, between one zone and another. The network draws its own here; a fleet may propose a line it runs itself, and nothing routes on that line until it is published here. A shop reads them without knowing they exist.',
   'tower.corridors.caveatT': 'A corridor decides what a shop may take in.',
   'tower.corridors.caveat':
     'A parcel crossing zones can only be accepted where a corridor serves that pair and no hub can carry it instead. Closing one stops those take-ins straight away; shifts already running on it keep running, and the buses still finish today.',

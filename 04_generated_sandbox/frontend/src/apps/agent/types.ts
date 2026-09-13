@@ -62,6 +62,8 @@ export interface AgentView {
   did: string;
   shopName: string;
   zone: string;
+  /** The country the shop stands in (absent on a record written before sites had one — the home country). */
+  country?: string;
   location?: { lat: number; lng: number };
   landmark?: string;
   openState: OpenState;
@@ -71,8 +73,9 @@ export interface AgentView {
   shopfrontMediaId?: string; // the shop-front photo (owner-gated media)
   /** Floor room for outbound bags. Absent until the shop says — the plan's `staging.capacity` is the answer. */
   bagBays?: number;
-  /** Merged in by the controller alongside the record. */
-  balance: number;
+  /** Merged in by the controller alongside the record. NULL where we hold no money for this shop at all —
+   *  a different fact from an empty float, and never to be shown as 0.00. */
+  balance: number | null;
   rating?: { count: number; average: number; isNew?: boolean } | null;
 }
 
@@ -144,6 +147,8 @@ export interface NetworkPoint {
   did: string;
   shopName: string;
   zone: string;
+  /** The country the shop stands in. A counter walk-up cannot cross a border, so the picker filters on it. */
+  country?: string;
   location?: { lat: number; lng: number };
   landmark?: string;
   openState: 'open' | 'closed';

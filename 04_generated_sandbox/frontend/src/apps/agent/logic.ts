@@ -405,9 +405,13 @@ export function sizeMeta(size: ParcelSize, t: Translate): { label: string; hint:
  * Destination PUDOs the counter can pick: open ones first; with a reference point (a geocoded address),
  * NEAREST first; otherwise A→Z. Mirrors the Send app's picker so a shop and a sender rank shops the same.
  */
-export function selectablePoints(points: NetworkPoint[] | null, excludeDid?: string, near?: GeoPoint | null): NetworkPoint[] {
+export function selectablePoints(points: NetworkPoint[] | null, excludeDid?: string, near?: GeoPoint | null, country?: string): NetworkPoint[] {
   return (points ?? [])
     .filter((p) => p.did !== excludeDid) // never offer the accepting shop as its own destination (origin ≠ dest)
+    // A counter walk-up declares no contents or value, so it cannot cross a border — the server refuses it
+    // (CUSTOMS_INCOMPLETE). Found in the browser: a Nairobi counter was offered shops in Dar es Salaam.
+    // Unknown on either side is kept rather than hidden; the server still says no where it must.
+    .filter((p) => !country || !p.country || p.country === country)
     .sort((a, b) => {
       if (a.openState !== b.openState) return a.openState === 'open' ? -1 : 1;
       if (near) {

@@ -47,7 +47,10 @@ export interface RecentVehicle {
  */
 @Injectable()
 export class FleetService {
-  private readonly assignments = new Map<string, Assignment>();
+  // Durable: a running shift is what a counter hands parcels to. Kept in a plain Map, every restart ended
+  // every shift in the network silently — found in the browser pass, when the fleet app said "0 on shift"
+  // minutes after the demo had put a driver on the road. (Corridors had the same flaw, fixed in F1.)
+  private readonly assignments = new PersistentMap<string, Assignment>('pudo-fleet-assignments');
   /**
    * The roads each driver has declared before, most recent first — durable, unlike the coupling itself.
    * A shift ends every evening and the app may be reinstalled, but "Hawassa → Addis" is still the road this

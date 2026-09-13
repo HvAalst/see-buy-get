@@ -97,17 +97,22 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
         </div>
       </Card>
 
-      {/* The money the day runs on. */}
-      <GlanceNumber
-        label={t('agent.home.walletLabel')}
-        value={money(agent?.balance)}
-        sub={agent ? t('agent.home.chargePer', { price: money(agent.pricePerParcel) }) : undefined}
-        aside={
-          <Button variant="link" full={false} onClick={() => setSheet('topup')}>
-            {t('agent.home.topUp')}
-          </Button>
-        }
-      />
+      {/* The money the day runs on — or, where we hold none for this shop, that fact. NULL is not an empty
+          float: showing 0.00 and a Top up button there invites a top-up the network would have to refuse. */}
+      {agent && agent.balance === null ? (
+        <GlanceNumber label={t('agent.home.noFloat')} value="—" sub={t('agent.home.noFloatSub')} />
+      ) : (
+        <GlanceNumber
+          label={t('agent.home.walletLabel')}
+          value={money(agent?.balance)}
+          sub={agent ? t('agent.home.chargePer', { price: money(agent.pricePerParcel) }) : undefined}
+          aside={
+            <Button variant="link" full={false} onClick={() => setSheet('topup')}>
+              {t('agent.home.topUp')}
+            </Button>
+          }
+        />
+      )}
 
       {/* Live health: shelf occupancy + rating. */}
       <div class="healthstrip">

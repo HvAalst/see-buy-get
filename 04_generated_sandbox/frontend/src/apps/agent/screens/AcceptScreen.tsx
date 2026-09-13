@@ -402,7 +402,7 @@ function DestinationCard({ state, actions }: { state: AgentState; actions: Agent
   const f = state.accept;
   const near = f.destMode === 'address' ? state.acceptNear : null;
   // Exclude the accepting shop — a parcel can't be sent to the shop taking it in.
-  const points = selectablePoints(state.acceptPoints, state.agent?.did ?? undefined, near);
+  const points = selectablePoints(state.acceptPoints, state.agent?.did ?? undefined, near, state.agent?.country);
   const mapPins = points.filter((p) => p.location && p.openState === 'open').map((p) => ({ id: p.did, label: p.shopName, point: p.location! }));
   const pick = (p: NetworkPoint) => actions.pickDest({ did: p.did, zone: p.zone, shopName: p.shopName });
 

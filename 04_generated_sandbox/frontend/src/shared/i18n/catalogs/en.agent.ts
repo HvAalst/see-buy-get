@@ -296,6 +296,9 @@ export const enAgent = {
   'agent.accept.termsOursDeclared': 'The sender declared its value: {sister} covers it up to {amount} {currency}.',
   'agent.accept.termsOursNoLimit': '{sister} answers for it. No fixed cover limit is set, so a claim is decided case by case.',
   'agent.accept.termsOursUs': 'the network',
+  // Home — a shop we hold no money for (a country where the network matches but cannot bill).
+  'agent.home.noFloat': 'No float here',
+  'agent.home.noFloatSub': 'We hold no money for shops in this country yet, so there is nothing to top up.',
   'agent.accept.termsOwedNotPaid': 'You are owed for handling it, but we cannot pay out in {country} yet. It stays on the books until we can.',
   'agent.accept.termsTheirsTitle': 'The carrier answers for these goods, not us',
   'agent.accept.termsTheirsDetail': 'We cannot charge or pay claims in {country} yet. You take this in for the carrier: the carrier sets the price, is paid, and answers if it is lost or damaged. We record every hand-over and prove it. Our cover is zero, and no cash goes through our till.',

@@ -172,12 +172,16 @@ export class WalletGateService {
   canTransact(did: string): { ok: boolean; canTransact: boolean; code: string | null; balance: number; threshold: number; shortfall: number; credit: { limit: number; used: number; available: number } } {
     // Null where we hold no money in that country; the paths below are money paths, so it is refused
     // upstream by entityIdOf before this is ever reached.
-    const balance = this.agents.balance(did) ?? 0;
+    const float = this.agents.balance(did);
+    const balance = float ?? 0;
     // What the shop can actually spend: its own float PLUS the trade-credit line. A customer paying cash
     // at the counter is not turned away for an empty float — the shop keeps scanning, on credit, up to a
     // bounded number of parcels. With the limit at zero this is exactly the old 'no money, no scan' rule.
     const spendable = Math.round((balance + TRADE_CREDIT_LIMIT) * 100) / 100;
-    const funded = spendable >= LOCK_THRESHOLD;
+    // A shop we hold NO float for has nothing to fund: 'no money, no scan' guards money of ours, and none can
+    // move at that counter (the take-in door refuses cash there by country). Found in the browser — the shop
+    // was told to "top up your wallet first" with no wallet it could ever top up.
+    const funded = float === null || spendable >= LOCK_THRESHOLD;
     const ok = this.agents.canScan(did) && funded;
     const code = ok ? null : !funded ? 'WALLET_INSUFFICIENT' : 'AGENT_LOCKED';
     const shortfall = funded ? 0 : Math.round((LOCK_THRESHOLD - spendable) * 100) / 100;

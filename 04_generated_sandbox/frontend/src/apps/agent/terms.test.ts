@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n'; // English is the base catalog, so the real `t` yields the English literals
-import { takeInTermsNotice, termsBlock } from './logic';
-import type { TakeInTerms } from './types';
+import { selectablePoints, takeInTermsNotice, termsBlock } from './logic';
+import type { NetworkPoint, TakeInTerms } from './types';
+
+describe('the destination picker at a counter', () => {
+  it('never offers a shop in another country — a walk-up cannot cross a border', () => {
+    const pt = (did: string, country?: string): NetworkPoint => ({ did, shopName: did, zone: 'Z', country, openState: 'open', pricePerParcel: 1 });
+    const pts = [pt('nairobi', 'KE'), pt('dar', 'TZ'), pt('legacy')];
+    expect(selectablePoints(pts, undefined, null, 'KE').map((p) => p.did)).toEqual(['legacy', 'nairobi']);
+    expect(selectablePoints(pts, undefined, null).map((p) => p.did)).toEqual(['dar', 'legacy', 'nairobi']);
+  });
+});
 
 const terms = (over: Partial<TakeInTerms> = {}): TakeInTerms => ({
   promise: 'ours',
