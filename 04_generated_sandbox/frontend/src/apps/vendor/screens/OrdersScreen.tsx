@@ -7,6 +7,8 @@ import { useDebounced } from '../../../shared/useDebounced';
 import { formatDate } from '../../../shared/i18n';
 import { handoffLine, money, orderRowsToCsv, orderStatus, ordersSummary, paidWord } from '../logic';
 import { ORDER_LIMIT, type OrderQuery, type VendorActions, type VendorState } from '../useVendorApp';
+import { ConversationList, ConversationSheet } from '../../../shared/conversation/Conversations';
+import type { ChatThread } from '../../../shared/conversation/logic';
 import type { NetworkPoint, OrderRow } from '../types';
 
 export interface OrdersScreenProps {
@@ -33,6 +35,9 @@ export function OrdersScreen({ state, actions }: OrdersScreenProps) {
   const [filterOpen, setFilterOpen] = useState(false);
   const [searchText, setSearchText] = useState(state.orderQuery.q);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  // CV1 — the thread open in the sheet, and a tick that makes the list re-read after something changed.
+  const [thread, setThread] = useState<ChatThread | null>(null);
+  const [chatTick, setChatTick] = useState(0);
   const debounced = useDebounced(searchText, 300);
   const q = state.orderQuery;
   // Store-wide (the WHOLE store, never the filtered/paged list) — so the "top up" nudge and the spoken
@@ -102,6 +107,13 @@ export function OrdersScreen({ state, actions }: OrdersScreenProps) {
   return (
     <div class="scr">
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
+
+      {/* CV1 — drivers asking about an order this store sent as freight. Near the top, because an unanswered
+          question is the one thing here that a driver is standing still waiting on. */}
+      <Card title={t('common.chat.listTitle')}>
+        <ConversationList api={actions.chatApi} refreshKey={chatTick} onOpen={setThread} emptyText={t('vendor.chat.empty')} />
+      </Card>
+      <ConversationSheet api={actions.chatApi} thread={thread} onClose={() => setThread(null)} onChanged={() => setChatTick((n) => n + 1)} />
 
       {/* Parcels nobody came for, above the register because they are the only thing here waiting on a
           DECISION rather than on the network. Both numbers are shown, because "pay to bring it back" is

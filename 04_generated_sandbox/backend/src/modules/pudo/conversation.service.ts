@@ -5,6 +5,7 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
 import { DispatchService } from './dispatch.service';
 import { DriverService } from './driver.service';
 import { NotificationService } from './notification.service';
+import { VendorService } from './vendor.service';
 import {
   QUICK_REPLIES,
   REPORT_REASONS,
@@ -48,7 +49,22 @@ export class ConversationService {
     private readonly dispatch: DispatchService,
     private readonly drivers: DriverService,
     private readonly notifications: NotificationService,
+    private readonly vendors: VendorService,
   ) {}
+
+  /**
+   * WHO ANSWERS FOR A LOAD, as a person the chat can recognise.
+   *
+   * A store's diverted order records the STORE ID as its shipper (`ven_…`) — dispatch bills against it — while
+   * a store signs in as its DID. Compared raw, the thread would be addressed to an id nobody signs in as, and
+   * the store would never see a question about its own load. Resolved here to the DID a store actually holds.
+   */
+  private posterOf(freight: { postedByDid?: string; shipperDid?: string }): string | undefined {
+    if (freight.postedByDid) return freight.postedByDid;
+    const shipper = freight.shipperDid;
+    if (shipper && this.vendors.has(shipper)) return this.vendors.get(shipper).did;
+    return shipper;
+  }
 
   /**
    * Ask about a load — or return to the thread already asked. One thread per (load, asker), so asking twice
@@ -56,7 +72,7 @@ export class ConversationService {
    */
   open(freightId: string, askerDid: string, now = Date.now()): ConversationView {
     const freight = this.dispatch.requireFreightPublic(freightId);
-    const posterDid = freight.postedByDid ?? freight.shipperDid;
+    const posterDid = this.posterOf(freight);
     if (!posterDid) throw new GlosError('FORBIDDEN', 'Nobody can answer questions about this load — it was posted without an owner');
     if (posterDid === askerDid) throw new GlosError('INVALID_INPUT', 'This is your own load. People asking about it will appear in your conversations.');
 

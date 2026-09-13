@@ -194,6 +194,9 @@ export function createOperatorApi(sbg: SbgClient) {
     /** Every driver↔vehicle coupling running right now — which is to say, every shift. */
     couplings: () => sbg.request((c) => c.GET('/v1/sbg/fleet/assignments', { params: { query: { status: 'active' } } })),
 
+    /** CV1 — messages a party reported in a conversation, newest first, each with a copy of what was said. */
+    conversationReports: () => sbg.request((c) => c.GET('/v1/sbg/conversations/reports', {})),
+
     /** Shops waiting to be let onto the network. */
     kycQueue: () => sbg.request((c) => c.GET('/v1/sbg/agents/kyc-queue', {})),
 

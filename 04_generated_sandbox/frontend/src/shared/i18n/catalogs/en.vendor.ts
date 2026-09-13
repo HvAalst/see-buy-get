@@ -20,6 +20,8 @@ export const enVendor = {
   'vendor.bar.clear': 'Nothing outstanding',
   'vendor.signInSubtitle': 'Sign in',
   'vendor.nav.orders': 'Orders',
+  // CV1 — drivers asking about an order this store sent as freight.
+  'vendor.chat.empty': 'No questions from drivers. When a driver asks about an order you sent as freight, it appears here.',
   'vendor.nav.ship': 'Ship',
   'vendor.nav.books': 'Books',
   'vendor.nav.dock': 'Dock',

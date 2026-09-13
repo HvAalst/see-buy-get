@@ -7,6 +7,7 @@ import type { ConstraintView } from './logic';
 import type { EntityPricing, EntityRow } from './money';
 import type { ApprovalRow, ClaimDecision, ClaimRow, DisposalRow, StalledRow } from './queues';
 import { EMPTY_CORRIDOR_FORM, corridorName, type CorridorForm, type CorridorRow, type CouplingRow } from './corridors';
+import type { ReportRow } from './reports';
 import { EMPTY_COUNTRY_FORM, newCountryCode, overridesOf, type NewCountryForm, type PresenceLevel, type PresenceRow } from './presence';
 import type { AgentRow, CoverageCounts, FlagRow, HubRow, ToteRow } from './network';
 import { runSummary, type PayoutAction, type PayoutRow, type RunResult } from './settlement';
@@ -14,7 +15,7 @@ import type { HelpOption } from './pictures';
 import { resolveBaseUrl } from '../../lib/sbg';
 
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
-export type Screen = 'network' | 'hazards' | 'claims' | 'disposal' | 'approvals' | 'support' | 'pictures' | 'money' | 'rates' | 'companies' | 'corridors' | 'presence';
+export type Screen = 'network' | 'hazards' | 'claims' | 'disposal' | 'approvals' | 'reports' | 'support' | 'pictures' | 'money' | 'rates' | 'companies' | 'corridors' | 'presence';
 
 export interface TowerState {
   phase: Phase;
@@ -25,6 +26,8 @@ export interface TowerState {
   who: { mode: 'operator' | 'company'; name: string; entityId?: string } | null;
   /** The disputed queue, longest wait first — the server's order, kept as it arrives. */
   hazards: ConstraintView[] | null;
+  /** CV1 — messages a party reported in a conversation. Null while unread. */
+  reports: ReportRow[] | null;
   loading: boolean;
   /** A failed READ. The screen keeps whatever it last knew and says the read failed. */
   error: SbgError | null;
@@ -220,6 +223,7 @@ const INITIAL: TowerState = {
   creds: null,
   who: null,
   hazards: null,
+  reports: null,
   loading: false,
   error: null,
   signInError: null,
@@ -460,6 +464,19 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
    * with four buses on it is a different decision from blocking an idle one), and which zones this
    * deployment knows about — offered as suggestions, never as a closed list.
    */
+  /** CV1 — reported messages. A failed read keeps what was known and says so, like every queue here. */
+  const loadReports = useCallback(async (client: TowerClient) => {
+    setState((s) => ({ ...s, loading: true }));
+    const { data, error } = await client.api.conversationReports();
+    setState((s) => ({
+      ...s,
+      loading: false,
+      reports: error ? s.reports : (narrow<{ items: ReportRow[] }>(data)?.items ?? []),
+      queueError: error ? error.detail || error.title : null,
+      readAt: Date.now(),
+    }));
+  }, []);
+
   const loadCorridors = useCallback(async (client: TowerClient) => {
     setState((s) => ({ ...s, loading: true }));
     const [corridors, couplings, agents, hubs] = await Promise.all([
@@ -627,6 +644,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     else if (state.screen === 'money' && state.entityId) await loadMoney(client, state.entityId);
     else if (state.screen === 'pictures') await loadHelp(client, state.helpTopic);
     else if (state.screen === 'corridors') await loadCorridors(client);
+    else if (state.screen === 'reports') await loadReports(client);
     else if (state.screen === 'presence') await loadPresence(client);
     else if (state.screen === 'support') {
       // Refreshing the support screen means re-reading the parcel somebody is on the phone about, not
@@ -634,7 +652,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       if (state.lookup) await lookupParcel(state.lookup.parcelId);
     }
     else await loadHazards(client);
-  }, [loadHazards, loadQueues, loadNetwork, loadMoney, loadHelp, loadCorridors, loadPresence, lookupParcel, loadPricing, state.screen, state.entityId, state.lookup, state.helpTopic]);
+  }, [loadHazards, loadQueues, loadNetwork, loadMoney, loadHelp, loadCorridors, loadReports, loadPresence, lookupParcel, loadPricing, state.screen, state.entityId, state.lookup, state.helpTopic]);
 
   const open = useCallback((constraintId: string | null) => {
     setState((s) => ({ ...s, openId: constraintId, clearError: null }));
@@ -712,6 +730,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         const client = clientRef.current;
         if (screen === 'pictures' && client && stateRef.current.help === null) void loadHelp(client, stateRef.current.helpTopic);
         if (screen === 'corridors' && client && stateRef.current.corridors === null) void loadCorridors(client);
+        if (screen === 'reports' && client) void loadReports(client);
         if (screen === 'presence' && client && stateRef.current.presence === null) void loadPresence(client);
       },
       refresh,

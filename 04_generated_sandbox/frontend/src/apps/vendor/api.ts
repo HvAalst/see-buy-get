@@ -1,6 +1,8 @@
 import {
+  createConversationsApi,
   createCredentialedClient,
   createVendorApi,
+  type ConversationsApi,
   makeConfig,
   publicRequest,
   purgeTokens,
@@ -64,6 +66,8 @@ export function fetchCountries(): Promise<Result<OperatingCountry[]>> {
 export interface VendorClient {
   api: VendorApi;
   client: AppClient;
+  /** CV1 — questions drivers ask about this store's own freight. */
+  conversations: ConversationsApi;
 }
 
 /**
@@ -73,7 +77,7 @@ export interface VendorClient {
  */
 export function createVendorClient(vendorId: string, secret: string): VendorClient {
   const client = createCredentialedClient(vendorConfig(), tokenKeyFor(TOKEN_PREFIX, vendorId), () => vendorLogin(vendorId, secret));
-  return { api: createVendorApi(client.sbg), client };
+  return { api: createVendorApi(client.sbg), client, conversations: createConversationsApi(client.sbg) };
 }
 
 export function purgeVendorTokens(keepVendorId: string | null): void {

@@ -23,7 +23,18 @@ describe('conversations about a load', () => {
       },
     };
     const drivers = { canOperate: (did: string) => did.startsWith('did:drv'), get: () => ({ displayName: 'Amos K.' }) };
-    service = new ConversationService(dispatch as never, drivers as never, { notify } as never);
+    const vendors = { has: (id: string) => id === 'ven_store', get: () => ({ did: 'did:store' }) };
+    service = new ConversationService(dispatch as never, drivers as never, { notify } as never, vendors as never);
+  });
+
+  it('addresses a store’s own diverted load to the DID the store signs in as, not its store id', () => {
+    // Found building the vendor screen: the load records `ven_…` as its shipper, the store signs in as a DID,
+    // and compared raw the store would never have seen a question about its own freight.
+    loads.fr_store = { freightId: 'fr_store', code: 'FR-010', status: 'available', shipperDid: 'ven_store', description: 'Order 88', pickupLabel: 'A', destLabel: 'B' };
+    const { conversationId } = service.open('fr_store', 'did:drv:amos');
+    service.send(conversationId, 'did:drv:amos', { body: 'Is it ready?' });
+    expect(service.listFor('did:store').map((c) => c.conversationId)).toEqual([conversationId]);
+    expect(notify).toHaveBeenCalledWith('did:store', expect.objectContaining({ kind: 'message' }));
   });
 
   it('opens ONE thread per load and asker — asking twice returns to the same place', () => {

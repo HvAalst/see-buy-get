@@ -988,6 +988,8 @@ export function useVendorApp() {
     state,
     actions: {
       refresh,
+      /** CV1 — the conversations API for this store (null until signed in). */
+      chatApi: client?.conversations ?? null,
       issueApiKey,
       dismissIssuedKey,
       revokeApiKey,

@@ -62,9 +62,13 @@ when, between whom — in a form that can be shown to somebody later.
   driver), text + quick replies, server `seq` catch-up, read markers, block/unblock, report with a snapshot,
   20 new threads a day and 60 messages an hour per sender, discreet push (`message` kind). Screens: the driver
   app's Market (Ask about this load + a Conversations card) and the shop's Freight screen; a shared
-  `ConversationSheet` / `ConversationList`. **Gap, tracked on progress.html:** the vendor app has no thread
-  screen for a store's own diverted freight. Found while driving it: every message was stamped with a date
+  `ConversationSheet` / `ConversationList`. Found while driving it: every message was stamped with a date
   and no time.
+  **Follow-up, both gaps closed:** the vendor app's Orders screen carries the store's conversations, and the
+  console has **Reported messages** under Waiting on you (moved forward from CV3; the dispute report stays
+  there). Closing the vendor gap found an older defect: a store's diverted freight records its STORE ID as
+  shipper while the store signs in as its DID, so no store could be addressed in a thread, answer a price, or
+  see its own loads in the posted list — resolved to the DID in all three, billing untouched.
 - **CV2. The deal in the thread.** Proposal / accept / decline as structured cards over the existing
   negotiation; the off-platform settlement card.
 - **CV3. Sharing.** The driver's toggle to their fleet manager (+ the fleet app's read-only view), and the

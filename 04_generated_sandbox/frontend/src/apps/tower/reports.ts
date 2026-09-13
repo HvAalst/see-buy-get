@@ -1,0 +1,49 @@
+import type { MessageKey } from '../../shared/i18n';
+
+/**
+ * CV1 — REPORTED MESSAGES, as the operator reads them.
+ *
+ * A conversation is readable only by its two parties. What reaches the network is what one of them chose to
+ * report: a single message, kept with a copy of exactly what was said. Nothing here removes anything — a
+ * thread is append-only — so this is a list to act on (warn, suspend, or dismiss by knowing), not a delete key.
+ */
+
+export interface ReportRow {
+  reportId: string;
+  conversationId: string;
+  seq: number;
+  byDid: string;
+  reportedDid: string;
+  reason: 'spam' | 'abuse' | 'scam';
+  snapshot: { seq: number; kind: 'text' | 'quick'; body?: string; quick?: string; at: string };
+  at: string;
+}
+
+/** The reason in the operator's words. A scam leads, because it is the one where somebody may lose money. */
+export const REASON_KEY: Record<ReportRow['reason'], MessageKey> = {
+  scam: 'tower.reports.reason.scam',
+  abuse: 'tower.reports.reason.abuse',
+  spam: 'tower.reports.reason.spam',
+};
+
+const REASON_RANK: Record<ReportRow['reason'], number> = { scam: 0, abuse: 1, spam: 2 };
+
+/** Scams first, then abuse, then spam; newest first within each. */
+export function reportsInOrder(rows: ReportRow[]): ReportRow[] {
+  return [...rows].sort((a, b) => REASON_RANK[a.reason] - REASON_RANK[b.reason] || b.at.localeCompare(a.at));
+}
+
+/** What was said. A quick reply is a key, and a report of one shows the key rather than inventing a sentence. */
+export function reportedText(row: ReportRow): string {
+  return row.snapshot.kind === 'quick' ? `[${row.snapshot.quick ?? ''}]` : row.snapshot.body ?? '';
+}
+
+/** How many people one party has been reported by — the difference between a bad day and a pattern. */
+export function reportsAgainst(rows: ReportRow[], did: string): number {
+  return new Set(rows.filter((r) => r.reportedDid === did).map((r) => r.byDid)).size;
+}
+
+/** Enough of an identity to tell two apart on screen, not a whole one. */
+export function shortId(did: string): string {
+  return did.length > 18 ? `${did.slice(0, 10)}…${did.slice(-6)}` : did;
+}

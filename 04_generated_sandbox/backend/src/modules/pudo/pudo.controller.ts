@@ -2626,7 +2626,10 @@ export class SbgController {
    */
   @Get('dispatch/posted')
   postedFreight(@Query('did') did: string | undefined, @Actor() actor: IntrospectionResult): PostedFreightResponse {
-    return { items: this.dispatch.postedBy(actingDid(actor, did)) };
+    const who = actingDid(actor, did);
+    // …and a store's own freight is recorded under its store id, so it is looked up under both.
+    const store = this.vendors.byDid(who);
+    return { items: store ? [...this.dispatch.postedBy(who), ...this.dispatch.postedBy(store.vendorId)] : this.dispatch.postedBy(who) };
   }
 
   /** A driver names their price for a load posted 'negotiate'. Reserves nothing — the poster's accept claims it. */
@@ -2673,7 +2676,10 @@ export class SbgController {
     if (actor?.role === 'operator') return;
     const f = this.dispatch.requireFreightPublic(freightId);
     const owner = f.postedByDid ?? f.shipperDid;
-    if (!owner || !actor?.did || actor.did !== owner) throw new GlosError('FORBIDDEN', 'Only the shipper who posted this load can answer the prices offered on it');
+    // A store's diverted order records its STORE ID as shipper while the store signs in as its DID — compared
+    // raw, no store could ever answer a price on its own freight. Found building the store's conversations.
+    const ownerDid = !f.postedByDid && owner && this.vendors.has(owner) ? this.vendors.get(owner).did : owner;
+    if (!ownerDid || !actor?.did || actor.did !== ownerDid) throw new GlosError('FORBIDDEN', 'Only the shipper who posted this load can answer the prices offered on it');
   }
 
   /** Bulk freight pickup (claimed → in_transit). driverDid (the claimer) is verified against claimedBy. */
