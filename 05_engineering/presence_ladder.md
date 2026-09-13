@@ -138,8 +138,19 @@ and what the cover is, in the same breath as the price.
   with the stated cover, both booked intakes now ask the door and stamp the promise (P2 only asked the
   walk-up), and a claim on goods taken in under the carrier's promise cannot be awarded — only rejected
   with a reason.
-- **P4. The journey decides.** MoR resolved from the payer's jurisdiction; a foreign leg becomes a
-  purchased service; cross-border take-in refuses where neither end can answer for it.
+- **P4. ~~The journey decides~~ DONE (decisions: user, 2026-09-13).** The ORIGIN's sister sells and must be
+  able to charge; every other shop only has to be allowed to take goods in, and a hub must stand where a
+  sister does. A shop with no sister becomes a **purchased stop** (`QuoteNode.purchased`): the seller owes it
+  its own price in its own money (EXPENSE_PROVIDER_FEES / PAYABLE_PROVIDER on the seller, counterparty the
+  shop — the same shape as a hub or a fleet), and `payLabour` books nothing at all where no seller is named
+  (the carrier's promise). **Owed, not paid:** `PayoutService` asks a registered payee gate first, and a shop
+  in a country without `payouts` is skipped by name while its debt stays on the books; the counter's take-in
+  terms carry `paidOut` and say so before acceptance. **Refuse until mapped:** a purchased stop in a country
+  missing from the currency table refuses by name (`requireCurrencyFor`) instead of silently becoming USD.
+  Found on the way: `floats()` asked for a sister before skipping a shop with no float, so one such shop
+  would have taken the console's money screen down. Still true and not changed: the quote's `nativeFee` is
+  not what shops are paid (they are paid the network's fixed fees), so a purchased stop's payable is the
+  fixed fee in the seller's money.
 - **F1 + F2. ~~A fleet-owned line, propose → publish~~ DONE.** A corridor now has an owner (absent = the
   network) and a `proposed` status. A fleet proposes a line from the fleet app's new **Lines** tab
   (`POST fleet/lines`, fleet_manager only, pinned to the token's fleet); nothing routes on it until an

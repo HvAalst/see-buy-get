@@ -44,7 +44,9 @@ export function takeInTermsNotice(terms: TakeInTerms, t: Translate): TermsNotice
       : terms.coverBasis === 'free-limit'
         ? t('agent.accept.termsOursLimit', money)
         : t('agent.accept.termsOursNoLimit', { sister });
-  return { tone: 'info', icon: 'wallet', title: t('agent.accept.termsOursTitle', { sister }), detail };
+  // P4 — said in the same breath: the work is owed, but it cannot be paid out in this country yet.
+  const owed = terms.paidOut ? '' : ` ${t('agent.accept.termsOwedNotPaid', { country })}`;
+  return { tone: 'info', icon: 'wallet', title: t('agent.accept.termsOursTitle', { sister }), detail: detail + owed };
 }
 
 /**

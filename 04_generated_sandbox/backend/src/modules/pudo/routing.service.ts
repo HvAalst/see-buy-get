@@ -11,7 +11,7 @@ import { PresenceService } from '../../foundation/presence/presence.service';
 import { BORDER_DWELL_H, DISPATCH_BUFFER_H, HANDOVER_BUFFER_H, NETWORK_JURISDICTION, SIZE_LANE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, taxOn, VEHICLE_SPEED_KMH, withPlatformFee } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { ResolvedInsurance, ResolvedRates, ResolvedTax } from '../../foundation/entity/entity.types';
-import { currencyForJurisdiction } from '../../foundation/money/currency';
+import { currencyForJurisdiction, requireCurrencyFor } from '../../foundation/money/currency';
 import { FX_QUOTE_TTL_MIN, FxRate, FxService } from '../../foundation/money/fx.service';
 import { BorderCrossing, crossingsOn } from './country';
 import { ParcelFx, ParcelSize } from './pudo.types';
@@ -65,7 +65,21 @@ export interface QuoteLeg {
  * they must not be conflated, because one of them is a promise to a shop and the other is a promise to a
  * buyer, and the rate between them can move.
  */
-export interface QuoteNode { type: 'pudo' | 'mdp'; id: string; label: string; fee: number; nativeFee: number; entityId: string; country: string; currency: string; }
+export interface QuoteNode {
+  type: 'pudo' | 'mdp';
+  id: string;
+  label: string;
+  fee: number;
+  nativeFee: number;
+  entityId: string;
+  country: string;
+  currency: string;
+  /**
+   * P4 — a stop with no sister behind it: a service the SELLING sister buys. `entityId` is then the seller,
+   * which owes the shop directly; the shop is paid out only where money may leave to a supplier there.
+   */
+  purchased?: boolean;
+}
 
 /** The rates a quote was converted at, and how long the resulting price is good for. Shared with the
  *  parcel, so what was quoted and what was minted can be compared line for line. */
@@ -214,7 +228,7 @@ export class RoutingService {
    * (the over-hold is rebated on delivery); `locked` is the cheapest carrier if the vendor commits the route.
    */
   quoteShipment(originAgentDid: string, destAgentDid: string, size: ParcelSize = 'M', measured?: number): ShipmentQuote {
-    this.doorFor([originAgentDid, destAgentDid]);
+    this.doorFor(originAgentDid, destAgentDid);
     return this.quoteJourney(this.planJourney({ originAgentDid, destAgentDid, weightKg: SIZE_WEIGHT_KG[size] }), size, undefined, measured);
   }
 
@@ -225,7 +239,7 @@ export class RoutingService {
    * route twice to get them is work a public endpoint should not be doing on a stranger's behalf.
    */
   quoteWithPlan(originAgentDid: string, destAgentDid: string, size: ParcelSize = 'M', measured?: number): { plan: ReturnType<RoutingService['planJourney']>; quote: ShipmentQuote } {
-    this.doorFor([originAgentDid, destAgentDid]);
+    this.doorFor(originAgentDid, destAgentDid);
     const plan =this.planJourney({ originAgentDid, destAgentDid, weightKg: SIZE_WEIGHT_KG[size] });
     return { plan, quote: this.quoteJourney(plan, size, undefined, measured) };
   }
@@ -238,7 +252,7 @@ export class RoutingService {
    * store's own), which is who the margin belongs to when there is no origin shop to take it from.
    */
   quoteShipmentFrom(from: RouteEnd, destAgentDid: string, size: ParcelSize = 'M', sellerEntityId?: string, measured?: number): ShipmentQuote {
-    this.doorFor([destAgentDid]);
+    this.doorFor(undefined, destAgentDid);
     return this.quoteJourney(this.planJourney({ from, destAgentDid, weightKg: SIZE_WEIGHT_KG[size] }), size, sellerEntityId, measured);
   }
 
@@ -247,8 +261,12 @@ export class RoutingService {
    * we may charge anyone at either end — before the route is planned, and long before a shop's fee resolves
    * to a sister that does not exist and refuses in words about a float the buyer has never heard of.
    */
-  private doorFor(agentDids: string[]): void {
-    for (const did of agentDids) this.presence.require(this.agents.countryOf(this.agents.get(did)), 'merchantOfRecord');
+  private doorFor(originAgentDid: string | undefined, destAgentDid: string): void {
+    // P4 — THE JOURNEY DECIDES. The origin shop's sister SELLS the shipment, so it is asked whether we may
+    // charge anyone there. The destination only has to be allowed to take goods in: where no sister stands
+    // behind it, its leg is a service the seller buys (see quoteJourney).
+    if (originAgentDid) this.presence.require(this.agents.countryOf(this.agents.get(originAgentDid)), 'merchantOfRecord');
+    this.presence.require(this.agents.countryOf(this.agents.get(destAgentDid)), 'takeIn');
   }
 
   private quoteJourney(plan: ReturnType<RoutingService['planJourney']>, size: ParcelSize, sellerEntityId?: string, measured?: number): ShipmentQuote {
@@ -258,15 +276,30 @@ export class RoutingService {
     // A DOCK is on the route but not in the stack: it is where the parcel was, not somebody who handled it.
     // Each stop, what it is owed, and IN WHAT. The native amount is the shop's own advertised rate in its
     // own money; the fee the price is built from comes after, once we know what money the price is in.
-    // P2b — and of every hop in between: a hub in a country we cannot bill in is owed a fee nobody of ours
-    // can pay. Asked before a single fee is resolved, so the refusal names the country, not a float.
-    for (const h of plan.hops) this.presence.require(h.country ?? NETWORK_JURISDICTION, 'merchantOfRecord');
-    const stops = plan.hops.filter((h): h is typeof h & { type: 'pudo' | 'mdp' } => h.type !== 'dock').map((h) => {
+    // P2b/P4 — every hop, before a single fee is resolved, so a refusal names the country and not a float.
+    // A HUB is registered only where a sister stands, so it must be where we can bill. A SHOP need only be
+    // allowed to take goods in: where no sister stands behind it, its leg is bought by the seller.
+    for (const h of plan.hops) {
+      if (h.type === 'mdp') this.presence.require(h.country ?? NETWORK_JURISDICTION, 'merchantOfRecord');
+      if (h.type === 'pudo') this.presence.require(h.country ?? NETWORK_JURISDICTION, 'takeIn');
+    }
+    const sites = plan.hops.filter((h): h is typeof h & { type: 'pudo' | 'mdp' } => h.type !== 'dock').map((h) => {
       const isHub = h.type === 'mdp';
       const site = isHub ? this.mdps.require(h.id) : this.agents.get(h.id);
-      const entityId = isHub ? this.mdps.entityIdOf(this.mdps.require(h.id)) : this.agents.entityIdOf(this.agents.get(h.id));
-      return { type: h.type, id: h.id, label: h.label, entityId, country: h.country, nativeFee: Math.round(site.pricePerParcel * 100) / 100, currency: this.currencyOf(entityId) };
+      const own = isHub ? this.mdps.entityIdOf(this.mdps.require(h.id)) : this.agents.entityIdOrNone(this.agents.get(h.id));
+      return { type: h.type, id: h.id, label: h.label, own, country: h.country, nativeFee: Math.round(site.pricePerParcel * 100) / 100 };
     });
+    // The margin belongs to the sister selling the shipment, not to the network: the one named, else the
+    // first stop that has a sister of its own — which the door has already made the origin.
+    const sellerId = sellerEntityId ?? sites.find((s) => s.own)?.own;
+    if (!sellerId) throw new GlosError('FORBIDDEN', 'Nobody of ours can sell this journey: no stop on it stands where a company of ours does');
+    const stops = sites.map((s) =>
+      s.own
+        ? { ...s, entityId: s.own, purchased: false, currency: this.currencyOf(s.own) }
+        : // P4 — the seller owes this shop directly, in the shop's own money. An unmapped country refuses
+          // by name rather than silently becoming dollars (user, 2026-09-13).
+          { ...s, entityId: sellerId, purchased: true, currency: requireCurrencyFor(s.country) },
+    );
     const entityIds = [...new Set(stops.map((n) => n.entityId))];
     const legs = plan.legs.map((l) => ({ from: l.from, to: l.to, km: l.distanceKm }));
     const totalKm = Math.round(legs.reduce((s, l) => s + l.km, 0) * 10) / 10;
@@ -292,7 +325,7 @@ export class RoutingService {
     // The margin belongs to the sister selling the shipment, not to the network. Today one company
     // performs the whole journey, so the origin node's rate is that company's; when a route crosses a
     // border the COLLECTING sister's rate is the one that should apply, per R1 — revisit it there.
-    const sellerId = sellerEntityId ?? stops[0]?.entityId ?? entityIds[0];
+    // (The seller was resolved above, before any stop could be priced against it.)
     // The seller's three layers for THIS KIND of work. A letter through the shop network and a dedicated
     // truck haul are different businesses carrying different risk, and a sister can now say so. The lane
     // comes from the size's own class, so nothing new has to be declared to get the right rate.
@@ -323,7 +356,17 @@ export class RoutingService {
         const rate = this.fx.quoteRate(n.currency, currency);
         used.set(`${rate.from}>${rate.to}`, rate);
       }
-      return { type: n.type, id: n.id, label: n.label, entityId: n.entityId, country: n.country, currency: n.currency, nativeFee: n.nativeFee, fee: this.fx.convertForQuote(n.nativeFee, n.currency, currency) };
+      return {
+        type: n.type,
+        id: n.id,
+        label: n.label,
+        entityId: n.entityId,
+        country: n.country,
+        currency: n.currency,
+        nativeFee: n.nativeFee,
+        fee: this.fx.convertForQuote(n.nativeFee, n.currency, currency),
+        ...(n.purchased ? { purchased: true } : {}),
+      };
     });
     const nodeFees = Math.round(nodes.reduce((sum, n) => sum + n.fee, 0) * 100) / 100;
     const rates = [...used.values()];

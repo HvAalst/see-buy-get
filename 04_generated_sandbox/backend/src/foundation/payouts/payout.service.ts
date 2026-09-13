@@ -7,6 +7,16 @@ import { ACCOUNT_CODES } from '../books/books.types';
 import { EntityService } from '../entity/entity.service';
 import { IN_FLIGHT, PAYOUT_RAIL, Payout, PayoutRail, PayoutStatus } from './payout.types';
 
+/**
+ * Why a payee may NOT be paid out right now — or null when they may.
+ *
+ * Registered by whoever knows where a payee stands (a shop's country, and whether money may leave to a
+ * supplier there), because this service knows only a counterparty id. "Owed, not paid" (user, 2026-09-13):
+ * a shop in a country we only match is OWED for work on a sale a sister made, and that debt stays on the
+ * books — visibly — until the country can be paid out in.
+ */
+export type PayeeGate = (payeeDid: string) => string | null;
+
 /** The day a settlement covers, in the network's own reckoning. */
 export const dayOf = (at: number): string => new Date(at).toISOString().slice(0, 10);
 
@@ -29,6 +39,15 @@ export const dayOf = (at: number): string => new Date(at).toISOString().slice(0,
 @Injectable()
 export class PayoutService {
   private readonly payouts = new PersistentMap<string, Payout>('payouts');
+  private payeeGate: PayeeGate | null = null;
+
+  /**
+   * Say who may not be paid out. One registration at boot rather than a parameter on `runFor`: an optional
+   * argument is a thing every call site forgets, which is exactly how the driver payable once went missing.
+   */
+  registerPayeeGate(gate: PayeeGate): void {
+    this.payeeGate = gate;
+  }
 
   constructor(
     private readonly books: BooksService,
@@ -57,6 +76,13 @@ export class PayoutService {
     let available = this.books.coverage(entityId, currency).held;
 
     for (const { counterparty, amount } of this.books.outstanding(entityId, ACCOUNT_CODES.PAYABLE_PROVIDER, currency)) {
+      // Asked first: a payee who may not be paid out is not short of cash or already paid — they are owed,
+      // and the run says so by name rather than raising a payment that must never be submitted.
+      const barred = this.payeeGate?.(counterparty);
+      if (barred) {
+        skipped.push({ payeeDid: counterparty, reason: barred });
+        continue;
+      }
       if (this.paidToday(entityId, counterparty, day)) {
         skipped.push({ payeeDid: counterparty, reason: 'already settled today' });
         continue;

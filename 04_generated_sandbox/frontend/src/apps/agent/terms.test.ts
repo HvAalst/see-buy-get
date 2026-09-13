@@ -12,6 +12,7 @@ const terms = (over: Partial<TakeInTerms> = {}): TakeInTerms => ({
   coverBasis: 'free-limit',
   currency: 'KES',
   cashAccepted: true,
+  paidOut: true,
   ...over,
 });
 
@@ -20,6 +21,11 @@ describe('P3 — what the counter says before it takes goods in', () => {
     const n = takeInTermsNotice(terms(), t);
     expect(n.title).toBe('Covered by SBG Kenya');
     expect(n.detail).toContain('up to 5000.00 KES');
+  });
+
+  it('says the work is owed but not paid out, where the country cannot be paid out in', () => {
+    expect(takeInTermsNotice(terms({ jurisdiction: 'DE', paidOut: false }), t).detail).toMatch(/cannot pay out in DE yet/);
+    expect(takeInTermsNotice(terms(), t).detail).not.toMatch(/pay out/);
   });
 
   it('never invents a figure where the sister stated none', () => {

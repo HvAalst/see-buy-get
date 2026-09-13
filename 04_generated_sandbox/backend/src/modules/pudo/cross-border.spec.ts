@@ -49,6 +49,7 @@ import { LedgerService } from '../../foundation/ledger/ledger.service';
 import { InMemoryLedgerAdapter } from '../../foundation/ledger/in-memory-ledger.adapter';
 import { LEDGER_ADAPTER } from '../../foundation/ledger/ledger.types';
 import { EventBus } from '../../foundation/events/event-bus.service';
+import { PayeeStandingRegistrar } from './payee-standing';
 
 /**
  * Crossing a border — the fact the network could not previously state.
@@ -232,6 +233,70 @@ describe('crossing a border', () => {
       expect(() =>
         parcels.createConsumerSend({ senderPersonDid: 'did:p', senderPhoneHash: 'h', receiverMobile: '+254700999', originAgentDid: a.did, destAgentDid: b.did, dimensionsCm: { l: 10, w: 10, h: 10 }, weightKg: 1, quote: heldQuote }),
       ).toThrow(/cannot charge customers in this country/);
+    });
+  });
+
+  describe('P4 — the journey decides who sells, and a foreign leg is a service bought', () => {
+    const BERLIN = { lat: 52.52, lng: 13.405 };
+
+    it('sells a journey into a country we only match, the last stop bought by the selling sister', () => {
+      presence.set({ jurisdiction: 'DE', level: 'matched' });
+      const ke = shop('Nairobi CBD P4', 'Nairobi', NAIROBI, 'KE', 55);
+      const de = shop('Kiez Kiosk', 'Berlin', BERLIN, 'DE', 2);
+      corridors.addCorridor({ name: 'Nairobi–Berlin', originZone: 'Nairobi', destZone: 'Berlin' });
+      const keEntity = entities.requireForJurisdiction('KE').entityId;
+
+      const quote = routing.quoteShipment(ke.did, de.did);
+      expect(quote.sellerEntityId).toBe(keEntity);
+      expect(quote.currency).toBe('KES');
+      // The Kenyan sister owes the Berlin kiosk its own price, in its own money.
+      expect(quote.nodes[1]).toMatchObject({ purchased: true, entityId: keEntity, currency: 'EUR', nativeFee: 2 });
+      expect(quote.nodes[0].purchased).toBeUndefined();
+    });
+
+    it('refuses to price where no currency is recorded, rather than silently pricing in dollars', () => {
+      presence.set({ jurisdiction: 'TZ', level: 'matched' });
+      const ke = shop('Nairobi CBD P4b', 'Nairobi', NAIROBI, 'KE', 55);
+      const tz = shop('Dar Duka P4', 'DarEsSalaam', { lat: -6.79, lng: 39.21 }, 'TZ');
+      corridors.addCorridor({ name: 'Nairobi–Dar', originZone: 'Nairobi', destZone: 'DarEsSalaam' });
+      expect(() => routing.quoteShipment(ke.did, tz.did)).toThrow(/No currency is recorded for TZ/);
+    });
+
+    it('books the work of a shop with no sister as a debt of the seller — and nothing where nobody of ours sold it', () => {
+      presence.set({ jurisdiction: 'DE', level: 'matched' });
+      const de = shop('Kiez Kiosk 2', 'Berlin', BERLIN, 'DE', 2);
+      const keEntity = entities.requireForJurisdiction('KE').entityId;
+
+      expect(gate.payLabour(de.did, 5, 'PUD-P4-1', 'parcel', keEntity)).not.toBeNull();
+      const owed = books.outstanding(keEntity, ACCOUNT_CODES.PAYABLE_PROVIDER, 'KES').find((o) => o.counterparty === de.did);
+      expect(owed?.amount).toBe(5);
+      // The carrier's promise: nobody of ours owes this handover, so nothing is invented.
+      expect(gate.payLabour(de.did, 3, 'MAN-P4', 'manifest')).toBeNull();
+    });
+
+    it('owes, but does not pay out, where money may not leave to a supplier', () => {
+      presence.set({ jurisdiction: 'DE', level: 'matched' });
+      const de = shop('Kiez Kiosk 3', 'Berlin', BERLIN, 'DE', 2);
+      const ke = shop('Nairobi CBD P4c', 'Nairobi', NAIROBI, 'KE', 55);
+      const registrar = new PayeeStandingRegistrar({ registerPayeeGate: () => undefined } as never, agents, presence);
+      expect(registrar.reasonNotToPay(de.did)).toMatch(/cannot pay out in DE yet/);
+      expect(registrar.reasonNotToPay(ke.did)).toBeNull();
+      expect(registrar.reasonNotToPay('did:fleet:someone')).toBeNull(); // hubs, fleets, couriers stand where a sister does
+    });
+
+    it('tells the counter, before accepting, that the work is owed but not paid out here', () => {
+      presence.set({ jurisdiction: 'DE', level: 'matched' });
+      const de = shop('Kiez Kiosk 4', 'Berlin', BERLIN, 'DE', 2);
+      const keEntity = entities.requireForJurisdiction('KE');
+      const terms = parcels.intakeTermsFor({ originAgentDid: de.did, collectingEntityId: keEntity.entityId } as never);
+      expect(terms).toMatchObject({ promise: 'ours', answeredBy: keEntity.name, paidOut: false });
+    });
+
+    it('keeps the list of shop floats readable with a shop that has no float', () => {
+      presence.set({ jurisdiction: 'DE', level: 'matched' });
+      shop('Kiez Kiosk 5', 'Berlin', BERLIN, 'DE', 2);
+      shop('Nairobi CBD P4d', 'Nairobi', NAIROBI, 'KE', 55);
+      expect(() => gate.floats()).not.toThrow();
     });
   });
 

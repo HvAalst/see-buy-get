@@ -255,7 +255,32 @@ export class WalletGateService {
    *
    *  `sellerEntityId` is the sister that SOLD the shipment. When it is another company, this shop's own
    *  sister has just paid for work on somebody else's sale, and recovers it at cost (see recoverAtCost). */
-  payLabour(did: string, amount: number, reference: string, refType: PudoLedgerEntry['refType'], sellerEntityId?: string): PudoLedgerEntry {
+  payLabour(did: string, amount: number, reference: string, refType: PudoLedgerEntry['refType'], sellerEntityId?: string): PudoLedgerEntry | null {
+    const agent = this.agents.get(did);
+    if (!this.agents.entityIdOrNone(agent)) {
+      /**
+       * P4 — A SHOP WITH NO SISTER BEHIND IT.
+       *
+       * Working on a sale a sister made, it is a supplier that sister BOUGHT a service from: the seller books
+       * the cost and owes the shop, exactly as it owes a hub or a fleet. There is no float to credit and no
+       * sister of the shop's own to recharge from. What is owed is paid out only where money may leave to a
+       * supplier in that country — "owed, not paid" (user, 2026-09-13) — see PayoutService's payee gate.
+       *
+       * With no seller named, nothing of ours owes it: goods taken in under the carrier's promise are the
+       * carrier's to pay for, and inventing a payable here would promise the shopkeeper money nobody owes.
+       */
+      if (!sellerEntityId || !(amount > 0)) return null;
+      const entryId = this.books.post({
+        entityId: sellerEntityId,
+        kind: 'purchased-service',
+        ref: reference,
+        lines: [
+          { code: ACCOUNT_CODES.EXPENSE_PROVIDER_FEES, amount },
+          { code: ACCOUNT_CODES.PAYABLE_PROVIDER, counterparty: did, amount: -amount },
+        ],
+      }).entryId;
+      return this.record('LABOR_PAYOUT', '+', amount, did, reference, refType, entryId);
+    }
     const entryId = this.postAgent(did, 'labour', reference, [
       { code: ACCOUNT_CODES.EXPENSE_PROVIDER_FEES, amount },
       { code: ACCOUNT_CODES.DEPOSIT_AGENT, counterparty: did, amount: -amount },
@@ -473,8 +498,12 @@ export class WalletGateService {
   floats(): Array<{ currency: string; amount: number }> {
     const byCurrency = new Map<string, number>();
     for (const agent of this.agents.list()) {
-      const currency = this.entities.get(this.agents.entityIdOf(agent)).currency ?? NETWORK_CURRENCY;
-      // A shop we hold no float for adds nothing to the float we hold. Skipped, not counted as zero.
+      // A shop we hold no float for adds nothing to the float we hold. Skipped, not counted as zero — and
+      // skipped BEFORE its sister is asked for, because asking throws where none exists, and one shop in a
+      // matching-only country would otherwise take the whole money screen down (the P2 defect, again).
+      const entityId = this.agents.entityIdOrNone(agent);
+      if (!entityId) continue;
+      const currency = this.entities.get(entityId).currency ?? NETWORK_CURRENCY;
       byCurrency.set(currency, (byCurrency.get(currency) ?? 0) + (this.agents.balance(agent.did) ?? 0));
     }
     return [...byCurrency.entries()]

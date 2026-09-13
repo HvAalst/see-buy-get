@@ -552,6 +552,12 @@ export interface TakeInTerms {
   currency: string;
   /** Whether cash we answer for may cross this counter. False wherever the promise is not ours. */
   cashAccepted: boolean;
+  /**
+   * P4 — whether this shop can actually be PAID for the work, here. False where the promise is ours but the
+   * country cannot be paid out in: the shop is owed, the debt stays on the books, and the counter says so
+   * before the goods are accepted rather than on the day the shopkeeper expected money.
+   */
+  paidOut: boolean;
 }
 
 /**
@@ -811,7 +817,7 @@ export class ParcelService implements OnApplicationBootstrap {
     const promise = this.presence.takeInPromise(country, payerJurisdiction);
     const level = this.presence.resolve(country).level;
     if (promise !== 'ours') {
-      return { promise, jurisdiction: country, level, coverLimit: 0, coverBasis: 'none', currency: NETWORK_CURRENCY, cashAccepted: false };
+      return { promise, jurisdiction: country, level, coverLimit: 0, coverBasis: 'none', currency: NETWORK_CURRENCY, cashAccepted: false, paidOut: false };
     }
     // This country's sister where one exists; otherwise the payer's, the leg here being a service it bought.
     const entityId = this.agents.entityIdOrNone(agent) ?? (payerJurisdiction ? this.entities.forJurisdiction(payerJurisdiction)?.entityId : undefined);
@@ -826,6 +832,7 @@ export class ParcelService implements OnApplicationBootstrap {
       coverBasis: limit > 0 ? 'free-limit' : 'no-stated-limit',
       currency: entity?.currency ?? NETWORK_CURRENCY,
       cashAccepted: this.presence.can(country, 'cashOnDelivery'),
+      paidOut: this.presence.can(country, 'payouts'),
     };
   }
 
@@ -870,7 +877,8 @@ export class ParcelService implements OnApplicationBootstrap {
    * may we charge anyone anywhere on this route, and may the shops at its ends take goods in at all.
    */
   private requireSellable(quote: ShipmentQuote, shopDids: Array<string | undefined>): void {
-    for (const node of quote.nodes ?? []) this.presence.require(node.country, 'merchantOfRecord');
+    // A purchased stop (P4) is bought by the seller, so it only has to be allowed to take goods in.
+    for (const node of quote.nodes ?? []) this.presence.require(node.country, node.purchased ? 'takeIn' : 'merchantOfRecord');
     if (quote.sellerEntityId) this.presence.require(this.entities.get(quote.sellerEntityId).jurisdiction, 'merchantOfRecord');
     for (const did of shopDids) if (did) this.presence.require(this.agents.countryOf(this.agents.get(did)), 'takeIn');
   }

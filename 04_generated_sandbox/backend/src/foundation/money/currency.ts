@@ -12,6 +12,8 @@
  * tax registration and a settlement account), not a data-file import.
  */
 
+import { GlosError } from '../http/glos-error';
+
 export type CurrencyCode = string;
 
 /** ISO-3166-alpha-2 jurisdiction → ISO-4217 currency, for the markets the network operates in. */
@@ -30,4 +32,20 @@ export const FALLBACK_CURRENCY: CurrencyCode = 'USD';
 /** The currency a jurisdiction settles in; FALLBACK_CURRENCY when the jurisdiction is unknown/absent. */
 export function currencyForJurisdiction(jurisdiction?: string): CurrencyCode {
   return (jurisdiction && CURRENCY_BY_JURISDICTION[jurisdiction.toUpperCase()]) || FALLBACK_CURRENCY;
+}
+
+/**
+ * The currency a jurisdiction settles in — or a refusal that names the country.
+ *
+ * For every path that PRICES somewhere with no sister behind it (user, 2026-09-13: "refuse until mapped").
+ * The fallback above silently turned a Tanzanian shop's rate into dollars, which is a price stated in money
+ * nobody chose. Where a sister exists its own currency is used and this is never asked; where none does,
+ * adding the country to the table is a deliberate step, like recording its presence.
+ */
+export function requireCurrencyFor(jurisdiction?: string): CurrencyCode {
+  const code = jurisdiction ? CURRENCY_BY_JURISDICTION[jurisdiction.toUpperCase()] : undefined;
+  if (!code) {
+    throw new GlosError('INVALID_STATE', `No currency is recorded for ${jurisdiction || 'that country'}, so nothing can be priced there yet`);
+  }
+  return code;
 }

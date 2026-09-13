@@ -215,6 +215,8 @@ export interface TakeInTerms {
   coverBasis: 'declared' | 'free-limit' | 'no-stated-limit' | 'none';
   currency: string;
   cashAccepted: boolean;
+  /** P4 — false where the promise is ours but this country cannot be paid out in: owed, not paid. */
+  paidOut: boolean;
 }
 
 export interface HandoverView {
