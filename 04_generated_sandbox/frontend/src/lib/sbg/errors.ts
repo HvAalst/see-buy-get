@@ -22,7 +22,7 @@ export type SbgErrorCode =
   | 'FORBIDDEN' | 'WRONG_PUDO' | 'AGENT_LOCKED' | 'PIN_LOCKED' | 'ROLE_NOT_HELD' | 'MEDIA_LOCKED' | 'CARGO_REQUIRES_DEDICATED' | 'CARGO_INCOMPATIBLE' | 'VEHICLE_MISSING_CAPABILITY' | 'NOT_FOUND' | 'CONFLICT' | 'DUPLICATE' | 'INCOMPLETE_MANIFEST' | 'INVITE_LIMIT'
   | 'MEDIA_EXPIRED' | 'MEDIA_TOO_LARGE' | 'UNSUPPORTED_MEDIA' | 'RATE_LIMITED' | 'PRICE_CHANGED'
   | 'INTERNAL'
-  | 'NETWORK' | 'TIMEOUT' | 'CLIENT_OUTDATED'; // client-synthesised (no HTTP response)
+  | 'NETWORK' | 'TIMEOUT' | 'OFFLINE' | 'CLIENT_OUTDATED'; // client-synthesised (no HTTP response)
 
 /** The normalized error every SeeBuyGet call resolves to on failure. Never thrown for a business code. */
 export interface SbgError {
@@ -125,6 +125,8 @@ const PRESENTATION: Partial<Record<SbgErrorCode, ErrorPresentation>> = {
   VALIDATION_FAILED: { icon: 'edit', tone: 'warn', say: 'error.check_fields' },
   NETWORK: { icon: 'offline', tone: 'warn', say: 'error.offline' },
   TIMEOUT: { icon: 'offline', tone: 'warn', say: 'error.slow_network' },
+  // The phone knows it has no signal, and this was something only a connection can do.
+  OFFLINE: { icon: 'offline', tone: 'warn', say: 'error.offline_needed' },
   CLIENT_OUTDATED: { icon: 'refresh', tone: 'danger', say: 'error.update_app' },
 };
 
@@ -147,7 +149,7 @@ export function toSbgError(body: unknown, status: number): SbgError {
 }
 
 /** A client-synthesised error for failures with no HTTP response (offline, aborted, version block). */
-export function clientError(code: 'NETWORK' | 'TIMEOUT' | 'CLIENT_OUTDATED', detail: string): SbgError {
+export function clientError(code: 'NETWORK' | 'TIMEOUT' | 'OFFLINE' | 'CLIENT_OUTDATED', detail: string): SbgError {
   const retryable = code !== 'CLIENT_OUTDATED';
   return { code, status: 0, title: presentationFor(code).say, detail, retryable };
 }

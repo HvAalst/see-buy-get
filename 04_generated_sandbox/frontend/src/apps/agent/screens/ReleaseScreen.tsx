@@ -2,7 +2,7 @@ import type { ChatThread } from '../../../shared/conversation/logic';
 import { ConversationList, ConversationSheet } from '../../../shared/conversation/Conversations';
 import { narrow } from '../../../lib/sbg';
 import { useState } from 'preact/hooks';
-import { Button, Card, Checklist, CodeBoxes, ErrorNote, Note, ReadAloud, ScanField } from '../../../shared/ui';
+import { errorSentence, Button, Card, Checklist, CodeBoxes, ErrorNote, Note, ReadAloud, ScanField } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { handoverRoute, otpValid, releaseBlockedDetail, releaseStage } from '../logic';
 import type { AgentActions, AgentState } from '../useAgentApp';
@@ -211,7 +211,7 @@ function WaitingCustomers({ state, actions }: ReleaseScreenProps) {
     setFailed(null);
     const r = await actions.chatApi.openAboutParcel(parcelId);
     setBusy(null);
-    if (r.error) return setFailed({ parcelId, text: r.error.detail || r.error.title || t('agent.counter.messageFailed') });
+    if (r.error) return setFailed({ parcelId, text: r.error.status === 0 ? errorSentence(r.error) : r.error.detail || r.error.title || t('agent.counter.messageFailed') });
     const opened = narrow<ChatThread>(r.data);
     if (opened) setThread(opened);
   };

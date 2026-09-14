@@ -1,5 +1,5 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
-import { BottomNav, Button, Checklist, Icon, Pill, TopBar, type NavItem } from '../../shared/ui';
+import { ConnectivityNote, BottomNav, Button, Checklist, Icon, Pill, TopBar, type NavItem } from '../../shared/ui';
 import { useT } from '../../shared/i18n';
 import { money, vendorWorkLine } from './logic';
 import { BooksScreen } from './screens/BooksScreen';
@@ -74,12 +74,7 @@ export function App() {
       />
 
       <main class="app__scroll">
-        {state.stale ? (
-          <p class="stale">
-            <Icon name="offline" size={20} />
-            <span>{t('vendor.offlineBanner')}</span>
-          </p>
-        ) : null}
+        <ConnectivityNote stale={state.stale} />
         <ScreenRouter screen={state.screen} state={state} actions={actions} />
       </main>
 

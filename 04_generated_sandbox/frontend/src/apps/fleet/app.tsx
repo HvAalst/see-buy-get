@@ -1,6 +1,6 @@
 import { HelpLink } from '../../shared/guide/HelpLink';
 import { useRegisterSW } from 'virtual:pwa-register/preact';
-import { BottomNav, Button, Checklist, Icon, Pill, TopBar, type NavItem } from '../../shared/ui';
+import { ConnectivityNote, BottomNav, Button, Checklist, Icon, Pill, TopBar, type NavItem } from '../../shared/ui';
 import { useT } from '../../shared/i18n';
 import { DashboardScreen } from './screens/DashboardScreen';
 import { DriversScreen } from './screens/DriversScreen';
@@ -73,12 +73,7 @@ export function App() {
       />
 
       <main class="app__scroll">
-        {state.stale ? (
-          <p class="stale">
-            <Icon name="offline" size={20} />
-            <span>{t('fleet.offline')}</span>
-          </p>
-        ) : null}
+        <ConnectivityNote stale={state.stale} />
         <ScreenRouter screen={state.screen} state={state} actions={actions} />
         <div class="scr__foot" style="padding:8px 0 4px">
           <HelpLink app="fleet" />

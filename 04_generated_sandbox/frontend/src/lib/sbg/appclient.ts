@@ -1,3 +1,4 @@
+import { isBrowserOffline, markOffline, markOnline } from '../../shared/connectivity';
 import { createSbgClient, type Result, type SbgClient } from './client';
 import type { SbgConfig } from './config';
 import { clientError, toSbgError, type SbgError } from './errors';
@@ -159,8 +160,11 @@ export async function publicRequest<T>(
       if (ctl.signal.aborted) {
         return { data: null, error: clientError('TIMEOUT', `No answer within ${config.timeoutMs} ms.`), status: 0 };
       }
-      return { data: null, error: clientError('NETWORK', String((e as Error)?.message ?? e)), status: 0 };
+      // Nothing left the phone. Told as OFFLINE when the phone itself says the radio is off — a sign-in needs a connection.
+      markOffline();
+      return { data: null, error: clientError(isBrowserOffline() ? 'OFFLINE' : 'NETWORK', String((e as Error)?.message ?? e)), status: 0 };
     }
+    markOnline();
     const body: unknown = await res.json().catch(() => null);
     if (res.status === 426) {
       return { data: null, error: clientError('CLIENT_OUTDATED', 'This app must be updated to continue.'), status: 426 };

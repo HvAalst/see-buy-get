@@ -85,3 +85,20 @@ describe('SbgClient envelope + resilience', () => {
     expect(captured?.url).toBe('http://api.test/v1/sbg/fleet/drivers/did%3Ax');
   });
 });
+
+describe('when the phone itself says it is offline', () => {
+  it('names the failure OFFLINE — this call needed a connection and there is none', async () => {
+    const before = (globalThis as { navigator?: unknown }).navigator;
+    Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { onLine: false } });
+    try {
+      const { driver } = setup(async () => {
+        throw new TypeError('Failed to fetch');
+      });
+      const r = await driver.me('did:x');
+      expect(r.error?.code).toBe('OFFLINE');
+      expect(r.error?.retryable).toBe(true);
+    } finally {
+      Object.defineProperty(globalThis, 'navigator', { configurable: true, value: before });
+    }
+  });
+});

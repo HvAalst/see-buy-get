@@ -2,7 +2,7 @@ import type { ChatThread } from '../../../shared/conversation/logic';
 import { ConversationSheet } from '../../../shared/conversation/Conversations';
 import { narrow } from '../../../lib/sbg';
 import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, Checklist, CodeCard, ErrorNote, Icon, Note, Pill, ReadAloud, Sheet } from '../../../shared/ui';
+import { errorSentence, Button, Card, Checklist, CodeCard, ErrorNote, Icon, Note, Pill, ReadAloud, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { PhotoField } from './PhotoField';
 import { LADDER, isOffLadder, ladderIndex, parcelRowLine, relationWord, sortForPerson, statusPresentation, stepTime } from '../logic';
@@ -162,7 +162,8 @@ function ParcelDetail({ parcel, state, actions }: { parcel: ConsumerParcelView; 
     setChatFailed(null);
     const r = await actions.chatApi.openAboutParcel(parcel.parcelId);
     setChatBusy(false);
-    if (r.error) return setChatFailed(r.error.detail || r.error.title || t('common.chat.loadFailed'));
+    // A failure with no answer (offline) is said in the shared sentence; a refusal keeps the server's own words.
+    if (r.error) return setChatFailed(r.error.status === 0 ? errorSentence(r.error) : r.error.detail || r.error.title || t('common.chat.loadFailed'));
     const opened = narrow<ChatThread>(r.data);
     if (opened) setThread(opened);
   };

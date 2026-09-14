@@ -61,7 +61,7 @@ const INITIAL: MdpState = {
   form: { ...EMPTY_FORM },
 };
 
-const isOffline = (e: SbgError) => e.code === 'NETWORK' || e.code === 'TIMEOUT';
+const isOffline = (e: SbgError) => e.code === 'NETWORK' || e.code === 'OFFLINE' || e.code === 'TIMEOUT';
 
 export function phaseAfterFailure(phase: Phase, code: string): Phase {
   if (code === 'CLIENT_OUTDATED') return 'outdated';

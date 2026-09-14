@@ -1,5 +1,5 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
-import { BottomNav, Button, Checklist, FeedbackFlash, Icon, Pill, TopBar, type NavItem } from '../../shared/ui';
+import { OutboxNote, ConnectivityNote, BottomNav, Button, Checklist, FeedbackFlash, Icon, Pill, TopBar, type NavItem } from '../../shared/ui';
 import { useT } from '../../shared/i18n';
 import { fillingBags, homeSummary, unsortedAt } from './logic';
 import { DropScreen } from './screens/DropScreen';
@@ -76,12 +76,8 @@ export function App() {
       />
 
       <main class="app__scroll">
-        {state.stale ? (
-          <p class="stale">
-            <Icon name="offline" size={20} />
-            <span>{t('mdp.stale')}</span>
-          </p>
-        ) : null}
+        <ConnectivityNote stale={state.stale} />
+        <OutboxNote />
         <ScreenRouter screen={state.screen} state={state} actions={actions} />
       </main>
 

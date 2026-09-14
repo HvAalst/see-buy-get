@@ -1,5 +1,5 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
-import { BottomNav, Icon, NotificationBell, TopBar, type NavItem } from '../../shared/ui';
+import { BottomNav, ConnectivityNote, Icon, NotificationBell, TopBar, type NavItem } from '../../shared/ui';
 import { useT } from '../../shared/i18n';
 import { SendScreen } from './screens/SendScreen';
 import { TrackScreen } from './screens/TrackScreen';
@@ -57,6 +57,7 @@ export function App() {
       />
 
       <main class="app__scroll">
+        <ConnectivityNote />
         <Router state={state} actions={actions} />
       </main>
 

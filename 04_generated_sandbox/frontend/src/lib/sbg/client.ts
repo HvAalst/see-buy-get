@@ -4,6 +4,8 @@ import type { SbgConfig } from './config';
 import type { Session } from './session';
 import { type SbgError, clientError, toSbgError } from './errors';
 import { offlineFetch, startOutbox } from '../../shared/outbox';
+import { CACHED_AT_HEADER, cachedFetch } from '../../shared/readcache';
+import { isBrowserOffline } from '../../shared/connectivity';
 
 /**
  * Result envelope — a business failure is DATA, never an exception. Every call resolves to exactly one
@@ -14,6 +16,8 @@ export interface Ok<T> {
   data: T;
   error: null;
   status: number;
+  /** Set when the network could not be reached and this is what the phone last knew — see shared/readcache.ts. */
+  cachedAt?: string;
 }
 export interface Err {
   data: null;
@@ -78,7 +82,9 @@ export function createSbgClient(opts: SbgClientOptions): SbgClient {
    * list of what may be queued stays in one readable place instead of being a property of whoever
    * remembered to ask for it.
    */
-  const transport = offlineFetch(timeoutFetch, () => config.baseUrl);
+  // …and under it the read cache: a GET that cannot leave the phone is answered with what it last got back, marked
+  // as such. Reads inside, writes outside — a queued write and a remembered read are two different promises.
+  const transport = offlineFetch(cachedFetch(timeoutFetch, () => config.baseUrl), () => config.baseUrl);
 
   const headerMiddleware: Middleware = {
     async onRequest({ request }) {
@@ -134,7 +140,10 @@ type Attempt<T> = { kind: 'http'; data?: T; error?: unknown; response: Response 
 function normalize<T>(a: Attempt<T>): Result<T> {
   if (a.kind === 'thrown') {
     const aborted = a.error instanceof Error && a.error.name === 'AbortError';
-    return { data: null, error: clientError(aborted ? 'TIMEOUT' : 'NETWORK', String((a.error as Error)?.message ?? a.error)), status: 0 };
+    // Reaching here means neither the outbox nor the read cache could answer: this call NEEDS a connection. When the
+    // phone itself says the radio is off, it is said in those words rather than as a generic failure.
+    const code = aborted ? 'TIMEOUT' : isBrowserOffline() ? 'OFFLINE' : 'NETWORK';
+    return { data: null, error: clientError(code, String((a.error as Error)?.message ?? a.error)), status: 0 };
   }
   const status = a.response.status;
   if (status === 426) {
@@ -143,5 +152,6 @@ function normalize<T>(a: Attempt<T>): Result<T> {
   if (a.error !== undefined || !a.response.ok) {
     return { data: null, error: toSbgError(a.error, status), status };
   }
-  return { data: (a.data ?? null) as T, error: null, status };
+  const cachedAt = a.response.headers.get(CACHED_AT_HEADER);
+  return { data: (a.data ?? null) as T, error: null, status, ...(cachedAt ? { cachedAt } : {}) };
 }

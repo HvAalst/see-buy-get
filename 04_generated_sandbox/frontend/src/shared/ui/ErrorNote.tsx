@@ -13,7 +13,8 @@ import { Icon, type IconName } from './Icon';
  */
 const SAY: Record<string, string> = {
   'error.generic': 'Something went wrong. Try again.',
-  'error.offline': 'No signal right now. Your phone will retry.',
+  'error.offline': 'No signal right now. This needs a connection — try again when you have one.',
+  'error.offline_needed': 'You are offline. This needs a connection — try again when you have signal.',
   'error.slow_network': 'The network is very slow. Try again in a moment.',
   'error.update_app': 'This app needs updating before you can carry on.',
   'error.too_late': 'Too late — that one has gone.',

@@ -51,12 +51,12 @@
 <div class="cols">
   <nav class="toc" aria-label="Help by app">
     <ol>
-      <li><b>Shop app</b><ol><li><a href="#shop-sign-in">Signing in to a shop or a hub</a></li><li><a href="#change-password">Changing your password</a></li><li><a href="#message-shop">A word between a customer and the shop</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
-      <li><b>Hub app</b><ol><li><a href="#shop-sign-in">Signing in to a shop or a hub</a></li><li><a href="#change-password">Changing your password</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
-      <li><b>Fleet app</b><ol><li><a href="#fleet-sign-in">Signing in to a fleet</a></li><li><a href="#fleet-code">The fleet code, and issuing a new one</a></li><li><a href="#change-pin">Changing your PIN</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
-      <li><b>Driver app</b><ol><li><a href="#driver-sign-in">Signing in as a driver</a></li><li><a href="#change-pin">Changing your PIN</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
-      <li><b>Store app</b><ol><li><a href="#store-sign-in">Signing in to a store</a></li><li><a href="#store-secret">Rotating the signing secret</a></li><li><a href="#api-keys">Shipping API keys</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
-      <li><b>Send app</b><ol><li><a href="#change-pin">Changing your PIN</a></li><li><a href="#send-sign-in">Signing in to send or collect</a></li><li><a href="#message-shop">A word between a customer and the shop</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
+      <li><b>Shop app</b><ol><li><a href="#shop-sign-in">Signing in to a shop or a hub</a></li><li><a href="#change-password">Changing your password</a></li><li><a href="#message-shop">A word between a customer and the shop</a></li><li><a href="#no-signal">When there is no signal</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
+      <li><b>Hub app</b><ol><li><a href="#shop-sign-in">Signing in to a shop or a hub</a></li><li><a href="#change-password">Changing your password</a></li><li><a href="#no-signal">When there is no signal</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
+      <li><b>Fleet app</b><ol><li><a href="#fleet-sign-in">Signing in to a fleet</a></li><li><a href="#fleet-code">The fleet code, and issuing a new one</a></li><li><a href="#change-pin">Changing your PIN</a></li><li><a href="#no-signal">When there is no signal</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
+      <li><b>Driver app</b><ol><li><a href="#driver-sign-in">Signing in as a driver</a></li><li><a href="#change-pin">Changing your PIN</a></li><li><a href="#no-signal">When there is no signal</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
+      <li><b>Store app</b><ol><li><a href="#store-sign-in">Signing in to a store</a></li><li><a href="#store-secret">Rotating the signing secret</a></li><li><a href="#api-keys">Shipping API keys</a></li><li><a href="#no-signal">When there is no signal</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
+      <li><b>Send app</b><ol><li><a href="#change-pin">Changing your PIN</a></li><li><a href="#send-sign-in">Signing in to send or collect</a></li><li><a href="#message-shop">A word between a customer and the shop</a></li><li><a href="#no-signal">When there is no signal</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
       <li><b>Front door</b><ol><li><a href="#which-sign-in">Which app, and what you sign in with</a></li><li><a href="#send-sign-in">Signing in to send or collect</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
       <li><b>Operator console</b><ol><li><a href="#fleet-code">The fleet code, and issuing a new one</a></li><li><a href="#console-staff">Staff sign-in</a></li><li><a href="#console-setup-key">The setup key</a></li><li><a href="#console-company">Signing in for a company</a></li><li><a href="#two-person">Decisions that need two people</a></li><li><a href="#when-to-change">When to change a password, PIN or key</a></li></ol></li>
     </ol>
@@ -241,6 +241,19 @@
     <li>The shop can only reach a customer who has signed in to the Send app with the phone number they gave the store. If there is nobody to reach, the app says so.</li>
   </ol>
   <p class="note">Only the two of you can read it, and nothing in it can be edited or deleted. The collection code is never sent in a message — it stays on the parcel in the Send app.</p>
+</section>
+
+<section class="article" id="no-signal">
+  <h2>When there is no signal</h2>
+  <p class="in">Shop app · Hub app · Fleet app · Driver app · Store app · Send app</p>
+  <p class="lede">The app keeps working on what it last knew, and records the parcels you move. Some things wait for a connection.</p>
+  <ol>
+    <li>Taking a parcel in, handing it to the bus, shelving it, moving a bag: recorded on the phone at once and sent when the signal returns. A line at the top counts what is still to send.</li>
+    <li>What you see is what the app last loaded, and the line at the top says so, with the time.</li>
+    <li>Your collection code stays on your phone once the parcel has appeared in My parcels — open the app once while you have signal.</li>
+    <li>Signing in, paying, handing a parcel over at the counter and sending a message need a connection. The app says so plainly when it cannot do them.</li>
+  </ol>
+  <p class="note">Do not clear the app’s data while something is still to send: the record of what you moved is on the phone until it has gone.</p>
 </section>
 
 <section class="article" id="when-to-change">

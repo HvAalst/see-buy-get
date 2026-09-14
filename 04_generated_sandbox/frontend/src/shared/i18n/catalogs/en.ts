@@ -177,6 +177,9 @@ export const en = {
   'common.outbox.waitingOne': 'One thing recorded here has not been sent yet. It will go when there is signal.',
   'common.outbox.waitingMany': '{count} things recorded here have not been sent yet. They will go when there is signal.',
   'common.outbox.unknown': 'The network refused this and did not say why.',
+  'common.offline.banner': 'No signal — showing what we last knew.',
+  'common.offline.sinceBanner': 'No signal — showing what we knew at {time}.',
+  'common.offline.stale': 'Showing what we last knew — checking again.',
   'common.outbox.retry': 'Try again',
   'common.outbox.discard': 'Let it go',
 

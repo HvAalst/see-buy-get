@@ -289,7 +289,7 @@ const INITIAL: AgentState = {
   driverRating: null,
 };
 
-const isOffline = (e: SbgError) => e.code === 'NETWORK' || e.code === 'TIMEOUT';
+const isOffline = (e: SbgError) => e.code === 'NETWORK' || e.code === 'OFFLINE' || e.code === 'TIMEOUT';
 
 /** Same rule as the driver shell: a failure must always land on a screen that renders. */
 export function phaseAfterFailure(phase: Phase, code: string): Phase {

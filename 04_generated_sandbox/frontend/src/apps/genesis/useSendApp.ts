@@ -426,7 +426,13 @@ export function useSendApp() {
       setState((s) => ({ ...s, parcelsState: 'error', parcelsError: r.error }));
       return;
     }
-    setState((s) => ({ ...s, parcels: narrow<MyParcels>(r.data), parcelsState: 'ready' }));
+    const parcels = narrow<MyParcels>(r.data);
+    setState((s) => ({ ...s, parcels, parcelsState: 'ready' }));
+    // A parcel waiting at a shop is one this person will collect with no signal at the counter. Its detail — the
+    // only place the collection code travels — is fetched now so the read cache holds it before it is needed.
+    for (const p of parcels?.received ?? []) {
+      if (p.status === 'Ready_For_Pickup' || p.status === 'Unclaimed') void client.api.parcel(p.parcelId);
+    }
   }, [client]);
 
   /**

@@ -211,7 +211,7 @@ const INITIAL: DriverState = {
   form: { ...EMPTY_FORM },
 };
 
-const isOffline = (e: SbgError) => e.code === 'NETWORK' || e.code === 'TIMEOUT';
+const isOffline = (e: SbgError) => e.code === 'NETWORK' || e.code === 'OFFLINE' || e.code === 'TIMEOUT';
 
 /**
  * Where a failure leaves the shell.
