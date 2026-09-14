@@ -124,3 +124,35 @@ export interface DashboardView {
   positions?: PositionRow[];
   cargo: { count?: number; totalKg?: number; items?: CargoRow[] };
 }
+
+/* ------------------------------------------------- FP1: the fleet's earnings register -- */
+
+export interface FleetJobRow {
+  freightId: string;
+  code: string;
+  description: string;
+  destLabel: string;
+  status: 'available' | 'claimed' | 'in_transit' | 'delivered' | string;
+  cargoClass: string;
+  weightKg: number;
+  earning?: number;
+  /** BOOKED by the network at delivery — owed to the fleet, not yet money that moved. */
+  paid: boolean;
+  claimedAt?: string;
+  deliveredAt?: string;
+  createdAt: string;
+  driverDid: string;
+  driverName: string;
+}
+
+export interface FleetEarningsSummary {
+  earned: number;
+  paid: number;
+  unpaid: number;
+  delivered: number;
+  count: number;
+  byDriver: Array<{ driverDid: string; driverName: string; earned: number; delivered: number; count: number }>;
+  byMonth: Array<{ month: string; earned: number; delivered: number; count: number }>;
+  /** The money, apart from the register: booked as owed (null where no sister pays this fleet), on its way, left. */
+  settlement?: { payeeDid: string; owed: number | null; settled: number; inFlight: number; currency?: string };
+}

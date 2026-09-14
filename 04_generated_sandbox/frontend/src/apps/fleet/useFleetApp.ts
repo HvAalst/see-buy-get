@@ -1,3 +1,4 @@
+import { triggerDownload } from '../../shared/download';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { isUnknownIdentity, narrow, type SbgError } from '../../lib/sbg';
 import type { MediaKind } from '../../lib/sbg/personas/media';
@@ -6,7 +7,7 @@ import { downscaleImage } from '../../shared/media';
 import type { IconName } from '../../shared/ui/Icon';
 import { clearManager, createFleetClient, managerLookup, managerSession, managerChoices, managerSessionByFleet, changeManagerPin, purgeFleetTokens, readManager, saveManager } from './api';
 import { EMPTY_DRIVER, EMPTY_LINE, EMPTY_VEHICLE, isHeavySelection, lineBlocker, type DriverForm, type LineForm, type VehicleForm } from './logic';
-import type {
+import type { FleetEarningsSummary, FleetJobRow,
   AssignmentRow,
   CorridorRow,
   DashboardView,
@@ -15,7 +16,7 @@ import type {
   VehicleRow,
 } from './types';
 
-export type Screen = 'dash' | 'vehicles' | 'drivers' | 'sessions' | 'lines';
+export type Screen = 'dash' | 'vehicles' | 'drivers' | 'sessions' | 'lines' | 'earnings';
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
 
 export interface Toast {
@@ -50,6 +51,29 @@ export interface FleetState {
   cForm: { driverDid: string; vehicleId: string; corridorId: string };
   /** F1 — the line this fleet is about to propose. */
   lForm: LineForm;
+  /* FP1 — the earnings register. */
+  earnRows: FleetJobRow[];
+  earnTotal: number;
+  earnState: 'idle' | 'loading' | 'ready' | 'error';
+  earnQuery: EarningsQuery;
+  earnSummary: FleetEarningsSummary | null;
+}
+
+export interface EarningsQuery {
+  q: string;
+  status: '' | 'claimed' | 'in_transit' | 'delivered';
+  paid: '' | 'paid' | 'unpaid';
+  driver: string;
+  from: string;
+  to: string;
+  sort: 'newest' | 'oldest' | 'earn_desc' | 'earn_asc';
+  offset: number;
+}
+export const EARN_LIMIT = 20;
+const INITIAL_EARN_QUERY: EarningsQuery = { q: '', status: '', paid: '', driver: '', from: '', to: '', sort: 'newest', offset: 0 };
+/** The wire form of the query: empty strings are absent, numbers are strings. */
+function earnApiQuery(q: EarningsQuery): Record<string, string | undefined> {
+  return { q: q.q || undefined, status: q.status || undefined, paid: q.paid || undefined, driver: q.driver || undefined, from: q.from || undefined, to: q.to || undefined, sort: q.sort, limit: String(EARN_LIMIT), offset: String(q.offset) };
 }
 
 const EMPTY_COUPLE = { driverDid: '', vehicleId: '', corridorId: '' };
@@ -57,6 +81,11 @@ const EMPTY_COUPLE = { driverDid: '', vehicleId: '', corridorId: '' };
 const EMPTY_KYC = { for: null, idCopyRef: '', licenceCopyRef: '', photoRef: '' } as const;
 
 const INITIAL: FleetState = {
+  earnRows: [],
+  earnTotal: 0,
+  earnState: 'idle',
+  earnQuery: INITIAL_EARN_QUERY,
+  earnSummary: null,
   company: null,
   kyc: { ...EMPTY_KYC },
   phase: 'boot',
@@ -342,11 +371,70 @@ export function useFleetApp() {
     signOutRef.current = signOut;
   }, [signOut]);
 
+  /* ------------------------------------------------- FP1: the earnings register */
+
+  const earnEpoch = useRef(0);
+  const fetchEarningsWith = useCallback(
+    async (query: EarningsQuery) => {
+      const did = stateRef.current.manager?.did;
+      if (!client || !did) return;
+      const epoch = ++earnEpoch.current;
+      setState((s) => (s.earnState === 'ready' ? s : { ...s, earnState: 'loading' }));
+      const [pageR, sumR] = await Promise.all([client.api.earnings(did, earnApiQuery(query)), client.api.earningsSummary(did, earnApiQuery(query))]);
+      if (epoch !== earnEpoch.current) return;
+      if (pageR.error) {
+        setState((s) => ({ ...s, earnState: 'error', earnSummary: null }));
+        fail(pageR.error);
+        return;
+      }
+      const page = narrow<{ items?: FleetJobRow[]; total?: number }>(pageR.data);
+      const items = page.items ?? [];
+      const total = page.total ?? 0;
+      // A page past the end (a filter shrank the set): fall back to the last real page rather than showing nothing.
+      if (items.length === 0 && total > 0 && query.offset >= total) {
+        const lastOffset = Math.max(0, (Math.ceil(total / EARN_LIMIT) - 1) * EARN_LIMIT);
+        setState((s) => (s.earnQuery.offset === query.offset ? { ...s, earnQuery: { ...s.earnQuery, offset: lastOffset } } : s));
+        void fetchEarningsWith({ ...query, offset: lastOffset });
+        return;
+      }
+      setState((s) => ({ ...s, earnRows: items, earnTotal: total, earnState: 'ready', earnSummary: sumR.error ? null : narrow<FleetEarningsSummary>(sumR.data) }));
+    },
+    [client, fail],
+  );
+  const queryEarnings = useCallback(
+    (patch: Partial<EarningsQuery>) => {
+      const offsetOnly = Object.keys(patch).length === 1 && 'offset' in patch;
+      const next: EarningsQuery = { ...stateRef.current.earnQuery, ...patch, offset: offsetOnly ? (patch.offset ?? 0) : 0 };
+      setState((s) => ({ ...s, earnQuery: next, earnState: 'loading' }));
+      void fetchEarningsWith(next);
+    },
+    [fetchEarningsWith],
+  );
+  const exportEarnings = useCallback(async () => {
+    const did = stateRef.current.manager?.did;
+    if (!client || !did) return;
+    setState((s) => ({ ...s, busy: 'export-earnings', error: null }));
+    try {
+      const q = stateRef.current.earnQuery;
+      const r = await client.api.earningsExport(did, { ...earnApiQuery(q), limit: undefined, offset: undefined });
+      if (r.error) return fail(r.error);
+      triggerDownload('fleet-earnings.csv', narrow<string>(r.data));
+      pushToast({ tone: 'ok', icon: 'check', title: t('fleet.earn.exported'), detail: t('fleet.earn.exportedDetail') });
+    } finally {
+      setState((s) => ({ ...s, busy: null }));
+    }
+  }, [client, fail, pushToast]);
+
   /* ----------------------------------------------------------- navigation */
 
-  const go = useCallback((screen: Screen) => {
-    setState((s) => ({ ...s, screen, error: null }));
-  }, []);
+  const go = useCallback(
+    (screen: Screen) => {
+      setState((s) => ({ ...s, screen, error: null }));
+      // The register is read when it is opened, not on every refresh: it is a page of hauls, not a live gauge.
+      if (screen === 'earnings') void fetchEarningsWith(stateRef.current.earnQuery);
+    },
+    [fetchEarningsWith],
+  );
 
   const setVForm = useCallback((p: Partial<VehicleForm>) => {
     setState((s) => ({ ...s, vForm: { ...s.vForm, ...p } }));
@@ -627,6 +715,8 @@ export function useFleetApp() {
       chatApi: client?.conversations ?? null,
       setLForm,
       proposeLine,
+      queryEarnings,
+      exportEarnings,
       pushToast,
       dismissToast,
     },

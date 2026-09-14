@@ -15,6 +15,14 @@ export function createFleetApi(sbg: SbgClient) {
     // S26: real image upload/fetch (vehicle body + trailer + registration photos).
     ...createMediaApi(sbg),
 
+    /** FP1 — the fleet's earnings register: every driver's hauls, paged; the totals by driver and month + the money; CSV. */
+    earnings: (did: string, query: Record<string, string | undefined>) =>
+      sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/earnings', { params: { path: { did }, query: query as never } })),
+    earningsSummary: (did: string, query: Record<string, string | undefined>) =>
+      sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/earnings/summary', { params: { path: { did }, query: query as never } })),
+    earningsExport: (did: string, query: Record<string, string | undefined>) =>
+      sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/earnings/export', { params: { path: { did }, query: query as never }, parseAs: 'text' })),
+
     /** Counts, working hours, live positions and active cargo — scoped by the token.
      *  (`manager` is required by the contract but operator-only at runtime; empty = my tenant.) */
     dashboard: () => sbg.request((c) => c.GET('/v1/sbg/fleet/dashboard', { params: { query: { manager: '' } } })),

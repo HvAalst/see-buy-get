@@ -515,6 +515,19 @@ export class AgentLedgerQueryDto {
 }
 
 /** R5 — the driver jobs + earnings register query (over the driver's freight hauls). */
+/** FP1 — the fleet's register: the driver's filters, plus which driver. */
+export class FleetEarningsQueryDto {
+  @IsOptional() @IsString() q?: string;
+  @IsOptional() @IsIn(['available', 'claimed', 'in_transit', 'delivered']) status?: 'available' | 'claimed' | 'in_transit' | 'delivered';
+  @IsOptional() @IsIn(['paid', 'unpaid']) paid?: 'paid' | 'unpaid';
+  @IsOptional() @IsString() driver?: string;
+  @IsOptional() @IsString() from?: string;
+  @IsOptional() @IsString() to?: string;
+  @IsOptional() @IsIn(['newest', 'oldest', 'earn_desc', 'earn_asc']) sort?: 'newest' | 'oldest' | 'earn_desc' | 'earn_asc';
+  @IsOptional() @IsString() limit?: string;
+  @IsOptional() @IsString() offset?: string;
+}
+
 export class DriverJobsQueryDto {
   @IsOptional() @IsString() q?: string; // job code / description / destination / tracking / order ref
   @IsOptional() @IsIn(['available', 'claimed', 'in_transit', 'delivered']) status?: 'available' | 'claimed' | 'in_transit' | 'delivered';

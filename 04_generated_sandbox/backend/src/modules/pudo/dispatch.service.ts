@@ -159,7 +159,80 @@ function driverJobSort(sort?: DriverJobsQuery['sort']): (a: Freight, b: Freight)
 
 /** Filter + search + sort a driver's freight jobs (PURE — restricts to THIS driver's claimed hauls). */
 export function filterDriverJobs(rows: Freight[], driverDid: string, q: DriverJobsQuery): Freight[] {
-  let out = rows.filter((f) => f.claimedBy === driverDid);
+  return filterJobsFor(rows, (f) => f.claimedBy === driverDid, q);
+}
+
+/* ---------------------------------------------------- FP1 — the FLEET's register: every driver's hauls ---- */
+
+export interface FleetJobsQuery extends DriverJobsQuery {
+  /** One of the fleet's drivers, or every one. */
+  driver?: string;
+}
+
+export interface FleetJobRow extends DriverJobRow {
+  driverDid: string;
+  driverName: string;
+}
+
+export interface FleetEarningsSummary extends DriverJobsSummary {
+  /** Who earned what, most first — the question a manager asks on payday. */
+  byDriver: Array<{ driverDid: string; driverName: string; earned: number; delivered: number; count: number }>;
+  /** Filed by the month the job was claimed, newest first. */
+  byMonth: Array<{ month: string; earned: number; delivered: number; count: number }>;
+}
+
+/**
+ * The fleet's own register over its drivers' hauls. A fleet is paid as ONE supplier for all of them, so the
+ * register is one list with the driver as a column — and the summary cuts it by driver and by month, which are
+ * the two ways a fleet owner reads it: who earned it, and what the month came to.
+ */
+export function filterFleetJobs(rows: Freight[], driverDids: ReadonlySet<string>, q: FleetJobsQuery): Freight[] {
+  return filterJobsFor(rows, (f) => Boolean(f.claimedBy) && driverDids.has(f.claimedBy!) && (!q.driver || f.claimedBy === q.driver), q);
+}
+
+export function fleetJobRowOf(f: Freight, nameOf: (did: string) => string): FleetJobRow {
+  return { ...driverJobRowOf(f), driverDid: f.claimedBy ?? '', driverName: nameOf(f.claimedBy ?? '') };
+}
+
+export function fleetEarningsSummaryOf(rows: Freight[], nameOf: (did: string) => string): FleetEarningsSummary {
+  const base = driverJobsSummaryOf(rows);
+  const drivers = new Map<string, { driverDid: string; driverName: string; earned: number; delivered: number; count: number }>();
+  const months = new Map<string, { month: string; earned: number; delivered: number; count: number }>();
+  for (const f of rows) {
+    const did = f.claimedBy ?? '';
+    const d = drivers.get(did) ?? { driverDid: did, driverName: nameOf(did), earned: 0, delivered: 0, count: 0 };
+    const month = jobDate(f).slice(0, 7);
+    const m = months.get(month) ?? { month, earned: 0, delivered: 0, count: 0 };
+    const e = f.lockedPrice ?? 0;
+    d.earned += e;
+    m.earned += e;
+    d.count += 1;
+    m.count += 1;
+    if (f.status === 'delivered') {
+      d.delivered += 1;
+      m.delivered += 1;
+    }
+    drivers.set(did, d);
+    months.set(month, m);
+  }
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  return {
+    ...base,
+    byDriver: [...drivers.values()].map((d) => ({ ...d, earned: r2(d.earned) })).sort((a, b) => b.earned - a.earned),
+    byMonth: [...months.values()].map((m) => ({ ...m, earned: r2(m.earned) })).sort((a, b) => b.month.localeCompare(a.month)),
+  };
+}
+
+export function fleetJobsToCsv(rows: Freight[], nameOf: (did: string) => string): string {
+  return toCsv(
+    ['Driver', 'Job', 'Description', 'Destination', 'Status', 'Class', 'Weight kg', 'Earning', 'Currency', 'Booked', 'Claimed', 'Delivered'],
+    rows.map((f) => [nameOf(f.claimedBy ?? ''), f.code, f.description, f.destLabel, f.status, f.cargoClass, f.weightKg, f.lockedPrice ?? '', f.lockedPrice == null ? '' : NETWORK_CURRENCY, f.driverPaid ? 'yes' : 'no', f.claimedAt ?? '', f.deliveredAt ?? '']),
+  );
+}
+
+/** The register's one filter, for whichever set of hauls a caller may see. */
+function filterJobsFor(rows: Freight[], mine: (f: Freight) => boolean, q: DriverJobsQuery): Freight[] {
+  let out = rows.filter(mine);
   if (q.status) out = out.filter((f) => f.status === q.status);
   if (q.paid) out = out.filter((f) => (q.paid === 'paid' ? f.driverPaid === true : !f.driverPaid));
   if (q.from || q.to) out = out.filter((f) => withinDates(jobDate(f), q.from, q.to));
@@ -1693,6 +1766,22 @@ export class DispatchService {
 
   driverJobsCsv(driverDid: string, q: DriverJobsQuery): string {
     return driverJobsToCsv(filterDriverJobs([...this.freights.values()], driverDid, q));
+  }
+
+  /* --- FP1: the fleet's register over all its drivers --- */
+
+  fleetJobsPage(driverDids: ReadonlySet<string>, nameOf: (did: string) => string, q: FleetJobsQuery): Page<FleetJobRow> {
+    const filtered = filterFleetJobs([...this.freights.values()], driverDids, q);
+    const { items, total } = paginate(filtered, q.limit, q.offset);
+    return { items: items.map((f) => fleetJobRowOf(f, nameOf)), total };
+  }
+
+  fleetEarningsSummary(driverDids: ReadonlySet<string>, nameOf: (did: string) => string, q: FleetJobsQuery): FleetEarningsSummary {
+    return fleetEarningsSummaryOf(filterFleetJobs([...this.freights.values()], driverDids, q), nameOf);
+  }
+
+  fleetJobsCsv(driverDids: ReadonlySet<string>, nameOf: (did: string) => string, q: FleetJobsQuery): string {
+    return fleetJobsToCsv(filterFleetJobs([...this.freights.values()], driverDids, q), nameOf);
   }
 
   /** All cargo currently claimed or moving (optionally scoped to one fleet's drivers) for the dashboard. */

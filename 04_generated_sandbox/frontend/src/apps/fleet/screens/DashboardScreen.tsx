@@ -32,6 +32,11 @@ export function DashboardScreen({ state, actions }: DashboardScreenProps) {
         <Tile value={hoursLabel(d?.sessions.todayHours)} label={t('fleet.dash.tileHours')} />
       </div>
 
+      {/* FP1 — the one thing a fleet owner asks first, and the one screen this app never had. */}
+      <Card title={t('fleet.earn.cardTitle')} aside={<Button variant="link" full={false} onClick={() => actions.go('earnings')}>{t('fleet.earn.cardOpen')}</Button>}>
+        <p class="card__note">{t('fleet.earn.cardBody')}</p>
+      </Card>
+
 {/* A REAL map, and one that renders whether or not anything is on it.
 
           It used to be a bespoke dot-plot projected onto an abstract grid, which meant that with nothing

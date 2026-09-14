@@ -9863,6 +9863,341 @@
         }
       }
     },
+    "/v1/sbg/fleet/managers/{did}/earnings": {
+      "get": {
+        "operationId": "Sbg.fleetEarnings",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "available",
+                "claimed",
+                "in_transit",
+                "delivered"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "paid",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "paid",
+                "unpaid"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "driver",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "newest",
+                "oldest",
+                "earn_desc",
+                "earn_asc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/earnings/summary": {
+      "get": {
+        "operationId": "Sbg.fleetEarningsSummary",
+        "summary": "",
+        "description": "Totals for the filter, by driver and by month — and, apart from them, the MONEY: what the network has booked\nas owed to this fleet, what is on its way, and what a rail confirmed leaving. Three different facts that one\nscreen used to blur into \"paid\".",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "available",
+                "claimed",
+                "in_transit",
+                "delivered"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "paid",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "paid",
+                "unpaid"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "driver",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "newest",
+                "oldest",
+                "earn_desc",
+                "earn_asc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/earnings/export": {
+      "get": {
+        "operationId": "Sbg.fleetEarningsExport",
+        "summary": "",
+        "description": "The whole matching set as CSV — the fleet's own statement, for its books.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "available",
+                "claimed",
+                "in_transit",
+                "delivered"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "paid",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "paid",
+                "unpaid"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "driver",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "newest",
+                "oldest",
+                "earn_desc",
+                "earn_asc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/managers/{did}/code/rotate": {
       "post": {
         "operationId": "Sbg.rotateManagerCode",

@@ -1,3 +1,4 @@
+import { EarningsScreen } from './screens/EarningsScreen';
 import { HelpLink } from '../../shared/guide/HelpLink';
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { ConnectivityNote, BottomNav, Button, Checklist, Icon, Pill, TopBar, type NavItem } from '../../shared/ui';
@@ -100,6 +101,8 @@ function ScreenRouter({ screen, state, actions }: { screen: Screen; state: Fleet
       return <SessionsScreen state={state} actions={actions} />;
     case 'lines':
       return <LinesScreen state={state} actions={actions} />;
+    case 'earnings':
+      return <EarningsScreen state={state} actions={actions} />;
     default:
       return <DashboardScreen state={state} actions={actions} />;
   }

@@ -54,7 +54,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyRecordDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto } from './pudo.dto';
+  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { classifySize, MAX_CLAIM_AWARD, measuredFactor, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
@@ -2487,6 +2487,67 @@ export class SbgController {
         }
       });
     return { fleets };
+  }
+
+  /* ------------------------------------------------ FP1: what the fleet has earned, and where it is -- */
+
+  /**
+   * The fleet's own earnings register: every haul its drivers carried, searchable and paged, with the driver as a
+   * column. A fleet is paid as ONE supplier for all of them (the payable is keyed to the fleet, never to the
+   * driver — see DriverService.payeeOf), so this is the list that payday is reconciled against.
+   */
+  @Roles('fleet_manager', 'operator')
+  @Get('fleet/managers/:did/earnings')
+  fleetEarnings(@Param('did') did: string, @Query() query: FleetEarningsQueryDto, @Actor() actor: IntrospectionResult) {
+    this.assertFleetSelf(did, actor);
+    const { dids, nameOf } = this.fleetDrivers(did);
+    return this.dispatch.fleetJobsPage(dids, nameOf, query);
+  }
+
+  /**
+   * Totals for the filter, by driver and by month — and, apart from them, the MONEY: what the network has booked
+   * as owed to this fleet, what is on its way, and what a rail confirmed leaving. Three different facts that one
+   * screen used to blur into "paid".
+   */
+  @Roles('fleet_manager', 'operator')
+  @Get('fleet/managers/:did/earnings/summary')
+  fleetEarningsSummary(@Param('did') did: string, @Query() query: FleetEarningsQueryDto, @Actor() actor: IntrospectionResult) {
+    this.assertFleetSelf(did, actor);
+    const { dids, nameOf } = this.fleetDrivers(did);
+    const m = this.managers.get(did);
+    const entityId = this.managers.entityIdOrNone(m);
+    const currency = entityId ? this.entities.get(entityId).currency : undefined;
+    // Owed = the sister's payable to this fleet, still standing. Null where no sister pays this fleet at all:
+    // its jobs settle between the parties, and "0 owed" would be a false comfort.
+    const owed = entityId ? Math.round(-this.books.balance(entityId, ACCOUNT_CODES.PAYABLE_PROVIDER, currency, did) * 100) / 100 : null;
+    return {
+      ...this.dispatch.fleetEarningsSummary(dids, nameOf, query),
+      settlement: { payeeDid: did, owed, ...this.payouts.forPayee(did), ...(currency ? { currency } : {}) },
+    };
+  }
+
+  /** The whole matching set as CSV — the fleet's own statement, for its books. */
+  @Roles('fleet_manager', 'operator')
+  @Get('fleet/managers/:did/earnings/export')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="fleet-earnings.csv"')
+  fleetEarningsExport(@Param('did') did: string, @Query() query: FleetEarningsQueryDto, @Actor() actor: IntrospectionResult): string {
+    this.assertFleetSelf(did, actor);
+    const { dids, nameOf } = this.fleetDrivers(did);
+    return this.dispatch.fleetJobsCsv(dids, nameOf, query);
+  }
+
+  /** The fleet itself (its token's tenant), or network staff. Anyone else is told the fleet is not theirs. */
+  private assertFleetSelf(did: string, actor: IntrospectionResult): void {
+    this.managers.get(did); // 404 if unknown
+    if (actor?.role !== 'operator' && actingTenant(actor) !== did) throw new GlosError('FORBIDDEN', 'This fleet is not yours');
+  }
+
+  /** The fleet's drivers as a set, and their names — the two things every fleet register needs. */
+  private fleetDrivers(managerDid: string): { dids: Set<string>; nameOf: (did: string) => string } {
+    const drivers = this.drivers.list({ managerDid });
+    const names = new Map(drivers.map((d) => [d.did, d.displayName]));
+    return { dids: new Set(names.keys()), nameOf: (did) => names.get(did) ?? did };
   }
 
   /** Issue the fleet a new code — the fleet itself, or network staff. The old code stops working at once. */
