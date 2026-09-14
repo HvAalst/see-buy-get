@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, Chip, ErrorNote, GlanceNumber, Icon, Pager, Pill, ReadAloud, SearchInput, Sheet } from '../../../shared/ui';
+import { Button, Card, Chip, DocumentButton, ErrorNote, GlanceNumber, Icon, Pager, Pill, ReadAloud, SearchInput, Sheet } from '../../../shared/ui';
 import { useDebounced } from '../../../shared/useDebounced';
 import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
 import { EARN_LIMIT, type EarningsQuery, type FleetActions, type FleetState } from '../useFleetApp';
@@ -166,7 +166,7 @@ export function EarningsScreen({ state, actions }: EarningsScreenProps) {
           ) : (
             <div class={`rows${state.earnState === 'loading' ? ' rows--loading' : ''}`} role="list">
               {state.earnRows.map((j) => (
-                <JobRow key={j.freightId} j={j} />
+                <JobRow key={j.freightId} j={j} actions={actions} />
               ))}
             </div>
           )}
@@ -203,7 +203,7 @@ export function EarningsScreen({ state, actions }: EarningsScreenProps) {
   );
 }
 
-function JobRow({ j }: { j: FleetJobRow }) {
+function JobRow({ j, actions }: { j: FleetJobRow; actions: FleetActions }) {
   const t = useT();
   const when = j.deliveredAt ?? j.claimedAt;
   return (
@@ -219,6 +219,9 @@ function JobRow({ j }: { j: FleetJobRow }) {
         <span class="row__meta">
           {t('fleet.earn.rowMeta', { status: statusWord(j.status, t), kg: j.weightKg })}
           {when ? ` · ${new Date(when).toLocaleDateString()}` : ''}
+        </span>
+        <span class="row__meta">
+          <DocumentButton label={t('common.cmr.open')} title={t('common.cmr.title')} fetch={() => actions.freightNote(j.freightId)} />
         </span>
       </span>
       <span class="row__end">

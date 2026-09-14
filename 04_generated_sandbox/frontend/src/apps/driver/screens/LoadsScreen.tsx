@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, CheckGate, Checklist, ErrorNote, GlanceNumber, Icon, Note, OpenInMaps, PhotoField, Pill, ReadAloud, Sheet } from '../../../shared/ui';
+import { DocumentButton, Button, Card, CheckGate, Checklist, ErrorNote, GlanceNumber, Icon, Note, OpenInMaps, PhotoField, Pill, ReadAloud, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { canLoadBag, capacitySubLine, claimControl, isFull, loadsSummary, money, usedPercent } from '../logic';
 import type { Claimable } from '../types';
@@ -120,6 +120,10 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                   ) : null}
                   {/* S33b — an in-transit cold-chain load: show the safe band + last reading + a log control. */}
                   {control === 'deliver' && c.tempBand ? <TempStrip claim={c} onLog={() => setTempFor(c)} /> : null}
+                  {/* FP2 — the consignment note travels with the load; the driver can show it at any gate. */}
+                  <div class="load__nav">
+                    <DocumentButton label={t('common.cmr.open')} title={t('common.cmr.title')} fetch={() => actions.freightNote(c.ref)} />
+                  </div>
                 </li>
               );
             }

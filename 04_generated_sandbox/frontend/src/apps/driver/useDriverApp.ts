@@ -1354,6 +1354,8 @@ const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehic
       loadNodes,
       startShift,
       endShift,
+      /** FP2 — the consignment note of a load this driver carries. */
+      freightNote: (freightId: string) => client!.api.freightNote(freightId),
       matchRate,
       submitRoute,
       repeatRoute,

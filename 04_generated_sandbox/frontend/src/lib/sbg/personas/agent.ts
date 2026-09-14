@@ -187,6 +187,8 @@ export function createAgentApi(sbg: SbgClient) {
     postedFreight: () => sbg.request((c) => c.GET('/v1/sbg/dispatch/posted', {})),
 
     /** FB2b — the prices offered on one of my loads, newest first. */
+    /** FP2 — the load's consignment note (CMR), as a printable page. */
+    freightNote: (freightId: string) => sbg.request((c) => c.GET('/v1/sbg/dispatch/freight/{id}/consignment-note.html', { params: { path: { id: freightId } }, parseAs: 'text' })),
     freightProposals: (freightId: string) =>
       sbg.request((c) => c.GET('/v1/sbg/dispatch/freight/{id}/proposals', { params: { path: { id: freightId } } })),
 

@@ -180,6 +180,9 @@ export const en = {
   'common.offline.banner': 'No signal — showing what we last knew.',
   'common.offline.sinceBanner': 'No signal — showing what we knew at {time}.',
   'common.offline.stale': 'Showing what we last knew — checking again.',
+  'common.doc.print': 'Print or save',
+  'common.cmr.open': 'Consignment note',
+  'common.cmr.title': 'Consignment note (CMR)',
   'common.outbox.retry': 'Try again',
   'common.outbox.discard': 'Let it go',
 

@@ -293,6 +293,24 @@ export const ARTICLES: GuideArticle[] = [
     ]
   },
   {
+    id: "consignment-note",
+    apps: [
+      "agent",
+      "driver",
+      "fleet"
+    ],
+    title: "The consignment note (CMR)",
+    summary: "Every load carries one document from posting to delivery, in the CMR layout: sender, consignee, carrier and vehicle, the goods, taking over and delivery. Across a border it is the CMR itself.",
+    steps: [
+      "Shop app: Freight, open the load, then “Consignment note”. Print or save it for your books.",
+      "Driver app: Loads, then “Consignment note” under the load — show it at a weighbridge, a border or the receiver’s gate.",
+      "Fleet app: Earnings, then “Consignment note” on any haul."
+    ],
+    notes: [
+      "Every box is filled from a recorded act — posting, the load-safety check at pickup, the unload report at delivery. A box that says “not recorded” is not recorded; nothing is typed in by hand. The buyer of a store order is named as the buyer, never by phone number."
+    ]
+  },
+  {
     id: "when-to-change",
     apps: [
       "agent",

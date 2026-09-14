@@ -130,6 +130,12 @@ export class AccountService implements OnApplicationBootstrap {
     return { accountId: account.accountId, role: account.role, did, email, entityStatus, token: this.mint(account) };
   }
 
+  /** The email behind an entity's DID — for the receipts a shop is sent about its own loads. Undefined for a store or a stranger. */
+  emailForDid(did: string): string | undefined {
+    for (const a of this.accounts.values()) if (a.did === did) return a.email;
+    return undefined;
+  }
+
   /** Verify credentials → an actor-scoped token (S2). Replaces the old ?<role>=<did> URL "session". */
   login(email: string, password: string): { accountId: string; role: AccountRole; did: string; email: string; token: AccessToken } {
     const account = this.accounts.get((email || '').trim().toLowerCase());

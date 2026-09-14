@@ -76,6 +76,7 @@ export interface MailParams {
   'fleet-code-due': { company: string; days: number };
   'order-on-its-way': { store: string; orderRef?: string; shop: string; trackingUrl: string };
   'ready-for-collection': { shop: string; address?: string; collectBy: string; openUrl?: string };
+  'freight-delivered': { code: string; description: string; destination: string; deliveredAt: string; carrier: string; driver?: string; amount?: number; currency?: string; noteNumber: string };
 }
 
 export type MailTemplateId = keyof MailParams;
@@ -286,6 +287,35 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
         { kind: 'note', text: 'For your safety the code is never sent by email, and nobody from SeeBuyGet or the shop will ask you for it before you are at the counter.' },
       ],
       reason: `You are getting this email because you ordered from ${p.store} and chose to collect at a SeeBuyGet shop.`,
+    }),
+  },
+
+  'freight-delivered': {
+    title: 'Load delivered — receipt (shipper)',
+    sentWhen: 'A driver delivers a load, to the email of the shop that posted it.',
+    wired: true,
+    sample: { code: 'FRT-010', description: 'Maize, 20 sacks', destination: 'Riverside Corner', deliveredAt: '2026-09-14T12:04:00Z', carrier: 'Kilima Logistics', driver: 'Amos K.', amount: 350, currency: 'KES', noteNumber: 'CMR-FRT-010' },
+    build: (p) => ({
+      subject: `Delivered: ${p.code} — ${p.description}`,
+      preheader: `Your load reached ${p.destination} on ${formatWhen(p.deliveredAt)}.`,
+      blocks: [
+        { kind: 'heading', text: 'Your load was delivered' },
+        { kind: 'paragraph', text: `${p.carrier}${p.driver ? ` (driver ${p.driver})` : ''} delivered ${p.code}, ${p.description}, to ${p.destination}.` },
+        {
+          kind: 'facts',
+          rows: [
+            ['Load', p.code],
+            ['Delivered', formatWhen(p.deliveredAt)],
+            ['Carrier', p.carrier],
+            ...(p.amount != null ? [['Carriage charges', `${p.amount.toFixed(2)} ${p.currency ?? ''}`.trim()] as [string, string]] : []),
+            ['Consignment note', p.noteNumber],
+          ],
+        },
+        { kind: 'paragraph', text: 'The consignment note — sender, carrier, vehicle, goods, taking over and delivery — is on the load in the Shop app under Freight. Open it there to print or save it for your books.' },
+        { kind: 'button', label: 'Open the Shop app', href: appUrl('agent') },
+        { kind: 'note', text: 'Something wrong with the delivery? Say so from the load in the app; a note that says “not recorded” is one the receiver has not yet confirmed.' },
+      ],
+      reason: 'You are getting this email because your shop posted this load on SeeBuyGet.',
     }),
   },
 

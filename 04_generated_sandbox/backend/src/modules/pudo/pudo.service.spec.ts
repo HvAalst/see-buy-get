@@ -1,4 +1,5 @@
-﻿import { MAIL_SENDER } from '../../foundation/mail/mail.types';
+﻿import { ConsignmentNoteService } from './consignment-note.service';
+import { MAIL_SENDER } from '../../foundation/mail/mail.types';
 import { OutboxMailSender } from '../../foundation/mail/outbox-mail.sender';
 import { MailService } from '../../foundation/mail/mail.service';
 import { CompanyDocumentService } from '../../foundation/entity/company-documents.service';
@@ -128,7 +129,7 @@ describe('PUDO Light', () => {
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
         GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, VehicleService, DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService, FleetManagerService, AccountService, OtpService, PersonService, InviteService, MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
-        WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus, EntityService, EntityAdminService, OperatorAccountService, MailService, OutboxMailSender, { provide: MAIL_SENDER, useExisting: OutboxMailSender }, PresenceService, CompanyDocumentService, CompanyReadinessService, BorderRuleService, BooksService, FxService, ApiKeyService,
+        WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus, EntityService, EntityAdminService, OperatorAccountService, ConsignmentNoteService, MailService, OutboxMailSender, { provide: MAIL_SENDER, useExisting: OutboxMailSender }, PresenceService, CompanyDocumentService, CompanyReadinessService, BorderRuleService, BooksService, FxService, ApiKeyService,
         PayoutService, ReturnService, UnclaimedService, MerchantRatingService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
         GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder },

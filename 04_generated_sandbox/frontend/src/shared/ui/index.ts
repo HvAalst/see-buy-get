@@ -15,6 +15,7 @@ export { PhotoField, type PhotoFieldProps } from './PhotoField';
 export { GlanceNumber, type GlanceNumberProps } from './GlanceNumber';
 export { SwipeDeck, type SwipeDeckProps } from './SwipeDeck';
 export { Sheet, type SheetProps } from './Sheet';
+export { DocumentButton } from './DocumentButton';
 export { TopBar, type TopBarProps } from './TopBar';
 export { BrandMark, type BrandMarkProps } from './BrandMark';
 export { OutboxNote } from './OutboxNote';

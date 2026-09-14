@@ -1791,6 +1791,8 @@ export function useAgentApp() {
       dismissBookedFreight,
       loadPosted,
       openPrices,
+      /** FP2 — the consignment note of one of this shop's loads, as a page. */
+      freightNote: (freightId: string) => client!.api.freightNote(freightId),
       acceptPrice,
       declinePrice,
       loadConsignments,

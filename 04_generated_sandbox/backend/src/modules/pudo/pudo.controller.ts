@@ -1,4 +1,5 @@
-﻿import { MailService } from '../../foundation/mail/mail.service';
+﻿import { ConsignmentNoteService } from './consignment-note.service';
+import { MailService } from '../../foundation/mail/mail.service';
 import { isSandbox } from '../../foundation/runtime/sandbox';
 import { Body, Controller, Delete, Get, Header, Inject, Param, Patch, Post, Query, Res, StreamableFile, Optional } from '@nestjs/common';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
@@ -130,6 +131,7 @@ export class SbgController {
     private readonly borderRules: BorderRuleService,
     private readonly entityAdmins: EntityAdminService,
     private readonly operatorAccounts: OperatorAccountService,
+    private readonly notes: ConsignmentNoteService,
     private readonly fx: FxService,
     private readonly apiKeys: ApiKeyService,
     private readonly books: BooksService,
@@ -3160,6 +3162,25 @@ export class SbgController {
   }
 
   /** S33b — log a temperature reading for a cold-chain freight in transit (a breach flags it for the tower). */
+  /**
+   * FP2 — THE CONSIGNMENT NOTE of a load, as data. Read by the sender, the carrier (driver or their fleet) and network
+   * staff; anybody else is told the load does not exist. The CMR layout everywhere, the CMR itself across a border.
+   */
+  @Get('dispatch/freight/:id/consignment-note')
+  consignmentNote(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    this.notes.requireReader(id, actor);
+    return this.notes.noteFor(id);
+  }
+
+  /** The same note as a printable page. */
+  @Get('dispatch/freight/:id/consignment-note.html')
+  @Header('Content-Type', 'text/html; charset=utf-8')
+  @Header('Cache-Control', 'private, no-store')
+  consignmentNoteHtml(@Param('id') id: string, @Actor() actor: IntrospectionResult): string {
+    this.notes.requireReader(id, actor);
+    return this.notes.htmlFor(this.notes.noteFor(id));
+  }
+
   @Post('dispatch/freight/:id/temperature')
   freightTemp(@Param('id') id: string, @Body() dto: RecordTempDto) {
     return this.dispatch.recordTemp(id, dto.celsius, dto.driverDid);

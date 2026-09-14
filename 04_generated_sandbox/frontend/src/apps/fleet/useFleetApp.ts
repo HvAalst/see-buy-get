@@ -717,6 +717,8 @@ export function useFleetApp() {
       proposeLine,
       queryEarnings,
       exportEarnings,
+      /** FP2 — the consignment note of a haul one of this fleet's drivers carried. */
+      freightNote: (freightId: string) => client!.api.freightNote(freightId),
       pushToast,
       dismissToast,
     },

@@ -78,7 +78,8 @@ export const GlosEvent = {
     DriverMoved: 'pudo.driver_moved', // a live GPS fix — the trigger for "there is a load on your road NOW"
     ToteAvailable: 'pudo.tote_available', // a full/aged/SEALED tote published to the claim marketplace
     ToteNeedsSeal: 'pudo.tote_needs_seal', // a SHOP bag is full/aged but still open — ask the shop to close it
-    FreightPosted: 'pudo.freight_posted', // a dedicated-freight load registered → ping drivers near its pickup
+    FreightPosted: 'pudo.freight_posted',
+    FreightDelivered: 'pudo.freight_delivered', // FP2 — the consignment closes: the sender is sent its receipt // a dedicated-freight load registered → ping drivers near its pickup
     LoadClaimed: 'pudo.load_claimed', // a driver claimed a tote/freight along their route
     FreightTempBreach: 'pudo.freight_temp_breach', // S33b — a cold-chain freight logged an out-of-band temperature
     FleetManagerActivated: 'pudo.fleet_manager_activated', // operator vetted + bonded → may build a fleet

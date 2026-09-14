@@ -12184,11 +12184,67 @@
         }
       }
     },
+    "/v1/sbg/dispatch/freight/{id}/consignment-note": {
+      "get": {
+        "operationId": "Sbg.consignmentNote",
+        "summary": "",
+        "description": "S33b — log a temperature reading for a cold-chain freight in transit (a breach flags it for the tower).",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/dispatch/freight/{id}/consignment-note.html": {
+      "get": {
+        "operationId": "Sbg.consignmentNoteHtml",
+        "summary": "",
+        "description": "The same note as a printable page.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/dispatch/freight/{id}/temperature": {
       "post": {
         "operationId": "Sbg.freightTemp",
-        "summary": "",
-        "description": "S33b — log a temperature reading for a cold-chain freight in transit (a breach flags it for the tower).",
         "parameters": [
           {
             "name": "id",
@@ -22185,6 +22241,35 @@
           "destCountry": {
             "type": "string"
           },
+          "carriage": {
+            "type": "object",
+            "properties": {
+              "vehicleId": {
+                "required": true,
+                "type": "string"
+              },
+              "plate": {
+                "required": true,
+                "type": "string"
+              },
+              "vehicleClass": {
+                "required": true,
+                "type": "string"
+              },
+              "driverDid": {
+                "required": true,
+                "type": "string"
+              },
+              "managerDid": {
+                "required": false,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
           "priceOrigin": {
             "type": "string",
             "description": "FB0c — where lockedPrice came from. 'computed' (or absent, for anything locked before FB0c) means it IS\n priceBreakdown.total. 'negotiated' means two parties agreed a number, so lockedPrice is authoritative and\n may differ from the breakdown — which is kept anyway, because its distances are real and are what the\n market series reads. Every money path already reads lockedPrice; nothing bills off the breakdown.",
@@ -22427,6 +22512,7 @@
         "required": [
           "cargoClass",
           "natureCode",
+          "carriage",
           "status",
           "freightId",
           "code",

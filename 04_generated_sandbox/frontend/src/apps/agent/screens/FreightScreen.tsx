@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { Button, Card, Checklist, ErrorNote, Icon, Pill, Sheet } from '../../../shared/ui';
+import { DocumentButton, Button, Card, Checklist, ErrorNote, Icon, Pill, Sheet } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
 import { ConversationList, ConversationSheet } from '../../../shared/conversation/Conversations';
 import type { ChatThread } from '../../../shared/conversation/logic';
@@ -121,6 +121,10 @@ function Prices({ load, state, actions }: { load: PostedFreight } & FreightScree
       <h1 class="scr__title">{t('agent.freight.pricesTitle', { code: load.code })}</h1>
       <p class="scr__lede">{load.description}</p>
       {load.maxSpend != null ? <p class="scr__lede">{t('agent.freight.budget', { amount: load.maxSpend.toFixed(2) })}</p> : null}
+      {/* FP2 — the load's own document, from posting to delivery. */}
+      <div class="btnrow">
+        <DocumentButton label={t('common.cmr.open')} title={t('common.cmr.title')} fetch={() => actions.freightNote(load.freightId)} />
+      </div>
       {state.error ? <ErrorNote error={state.error} /> : null}
 
       {loading ? (

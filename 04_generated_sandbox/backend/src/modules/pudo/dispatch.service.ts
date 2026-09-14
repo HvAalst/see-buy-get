@@ -1698,6 +1698,19 @@ export class DispatchService {
     // DRIVER owns and that isn't attached elsewhere, so a passed id can never launder another actor's media
     // (S29). Anchored at delivery (the terminal state).
     this.media.adopt(securementPhotoId, driverDid ?? '', { type: 'freight', id: f.freightId }, 'securement');
+    // FP2 — the consignment note names the vehicle that took the goods over. Fixed now, from the driver's shift.
+    if (driverDid) {
+      const session = this.fleet.sessionFor(driverDid);
+      if (session.active) {
+        let managerDid: string | undefined;
+        try {
+          managerDid = this.drivers.get(driverDid).managerDid ?? undefined;
+        } catch {
+          managerDid = undefined;
+        }
+        f.carriage = { vehicleId: session.vehicle.vehicleId, plate: session.vehicle.plate, vehicleClass: session.vehicle.vehicleClass, driverDid, ...(managerDid ? { managerDid } : {}), at: new Date(now).toISOString() };
+      }
+    }
     this.freights.set(f.freightId, f);
     return f;
   }
@@ -1720,6 +1733,8 @@ export class DispatchService {
     // S33 — delivery is terminal: start the securement photo's retention clock (shipment-proof bin).
     this.media.anchorFreightTerminal(f.freightId);
     this.freights.set(f.freightId, f);
+    // FP2 — the consignment closes: whoever documents and bills it is told.
+    void this.events.publish(GlosEvent.Pudo.FreightDelivered, { freightId: f.freightId, code: f.code, driverDid: f.claimedBy }, { source: 'pudo' }).catch(() => undefined);
     return f;
   }
 

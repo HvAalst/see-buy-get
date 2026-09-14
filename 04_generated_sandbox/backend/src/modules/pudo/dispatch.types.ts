@@ -143,6 +143,11 @@ export class Freight {
   /** CA6 — the country at each end, where it is known (a shop's), so the rules of crossing can be asked. */
   @ApiPropertyOptional() pickupCountry?: string;
   @ApiPropertyOptional() destCountry?: string;
+  /**
+   * FP2 — WHO took the goods over and IN WHAT, fixed at pickup for the consignment note. Read live it would follow
+   * the driver's later shifts; a note must name the vehicle that carried this load.
+   */
+  @ApiPropertyOptional() carriage?: { vehicleId: string; plate: string; vehicleClass: string; driverDid: string; managerDid?: string; at: string };
   // S34c — the shipper's budget: the most they will pay (the all-in shipperCharge = earning + platform fee) for
   // this haul. Dispatch will not OFFER or let a driver CLAIM the job above it — the load waits for a cheaper
   // vehicle or a cooler market. The driver owns their [min,max] corridor; the shipper owns this ceiling. Undefined
