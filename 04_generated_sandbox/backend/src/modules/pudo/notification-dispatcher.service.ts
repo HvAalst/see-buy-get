@@ -122,6 +122,45 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<{ freightId: string; destLabel?: string; pickupLocation?: GeoPoint }>(GlosEvent.Pudo.FreightPosted, (e) => this.onFreightPosted(e.payload));
     // FP3 (driver) — a load they had claimed was withdrawn by its sender: their day just changed, tell them why.
     this.events.subscribe<{ freightId: string; code: string; driverDid?: string; reason: string; destLabel?: string }>(GlosEvent.Pudo.FreightCancelled, (e) => this.onFreightCancelled(e.payload));
+    // FP3b (sender) — the driver is at the door and cannot hand over: the sender is the one who can fix it.
+    this.events.subscribe<{ freightId: string; code: string; posterDid?: string; outcome: string; note?: string; destLabel?: string; attempts: number }>(GlosEvent.Pudo.FreightDeliveryFailed, (e) => this.onFreightDeliveryFailed(e.payload));
+    // FP3b (claimant) — their claim was decided; they are shown the reason.
+    this.events.subscribe<{ freightId: string; code: string; decision: string; award: number; note: string; posterDid?: string; claimantDid?: string }>(GlosEvent.Pudo.FreightClaimDecided, (e) => this.onFreightClaimDecided(e.payload));
+  }
+
+  private async onFreightDeliveryFailed(payload: { freightId: string; code: string; posterDid?: string; outcome: string; note?: string; destLabel?: string; attempts: number }): Promise<void> {
+    if (!payload.posterDid) return;
+    const why = payload.outcome === 'absent' ? 'nobody was there to receive it' : payload.outcome === 'refused' ? 'the receiver refused it' : 'the driver could not reach the place';
+    try {
+      await this.notifications.notify(payload.posterDid, {
+        kind: 'freight_problem',
+        title: `Load ${payload.code} could not be delivered`,
+        body: `The driver was at ${payload.destLabel ?? 'the destination'} and ${why}${payload.note ? ` — "${payload.note}"` : ''}. The goods are still on the van. Ring the receiver, or message the driver about where to take it.`,
+        link: '/',
+        tag: `freight:${payload.freightId}:attempt${payload.attempts}`,
+        data: { freightId: payload.freightId },
+      });
+    } catch (err) {
+      this.logger.warn(`freight-delivery-failed notify failed for ${payload.freightId}: ${(err as Error).message}`);
+    }
+  }
+
+  private async onFreightClaimDecided(payload: { freightId: string; code: string; decision: string; award: number; note: string; posterDid?: string; claimantDid?: string }): Promise<void> {
+    const to = payload.claimantDid ?? payload.posterDid;
+    if (!to) return;
+    const outcome = payload.decision === 'upheld' ? 'upheld' : payload.decision === 'partly_upheld' ? 'upheld in part' : 'rejected';
+    try {
+      await this.notifications.notify(to, {
+        kind: 'claim_decided',
+        title: `Your claim on ${payload.code} was ${outcome}`,
+        body: `${payload.award > 0 ? `${payload.award.toFixed(2)} is credited to your balance. ` : ''}${payload.note}`,
+        link: '/',
+        tag: `freight:${payload.freightId}:claim`,
+        data: { freightId: payload.freightId },
+      });
+    } catch (err) {
+      this.logger.warn(`freight-claim-decided notify failed for ${payload.freightId}: ${(err as Error).message}`);
+    }
   }
 
   private async onFreightCancelled(payload: { freightId: string; code: string; driverDid?: string; reason: string; destLabel?: string }): Promise<void> {

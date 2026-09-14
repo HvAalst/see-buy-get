@@ -8,6 +8,7 @@ import {
   claimBlocker,
   coverLine,
   daysWaiting,
+  freightCoverLine,
   STALLED_REASON,
   documentsOf,
   missingWords,
@@ -19,6 +20,7 @@ import {
   type ClaimDecision,
   type ClaimRow,
   type DisposalRow,
+  type FreightClaimRow,
   type StalledRow,
 } from '../queues';
 import type { TowerActions, TowerState } from '../useTowerApp';
@@ -60,8 +62,8 @@ export function ClaimsScreen({ state, actions }: { state: TowerState; actions: T
       </p>
 
       <QueuePanel
-        count={rows?.length ?? null}
-        countLabel={t('tower.claims.count', { n: rows?.length ?? 0 })}
+        count={rows == null && state.freightClaims == null ? null : (rows?.length ?? 0) + (state.freightClaims?.length ?? 0)}
+        countLabel={t('tower.claims.count', { n: (rows?.length ?? 0) + (state.freightClaims?.length ?? 0) })}
         state={state}
         actions={actions}
         emptyTitle={t('tower.claims.emptyTitle')}
@@ -84,6 +86,28 @@ export function ClaimsScreen({ state, actions }: { state: TowerState; actions: T
               ))}
             </tbody>
           </table>
+        ) : null}
+        {/* FP3b — the freight claims, under the parcel ones: same decision, a different answer to "covered for what". */}
+        {state.freightClaims?.length ? (
+          <>
+            <h2 class="cons__panelt" style="margin-top:20px">{t('tower.claims.freightTitle')}</h2>
+            <table class="ctbl">
+              <thead>
+                <tr>
+                  <th>{t('tower.claims.col.claim')}</th>
+                  <th>{t('tower.claims.col.cover')}</th>
+                  <th>{t('tower.claims.col.evidence')}</th>
+                  <th>{t('tower.claims.col.waiting')}</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {state.freightClaims.map((row) => (
+                  <FreightClaimRowView key={row.freightId} row={row} now={now} state={state} actions={actions} />
+                ))}
+              </tbody>
+            </table>
+          </>
         ) : null}
       </QueuePanel>
     </>
@@ -123,7 +147,69 @@ function ClaimRowView({ row, now, state, actions }: { row: ClaimRow; now: number
       {open ? (
         <tr class="is-open ctbl__editor">
           <td colSpan={5}>
-            <ClaimForm row={row} state={state} actions={actions} />
+            <ClaimForm
+              id={row.parcelId}
+              cap={row}
+              body={t('tower.claims.decideBody', { max: amount(row.awardCap, row.currency) })}
+              busy={state.busyId === row.parcelId}
+              state={state}
+              actions={actions}
+              onDecide={(decision, award, note) => actions.resolveClaim(row.parcelId, decision, award, note)}
+            />
+          </td>
+        </tr>
+      ) : null}
+    </>
+  );
+}
+
+/** FP3b — one freight claim: what the sender says, what the driver recorded, and what it is covered for. */
+function FreightClaimRowView({ row, now, state, actions }: { row: FreightClaimRow; now: number; state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const open = state.openId === row.freightId;
+  const waited = daysWaiting(row.raisedAt, now);
+  const slow = waited != null && waited >= CLAIM_SLOW_DAYS;
+  const kind = row.kind === 'damaged' ? t('tower.claims.freightDamaged') : row.kind === 'short' ? t('tower.claims.freightShort') : t('tower.claims.freightNotReceived');
+  return (
+    <>
+      <tr class={open ? 'is-open' : undefined}>
+        <td>
+          <div class="ctbl__strong">
+            {row.code} · {row.description}
+          </div>
+          <div class="ctbl__sub">
+            <span class="ctag ctag--warn">{kind}</span> {row.reason}
+          </div>
+          <div class="ctbl__sub">
+            {t('tower.claims.freightParties', { sender: row.senderName, carrier: row.carrierName ?? '—', dest: row.destLabel })}
+            {row.receiverName ? ` · ${t('tower.claims.freightReceivedBy', { name: row.receiverName })}` : ''}
+            {row.attempts ? ` · ${t('tower.claims.freightAttempts', { n: row.attempts })}` : ''}
+          </div>
+        </td>
+        <td class="ctbl__sub">{freightCoverLine(row, t)}</td>
+        <td class="ctbl__mono">{row.evidence.length ? t('tower.claims.nPhotos', { n: row.evidence.length }) : t('tower.claims.noEvidence')}</td>
+        <td>
+          <div>{waited == null ? '—' : t('tower.wait.days', { n: waited })}</div>
+          {slow ? <span class="ctag ctag--warn">{t('tower.claims.slow')}</span> : null}
+        </td>
+        <td class="ctbl__num">
+          <button type="button" class="cbtn cbtn--ghost cbtn--sm" aria-expanded={open} onClick={() => actions.open(open ? null : row.freightId)}>
+            {open ? t('common.close') : t('tower.claims.decide')}
+          </button>
+        </td>
+      </tr>
+      {open ? (
+        <tr class="is-open ctbl__editor">
+          <td colSpan={5}>
+            <ClaimForm
+              id={row.code}
+              cap={row}
+              body={row.coverable ? t('tower.claims.decideBody', { max: amount(row.awardCap, row.currency) }) : t('tower.claims.freightDecideBodyNoBooks')}
+              busy={state.busyId === row.freightId}
+              state={state}
+              actions={actions}
+              onDecide={(decision, award, note) => actions.resolveFreightClaim(row.freightId, decision, award, note)}
+            />
           </td>
         </tr>
       ) : null}
@@ -136,30 +222,45 @@ function ClaimRowView({ row, now, state, actions }: { row: ClaimRow; now: number
  * the claimant is shown it and a person whose goods arrived broken is owed an explanation even when they
  * are not owed money.
  */
-function ClaimForm({ row, state, actions }: { row: ClaimRow; state: TowerState; actions: TowerActions }) {
+function ClaimForm({
+  id,
+  cap,
+  body,
+  busy,
+  actions,
+  state,
+  onDecide,
+}: {
+  id: string;
+  cap: { awardCap: number; capBasis: ClaimRow['capBasis'] | 'none'; currency?: string };
+  body: string;
+  busy: boolean;
+  state: TowerState;
+  actions: TowerActions;
+  onDecide: (decision: ClaimDecision, award: number | undefined, note: string) => void;
+}) {
   const t = useT();
   const [award, setAward] = useState('');
   const [note, setNote] = useState('');
-  const busy = state.busyId === row.parcelId;
 
   const decide = (decision: ClaimDecision) => {
-    const blocker = claimBlocker(decision, award, note, row, t);
+    const blocker = claimBlocker(decision, award, note, cap, t);
     if (blocker) {
       actions.showQueueError(blocker);
       return;
     }
-    void actions.resolveClaim(row.parcelId, decision, decision === 'rejected' ? undefined : Number(award), note);
+    onDecide(decision, decision === 'rejected' || !award.trim() ? undefined : Number(award), note);
   };
 
   return (
     <div class="twr-knobs">
-      <p class="twr-clear__t">{t('tower.claims.decideTitle', { parcel: row.parcelId })}</p>
-      <p class="twr-clear__b">{t('tower.claims.decideBody', { max: amount(row.awardCap, row.currency) })}</p>
+      <p class="twr-clear__t">{t('tower.claims.decideTitle', { parcel: id })}</p>
+      <p class="twr-clear__b">{body}</p>
 
       <div class="twr-knobs__row">
         <div class="twr-knob">
           <label class="cfield">
-            <span class="cfield__label">{t('tower.claims.award', { currency: row.currency ? ` (${row.currency})` : '' })}</span>
+            <span class="cfield__label">{t('tower.claims.award', { currency: cap.currency ? ` (${cap.currency})` : '' })}</span>
             <input class="cinput" inputMode="decimal" value={award} onInput={(e) => setAward((e.target as HTMLInputElement).value)} />
             <span class="chint">{t('tower.claims.awardHint')}</span>
           </label>

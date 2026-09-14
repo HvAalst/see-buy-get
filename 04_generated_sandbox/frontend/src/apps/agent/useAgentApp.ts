@@ -65,6 +65,25 @@ export interface PostedFreight {
   cancelledAt?: string;
   /** True while the shop may still withdraw it: before the goods are on a truck. */
   canCancel: boolean;
+  /** FP3b — the doors the driver stood at and could not hand over at. */
+  attempts?: Array<{ outcome: 'absent' | 'refused' | 'unreachable'; note?: string; at: string }>;
+  /** FP3b — the shop's claim, as far as it has got. */
+  claim?: FreightClaim;
+  /** True while a claim may still be made: delivered, none yet, within the window. */
+  canClaim: boolean;
+}
+
+export interface FreightClaim {
+  state: 'open' | 'resolved';
+  kind: 'damaged' | 'short' | 'not_received';
+  description: string;
+  photoRef?: string;
+  raisedAt: string;
+  decision?: 'upheld' | 'partly_upheld' | 'rejected';
+  award?: number;
+  note?: string;
+  decidedAt?: string;
+  paidTo?: { kind: 'vendor' | 'between_parties'; id?: string };
 }
 
 export interface FreightPrice {
@@ -1212,6 +1231,20 @@ export function useAgentApp() {
     [client, run, fail, pushToast, t, loadPosted, openPrices],
   );
 
+  /** FP3b — the shop says the delivered goods were damaged, short, or never arrived. An operator decides it. */
+  const openFreightClaim = useCallback(
+    async (freightId: string, body: { kind: 'damaged' | 'short' | 'not_received'; description: string; photoRef?: string }) => {
+      if (!client) return;
+      await run(`claim-freight:${freightId}`, async () => {
+        const r = await client.api.openFreightClaim(freightId, body);
+        if (r.error) return fail(r.error);
+        pushToast({ tone: 'ok', icon: 'check', title: t('agent.freight.claimToast'), detail: t('agent.freight.claimToastDetail') });
+        await loadPosted();
+      });
+    },
+    [client, run, fail, pushToast, t, loadPosted],
+  );
+
   const declinePrice = useCallback(
     async (p: FreightPrice) => {
       if (!client) return;
@@ -1823,6 +1856,7 @@ export function useAgentApp() {
       acceptPrice,
       declinePrice,
       cancelFreight,
+      openFreightClaim,
       loadConsignments,
       openConsignment,
       depositConsignment,

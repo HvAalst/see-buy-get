@@ -180,6 +180,18 @@ export class MediaService implements OnApplicationBootstrap, OnModuleDestroy {
    * dispute photo (which otherwise never anchors). No resolution event exists yet, so the clock is
    * anchored at filing — a bounded, honest approximation of "180 days after resolution".
    */
+  /** FP3b — a claim was opened against a delivered freight: its securement + delivery proof and the claim photo go onto one dispute-evidence clock. */
+  holdFreightForDispute(freightId: string, at: Date = new Date()): void {
+    const until = new Date(at.getTime() + RETENTION_DAYS['dispute-evidence'] * DAY_MS).toISOString();
+    for (const ref of this.refs.values()) {
+      if (ref.status !== 'active') continue;
+      if (ref.link?.type !== 'freight' || ref.link.id !== freightId) continue;
+      ref.expiresAt = until;
+      if (ref.retentionClass === 'shipment-proof') ref.retentionClass = 'dispute-evidence';
+      this.refs.set(ref.mediaId, ref);
+    }
+  }
+
   holdParcelForDispute(parcelId: string, at: Date = new Date()): void {
     const until = new Date(at.getTime() + RETENTION_DAYS['dispute-evidence'] * DAY_MS).toISOString();
     for (const ref of this.refs.values()) {

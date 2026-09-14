@@ -154,6 +154,12 @@ export function createOperatorApi(sbg: SbgClient) {
     resolveDispute: (parcelId: string, body: { decision: string; award?: number; note: string; by?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/disputes/{parcelId}/resolve', { params: { path: { parcelId } }, body: body as never })),
 
+    /** FP3b — open freight claims, oldest first: damaged, short or not received, against a delivered load. */
+    freightClaims: () => sbg.request((c) => c.GET('/v1/sbg/freight-claims', {})),
+    /** FP3b — decide one. An award only where a sister billed the load; every ending carries the note the claimant is shown. */
+    resolveFreightClaim: (freightId: string, body: { decision: string; award?: number; note: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/freight-claims/{id}/resolve', { params: { path: { id: freightId } }, body: body as never })),
+
     /** Parcels nobody claimed and nobody is paying to recover — a queue, because the RULE is local law. */
     disposalQueue: () => sbg.request((c) => c.GET('/v1/sbg/ops/disposal-queue', {})),
 

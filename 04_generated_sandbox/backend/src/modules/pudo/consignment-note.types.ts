@@ -77,6 +77,10 @@ export interface ConsignmentNote {
   confirmations: { sender: NoteConfirmation; carrier?: NoteConfirmation; consignee?: NoteConfirmation };
   /** Where the network's own record of this load can be followed. */
   trackingUrl?: string;
+  /** FP3b — every door the driver stood at and could not hand over at, in words. Listed in box 24 until delivered. */
+  attempts: string[];
+  /** FP3b — the sender's claim against the delivered goods, and its decision when there is one. */
+  claim?: { line: string; decision?: string };
   /** FP3 — the load was withdrawn before taking over. Boxes 23 and 24 then say so instead of "not yet". */
   cancelled?: { at: string; reason: string; by: 'sender' | 'network' };
 }

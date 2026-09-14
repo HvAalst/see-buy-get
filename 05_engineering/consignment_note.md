@@ -52,7 +52,25 @@ carrier, the time, the carriage charges and the note number. A store's system he
   (`load_cancelled`). The driver's and the fleet's registers keep the job with nothing earned. The note's boxes 23
   and 24 say the load was never taken over and why.
 
+## The exceptions (FP3b)
+- **Could not deliver.** `POST dispatch/freight/:id/delivery-failed {outcome: absent|refused|unreachable, note?}` by the
+  claiming driver while `in_transit`. Appends to `Freight.deliveryAttempts`; the status does NOT change — the goods are
+  still on the van and still the carrier's to answer for. Raises `FreightDeliveryFailed`; the sender (poster or
+  shipper) is notified (`freight_problem`). Box 24 lists every attempt until delivery. Turning the load back to the
+  sender is not modelled: it is a conversation with the driver today.
+- **The claim.** `POST dispatch/freight/:id/claim {kind: damaged|short|not_received, description, photoRef?}` by the
+  sender, against a `delivered` load, once, within `FREIGHT_CLAIM_WINDOW_DAYS` (7 — the CMR's window for non-apparent
+  damage). `Freight.claim` is the freight analogue of the parcel's `DisputeCase`; the photo is adopted under the S29
+  rule and all the load's proof goes onto the dispute-evidence clock (`MediaService.holdFreightForDispute`).
+- **The decision.** Operators: `GET freight-claims` (oldest first, with `coverable`, `awardCap`, `capBasis`, the
+  evidence and the receiver) and `POST freight-claims/:id/resolve {decision, award?, note, by?}`. Every ending needs a
+  note. **An award is possible only where a sister billed the load** (`Freight.billed` + a store shipper): it is paid
+  with `VendorService.payClaim` from the claims provision, capped by `MAX_CLAIM_AWARD` (a sanity bound, not a policy).
+  Where carriage was settled between the parties, an award is refused (`INVALID_STATE`) and an upheld decision is
+  recorded as `paidTo: between_parties` — who was right, without money that does not exist. The driver's pay is
+  untouched by a claim: clawing it back is a policy nobody has decided. The claimant is notified (`claim_decided`).
+
 ## Not yet
 A stated number of packages (the posting form does not ask); successive carriers; a signed PDF — the printable page
-is the document today. A load on the road that cannot be delivered (turned back, refused) and a claim against a
-delivered load are the next slice.
+is the document today. Turning a load back to the sender after failed attempts (CMR art. 15 instructions); a carrier
+clawback on an upheld claim; the consignee's own confirmation (today the driver records the name).

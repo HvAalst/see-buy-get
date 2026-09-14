@@ -94,7 +94,7 @@ export function App() {
    */
   const counts: Partial<Record<Screen, number | null>> = {
     hazards: state.hazards?.length ?? null,
-    claims: state.claims?.length ?? null,
+    claims: state.claims == null && state.freightClaims == null ? null : (state.claims?.length ?? 0) + (state.freightClaims?.length ?? 0),
     disposal: state.disposal?.length ?? null,
     approvals: state.approvals?.length ?? null,
     reports: state.reports?.length ?? null,
@@ -116,7 +116,7 @@ export function App() {
               {waitingLine(
                 {
                   hazards: state.hazards?.length ?? null,
-                  claims: state.claims?.length ?? null,
+                  claims: state.claims == null && state.freightClaims == null ? null : (state.claims?.length ?? 0) + (state.freightClaims?.length ?? 0),
                   disposal: state.disposal?.length ?? null,
                   approvals: state.approvals?.length ?? null,
                 },

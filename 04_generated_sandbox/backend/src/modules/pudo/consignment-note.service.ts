@@ -85,6 +85,15 @@ export class ConsignmentNoteService implements OnModuleInit {
     if (f.reservations) reservations.push(`At taking over: ${f.reservations.note}`);
     if (f.tempBreached) reservations.push('Cold chain breached in transit — see the temperature log');
     const carriage = this.carriageOf(f);
+    const attempts = (f.deliveryAttempts ?? []).map((a) => `Delivery attempted ${when(a.at)}: ${a.outcome === 'absent' ? 'nobody to receive the goods' : a.outcome === 'refused' ? 'the receiver refused the goods' : 'the place could not be reached'}${a.note ? ` — ${a.note}` : ''}`);
+    const claim = f.claim
+      ? {
+          line: `Claim by the sender ${when(f.claim.raisedAt)} — goods ${f.claim.kind === 'damaged' ? 'damaged' : f.claim.kind === 'short' ? 'short' : 'not received'}: ${f.claim.description}`,
+          ...(f.claim.state === 'resolved' && f.claim.decision
+            ? { decision: `Decided ${when(f.claim.decidedAt ?? f.claim.raisedAt)}: ${f.claim.decision === 'upheld' ? 'upheld' : f.claim.decision === 'partly_upheld' ? 'upheld in part' : 'rejected'}${f.claim.award ? `, ${f.claim.award} ${NETWORK_CURRENCY} awarded` : f.claim.paidTo?.kind === 'between_parties' ? ', to be settled between sender and carrier' : ''}${f.claim.note ? ` — ${f.claim.note}` : ''}` }
+            : {}),
+        }
+      : undefined;
     return {
       number: `CMR-${f.code}`,
       kind: international ? 'cmr' : 'national',
@@ -113,7 +122,10 @@ export class ConsignmentNoteService implements OnModuleInit {
       instructions,
       carriage,
       ...(carrier ? { carrier } : {}),
-      reservations,
+      // A door the carrier stood at and could not hand over at is the carrier's observation: box 18, for good.
+      reservations: [...reservations, ...attempts],
+      attempts,
+      ...(claim ? { claim } : {}),
       established: { place: f.pickupLabel, at: f.createdAt },
       confirmations: {
         sender: { by: sender.name, at: f.createdAt, how: 'Confirmed electronically at posting' },
@@ -246,6 +258,9 @@ export class ConsignmentNoteService implements OnModuleInit {
     const conf = (c: ConsignmentNote['confirmations']['sender'] | undefined, missing: string) =>
       c ? `<b>${e(c.by)}</b><br>${e(when(c.at))}<br><span class="how">${e(c.how)}</span>${c.remarks ? `<br>${e(c.remarks)}` : ''}` : `<span class="empty">${e(missing)}</span>`;
     const cancelledLine = n.cancelled ? `Cancelled by the ${n.cancelled.by} ${when(n.cancelled.at)} — ${n.cancelled.reason}` : '';
+    // Box 24 before delivery: every failed attempt, then the honest gap. After: the confirmation, then the claim.
+    const box24missing = n.cancelled ? cancelledLine : n.attempts.length ? `Not yet delivered — ${n.attempts.length} attempt(s), see box 18` : 'Not yet delivered';
+    const claimLines = n.claim ? `<div class="claim"><b>${e(n.claim.line)}</b>${n.claim.decision ? `<br>${e(n.claim.decision)}` : '<br><span class="empty">Not yet decided</span>'}</div>` : '';
     const qr = n.trackingUrl ? `<svg viewBox="0 0 120 120" width="120" height="120" aria-label="Tracking code">${qrSvgGroup(n.trackingUrl, 0, 0, 120)}</svg>` : '';
     const g = n.goods;
     const carrierExtra = [n.carrier?.driverName ? `Driver: ${e(n.carrier.driverName)}` : '', n.carrier?.plate ? `Vehicle: ${e(n.carrier.plate)}${n.carrier.vehicleClass ? ` (${e(n.carrier.vehicleClass)})` : ''}` : ''].filter(Boolean).join('<br>');
@@ -269,6 +284,7 @@ export class ConsignmentNoteService implements OnModuleInit {
   .box__b { font-size: 12px; }
   .empty { color: #777; }
   .did, .how { color: #555; font-size: 10px; word-break: break-all; }
+  .claim { margin-top: 6px; padding-top: 6px; border-top: 1px dashed #999; }
   table.goods { width: 100%; border-collapse: collapse; }
   table.goods th, table.goods td { text-align: left; padding: 3px 6px; border-bottom: 1px solid #ccc; vertical-align: top; font-size: 12px; }
   table.goods th { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: #444; }
@@ -302,7 +318,7 @@ export class ConsignmentNoteService implements OnModuleInit {
   ${box(15, 'Cash on delivery', '<span class="empty">None — the network never collects cash on delivery</span>')}
   ${box(22, 'Signature and stamp of the sender', conf(n.confirmations.sender, ''))}
   ${box(23, 'Signature and stamp of the carrier', conf(n.confirmations.carrier, n.cancelled ? 'Never taken over — the load was cancelled' : 'Not yet taken over'))}
-  ${box(24, 'Goods received — signature and stamp of the consignee', conf(n.confirmations.consignee, n.cancelled ? cancelledLine : 'Not yet delivered'), 'wide')}
+  ${box(24, 'Goods received — signature and stamp of the consignee', (n.confirmations.consignee ? conf(n.confirmations.consignee, '') : `<span class="empty">${box24missing}</span>`) + claimLines, 'wide')}
 </div>
 <footer><span>Issued by the SeeBuyGet network from its records of this load. Every box is filled from a recorded act; a box that says it is not recorded is not recorded.</span><span>${e(n.number)}</span></footer>
 </div></body></html>`;

@@ -1241,6 +1241,25 @@ const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehic
     [client, run, fail, pushToast, refresh],
   );
 
+  /** FP3b — the driver was at the door and could not hand over: the attempt is written down, the sender is told,
+   *  and the load stays on the van (nothing moves in the list — the same row keeps its Deliver control). */
+  const failDelivery = useCallback(
+    async (ref: string, input: { outcome: 'absent' | 'refused' | 'unreachable'; note?: string }) => {
+      const did = stateRef.current.driver?.did;
+      if (!client || !did) return;
+      await run(`freight:${ref}`, async () => {
+        const r = await client.api.failDelivery(ref, did, input);
+        if (r.error) {
+          if (!isOffline(r.error)) await refresh();
+          return fail(r.error);
+        }
+        pushToast({ tone: 'info', icon: 'truck', title: t('driver.toast.attemptRecorded'), detail: t('driver.toast.attemptRecordedDetail') });
+        await refresh();
+      });
+    },
+    [client, run, fail, pushToast, refresh],
+  );
+
   /** S33b — log a temperature reading for a cold-chain freight in transit. An out-of-band reading warns the
    *  driver (and flags the load for the control tower). */
   const logTemp = useCallback(
@@ -1365,6 +1384,7 @@ const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehic
       uploadPhoto,
       pickupFreight,
       deliverFreight,
+      failDelivery,
       logTemp,
       pushToast,
       dismissToast,

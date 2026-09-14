@@ -31,11 +31,11 @@ import { MediaService } from './media.service';
 import { MarketPulseStore } from './market-pulse.store';
 import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, toteCapacityOf, VEHICLE_SPEC } from './fleet.config';
 import { Router, ROUTER } from './router';
-import { DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MARKET_MIN_DEMAND, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NUDGE_RADIUS_KM, OFFER_TTL_MIN, PLATFORM_FEE_PCT, taxOn, TOTE_LOAD_FEE, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
+import { DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MARKET_MIN_DEMAND, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NUDGE_RADIUS_KM, OFFER_TTL_MIN, PLATFORM_FEE_PCT, taxOn, TOTE_LOAD_FEE, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH, MAX_CLAIM_AWARD } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
-import { BoardRow, Claimable, ClaimableKind, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, MarketRow, MarketSeries, Offer, PostedFreightRow, RoutePlan } from './dispatch.types';
+import { BoardRow, Claimable, ClaimableKind, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, MarketRow, MarketSeries, Offer, PostedFreightRow, RoutePlan, DeliveryFailure, FreightClaimKind, FreightClaimDecision, FreightClaimQueueRow, DELIVERY_FAILURES, FREIGHT_CLAIM_KINDS, FREIGHT_CLAIM_DECISIONS } from './dispatch.types';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
 import { buildOfferResponse, type OfferResponse } from './offer-response';
 
@@ -86,6 +86,9 @@ function coarsePoint(p: GeoPoint): GeoPoint {
 /** A driver's "jobs" are the dedicated-freight hauls they CLAIMED (Freight.claimedBy === driverDid); each
  *  carries the driver's agreed earning (lockedPrice, locked at claim) and whether it has been paid out.
  *  Totes are excluded — they are unpriced to the driver (they settle on the parcel model). */
+/** FP3b — how long after delivery a sender may still claim (the CMR's seven days for non-apparent damage). */
+export const FREIGHT_CLAIM_WINDOW_DAYS = 7;
+
 export interface DriverJobsQuery {
   q?: string; // job code / description / destination / tracking / order ref
   status?: FreightStatus;
@@ -1388,6 +1391,9 @@ export class DispatchService {
         receiverName: f.proofOfDelivery?.receiverName,
         cancelledAt: f.cancelledAt,
         canCancel: f.status === 'scheduled' || f.status === 'available' || f.status === 'claimed',
+        ...(f.deliveryAttempts?.length ? { attempts: f.deliveryAttempts } : {}),
+        ...(f.claim ? { claim: f.claim } : {}),
+        canClaim: f.status === 'delivered' && !f.claim && (f.deliveredAt ? Date.now() - new Date(f.deliveredAt).getTime() <= FREIGHT_CLAIM_WINDOW_DAYS * 86_400_000 : true),
       }));
   }
 
@@ -1755,6 +1761,122 @@ export class DispatchService {
     this.freights.set(f.freightId, f);
     // FP2 — the consignment closes: whoever documents and bills it is told.
     void this.events.publish(GlosEvent.Pudo.FreightDelivered, { freightId: f.freightId, code: f.code, driverDid: f.claimedBy }, { source: 'pudo' }).catch(() => undefined);
+    return f;
+  }
+
+  /**
+   * FP3b — the driver was at the door and could not hand over: nobody there, the receiver refused, or the place
+   * could not be reached. The load STAYS in transit — the goods are still on the van and still the carrier's to
+   * answer for — and the attempt is written down and told to the sender, who is the one who can do something
+   * about it (ring the receiver, name another door, take it back). Box 24 of the note lists every attempt.
+   */
+  failDelivery(freightId: string, driverDid: string | undefined, input: { outcome: DeliveryFailure; note?: string }, now: number = Date.now()): Freight {
+    const f = this.requireFreight(freightId);
+    if (driverDid && f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
+    if (f.status !== 'in_transit') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected in_transit`);
+    if (!DELIVERY_FAILURES.includes(input.outcome)) throw new GlosError('INVALID_INPUT', 'Say what happened at the door: absent, refused or unreachable');
+    const note = input.note?.trim();
+    const at = new Date(now).toISOString();
+    f.deliveryAttempts = [...(f.deliveryAttempts ?? []), { outcome: input.outcome, ...(note ? { note: note.slice(0, 500) } : {}), at, by: driverDid }];
+    this.freights.set(f.freightId, f);
+    void this.events
+      .publish(GlosEvent.Pudo.FreightDeliveryFailed, { freightId: f.freightId, code: f.code, driverDid: f.claimedBy, posterDid: f.postedByDid ?? f.shipperDid, outcome: input.outcome, note, destLabel: f.destLabel, attempts: f.deliveryAttempts.length }, { source: 'pudo' })
+      .catch(() => undefined);
+    return f;
+  }
+
+  /**
+   * FP3b — the sender says the delivered goods were damaged, short, or never arrived. One claim per load, within
+   * the claim window (the CMR gives seven days for damage that was not apparent at delivery), and only against a
+   * DELIVERED load: a load still on the road is a conversation with the driver, not a claim. The photo, if any,
+   * is adopted under the same ownership rule as every other client-supplied picture, and all the load's proof —
+   * securement, delivery, this — goes onto the dispute-evidence clock so nothing is swept while the case is open.
+   */
+  openFreightClaim(freightId: string, byDid: string, input: { kind: FreightClaimKind; description: string; photoRef?: string }, now: number = Date.now()): Freight {
+    const f = this.requireFreight(freightId);
+    if (f.status !== 'delivered') throw new GlosError('INVALID_STATE', f.status === 'in_transit' ? 'The goods are still on the road — talk to the driver; a claim is made against a delivered load' : `Freight is ${f.status}, expected delivered`);
+    if (f.claim) throw new GlosError('INVALID_STATE', f.claim.state === 'open' ? 'A claim on this load is already open' : 'This load’s claim has already been decided');
+    if (!FREIGHT_CLAIM_KINDS.includes(input.kind)) throw new GlosError('INVALID_INPUT', 'Say what is wrong: damaged, short, or not received');
+    const description = (input.description ?? '').trim();
+    if (description.length < 3) throw new GlosError('FIELD_REQUIRED', 'Say what you found — the operator deciding this has only your words and the photos');
+    const deliveredAt = f.deliveredAt ? new Date(f.deliveredAt).getTime() : now;
+    if (now - deliveredAt > FREIGHT_CLAIM_WINDOW_DAYS * 86_400_000) throw new GlosError('WINDOW_EXPIRED', `A claim is made within ${FREIGHT_CLAIM_WINDOW_DAYS} days of delivery`);
+    const at = new Date(now).toISOString();
+    f.claim = { state: 'open', kind: input.kind, description: description.slice(0, 1000), ...(input.photoRef ? { photoRef: input.photoRef } : {}), raisedBy: byDid, raisedAt: at };
+    if (input.photoRef) this.media.adopt(input.photoRef, byDid, { type: 'freight', id: f.freightId }, 'dispute');
+    this.media.holdFreightForDispute(f.freightId, new Date(now));
+    this.freights.set(f.freightId, f);
+    void this.events.publish(GlosEvent.Pudo.FreightClaimOpened, { freightId: f.freightId, code: f.code, kind: input.kind, byDid, driverDid: f.claimedBy }, { source: 'pudo' }).catch(() => undefined);
+    return f;
+  }
+
+  /** The claims waiting on a person, oldest first — the one somebody has waited longest for needs answering most. */
+  openFreightClaims(): Freight[] {
+    return [...this.freights.values()].filter((f) => f.claim?.state === 'open').sort((a, b) => (a.claim?.raisedAt ?? '').localeCompare(b.claim?.raisedAt ?? ''));
+  }
+
+  /** Whether a sister billed this load — and so holds a provision an award can be drawn from. */
+  claimCoverable(f: Freight): boolean {
+    return Boolean(f.billed && f.shipperDid && this.vendors.has(f.shipperDid));
+  }
+
+  freightClaimRowOf(f: Freight, names: { sender: string; carrier?: string }): FreightClaimQueueRow {
+    const c = f.claim!;
+    const coverable = this.claimCoverable(f);
+    return {
+      freightId: f.freightId,
+      code: f.code,
+      description: f.description,
+      destLabel: f.destLabel,
+      kind: c.kind,
+      reason: c.description,
+      raisedAt: c.raisedAt,
+      raisedBy: c.raisedBy,
+      senderName: names.sender,
+      ...(names.carrier ? { carrierName: names.carrier } : {}),
+      ...(f.billed ? { carriage: f.billed.gross, currency: NETWORK_CURRENCY } : f.lockedPrice != null ? { carriage: f.lockedPrice, currency: NETWORK_CURRENCY } : {}),
+      coverable,
+      awardCap: coverable ? MAX_CLAIM_AWARD : 0,
+      capBasis: coverable ? 'sanity-bound' : 'none',
+      evidence: [f.loadSafety?.securementPhotoRef, f.proofOfDelivery?.photoRef, c.photoRef].filter((x): x is string => Boolean(x)),
+      attempts: f.deliveryAttempts?.length ?? 0,
+      ...(f.proofOfDelivery ? { receiverName: f.proofOfDelivery.receiverName } : {}),
+    };
+  }
+
+  /**
+   * FP3b — decide the claim. Every ending carries a note the claimant is shown, including a rejection. An award
+   * is paid the way a parcel award is — from the sender's sister's claims provision, to the store that was
+   * billed — and ONLY where somebody was billed through the network: a load settled between sender and carrier
+   * was announced as carried under nothing of ours, so upholding it records that the sender was right and that
+   * the money is between the parties. Awarding on such a load is refused, not silently zeroed.
+   */
+  resolveFreightClaim(freightId: string, input: { decision: FreightClaimDecision; award?: number; note: string; by?: string }, now: number = Date.now()): Freight {
+    const f = this.requireFreight(freightId);
+    const c = f.claim;
+    if (!c || c.state !== 'open') throw new GlosError('INVALID_STATE', c ? 'This claim has already been decided' : 'There is no claim on this load');
+    if (!FREIGHT_CLAIM_DECISIONS.includes(input.decision)) throw new GlosError('INVALID_INPUT', 'A decision is upheld, partly upheld or rejected');
+    const note = (input.note ?? '').trim();
+    if (!note) throw new GlosError('FIELD_REQUIRED', 'A decision needs a reason the claimant can be shown — including a rejection');
+    const award = input.decision === 'rejected' ? 0 : Math.round(Math.max(0, Number(input.award) || 0) * 100) / 100;
+    const coverable = this.claimCoverable(f);
+    if (award > 0 && !coverable) throw new GlosError('INVALID_STATE', 'Nobody was billed for this load through the network, so there is nothing to award from — uphold it with a reason that says the money is between sender and carrier, or reject it');
+    if (award > 0 && award > MAX_CLAIM_AWARD) throw new GlosError('INVALID_INPUT', `An award over ${MAX_CLAIM_AWARD} needs to be settled off-platform — this is a sanity bound, not a policy`);
+    if (input.decision !== 'rejected' && coverable && award <= 0) throw new GlosError('INVALID_INPUT', 'Upholding a covered claim means awarding something — reject it instead of awarding nothing');
+    let funding: { fromProvision: number; fromExpense: number } | undefined;
+    let paidTo: NonNullable<Freight['claim']>['paidTo'];
+    if (award > 0) {
+      funding = this.vendors.payClaim(f.shipperDid!, f.freightId, award, `freight claim · ${f.code}`);
+      paidTo = { kind: 'vendor', id: f.shipperDid! };
+    } else if (input.decision !== 'rejected') {
+      paidTo = { kind: 'between_parties' };
+    }
+    const at = new Date(now).toISOString();
+    f.claim = { ...c, state: 'resolved', decision: input.decision, award, note: note.slice(0, 1000), ...(input.by ? { decidedBy: input.by } : {}), decidedAt: at, ...(funding ? { funding } : {}), ...(paidTo ? { paidTo } : {}) };
+    this.freights.set(f.freightId, f);
+    void this.events
+      .publish(GlosEvent.Pudo.FreightClaimDecided, { freightId: f.freightId, code: f.code, decision: input.decision, award, note, posterDid: f.postedByDid ?? f.shipperDid, claimantDid: c.raisedBy, driverDid: f.claimedBy }, { source: 'pudo' })
+      .catch(() => undefined);
     return f;
   }
 

@@ -5069,6 +5069,85 @@ describe('PUDO Light', () => {
     expect(() => dispatch.cancelFreight(f.freightId, { did: vendor.vendorId, role: 'shipper' }, 'again')).toThrow(/already cancelled/);
   });
 
+  it('FP3b: a delivery that could not be made is written down, the load stays in transit, and the sender is told', () => {
+    const pickup = { lat: -1.88, lng: 36.38 };
+    const d = coupleTipper('DF1', { min: 0.8, max: 1.5 });
+    const f = dispatch.registerFreight({ description: 'Cement', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, packaging: 'loose', postedByDid: 'did:shop:p' });
+    claimFreight(d.did, pickup, f.freightId);
+    expect(() => dispatch.failDelivery(f.freightId, d.did, { outcome: 'absent' })).toThrow(/expected in_transit/);
+    dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_sec' });
+    const heard: unknown[] = [];
+    events.subscribe(GlosEvent.Pudo.FreightDeliveryFailed, (e) => {
+      heard.push(e.payload);
+    });
+    expect(() => dispatch.failDelivery(f.freightId, 'did:other', { outcome: 'absent' })).toThrow(/another driver/);
+    const after = dispatch.failDelivery(f.freightId, d.did, { outcome: 'absent', note: 'Gate locked, no answer' });
+    expect(after.status).toBe('in_transit');
+    expect(after.deliveryAttempts).toEqual([expect.objectContaining({ outcome: 'absent', note: 'Gate locked, no answer', by: d.did })]);
+    expect(heard).toEqual([expect.objectContaining({ freightId: f.freightId, posterDid: 'did:shop:p', outcome: 'absent', attempts: 1 })]);
+    expect(() => dispatch.openFreightClaim(f.freightId, 'did:shop:p', { kind: 'damaged', description: 'broken' })).toThrow(/still on the road/);
+    expect(dispatch.postedBy('did:shop:p').find((r) => r.freightId === f.freightId)).toMatchObject({ attempts: [expect.objectContaining({ outcome: 'absent' })], canClaim: false });
+    // A second attempt, then delivered after all.
+    dispatch.failDelivery(f.freightId, d.did, { outcome: 'refused' });
+    const done = dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys(), receiverName: 'Joseph', podPhotoId: 'med_pod' });
+    expect(done.deliveryAttempts).toHaveLength(2);
+    expect(dispatch.postedBy('did:shop:p').find((r) => r.freightId === f.freightId)?.canClaim).toBe(true);
+  });
+
+  it('FP3b: a claim on a load nobody was billed for is decided with a reason and no award; on a billed load the award is paid from the sister’s books', () => {
+    const pickup = { lat: -1.89, lng: 36.39 };
+    const d = coupleTipper('CL1', { min: 0.8, max: 1.5 });
+    // A shop's own load — settled between the parties, nothing of ours to award from.
+    const f = dispatch.registerFreight({ description: 'Cement', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, packaging: 'loose', postedByDid: 'did:shop:q' });
+    claimFreight(d.did, pickup, f.freightId);
+    dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_sec' });
+    dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys(), receiverName: 'Joseph', podPhotoId: 'med_pod' });
+    expect(() => dispatch.openFreightClaim(f.freightId, 'did:shop:q', { kind: 'damaged', description: 'x' })).toThrow(/what you found/);
+    const t0 = Date.now();
+    expect(() => dispatch.openFreightClaim(f.freightId, 'did:shop:q', { kind: 'damaged', description: 'Three bags split open' }, t0 + 8 * 86_400_000)).toThrow(/within 7 days/);
+    const holdSpy = jest.spyOn(media, 'holdFreightForDispute');
+    const opened = dispatch.openFreightClaim(f.freightId, 'did:shop:q', { kind: 'damaged', description: 'Three bags split open', photoRef: 'med_claim' });
+    expect(opened.claim).toMatchObject({ state: 'open', kind: 'damaged', raisedBy: 'did:shop:q' });
+    expect(holdSpy).toHaveBeenCalledWith(f.freightId, expect.any(Date));
+    holdSpy.mockRestore();
+    expect(() => dispatch.openFreightClaim(f.freightId, 'did:shop:q', { kind: 'short', description: 'again' })).toThrow(/already open/);
+    expect(dispatch.openFreightClaims().map((x) => x.freightId)).toContain(f.freightId);
+    const row = dispatch.freightClaimRowOf(dispatch.openFreightClaims().find((x) => x.freightId === f.freightId)!, { sender: 'Shop Q', carrier: 'CL1' });
+    expect(row).toMatchObject({ code: f.code, kind: 'damaged', coverable: false, awardCap: 0, capBasis: 'none', evidence: ['med_sec', 'med_pod', 'med_claim'], receiverName: 'Joseph' });
+    expect(() => dispatch.resolveFreightClaim(f.freightId, { decision: 'upheld', award: 50, note: 'Photos show it' })).toThrow(/nothing to award from/);
+    expect(() => dispatch.resolveFreightClaim(f.freightId, { decision: 'rejected', note: '' })).toThrow(/reason/);
+    const decided = dispatch.resolveFreightClaim(f.freightId, { decision: 'upheld', note: 'The photos show the bags split; settle it with the carrier', by: 'Ops One' });
+    expect(decided.claim).toMatchObject({ state: 'resolved', decision: 'upheld', award: 0, paidTo: { kind: 'between_parties' }, decidedBy: 'Ops One' });
+    expect(() => dispatch.resolveFreightClaim(f.freightId, { decision: 'rejected', note: 'again' })).toThrow(/already been decided/);
+    expect(dispatch.openFreightClaims().map((x) => x.freightId)).not.toContain(f.freightId);
+
+    // A store's load, billed through the network: the award comes from the sister's claims provision to the store.
+    const vendor = vendors.register({ name: 'ClaimShipper' });
+    vendors.topUp(vendor.vendorId, 1000);
+    const g = dispatch.registerFreight({ description: 'Sand', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 300, packaging: 'loose', shipperDid: vendor.vendorId });
+    const d2 = coupleTipper('CL2', { min: 0.8, max: 1.5 });
+    claimFreight(d2.did, pickup, g.freightId);
+    const billed = dispatch.listFreight().find((x) => x.freightId === g.freightId)!;
+    expect(billed.paidStatus).toBe('billed');
+    dispatch.pickupFreight(g.freightId, d2.did, { confirmed: requiredLoadKeys(g), securementPhotoId: 'med_sec' });
+    dispatch.deliverFreight(g.freightId, d2.did, { confirmed: requiredUnloadKeys(), receiverName: 'Anne', podPhotoId: 'med_pod' });
+    const before = vendors.balanceOf(vendor.vendorId);
+    dispatch.openFreightClaim(g.freightId, vendor.vendorId, { kind: 'short', description: 'Two boxes of tiles missing' });
+    const row2 = dispatch.freightClaimRowOf(dispatch.openFreightClaims().find((x) => x.freightId === g.freightId)!, { sender: 'ClaimShipper' });
+    expect(row2).toMatchObject({ coverable: true, capBasis: 'sanity-bound', currency: 'KES' });
+    expect(row2.carriage).toBeGreaterThan(0);
+    expect(() => dispatch.resolveFreightClaim(g.freightId, { decision: 'upheld', note: 'yes' })).toThrow(/awarding something/);
+    const heard: unknown[] = [];
+    events.subscribe(GlosEvent.Pudo.FreightClaimDecided, (e) => {
+      heard.push(e.payload);
+    });
+    const paid = dispatch.resolveFreightClaim(g.freightId, { decision: 'partly_upheld', award: 120, note: 'Two boxes short of the manifest' });
+    expect(paid.claim).toMatchObject({ decision: 'partly_upheld', award: 120, paidTo: { kind: 'vendor', id: vendor.vendorId } });
+    expect(paid.claim?.funding).toBeDefined();
+    expect(vendors.balanceOf(vendor.vendorId)).toBeCloseTo(before + 120, 2);
+    expect(heard).toEqual([expect.objectContaining({ freightId: g.freightId, decision: 'partly_upheld', award: 120, claimantDid: vendor.vendorId })]);
+  });
+
   it('FP3: a load already on the road cannot be cancelled, and open prices on a withdrawn load are superseded', () => {
     const pickup = { lat: -1.87, lng: 36.37 };
     const d = coupleTipper('WD2', { min: 0.8, max: 1.5 });

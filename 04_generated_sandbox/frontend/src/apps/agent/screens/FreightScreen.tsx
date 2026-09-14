@@ -1,9 +1,9 @@
 import { useState } from 'preact/hooks';
-import { DocumentButton, Button, Card, Checklist, ErrorNote, Icon, Pill, Sheet } from '../../../shared/ui';
+import { DocumentButton, Button, Card, Checklist, ErrorNote, Icon, PhotoField, Pill, Sheet } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
 import { ConversationList, ConversationSheet } from '../../../shared/conversation/Conversations';
 import type { ChatThread } from '../../../shared/conversation/logic';
-import type { AgentActions, AgentState, FreightPrice, PostedFreight } from '../useAgentApp';
+import type { AgentActions, AgentState, FreightClaim, FreightPrice, PostedFreight } from '../useAgentApp';
 
 export interface FreightScreenProps {
   state: AgentState;
@@ -80,6 +80,21 @@ function PostedList({ state, actions }: FreightScreenProps) {
   );
 }
 
+/** FP3b — one failed attempt, in the shop's words. */
+function attemptLine(a: NonNullable<PostedFreight['attempts']>[number], t: ReturnType<typeof useT>): string {
+  const why = a.outcome === 'absent' ? t('agent.freight.attemptAbsent') : a.outcome === 'refused' ? t('agent.freight.attemptRefused') : t('agent.freight.attemptUnreachable');
+  return t('agent.freight.attemptLine', { when: formatDate(a.at), why: a.note ? `${why} — “${a.note}”` : why });
+}
+
+/** FP3b — where the claim stands, in one line. */
+function claimLine(c: FreightClaim, t: ReturnType<typeof useT>): string {
+  const kind = c.kind === 'damaged' ? t('agent.freight.claimDamaged') : c.kind === 'short' ? t('agent.freight.claimShort') : t('agent.freight.claimNotReceived');
+  if (c.state === 'open') return t('agent.freight.claimOpenLine', { kind, when: formatDate(c.raisedAt) });
+  const decision = c.decision === 'upheld' ? t('agent.freight.claimUpheld') : c.decision === 'partly_upheld' ? t('agent.freight.claimPartly') : t('agent.freight.claimRejected');
+  const money = c.award ? t('agent.freight.claimAward', { amount: c.award.toFixed(2) }) : c.paidTo?.kind === 'between_parties' ? t('agent.freight.claimBetween') : '';
+  return t('agent.freight.claimDecidedLine', { kind, decision, money: money ? ` — ${money}` : '', note: c.note ?? '' });
+}
+
 function PostedRow({ f, onOpen }: { f: PostedFreight; onOpen: () => void }) {
   const t = useT();
   return (
@@ -98,6 +113,8 @@ function PostedRow({ f, onOpen }: { f: PostedFreight; onOpen: () => void }) {
         {/* FP3 — what became of it: who signed for the goods, or that the shop withdrew it. */}
         {f.receiverName && f.deliveredAt ? <span class="row__s">{t('agent.freight.receivedBy', { name: f.receiverName, when: formatDate(f.deliveredAt) })}</span> : null}
         {f.cancelledAt ? <span class="row__s">{t('agent.freight.cancelledLine', { when: formatDate(f.cancelledAt) })}</span> : null}
+        {f.attempts?.length && f.status === 'in_transit' ? <span class="row__s">{attemptLine(f.attempts[f.attempts.length - 1], t)}</span> : null}
+        {f.claim ? <span class="row__s">{claimLine(f.claim, t)}</span> : null}
         <span class="freight__tags">
           <Pill tone="idle">{f.commitMode === 'negotiate' ? t('agent.freight.negotiate') : t('agent.freight.instant')}</Pill>
           {/* The count is the reason this row is on a screen at all, so it leads in the loud tone. */}
@@ -118,6 +135,10 @@ function Prices({ load, state, actions }: { load: PostedFreight } & FreightScree
   const [confirm, setConfirm] = useState<FreightPrice | null>(null);
   const [withdraw, setWithdraw] = useState(false);
   const [reason, setReason] = useState('');
+  const [claiming, setClaiming] = useState(false);
+  const [claimKind, setClaimKind] = useState<'damaged' | 'short' | 'not_received'>('damaged');
+  const [claimText, setClaimText] = useState('');
+  const [claimPhoto, setClaimPhoto] = useState('');
   const loading = state.pricesState === 'loading';
   const open = state.prices.filter((p) => p.status === 'open');
   const decided = state.prices.filter((p) => p.status !== 'open');
@@ -129,6 +150,22 @@ function Prices({ load, state, actions }: { load: PostedFreight } & FreightScree
       {/* FP2 — the load's own document, from posting to delivery. */}
       {load.receiverName && load.deliveredAt ? <p class="scr__lede">{t('agent.freight.receivedBy', { name: load.receiverName, when: formatDate(load.deliveredAt) })}</p> : null}
       {load.cancelledAt ? <p class="scr__lede">{t('agent.freight.cancelledLine', { when: formatDate(load.cancelledAt) })}</p> : null}
+      {/* FP3b — every failed attempt, and the claim: the two things a shop rings about. */}
+      {load.attempts?.length ? (
+        <Card tone="soft">
+          {load.attempts.map((a) => (
+            <p key={a.at} class="card__note">
+              {attemptLine(a, t)}
+            </p>
+          ))}
+          {load.status === 'in_transit' ? <p class="card__note">{t('agent.freight.attemptAdvice')}</p> : null}
+        </Card>
+      ) : null}
+      {load.claim ? (
+        <Card tone="soft">
+          <p class="card__note">{claimLine(load.claim, t)}</p>
+        </Card>
+      ) : null}
       <div class="btnrow">
         <DocumentButton label={t('common.cmr.open')} title={t('common.cmr.title')} fetch={() => actions.freightNote(load.freightId)} />
         {/* FP3 — withdrawing is possible only until the goods are on a truck; the server says the same. A quiet
@@ -136,6 +173,11 @@ function Prices({ load, state, actions }: { load: PostedFreight } & FreightScree
         {load.canCancel ? (
           <Button variant="link" danger full={false} onClick={() => setWithdraw(true)}>
             {t('agent.freight.cancelOpen')}
+          </Button>
+        ) : null}
+        {load.canClaim ? (
+          <Button variant="link" full={false} onClick={() => setClaiming(true)}>
+            {t('agent.freight.claimOpen')}
           </Button>
         ) : null}
       </div>
@@ -195,6 +237,52 @@ function Prices({ load, state, actions }: { load: PostedFreight } & FreightScree
             {t('agent.freight.cancelConfirm')}
           </Button>
           <Button variant="link" onClick={() => setWithdraw(false)}>
+            {t('agent.cancel')}
+          </Button>
+        </div>
+      </Sheet>
+
+      {/* FP3b — the claim. What was found, in the shop's words, with a photo if there is one; an operator
+          decides it and the shop is shown the reason. Nothing is promised here about money: whether there is
+          any to award depends on whether the network billed this load at all. */}
+      <Sheet open={claiming} onClose={() => setClaiming(false)} title={t('agent.freight.claimTitle')}>
+        <p class="t-body">{t('agent.freight.claimBody', { code: load.code })}</p>
+        <div class="field">
+          <label class="field__label" for={`ckind-${load.freightId}`}>
+            {t('agent.freight.claimKindLabel')}
+          </label>
+          <select id={`ckind-${load.freightId}`} class="input" value={claimKind} onChange={(e) => setClaimKind(e.currentTarget.value as 'damaged' | 'short' | 'not_received')}>
+            <option value="damaged">{t('agent.freight.claimDamaged')}</option>
+            <option value="short">{t('agent.freight.claimShort')}</option>
+            <option value="not_received">{t('agent.freight.claimNotReceived')}</option>
+          </select>
+        </div>
+        <div class="field" style="margin-top:10px">
+          <label class="field__label" for={`ctext-${load.freightId}`}>
+            {t('agent.freight.claimTextLabel')}
+          </label>
+          <textarea id={`ctext-${load.freightId}`} class="input" rows={3} maxLength={1000} value={claimText} onInput={(e) => setClaimText(e.currentTarget.value)} />
+        </div>
+        <div class="field" style="margin-top:10px">
+          <span class="field__label">{t('agent.freight.claimPhotoLabel')}</span>
+          <PhotoField id={`cphoto-${load.freightId}`} value={claimPhoto} upload={(f) => actions.uploadPhoto('dispute', f)} onCapture={setClaimPhoto} label={t('agent.freight.claimPhotoAria')} />
+        </div>
+        <div style="margin-top:14px">
+          <Button
+            chevron={false}
+            busy={state.busy === `claim-freight:${load.freightId}`}
+            disabled={claimText.trim().length < 3}
+            onClick={() => {
+              const body = { kind: claimKind, description: claimText.trim(), ...(claimPhoto ? { photoRef: claimPhoto } : {}) };
+              setClaiming(false);
+              setClaimText('');
+              setClaimPhoto('');
+              void actions.openFreightClaim(load.freightId, body);
+            }}
+          >
+            {t('agent.freight.claimConfirm')}
+          </Button>
+          <Button variant="link" onClick={() => setClaiming(false)}>
             {t('agent.cancel')}
           </Button>
         </div>

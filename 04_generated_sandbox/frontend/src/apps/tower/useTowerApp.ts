@@ -5,7 +5,7 @@ import { t } from '../../shared/i18n'; // plain t(): these strings are built at 
 import { changeCompanyPassword, changeStaffPassword, clearCreds, companyLogin, createTowerClient, readCreds, saveCreds, staffLogin, type TowerClient, type TowerCreds } from './api';
 import type { ConstraintView } from './logic';
 import type { EntityPricing, EntityRow } from './money';
-import type { ApprovalRow, ClaimDecision, ClaimRow, DisposalRow, StalledRow } from './queues';
+import type { ApprovalRow, ClaimDecision, ClaimRow, DisposalRow, FreightClaimRow, StalledRow } from './queues';
 import { EMPTY_CORRIDOR_FORM, corridorName, type CorridorForm, type CorridorRow, type CouplingRow } from './corridors';
 import type { DisputeReportRow, ReportRow } from './reports';
 import { EMPTY_COUNTRY_FORM, newCountryCode, overridesOf, type CatalogueCountry, type NewCountryForm, type PresenceLevel, type PresenceProposalRow, type PresenceRow } from './presence';
@@ -63,6 +63,8 @@ export interface TowerState {
 
   /* ---- the operator's decision queues (migrated from the vanilla tower) ---- */
   claims: ClaimRow[] | null;
+  /** FP3b — claims against delivered freight, read with the parcel ones and counted with them. */
+  freightClaims: FreightClaimRow[] | null;
   disposal: DisposalRow[] | null;
   approvals: ApprovalRow[] | null;
   /** Shops that started signing up and stopped — read beside the applications, counted with none of
@@ -222,6 +224,8 @@ export interface TowerActions {
   open(rowId: string | null): void;
   clear(constraintId: string, reason: string, hazard: string): Promise<void>;
   resolveClaim(parcelId: string, decision: ClaimDecision, award: number | undefined, note: string): Promise<void>;
+  /** FP3b — decide a freight claim; same three endings, same note. */
+  resolveFreightClaim(freightId: string, decision: ClaimDecision, award: number | undefined, note: string): Promise<void>;
   closeDisposal(parcelId: string, reason: string): Promise<void>;
   decideApproval(did: string, approve: boolean): Promise<void>;
   runPayouts(): Promise<void>;
@@ -270,6 +274,7 @@ const INITIAL: TowerState = {
   companyId: null,
   expiring: null,
   claims: null,
+  freightClaims: null,
   disposal: null,
   approvals: null,
   stalled: null,
@@ -479,8 +484,9 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
    */
   const loadQueues = useCallback(async (client: TowerClient) => {
     setState((s) => ({ ...s, loading: true }));
-    const [claims, disposal, approvals, stalled] = await Promise.all([
+    const [claims, freightClaims, disposal, approvals, stalled] = await Promise.all([
       client.api.disputes(),
+      client.api.freightClaims(),
       client.api.disposalQueue(),
       client.api.kycQueue(),
       // Read with the queues and kept apart from them everywhere after: it shares a screen with the
@@ -491,6 +497,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       ...s,
       loading: false,
       claims: claims.error ? null : (narrow<{ disputes: ClaimRow[] }>(claims.data)?.disputes ?? []),
+      freightClaims: freightClaims.error ? null : (narrow<{ claims: FreightClaimRow[] }>(freightClaims.data)?.claims ?? []),
       disposal: disposal.error ? null : (narrow<{ rows: DisposalRow[] }>(disposal.data)?.rows ?? []),
       approvals: approvals.error ? null : (narrow<ApprovalRow[]>(approvals.data) ?? []),
       stalled: stalled.error ? null : (narrow<{ items: StalledRow[] }>(stalled.data)?.items ?? []),
@@ -1023,6 +1030,18 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
           return;
         }
         setState((s) => ({ ...s, busyId: null, openId: null, queueError: null, done: t('tower.claims.decided', { parcel: parcelId }) }));
+        await loadQueues(client);
+      },
+      resolveFreightClaim: async (freightId: string, decision: ClaimDecision, award: number | undefined, note: string) => {
+        const client = clientRef.current;
+        if (!client) return;
+        setState((s) => ({ ...s, busyId: freightId, queueError: null }));
+        const { error } = await client.api.resolveFreightClaim(freightId, { decision, ...(award != null && award > 0 ? { award } : {}), note, by: stateRef.current.who?.name });
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, openId: null, queueError: null, done: t('tower.claims.decided', { parcel: freightId }) }));
         await loadQueues(client);
       },
       /** Close a disposal row. The screen said what it pays the shop; the toast says what it paid. */

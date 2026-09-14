@@ -540,6 +540,17 @@ export const enTowerQueues = {
   'tower.claims.needAward': 'Upholding a claim means awarding something. Reject it instead of awarding nothing.',
   'tower.claims.overCover': 'This shipment is covered to {max}. Award up to that, or settle the excess off-platform.',
   'tower.claims.overBound': 'An award over {max} has to be settled off-platform — that figure is a sanity bound, not a policy.',
+  'tower.claims.freightTitle': 'Freight claims',
+  'tower.claims.freightDamaged': 'Damaged',
+  'tower.claims.freightShort': 'Short',
+  'tower.claims.freightNotReceived': 'Not received',
+  'tower.claims.freightParties': '{sender} → {dest} · carried by {carrier}',
+  'tower.claims.freightReceivedBy': 'signed for by {name}',
+  'tower.claims.freightAttempts': '{n} failed attempt(s) before delivery',
+  'tower.claims.freightNoBooks': 'NOTHING BILLED through the network — carriage was settled between sender and carrier. Uphold or reject with a reason; no award is possible here.',
+  'tower.claims.freightBilled': 'Carriage of {amount} billed by us — an award comes from the sister’s claims provision, up to the sanity bound',
+  'tower.claims.freightNoAward': 'Nobody was billed for this load through the network, so there is nothing to award from. Uphold it with a reason that says the money is between sender and carrier, or reject it.',
+  'tower.claims.freightDecideBodyNoBooks': 'The network billed nothing for this load, so no money can be awarded here. Upholding records that the sender was right and that the carriage is theirs and the carrier’s to settle; the sender is shown your reason either way.',
 
   // ---- awaiting disposal ----
   'tower.disposal.title': 'Awaiting disposal',

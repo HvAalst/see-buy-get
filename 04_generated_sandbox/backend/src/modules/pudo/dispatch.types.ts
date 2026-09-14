@@ -63,6 +63,47 @@ export type ClaimableKind = 'tote' | 'freight';
 export const FREIGHT_STATUSES = ['scheduled', 'available', 'claimed', 'in_transit', 'delivered', 'cancelled'] as const;
 export type FreightStatus = (typeof FREIGHT_STATUSES)[number];
 
+/** FP3b — a delivery the driver could not make: they were there, the goods were not handed over, and why. */
+export const DELIVERY_FAILURES = ['absent', 'refused', 'unreachable'] as const;
+export type DeliveryFailure = (typeof DELIVERY_FAILURES)[number];
+export class FreightDeliveryAttempt {
+  @ApiProperty({ enum: DELIVERY_FAILURES })
+  outcome: DeliveryFailure;
+  note?: string;
+  at: string;
+  by?: string;
+}
+
+/** FP3b — what the sender says went wrong with a delivered load. */
+export const FREIGHT_CLAIM_KINDS = ['damaged', 'short', 'not_received'] as const;
+export type FreightClaimKind = (typeof FREIGHT_CLAIM_KINDS)[number];
+export const FREIGHT_CLAIM_DECISIONS = ['upheld', 'partly_upheld', 'rejected'] as const;
+export type FreightClaimDecision = (typeof FREIGHT_CLAIM_DECISIONS)[number];
+
+/**
+ * FP3b — the claim against a delivered load. The freight analogue of the parcel's DisputeCase, with one
+ * difference that matters: a freight has no declared cover, so an award can only come from the provision the
+ * sender's charge carried — and where nobody was billed through the network there is nothing to award from,
+ * only a decision with a reason.
+ */
+export class FreightClaim {
+  state: 'open' | 'resolved';
+  @ApiProperty({ enum: FREIGHT_CLAIM_KINDS })
+  kind: FreightClaimKind;
+  description: string;
+  photoRef?: string;
+  raisedBy: string;
+  raisedAt: string;
+  @ApiPropertyOptional({ enum: FREIGHT_CLAIM_DECISIONS })
+  decision?: FreightClaimDecision;
+  award?: number;
+  note?: string;
+  decidedBy?: string;
+  decidedAt?: string;
+  funding?: { fromProvision: number; fromExpense: number };
+  paidTo?: { kind: 'vendor' | 'between_parties'; id?: string };
+}
+
 /** A bulk/dedicated freight job (sugar/cement, or a P4+ order diverted out of the PUDO network) — trucks
  *  only, never via MDP. Same marketplace as totes. */
 export class Freight {
@@ -157,6 +198,10 @@ export class Freight {
   /** FP3 — withdrawn by the sender (or the network) before the goods were taken over. Terminal; the record stays. */
   @ApiPropertyOptional() cancelledAt?: string;
   @ApiPropertyOptional() cancellation?: { by: string; role: 'shipper' | 'operator'; reason: string; at: string; refunded?: number };
+  /** FP3b — every time the driver stood at the door and could not hand over. The load stays in transit. */
+  @ApiPropertyOptional({ type: [FreightDeliveryAttempt] }) deliveryAttempts?: FreightDeliveryAttempt[];
+  /** FP3b — the sender's claim against the delivered goods, and how it ended. One per load. */
+  @ApiPropertyOptional({ type: FreightClaim }) claim?: FreightClaim;
   // S34c — the shipper's budget: the most they will pay (the all-in shipperCharge = earning + platform fee) for
   // this haul. Dispatch will not OFFER or let a driver CLAIM the job above it — the load waits for a cheaper
   // vehicle or a cooler market. The driver owns their [min,max] corridor; the shipper owns this ceiling. Undefined
@@ -508,6 +553,46 @@ export class PostedFreightRow {
   cancelledAt?: string;
   /** FP3 — true while the sender may still withdraw the load: before the goods are taken over. */
   canCancel: boolean;
+  /** FP3b — the door the driver stood at and could not hand over at, most recent last. */
+  @ApiPropertyOptional({ type: [FreightDeliveryAttempt] }) attempts?: FreightDeliveryAttempt[];
+  /** FP3b — the sender's claim, as far as it has got. */
+  @ApiPropertyOptional({ type: FreightClaim }) claim?: FreightClaim;
+  /** FP3b — true while the sender may still claim: delivered, no claim yet, within the claim window. */
+  canClaim: boolean;
+}
+
+/** FP3b — what the sender gets back for opening a claim. */
+export class FreightClaimResponse {
+  freightId: string;
+  code: string;
+  @ApiProperty({ type: FreightClaim })
+  claim: FreightClaim;
+}
+
+/** FP3b — one open freight claim as the operator's queue reports it. */
+export class FreightClaimQueueRow {
+  freightId: string;
+  code: string;
+  description: string;
+  destLabel: string;
+  @ApiProperty({ enum: FREIGHT_CLAIM_KINDS })
+  kind: FreightClaimKind;
+  reason: string;
+  raisedAt: string;
+  raisedBy: string;
+  senderName: string;
+  carrierName?: string;
+  /** What the sender paid for carriage through the network, if anything — a figure, never a cap. */
+  carriage?: number;
+  currency?: string;
+  /** Whether a sister billed this load and so holds a provision to award from. False = decide with a reason only. */
+  coverable: boolean;
+  awardCap: number;
+  @ApiProperty({ enum: ['sanity-bound', 'none'] })
+  capBasis: 'sanity-bound' | 'none';
+  evidence: string[];
+  attempts: number;
+  receiverName?: string;
 }
 
 /** FP3 — what a sender gets back for withdrawing a load: never the freight record (it carries the buyer's hash). */

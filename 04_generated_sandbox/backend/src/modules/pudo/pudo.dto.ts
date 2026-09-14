@@ -1324,6 +1324,20 @@ export class FreightActionDto {
   @IsOptional() @IsString() @MaxLength(500) remarks?: string;
 }
 
+/** FP3b — the driver stood at the door and could not hand over. */
+export class FreightDeliveryFailedDto {
+  @IsOptional() @IsString() driverDid?: string;
+  @IsIn(['absent', 'refused', 'unreachable']) outcome!: 'absent' | 'refused' | 'unreachable';
+  @IsOptional() @IsString() @MaxLength(500) note?: string;
+}
+
+/** FP3b — the sender's claim against a delivered load. */
+export class OpenFreightClaimDto {
+  @IsIn(['damaged', 'short', 'not_received']) kind!: 'damaged' | 'short' | 'not_received';
+  @IsString() @MaxLength(1000) description!: string;
+  @IsOptional() @IsString() photoRef?: string;
+}
+
 /** FP3 — the sender withdraws a load before taking over. The reason goes on the note. */
 export class CancelFreightDto {
   @IsString() @MaxLength(500) reason!: string;

@@ -567,3 +567,21 @@ describe('NotificationDispatcher — FP3: the driver whose claimed load was with
     expect(notifications.inboxFor('d-amos')).toHaveLength(0);
   });
 });
+
+describe('NotificationDispatcher — FP3b: the sender whose load could not be delivered, and the claimant whose claim was decided', () => {
+  it('tells the sender what happened at the door, and that the goods are still on the van', async () => {
+    const { events, notifications } = harness({});
+    await events.publish(GlosEvent.Pudo.FreightDeliveryFailed, { freightId: 'frt_7', code: 'FRT-007', posterDid: 'did:shop:p', outcome: 'absent', note: 'Gate locked', destLabel: 'Riverside Corner', attempts: 1 });
+    const inbox = notifications.inboxFor('did:shop:p');
+    expect(inbox).toHaveLength(1);
+    expect(inbox[0]).toMatchObject({ kind: 'freight_problem', title: 'Load FRT-007 could not be delivered' });
+    expect(inbox[0].body).toContain('nobody was there to receive it — "Gate locked". The goods are still on the van.');
+  });
+
+  it('tells the claimant the decision, the money when there is any, and the reason', async () => {
+    const { events, notifications } = harness({});
+    await events.publish(GlosEvent.Pudo.FreightClaimDecided, { freightId: 'frt_7', code: 'FRT-007', decision: 'partly_upheld', award: 120, note: 'Two boxes short of the manifest', posterDid: 'did:shop:p', claimantDid: 'ven_1' });
+    expect(notifications.inboxFor('ven_1')[0]).toMatchObject({ kind: 'claim_decided', title: 'Your claim on FRT-007 was upheld in part', body: '120.00 is credited to your balance. Two boxes short of the manifest' });
+    expect(notifications.inboxFor('did:shop:p')).toHaveLength(0);
+  });
+});

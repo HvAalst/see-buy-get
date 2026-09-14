@@ -264,6 +264,10 @@ function FreightGate({ claim, state, actions, onClose }: { claim: Claimable | nu
   const [receiver, setReceiver] = useState('');
   const [podId, setPodId] = useState('');
   const [remarks, setRemarks] = useState('');
+  // FP3b — the other ending at the door: nobody there, refused, or unreachable.
+  const [failing, setFailing] = useState(false);
+  const [failure, setFailure] = useState<'absent' | 'refused' | 'unreachable'>('absent');
+  const [failNote, setFailNote] = useState('');
   useEffect(() => {
     setChecked([]);
     setPhotoId('');
@@ -271,6 +275,9 @@ function FreightGate({ claim, state, actions, onClose }: { claim: Claimable | nu
     setReceiver('');
     setPodId('');
     setRemarks('');
+    setFailing(false);
+    setFailure('absent');
+    setFailNote('');
   }, [claim?.ref]);
 
   const isPickup = claim?.status === 'claimed';
@@ -369,6 +376,53 @@ function FreightGate({ claim, state, actions, onClose }: { claim: Claimable | nu
               <p class="hint" style="margin-top:8px">{t('driver.loads.addPodPhoto')}</p>
             ) : null}
           </div>
+          {/* FP3b — the delivery that cannot be made. Not a way out of the proof above: it records that the driver
+              was at the door and why the goods are still on the van, and it tells the sender, who is the one
+              who can do something about it. */}
+          {!isPickup ? (
+            !failing ? (
+              <Button variant="link" onClick={() => setFailing(true)}>
+                {t('driver.loads.couldNotDeliver')}
+              </Button>
+            ) : (
+              <div class="card card--soft" style="margin-top:14px">
+                <p class="t-body">{t('driver.loads.failBody')}</p>
+                <div class="field">
+                  <label class="field__label" for={`fail-${claim.ref}`}>
+                    {t('driver.loads.failWhatLabel')}
+                  </label>
+                  <select id={`fail-${claim.ref}`} class="input" value={failure} onChange={(e) => setFailure(e.currentTarget.value as 'absent' | 'refused' | 'unreachable')} disabled={busy}>
+                    <option value="absent">{t('driver.loads.failAbsent')}</option>
+                    <option value="refused">{t('driver.loads.failRefused')}</option>
+                    <option value="unreachable">{t('driver.loads.failUnreachable')}</option>
+                  </select>
+                </div>
+                <div class="field" style="margin-top:10px">
+                  <label class="field__label" for={`failnote-${claim.ref}`}>
+                    {t('driver.loads.failNoteLabel')}
+                  </label>
+                  <textarea id={`failnote-${claim.ref}`} class="input" rows={2} maxLength={500} value={failNote} onInput={(e) => setFailNote(e.currentTarget.value)} disabled={busy} />
+                </div>
+                <div style="margin-top:12px">
+                  <Button
+                    variant="outline"
+                    chevron={false}
+                    busy={busy}
+                    onClick={() => {
+                      const ref = claim.ref;
+                      void actions.failDelivery(ref, { outcome: failure, ...(failNote.trim() ? { note: failNote.trim() } : {}) });
+                      onClose();
+                    }}
+                  >
+                    {t('driver.loads.failConfirm')}
+                  </Button>
+                  <Button variant="link" onClick={() => setFailing(false)}>
+                    {t('driver.loads.failBack')}
+                  </Button>
+                </div>
+              </div>
+            )
+          ) : null}
           <Button variant="link" onClick={onClose}>
             {t('driver.notYet')}
           </Button>

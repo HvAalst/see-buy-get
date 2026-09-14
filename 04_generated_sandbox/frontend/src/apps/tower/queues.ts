@@ -33,6 +33,38 @@ export interface ClaimRow {
 
 export type ClaimDecision = 'upheld' | 'partly_upheld' | 'rejected';
 
+/** FP3b — one open FREIGHT claim, as the queue reports it. Same decision, different cover: a freight has no declared
+ *  cover, so the cap is the sanity bound where a sister billed the load and NOTHING where nobody was billed. */
+export interface FreightClaimRow {
+  freightId: string;
+  code: string;
+  description: string;
+  destLabel: string;
+  kind: 'damaged' | 'short' | 'not_received';
+  reason: string;
+  raisedAt: string;
+  raisedBy: string;
+  senderName: string;
+  carrierName?: string;
+  carriage?: number;
+  currency?: string;
+  coverable: boolean;
+  awardCap: number;
+  capBasis: 'sanity-bound' | 'none';
+  evidence: string[];
+  attempts: number;
+  receiverName?: string;
+}
+
+/** What a decision is checked against — the part of a row claimBlocker reads, shared by parcels and freight. */
+export type ClaimCap = { awardCap: number; capBasis: ClaimRow['capBasis'] | 'none'; currency?: string };
+
+/** FP3b — what a freight claim is covered for: the carriage the network billed, or the plain fact that it billed nothing. */
+export function freightCoverLine(row: FreightClaimRow, t: Translate): string {
+  if (!row.coverable) return t('tower.claims.freightNoBooks');
+  return t('tower.claims.freightBilled', { amount: amount(row.carriage, row.currency) });
+}
+
 /** Whole days a case has been open — the number that decides how loudly a row asks to be looked at. */
 export function daysWaiting(since: string | undefined, now: number): number | null {
   const ms = Date.parse(since ?? '');
@@ -68,9 +100,12 @@ export function coverLine(row: ClaimRow, t: Translate): string {
  * well as on the server, because the server's refusal would cost a round trip to say the one thing the
  * operator can see for themselves.
  */
-export function claimBlocker(decision: ClaimDecision, award: string, note: string, row: ClaimRow, t: Translate): string | null {
+export function claimBlocker(decision: ClaimDecision, award: string, note: string, row: ClaimCap, t: Translate): string | null {
   if (!note.trim()) return t('tower.claims.needReason');
   if (decision === 'rejected') return null; // nothing is paid, so there is no figure to check
+  // FP3b — a load nobody was billed for: upholding it records that the sender was right and that the money is
+  // between the parties. Any figure typed here would be a promise from books that do not exist.
+  if (row.capBasis === 'none') return award.trim() && Number(award.trim()) > 0 ? t('tower.claims.freightNoAward') : null;
   const value = Number(award.trim());
   if (!award.trim() || !Number.isFinite(value) || value <= 0) return t('tower.claims.needAward');
   if (value > row.awardCap) {

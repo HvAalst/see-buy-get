@@ -39,7 +39,7 @@ import { FleetService } from './fleet.service';
 import { DispatchService } from './dispatch.service';
 import { RouteConstraintService } from './route-constraint.service';
 import { ConstraintView, ConstraintsResponse, RouteConstraintsResponse } from './route-constraint.types';
-import { FreightBoardResponse, FreightProposalsResponse, MarketResponse, MarketSeries, PostedFreightResponse, FreightCancelledResponse } from './dispatch.types';
+import { FreightBoardResponse, FreightProposalsResponse, MarketResponse, MarketSeries, PostedFreightResponse, FreightCancelledResponse, FreightClaimResponse, FreightClaimQueueRow } from './dispatch.types';
 import { MarketPulseService } from './market-pulse.service';
 import { CargoService } from './cargo.service';
 import { FleetManagerService } from './fleet-manager.service';
@@ -55,7 +55,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyRecordDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto } from './pudo.dto';
+  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { classifySize, MAX_CLAIM_AWARD, measuredFactor, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
@@ -3168,13 +3168,73 @@ export class SbgController {
    */
   @Post('dispatch/freight/:id/cancel')
   freightCancel(@Param('id') id: string, @Body() dto: CancelFreightDto, @Actor() actor: IntrospectionResult): FreightCancelledResponse {
-    const f = this.dispatch.requireFreightPublic(id);
+    const { did, role } = this.assertFreightSender(id, actor);
+    const done = this.dispatch.cancelFreight(id, { did, role }, dto.reason);
+    return { freightId: done.freightId, code: done.code, status: done.status, cancelledAt: done.cancelledAt ?? new Date().toISOString(), ...(done.cancellation?.refunded != null ? { refunded: done.cancellation.refunded } : {}) };
+  }
+
+  /** FP3 — the poster, the shipper (a store's order under its store id) or staff; anybody else is told the load does not exist. */
+  private assertFreightSender(freightId: string, actor: IntrospectionResult): { did: string; role: 'shipper' | 'operator' } {
+    const f = this.dispatch.requireFreightPublic(freightId);
     const did = actor.did;
+    if (actor.role === 'operator') return { did: did ?? 'operator', role: 'operator' };
     const store = did ? this.vendors.byDid(did) : undefined;
     const mine = Boolean(did) && (f.postedByDid === did || f.shipperDid === did || (store != null && f.shipperDid === store.vendorId));
-    if (actor.role !== 'operator' && !mine) throw new GlosError('NOT_FOUND', 'Freight not found');
-    const done = this.dispatch.cancelFreight(id, { did: did ?? 'operator', role: actor.role === 'operator' ? 'operator' : 'shipper' }, dto.reason);
-    return { freightId: done.freightId, code: done.code, status: done.status, cancelledAt: done.cancelledAt ?? new Date().toISOString(), ...(done.cancellation?.refunded != null ? { refunded: done.cancellation.refunded } : {}) };
+    if (!mine || !did) throw new GlosError('NOT_FOUND', 'Freight not found');
+    return { did, role: 'shipper' };
+  }
+
+  /** FP3b — the driver stood at the door and could not hand over. The load stays on the van; the sender is told. */
+  @Post('dispatch/freight/:id/delivery-failed')
+  freightDeliveryFailed(@Param('id') id: string, @Body() dto: FreightDeliveryFailedDto) {
+    return this.dispatch.failDelivery(id, dto.driverDid, { outcome: dto.outcome, note: dto.note });
+  }
+
+  /** FP3b — the sender's claim against a delivered load: damaged, short, or not received. Answers with the claim, never the record. */
+  @Post('dispatch/freight/:id/claim')
+  freightClaim(@Param('id') id: string, @Body() dto: OpenFreightClaimDto, @Actor() actor: IntrospectionResult): FreightClaimResponse {
+    const { did } = this.assertFreightSender(id, actor);
+    const f = this.dispatch.openFreightClaim(id, did, { kind: dto.kind, description: dto.description, photoRef: dto.photoRef });
+    return { freightId: f.freightId, code: f.code, claim: f.claim! };
+  }
+
+  /** FP3b — the freight claims waiting on a person, oldest first. */
+  @Roles('operator')
+  @Get('freight-claims')
+  freightClaims(): { claims: FreightClaimQueueRow[] } {
+    return {
+      claims: this.dispatch.openFreightClaims().map((f) => this.dispatch.freightClaimRowOf(f, { sender: this.freightSenderName(f), carrier: this.freightCarrierName(f) })),
+    };
+  }
+
+  /** FP3b — decide one. Every ending carries a note the claimant is shown; an award only where a sister billed the load. */
+  @Roles('operator')
+  @Post('freight-claims/:id/resolve')
+  resolveFreightClaim(@Param('id') id: string, @Body() dto: ResolveDisputeDto): FreightClaimResponse {
+    const f = this.dispatch.resolveFreightClaim(id, dto);
+    return { freightId: f.freightId, code: f.code, claim: f.claim! };
+  }
+
+  private freightSenderName(f: { shipperDid?: string; postedByDid?: string }): string {
+    if (f.shipperDid && this.vendors.has(f.shipperDid)) return this.vendors.get(f.shipperDid).name;
+    const did = f.postedByDid ?? f.shipperDid;
+    if (did) {
+      try {
+        return this.agents.get(did).shopName;
+      } catch {
+        return did;
+      }
+    }
+    return 'Sender not recorded';
+  }
+
+  private freightCarrierName(f: { claimedBy?: string }): string | undefined {
+    if (!f.claimedBy) return undefined;
+    try {
+      return this.drivers.get(f.claimedBy).displayName;
+    } catch {
+      return f.claimedBy;
+    }
   }
 
   /** S33b — log a temperature reading for a cold-chain freight in transit (a breach flags it for the tower). */

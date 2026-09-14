@@ -12226,6 +12226,136 @@
         }
       }
     },
+    "/v1/sbg/dispatch/freight/{id}/delivery-failed": {
+      "post": {
+        "operationId": "Sbg.freightDeliveryFailed",
+        "summary": "",
+        "description": "FP3b — the driver stood at the door and could not hand over. The load stays on the van; the sender is told.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FreightDeliveryFailedDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Freight"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/dispatch/freight/{id}/claim": {
+      "post": {
+        "operationId": "Sbg.freightClaim",
+        "summary": "",
+        "description": "FP3b — the sender's claim against a delivered load: damaged, short, or not received. Answers with the claim, never the record.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenFreightClaimDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FreightClaimResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/freight-claims": {
+      "get": {
+        "operationId": "Sbg.freightClaims",
+        "summary": "",
+        "description": "FP3b — the freight claims waiting on a person, oldest first.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/freight-claims/{id}/resolve": {
+      "post": {
+        "operationId": "Sbg.resolveFreightClaim",
+        "summary": "",
+        "description": "FP3b — decide one. Every ending carries a note the claimant is shown; an award only where a sister billed the load.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveDisputeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FreightClaimResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/dispatch/freight/{id}/consignment-note": {
       "get": {
         "operationId": "Sbg.consignmentNote",
@@ -22032,6 +22162,115 @@
           "weightKg"
         ]
       },
+      "FreightDeliveryAttempt": {
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "absent",
+              "refused",
+              "unreachable"
+            ]
+          },
+          "note": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome",
+          "at"
+        ]
+      },
+      "FreightClaim": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "damaged",
+              "short",
+              "not_received"
+            ]
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "upheld",
+              "partly_upheld",
+              "rejected"
+            ]
+          },
+          "state": {
+            "type": "object"
+          },
+          "description": {
+            "type": "string"
+          },
+          "photoRef": {
+            "type": "string"
+          },
+          "raisedBy": {
+            "type": "string"
+          },
+          "raisedAt": {
+            "type": "string"
+          },
+          "award": {
+            "type": "number"
+          },
+          "note": {
+            "type": "string"
+          },
+          "decidedBy": {
+            "type": "string"
+          },
+          "decidedAt": {
+            "type": "string"
+          },
+          "funding": {
+            "type": "object",
+            "properties": {
+              "fromProvision": {
+                "required": true,
+                "type": "number"
+              },
+              "fromExpense": {
+                "required": true,
+                "type": "number"
+              }
+            }
+          },
+          "paidTo": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "required": true,
+                "type": "object"
+              },
+              "id": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          }
+        },
+        "required": [
+          "kind",
+          "state",
+          "description",
+          "raisedBy",
+          "raisedAt",
+          "funding",
+          "paidTo"
+        ]
+      },
       "DerivedBody": {
         "type": "object",
         "properties": {
@@ -22385,6 +22624,21 @@
                 "type": "number"
               }
             }
+          },
+          "deliveryAttempts": {
+            "description": "FP3b — every time the driver stood at the door and could not hand over. The load stays in transit.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FreightDeliveryAttempt"
+            }
+          },
+          "claim": {
+            "description": "FP3b — the sender's claim against the delivered goods, and how it ended. One per load.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FreightClaim"
+              }
+            ]
           },
           "priceOrigin": {
             "type": "string",
@@ -23323,6 +23577,21 @@
               "negotiate"
             ]
           },
+          "attempts": {
+            "description": "FP3b — the door the driver stood at and could not hand over at, most recent last.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FreightDeliveryAttempt"
+            }
+          },
+          "claim": {
+            "description": "FP3b — the sender's claim, as far as it has got.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FreightClaim"
+              }
+            ]
+          },
           "freightId": {
             "type": "string"
           },
@@ -23373,6 +23642,10 @@
           "canCancel": {
             "type": "boolean",
             "description": "FP3 — true while the sender may still withdraw the load: before the goods are taken over."
+          },
+          "canClaim": {
+            "type": "boolean",
+            "description": "FP3b — true while the sender may still claim: delivered, no claim yet, within the claim window."
           }
         },
         "required": [
@@ -23385,7 +23658,8 @@
           "weightKg",
           "createdAt",
           "openProposals",
-          "canCancel"
+          "canCancel",
+          "canClaim"
         ]
       },
       "PostedFreightResponse": {
@@ -23582,6 +23856,72 @@
           "freightId",
           "code",
           "cancelledAt"
+        ]
+      },
+      "FreightDeliveryFailedDto": {
+        "type": "object",
+        "properties": {
+          "driverDid": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "absent",
+              "refused",
+              "unreachable"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "outcome"
+        ]
+      },
+      "OpenFreightClaimDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "damaged",
+              "short",
+              "not_received"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "photoRef": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "description"
+        ]
+      },
+      "FreightClaimResponse": {
+        "type": "object",
+        "properties": {
+          "claim": {
+            "$ref": "#/components/schemas/FreightClaim"
+          },
+          "freightId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "claim",
+          "freightId",
+          "code"
         ]
       },
       "RecordTempDto": {

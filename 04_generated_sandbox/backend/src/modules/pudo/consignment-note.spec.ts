@@ -84,6 +84,23 @@ describe('the consignment note', () => {
     expect(chtml).not.toContain('Not yet delivered');
   });
 
+  it('FP3b: failed attempts and the claim show in box 24', () => {
+    freights.fr_1 = base({ status: 'in_transit', pickedUpAt: '2026-09-14T09:00:00Z', deliveryAttempts: [{ outcome: 'absent', note: 'Gate locked', at: '2026-09-14T11:00:00Z', by: 'did:drv:amos' }] });
+    const n = service.build(freights.fr_1);
+    expect(n.attempts).toEqual(['Delivery attempted 14 Sep 2026, 11:00 UTC: nobody to receive the goods — Gate locked']);
+    const html = service.htmlFor(n);
+    expect(n.reservations).toContain(n.attempts[0]); // box 18 keeps it after delivery too
+    expect(html).toContain('Gate locked');
+    expect(html).toContain('Not yet delivered — 1 attempt(s), see box 18');
+    freights.fr_1 = base({ status: 'delivered', pickedUpAt: '2026-09-14T09:00:00Z', deliveredAt: '2026-09-14T12:00:00Z', proofOfDelivery: { receiverName: 'Joseph Mwangi', photoRef: 'med_pod', at: '2026-09-14T12:00:00Z' }, claim: { state: 'resolved', kind: 'damaged', description: 'Three bags split', raisedBy: 'did:shop:a1', raisedAt: '2026-09-15T08:00:00Z', decision: 'upheld', award: 0, note: 'Settle it with the carrier', decidedAt: '2026-09-15T10:00:00Z', paidTo: { kind: 'between_parties' } } });
+    const c = service.build(freights.fr_1);
+    expect(c.claim).toEqual({ line: 'Claim by the sender 15 Sep 2026, 08:00 UTC — goods damaged: Three bags split', decision: 'Decided 15 Sep 2026, 10:00 UTC: upheld, to be settled between sender and carrier — Settle it with the carrier' });
+    const chtml = service.htmlFor(c);
+    expect(chtml).toContain('Joseph Mwangi');
+    expect(chtml).toContain('goods damaged: Three bags split');
+    expect(chtml).toContain('to be settled between sender and carrier');
+  });
+
   it('is a CMR note when a border is crossed, and names a store’s buyer without a phone number', () => {
     freights.fr_1 = base({ pickupCountry: 'KE', destCountry: 'UG', shipperDid: 'ven_1', postedByDid: undefined, externalOrderId: 'SO-77', buyerPhoneHash: 'h' });
     const n = service.build(freights.fr_1);
