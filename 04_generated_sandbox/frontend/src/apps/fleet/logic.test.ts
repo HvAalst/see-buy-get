@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n'; // English is the base catalog, so the real `t` yields the English literals
-import {
+import { ageWords, signalState,
   EMPTY_DRIVER,
   EMPTY_VEHICLE,
   bodyPickerOptions,
@@ -206,5 +206,23 @@ describe('the corridor a shift is on', () => {
     // Saying "none" here would read as "local work only" about a driver who is on a line-haul run.
     expect(corridorState(shift('cor_gone'), corridors)).toEqual({ kind: 'gone', name: 'cor_gone' });
     expect(corridorState(shift('cor_1'), [])).toEqual({ kind: 'gone', name: 'cor_1' });
+  });
+});
+
+describe('a vehicle that went dark', () => {
+  const now = Date.parse('2026-09-14T14:35:00Z');
+  it('is live inside ten minutes, dark after, and never when it has not reported', () => {
+    expect(signalState('2026-09-14T14:33:00Z', now)).toEqual({ kind: 'live', minutes: 2 });
+    expect(signalState('2026-09-14T14:20:00Z', now)).toEqual({ kind: 'dark', minutes: 15 });
+    expect(signalState(undefined, now)).toEqual({ kind: 'never', minutes: 0 });
+    expect([ageWords(12), ageWords(95), ageWords(1428), ageWords(3000)]).toEqual(['12 min', '2 h', '24 h', '2 d']);
+  });
+
+  it('says so on the pin, so the last place we heard from it is not read as where it is', () => {
+    const rows = [
+      { plate: 'KLM 001V', driverName: 'Grace', vehicleClass: 'van', hoursOnDuty: 2, location: { lat: -1.3, lng: 36.8 }, lastLocatedAt: '2026-09-14T14:34:00Z' },
+      { plate: 'KLM 002B', driverName: 'Amos', vehicleClass: 'bike', hoursOnDuty: 3, location: { lat: -1.2, lng: 36.9 }, lastLocatedAt: '2026-09-14T14:00:00Z' },
+    ];
+    expect(vehiclePins(rows, now).map((p) => p.label)).toEqual(['KLM 001V · Grace', 'KLM 002B · Amos · no signal 35 min']);
   });
 });

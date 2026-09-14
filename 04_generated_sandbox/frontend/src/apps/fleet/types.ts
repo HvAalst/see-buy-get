@@ -95,6 +95,8 @@ export interface PositionRow {
   vehicleClass: string;
   hoursOnDuty: number;
   location: { lat: number; lng: number };
+  /** When that position was reported. Absent on a record from before it was stamped. */
+  lastLocatedAt?: string;
 }
 
 export interface SessionRow {
@@ -103,6 +105,7 @@ export interface SessionRow {
   vehicleClass: string;
   hoursOnDuty: number;
   location?: { lat: number; lng: number } | null;
+  lastLocatedAt?: string;
 }
 
 export interface CargoRow {

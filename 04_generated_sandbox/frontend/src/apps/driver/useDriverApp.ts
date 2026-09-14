@@ -1,7 +1,8 @@
+import { drain, outboxItems } from '../../shared/outbox';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { SbgError } from '../../lib/sbg';
 import type { IconName } from '../../shared/ui/Icon';
-import { choosePin, createDriverClient, driverSession, isMintSourced, isSignInRequired, narrow, purgeDriverTokens, requestPhoneCode, verifyPhoneCode } from './api';
+import { choosePin, createDriverClient, driverConfig, driverSession, isMintSourced, isSignInRequired, narrow, purgeDriverTokens, requestPhoneCode, verifyPhoneCode } from './api';
 import { adoptDidFromUrl, clearDid, saveDid, saveRadius, saveRoute, savedRadius, savedRoute } from './storage';
 import type {
   AgentRow,
@@ -323,6 +324,9 @@ export function useDriverApp() {
    * older refresh reaching its terminal setState after a newer one resurrects the data it read
    * before the mutation landed (claims that are gone, capacity that is wrong).
    */
+  /** A shift end still in the outbox: the driver ended it with no signal, and the phone is the record until it sends. */
+  const endQueued = useCallback(() => outboxItems().some((i) => i.path === `/v1/sbg/fleet/drivers/${encodeURIComponent(did ?? '')}/end-session` && i.state !== 'blocked'), [did]);
+
   const refresh = useCallback(async () => {
     if (!client || !did) return;
     const epoch = ++refreshEpoch.current;
@@ -363,7 +367,8 @@ export function useDriverApp() {
         fail(sesR.error);
         return;
       }
-      const session = narrow<SessionView>(sesR.data) ?? { active: false };
+      // A read from memory still says "on shift" after the driver ended it in a dead spot; the queued end wins.
+      const session = endQueued() ? { active: false } : (narrow<SessionView>(sesR.data) ?? { active: false });
 
       let vehicle: VehicleView | null = null;
       let remaining = 0;
@@ -435,7 +440,7 @@ export function useDriverApp() {
     } finally {
       refreshesRunning.current -= 1;
     }
-  }, [client, did, fail]);
+  }, [client, did, fail, endQueued]);
 
   /**
    * Follow the phone while the shift lasts.
@@ -878,7 +883,9 @@ export function useDriverApp() {
       return;
     }
     await run('start', async () => {
-      const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehicleQr: qr }, leg);
+            // An end still in the pocket goes first: the server must hear "ended" before "started" or it refuses the second.
+      if (endQueued()) await drain({ baseUrl: driverConfig().baseUrl, token: () => client.client.session.getToken() });
+const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehicleQr: qr }, leg);
       if (r.error) return fail(r.error);
       buzz();
       setState((s) => ({ ...s, form: { ...EMPTY_FORM } }));
@@ -969,7 +976,10 @@ export function useDriverApp() {
       const r = await client.api.endSession(did);
       if (r.error) return fail(r.error);
       buzz();
-      pushToast({ tone: 'ok', icon: 'check', title: t('driver.toast.shiftClosed'), detail: t('driver.toast.shiftClosedDetail') });
+      // A 202 is the outbox: the end is recorded here and goes when there is signal. Said as such, and the shift
+      // shows as over from now — the refresh reads the queue before it believes what it last knew.
+      if (r.status === 202) pushToast({ tone: 'ok', icon: 'offline', title: t('driver.toast.shiftClosed'), detail: t('driver.toast.shiftEndQueued') });
+      else pushToast({ tone: 'ok', icon: 'check', title: t('driver.toast.shiftClosed'), detail: t('driver.toast.shiftClosedDetail') });
       await refresh();
     });
   }, [client, did, run, fail, pushToast, refresh]);

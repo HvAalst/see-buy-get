@@ -69,7 +69,7 @@ export interface DriverClient {
   conversations: ConversationsApi;
 }
 
-function driverConfig() {
+export function driverConfig() {
   return makeConfig('driver', APP_VERSION);
 }
 

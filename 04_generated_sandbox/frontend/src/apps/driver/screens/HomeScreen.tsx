@@ -1,3 +1,4 @@
+import { DarkSpellNote } from './DarkSpellNote';
 import { HelpLink } from '../../../shared/guide/HelpLink';
 import { useState } from 'preact/hooks';
 import { Button, Card, Checklist, ErrorNote, GlanceNumber, Icon, Note, Pill, QrBlock, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
@@ -47,6 +48,7 @@ function OffShift({ state, actions }: HomeScreenProps) {
 
       {notice ? <Note tone="warn" icon="clock" title={t('driver.home.notActivated')} detail={notice} /> : null}
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
+      <DarkSpellNote />
 
       {/* Your own vehicles first — the morning question is "which one today?", and it has an answer before
           the driver has walked anywhere. One in use by someone else is shown and blocked, never hidden. */}
@@ -337,6 +339,7 @@ function OnShift({ state, actions }: HomeScreenProps) {
   return (
     <div class="scr">
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
+      <DarkSpellNote />
 
       {/* The one big number: how much room is left, readable at arm's length. */}
       <GlanceNumber

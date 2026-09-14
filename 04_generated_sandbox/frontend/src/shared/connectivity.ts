@@ -14,9 +14,11 @@ export interface Connectivity {
   offlineSince: string | null;
   /** The last moment a real answer came back from the server — what "what we last knew" is dated from. */
   lastAnswerAt: string | null;
+  /** The last spell without a signal, once it is over: from the first failure to the first answer after it. */
+  lastDarkSpell: { from: string; to: string } | null;
 }
 
-const state: Connectivity = { online: true, offlineSince: null, lastAnswerAt: null };
+const state: Connectivity = { online: true, offlineSince: null, lastAnswerAt: null, lastDarkSpell: null };
 const listeners = new Set<() => void>();
 
 function announce(): void {
@@ -28,12 +30,13 @@ export function isBrowserOffline(): boolean {
   return typeof navigator !== 'undefined' && navigator.onLine === false;
 }
 
-function recompute(): void {
+/** Re-derive `online`; true when it changed (and listeners were told). */
+function recompute(): boolean {
   const online = !isBrowserOffline() && state.offlineSince === null;
-  if (online !== state.online) {
-    state.online = online;
-    announce();
-  }
+  if (online === state.online) return false;
+  state.online = online;
+  announce();
+  return true;
 }
 
 /** A request could not leave the phone. */
@@ -47,8 +50,9 @@ export function markOnline(now: number = Date.now()): void {
   state.lastAnswerAt = new Date(now).toISOString();
   const was = state.offlineSince;
   state.offlineSince = null;
-  recompute();
-  if (was !== null && state.online) announce(); // the banner reads lastAnswerAt too
+  if (was !== null) state.lastDarkSpell = { from: was, to: state.lastAnswerAt };
+  // Told once: either the flag flipped (recompute said so) or a spell ended with the browser still claiming offline.
+  if (!recompute() && was !== null) announce();
 }
 
 export function connectivity(): Connectivity {
@@ -70,6 +74,7 @@ export function resetConnectivity(): void {
   state.online = true;
   state.offlineSince = null;
   state.lastAnswerAt = null;
+  state.lastDarkSpell = null;
 }
 
 if (typeof addEventListener === 'function') {

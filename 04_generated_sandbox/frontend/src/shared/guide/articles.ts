@@ -285,7 +285,8 @@ export const ARTICLES: GuideArticle[] = [
       "Taking a parcel in, handing it to the bus, shelving it, moving a bag: recorded on the phone at once and sent when the signal returns. A line at the top counts what is still to send.",
       "What you see is what the app last loaded, and the line at the top says so, with the time.",
       "Your collection code stays on your phone once the parcel has appeared in My parcels — open the app once while you have signal.",
-      "Signing in, paying, handing a parcel over at the counter and sending a message need a connection. The app says so plainly when it cannot do them."
+      "Signing in, paying, handing a parcel over at the counter and sending a message need a connection. The app says so plainly when it cannot do them.",
+      "Drivers: ending your shift is recorded on the phone too. Starting one and taking an offer need a connection; an offer you could not see lapses after ten minutes and is not held against you. The fleet app shows when each vehicle was last heard from."
     ],
     notes: [
       "Do not clear the app’s data while something is still to send: the record of what you moved is on the phone until it has gone."

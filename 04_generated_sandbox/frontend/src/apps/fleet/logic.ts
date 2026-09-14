@@ -168,12 +168,38 @@ export function freeVehicles(vehicles: VehicleRow[], assignments: AssignmentRow[
  * Labelled by PLATE, because that is what a manager says out loud on the phone. The driver and the class
  * ride along in the label so a pin can still answer "who is that".
  */
-export function vehiclePins(positions: PositionRow[]): Array<{ id: string; label: string; point: { lat: number; lng: number } }> {
-  return (positions ?? []).map((p) => ({
-    id: p.plate,
-    label: `${p.plate} · ${p.driverName}`,
-    point: { lat: p.location.lat, lng: p.location.lng },
-  }));
+export function vehiclePins(positions: PositionRow[], now: number = Date.now()): Array<{ id: string; label: string; point: { lat: number; lng: number } }> {
+  return (positions ?? []).map((p) => {
+    const signal = signalState(p.lastLocatedAt, now);
+    return {
+      id: p.plate,
+      // A dark vehicle says so on the pin itself: the last place we heard from it is not where it is.
+      label: `${p.plate} · ${p.driverName}${signal.kind === 'dark' ? ` · no signal ${ageWords(signal.minutes)}` : ''}`,
+      point: { lat: p.location.lat, lng: p.location.lng },
+    };
+  });
+}
+
+/** "12 min" up to an hour and a half, then hours: a vehicle dark since yesterday is not "1428 min" to anybody. */
+export function ageWords(minutes: number): string {
+  if (minutes < 90) return `${minutes} min`;
+  const h = Math.round(minutes / 60);
+  return h >= 48 ? `${Math.round(h / 24)} d` : `${h} h`;
+}
+
+/** After this long without a position the vehicle is DARK: a phone reports every 30 s while on shift. */
+export const DARK_AFTER_MIN = 10;
+
+/**
+ * What a vehicle's last position is worth. `live`: heard from within the dark threshold. `dark`: it has stopped
+ * reporting — the pin is where it WAS. `never`: this shift has not reported at all (an old record, or a phone
+ * that refused location).
+ */
+export function signalState(lastLocatedAt: string | undefined | null, now: number = Date.now()): { kind: 'live' | 'dark' | 'never'; minutes: number } {
+  const at = lastLocatedAt ? Date.parse(lastLocatedAt) : Number.NaN;
+  if (!Number.isFinite(at)) return { kind: 'never', minutes: 0 };
+  const minutes = Math.max(0, Math.floor((now - at) / 60_000));
+  return { kind: minutes >= DARK_AFTER_MIN ? 'dark' : 'live', minutes };
 }
 
 

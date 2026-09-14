@@ -124,6 +124,8 @@ export const enFleet = {
   'fleet.dash.onDutyRow': '{plate} · {cls} · on duty {hours}',
   'fleet.dash.located': 'Located',
   'fleet.dash.noSignal': 'No signal',
+  'fleet.dash.seenAgo': 'Seen {age} ago',
+  'fleet.dash.darkFor': 'No signal for {age}',
   'fleet.dash.cargoTitle': 'Cargo in motion',
   'fleet.dash.noCargo': 'No cargo claimed right now.',
   'fleet.dash.aloudLoading': 'The dashboard is still loading.',

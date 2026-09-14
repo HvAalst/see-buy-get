@@ -327,8 +327,9 @@ export class FleetService {
   overview(managerDid?: string, now: number = Date.now()): {
     vehicles: { total: number; active: number; inUse: number; byClass: Record<string, number> };
     drivers: { total: number; onShift: number; offShift: number; byStatus: Record<string, number> };
-    sessions: { active: number; todayHours: number; list: Array<{ driverDid: string; driverName: string; plate: string; vehicleClass: string; startedAt: string; hoursOnDuty: number; location?: { lat: number; lng: number } }> };
-    positions: Array<{ plate: string; vehicleClass: string; driverName: string; location: { lat: number; lng: number }; hoursOnDuty: number }>;
+    sessions: { active: number; todayHours: number; list: Array<{ driverDid: string; driverName: string; plate: string; vehicleClass: string; startedAt: string; hoursOnDuty: number; location?: { lat: number; lng: number }; lastLocatedAt?: string }> };
+    /** A position carries WHEN it was reported: a vehicle that went dark an hour ago must not read as moving. */
+    positions: Array<{ plate: string; vehicleClass: string; driverName: string; location: { lat: number; lng: number }; hoursOnDuty: number; lastLocatedAt?: string }>;
   } {
     const ownsDriver = (driverDid: string) => !managerDid || this.drivers.get(driverDid).managerDid === managerDid;
     const all = [...this.assignments.values()].filter((a) => ownsDriver(a.driverDid));
@@ -339,7 +340,7 @@ export class FleetService {
     const list = activeSessions.map((a) => {
       const d = this.drivers.get(a.driverDid);
       const v = this.vehicles.get(a.vehicleId);
-      return { driverDid: a.driverDid, driverName: d.displayName, plate: v.plate, vehicleClass: v.vehicleClass, startedAt: a.startedAt, hoursOnDuty: hoursOf(a), location: a.location };
+      return { driverDid: a.driverDid, driverName: d.displayName, plate: v.plate, vehicleClass: v.vehicleClass, startedAt: a.startedAt, hoursOnDuty: hoursOf(a), location: a.location, ...(a.lastLocatedAt ? { lastLocatedAt: a.lastLocatedAt } : {}) };
     });
     const todayHours = Math.round(all.filter((a) => new Date(a.startedAt).getTime() >= dayStart).reduce((s, a) => s + hoursOf(a), 0) * 100) / 100;
 
@@ -355,7 +356,7 @@ export class FleetService {
       vehicles: { total: allVehicles.length, active: allVehicles.filter((v) => v.status === 'ACTIVE').length, inUse: activeSessions.length, byClass },
       drivers: { total: allDrivers.length, onShift, offShift: allDrivers.length - onShift, byStatus },
       sessions: { active: activeSessions.length, todayHours, list },
-      positions: list.filter((s) => s.location).map((s) => ({ plate: s.plate, vehicleClass: s.vehicleClass, driverName: s.driverName, location: s.location!, hoursOnDuty: s.hoursOnDuty })),
+      positions: list.filter((s) => s.location).map((s) => ({ plate: s.plate, vehicleClass: s.vehicleClass, driverName: s.driverName, location: s.location!, hoursOnDuty: s.hoursOnDuty, ...(s.lastLocatedAt ? { lastLocatedAt: s.lastLocatedAt } : {}) })),
     };
   }
 

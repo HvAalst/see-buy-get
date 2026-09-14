@@ -67,6 +67,8 @@ const QUEUEABLE: Array<{ method: string; test: RegExp; label: string }> = [
   // the record breaks the chain as surely as a breach does. It reports a measurement rather than asking
   // for a decision, so it is safe to complete without an answer.
   { method: 'POST', test: /^\/v1\/sbg\/dispatch\/freight\/[^/]+\/temperature$/, label: 'Temperature logged' },
+  // The vehicle is parked and the driver can see it. Ending twice is a no-op, so a replay costs nothing.
+  { method: 'POST', test: /^\/v1\/sbg\/fleet\/drivers\/[^/]+\/end-session$/, label: 'Shift ended' },
 ];
 
 /**

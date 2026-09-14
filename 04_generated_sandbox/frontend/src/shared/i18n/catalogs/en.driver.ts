@@ -167,6 +167,9 @@ export const enDriver = {
   'driver.home.scan2': 'You can pick up loads on your route',
   'driver.home.scan3': 'End the shift to hand the van back',
   'driver.home.notYou': 'Not you? Sign out',
+  'driver.home.darkTitle': 'You were out of reach',
+  'driver.home.darkBody': 'No signal from {from} to {to}. Any load offered in that time went to another driver. Anything you recorded is being sent.',
+  'driver.home.darkOk': 'OK',
 
   // Home screen — on shift.
   'driver.home.spaceLabel': 'Space left on the van',
@@ -466,6 +469,7 @@ export const enDriver = {
   'driver.toast.shiftStartedDetail': 'You are coupled to this vehicle.',
   'driver.toast.shiftClosed': 'Shift closed',
   'driver.toast.shiftClosedDetail': 'The vehicle is released.',
+  'driver.toast.shiftEndQueued': 'No signal — recorded here, sent when there is one.',
   'driver.toast.rateUpdated': 'Rate updated',
   'driver.toast.rateUpdatedDetail': 'You now charge the market rate.',
   'driver.toast.pickRoute': 'Pick where you start and where you are heading.',

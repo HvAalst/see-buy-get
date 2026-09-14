@@ -3,7 +3,7 @@ import { pinChangeBlocker } from '../../../shared/account/password';
 import { useState, useEffect } from 'preact/hooks';
 import { Button, Card, ErrorNote, Icon, PlaceMap, Pill, ReadAloud, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
-import { dashboardSummary, hoursLabel, vehiclePins } from '../logic';
+import { ageWords, signalState, dashboardSummary, hoursLabel, vehiclePins } from '../logic';
 import type { FleetActions, FleetState } from '../useFleetApp';
 
 export interface DashboardScreenProps {
@@ -90,9 +90,17 @@ export function DashboardScreen({ state, actions }: DashboardScreenProps) {
                   <span class="row__s">{t('fleet.dash.onDutyRow', { plate: s.plate, cls: s.vehicleClass, hours: hoursLabel(s.hoursOnDuty) })}</span>
                 </span>
                 <span class="row__end">
-                  <Pill tone={s.location ? 'ok' : 'idle'} dot>
-                    {s.location ? t('fleet.dash.located') : t('fleet.dash.noSignal')}
-                  </Pill>
+                  {/* Located means heard from lately. A vehicle silent for ten minutes is said to be dark, with how long:
+                      a manager phoning a driver who is in a valley is not helped by a green dot. */}
+                  {(() => {
+                    const signal = signalState(s.lastLocatedAt);
+                    const kind = s.location ? signal.kind : 'never';
+                    return (
+                      <Pill tone={kind === 'live' ? 'ok' : kind === 'dark' ? 'warn' : 'idle'} dot>
+                        {kind === 'live' ? t('fleet.dash.seenAgo', { age: ageWords(signal.minutes) }) : kind === 'dark' ? t('fleet.dash.darkFor', { age: ageWords(signal.minutes) }) : t('fleet.dash.noSignal')}
+                      </Pill>
+                    );
+                  })()}
                 </span>
               </div>
             ))}
