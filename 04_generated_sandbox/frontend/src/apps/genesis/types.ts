@@ -213,7 +213,7 @@ export interface ConsumerParcelView {
 export interface FreightShipmentView {
   freightId: string;
   code: string; // human FRT-NNN reference
-  status: 'available' | 'claimed' | 'in_transit' | 'delivered';
+  status: 'available' | 'claimed' | 'in_transit' | 'delivered' | 'cancelled';
   cargoClass: string;
   destLabel: string;
   weightKg: number;

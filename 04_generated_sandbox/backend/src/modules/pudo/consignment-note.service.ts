@@ -74,6 +74,7 @@ export class ConsignmentNoteService implements OnModuleInit {
     if (f.loadSafety?.securementPhotoRef) documents.push(`Photo of the secured load (${f.loadSafety.securementPhotoRef})`);
     if (f.tempReadings?.length) documents.push(`Temperature log, ${f.tempReadings.length} reading(s)`);
     if (f.unloadReport) documents.push(`Unload report, ${f.unloadReport.confirmed.length} item(s) confirmed`);
+    if (f.proofOfDelivery?.photoRef) documents.push(`Photo of the goods as delivered (${f.proofOfDelivery.photoRef})`);
     const instructions: string[] = [];
     if (band) instructions.push(`Keep between ${band.minC} °C and ${band.maxC} °C`);
     if (f.fragile) instructions.push('Fragile — handle with care');
@@ -81,6 +82,7 @@ export class ConsignmentNoteService implements OnModuleInit {
     if (f.requiredEquipment?.length) instructions.push(`Equipment required: ${f.requiredEquipment.join(', ')}`);
     if (f.scheduledPickupAt) instructions.push(`Taking over booked for ${when(f.scheduledPickupAt)}`);
     const reservations: string[] = [];
+    if (f.reservations) reservations.push(`At taking over: ${f.reservations.note}`);
     if (f.tempBreached) reservations.push('Cold chain breached in transit — see the temperature log');
     const carriage = this.carriageOf(f);
     return {
@@ -116,8 +118,13 @@ export class ConsignmentNoteService implements OnModuleInit {
       confirmations: {
         sender: { by: sender.name, at: f.createdAt, how: 'Confirmed electronically at posting' },
         ...(f.pickedUpAt && carrier ? { carrier: { by: carrier.driverName ?? carrier.name, at: f.pickedUpAt, how: 'Confirmed electronically at taking over, after the load-safety check' } } : {}),
-        ...(f.deliveredAt ? { consignee: { by: 'Receiver — confirmation not recorded', at: f.deliveredAt, how: 'Delivery recorded by the carrier with the unload report; the receiver’s own confirmation is not yet part of this note' } } : {}),
+        ...(f.proofOfDelivery
+          ? { consignee: { by: f.proofOfDelivery.receiverName, at: f.proofOfDelivery.at, how: f.proofOfDelivery.photoRef ? 'Received in person; name recorded by the driver at delivery, with a photo of the goods as delivered' : 'Received in person; name recorded by the driver at delivery', ...(f.proofOfDelivery.remarks ? { remarks: `Receiver’s remarks: ${f.proofOfDelivery.remarks}` } : {}) } }
+          : f.deliveredAt
+            ? { consignee: { by: 'Receiver — confirmation not recorded', at: f.deliveredAt, how: 'Delivery recorded by the carrier with the unload report; the receiver’s own confirmation is not yet part of this note' } }
+            : {}),
       },
+      ...(f.cancellation ? { cancelled: { at: f.cancellation.at, reason: f.cancellation.reason, by: f.cancellation.role === 'operator' ? 'network' : 'sender' } } : {}),
       ...(f.trackingKey ? { trackingUrl: `${appUrl('send')}?track=${encodeURIComponent(f.trackingKey)}` } : {}),
     };
   }
@@ -217,6 +224,7 @@ export class ConsignmentNoteService implements OnModuleInit {
         description: f.description,
         destination: f.destLabel,
         deliveredAt: f.deliveredAt ?? new Date().toISOString(),
+        ...(f.proofOfDelivery ? { receiverName: f.proofOfDelivery.receiverName } : {}),
         carrier: note.carrier?.name ?? 'the carrier',
         ...(note.carrier?.driverName ? { driver: note.carrier.driverName } : {}),
         ...(note.carriage.amount != null ? { amount: note.carriage.amount, currency: note.carriage.currency ?? NETWORK_CURRENCY } : {}),
@@ -236,7 +244,8 @@ export class ConsignmentNoteService implements OnModuleInit {
     const list = (xs: string[]) => (xs.length ? xs.map((x) => `<div>${e(x)}</div>`).join('') : '<span class="empty">None</span>');
     const box = (no: number | string, label: string, body: string, cls = '') => `<div class="box ${cls}"><div class="box__h"><span class="no">${no}</span>${e(label)}</div><div class="box__b">${body}</div></div>`;
     const conf = (c: ConsignmentNote['confirmations']['sender'] | undefined, missing: string) =>
-      c ? `<b>${e(c.by)}</b><br>${e(when(c.at))}<br><span class="how">${e(c.how)}</span>` : `<span class="empty">${e(missing)}</span>`;
+      c ? `<b>${e(c.by)}</b><br>${e(when(c.at))}<br><span class="how">${e(c.how)}</span>${c.remarks ? `<br>${e(c.remarks)}` : ''}` : `<span class="empty">${e(missing)}</span>`;
+    const cancelledLine = n.cancelled ? `Cancelled by the ${n.cancelled.by} ${when(n.cancelled.at)} — ${n.cancelled.reason}` : '';
     const qr = n.trackingUrl ? `<svg viewBox="0 0 120 120" width="120" height="120" aria-label="Tracking code">${qrSvgGroup(n.trackingUrl, 0, 0, 120)}</svg>` : '';
     const g = n.goods;
     const carrierExtra = [n.carrier?.driverName ? `Driver: ${e(n.carrier.driverName)}` : '', n.carrier?.plate ? `Vehicle: ${e(n.carrier.plate)}${n.carrier.vehicleClass ? ` (${e(n.carrier.vehicleClass)})` : ''}` : ''].filter(Boolean).join('<br>');
@@ -292,8 +301,8 @@ export class ConsignmentNoteService implements OnModuleInit {
   ${box(21, 'Established in / on', `<b>${e(n.established.place)}</b><br>${e(when(n.established.at))}`)}
   ${box(15, 'Cash on delivery', '<span class="empty">None — the network never collects cash on delivery</span>')}
   ${box(22, 'Signature and stamp of the sender', conf(n.confirmations.sender, ''))}
-  ${box(23, 'Signature and stamp of the carrier', conf(n.confirmations.carrier, 'Not yet taken over'))}
-  ${box(24, 'Goods received — signature and stamp of the consignee', conf(n.confirmations.consignee, 'Not yet delivered'), 'wide')}
+  ${box(23, 'Signature and stamp of the carrier', conf(n.confirmations.carrier, n.cancelled ? 'Never taken over — the load was cancelled' : 'Not yet taken over'))}
+  ${box(24, 'Goods received — signature and stamp of the consignee', conf(n.confirmations.consignee, n.cancelled ? cancelledLine : 'Not yet delivered'), 'wide')}
 </div>
 <footer><span>Issued by the SeeBuyGet network from its records of this load. Every box is filled from a recorded act; a box that says it is not recorded is not recorded.</span><span>${e(n.number)}</span></footer>
 </div></body></html>`;

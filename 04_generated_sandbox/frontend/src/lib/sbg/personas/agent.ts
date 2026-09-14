@@ -189,6 +189,8 @@ export function createAgentApi(sbg: SbgClient) {
     /** FB2b — the prices offered on one of my loads, newest first. */
     /** FP2 — the load's consignment note (CMR), as a printable page. */
     freightNote: (freightId: string) => sbg.request((c) => c.GET('/v1/sbg/dispatch/freight/{id}/consignment-note.html', { params: { path: { id: freightId } }, parseAs: 'text' })),
+    /** FP3 — withdraw a posted load before the goods are taken over. The reason goes on the consignment note. */
+    cancelFreight: (freightId: string, reason: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/cancel', { params: { path: { id: freightId } }, body: { reason } })),
     freightProposals: (freightId: string) =>
       sbg.request((c) => c.GET('/v1/sbg/dispatch/freight/{id}/proposals', { params: { path: { id: freightId } } })),
 

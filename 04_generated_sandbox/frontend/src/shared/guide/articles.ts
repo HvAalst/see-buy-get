@@ -311,6 +311,23 @@ export const ARTICLES: GuideArticle[] = [
     ]
   },
   {
+    id: "freight-delivery",
+    apps: [
+      "agent",
+      "driver"
+    ],
+    title: "Delivering a load: who received it, and the photo",
+    summary: "A load is delivered when somebody took it in. The driver records their name and a photo of the goods as put down; both go on the consignment note. Until the goods are on a truck, the shop can still withdraw the load.",
+    steps: [
+      "Driver app, at the gate: tick the unload list, type the name of the person who received the goods, take a photo of them where you put them down, and note anything the receiver said. That is box 24 of the consignment note.",
+      "Driver app, at pickup: if something is already wrong with the goods as handed over — a torn sack, a short count, a wet pallet — write it in the reservations box. The note then shows the goods were like that before you took them over.",
+      "Shop app: a delivered load shows who received it and when. Until pickup you can withdraw a load — open it, tap “Withdraw this load” and say why. A driver who had claimed it is told, and a charge you paid comes back. Once it is on a truck, talk to the driver instead."
+    ],
+    notes: [
+      "Nobody signs on a screen: the driver records the name, and the photo is the proof. A delivered load cannot be withdrawn — a problem with the goods is a claim, not a cancellation."
+    ]
+  },
+  {
     id: "when-to-change",
     apps: [
       "agent",

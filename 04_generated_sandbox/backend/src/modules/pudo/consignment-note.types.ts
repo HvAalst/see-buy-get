@@ -25,6 +25,8 @@ export interface NoteConfirmation {
   at: string;
   /** How the confirmation was made — always electronic here; the wording the printed box carries. */
   how: string;
+  /** What the confirming party said about the goods, in their words as the driver recorded them (box 24). */
+  remarks?: string;
 }
 
 export interface ConsignmentNote {
@@ -75,4 +77,6 @@ export interface ConsignmentNote {
   confirmations: { sender: NoteConfirmation; carrier?: NoteConfirmation; consignee?: NoteConfirmation };
   /** Where the network's own record of this load can be followed. */
   trackingUrl?: string;
+  /** FP3 — the load was withdrawn before taking over. Boxes 23 and 24 then say so instead of "not yet". */
+  cancelled?: { at: string; reason: string; by: 'sender' | 'network' };
 }

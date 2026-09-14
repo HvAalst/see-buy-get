@@ -80,6 +80,7 @@ export const GlosEvent = {
     ToteNeedsSeal: 'pudo.tote_needs_seal', // a SHOP bag is full/aged but still open — ask the shop to close it
     FreightPosted: 'pudo.freight_posted',
     FreightDelivered: 'pudo.freight_delivered', // FP2 — the consignment closes: the sender is sent its receipt // a dedicated-freight load registered → ping drivers near its pickup
+    FreightCancelled: 'pudo.freight_cancelled', // FP3 — the sender (or the network) withdrew a load before it was taken over; a driver who had claimed it is told
     LoadClaimed: 'pudo.load_claimed', // a driver claimed a tote/freight along their route
     FreightTempBreach: 'pudo.freight_temp_breach', // S33b — a cold-chain freight logged an out-of-band temperature
     FleetManagerActivated: 'pudo.fleet_manager_activated', // operator vetted + bonded → may build a fleet

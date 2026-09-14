@@ -61,7 +61,7 @@ export interface FleetState {
 
 export interface EarningsQuery {
   q: string;
-  status: '' | 'claimed' | 'in_transit' | 'delivered';
+  status: '' | 'claimed' | 'in_transit' | 'delivered' | 'cancelled';
   paid: '' | 'paid' | 'unpaid';
   driver: string;
   from: string;

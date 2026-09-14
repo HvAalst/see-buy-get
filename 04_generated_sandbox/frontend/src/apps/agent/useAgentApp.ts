@@ -58,6 +58,13 @@ export interface PostedFreight {
   createdAt: string;
   openProposals: number;
   agreedPrice?: number;
+  /** FP3 — the journey's stamps and the proof of delivery, so the list can say what became of the load. */
+  pickedUpAt?: string;
+  deliveredAt?: string;
+  receiverName?: string;
+  cancelledAt?: string;
+  /** True while the shop may still withdraw it: before the goods are on a truck. */
+  canCancel: boolean;
 }
 
 export interface FreightPrice {
@@ -1185,6 +1192,26 @@ export function useAgentApp() {
     [client, run, fail, pushToast, t, loadPosted, openPrices],
   );
 
+  /** FP3 — the shop withdraws a load before pickup. A driver who had claimed it is told; a charge comes back. */
+  const cancelFreight = useCallback(
+    async (freightId: string, reason: string) => {
+      if (!client) return;
+      await run(`cancel-freight:${freightId}`, async () => {
+        const r = await client.api.cancelFreight(freightId, reason);
+        if (r.error) return fail(r.error);
+        const out = narrow<{ code?: string; refunded?: number }>(r.data);
+        pushToast({
+          tone: 'ok',
+          icon: 'truck',
+          title: t('agent.freight.cancelledToast', { code: out.code ?? '' }),
+          detail: out.refunded != null ? t('agent.freight.cancelledRefund', { amount: out.refunded.toFixed(2) }) : t('agent.freight.cancelledDetail'),
+        });
+        await Promise.all([loadPosted(), openPrices(null)]);
+      });
+    },
+    [client, run, fail, pushToast, t, loadPosted, openPrices],
+  );
+
   const declinePrice = useCallback(
     async (p: FreightPrice) => {
       if (!client) return;
@@ -1795,6 +1822,7 @@ export function useAgentApp() {
       freightNote: (freightId: string) => client!.api.freightNote(freightId),
       acceptPrice,
       declinePrice,
+      cancelFreight,
       loadConsignments,
       openConsignment,
       depositConsignment,

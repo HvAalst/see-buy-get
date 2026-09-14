@@ -4640,7 +4640,7 @@ describe('PUDO Light', () => {
   const pickupOk = (freight: { freightId: string; bulk: boolean; fragile: boolean; requiredCapabilities: import('./cargo.types').VehicleCapability[] }, did?: string) =>
     dispatch.pickupFreight(freight.freightId, did, { confirmed: requiredLoadKeys(freight), securementPhotoId: 'med_test' });
   const deliverOk = (freight: { freightId: string }, did?: string) =>
-    dispatch.deliverFreight(freight.freightId, did, { confirmed: requiredUnloadKeys() });
+    dispatch.deliverFreight(freight.freightId, did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: 'med_pod' });
 
   const coupleTipper = (tag: string, bounds: { min: number; max: number }, baseFee = 10) => {
     const d = drivers.register({ displayName: tag, fullName: tag, nationalId: 'ID-' + tag, mobile: '+2547' + tag, licenceClasses: ['truck'], licenceNumber: 'L-' + tag, licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
@@ -4968,7 +4968,7 @@ describe('PUDO Light', () => {
     claimFreight(d.did, pickup, f.freightId);
     pickupOk(f, d.did);
     expect(() => dispatch.deliverFreight(f.freightId, d.did)).toThrow(/checklist/i);
-    const done = dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys() });
+    const done = dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: 'med_pod' });
     expect(done.status).toBe('delivered');
     expect(done.unloadReport?.confirmed).toEqual(expect.arrayContaining(requiredUnloadKeys()));
     expect(done.driverPaid).toBe(true); // the S34 payout still fires after the gate
@@ -4994,7 +4994,7 @@ describe('PUDO Light', () => {
     const anchorSpy = jest.spyOn(media, 'anchorFreightTerminal');
     dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_real' });
     expect(adoptSpy).toHaveBeenCalledWith('med_real', d.did, { type: 'freight', id: f.freightId }, 'securement');
-    dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys() });
+    dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: 'med_pod' });
     expect(anchorSpy).toHaveBeenCalledWith(f.freightId);
     adoptSpy.mockRestore();
     anchorSpy.mockRestore();
@@ -5015,6 +5015,72 @@ describe('PUDO Light', () => {
   });
 
   // --- S33b: cold-chain temperature monitoring (the first temp-band concept) ---
+
+  // --- FP3: proof of delivery, the carrier's reservations, and the sender withdrawing a load ---
+
+  it('FP3: delivery needs the receiver’s name and a photo of the goods; both land on the freight as the proof of delivery', () => {
+    const pickup = { lat: -1.86, lng: 36.36 };
+    const d = coupleTipper('POD', { min: 0.8, max: 1.5 });
+    const f = dispatch.registerFreight({ description: 'Cement', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, packaging: 'loose' });
+    claimFreight(d.did, pickup, f.freightId);
+    dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_sec', reservations: '  Two sacks torn at the corner  ' });
+    expect(dispatch.listFreight().find((x) => x.freightId === f.freightId)?.reservations).toMatchObject({ note: 'Two sacks torn at the corner', by: d.did });
+    expect(() => dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys() })).toThrow(/who received/i);
+    expect(() => dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys(), receiverName: 'J' })).toThrow(/who received/i);
+    expect(() => dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys(), receiverName: 'Joseph' })).toThrow(/photo/i);
+    const adoptSpy = jest.spyOn(media, 'adopt');
+    const done = dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys(), receiverName: ' Joseph Mwangi ', podPhotoId: 'med_pod_1', remarks: 'One sack short' });
+    expect(done.status).toBe('delivered');
+    expect(done.proofOfDelivery).toMatchObject({ receiverName: 'Joseph Mwangi', photoRef: 'med_pod_1', remarks: 'One sack short', by: d.did });
+    expect(adoptSpy).toHaveBeenCalledWith('med_pod_1', d.did, { type: 'freight', id: f.freightId }, 'pod');
+    adoptSpy.mockRestore();
+    expect(dispatch.postedBy(d.did)).toEqual([]); // the driver posted nothing — the row below is the poster's
+  });
+
+  it('FP3: the sender may withdraw a claimed load before pickup — the charge comes back, the driver is told, and the job earns nothing', () => {
+    const pickup = { lat: -1.2, lng: 36.8 };
+    const t0 = new Date('2026-07-22T11:00:00').getTime();
+    const vendor = vendors.register({ name: 'WithdrawShipper' });
+    vendors.topUp(vendor.vendorId, 500);
+    const f = dispatch.registerFreight({ description: 'Reserved', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 1000, packaging: 'loose', shipperDid: vendor.vendorId, scheduledPickupAt: new Date(t0 + 24 * 3_600_000).toISOString() }, t0);
+    const driver = coupleTipper('WD1', { min: 0.8, max: 1.5 });
+    const before = vendors.balanceOf(vendor.vendorId);
+    const [offer] = dispatch.suggest(driver.did, { from: pickup, to: pickup }, t0).filter((o) => o.ref === f.freightId);
+    dispatch.claim(offer.offerId, t0);
+    expect(vendors.balanceOf(vendor.vendorId)).toBeLessThan(before);
+    const heard: unknown[] = [];
+    events.subscribe(GlosEvent.Pudo.FreightCancelled, (e) => {
+      heard.push(e.payload);
+    });
+    expect(() => dispatch.cancelFreight(f.freightId, { did: vendor.vendorId, role: 'shipper' }, '  ')).toThrow(/why/i);
+    const done = dispatch.cancelFreight(f.freightId, { did: vendor.vendorId, role: 'shipper' }, 'Customer changed their mind', t0 + 3_600_000);
+    expect(done.status).toBe('cancelled');
+    expect(done.cancellation).toMatchObject({ by: vendor.vendorId, role: 'shipper', reason: 'Customer changed their mind' });
+    expect(done.cancellation?.refunded).toBeGreaterThan(0);
+    expect(vendors.balanceOf(vendor.vendorId)).toBeCloseTo(before, 2);
+    expect(heard).toEqual([expect.objectContaining({ freightId: f.freightId, driverDid: driver.did, by: 'shipper' })]);
+    // The driver's register keeps the job, but it earned nothing; their capacity is free again.
+    const jobs = dispatch.driverJobsPage(driver.did, {});
+    expect(jobs.items.find((j) => j.freightId === f.freightId)).toMatchObject({ status: 'cancelled', earning: undefined });
+    expect(dispatch.driverJobsSummary(driver.did, {}).earned).toBe(0);
+    expect(dispatch.claimsFor(driver.did).find((c) => c.ref === f.freightId)).toBeUndefined();
+    // The poster's row says so, and it can never be cancelled twice.
+    expect(dispatch.postedBy(vendor.vendorId).find((r) => r.freightId === f.freightId)).toMatchObject({ status: 'cancelled', canCancel: false });
+    expect(() => dispatch.cancelFreight(f.freightId, { did: vendor.vendorId, role: 'shipper' }, 'again')).toThrow(/already cancelled/);
+  });
+
+  it('FP3: a load already on the road cannot be cancelled, and open prices on a withdrawn load are superseded', () => {
+    const pickup = { lat: -1.87, lng: 36.37 };
+    const d = coupleTipper('WD2', { min: 0.8, max: 1.5 });
+    const f = dispatch.registerFreight({ description: 'Cement', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, packaging: 'loose' });
+    claimFreight(d.did, pickup, f.freightId);
+    dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f), securementPhotoId: 'med_sec' });
+    expect(() => dispatch.cancelFreight(f.freightId, { did: 'did:shop', role: 'shipper' }, 'too late')).toThrow(/on the road/);
+    const g = dispatch.registerFreight({ description: 'Negotiated', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, packaging: 'loose', commitMode: 'negotiate', postedByDid: 'did:shop:p' });
+    const p = dispatch.propose({ freightId: g.freightId, driverDid: d.did, from: pickup, price: 300 });
+    dispatch.cancelFreight(g.freightId, { did: 'did:shop:p', role: 'shipper' }, 'No longer needed');
+    expect(dispatch.proposalsFor(g.freightId).find((x) => x.proposalId === p.proposalId)?.status).toBe('superseded');
+  });
 
   it('S33b: a cold-chain freight logs temperatures; an out-of-band reading breaches it (sticky) + flags the tower', () => {
     const pickup = { lat: -1.9, lng: 36.2 };

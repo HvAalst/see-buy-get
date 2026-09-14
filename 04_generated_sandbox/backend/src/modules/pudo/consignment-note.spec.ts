@@ -66,6 +66,24 @@ describe('the consignment note', () => {
     expect(n.documents).toEqual(['Photo of the secured load (med_1)', 'Unload report, 2 item(s) confirmed']);
   });
 
+  it('FP3: the carrier’s reservations fill box 18, the proof of delivery fills box 24, and a cancelled load says so', () => {
+    freights.fr_1 = base({ status: 'delivered', pickedUpAt: '2026-09-14T09:00:00Z', deliveredAt: '2026-09-14T12:00:00Z', reservations: { note: 'Two sacks torn', at: '2026-09-14T09:00:00Z', by: 'did:drv:amos' }, proofOfDelivery: { receiverName: 'Joseph Mwangi', photoRef: 'med_pod', remarks: 'One sack short', at: '2026-09-14T12:00:00Z', by: 'did:drv:amos' } });
+    const n = service.build(freights.fr_1);
+    expect(n.reservations).toEqual(['At taking over: Two sacks torn']);
+    expect(n.confirmations.consignee).toMatchObject({ by: 'Joseph Mwangi', at: '2026-09-14T12:00:00Z', remarks: 'Receiver’s remarks: One sack short' });
+    expect(n.documents).toContain('Photo of the goods as delivered (med_pod)');
+    const html = service.htmlFor(n);
+    expect(html).toContain('Joseph Mwangi');
+    expect(html).toContain('One sack short');
+    freights.fr_1 = base({ status: 'cancelled', cancelledAt: '2026-09-14T08:30:00Z', cancellation: { by: 'did:shop:a1', role: 'shipper', reason: 'Customer changed their mind', at: '2026-09-14T08:30:00Z' } });
+    const c = service.build(freights.fr_1);
+    expect(c.cancelled).toMatchObject({ by: 'sender', reason: 'Customer changed their mind' });
+    const chtml = service.htmlFor(c);
+    expect(chtml).toContain('Never taken over — the load was cancelled');
+    expect(chtml).toContain('Cancelled by the sender');
+    expect(chtml).not.toContain('Not yet delivered');
+  });
+
   it('is a CMR note when a border is crossed, and names a store’s buyer without a phone number', () => {
     freights.fr_1 = base({ pickupCountry: 'KE', destCountry: 'UG', shipperDid: 'ven_1', postedByDid: undefined, externalOrderId: 'SO-77', buyerPhoneHash: 'h' });
     const n = service.build(freights.fr_1);

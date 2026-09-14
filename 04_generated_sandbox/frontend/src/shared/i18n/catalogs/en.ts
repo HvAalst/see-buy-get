@@ -471,6 +471,7 @@ export const en = {
   'send.parcels.freightAvailable': 'Finding a truck',
   'send.parcels.freightClaimed': 'Truck assigned',
   'send.parcels.freightInTransit': 'On the way',
+  'send.parcels.freightCancelled': 'Cancelled',
   'send.parcels.freightRow': 'To {dest} · {kg} kg · class {cls}',
   'send.parcels.allParcels': 'All parcels',
   'send.parcels.detailFrom': 'from {zone}',

@@ -16,6 +16,7 @@ export interface NotificationBellProps {
 const KIND_ICON: Record<string, IconName> = {
   parcel_ready: 'box',
   load_nearby: 'truck',
+  load_cancelled: 'truck',
   bus_inbound: 'bag',
   intake_expected: 'box',
   bag_ready_to_close: 'bag',

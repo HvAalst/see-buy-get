@@ -95,6 +95,9 @@ function PostedRow({ f, onOpen }: { f: PostedFreight; onOpen: () => void }) {
         {f.maxSpend != null ? <span class="row__s">{t('agent.freight.budget', { amount: f.maxSpend.toFixed(2) })}</span> : null}
         {f.agreedPrice != null ? <span class="row__s">{t('agent.freight.agreed', { amount: f.agreedPrice.toFixed(2) })}</span> : null}
         {f.scheduledPickupAt ? <span class="row__s">{formatDate(f.scheduledPickupAt)}</span> : null}
+        {/* FP3 — what became of it: who signed for the goods, or that the shop withdrew it. */}
+        {f.receiverName && f.deliveredAt ? <span class="row__s">{t('agent.freight.receivedBy', { name: f.receiverName, when: formatDate(f.deliveredAt) })}</span> : null}
+        {f.cancelledAt ? <span class="row__s">{t('agent.freight.cancelledLine', { when: formatDate(f.cancelledAt) })}</span> : null}
         <span class="freight__tags">
           <Pill tone="idle">{f.commitMode === 'negotiate' ? t('agent.freight.negotiate') : t('agent.freight.instant')}</Pill>
           {/* The count is the reason this row is on a screen at all, so it leads in the loud tone. */}
@@ -113,6 +116,8 @@ function PostedRow({ f, onOpen }: { f: PostedFreight; onOpen: () => void }) {
 function Prices({ load, state, actions }: { load: PostedFreight } & FreightScreenProps) {
   const t = useT();
   const [confirm, setConfirm] = useState<FreightPrice | null>(null);
+  const [withdraw, setWithdraw] = useState(false);
+  const [reason, setReason] = useState('');
   const loading = state.pricesState === 'loading';
   const open = state.prices.filter((p) => p.status === 'open');
   const decided = state.prices.filter((p) => p.status !== 'open');
@@ -122,8 +127,17 @@ function Prices({ load, state, actions }: { load: PostedFreight } & FreightScree
       <p class="scr__lede">{load.description}</p>
       {load.maxSpend != null ? <p class="scr__lede">{t('agent.freight.budget', { amount: load.maxSpend.toFixed(2) })}</p> : null}
       {/* FP2 — the load's own document, from posting to delivery. */}
+      {load.receiverName && load.deliveredAt ? <p class="scr__lede">{t('agent.freight.receivedBy', { name: load.receiverName, when: formatDate(load.deliveredAt) })}</p> : null}
+      {load.cancelledAt ? <p class="scr__lede">{t('agent.freight.cancelledLine', { when: formatDate(load.cancelledAt) })}</p> : null}
       <div class="btnrow">
         <DocumentButton label={t('common.cmr.open')} title={t('common.cmr.title')} fetch={() => actions.freightNote(load.freightId)} />
+        {/* FP3 — withdrawing is possible only until the goods are on a truck; the server says the same. A quiet
+            link, not a button: it is the exception, and it is confirmed with a reason in a sheet. */}
+        {load.canCancel ? (
+          <Button variant="link" danger full={false} onClick={() => setWithdraw(true)}>
+            {t('agent.freight.cancelOpen')}
+          </Button>
+        ) : null}
       </div>
       {state.error ? <ErrorNote error={state.error} /> : null}
 
@@ -157,6 +171,34 @@ function Prices({ load, state, actions }: { load: PostedFreight } & FreightScree
       <Button variant="outline" onClick={() => void actions.openPrices(null)}>
         {t('agent.freight.back')}
       </Button>
+
+      <Sheet open={withdraw} onClose={() => setWithdraw(false)} title={t('agent.freight.cancelTitle')}>
+        <p class="t-body">{t('agent.freight.cancelBody', { code: load.code })}</p>
+        <div class="field">
+          <label class="field__label" for={`why-${load.freightId}`}>
+            {t('agent.freight.cancelReasonLabel')}
+          </label>
+          <textarea id={`why-${load.freightId}`} class="input" rows={2} maxLength={500} value={reason} onInput={(e) => setReason(e.currentTarget.value)} />
+        </div>
+        <div style="margin-top:14px">
+          <Button
+            chevron={false}
+            busy={state.busy === `cancel-freight:${load.freightId}`}
+            disabled={reason.trim().length < 3}
+            onClick={() => {
+              const why = reason.trim();
+              setWithdraw(false);
+              setReason('');
+              void actions.cancelFreight(load.freightId, why);
+            }}
+          >
+            {t('agent.freight.cancelConfirm')}
+          </Button>
+          <Button variant="link" onClick={() => setWithdraw(false)}>
+            {t('agent.cancel')}
+          </Button>
+        </div>
+      </Sheet>
 
       {/* Taking a price CLAIMS the load and settles the money, so it is confirmed in a sheet — the same
           shape the counter already uses for a claim or a bag load, and the screen's one blue CTA lives here

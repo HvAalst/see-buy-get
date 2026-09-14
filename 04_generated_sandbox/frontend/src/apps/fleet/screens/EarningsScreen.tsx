@@ -12,10 +12,11 @@ export interface EarningsScreenProps {
 
 const money = (n: number | undefined | null) => (n ?? 0).toFixed(2);
 
-const STATUS_OPTIONS: Array<{ value: 'claimed' | 'in_transit' | 'delivered'; labelKey: MessageKey }> = [
+const STATUS_OPTIONS: Array<{ value: 'claimed' | 'in_transit' | 'delivered' | 'cancelled'; labelKey: MessageKey }> = [
   { value: 'claimed', labelKey: 'fleet.earn.statusClaimed' },
   { value: 'in_transit', labelKey: 'fleet.earn.statusInTransit' },
   { value: 'delivered', labelKey: 'fleet.earn.statusDelivered' },
+  { value: 'cancelled', labelKey: 'fleet.earn.statusCancelled' },
 ];
 const SORT_OPTIONS: Array<{ value: EarningsQuery['sort']; labelKey: MessageKey }> = [
   { value: 'newest', labelKey: 'fleet.earn.sortNewest' },
@@ -28,6 +29,7 @@ const STATUS_WORD_KEYS: Record<string, MessageKey> = {
   claimed: 'fleet.earn.statusClaimed',
   in_transit: 'fleet.earn.statusInTransit',
   delivered: 'fleet.earn.statusDelivered',
+  cancelled: 'fleet.earn.statusCancelled',
 };
 const statusWord = (status: string, t: Translate) => (STATUS_WORD_KEYS[status] ? t(STATUS_WORD_KEYS[status]) : status);
 

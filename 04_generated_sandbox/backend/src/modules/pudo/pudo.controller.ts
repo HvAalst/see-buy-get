@@ -39,7 +39,7 @@ import { FleetService } from './fleet.service';
 import { DispatchService } from './dispatch.service';
 import { RouteConstraintService } from './route-constraint.service';
 import { ConstraintView, ConstraintsResponse, RouteConstraintsResponse } from './route-constraint.types';
-import { FreightBoardResponse, FreightProposalsResponse, MarketResponse, MarketSeries, PostedFreightResponse } from './dispatch.types';
+import { FreightBoardResponse, FreightProposalsResponse, MarketResponse, MarketSeries, PostedFreightResponse, FreightCancelledResponse } from './dispatch.types';
 import { MarketPulseService } from './market-pulse.service';
 import { CargoService } from './cargo.service';
 import { FleetManagerService } from './fleet-manager.service';
@@ -55,7 +55,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyRecordDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto } from './pudo.dto';
+  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { classifySize, MAX_CLAIM_AWARD, measuredFactor, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
@@ -3152,13 +3152,29 @@ export class SbgController {
   /** Bulk freight pickup (claimed → in_transit). driverDid (the claimer) is verified against claimedBy. */
   @Post('dispatch/freight/:id/pickup')
   freightPickup(@Param('id') id: string, @Body() dto: FreightActionDto) {
-    return this.dispatch.pickupFreight(id, dto.driverDid, { confirmed: dto.confirmed, securementPhotoId: dto.securementPhotoId });
+    return this.dispatch.pickupFreight(id, dto.driverDid, { confirmed: dto.confirmed, securementPhotoId: dto.securementPhotoId, reservations: dto.reservations });
   }
 
   /** Bulk freight delivery (in_transit → delivered; releases the driver's reserved capacity). */
   @Post('dispatch/freight/:id/deliver')
   freightDeliver(@Param('id') id: string, @Body() dto: FreightActionDto) {
-    return this.dispatch.deliverFreight(id, dto.driverDid, { confirmed: dto.confirmed });
+    return this.dispatch.deliverFreight(id, dto.driverDid, { confirmed: dto.confirmed, receiverName: dto.receiverName, podPhotoId: dto.podPhotoId, remarks: dto.remarks });
+  }
+
+  /**
+   * FP3 — the sender withdraws a load before the goods are taken over. The poster, the shipper (a store's order
+   * under its store id) or staff; anybody else is told the load does not exist. Answers with the outcome, never
+   * the freight record (it carries the buyer's hash).
+   */
+  @Post('dispatch/freight/:id/cancel')
+  freightCancel(@Param('id') id: string, @Body() dto: CancelFreightDto, @Actor() actor: IntrospectionResult): FreightCancelledResponse {
+    const f = this.dispatch.requireFreightPublic(id);
+    const did = actor.did;
+    const store = did ? this.vendors.byDid(did) : undefined;
+    const mine = Boolean(did) && (f.postedByDid === did || f.shipperDid === did || (store != null && f.shipperDid === store.vendorId));
+    if (actor.role !== 'operator' && !mine) throw new GlosError('NOT_FOUND', 'Freight not found');
+    const done = this.dispatch.cancelFreight(id, { did: did ?? 'operator', role: actor.role === 'operator' ? 'operator' : 'shipper' }, dto.reason);
+    return { freightId: done.freightId, code: done.code, status: done.status, cancelledAt: done.cancelledAt ?? new Date().toISOString(), ...(done.cancellation?.refunded != null ? { refunded: done.cancellation.refunded } : {}) };
   }
 
   /** S33b — log a temperature reading for a cold-chain freight in transit (a breach flags it for the tower). */

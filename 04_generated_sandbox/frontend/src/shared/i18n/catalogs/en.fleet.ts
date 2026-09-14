@@ -163,6 +163,7 @@ export const enFleet = {
   'fleet.earn.statusClaimed': 'Claimed',
   'fleet.earn.statusInTransit': 'On the road',
   'fleet.earn.statusDelivered': 'Delivered',
+  'fleet.earn.statusCancelled': 'Cancelled',
   'fleet.earn.sortNewest': 'Newest first',
   'fleet.earn.sortOldest': 'Oldest first',
   'fleet.earn.sortEarnDesc': 'Earning: high → low',

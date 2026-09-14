@@ -118,7 +118,7 @@ function jobDate(f: Freight): string {
 }
 
 export function driverJobRowOf(f: Freight): DriverJobRow {
-  return { freightId: f.freightId, code: f.code, description: f.description, destLabel: f.destLabel, status: f.status, cargoClass: f.cargoClass, weightKg: f.weightKg, earning: f.lockedPrice, paid: Boolean(f.driverPaid), claimedAt: f.claimedAt, deliveredAt: f.deliveredAt, createdAt: f.createdAt };
+  return { freightId: f.freightId, code: f.code, description: f.description, destLabel: f.destLabel, status: f.status, cargoClass: f.cargoClass, weightKg: f.weightKg, earning: f.status === 'cancelled' ? undefined : f.lockedPrice, paid: Boolean(f.driverPaid), claimedAt: f.claimedAt, deliveredAt: f.deliveredAt, createdAt: f.createdAt };
 }
 
 export interface DriverJobsSummary {
@@ -134,7 +134,7 @@ export function driverJobsSummaryOf(rows: Freight[]): DriverJobsSummary {
   let paid = 0;
   let delivered = 0;
   for (const f of rows) {
-    const e = f.lockedPrice ?? 0;
+    const e = f.status === 'cancelled' ? 0 : (f.lockedPrice ?? 0); // FP3 — a withdrawn load pays nothing
     earned += e;
     if (f.driverPaid) paid += e;
     if (f.status === 'delivered') delivered += 1;
@@ -203,7 +203,7 @@ export function fleetEarningsSummaryOf(rows: Freight[], nameOf: (did: string) =>
     const d = drivers.get(did) ?? { driverDid: did, driverName: nameOf(did), earned: 0, delivered: 0, count: 0 };
     const month = jobDate(f).slice(0, 7);
     const m = months.get(month) ?? { month, earned: 0, delivered: 0, count: 0 };
-    const e = f.lockedPrice ?? 0;
+    const e = f.status === 'cancelled' ? 0 : (f.lockedPrice ?? 0); // FP3 — a withdrawn load pays nothing
     d.earned += e;
     m.earned += e;
     d.count += 1;
@@ -541,6 +541,7 @@ export class DispatchService {
     if (f.claimedAt) timeline.push({ status: 'claimed', at: f.claimedAt });
     if (f.pickedUpAt) timeline.push({ status: 'in_transit', at: f.pickedUpAt });
     if (f.deliveredAt) timeline.push({ status: 'delivered', at: f.deliveredAt });
+    if (f.cancelledAt) timeline.push({ status: 'cancelled', at: f.cancelledAt });
     return {
       freightId: f.freightId,
       code: f.code,
@@ -1382,6 +1383,11 @@ export class DispatchService {
         createdAt: f.createdAt,
         openProposals: open.get(f.freightId) ?? 0,
         agreedPrice: f.lockedPrice,
+        pickedUpAt: f.pickedUpAt,
+        deliveredAt: f.deliveredAt,
+        receiverName: f.proofOfDelivery?.receiverName,
+        cancelledAt: f.cancelledAt,
+        canCancel: f.status === 'scheduled' || f.status === 'available' || f.status === 'claimed',
       }));
   }
 
@@ -1674,7 +1680,7 @@ export class DispatchService {
   /** Freight is picked up (claimed → in_transit) then delivered (→ delivered, capacity released). S32b: when
    *  a driver DID is given (the authenticated driver-app path), only the driver who CLAIMED it may advance it —
    *  a claimed freight is that driver's obligation, not a free-for-all. */
-  pickupFreight(freightId: string, driverDid?: string, check?: { confirmed?: string[]; securementPhotoId?: string }, now: number = Date.now()): Freight {
+  pickupFreight(freightId: string, driverDid?: string, check?: { confirmed?: string[]; securementPhotoId?: string; reservations?: string }, now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
     if (driverDid && f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
     if (f.status !== 'claimed') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected claimed`);
@@ -1693,6 +1699,9 @@ export class DispatchService {
     f.status = 'in_transit';
     f.pickedUpAt = new Date().toISOString();
     f.loadSafety = { confirmed: [...new Set(check?.confirmed ?? [])], securementPhotoRef: securementPhotoId, at: f.pickedUpAt, by: driverDid };
+    // FP3 — box 18: what the carrier saw when the goods were handed over. Optional, and only ever the driver's words.
+    const reservations = check?.reservations?.trim();
+    f.reservations = reservations ? { note: reservations.slice(0, 500), at: f.pickedUpAt, by: driverDid } : undefined;
     // Bind the securement photo to the freight so its retention clock is the freight's, not the 48h orphan
     // reaper. adopt() (not link()) because this id came from the CLIENT: it only re-kinds/links a photo the
     // DRIVER owns and that isn't attached elsewhere, so a passed id can never launder another actor's media
@@ -1714,16 +1723,27 @@ export class DispatchService {
     this.freights.set(f.freightId, f);
     return f;
   }
-  deliverFreight(freightId: string, driverDid?: string, check?: { confirmed?: string[] }): Freight {
+  deliverFreight(freightId: string, driverDid?: string, check?: { confirmed?: string[]; receiverName?: string; podPhotoId?: string; remarks?: string }): Freight {
     const f = this.requireFreight(freightId);
     if (driverDid && f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
     if (f.status !== 'in_transit') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected in_transit`);
     // S33 — the unload gate: the unload checklist must be complete before the freight is marked delivered.
     const missing = missingKeys(requiredUnloadKeys(), check?.confirmed);
     if (missing.length) throw new GlosError('SAFETY_CHECK_INCOMPLETE', `Complete the unload checklist before delivery — ${missing.length} item(s) left`);
+    // FP3 — proof of delivery. "Delivered" without a receiver's name and a photo of the goods as put down is the
+    // driver's word against the sender's; with them it is box 24 of the consignment note. Both are required,
+    // like the securement photo at pickup — it is the driver this protects first.
+    const receiverName = check?.receiverName?.trim() ?? '';
+    if (receiverName.length < 2) throw new GlosError('RECEIVER_REQUIRED', 'Record who received the goods before marking the load delivered');
+    const podPhotoId = check?.podPhotoId;
+    if (!podPhotoId) throw new GlosError('DELIVERY_PHOTO_REQUIRED', 'Attach a photo of the goods as delivered');
     f.status = 'delivered'; // no longer counts against the driver's remaining capacity
     f.deliveredAt = new Date().toISOString();
     f.unloadReport = { confirmed: [...new Set(check?.confirmed ?? [])], at: f.deliveredAt, by: driverDid };
+    const remarks = check?.remarks?.trim();
+    f.proofOfDelivery = { receiverName: receiverName.slice(0, 120), photoRef: podPhotoId, ...(remarks ? { remarks: remarks.slice(0, 500) } : {}), at: f.deliveredAt, by: driverDid };
+    // Same adopt-not-link rule as the securement photo (S29): only the driver's own, unattached upload is taken.
+    this.media.adopt(podPhotoId, driverDid ?? '', { type: 'freight', id: f.freightId }, 'pod');
     // S34 — pay the driver their LOCKED earning on delivery, exactly once. A system-level ledger outflow
     // (drivers hold no agent wallet). A legacy/bulletin freight claimed before pricing (no lockedPrice) is skipped.
     if (f.lockedPrice != null && !f.driverPaid && f.claimedBy) {
@@ -1735,6 +1755,45 @@ export class DispatchService {
     this.freights.set(f.freightId, f);
     // FP2 — the consignment closes: whoever documents and bills it is told.
     void this.events.publish(GlosEvent.Pudo.FreightDelivered, { freightId: f.freightId, code: f.code, driverDid: f.claimedBy }, { source: 'pudo' }).catch(() => undefined);
+    return f;
+  }
+
+  /**
+   * FP3 — the sender withdraws a load before the goods are taken over. Who may (the poster, the shipper, staff) is
+   * decided by the caller; this is what withdrawing MEANS. Until pickup nothing has physically happened, so the
+   * whole thing unwinds: a billed sender gets exactly the stamped charge back (the no-show rule), open prices
+   * are moot, pending offers lapse, and a driver who had claimed it is told by event. From pickup on the goods
+   * are on somebody's truck and "cancel" is no longer the word — a load on the road is turned back or a
+   * delivered one is claimed against, never erased. The record stays, terminal, with the reason on it.
+   */
+  cancelFreight(freightId: string, by: { did: string; role: 'shipper' | 'operator' }, reason: string, now: number = Date.now()): Freight {
+    const f = this.requireFreight(freightId);
+    const why = (reason ?? '').trim();
+    if (why.length < 3) throw new GlosError('REASON_REQUIRED', 'Say why the load is withdrawn');
+    if (f.status === 'cancelled') throw new GlosError('INVALID_STATE', 'This load is already cancelled');
+    if (f.status === 'delivered') throw new GlosError('INVALID_STATE', 'This load is delivered — a problem with the goods is a claim, not a cancellation');
+    if (f.status === 'in_transit') throw new GlosError('INVALID_STATE', 'The goods are already on the road — a load that has been taken over cannot be cancelled; talk to the driver');
+    const at = new Date(now).toISOString();
+    let refunded: number | undefined;
+    if (f.paidStatus === 'billed' && f.shipperDid && this.vendors.has(f.shipperDid)) {
+      const charged = f.billed ?? this.shipperBill(f.lockedPrice ?? 0, f);
+      this.vendors.rebate(f.shipperDid, f.freightId, charged.gross, 'freight cancelled by the sender', charged.tax, charged.provision);
+      refunded = charged.gross;
+    }
+    for (const p of this.proposals.values()) {
+      if (p.freightId === f.freightId && p.status === 'open') {
+        p.status = 'superseded'; // nobody judged these numbers — the load went away
+        p.decidedAt = at;
+        this.proposals.set(p.proposalId, p);
+      }
+    }
+    for (const o of this.offers.values()) if (o.ref === f.freightId && o.status === 'pending') o.status = 'expired';
+    const driverDid = f.claimedBy;
+    f.status = 'cancelled';
+    f.cancelledAt = at;
+    f.cancellation = { by: by.did, role: by.role, reason: why.slice(0, 500), at, ...(refunded != null ? { refunded } : {}) };
+    this.freights.set(f.freightId, f);
+    void this.events.publish(GlosEvent.Pudo.FreightCancelled, { freightId: f.freightId, code: f.code, driverDid, shipperDid: f.shipperDid, reason: why, by: by.role, destLabel: f.destLabel }, { source: 'pudo' }).catch(() => undefined);
     return f;
   }
 

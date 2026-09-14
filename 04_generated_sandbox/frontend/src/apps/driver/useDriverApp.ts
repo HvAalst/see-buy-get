@@ -1201,7 +1201,7 @@ const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehic
   /** S32b/S33 — pick up a claimed dedicated-freight job (claimed → in_transit), through the load-safety gate:
    *  the confirmed checklist keys + the securement photo mediaId. */
   const pickupFreight = useCallback(
-    async (ref: string, check: { confirmed: string[]; securementPhotoId: string }) => {
+    async (ref: string, check: { confirmed: string[]; securementPhotoId: string; reservations?: string }) => {
       const did = stateRef.current.driver?.did;
       if (!client || !did) return;
       await run(`freight:${ref}`, async () => {
@@ -1224,7 +1224,7 @@ const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehic
   /** S32b/S33 — deliver an in-transit dedicated-freight job (in_transit → delivered), with the confirmed
    *  unload-checklist keys. */
   const deliverFreight = useCallback(
-    async (ref: string, check: { confirmed: string[] }) => {
+    async (ref: string, check: { confirmed: string[]; receiverName: string; podPhotoId: string; remarks?: string }) => {
       const did = stateRef.current.driver?.did;
       if (!client || !did) return;
       await run(`freight:${ref}`, async () => {

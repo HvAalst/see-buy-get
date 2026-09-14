@@ -76,7 +76,7 @@ export interface MailParams {
   'fleet-code-due': { company: string; days: number };
   'order-on-its-way': { store: string; orderRef?: string; shop: string; trackingUrl: string };
   'ready-for-collection': { shop: string; address?: string; collectBy: string; openUrl?: string };
-  'freight-delivered': { code: string; description: string; destination: string; deliveredAt: string; carrier: string; driver?: string; amount?: number; currency?: string; noteNumber: string };
+  'freight-delivered': { code: string; description: string; destination: string; deliveredAt: string; carrier: string; driver?: string; receiverName?: string; amount?: number; currency?: string; noteNumber: string };
 }
 
 export type MailTemplateId = keyof MailParams;
@@ -294,7 +294,7 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
     title: 'Load delivered — receipt (shipper)',
     sentWhen: 'A driver delivers a load, to the email of the shop that posted it.',
     wired: true,
-    sample: { code: 'FRT-010', description: 'Maize, 20 sacks', destination: 'Riverside Corner', deliveredAt: '2026-09-14T12:04:00Z', carrier: 'Kilima Logistics', driver: 'Amos K.', amount: 350, currency: 'KES', noteNumber: 'CMR-FRT-010' },
+    sample: { code: 'FRT-010', description: 'Maize, 20 sacks', destination: 'Riverside Corner', deliveredAt: '2026-09-14T12:04:00Z', carrier: 'Kilima Logistics', driver: 'Amos K.', receiverName: 'Wanjiru (Riverside Corner)', amount: 350, currency: 'KES', noteNumber: 'CMR-FRT-010' },
     build: (p) => ({
       subject: `Delivered: ${p.code} — ${p.description}`,
       preheader: `Your load reached ${p.destination} on ${formatWhen(p.deliveredAt)}.`,
@@ -306,6 +306,7 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
           rows: [
             ['Load', p.code],
             ['Delivered', formatWhen(p.deliveredAt)],
+            ...(p.receiverName ? [['Received by', p.receiverName] as [string, string]] : []),
             ['Carrier', p.carrier],
             ...(p.amount != null ? [['Carriage charges', `${p.amount.toFixed(2)} ${p.currency ?? ''}`.trim()] as [string, string]] : []),
             ['Consignment note', p.noteNumber],

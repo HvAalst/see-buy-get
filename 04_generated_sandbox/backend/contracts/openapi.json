@@ -9892,7 +9892,8 @@
                 "available",
                 "claimed",
                 "in_transit",
-                "delivered"
+                "delivered",
+                "cancelled"
               ],
               "type": "string"
             }
@@ -10002,7 +10003,8 @@
                 "available",
                 "claimed",
                 "in_transit",
-                "delivered"
+                "delivered",
+                "cancelled"
               ],
               "type": "string"
             }
@@ -10112,7 +10114,8 @@
                 "available",
                 "claimed",
                 "in_transit",
-                "delivered"
+                "delivered",
+                "cancelled"
               ],
               "type": "string"
             }
@@ -12184,6 +12187,45 @@
         }
       }
     },
+    "/v1/sbg/dispatch/freight/{id}/cancel": {
+      "post": {
+        "operationId": "Sbg.freightCancel",
+        "summary": "",
+        "description": "FP3 — the sender withdraws a load before the goods are taken over. The poster, the shipper (a store's order\nunder its store id) or staff; anybody else is told the load does not exist. Answers with the outcome, never\nthe freight record (it carries the buyer's hash).",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelFreightDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FreightCancelledResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/dispatch/freight/{id}/consignment-note": {
       "get": {
         "operationId": "Sbg.consignmentNote",
@@ -12564,7 +12606,8 @@
                 "available",
                 "claimed",
                 "in_transit",
-                "delivered"
+                "delivered",
+                "cancelled"
               ],
               "type": "string"
             }
@@ -12666,7 +12709,8 @@
                 "available",
                 "claimed",
                 "in_transit",
-                "delivered"
+                "delivered",
+                "cancelled"
               ],
               "type": "string"
             }
@@ -12768,7 +12812,8 @@
                 "available",
                 "claimed",
                 "in_transit",
-                "delivered"
+                "delivered",
+                "cancelled"
               ],
               "type": "string"
             }
@@ -22270,6 +22315,77 @@
               }
             }
           },
+          "proofOfDelivery": {
+            "type": "object",
+            "properties": {
+              "receiverName": {
+                "required": true,
+                "type": "string"
+              },
+              "photoRef": {
+                "required": false,
+                "type": "string"
+              },
+              "remarks": {
+                "required": false,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "by": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
+          "reservations": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "required": true,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "by": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
+          "cancelledAt": {
+            "type": "string",
+            "description": "FP3 — withdrawn by the sender (or the network) before the goods were taken over. Terminal; the record stays."
+          },
+          "cancellation": {
+            "type": "object",
+            "properties": {
+              "by": {
+                "required": true,
+                "type": "string"
+              },
+              "role": {
+                "required": true,
+                "type": "object"
+              },
+              "reason": {
+                "required": true,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "refunded": {
+                "required": false,
+                "type": "number"
+              }
+            }
+          },
           "priceOrigin": {
             "type": "string",
             "description": "FB0c — where lockedPrice came from. 'computed' (or absent, for anything locked before FB0c) means it IS\n priceBreakdown.total. 'negotiated' means two parties agreed a number, so lockedPrice is authoritative and\n may differ from the breakdown — which is kept anyway, because its distances are real and are what the\n market series reads. Every money path already reads lockedPrice; nothing bills off the breakdown.",
@@ -22301,7 +22417,8 @@
               "available",
               "claimed",
               "in_transit",
-              "delivered"
+              "delivered",
+              "cancelled"
             ]
           },
           "freightId": {
@@ -22513,6 +22630,9 @@
           "cargoClass",
           "natureCode",
           "carriage",
+          "proofOfDelivery",
+          "reservations",
+          "cancellation",
           "status",
           "freightId",
           "code",
@@ -23192,7 +23312,8 @@
               "available",
               "claimed",
               "in_transit",
-              "delivered"
+              "delivered",
+              "cancelled"
             ]
           },
           "commitMode": {
@@ -23234,6 +23355,24 @@
           "agreedPrice": {
             "type": "number",
             "description": "Set once the load is taken, so the poster sees the outcome without a second call."
+          },
+          "pickedUpAt": {
+            "type": "string",
+            "description": "FP3 — the journey's stamps, so the list can say \"on the road since\", \"delivered to\", \"cancelled\"."
+          },
+          "deliveredAt": {
+            "type": "string"
+          },
+          "receiverName": {
+            "type": "string",
+            "description": "FP3 — who signed for the goods (box 24), once delivered."
+          },
+          "cancelledAt": {
+            "type": "string"
+          },
+          "canCancel": {
+            "type": "boolean",
+            "description": "FP3 — true while the sender may still withdraw the load: before the goods are taken over."
           }
         },
         "required": [
@@ -23245,7 +23384,8 @@
           "destLabel",
           "weightKg",
           "createdAt",
-          "openProposals"
+          "openProposals",
+          "canCancel"
         ]
       },
       "PostedFreightResponse": {
@@ -23377,8 +23517,72 @@
           },
           "securementPhotoId": {
             "type": "string"
+          },
+          "reservations": {
+            "type": "string",
+            "description": "FP3 — at pickup: the carrier's reservations about the goods as handed over (box 18).",
+            "maxLength": 500
+          },
+          "receiverName": {
+            "type": "string",
+            "description": "FP3 — at delivery: who received the goods, the photo of them as put down, and what the receiver said (box 24).",
+            "maxLength": 120
+          },
+          "podPhotoId": {
+            "type": "string"
+          },
+          "remarks": {
+            "type": "string",
+            "maxLength": 500
           }
         }
+      },
+      "CancelFreightDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "FreightCancelledResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "scheduled",
+              "available",
+              "claimed",
+              "in_transit",
+              "delivered",
+              "cancelled"
+            ]
+          },
+          "freightId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "cancelledAt": {
+            "type": "string"
+          },
+          "refunded": {
+            "type": "number",
+            "description": "The charge handed back to a billed sender, when there was one."
+          }
+        },
+        "required": [
+          "status",
+          "freightId",
+          "code",
+          "cancelledAt"
+        ]
       },
       "RecordTempDto": {
         "type": "object",

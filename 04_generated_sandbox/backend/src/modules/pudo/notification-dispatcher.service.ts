@@ -120,6 +120,24 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     // Rule 5 (driver) — a dedicated-freight load was posted; ping active drivers near its pickup (same
     // live-GPS matching as a ready tote), so a heavy divert reaches a truck at genesis, not only via pull.
     this.events.subscribe<{ freightId: string; destLabel?: string; pickupLocation?: GeoPoint }>(GlosEvent.Pudo.FreightPosted, (e) => this.onFreightPosted(e.payload));
+    // FP3 (driver) — a load they had claimed was withdrawn by its sender: their day just changed, tell them why.
+    this.events.subscribe<{ freightId: string; code: string; driverDid?: string; reason: string; destLabel?: string }>(GlosEvent.Pudo.FreightCancelled, (e) => this.onFreightCancelled(e.payload));
+  }
+
+  private async onFreightCancelled(payload: { freightId: string; code: string; driverDid?: string; reason: string; destLabel?: string }): Promise<void> {
+    if (!payload.driverDid) return;
+    try {
+      await this.notifications.notify(payload.driverDid, {
+        kind: 'load_cancelled',
+        title: `Load ${payload.code} was cancelled`,
+        body: `The sender withdrew ${payload.code}${payload.destLabel ? ` to ${payload.destLabel}` : ''} before pickup: ${payload.reason}. Nothing to collect; your capacity is free again.`,
+        link: '/',
+        tag: `freight:${payload.freightId}`,
+        data: { freightId: payload.freightId },
+      });
+    } catch (err) {
+      this.logger.warn(`freight-cancelled notify failed for ${payload.freightId}: ${(err as Error).message}`);
+    }
   }
 
   /**

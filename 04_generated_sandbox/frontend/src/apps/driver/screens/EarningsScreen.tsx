@@ -11,10 +11,11 @@ export interface EarningsScreenProps {
   actions: DriverActions;
 }
 
-const STATUS_OPTIONS: Array<{ value: 'claimed' | 'in_transit' | 'delivered'; labelKey: MessageKey }> = [
+const STATUS_OPTIONS: Array<{ value: 'claimed' | 'in_transit' | 'delivered' | 'cancelled'; labelKey: MessageKey }> = [
   { value: 'claimed', labelKey: 'driver.earn.statusClaimed' },
   { value: 'in_transit', labelKey: 'driver.earn.statusInTransit' },
   { value: 'delivered', labelKey: 'driver.earn.statusDelivered' },
+  { value: 'cancelled', labelKey: 'driver.earn.statusCancelled' },
 ];
 const SORT_OPTIONS: Array<{ value: JobsQuery['sort']; labelKey: MessageKey }> = [
   { value: 'newest', labelKey: 'driver.earn.sortNewest' },
@@ -28,6 +29,7 @@ const STATUS_WORD_KEYS: Record<string, MessageKey> = {
   claimed: 'driver.earn.statusClaimed',
   in_transit: 'driver.earn.statusInTransit',
   delivered: 'driver.earn.statusDelivered',
+  cancelled: 'driver.earn.statusCancelled',
 };
 
 function statusWord(status: string, t: Translate): string {

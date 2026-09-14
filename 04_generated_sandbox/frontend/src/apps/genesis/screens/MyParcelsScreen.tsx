@@ -103,11 +103,12 @@ function ParcelGroup({ title, items, actions }: { title: string; items: Consumer
 
 /** S32d — the buyer's dedicated-freight orders (too big for the parcel network). Informational rows: a
  *  diverted order stays visible with its status; the carrier/pickup flow is handled off the shelves. */
-const FREIGHT_STATUS: Record<string, { wordKey: 'send.parcels.freightAvailable' | 'send.parcels.freightClaimed' | 'send.parcels.freightInTransit' | 'send.status.delivered'; tone: 'ok' | 'info' | 'idle' }> = {
+const FREIGHT_STATUS: Record<string, { wordKey: 'send.parcels.freightAvailable' | 'send.parcels.freightClaimed' | 'send.parcels.freightInTransit' | 'send.status.delivered' | 'send.parcels.freightCancelled'; tone: 'ok' | 'info' | 'idle' }> = {
   available: { wordKey: 'send.parcels.freightAvailable', tone: 'idle' },
   claimed: { wordKey: 'send.parcels.freightClaimed', tone: 'info' },
   in_transit: { wordKey: 'send.parcels.freightInTransit', tone: 'info' },
   delivered: { wordKey: 'send.status.delivered', tone: 'ok' },
+  cancelled: { wordKey: 'send.parcels.freightCancelled', tone: 'idle' },
 };
 
 function FreightGroup({ items }: { items: FreightShipmentView[] }) {

@@ -550,3 +550,20 @@ describe('notification deep links resolve to a page that exists', () => {
     expect(notice!.link === '/' || notice!.link!.startsWith('/?')).toBe(true);
   });
 });
+
+describe('NotificationDispatcher — FP3: the driver whose claimed load was withdrawn', () => {
+  it('tells the claiming driver why, with the destination and the reason', async () => {
+    const { events, notifications } = harness({});
+    await events.publish(GlosEvent.Pudo.FreightCancelled, { freightId: 'frt_9', code: 'FRT-009', driverDid: 'd-amos', reason: 'Customer changed their mind', by: 'shipper', destLabel: 'Riverside Corner' });
+    const inbox = notifications.inboxFor('d-amos');
+    expect(inbox).toHaveLength(1);
+    expect(inbox[0]).toMatchObject({ kind: 'load_cancelled', title: 'Load FRT-009 was cancelled' });
+    expect(inbox[0].body).toBe('The sender withdrew FRT-009 to Riverside Corner before pickup: Customer changed their mind. Nothing to collect; your capacity is free again.');
+  });
+
+  it('says nothing when nobody had claimed the load', async () => {
+    const { events, notifications } = harness({});
+    await events.publish(GlosEvent.Pudo.FreightCancelled, { freightId: 'frt_8', code: 'FRT-008', reason: 'No longer needed', by: 'shipper' });
+    expect(notifications.inboxFor('d-amos')).toHaveLength(0);
+  });
+});

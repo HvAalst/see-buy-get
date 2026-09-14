@@ -205,12 +205,12 @@ export function createDriverApi(sbg: SbgClient) {
     /** S32b/S33 — pick up a claimed dedicated-freight job (claimed → in_transit). Sends the driver's own DID
      *  (only the claimer may advance a job) plus the S33 load-safety gate: the confirmed checklist keys + the
      *  securement photo mediaId. */
-    pickupFreight: (freightId: string, driverDid: string, check?: { confirmed?: string[]; securementPhotoId?: string }) =>
+    pickupFreight: (freightId: string, driverDid: string, check?: { confirmed?: string[]; securementPhotoId?: string; reservations?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/pickup', { params: { path: { id: freightId } }, body: { driverDid, ...check } })),
 
     /** S32b/S33 — deliver an in-transit dedicated-freight job (in_transit → delivered; capacity released),
      *  with the confirmed unload-checklist keys. */
-    deliverFreight: (freightId: string, driverDid: string, check?: { confirmed?: string[] }) =>
+    deliverFreight: (freightId: string, driverDid: string, check?: { confirmed?: string[]; receiverName?: string; podPhotoId?: string; remarks?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/deliver', { params: { path: { id: freightId } }, body: { driverDid, ...check } })),
 
     /** S33b — log a temperature reading for a cold-chain freight in transit (a breach flags it for the tower). */

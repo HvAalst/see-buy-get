@@ -259,15 +259,26 @@ function FreightGate({ claim, state, actions, onClose }: { claim: Claimable | nu
   const t = useT();
   const [checked, setChecked] = useState<string[]>([]);
   const [photoId, setPhotoId] = useState('');
+  // FP3 — box 18 at pickup (the carrier's reservations), box 24 at delivery (who received it, the photo, their words).
+  const [reservations, setReservations] = useState('');
+  const [receiver, setReceiver] = useState('');
+  const [podId, setPodId] = useState('');
+  const [remarks, setRemarks] = useState('');
   useEffect(() => {
     setChecked([]);
     setPhotoId('');
+    setReservations('');
+    setReceiver('');
+    setPodId('');
+    setRemarks('');
   }, [claim?.ref]);
 
   const isPickup = claim?.status === 'claimed';
   const items = (isPickup ? claim?.loadChecklist : claim?.unloadChecklist) ?? [];
   const allChecked = items.length > 0 && items.every((i) => checked.includes(i.key));
   const photoOk = !isPickup || photoId.length > 0;
+  const receiverOk = isPickup || receiver.trim().length >= 2;
+  const podOk = isPickup || podId.length > 0;
   const busy = claim ? state.busy === `freight:${claim.ref}` : false;
 
   return (
@@ -281,33 +292,82 @@ function FreightGate({ claim, state, actions, onClose }: { claim: Claimable | nu
           </p>
           <CheckGate items={items} checked={checked} onChange={setChecked} disabled={busy} />
           {isPickup ? (
-            <div class="field" style="margin-top:14px">
-              <span class="field__label">{t('driver.loads.securePhotoLabel')}</span>
-              <PhotoField
-                id={`sec-${claim.ref}`}
-                value={photoId}
-                upload={(f) => actions.uploadPhoto('securement', f)}
-                onCapture={setPhotoId}
-                label={t('driver.loads.securePhotoAria')}
-                disabled={busy}
-              />
-            </div>
-          ) : null}
+            <>
+              <div class="field" style="margin-top:14px">
+                <span class="field__label">{t('driver.loads.securePhotoLabel')}</span>
+                <PhotoField
+                  id={`sec-${claim.ref}`}
+                  value={photoId}
+                  upload={(f) => actions.uploadPhoto('securement', f)}
+                  onCapture={setPhotoId}
+                  label={t('driver.loads.securePhotoAria')}
+                  disabled={busy}
+                />
+              </div>
+              {/* FP3 — the carrier's reservations (CMR box 18). Optional, and the driver's protection: a sack torn
+                  BEFORE taking over is on the note as such, not as damage in transit. */}
+              <div class="field" style="margin-top:14px">
+                <label class="field__label" for={`res-${claim.ref}`}>
+                  {t('driver.loads.reservationsLabel')}
+                </label>
+                <textarea id={`res-${claim.ref}`} class="input" rows={2} maxLength={500} value={reservations} onInput={(e) => setReservations(e.currentTarget.value)} disabled={busy} />
+                <p class="hint">{t('driver.loads.reservationsHint')}</p>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* FP3 — proof of delivery (CMR box 24): who received the goods, a photo of them as put down, and what
+                  the receiver said. Required, like the securement photo: "delivered" on its own is only the
+                  driver's word. */}
+              <div class="field" style="margin-top:14px">
+                <label class="field__label" for={`rcv-${claim.ref}`}>
+                  {t('driver.loads.receiverLabel')}
+                </label>
+                <input id={`rcv-${claim.ref}`} class="input" type="text" autocomplete="off" maxLength={120} placeholder={t('driver.loads.receiverPlaceholder')} value={receiver} onInput={(e) => setReceiver(e.currentTarget.value)} disabled={busy} />
+              </div>
+              <div class="field" style="margin-top:14px">
+                <span class="field__label">{t('driver.loads.podPhotoLabel')}</span>
+                <PhotoField
+                  id={`pod-${claim.ref}`}
+                  value={podId}
+                  upload={(f) => actions.uploadPhoto('pod', f)}
+                  onCapture={setPodId}
+                  label={t('driver.loads.podPhotoAria')}
+                  disabled={busy}
+                />
+              </div>
+              <div class="field" style="margin-top:14px">
+                <label class="field__label" for={`rem-${claim.ref}`}>
+                  {t('driver.loads.remarksLabel')}
+                </label>
+                <textarea id={`rem-${claim.ref}`} class="input" rows={2} maxLength={500} value={remarks} onInput={(e) => setRemarks(e.currentTarget.value)} disabled={busy} />
+                <p class="hint">{t('driver.loads.remarksHint')}</p>
+              </div>
+            </>
+          )}
           <div style="margin-top:14px">
             <Button
               chevron={false}
               busy={busy}
-              disabled={!allChecked || !photoOk}
+              disabled={!allChecked || !photoOk || !receiverOk || !podOk}
               onClick={() => {
                 const ref = claim.ref;
-                if (isPickup) void actions.pickupFreight(ref, { confirmed: checked, securementPhotoId: photoId });
-                else void actions.deliverFreight(ref, { confirmed: checked });
+                if (isPickup) void actions.pickupFreight(ref, { confirmed: checked, securementPhotoId: photoId, ...(reservations.trim() ? { reservations: reservations.trim() } : {}) });
+                else void actions.deliverFreight(ref, { confirmed: checked, receiverName: receiver.trim(), podPhotoId: podId, ...(remarks.trim() ? { remarks: remarks.trim() } : {}) });
                 onClose();
               }}
             >
               {isPickup ? t('driver.loads.confirmPickup') : t('driver.loads.confirmDelivery')}
             </Button>
-            {!allChecked ? <p class="hint" style="margin-top:8px">{t('driver.loads.tickAll')}</p> : !photoOk ? <p class="hint" style="margin-top:8px">{t('driver.loads.addPhoto')}</p> : null}
+            {!allChecked ? (
+              <p class="hint" style="margin-top:8px">{t('driver.loads.tickAll')}</p>
+            ) : !photoOk ? (
+              <p class="hint" style="margin-top:8px">{t('driver.loads.addPhoto')}</p>
+            ) : !receiverOk ? (
+              <p class="hint" style="margin-top:8px">{t('driver.loads.addReceiver')}</p>
+            ) : !podOk ? (
+              <p class="hint" style="margin-top:8px">{t('driver.loads.addPodPhoto')}</p>
+            ) : null}
           </div>
           <Button variant="link" onClick={onClose}>
             {t('driver.notYet')}

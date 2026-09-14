@@ -518,7 +518,7 @@ export class AgentLedgerQueryDto {
 /** FP1 — the fleet's register: the driver's filters, plus which driver. */
 export class FleetEarningsQueryDto {
   @IsOptional() @IsString() q?: string;
-  @IsOptional() @IsIn(['available', 'claimed', 'in_transit', 'delivered']) status?: 'available' | 'claimed' | 'in_transit' | 'delivered';
+  @IsOptional() @IsIn(['available', 'claimed', 'in_transit', 'delivered', 'cancelled']) status?: 'available' | 'claimed' | 'in_transit' | 'delivered' | 'cancelled';
   @IsOptional() @IsIn(['paid', 'unpaid']) paid?: 'paid' | 'unpaid';
   @IsOptional() @IsString() driver?: string;
   @IsOptional() @IsString() from?: string;
@@ -530,7 +530,7 @@ export class FleetEarningsQueryDto {
 
 export class DriverJobsQueryDto {
   @IsOptional() @IsString() q?: string; // job code / description / destination / tracking / order ref
-  @IsOptional() @IsIn(['available', 'claimed', 'in_transit', 'delivered']) status?: 'available' | 'claimed' | 'in_transit' | 'delivered';
+  @IsOptional() @IsIn(['available', 'claimed', 'in_transit', 'delivered', 'cancelled']) status?: 'available' | 'claimed' | 'in_transit' | 'delivered' | 'cancelled';
   @IsOptional() @IsIn(['paid', 'unpaid']) paid?: 'paid' | 'unpaid';
   @IsOptional() @IsString() from?: string; // ISO or YYYY-MM-DD (inclusive)
   @IsOptional() @IsString() to?: string;
@@ -1316,6 +1316,17 @@ export class FreightActionDto {
   @IsOptional() @IsString() driverDid?: string;
   @IsOptional() @IsArray() @IsString({ each: true }) confirmed?: string[];
   @IsOptional() @IsString() securementPhotoId?: string;
+  /** FP3 — at pickup: the carrier's reservations about the goods as handed over (box 18). */
+  @IsOptional() @IsString() @MaxLength(500) reservations?: string;
+  /** FP3 — at delivery: who received the goods, the photo of them as put down, and what the receiver said (box 24). */
+  @IsOptional() @IsString() @MaxLength(120) receiverName?: string;
+  @IsOptional() @IsString() podPhotoId?: string;
+  @IsOptional() @IsString() @MaxLength(500) remarks?: string;
+}
+
+/** FP3 — the sender withdraws a load before taking over. The reason goes on the note. */
+export class CancelFreightDto {
+  @IsString() @MaxLength(500) reason!: string;
 }
 
 /** F3 — a cooperative opens a consolidation lot for a durable dry commodity. The owner's site (the freight's

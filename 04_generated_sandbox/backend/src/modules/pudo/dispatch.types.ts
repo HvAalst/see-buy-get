@@ -60,7 +60,7 @@ export class RoutePlan {
 export type ClaimableKind = 'tote' | 'freight';
 // 'scheduled' — booked for a FUTURE pickup date; held out of the driver marketplace until due, then
 // promoted to 'available' (the freight analogue of a tote that isn't full/aged yet).
-export const FREIGHT_STATUSES = ['scheduled', 'available', 'claimed', 'in_transit', 'delivered'] as const;
+export const FREIGHT_STATUSES = ['scheduled', 'available', 'claimed', 'in_transit', 'delivered', 'cancelled'] as const;
 export type FreightStatus = (typeof FREIGHT_STATUSES)[number];
 
 /** A bulk/dedicated freight job (sugar/cement, or a P4+ order diverted out of the PUDO network) — trucks
@@ -148,6 +148,15 @@ export class Freight {
    * the driver's later shifts; a note must name the vehicle that carried this load.
    */
   @ApiPropertyOptional() carriage?: { vehicleId: string; plate: string; vehicleClass: string; driverDid: string; managerDid?: string; at: string };
+  /** FP3 — proof of delivery: who took the goods in, the driver's photo of them as put down, and what the receiver
+   *  said about them. This is box 24 of the consignment note; without it "delivered" is only the driver's word. */
+  @ApiPropertyOptional() proofOfDelivery?: { receiverName: string; photoRef?: string; remarks?: string; at: string; by?: string };
+  /** FP3 — the carrier's reservations about the goods as handed over at taking over (box 18): a torn sack, a
+   *  short count, a wet pallet. Written by the driver at pickup, before the goods are theirs to answer for. */
+  @ApiPropertyOptional() reservations?: { note: string; at: string; by?: string };
+  /** FP3 — withdrawn by the sender (or the network) before the goods were taken over. Terminal; the record stays. */
+  @ApiPropertyOptional() cancelledAt?: string;
+  @ApiPropertyOptional() cancellation?: { by: string; role: 'shipper' | 'operator'; reason: string; at: string; refunded?: number };
   // S34c — the shipper's budget: the most they will pay (the all-in shipperCharge = earning + platform fee) for
   // this haul. Dispatch will not OFFER or let a driver CLAIM the job above it — the load waits for a cheaper
   // vehicle or a cooler market. The driver owns their [min,max] corridor; the shipper owns this ceiling. Undefined
@@ -491,6 +500,25 @@ export class PostedFreightRow {
   openProposals: number;
   /** Set once the load is taken, so the poster sees the outcome without a second call. */
   agreedPrice?: number;
+  /** FP3 — the journey's stamps, so the list can say "on the road since", "delivered to", "cancelled". */
+  pickedUpAt?: string;
+  deliveredAt?: string;
+  /** FP3 — who signed for the goods (box 24), once delivered. */
+  receiverName?: string;
+  cancelledAt?: string;
+  /** FP3 — true while the sender may still withdraw the load: before the goods are taken over. */
+  canCancel: boolean;
+}
+
+/** FP3 — what a sender gets back for withdrawing a load: never the freight record (it carries the buyer's hash). */
+export class FreightCancelledResponse {
+  freightId: string;
+  code: string;
+  @ApiProperty({ enum: FREIGHT_STATUSES })
+  status: FreightStatus;
+  cancelledAt: string;
+  /** The charge handed back to a billed sender, when there was one. */
+  refunded?: number;
 }
 
 export class PostedFreightResponse {
