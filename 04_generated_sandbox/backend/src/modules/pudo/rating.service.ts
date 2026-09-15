@@ -55,6 +55,8 @@ export interface DriverRatingRecord {
   stars: number; // 1–5
   issues: DriverIssue[];
   at: string;
+  /** FP6 — set when the rating is the shipper's verdict on ONE delivered load (last-wins per load, not per pair). */
+  freightId?: string;
 }
 
 /**
@@ -192,6 +194,40 @@ export class RatingService {
 
     this.core.updateReputation(input.driverDid, composite); // graduation, same as an agent rating
     void this.events.publish(GlosEvent.Reputation.RatingSubmitted, { subjectDid: input.driverDid, byAgentDid: input.byAgentDid, stars: input.stars }, { source: 'pudo' }).catch(() => undefined);
+    void this.events.publish(GlosEvent.Reputation.ScoreUpdated, { subjectDid: input.driverDid, composite }, { source: 'pudo' }).catch(() => undefined);
+    return { rating: record, driverComposite: composite };
+  }
+
+  /**
+   * FP6 — the SHIPPER rates the carrier on a delivered load. One rating per LOAD, last wins: a shop that
+   * ships ten loads with the same driver has ten verdicts, one each, because each haul was its own job —
+   * the per-pair rule above is for the standing counter relationship, not for freight. Counts toward the
+   * driver's composite exactly like a counter rating, so a fleet's derived rating reads its hauls too. The
+   * CALLER proves the rater shipped the load and that it was delivered; this only keeps the arithmetic honest.
+   */
+  rateFreight(input: { freightId: string; driverDid: string; byDid: string; stars: number; issues?: DriverIssue[] }): { rating: DriverRatingRecord; driverComposite: number } {
+    if (!(input.stars >= 1 && input.stars <= 5)) throw new GlosError('INVALID_RATING', 'Stars must be 1–5');
+    const issues = [...new Set((input.issues ?? []).filter((i) => DRIVER_ISSUES.includes(i)))];
+    const now = new Date().toISOString();
+    const existing = this.driverRatings.find((r) => r.freightId === input.freightId);
+    let record: DriverRatingRecord;
+    const t = this.driverTally.get(input.driverDid) ?? { sum: 0, count: 0 };
+    if (existing) {
+      t.sum += input.stars - existing.stars;
+      existing.stars = input.stars;
+      existing.issues = issues;
+      existing.at = now;
+      record = existing;
+    } else {
+      record = { id: `drt_${randomBytes(6).toString('hex')}`, driverDid: input.driverDid, byAgentDid: input.byDid, stars: input.stars, issues, at: now, freightId: input.freightId };
+      this.driverRatings.push(record);
+      t.sum += input.stars;
+      t.count += 1;
+    }
+    this.driverTally.set(input.driverDid, t);
+    const composite = Math.round((t.sum / t.count) * 100) / 100;
+    this.core.updateReputation(input.driverDid, composite);
+    void this.events.publish(GlosEvent.Reputation.RatingSubmitted, { subjectDid: input.driverDid, byAgentDid: input.byDid, stars: input.stars, freightId: input.freightId }, { source: 'pudo' }).catch(() => undefined);
     void this.events.publish(GlosEvent.Reputation.ScoreUpdated, { subjectDid: input.driverDid, composite }, { source: 'pudo' }).catch(() => undefined);
     return { rating: record, driverComposite: composite };
   }

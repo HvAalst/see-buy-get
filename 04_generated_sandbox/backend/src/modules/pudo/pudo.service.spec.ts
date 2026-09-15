@@ -3786,6 +3786,44 @@ describe('PUDO Light', () => {
     expect(gate.entries({ type: 'DRIVER_PAYOUT' }).filter((e) => e.reference === d.did)).toHaveLength(1);
   });
 
+  it('FP6: the shipper rates the carrier once the load is delivered — one verdict per load, last wins, and the driver’s composite moves', () => {
+    const d = drivers.register({ displayName: 'RT', fullName: 'R', nationalId: 'ID-RT', mobile: '+254770666', licenceClasses: ['truck'], licenceNumber: 'L-RT', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const truck = vehicles.register({ plate: 'RT-1', vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 10_000, ownerName: 'X', equipment: ['TLT'], baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5 });
+    fleet.couple(d.did, truck.vehicleId);
+    const pickup = { lat: -1.2, lng: 36.8 };
+    const f = dispatch.registerFreight({ description: 'Machinery', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', destLocation: pickup, weightKg: 200, packaging: 'palletised', postedByDid: 'did:shop:rater' });
+    // Nothing to judge before delivery.
+    expect(() => dispatch.rateFreight(f.freightId, 'did:shop:rater', { stars: 5 })).toThrow(/delivered/);
+    const noon = new Date('2026-07-22T11:00:00').getTime();
+    const [offer] = dispatch.suggest(d.did, { from: pickup, to: pickup }, noon);
+    dispatch.claim(offer.offerId, noon);
+    // The shipper's list carries the link and the carrier, and says it cannot be rated yet.
+    let row = dispatch.postedBy('did:shop:rater').find((r) => r.freightId === f.freightId)!;
+    expect(row.trackingUrl).toContain('?track=' + row.trackingKey);
+    expect(row.carrier).toBeUndefined(); // not taken over yet: the carriage is stamped at pickup
+    expect(row.canRate).toBe(false);
+    pickupOk(f, d.did);
+    deliverOk(f, d.did);
+    row = dispatch.postedBy('did:shop:rater').find((r) => r.freightId === f.freightId)!;
+    expect(row.carrier).toMatchObject({ driverName: 'RT', plate: 'RT-1' });
+    expect(row.canRate).toBe(true);
+    const before = rating.driverRating(d.did).count;
+    const rated = dispatch.rateFreight(f.freightId, 'did:shop:rater', { stars: 4, issues: ['LATE_PICKUP', 'BOGUS' as never] });
+    expect(rated.rating).toMatchObject({ stars: 4, issues: ['LATE_PICKUP'], by: 'did:shop:rater' });
+    expect(rating.driverRating(d.did).count).toBe(before + 1);
+    // Last wins on the same load: the count does not grow, the stars change.
+    dispatch.rateFreight(f.freightId, 'did:shop:rater', { stars: 2 });
+    expect(rating.driverRating(d.did).count).toBe(before + 1);
+    expect(dispatch.postedBy('did:shop:rater').find((r) => r.freightId === f.freightId)!.rating).toMatchObject({ stars: 2 });
+    // Too late is too late.
+    expect(() => dispatch.rateFreight(f.freightId, 'did:shop:rater', { stars: 5 }, Date.now() + 31 * 86_400_000)).toThrow(/30 days/);
+    // The key finds the load, and only the load.
+    expect(dispatch.freightByTrackingKey(row.trackingKey!)?.freightId).toBe(f.freightId);
+    expect(dispatch.freightByTrackingKey('T-NOPE')).toBeUndefined();
+  });
+
   it('FB0a: the locked price keeps the deadhead/loaded split — a claimed haul is not recorded as all-empty running', () => {
     const d = drivers.register({ displayName: 'SP', fullName: 'S', nationalId: 'ID-SP', mobile: '+254770123', licenceClasses: ['truck'], licenceNumber: 'L-SP', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
     drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
@@ -4184,8 +4222,10 @@ describe('PUDO Light', () => {
     const [row] = dispatch.postedBy('did:agent:mine');
     expect(dispatch.listFreight().find((x) => x.freightId === f.freightId)!.buyerPhoneHash).toBeTruthy();
     expect(row).not.toHaveProperty('buyerPhoneHash');
-    expect(row).not.toHaveProperty('trackingKey');
     expect(row).not.toHaveProperty('claimedBy');
+    // FP6 — the tracking key IS on the row now, deliberately: it names the load, not a person, and the poster is
+    // the one who hands it on. The carrier still appears only as a display name and a plate, never a did.
+    expect(row.trackingKey).toMatch(/^T-/);
   });
 
   it('FB2b: the count follows the negotiation — decided prices stop waiting', () => {

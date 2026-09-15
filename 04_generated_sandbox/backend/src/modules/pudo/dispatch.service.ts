@@ -17,7 +17,8 @@ import { CargoService } from './cargo.service';
 import { CargoNature, Equipment, VehicleCapability } from './cargo.types';
 import { VendorService } from './vendor.service';
 import { RouteConstraintService } from './route-constraint.service';
-import { RatingService, belowFloor } from './rating.service';
+import { RatingService, belowFloor, type DriverIssue } from './rating.service';
+import { appUrl } from '../../foundation/mail/mail.templates';
 import { WalletGateService } from './wallet-gate.service';
 import { clampMultiplier, computeFreightPrice, computeToteHaul, distanceSplit, earningsPerKm, freightMultiplier, shipperCharge, type PriceBreakdown } from './pricing';
 import { canonicalBody, bodyOf, excludedByShipper } from './freight-body';
@@ -88,6 +89,13 @@ function coarsePoint(p: GeoPoint): GeoPoint {
  *  Totes are excluded — they are unpriced to the driver (they settle on the parcel model). */
 /** FP3b — how long after delivery a sender may still claim (the CMR's seven days for non-apparent damage). */
 export const FREIGHT_CLAIM_WINDOW_DAYS = 7;
+/** FP6 — how long after delivery the shipper may still rate the carrier. Longer than the claim window: a verdict is not a dispute. */
+export const FREIGHT_RATING_WINDOW_DAYS = 30;
+
+/** FP6 — the public tracking link for a key: the Send app's track page, which now answers loads as well as parcels. */
+function trackingUrlOf(trackingKey: string): string {
+  return `${appUrl('send')}?track=${encodeURIComponent(trackingKey)}`;
+}
 
 export interface DriverJobsQuery {
   q?: string; // job code / description / destination / tracking / order ref
@@ -1394,7 +1402,41 @@ export class DispatchService {
         ...(f.deliveryAttempts?.length ? { attempts: f.deliveryAttempts } : {}),
         ...(f.claim ? { claim: f.claim } : {}),
         canClaim: f.status === 'delivered' && !f.claim && (f.deliveredAt ? Date.now() - new Date(f.deliveredAt).getTime() <= FREIGHT_CLAIM_WINDOW_DAYS * 86_400_000 : true),
+        // FP6 — the link to hand on, who is carrying it, and the verdict.
+        ...(f.trackingKey ? { trackingKey: f.trackingKey, trackingUrl: trackingUrlOf(f.trackingKey) } : {}),
+        ...(f.carriage ? { carrier: { driverName: this.driverNameOf(f.carriage.driverDid), plate: f.carriage.plate, vehicleClass: f.carriage.vehicleClass } } : {}),
+        ...(f.rating ? { rating: { stars: f.rating.stars, issues: f.rating.issues, at: f.rating.at } } : {}),
+        canRate: f.status === 'delivered' && Boolean(f.claimedBy) && (f.deliveredAt ? Date.now() - new Date(f.deliveredAt).getTime() <= FREIGHT_RATING_WINDOW_DAYS * 86_400_000 : true),
       }));
+  }
+
+  /** FP6 — the load behind a tracking key, or nothing. The key is the credential: no other lookup is offered. */
+  freightByTrackingKey(trackingKey: string): Freight | undefined {
+    return [...this.freights.values()].find((f) => f.trackingKey === trackingKey);
+  }
+
+  /**
+   * FP6 — the shipper's verdict on a delivered load. Delivered only (there is nothing to judge before), within
+   * the window, and only while a carrier is on the record. Last wins on the same load; the driver's composite
+   * moves with it. Recorded on the freight so the shipper's list can show what they said.
+   */
+  rateFreight(freightId: string, byDid: string, input: { stars: number; issues?: DriverIssue[] }, now: number = Date.now()): Freight {
+    const f = this.requireFreight(freightId);
+    if (f.status !== 'delivered') throw new GlosError('INVALID_STATE', `Freight is ${f.status} — a load is rated once it has been delivered`);
+    if (!f.claimedBy) throw new GlosError('INVALID_STATE', 'No carrier is recorded on this load');
+    if (f.deliveredAt && now - new Date(f.deliveredAt).getTime() > FREIGHT_RATING_WINDOW_DAYS * 86_400_000) throw new GlosError('WINDOW_EXPIRED', `A load is rated within ${FREIGHT_RATING_WINDOW_DAYS} days of delivery`);
+    const { rating } = this.ratings.rateFreight({ freightId: f.freightId, driverDid: f.claimedBy, byDid, stars: input.stars, issues: input.issues });
+    f.rating = { stars: rating.stars, issues: rating.issues, at: rating.at, by: byDid };
+    this.freights.set(f.freightId, f);
+    return f;
+  }
+
+  private driverNameOf(did: string): string | undefined {
+    try {
+      return this.drivers.get(did).displayName;
+    } catch {
+      return undefined;
+    }
   }
 
   /** The proposals on a load, newest first. The poster's whole view of the negotiation. */

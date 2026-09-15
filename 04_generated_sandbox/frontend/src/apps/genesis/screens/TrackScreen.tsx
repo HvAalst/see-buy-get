@@ -1,7 +1,9 @@
 import { Button, Card, ErrorNote, Icon, Note, ReadAloud } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { toPlaceWords } from '../../../shared/placewords';
-import { LADDER, ladderIndex, mapsHref, showCollectCard, statusPresentation, stepTime, trackSummary } from '../logic';
+import { LADDER, freightTrackSummary, ladderIndex, mapsHref, showCollectCard, statusPresentation, stepTime, trackSummary } from '../logic';
+import { isFreightTrack } from '../types';
+import { FreightTrack } from './FreightTrack';
 import type { SendActions, SendState } from '../useSendApp';
 
 export interface TrackScreenProps {
@@ -16,7 +18,10 @@ export interface TrackScreenProps {
  */
 export function TrackScreen({ state, actions }: TrackScreenProps) {
   const t = useT();
-  const res = state.result;
+  // FP6 — one key, two kinds of thing. A load renders its own ladder; everything below that is the parcel's.
+  const raw = state.result;
+  const freight = raw && isFreightTrack(raw) ? raw : null;
+  const res = raw && !isFreightTrack(raw) ? raw : null;
   const offLadder = res && ladderIndex(res.status) === -1;
   const at = res ? ladderIndex(res.status) : -1;
 
@@ -51,7 +56,7 @@ export function TrackScreen({ state, actions }: TrackScreenProps) {
         <div style="margin-top:12px">
           {/* Once a result is on screen, the way-finding CTA takes the solid slot (one per screen). */}
           <Button
-            variant={res ? 'outline' : 'primary'}
+            variant={raw ? 'outline' : 'primary'}
             chevron={false}
             onClick={() => void actions.runTrack()}
             disabled={!state.key.trim()}
@@ -63,6 +68,8 @@ export function TrackScreen({ state, actions }: TrackScreenProps) {
       </Card>
 
       {state.trackState === 'error' && state.trackError ? <ErrorNote error={state.trackError} onRetry={() => void actions.runTrack()} /> : null}
+
+      {freight ? <FreightTrack view={freight} /> : null}
 
       {res && offLadder ? (
         <Note
@@ -176,7 +183,7 @@ export function TrackScreen({ state, actions }: TrackScreenProps) {
 
       <div class="scr__foot">
         <ReadAloud
-          text={() => (res ? trackSummary(res, t) : t('send.track.aloudPrompt'))}
+          text={() => (freight ? freightTrackSummary(freight, t) : res ? trackSummary(res, t) : t('send.track.aloudPrompt'))}
           label={t('send.readAloud')}
         />
       </div>

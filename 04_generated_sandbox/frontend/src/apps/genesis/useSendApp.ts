@@ -33,7 +33,7 @@ import {
 import { pickPhoneFromContacts, readSmsOtp } from '../../shared/device';
 import { classifyParcel } from './api';
 import { cleanPhone, codeReady, normalizeKey, parseDims, phoneReady, EMPTY_DIMS, type DimsForm } from './logic';
-import type { AuthResult, ClassifyView, ConsumerParcelView, InviteSummary, InviteView, MintResult, MyParcels, NetworkPoint, PersonRole, PersonView, QuoteView, SwitchResult, TrackView } from './types';
+import type { AnyTrackView, AuthResult, ClassifyView, ConsumerParcelView, InviteSummary, InviteView, MintResult, MyParcels, NetworkPoint, PersonRole, PersonView, QuoteView, SwitchResult } from './types';
 
 export type Screen = 'send' | 'track' | 'parcels' | 'account';
 export type WizardStep = 'parcel' | 'from' | 'to' | 'quote' | 'book' | 'done';
@@ -70,7 +70,7 @@ export interface SendState {
 
   /* --- track --- */
   key: string;
-  result: TrackView | null;
+  result: AnyTrackView | null;
   trackState: 'idle' | 'loading' | 'ready' | 'error';
   trackError: SbgError | null;
   recent: string[];

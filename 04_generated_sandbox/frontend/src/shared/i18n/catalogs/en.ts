@@ -455,6 +455,23 @@ export const en = {
   'send.track.journeySoFar': 'The journey so far',
   'send.track.recentTitle': 'Parcels you looked up before',
   'send.track.aloudPrompt': 'Type the tracking code from your message, then tap find my parcel.',
+  // FP6 — a LOAD behind a tracking key: the consignment note's QR and the shipper's shared link land here.
+  'send.freight.waiting': 'Waiting for a carrier',
+  'send.freight.booked': 'A carrier has it booked',
+  'send.freight.onRoad': 'On the road',
+  'send.freight.delivered': 'Delivered',
+  'send.freight.withdrawn': 'Withdrawn',
+  'send.freight.line': 'Load {ref} · {kg} kg · {pickup} → {dest}',
+  'send.freight.carrierLabel': 'Who is carrying it',
+  'send.freight.carrierWith': '{who}, in a {what}',
+  'send.freight.carrierNote': 'This is who will be at the door.',
+  'send.freight.attemptAbsent': 'The driver was at the door on {when} and nobody was there.',
+  'send.freight.attemptRefused': 'The driver was at the door on {when} and the goods were refused.',
+  'send.freight.attemptUnreachable': 'The driver could not reach the door on {when}.',
+  'send.freight.receivedBy': 'Received by {name}.',
+  'send.freight.withdrawnBySender': 'The sender withdrew this load on {when}.',
+  'send.freight.withdrawnByNetwork': 'The network withdrew this load on {when}.',
+  'send.logic.freightTrack': 'Load {ref}: {status}, going to {dest}.',
 
   // My parcels screen.
   'send.parcels.title': 'My parcels',

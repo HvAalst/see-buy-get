@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { DocumentButton, Button, Card, Checklist, ErrorNote, Icon, PhotoField, Pill, Sheet } from '../../../shared/ui';
+import { DocumentButton, Button, Card, Checklist, ErrorNote, Icon, PhotoField, Pill, QrBlock, Sheet } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
 import { ConversationList, ConversationSheet } from '../../../shared/conversation/Conversations';
 import type { ChatThread } from '../../../shared/conversation/logic';
@@ -115,6 +115,9 @@ function PostedRow({ f, onOpen }: { f: PostedFreight; onOpen: () => void }) {
         {f.cancelledAt ? <span class="row__s">{t('agent.freight.cancelledLine', { when: formatDate(f.cancelledAt) })}</span> : null}
         {f.attempts?.length && f.status === 'in_transit' ? <span class="row__s">{attemptLine(f.attempts[f.attempts.length - 1], t)}</span> : null}
         {f.claim ? <span class="row__s">{claimLine(f.claim, t)}</span> : null}
+        {/* FP6 — who has it, and what the shop said of them. */}
+        {f.carrier ? <span class="row__s">{t('agent.freight.carrierLine', { driver: f.carrier.driverName ?? t('agent.freight.carrierUnknown'), plate: f.carrier.plate ?? '' })}</span> : null}
+        {f.rating ? <span class="row__s">{t('agent.freight.ratedLine', { stars: f.rating.stars })}</span> : null}
         <span class="freight__tags">
           <Pill tone="idle">{f.commitMode === 'negotiate' ? t('agent.freight.negotiate') : t('agent.freight.instant')}</Pill>
           {/* The count is the reason this row is on a screen at all, so it leads in the loud tone. */}
@@ -136,6 +139,9 @@ function Prices({ load, state, actions }: { load: PostedFreight } & FreightScree
   const [withdraw, setWithdraw] = useState(false);
   const [reason, setReason] = useState('');
   const [claiming, setClaiming] = useState(false);
+  // FP6 — the link to hand on, and the verdict.
+  const [sharing, setSharing] = useState(false);
+  const [rating, setRating] = useState(false);
   const [claimKind, setClaimKind] = useState<'damaged' | 'short' | 'not_received'>('damaged');
   const [claimText, setClaimText] = useState('');
   const [claimPhoto, setClaimPhoto] = useState('');
@@ -180,7 +186,23 @@ function Prices({ load, state, actions }: { load: PostedFreight } & FreightScree
             {t('agent.freight.claimOpen')}
           </Button>
         ) : null}
+        {/* FP6 — the same link the consignment note carries as a QR, here so a shop can send it on WhatsApp. */}
+        {load.trackingUrl ? (
+          <Button variant="link" full={false} onClick={() => setSharing(true)}>
+            {t('agent.freight.trackOpen')}
+          </Button>
+        ) : null}
+        {load.canRate ? (
+          <Button variant="link" full={false} onClick={() => setRating(true)}>
+            {load.rating ? t('agent.freight.rateChange') : t('agent.freight.rateOpen')}
+          </Button>
+        ) : null}
       </div>
+      {load.carrier ? <p class="scr__lede">{t('agent.freight.carrierLine', { driver: load.carrier.driverName ?? t('agent.freight.carrierUnknown'), plate: load.carrier.plate ?? '' })}</p> : null}
+      {load.rating ? <p class="scr__lede">{t('agent.freight.ratedLine', { stars: load.rating.stars })}</p> : null}
+
+      <TrackingSheet load={load} open={sharing} onClose={() => setSharing(false)} />
+      <RatingSheet load={load} open={rating} onClose={() => setRating(false)} state={state} actions={actions} />
       {state.error ? <ErrorNote error={state.error} /> : null}
 
       {loading ? (
@@ -363,5 +385,107 @@ function PriceRow({ p, load, state, actions, onTake }: { p: FreightPrice; load: 
         )}
       </span>
     </div>
+  );
+}
+
+/**
+ * FP6 — the tracking link, to hand on. The receiver is usually not on the network at all; what they get is a
+ * link and a QR that answer where the load is and who will be at the door, and nothing more. Share where the
+ * phone can, copy where it cannot.
+ */
+function TrackingSheet({ load, open, onClose }: { load: PostedFreight; open: boolean; onClose: () => void }) {
+  const t = useT();
+  const [copied, setCopied] = useState(false);
+  const url = load.trackingUrl ?? '';
+  const send = async () => {
+    try {
+      if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+        await navigator.share({ title: t('agent.freight.trackShareTitle', { code: load.code }), text: t('agent.freight.trackShareText', { code: load.code, dest: load.destLabel }), url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+    } catch {
+      /* dismissed, or no clipboard — the link is on screen to copy by hand */
+    }
+  };
+  return (
+    <Sheet open={open} onClose={onClose} title={t('agent.freight.trackTitle', { code: load.code })}>
+      <p class="t-body">{t('agent.freight.trackBody')}</p>
+      <QrBlock value={url} size={180} caption={load.trackingKey ?? ''} label={t('agent.freight.trackQrLabel', { code: load.code })} />
+      <p class="mono-t" style="word-break:break-all;font-size:0.9rem">{url}</p>
+      {copied ? <p class="card__note">{t('agent.freight.trackCopied')}</p> : null}
+      <Button chevron={false} onClick={() => void send()}>
+        {t('agent.freight.trackShare')}
+      </Button>
+      <Button variant="link" onClick={onClose}>
+        {t('agent.freight.close')}
+      </Button>
+    </Sheet>
+  );
+}
+
+const ISSUE_KEYS = [
+  ['LATE_PICKUP', 'agent.freight.issueLatePickup'],
+  ['LATE_ARRIVAL', 'agent.freight.issueLateArrival'],
+  ['KEPT_OVERNIGHT', 'agent.freight.issueOvernight'],
+  ['AFTER_HOURS', 'agent.freight.issueAfterHours'],
+  ['EQUIPMENT_FAILURE', 'agent.freight.issueEquipment'],
+  ['ROUGH_HANDLING', 'agent.freight.issueRough'],
+] as const;
+
+/**
+ * FP6 — the verdict. Stars, and tags for what went wrong: tags rather than prose, so what a shop says of a
+ * driver is the same kind of thing every other shop says, and can be counted. Last wins on the same load.
+ */
+function RatingSheet({ load, open, onClose, state, actions }: { load: PostedFreight; open: boolean; onClose: () => void } & FreightScreenProps) {
+  const t = useT();
+  const [stars, setStars] = useState(load.rating?.stars ?? 0);
+  const [issues, setIssues] = useState<string[]>(load.rating?.issues ?? []);
+  const busy = state.busy === `rate-freight:${load.freightId}`;
+  return (
+    <Sheet open={open} onClose={onClose} title={t('agent.freight.rateTitle', { code: load.code })}>
+      <p class="t-body">{t('agent.freight.rateBody', { driver: load.carrier?.driverName ?? t('agent.freight.carrierUnknown') })}</p>
+      <div class="field">
+        <span class="field__label">{t('agent.freight.rateStars')}</span>
+        <div class="chips" role="radiogroup" aria-label={t('agent.freight.rateStars')} style="display:flex;flex-wrap:wrap;gap:8px">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button key={n} type="button" role="radio" aria-checked={stars === n} class={'chip chip--tap' + (stars === n ? ' chip--on' : '')} style="min-width:44px;justify-content:center" onClick={() => setStars(n)}>
+              {t('agent.freight.starN', { n })}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div class="field" style="margin-top:12px">
+        <span class="field__label">{t('agent.freight.rateIssues')}</span>
+        <div class="chips" style="display:flex;flex-wrap:wrap;gap:8px">
+          {ISSUE_KEYS.map(([key, labelKey]) => {
+            const on = issues.includes(key);
+            return (
+              <button key={key} type="button" class={'chip chip--tap' + (on ? ' chip--on' : '')} aria-pressed={on} onClick={() => setIssues(on ? issues.filter((i) => i !== key) : [...issues, key])}>
+                {t(labelKey)}
+              </button>
+            );
+          })}
+        </div>
+        <p class="hint" style="margin-top:6px">{t('agent.freight.rateIssuesHint')}</p>
+      </div>
+      <div style="margin-top:14px">
+        <Button
+          chevron={false}
+          busy={busy}
+          disabled={stars < 1}
+          onClick={() => {
+            onClose();
+            void actions.rateFreight(load.freightId, { stars, issues });
+          }}
+        >
+          {t('agent.freight.rateConfirm')}
+        </Button>
+        <Button variant="link" onClick={onClose}>
+          {t('agent.cancel')}
+        </Button>
+      </div>
+    </Sheet>
   );
 }

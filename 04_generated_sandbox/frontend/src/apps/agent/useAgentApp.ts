@@ -71,6 +71,12 @@ export interface PostedFreight {
   claim?: FreightClaim;
   /** True while a claim may still be made: delivered, none yet, within the window. */
   canClaim: boolean;
+  /** FP6 — the link to hand on (the same one the consignment note carries as a QR), who is carrying it, and the verdict. */
+  trackingKey?: string;
+  trackingUrl?: string;
+  carrier?: { driverName?: string; plate?: string; vehicleClass?: string };
+  rating?: { stars: number; issues: string[]; at: string };
+  canRate: boolean;
 }
 
 export interface FreightClaim {
@@ -1231,6 +1237,20 @@ export function useAgentApp() {
     [client, run, fail, pushToast, t, loadPosted, openPrices],
   );
 
+  /** FP6 — the shop's verdict on the carrier, once the load is delivered. Last wins on the same load. */
+  const rateFreight = useCallback(
+    async (freightId: string, body: { stars: number; issues?: string[] }) => {
+      if (!client) return;
+      await run(`rate-freight:${freightId}`, async () => {
+        const r = await client.api.rateFreight(freightId, body);
+        if (r.error) return fail(r.error);
+        pushToast({ tone: 'ok', icon: 'star', title: t('agent.freight.ratedToast', { stars: body.stars }), detail: t('agent.freight.ratedDetail') });
+        await loadPosted();
+      });
+    },
+    [client, run, fail, pushToast, t, loadPosted],
+  );
+
   /** FP3b — the shop says the delivered goods were damaged, short, or never arrived. An operator decides it. */
   const openFreightClaim = useCallback(
     async (freightId: string, body: { kind: 'damaged' | 'short' | 'not_received'; description: string; photoRef?: string }) => {
@@ -1856,6 +1876,7 @@ export function useAgentApp() {
       acceptPrice,
       declinePrice,
       cancelFreight,
+      rateFreight,
       openFreightClaim,
       loadConsignments,
       openConsignment,

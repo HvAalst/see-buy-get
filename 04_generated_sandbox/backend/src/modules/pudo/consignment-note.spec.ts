@@ -110,6 +110,30 @@ describe('the consignment note', () => {
     expect(JSON.stringify(n)).not.toMatch(/\+254|buyerPhone/);
   });
 
+  it('FP6: the tracking view shows the journey and the carrier at the door, and nothing a stranger with the link should not see', () => {
+    const view = service.trackView(
+      base({
+        status: 'delivered',
+        pickedUpAt: '2026-09-14T09:00:00Z',
+        deliveredAt: '2026-09-14T12:04:00Z',
+        carriage: { vehicleId: 'v1', plate: 'KLM 002B', vehicleClass: 'bike', driverDid: 'did:drv:amos', at: '2026-09-14T09:00:00Z' },
+        deliveryAttempts: [{ outcome: 'absent', note: 'Gate locked, rang twice', at: '2026-09-14T11:00:00Z', by: 'did:drv:amos' }],
+        proofOfDelivery: { receiverName: 'Joseph Mwangi', at: '2026-09-14T12:04:00Z', remarks: 'One sack torn' },
+        buyerPhoneHash: 'ph_secret',
+        trackingKey: 'T-ABC',
+      }),
+    );
+    expect(view).toMatchObject({ kind: 'freight', ref: 'FRT-010', status: 'delivered', carrier: { name: 'Kilima Logistics', driverName: 'Amos K.', plate: 'KLM 002B' }, receiverName: 'Joseph Mwangi' });
+    expect(view.steps.map((s) => s.status)).toEqual(['available', 'claimed', 'in_transit', 'delivered']);
+    expect(view.attempts).toEqual([{ outcome: 'absent', at: '2026-09-14T11:00:00Z' }]);
+    const text = JSON.stringify(view);
+    for (const secret of ['ph_secret', 'Gate locked', 'One sack torn', 'T-ABC', '350', 'did:']) expect(text).not.toContain(secret);
+    // Withdrawn: when and by whom, never why.
+    const gone = service.trackView(base({ status: 'cancelled', cancellation: { by: 'did:shop:a1', role: 'shipper', reason: 'Customer changed their mind', at: '2026-09-14T08:30:00Z' } }));
+    expect(gone.cancelled).toEqual({ at: '2026-09-14T08:30:00Z', by: 'sender' });
+    expect(JSON.stringify(gone)).not.toContain('changed their mind');
+  });
+
   it('lets the sender, the driver, the driver’s fleet and staff read it — and tells a stranger it does not exist', () => {
     freights.fr_1 = base({});
     const read = (actor: object) => service.requireReader('fr_1', actor as never).code;

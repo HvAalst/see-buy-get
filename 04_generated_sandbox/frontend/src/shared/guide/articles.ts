@@ -330,6 +330,23 @@ export const ARTICLES: GuideArticle[] = [
     ]
   },
   {
+    id: "freight-tracking",
+    apps: [
+      "agent",
+      "send"
+    ],
+    title: "Where is my load: the tracking link, and rating the driver",
+    summary: "Every load has a tracking link — the same code the consignment note carries as a QR. Whoever holds it sees where the load is, who is carrying it and who signed for it, and nothing else. After delivery the shop that posted the load rates the driver.",
+    steps: [
+      "Shop app, Freight you posted: open the load and tap “Tracking link”. Share it, or copy it into a message to whoever is waiting for the goods. They need no account.",
+      "Send app, Track: type the code, or open the link. A load climbs its own ladder — waiting for a carrier, booked, on the road, delivered — with the carrier as they will be at the door, any door nobody answered, and who signed.",
+      "Shop app, once delivered: tap “Rate the driver”. Stars out of five, and tags for what went wrong if anything. It counts toward the driver’s rating like a shop’s rating at the counter, one verdict per load, and you can change it within 30 days."
+    ],
+    notes: [
+      "The link shows no phone number, no price and no reasons — a withdrawn load says when, never why. What is between the sender and the carrier stays there."
+    ]
+  },
+  {
     id: "manager-dispatch",
     apps: [
       "fleet",

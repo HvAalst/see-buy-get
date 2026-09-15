@@ -314,6 +314,12 @@ export class RateDriverDto {
   @IsOptional() @IsArray() @IsIn([...DRIVER_ISSUES], { each: true }) @ApiPropertyOptional({ enum: DRIVER_ISSUES, isArray: true }) issues?: DriverIssue[];
 }
 
+/** FP6 — the shipper's verdict on a delivered load: stars, and what went wrong if anything. */
+export class RateFreightDto {
+  @IsNumber() @Min(1) @Max(5) stars!: number;
+  @IsOptional() @IsArray() @IsIn([...DRIVER_ISSUES], { each: true }) @ApiPropertyOptional({ enum: DRIVER_ISSUES, isArray: true }) issues?: DriverIssue[];
+}
+
 export class DriverPayoutDto {
   @IsString() driverId!: string;
   @IsNumber() @Min(0.01) amount!: number;

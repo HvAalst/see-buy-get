@@ -8650,7 +8650,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       }
@@ -10801,6 +10808,38 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/RenewLicenceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/dispatch/freight/{id}/rate": {
+      "post": {
+        "operationId": "Sbg.rateFreight",
+        "summary": "",
+        "description": "FP6 — the shipper rates the carrier on a delivered load. The sender or the store that shipped it, never a\nstranger with the tracking link; the service holds it to delivered loads within the window.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RateFreightDto"
               }
             }
           }
@@ -22111,6 +22150,30 @@
               }
             }
           },
+          "rating": {
+            "type": "object",
+            "properties": {
+              "stars": {
+                "required": true,
+                "type": "number"
+              },
+              "issues": {
+                "required": true,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "by": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
           "freightId": {
             "type": "string"
           },
@@ -22325,6 +22388,7 @@
           "cancellation",
           "status",
           "assignedBy",
+          "rating",
           "freightId",
           "code",
           "description",
@@ -22780,6 +22844,33 @@
         },
         "required": [
           "expiresAt"
+        ]
+      },
+      "RateFreightDto": {
+        "type": "object",
+        "properties": {
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "LATE_PICKUP",
+                "LATE_ARRIVAL",
+                "KEPT_OVERNIGHT",
+                "AFTER_HOURS",
+                "EQUIPMENT_FAILURE",
+                "ROUGH_HANDLING"
+              ]
+            }
+          },
+          "stars": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 5
+          }
+        },
+        "required": [
+          "stars"
         ]
       },
       "DriverKycDto": {
@@ -23860,6 +23951,43 @@
               }
             ]
           },
+          "carrier": {
+            "type": "object",
+            "properties": {
+              "driverName": {
+                "required": false,
+                "type": "string"
+              },
+              "plate": {
+                "required": false,
+                "type": "string"
+              },
+              "vehicleClass": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
+          "rating": {
+            "type": "object",
+            "properties": {
+              "stars": {
+                "required": true,
+                "type": "number"
+              },
+              "issues": {
+                "required": true,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
           "freightId": {
             "type": "string"
           },
@@ -23911,6 +24039,17 @@
             "type": "boolean",
             "description": "FP3 — true while the sender may still withdraw the load: before the goods are taken over."
           },
+          "trackingKey": {
+            "type": "string",
+            "description": "FP6 — the shareable key behind the tracking link, and the link itself, so the shipper can hand it on."
+          },
+          "trackingUrl": {
+            "type": "string"
+          },
+          "canRate": {
+            "type": "boolean",
+            "description": "FP6 — true while the shipper may rate: delivered, within the rating window. Re-rating is allowed (last wins)."
+          },
           "canClaim": {
             "type": "boolean",
             "description": "FP3b — true while the sender may still claim: delivered, no claim yet, within the claim window."
@@ -23919,6 +24058,8 @@
         "required": [
           "status",
           "commitMode",
+          "carrier",
+          "rating",
           "freightId",
           "code",
           "description",
@@ -23927,6 +24068,7 @@
           "createdAt",
           "openProposals",
           "canCancel",
+          "canRate",
           "canClaim"
         ]
       },

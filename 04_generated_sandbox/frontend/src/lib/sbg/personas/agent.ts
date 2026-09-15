@@ -191,6 +191,9 @@ export function createAgentApi(sbg: SbgClient) {
     freightNote: (freightId: string) => sbg.request((c) => c.GET('/v1/sbg/dispatch/freight/{id}/consignment-note.html', { params: { path: { id: freightId } }, parseAs: 'text' })),
     /** FP3 — withdraw a posted load before the goods are taken over. The reason goes on the consignment note. */
     cancelFreight: (freightId: string, reason: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/cancel', { params: { path: { id: freightId } }, body: { reason } })),
+    /** FP6 — the shop rates the carrier on a delivered load: stars, and what went wrong if anything. */
+    rateFreight: (freightId: string, body: { stars: number; issues?: string[] }) =>
+      sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/rate', { params: { path: { id: freightId } }, body: body as never })),
     /** FP3b — the shop's claim against a delivered load: damaged, short, or not received. */
     openFreightClaim: (freightId: string, body: { kind: 'damaged' | 'short' | 'not_received'; description: string; photoRef?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/claim', { params: { path: { id: freightId } }, body })),

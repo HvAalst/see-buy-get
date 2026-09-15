@@ -36,8 +36,12 @@ import {
   statusPresentation,
   stepTime,
   trackSummary,
+  carrierLine,
+  freightLadderIndex,
+  freightTrackSummary,
 } from './logic';
-import type { ConsumerParcelView, NetworkPoint, QuoteView, TrackView } from './types';
+import type { ConsumerParcelView, FreightTrackView, NetworkPoint, QuoteView, TrackView } from './types';
+import { isFreightTrack } from './types';
 
 const point = (over: Partial<NetworkPoint> = {}): NetworkPoint => ({
   did: 'did:a',
@@ -354,5 +358,24 @@ describe('a parcel whose collection window has closed', () => {
     // urgency, and folding them together loses exactly the part that would make somebody get up.
     const parcels = { sent: [], received: [{ status: 'Unclaimed' }, { status: 'Ready_For_Pickup' }] };
     expect(sendWorkLine(parcels as never, t)).toBe('1 parcel waiting past its date');
+  });
+});
+
+describe('FP6 — a load on the tracking page', () => {
+  const view = (status: FreightTrackView['status'], over: Partial<FreightTrackView> = {}): FreightTrackView => ({ kind: 'freight', ref: 'FRT-018', status, description: 'Crates', weightKg: 6, pickupLabel: 'Mama Sarah Shop', destLabel: 'Riverside Corner', steps: [], ...over });
+
+  it('tells a load from a parcel by its kind, and climbs its own ladder', () => {
+    expect(isFreightTrack(view('claimed'))).toBe(true);
+    expect(isFreightTrack({ ref: 'p', status: 'Created', size: 'S', destination: 'x', destZone: 'z', steps: [] })).toBe(false);
+    expect(freightLadderIndex('scheduled')).toBe(0);
+    expect(freightLadderIndex('in_transit')).toBe(2);
+    expect(freightLadderIndex('cancelled')).toBe(-1);
+  });
+
+  it('says the carrier as the receiver will meet them, and nothing when none is booked', () => {
+    expect(carrierLine(undefined, t)).toBeNull();
+    expect(carrierLine({ name: 'Kilima Logistics', driverName: 'Amos K.', plate: 'KLM 002B', vehicleClass: 'bike' }, t)).toBe('Kilima Logistics · Amos K., in a bike KLM 002B');
+    expect(carrierLine({ name: 'Amos K.', driverName: 'Amos K.' }, t)).toBe('Amos K.');
+    expect(freightTrackSummary(view('in_transit'), t)).toBe('Load FRT-018: on the road, going to Riverside Corner.');
   });
 });

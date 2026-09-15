@@ -7,7 +7,7 @@
 import { distanceLabel, haversineKm, type GeoPoint } from '../../shared/geo';
 import type { IconName } from '../../shared/ui/Icon';
 import type { MessageKey } from '../../shared/i18n';
-import type { ConsumerParcelView, NetworkPoint, ParcelSize, ParcelStatus, PersonRole, QuoteView, TrackView } from './types';
+import type { ConsumerParcelView, NetworkPoint, ParcelSize, ParcelStatus, PersonRole, QuoteView, TrackView, FreightTrackView } from './types';
 
 /**
  * The translate function, threaded into every prose-producing helper so this module stays pure (no direct
@@ -229,6 +229,46 @@ export function statusPresentation(status: ParcelStatus, t: Translate): StatusPr
     case 'Voided':
       return { word: t('send.status.voided'), icon: 'block', tone: 'danger' };
   }
+}
+
+/* ------------------------------------------------------------ FP6: a load on the tracking page -- */
+
+/** The rungs a load climbs. 'scheduled' stands on the first rung: booked, waiting for its day and a carrier. */
+export const FREIGHT_LADDER: Array<FreightTrackView['status']> = ['available', 'claimed', 'in_transit', 'delivered'];
+
+export function freightLadderIndex(status: FreightTrackView['status']): number {
+  if (status === 'scheduled') return 0;
+  return FREIGHT_LADDER.indexOf(status);
+}
+
+/** Plain words for every state of a load — the same grade-3 register as a parcel's. */
+export function freightStatusPresentation(status: FreightTrackView['status'], t: Translate): StatusPresentation {
+  switch (status) {
+    case 'scheduled':
+    case 'available':
+      return { word: t('send.freight.waiting'), icon: 'edit', tone: 'info' };
+    case 'claimed':
+      return { word: t('send.freight.booked'), icon: 'badge', tone: 'info' };
+    case 'in_transit':
+      return { word: t('send.freight.onRoad'), icon: 'truck', tone: 'info' };
+    case 'delivered':
+      return { word: t('send.freight.delivered'), icon: 'check', tone: 'ok' };
+    case 'cancelled':
+      return { word: t('send.freight.withdrawn'), icon: 'block', tone: 'danger' };
+  }
+}
+
+/** The carrier as the receiver will meet them: the company, the driver, the vehicle — whatever is known. */
+export function carrierLine(c: FreightTrackView['carrier'], t: Translate): string | null {
+  if (!c) return null;
+  const who = c.driverName && c.driverName !== c.name ? `${c.name} · ${c.driverName}` : c.name;
+  const what = [c.vehicleClass, c.plate].filter(Boolean).join(' ');
+  return what ? t('send.freight.carrierWith', { who, what }) : who;
+}
+
+export function freightTrackSummary(view: FreightTrackView, t: Translate): string {
+  const status = freightStatusPresentation(view.status, t).word.toLowerCase();
+  return t('send.logic.freightTrack', { ref: view.ref, status, dest: view.destLabel });
 }
 
 export function trackSummary(view: TrackView, t: Translate): string {

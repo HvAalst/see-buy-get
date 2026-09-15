@@ -275,6 +275,8 @@ export class Freight {
   claimedBy?: string;
   /** FP5 — when the load was put on the driver by their fleet office rather than claimed by them. Who, and when. */
   @ApiPropertyOptional() assignedBy?: { managerDid: string; name?: string; at: string };
+  /** FP6 — the shipper's rating of the carrier after delivery: stars, the tags, and when. One per load, last wins. */
+  @ApiPropertyOptional() rating?: { stars: number; issues: string[]; at: string; by: string };
   /**
    * FB4a — what actually CARRIED it, stamped at claim. The mirror of `bodyDerived`: that one records the body
    * the load needed, this one the body that turned up.
@@ -559,6 +561,15 @@ export class PostedFreightRow {
   @ApiPropertyOptional({ type: [FreightDeliveryAttempt] }) attempts?: FreightDeliveryAttempt[];
   /** FP3b — the sender's claim, as far as it has got. */
   @ApiPropertyOptional({ type: FreightClaim }) claim?: FreightClaim;
+  /** FP6 — the shareable key behind the tracking link, and the link itself, so the shipper can hand it on. */
+  trackingKey?: string;
+  trackingUrl?: string;
+  /** FP6 — who is carrying it, once taken: the driver's display name and the plate. No phone, no fleet internals. */
+  @ApiPropertyOptional() carrier?: { driverName?: string; plate?: string; vehicleClass?: string };
+  /** FP6 — the shipper's rating, once given. */
+  @ApiPropertyOptional() rating?: { stars: number; issues: string[]; at: string };
+  /** FP6 — true while the shipper may rate: delivered, within the rating window. Re-rating is allowed (last wins). */
+  canRate: boolean;
   /** FP3b — true while the sender may still claim: delivered, no claim yet, within the claim window. */
   canClaim: boolean;
 }
@@ -765,4 +776,43 @@ export class Offer {
   createdAt: string;
   expiresAt: string;
   status: OfferStatus;
+}
+
+/* ------------------------------------------------------ FP6: the public tracking view of a load -- */
+
+/** One rung of a load's journey, as the public tracking page draws it. */
+export class FreightTrackStep {
+  @ApiProperty({ enum: FREIGHT_STATUSES })
+  status: FreightStatus;
+  at: string;
+}
+
+/**
+ * FP6 — a load as the holder of its tracking link sees it: the journey, the carrier as they would meet
+ * them at the door, and nothing that identifies a person beyond that. No phone hash, no note text, no
+ * money, no proposals — the KEY is the credential, and a key can be forwarded.
+ */
+export class FreightTrackView {
+  @ApiProperty({ enum: ['freight'] })
+  kind: 'freight';
+  /** The human reference (FRT-018). */
+  ref: string;
+  @ApiProperty({ enum: FREIGHT_STATUSES })
+  status: FreightStatus;
+  description: string;
+  weightKg: number;
+  pickupLabel: string;
+  destLabel: string;
+  destLocation?: GeoPoint;
+  scheduledPickupAt?: string;
+  /** Who is carrying it, once taken — the company, the driver's display name, the vehicle. */
+  @ApiPropertyOptional() carrier?: { name: string; driverName?: string; plate?: string; vehicleClass?: string };
+  @ApiProperty({ type: [FreightTrackStep] })
+  steps: FreightTrackStep[];
+  /** The doors the driver stood at and could not hand over at, most recent last. Outcome and time only. */
+  @ApiPropertyOptional({ type: [FreightDeliveryAttempt] }) attempts?: Array<Pick<FreightDeliveryAttempt, 'outcome' | 'at'>>;
+  /** Who took the goods in, once delivered — the name the driver recorded, as it stands on the consignment note. */
+  receiverName?: string;
+  /** Withdrawn: when, and by the sender or the network. Never the reason — that is between the parties. */
+  @ApiPropertyOptional() cancelled?: { at: string; by: 'sender' | 'network' };
 }

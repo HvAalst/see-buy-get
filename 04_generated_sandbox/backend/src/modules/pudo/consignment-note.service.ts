@@ -10,7 +10,7 @@ import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { AccountService } from './account.service';
 import { AgentService } from './agent.service';
 import { DispatchService } from './dispatch.service';
-import { Freight } from './dispatch.types';
+import { Freight, FreightTrackView } from './dispatch.types';
 import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { tempBand } from './heavy-cargo';
@@ -138,6 +138,36 @@ export class ConsignmentNoteService implements OnModuleInit {
       },
       ...(f.cancellation ? { cancelled: { at: f.cancellation.at, reason: f.cancellation.reason, by: f.cancellation.role === 'operator' ? 'network' : 'sender' } } : {}),
       ...(f.trackingKey ? { trackingUrl: `${appUrl('send')}?track=${encodeURIComponent(f.trackingKey)}` } : {}),
+    };
+  }
+
+  /**
+   * FP6 — the load as the holder of its tracking link sees it. Built beside the note because the note already
+   * knows the parties; what leaves here is the subset a stranger with the link may see: the journey, the carrier
+   * as they would meet them at the door, who signed. No phone, no money, no reasons, no proposals.
+   */
+  trackView(f: Freight): FreightTrackView {
+    const carrier = this.carrierOf(f);
+    const steps: FreightTrackView['steps'] = [{ status: f.scheduledPickupAt ? 'scheduled' : 'available', at: f.createdAt }];
+    if (f.claimedAt) steps.push({ status: 'claimed', at: f.claimedAt });
+    if (f.pickedUpAt) steps.push({ status: 'in_transit', at: f.pickedUpAt });
+    if (f.deliveredAt) steps.push({ status: 'delivered', at: f.deliveredAt });
+    if (f.cancellation) steps.push({ status: 'cancelled', at: f.cancellation.at });
+    return {
+      kind: 'freight',
+      ref: f.code,
+      status: f.status,
+      description: f.description,
+      weightKg: f.weightKg,
+      pickupLabel: f.pickupLabel,
+      destLabel: f.destLabel,
+      ...(f.destLocation ? { destLocation: f.destLocation } : {}),
+      ...(f.scheduledPickupAt ? { scheduledPickupAt: f.scheduledPickupAt } : {}),
+      ...(carrier ? { carrier: { name: carrier.name, ...(carrier.driverName ? { driverName: carrier.driverName } : {}), ...(carrier.plate ? { plate: carrier.plate } : {}), ...(carrier.vehicleClass ? { vehicleClass: carrier.vehicleClass } : {}) } } : {}),
+      steps,
+      ...(f.deliveryAttempts?.length ? { attempts: f.deliveryAttempts.map((a) => ({ outcome: a.outcome, at: a.at })) } : {}),
+      ...(f.proofOfDelivery?.receiverName ? { receiverName: f.proofOfDelivery.receiverName } : {}),
+      ...(f.cancellation ? { cancelled: { at: f.cancellation.at, by: f.cancellation.role === 'operator' ? 'network' : 'sender' } } : {}),
     };
   }
 

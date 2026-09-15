@@ -14,7 +14,7 @@ import {
   type SbgConfig,
   type SeededAppClient,
 } from '../../lib/sbg';
-import type { AuthResult, ClassifyView, NetworkPoint, ParcelSize, PersonRole, QuoteView, TrackView } from './types';
+import type { AuthResult, ClassifyView, NetworkPoint, ParcelSize, PersonRole, QuoteView, AnyTrackView } from './types';
 
 const APP_VERSION = '1.0.0';
 
@@ -46,8 +46,8 @@ export function fetchQuote(originDid: string, destDid: string, size: ParcelSize,
   return publicRequest<QuoteView>(sendConfig(), `/v1/sbg/quote?${q.toString()}`);
 }
 
-export function fetchTrack(key: string): Promise<Result<TrackView>> {
-  return publicRequest<TrackView>(sendConfig(), `/v1/sbg/track/${encodeURIComponent(key)}`);
+export function fetchTrack(key: string): Promise<Result<AnyTrackView>> {
+  return publicRequest<AnyTrackView>(sendConfig(), `/v1/sbg/track/${encodeURIComponent(key)}`);
 }
 
 /** PG3 — derive the size tier + cargo class from typed dims + weight (@Public: a pure computation over

@@ -84,7 +84,36 @@ export interface TrackStep {
   note?: string;
 }
 
+/**
+ * FP6 — a LOAD behind a tracking key. Every consignment note has carried this link as a QR since FP2; until
+ * now the page answered "no parcel" to it. The key names one thing: a freight answers with kind 'freight',
+ * a parcel with none (the shape below, unchanged).
+ */
+export interface FreightTrackView {
+  kind: 'freight';
+  ref: string;
+  status: 'scheduled' | 'available' | 'claimed' | 'in_transit' | 'delivered' | 'cancelled';
+  description: string;
+  weightKg: number;
+  pickupLabel: string;
+  destLabel: string;
+  destLocation?: { lat: number; lng: number };
+  scheduledPickupAt?: string;
+  carrier?: { name: string; driverName?: string; plate?: string; vehicleClass?: string };
+  steps: TrackStep[];
+  attempts?: Array<{ outcome: 'absent' | 'refused' | 'unreachable'; at: string }>;
+  receiverName?: string;
+  cancelled?: { at: string; by: 'sender' | 'network' };
+}
+
+export type AnyTrackView = TrackView | FreightTrackView;
+
+export function isFreightTrack(v: AnyTrackView): v is FreightTrackView {
+  return (v as FreightTrackView).kind === 'freight';
+}
+
 export interface TrackView {
+  kind?: 'parcel';
   ref: string;
   status: ParcelStatus;
   size: ParcelSize;
