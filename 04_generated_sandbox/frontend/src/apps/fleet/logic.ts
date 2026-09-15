@@ -10,6 +10,8 @@ import {
   type AssignmentRow,
   type CorridorRow,
   type DriverRow,
+  type DispatchRow,
+  type DispatchView,
   type DriverStatus,
   type PapersReport,
   type PositionRow,
@@ -397,4 +399,24 @@ export function corridorState(assignment: AssignmentRow, corridors: CorridorRow[
   // reads as "local work only" about a driver who is on a line-haul run.
   if (!corridor) return { kind: 'gone', name: assignment.corridorId };
   return { kind: corridor.status === 'blocked' ? 'blocked' : 'on', name: corridor.name };
+}
+
+/* ------------------------------------------------------------ FP5: dispatch -- */
+
+/** What the office can do with a row: put it on the driver, only name a price (negotiation), or nothing. */
+export function dispatchRowState(row: Pick<DispatchRow, 'canTake' | 'commitMode'>): 'take' | 'negotiate' | 'blocked' {
+  if (row.commitMode === 'negotiate') return 'negotiate';
+  return row.canTake ? 'take' : 'blocked';
+}
+
+/** The two legs, said the way the money is split: what is driven empty, what is driven paid. */
+export function dispatchDistanceLine(row: Pick<DispatchRow, 'deadheadKm' | 'loadedKm'>, t: Translate): string {
+  return t('fleet.dispatch.distance', { empty: row.deadheadKm.toFixed(1), loaded: row.loadedKm.toFixed(1) });
+}
+
+/** Read aloud: how big the market is for this driver, and how much of it they could take. */
+export function dispatchSummary(view: DispatchView | null, t: Translate): string {
+  if (!view || !view.drivers.length) return t('fleet.dispatch.aloudNobody');
+  const name = view.drivers.find((d) => d.did === view.driver)?.name ?? '';
+  return t('fleet.dispatch.aloud', { n: view.rows.length, name, can: view.rows.filter((r) => dispatchRowState(r) === 'take').length });
 }

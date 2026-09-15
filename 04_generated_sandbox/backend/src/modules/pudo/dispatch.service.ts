@@ -1472,6 +1472,62 @@ export class DispatchService {
     return { proposal: p, freight };
   }
 
+  /**
+   * FP5 — the fleet office puts a load on one of its drivers.
+   *
+   * The third door to the one commit (lockFreightToDriver), beside the counter claim and an accepted
+   * proposal, and it passes every gate they pass: the driver must be ON A SHIFT (a load is put on a vehicle,
+   * and the price is that vehicle's), with room, with the capability and the papers the road needs, under
+   * the shipper's budget and above the rating floor. What differs is who decided — recorded on the freight,
+   * so a driver who did not choose this work can see that, and so the office's decisions are on the record.
+   *
+   * A load posted for negotiation cannot be assigned: its price is not settled, and an office committing
+   * a driver at a counter rate would take it at a number nobody agreed to.
+   *
+   * Priced from where the driver IS, because the empty run is real kilometres the shipper pays for. A shift
+   * that has never reported a position is priced from the pickup — an unknown empty run is not billed.
+   */
+  assign(freightId: string, driverDid: string, by: { managerDid: string; name?: string }, now: number = Date.now()): Freight {
+    const f = this.requireFreight(freightId);
+    const vehicle = this.fleet.vehicleForDriver(driverDid);
+    if (!vehicle) throw new GlosError('NOT_COUPLED', 'That driver is not on a shift — a load goes on a vehicle, and they have none yet');
+    if (commitModeOf(f) === 'negotiate') throw new GlosError('NEGOTIATION_REQUIRED', 'This load is posted for negotiation — the driver can send the shipper a price from their board; it cannot be assigned at a counter rate');
+    if (f.weightKg > this.remainingCapacity(driverDid)) throw new GlosError('CAPACITY_EXCEEDED', "That driver's vehicle has no room left for this load");
+    const need = this.loadRequirements('freight', f.freightId);
+    if (
+      need.capabilities.some((cap) => !vehicle[cap]) ||
+      !DispatchService.hasEquipmentFor(vehicle, need.equipment) ||
+      (need.bulk && !vehicle.carriesBulk) ||
+      (need.fragile && !vehicle.allowsFragile)
+    ) {
+      throw new GlosError('VEHICLE_MISSING_CAPABILITY', "That driver's vehicle lacks a capability or equipment this load requires");
+    }
+    this.requireBorderAllows(vehicle, driverDid, 'freight', f.freightId);
+    const at = this.fleet.activeForDriver(driverDid)?.location;
+    const deadheadKm = at ? round1(this.router.roadKm(at, f.pickupLocation)) : 0;
+    const loadedKm = round1(f.destLocation ? this.router.roadKm(f.pickupLocation, f.destLocation) : 0);
+    const freight = this.lockFreightToDriver(f, driverDid, vehicle, { deadheadKm, loadedKm }, undefined, now);
+    const atIso = new Date(now).toISOString();
+    freight.assignedBy = { managerDid: by.managerDid, ...(by.name ? { name: by.name } : {}), at: atIso };
+    this.freights.set(freight.freightId, freight);
+    // Everyone else's price and every live counter-offer on this load are moot now, exactly as after a claim.
+    for (const other of this.proposals.values()) {
+      if (other.freightId === f.freightId && other.status === 'open') {
+        other.status = 'superseded';
+        other.decidedAt = atIso;
+        this.proposals.set(other.proposalId, other);
+      }
+    }
+    for (const o of this.offers.values()) if (o.ref === f.freightId && o.status === 'pending') o.status = 'ignored';
+    // Taking a load is saying where you are going — the same restraint as a claim (deriveLegFromLoad).
+    if (f.destLocation) this.fleet.deriveLegFromLoad(driverDid, { fromLabel: f.pickupLabel, from: f.pickupLocation, toLabel: f.destLabel, to: f.destLocation });
+    void this.events.publish(GlosEvent.Pudo.LoadClaimed, { driverDid, kind: 'freight', ref: f.freightId, weightKg: f.weightKg }, { source: 'pudo' }).catch(() => undefined);
+    void this.events
+      .publish(GlosEvent.Pudo.FreightAssigned, { freightId: f.freightId, code: f.code, driverDid, managerDid: by.managerDid, byName: by.name, pickupLabel: f.pickupLabel, destLabel: f.destLabel, weightKg: f.weightKg, earning: freight.lockedPrice }, { source: 'pudo' })
+      .catch(() => undefined);
+    return freight;
+  }
+
   /** Lookups the controller needs to authorise a negotiation before it acts. Read-only. */
   requireProposalPublic(proposalId: string): FreightProposal {
     return this.requireProposal(proposalId);
@@ -2066,7 +2122,7 @@ export class DispatchService {
   private wrapFreight(f: Freight): Claimable {
     // S32: freight now carries its cargo model, so it matches vehicles on capability AND equipment like a tote.
     // S32b: status lets the driver app drive the claimed → picked-up → delivered flow in-app.
-    return { kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry };
+    return { kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}) };
   }
 
   /** CA6 — why the law does not let this vehicle carry this load (cabotage, a crossing's weight limit). Empty = it may. */

@@ -202,6 +202,8 @@ export interface Claimable {
   tempBand?: { minC: number; maxC: number }; // S33b — the safe band to keep (present ⇒ cold-chain, show the log control)
   lastTempC?: number; // S33b — the last logged reading
   tempBreached?: boolean; // S33b — the chain has been broken
+  /** FP5 — put on this driver by their fleet office, so the app can say it was the office's call, and whose. */
+  assignedBy?: { name?: string; at: string };
 }
 
 /**
@@ -211,13 +213,8 @@ export interface Claimable {
  * limits — no data exists) rather than pretending it did. A row whose only marks are 'unknown' is still
  * takeable, because deciding otherwise would be the platform overruling the operator who drives the road.
  */
-export type BlockerKind = 'legal' | 'physical' | 'resolvable' | 'preference' | 'unknown';
-
-export interface BoardBlocker {
-  kind: BlockerKind;
-  code: string;
-  message: string;
-}
+export type { BlockerKind, BoardBlocker } from '../../shared/board';
+import type { BoardBlocker } from '../../shared/board';
 
 /** FB1 — one load on the open board: the market's facts, this vehicle's price, and every reason why not. */
 export interface BoardRow {

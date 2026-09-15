@@ -139,6 +139,13 @@ export function createFleetApi(sbg: SbgClient) {
         }),
       ),
 
+    /** FP5 — the market as one of the fleet's drivers on shift would see it, and who is on a shift. */
+    dispatchView: (did: string, query: { driver?: string; radiusKm?: string }) =>
+      sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/dispatch', { params: { path: { did }, query: query as never } })),
+    /** FP5 — put a load on one of the fleet's drivers. The driver is told; the office's name goes on the load. */
+    assign: (did: string, body: { freightId: string; driverDid: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/dispatch', { params: { path: { did } }, body: body as never })),
+
     /** End a session (decouple). */
     uncouple: (did: string) => sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/uncouple', { params: { path: { did } } })),
   };

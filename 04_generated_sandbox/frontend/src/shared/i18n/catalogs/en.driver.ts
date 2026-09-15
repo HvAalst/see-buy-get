@@ -219,6 +219,9 @@ export const enDriver = {
   'driver.loads.empty3': 'Scan each bag onto the van',
   'driver.loads.youEarn': 'You earn {amount}',
   'driver.loads.meta': '{pickup} → {dest} · {kg} kg',
+  // FP5 — a load the fleet office put on the driver.
+  'driver.loads.assignedBy': 'Put on you by {name}',
+  'driver.loads.theOffice': 'your fleet office',
   'driver.loads.loadAria': 'Load {ref} onto the van',
   'driver.loads.loadOn': 'Load on',
   'driver.loads.pickupAria': 'Pick up freight {ref}',

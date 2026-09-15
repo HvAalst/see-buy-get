@@ -273,6 +273,8 @@ export class Freight {
   @ApiProperty({ enum: FREIGHT_STATUSES })
   status: FreightStatus;
   claimedBy?: string;
+  /** FP5 — when the load was put on the driver by their fleet office rather than claimed by them. Who, and when. */
+  @ApiPropertyOptional() assignedBy?: { managerDid: string; name?: string; at: string };
   /**
    * FB4a — what actually CARRIED it, stamped at claim. The mirror of `bodyDerived`: that one records the body
    * the load needed, this one the body that turned up.
@@ -657,6 +659,8 @@ export class Claimable {
   /** S32b — the underlying tote/freight status (available | claimed | in_transit | …). Lets the driver app
    *  decide the next action on a claimed load: a claimed freight needs PICK-UP, an in-transit one needs DELIVER. */
   status?: string;
+  /** FP5 — put on this driver by their fleet office (by whom, when), so the app can say it was not their choice. */
+  @ApiPropertyOptional() assignedBy?: { name?: string; at: string };
   /** F1 — a booked-for-later freight's pickup date, so the driver's offer reads "reserve now, pick up on <date>". */
   scheduledPickupAt?: string;
   /** CA6 — the country at each end of a freight, where it is known. */

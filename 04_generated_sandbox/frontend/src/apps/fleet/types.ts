@@ -23,6 +23,7 @@ export interface ManagerView {
 /* ------------------------------------------------- FP4: the papers that switch things off -- */
 
 export type { PaperKind, PaperState, PaperView } from '../../shared/papers';
+import type { BoardBlocker } from '../../shared/board';
 import type { PaperKind, PaperView } from '../../shared/papers';
 
 /** A paper on the dashboard's list: which thing, and whether it is on a shift the sweep will end. */
@@ -198,4 +199,51 @@ export interface FleetEarningsSummary {
   byMonth: Array<{ month: string; earned: number; delivered: number; count: number }>;
   /** The money, apart from the register: booked as owed (null where no sister pays this fleet), on its way, left. */
   settlement?: { payeeDid: string; owed: number | null; settled: number; inFlight: number; currency?: string };
+}
+
+/* ------------------------------------------------- FP5: dispatch — the office puts a load on a driver -- */
+
+/** A driver on a shift right now, as the dispatch picker needs them. */
+export interface DispatchDriverRow {
+  did: string;
+  name: string;
+  vehicleId: string;
+  plate: string;
+  vehicleClass: string;
+  truckSubtype?: string;
+  /** Kilos still free on the vehicle after what they already hold. */
+  remainingKg: number;
+  location?: { lat: number; lng: number };
+  lastLocatedAt?: string;
+}
+
+/** One load on the market as THIS driver would see it — priced against their vehicle, every reason why not marked. */
+export interface DispatchRow {
+  freightId: string;
+  code: string;
+  description: string;
+  pickupLabel: string;
+  destLabel: string;
+  weightKg: number;
+  cargoClass?: string;
+  commitMode: 'instant' | 'negotiate';
+  scheduledPickupAt?: string;
+  deadheadKm: number;
+  loadedKm: number;
+  totalKm: number;
+  /** The driver's earning. Absent when there is no vehicle to price against. */
+  price?: { total: number; multiplier?: number };
+  earningsPerKm?: number | null;
+  canTake: boolean;
+  blockers: BoardBlocker[];
+}
+
+export interface DispatchView {
+  drivers: DispatchDriverRow[];
+  /** The driver the rows were judged for; null when nobody was chosen (or nobody is on a shift). */
+  driver: string | null;
+  /** Where every distance and price was measured from, and why that point. */
+  from: { lat: number; lng: number; source: 'driver' | 'depot' };
+  rows: DispatchRow[];
+  total: number;
 }

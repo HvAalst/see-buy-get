@@ -120,6 +120,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     // Rule 5 (driver) — a dedicated-freight load was posted; ping active drivers near its pickup (same
     // live-GPS matching as a ready tote), so a heavy divert reaches a truck at genesis, not only via pull.
     this.events.subscribe<{ freightId: string; destLabel?: string; pickupLocation?: GeoPoint }>(GlosEvent.Pudo.FreightPosted, (e) => this.onFreightPosted(e.payload));
+    // FP5 (driver) — their fleet office put a load on them: it is on their list before they looked, so say so.
+    this.events.subscribe<{ freightId: string; code: string; driverDid: string; byName?: string; pickupLabel: string; destLabel: string; weightKg: number; earning?: number }>(GlosEvent.Pudo.FreightAssigned, (e) => this.onFreightAssigned(e.payload));
     // FP3 (driver) — a load they had claimed was withdrawn by its sender: their day just changed, tell them why.
     this.events.subscribe<{ freightId: string; code: string; driverDid?: string; reason: string; destLabel?: string }>(GlosEvent.Pudo.FreightCancelled, (e) => this.onFreightCancelled(e.payload));
     // FP3b (sender) — the driver is at the door and cannot hand over: the sender is the one who can fix it.
@@ -160,6 +162,21 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       });
     } catch (err) {
       this.logger.warn(`freight-claim-decided notify failed for ${payload.freightId}: ${(err as Error).message}`);
+    }
+  }
+
+  private async onFreightAssigned(payload: { freightId: string; code: string; driverDid: string; byName?: string; pickupLabel: string; destLabel: string; weightKg: number; earning?: number }): Promise<void> {
+    try {
+      await this.notifications.notify(payload.driverDid, {
+        kind: 'load_assigned',
+        title: `Load ${payload.code} was put on you`,
+        body: `${payload.byName ?? 'Your fleet office'} assigned you ${payload.code}: ${payload.weightKg} kg from ${payload.pickupLabel} to ${payload.destLabel}${payload.earning != null ? ` — you earn ${payload.earning.toFixed(2)}` : ''}. It is under My loads; collect it at the pickup.`,
+        link: '/',
+        tag: `freight:${payload.freightId}`,
+        data: { freightId: payload.freightId },
+      });
+    } catch (err) {
+      this.logger.warn(`freight-assigned notify failed for ${payload.freightId}: ${(err as Error).message}`);
     }
   }
 

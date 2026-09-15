@@ -63,6 +63,8 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                   <span class="load__meta">{t('driver.loads.meta', { pickup: c.pickupLabel, dest: c.destLabel, kg: c.weightKg })}</span>
                   {/* S34 — the locked earning rides on the claimed freight, so a driver always sees what this job pays. */}
                   {c.lockedPrice != null ? <span class="load__earn">{t('driver.loads.youEarn', { amount: money(c.lockedPrice) })}</span> : null}
+                  {/* FP5 — not their choice: said plainly, with whose it was. */}
+                  {c.assignedBy ? <span class="load__meta">{t('driver.loads.assignedBy', { name: c.assignedBy.name ?? t('driver.loads.theOffice') })}</span> : null}
                 </span>
               </>
             );

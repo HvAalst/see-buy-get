@@ -10201,6 +10201,82 @@
         }
       }
     },
+    "/v1/sbg/fleet/managers/{did}/dispatch": {
+      "get": {
+        "operationId": "Sbg.fleetDispatch",
+        "summary": "",
+        "description": "FP5 — the fleet's dispatch view: who is on a shift, and the market as one of them would see it.\n\nThe rows are the same board a driver reads (priced against THAT driver's vehicle, every reason it\ncannot be taken marked), judged from where the driver last reported, or from the depot when the shift\nhas never said where it is — and the response says which, because every distance and price below\nhangs off that point. The office sees exactly what the driver would, so the two cannot disagree about\nwhether a load can be taken.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "driver",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "radiusKm",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "operationId": "Sbg.fleetAssign",
+        "summary": "",
+        "description": "FP5 — put a load on one of this fleet's drivers. The driver must be the fleet's own and on a shift; the\nservice applies every gate a claim would. The office's name goes on the freight.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FleetAssignDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Freight"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/managers/{did}/code/rotate": {
       "post": {
         "operationId": "Sbg.rotateManagerCode",
@@ -21490,6 +21566,783 @@
           "pin"
         ]
       },
+      "FleetAssignDto": {
+        "type": "object",
+        "properties": {
+          "freightId": {
+            "type": "string"
+          },
+          "driverDid": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "freightId",
+          "driverDid"
+        ]
+      },
+      "FreightDeliveryAttempt": {
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "absent",
+              "refused",
+              "unreachable"
+            ]
+          },
+          "note": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome",
+          "at"
+        ]
+      },
+      "FreightClaim": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "damaged",
+              "short",
+              "not_received"
+            ]
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "upheld",
+              "partly_upheld",
+              "rejected"
+            ]
+          },
+          "state": {
+            "type": "object"
+          },
+          "description": {
+            "type": "string"
+          },
+          "photoRef": {
+            "type": "string"
+          },
+          "raisedBy": {
+            "type": "string"
+          },
+          "raisedAt": {
+            "type": "string"
+          },
+          "award": {
+            "type": "number"
+          },
+          "note": {
+            "type": "string"
+          },
+          "decidedBy": {
+            "type": "string"
+          },
+          "decidedAt": {
+            "type": "string"
+          },
+          "funding": {
+            "type": "object",
+            "properties": {
+              "fromProvision": {
+                "required": true,
+                "type": "number"
+              },
+              "fromExpense": {
+                "required": true,
+                "type": "number"
+              }
+            }
+          },
+          "paidTo": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "required": true,
+                "type": "object"
+              },
+              "id": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          }
+        },
+        "required": [
+          "kind",
+          "state",
+          "description",
+          "raisedBy",
+          "raisedAt",
+          "funding",
+          "paidTo"
+        ]
+      },
+      "DerivedBody": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string",
+            "enum": [
+              "flatbed",
+              "dropside",
+              "box",
+              "curtain_side",
+              "refrigerated",
+              "insulated",
+              "tipper",
+              "cement_mixer",
+              "grain_hopper",
+              "bulk_tanker",
+              "tanker",
+              "food_tanker",
+              "fuel_tanker",
+              "water_bowser",
+              "hazmat",
+              "car_carrier",
+              "livestock",
+              "skeletal",
+              "container_selfloader",
+              "crane",
+              "lowboy",
+              "logging",
+              "tow_recovery",
+              "refuse"
+            ]
+          },
+          "basis": {
+            "type": "string",
+            "enum": [
+              "measured",
+              "weight-only"
+            ]
+          }
+        },
+        "required": [
+          "body",
+          "basis"
+        ]
+      },
+      "PriceBreakdown": {
+        "type": "object",
+        "properties": {
+          "baseFee": {
+            "type": "number"
+          },
+          "distanceKm": {
+            "type": "number"
+          },
+          "deadheadKm": {
+            "type": "number"
+          },
+          "loadedKm": {
+            "type": "number"
+          },
+          "ratePerKm": {
+            "type": "number"
+          },
+          "multiplier": {
+            "type": "number"
+          },
+          "effectiveRate": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "baseFee",
+          "distanceKm",
+          "ratePerKm",
+          "multiplier",
+          "effectiveRate",
+          "total"
+        ]
+      },
+      "CarriedBody": {
+        "type": "object",
+        "properties": {
+          "vehicleClass": {
+            "type": "string",
+            "enum": [
+              "bike",
+              "motorcycle",
+              "tuktuk",
+              "car",
+              "van",
+              "bus",
+              "truck"
+            ]
+          },
+          "truckSubtype": {
+            "type": "string",
+            "description": "The truck body. Absent for a vehicle class that has no subtype — a van is a van.",
+            "enum": [
+              "flatbed",
+              "dropside",
+              "box",
+              "curtain_side",
+              "refrigerated",
+              "insulated",
+              "tipper",
+              "cement_mixer",
+              "grain_hopper",
+              "bulk_tanker",
+              "tanker",
+              "food_tanker",
+              "fuel_tanker",
+              "water_bowser",
+              "hazmat",
+              "car_carrier",
+              "livestock",
+              "skeletal",
+              "container_selfloader",
+              "crane",
+              "lowboy",
+              "logging",
+              "tow_recovery",
+              "refuse"
+            ]
+          }
+        },
+        "required": [
+          "vehicleClass"
+        ]
+      },
+      "Freight": {
+        "type": "object",
+        "properties": {
+          "dimensionsCm": {
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Length, width, height in cm (orientation-free)",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "bodyHint": {
+            "type": "string",
+            "description": "The minter's own body pick. ADVISORY — shown, compared and counted, NEVER used to filter (user, 2026-08-30).\n A shop clerk booking a walk-up cannot reliably tell a skeletal from a flatbed, and a binding wrong pick\n would invisibly exclude the one operator who could have taken the load. Where it disagrees with the\n derived body, that disagreement is itself a market signal worth reporting.",
+            "enum": [
+              "flatbed",
+              "dropside",
+              "box",
+              "curtain_side",
+              "refrigerated",
+              "insulated",
+              "tipper",
+              "cement_mixer",
+              "grain_hopper",
+              "bulk_tanker",
+              "tanker",
+              "food_tanker",
+              "fuel_tanker",
+              "water_bowser",
+              "hazmat",
+              "car_carrier",
+              "livestock",
+              "skeletal",
+              "container_selfloader",
+              "crane",
+              "lowboy",
+              "logging",
+              "tow_recovery",
+              "refuse"
+            ]
+          },
+          "excludedBodies": {
+            "type": "array",
+            "description": "Bodies the SHIPPER rules out — theft risk, an insurer's wording, a customer's requirement. A PREFERENCE,\n and typed as one: the board says \"the shipper ruled out open bodies\", never dressing it up as physics.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "flatbed",
+                "dropside",
+                "box",
+                "curtain_side",
+                "refrigerated",
+                "insulated",
+                "tipper",
+                "cement_mixer",
+                "grain_hopper",
+                "bulk_tanker",
+                "tanker",
+                "food_tanker",
+                "fuel_tanker",
+                "water_bowser",
+                "hazmat",
+                "car_carrier",
+                "livestock",
+                "skeletal",
+                "container_selfloader",
+                "crane",
+                "lowboy",
+                "logging",
+                "tow_recovery",
+                "refuse"
+              ]
+            }
+          },
+          "packaging": {
+            "type": "string",
+            "description": "FB5 — how the goods are PRESENTED for handling, which is what decides the body and the kit.\n\nRecorded per consignment rather than inferred from the commodity, because the same commodity is handled\ncompletely differently from place to place (user, 2026-08-30): sugar is poured into a food-grade bulk\ntrailer in Holland and stacked in sacks on a flatbed in Kenya. A rule keyed on \"is it sugar\" gets one of\nthose two wrong wherever it is deployed.",
+            "enum": [
+              "loose",
+              "bagged",
+              "palletised",
+              "drummed",
+              "baled",
+              "ibc",
+              "piece"
+            ]
+          },
+          "cargoClass": {
+            "type": "string",
+            "enum": [
+              "P0",
+              "P1",
+              "P2",
+              "P3",
+              "P4",
+              "P5",
+              "P6"
+            ]
+          },
+          "natureCode": {
+            "type": "string",
+            "enum": [
+              "GEN",
+              "FOD",
+              "FOP",
+              "HAZ-CHEM",
+              "HAZ-DUST",
+              "HAZ-BIO",
+              "HAZ-FLAM",
+              "FRG",
+              "ODR",
+              "HUM"
+            ]
+          },
+          "pickupCountry": {
+            "type": "string",
+            "description": "CA6 — the country at each end, where it is known (a shop's), so the rules of crossing can be asked."
+          },
+          "destCountry": {
+            "type": "string"
+          },
+          "carriage": {
+            "type": "object",
+            "properties": {
+              "vehicleId": {
+                "required": true,
+                "type": "string"
+              },
+              "plate": {
+                "required": true,
+                "type": "string"
+              },
+              "vehicleClass": {
+                "required": true,
+                "type": "string"
+              },
+              "driverDid": {
+                "required": true,
+                "type": "string"
+              },
+              "managerDid": {
+                "required": false,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
+          "proofOfDelivery": {
+            "type": "object",
+            "properties": {
+              "receiverName": {
+                "required": true,
+                "type": "string"
+              },
+              "photoRef": {
+                "required": false,
+                "type": "string"
+              },
+              "remarks": {
+                "required": false,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "by": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
+          "reservations": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "required": true,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "by": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
+          "cancelledAt": {
+            "type": "string",
+            "description": "FP3 — withdrawn by the sender (or the network) before the goods were taken over. Terminal; the record stays."
+          },
+          "cancellation": {
+            "type": "object",
+            "properties": {
+              "by": {
+                "required": true,
+                "type": "string"
+              },
+              "role": {
+                "required": true,
+                "type": "object"
+              },
+              "reason": {
+                "required": true,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "refunded": {
+                "required": false,
+                "type": "number"
+              }
+            }
+          },
+          "deliveryAttempts": {
+            "description": "FP3b — every time the driver stood at the door and could not hand over. The load stays in transit.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FreightDeliveryAttempt"
+            }
+          },
+          "claim": {
+            "description": "FP3b — the sender's claim against the delivered goods, and how it ended. One per load.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FreightClaim"
+              }
+            ]
+          },
+          "priceOrigin": {
+            "type": "string",
+            "description": "FB0c — where lockedPrice came from. 'computed' (or absent, for anything locked before FB0c) means it IS\n priceBreakdown.total. 'negotiated' means two parties agreed a number, so lockedPrice is authoritative and\n may differ from the breakdown — which is kept anyway, because its distances are real and are what the\n market series reads. Every money path already reads lockedPrice; nothing bills off the breakdown.",
+            "enum": [
+              "computed",
+              "negotiated"
+            ]
+          },
+          "paidStatus": {
+            "type": "string",
+            "enum": [
+              "unpaid",
+              "billed",
+              "billing_failed"
+            ]
+          },
+          "commitMode": {
+            "type": "string",
+            "description": "FB0c — how this load may be taken. 'instant' (the default, and what every pre-FB0c load is read as) means\n a fit driver claims it at the computed price. 'negotiate' means the minter wants to agree a price first:\n drivers PROPOSE, the poster accepts one, and only that acceptance claims the load.",
+            "enum": [
+              "instant",
+              "negotiate"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "scheduled",
+              "available",
+              "claimed",
+              "in_transit",
+              "delivered",
+              "cancelled"
+            ]
+          },
+          "assignedBy": {
+            "type": "object",
+            "properties": {
+              "managerDid": {
+                "required": true,
+                "type": "string"
+              },
+              "name": {
+                "required": false,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
+          "freightId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "pickupLocation": {
+            "$ref": "#/components/schemas/GeoPoint"
+          },
+          "pickupLabel": {
+            "type": "string"
+          },
+          "destLabel": {
+            "type": "string"
+          },
+          "destLocation": {
+            "$ref": "#/components/schemas/GeoPoint"
+          },
+          "weightKg": {
+            "type": "number"
+          },
+          "indivisible": {
+            "type": "boolean",
+            "description": "Can the load be split into two smaller ones? The single most decision-changing fact about anything\n oversize: a divisible 30 t is two ordinary trips, an indivisible 30 t is a low-loader and a permit."
+          },
+          "bodyDerived": {
+            "description": "FB0b — the body this load canonically needs, STAMPED at registration (and the basis it was derived on).\n Frozen rather than computed on read for the same reason a price is frozen at claim: \"kilometres of\n flatbed offered in 2026\" must not change when someone tunes a threshold in 2027. Absent on a pre-FB0b\n freight, which is derived live and reports itself as weight-only.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DerivedBody"
+              }
+            ]
+          },
+          "fragile": {
+            "type": "boolean"
+          },
+          "bulk": {
+            "type": "boolean",
+            "description": "DERIVED from packaging (`loose`), and kept because vehicle matching is written against it.\n\nIt used to be the stored truth and it meant two opposite things — \"loose, it tips or augers\" in the body\nderivation, \"sugar/cement bags\" in the vehicle spec. It now has exactly one meaning, the loose one, which\nis what `Vehicle.carriesBulk` and the board's NO_BULK_BODY blocker already assumed."
+          },
+          "requiredCapabilities": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "requiredEquipment": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "equipmentGaps": {
+            "description": "S32c — the ends whose SITE cannot handle this cargo (no qualifying load/unload equipment on hand). An\n ADVISORY flag (\"arrange a forklift at the destination\"), not a block — a Local Admin resolves it. Empty\n when both ends are equipped (or their equipment is unknown, e.g. a bulletin freight with only geo labels).",
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "shipperDid": {
+            "type": "string"
+          },
+          "maxSpend": {
+            "type": "number"
+          },
+          "buyerPhoneHash": {
+            "type": "string"
+          },
+          "trackingKey": {
+            "type": "string"
+          },
+          "externalOrderId": {
+            "type": "string"
+          },
+          "claimedAt": {
+            "type": "string"
+          },
+          "pickedUpAt": {
+            "type": "string"
+          },
+          "deliveredAt": {
+            "type": "string"
+          },
+          "lockedPrice": {
+            "type": "number"
+          },
+          "priceBreakdown": {
+            "$ref": "#/components/schemas/PriceBreakdown"
+          },
+          "lockedAt": {
+            "type": "string"
+          },
+          "billed": {
+            "type": "object",
+            "properties": {
+              "net": {
+                "required": true,
+                "type": "number"
+              },
+              "tax": {
+                "required": true,
+                "type": "number"
+              },
+              "gross": {
+                "required": true,
+                "type": "number"
+              },
+              "feePct": {
+                "required": true,
+                "type": "number"
+              },
+              "taxPct": {
+                "required": true,
+                "type": "number"
+              },
+              "provision": {
+                "required": true,
+                "type": "number"
+              }
+            }
+          },
+          "driverPaid": {
+            "type": "boolean"
+          },
+          "loadSafety": {
+            "type": "object",
+            "properties": {
+              "confirmed": {
+                "required": true,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "securementPhotoRef": {
+                "required": true,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "by": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
+          "unloadReport": {
+            "type": "object",
+            "properties": {
+              "confirmed": {
+                "required": true,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "by": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
+          "tempReadings": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "tempBreached": {
+            "type": "boolean"
+          },
+          "scheduledPickupAt": {
+            "type": "string"
+          },
+          "allowEarlyClaim": {
+            "type": "boolean"
+          },
+          "postedByDid": {
+            "type": "string",
+            "description": "FB0c — who posted the load, and therefore who negotiates for it. Distinct from shipperDid, which is who\n PAYS: a counter booking deliberately has no shipperDid (the customer's cash settles off-platform) yet\n still has a shop that must be able to answer a proposal. Absent for a bulletin freight → operators only."
+          },
+          "claimedBy": {
+            "type": "string"
+          },
+          "carriedBy": {
+            "description": "FB4a — what actually CARRIED it, stamped at claim. The mirror of `bodyDerived`: that one records the body\nthe load needed, this one the body that turned up.\n\nFrozen for exactly the reason the derived body and the price are frozen. Only `claimedBy` was ever\nrecorded, so \"kilometres moved by container chassis in 2026\" could only be answered by looking up what\nthat driver is coupled to TODAY — and a driver who sells a flatbed and buys a box van would silently\nrewrite every haul they have ever done. A market series that changes retroactively is not a series.\n\nAbsent on a load claimed before FB4a, and on one whose claimer had no truck subtype (a van or a bus).\nSuch a haul is counted as UNKNOWN in the analytics, never attributed to a body by inference.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CarriedBody"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "cargoClass",
+          "natureCode",
+          "carriage",
+          "proofOfDelivery",
+          "reservations",
+          "cancellation",
+          "status",
+          "assignedBy",
+          "freightId",
+          "code",
+          "description",
+          "pickupLocation",
+          "pickupLabel",
+          "destLabel",
+          "weightKg",
+          "fragile",
+          "bulk",
+          "requiredCapabilities",
+          "requiredEquipment",
+          "equipmentGaps",
+          "billed",
+          "loadSafety",
+          "unloadReport",
+          "createdAt"
+        ]
+      },
       "ManagerKycDto": {
         "type": "object",
         "properties": {
@@ -22319,750 +23172,6 @@
           "pickupLabel",
           "destLabel",
           "weightKg"
-        ]
-      },
-      "FreightDeliveryAttempt": {
-        "type": "object",
-        "properties": {
-          "outcome": {
-            "type": "string",
-            "enum": [
-              "absent",
-              "refused",
-              "unreachable"
-            ]
-          },
-          "note": {
-            "type": "string"
-          },
-          "at": {
-            "type": "string"
-          },
-          "by": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "outcome",
-          "at"
-        ]
-      },
-      "FreightClaim": {
-        "type": "object",
-        "properties": {
-          "kind": {
-            "type": "string",
-            "enum": [
-              "damaged",
-              "short",
-              "not_received"
-            ]
-          },
-          "decision": {
-            "type": "string",
-            "enum": [
-              "upheld",
-              "partly_upheld",
-              "rejected"
-            ]
-          },
-          "state": {
-            "type": "object"
-          },
-          "description": {
-            "type": "string"
-          },
-          "photoRef": {
-            "type": "string"
-          },
-          "raisedBy": {
-            "type": "string"
-          },
-          "raisedAt": {
-            "type": "string"
-          },
-          "award": {
-            "type": "number"
-          },
-          "note": {
-            "type": "string"
-          },
-          "decidedBy": {
-            "type": "string"
-          },
-          "decidedAt": {
-            "type": "string"
-          },
-          "funding": {
-            "type": "object",
-            "properties": {
-              "fromProvision": {
-                "required": true,
-                "type": "number"
-              },
-              "fromExpense": {
-                "required": true,
-                "type": "number"
-              }
-            }
-          },
-          "paidTo": {
-            "type": "object",
-            "properties": {
-              "kind": {
-                "required": true,
-                "type": "object"
-              },
-              "id": {
-                "required": false,
-                "type": "string"
-              }
-            }
-          }
-        },
-        "required": [
-          "kind",
-          "state",
-          "description",
-          "raisedBy",
-          "raisedAt",
-          "funding",
-          "paidTo"
-        ]
-      },
-      "DerivedBody": {
-        "type": "object",
-        "properties": {
-          "body": {
-            "type": "string",
-            "enum": [
-              "flatbed",
-              "dropside",
-              "box",
-              "curtain_side",
-              "refrigerated",
-              "insulated",
-              "tipper",
-              "cement_mixer",
-              "grain_hopper",
-              "bulk_tanker",
-              "tanker",
-              "food_tanker",
-              "fuel_tanker",
-              "water_bowser",
-              "hazmat",
-              "car_carrier",
-              "livestock",
-              "skeletal",
-              "container_selfloader",
-              "crane",
-              "lowboy",
-              "logging",
-              "tow_recovery",
-              "refuse"
-            ]
-          },
-          "basis": {
-            "type": "string",
-            "enum": [
-              "measured",
-              "weight-only"
-            ]
-          }
-        },
-        "required": [
-          "body",
-          "basis"
-        ]
-      },
-      "PriceBreakdown": {
-        "type": "object",
-        "properties": {
-          "baseFee": {
-            "type": "number"
-          },
-          "distanceKm": {
-            "type": "number"
-          },
-          "deadheadKm": {
-            "type": "number"
-          },
-          "loadedKm": {
-            "type": "number"
-          },
-          "ratePerKm": {
-            "type": "number"
-          },
-          "multiplier": {
-            "type": "number"
-          },
-          "effectiveRate": {
-            "type": "number"
-          },
-          "total": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "baseFee",
-          "distanceKm",
-          "ratePerKm",
-          "multiplier",
-          "effectiveRate",
-          "total"
-        ]
-      },
-      "CarriedBody": {
-        "type": "object",
-        "properties": {
-          "vehicleClass": {
-            "type": "string",
-            "enum": [
-              "bike",
-              "motorcycle",
-              "tuktuk",
-              "car",
-              "van",
-              "bus",
-              "truck"
-            ]
-          },
-          "truckSubtype": {
-            "type": "string",
-            "description": "The truck body. Absent for a vehicle class that has no subtype — a van is a van.",
-            "enum": [
-              "flatbed",
-              "dropside",
-              "box",
-              "curtain_side",
-              "refrigerated",
-              "insulated",
-              "tipper",
-              "cement_mixer",
-              "grain_hopper",
-              "bulk_tanker",
-              "tanker",
-              "food_tanker",
-              "fuel_tanker",
-              "water_bowser",
-              "hazmat",
-              "car_carrier",
-              "livestock",
-              "skeletal",
-              "container_selfloader",
-              "crane",
-              "lowboy",
-              "logging",
-              "tow_recovery",
-              "refuse"
-            ]
-          }
-        },
-        "required": [
-          "vehicleClass"
-        ]
-      },
-      "Freight": {
-        "type": "object",
-        "properties": {
-          "dimensionsCm": {
-            "minItems": 3,
-            "maxItems": 3,
-            "description": "Length, width, height in cm (orientation-free)",
-            "type": "array",
-            "items": {
-              "type": "number"
-            }
-          },
-          "bodyHint": {
-            "type": "string",
-            "description": "The minter's own body pick. ADVISORY — shown, compared and counted, NEVER used to filter (user, 2026-08-30).\n A shop clerk booking a walk-up cannot reliably tell a skeletal from a flatbed, and a binding wrong pick\n would invisibly exclude the one operator who could have taken the load. Where it disagrees with the\n derived body, that disagreement is itself a market signal worth reporting.",
-            "enum": [
-              "flatbed",
-              "dropside",
-              "box",
-              "curtain_side",
-              "refrigerated",
-              "insulated",
-              "tipper",
-              "cement_mixer",
-              "grain_hopper",
-              "bulk_tanker",
-              "tanker",
-              "food_tanker",
-              "fuel_tanker",
-              "water_bowser",
-              "hazmat",
-              "car_carrier",
-              "livestock",
-              "skeletal",
-              "container_selfloader",
-              "crane",
-              "lowboy",
-              "logging",
-              "tow_recovery",
-              "refuse"
-            ]
-          },
-          "excludedBodies": {
-            "type": "array",
-            "description": "Bodies the SHIPPER rules out — theft risk, an insurer's wording, a customer's requirement. A PREFERENCE,\n and typed as one: the board says \"the shipper ruled out open bodies\", never dressing it up as physics.",
-            "items": {
-              "type": "string",
-              "enum": [
-                "flatbed",
-                "dropside",
-                "box",
-                "curtain_side",
-                "refrigerated",
-                "insulated",
-                "tipper",
-                "cement_mixer",
-                "grain_hopper",
-                "bulk_tanker",
-                "tanker",
-                "food_tanker",
-                "fuel_tanker",
-                "water_bowser",
-                "hazmat",
-                "car_carrier",
-                "livestock",
-                "skeletal",
-                "container_selfloader",
-                "crane",
-                "lowboy",
-                "logging",
-                "tow_recovery",
-                "refuse"
-              ]
-            }
-          },
-          "packaging": {
-            "type": "string",
-            "description": "FB5 — how the goods are PRESENTED for handling, which is what decides the body and the kit.\n\nRecorded per consignment rather than inferred from the commodity, because the same commodity is handled\ncompletely differently from place to place (user, 2026-08-30): sugar is poured into a food-grade bulk\ntrailer in Holland and stacked in sacks on a flatbed in Kenya. A rule keyed on \"is it sugar\" gets one of\nthose two wrong wherever it is deployed.",
-            "enum": [
-              "loose",
-              "bagged",
-              "palletised",
-              "drummed",
-              "baled",
-              "ibc",
-              "piece"
-            ]
-          },
-          "cargoClass": {
-            "type": "string",
-            "enum": [
-              "P0",
-              "P1",
-              "P2",
-              "P3",
-              "P4",
-              "P5",
-              "P6"
-            ]
-          },
-          "natureCode": {
-            "type": "string",
-            "enum": [
-              "GEN",
-              "FOD",
-              "FOP",
-              "HAZ-CHEM",
-              "HAZ-DUST",
-              "HAZ-BIO",
-              "HAZ-FLAM",
-              "FRG",
-              "ODR",
-              "HUM"
-            ]
-          },
-          "pickupCountry": {
-            "type": "string",
-            "description": "CA6 — the country at each end, where it is known (a shop's), so the rules of crossing can be asked."
-          },
-          "destCountry": {
-            "type": "string"
-          },
-          "carriage": {
-            "type": "object",
-            "properties": {
-              "vehicleId": {
-                "required": true,
-                "type": "string"
-              },
-              "plate": {
-                "required": true,
-                "type": "string"
-              },
-              "vehicleClass": {
-                "required": true,
-                "type": "string"
-              },
-              "driverDid": {
-                "required": true,
-                "type": "string"
-              },
-              "managerDid": {
-                "required": false,
-                "type": "string"
-              },
-              "at": {
-                "required": true,
-                "type": "string"
-              }
-            }
-          },
-          "proofOfDelivery": {
-            "type": "object",
-            "properties": {
-              "receiverName": {
-                "required": true,
-                "type": "string"
-              },
-              "photoRef": {
-                "required": false,
-                "type": "string"
-              },
-              "remarks": {
-                "required": false,
-                "type": "string"
-              },
-              "at": {
-                "required": true,
-                "type": "string"
-              },
-              "by": {
-                "required": false,
-                "type": "string"
-              }
-            }
-          },
-          "reservations": {
-            "type": "object",
-            "properties": {
-              "note": {
-                "required": true,
-                "type": "string"
-              },
-              "at": {
-                "required": true,
-                "type": "string"
-              },
-              "by": {
-                "required": false,
-                "type": "string"
-              }
-            }
-          },
-          "cancelledAt": {
-            "type": "string",
-            "description": "FP3 — withdrawn by the sender (or the network) before the goods were taken over. Terminal; the record stays."
-          },
-          "cancellation": {
-            "type": "object",
-            "properties": {
-              "by": {
-                "required": true,
-                "type": "string"
-              },
-              "role": {
-                "required": true,
-                "type": "object"
-              },
-              "reason": {
-                "required": true,
-                "type": "string"
-              },
-              "at": {
-                "required": true,
-                "type": "string"
-              },
-              "refunded": {
-                "required": false,
-                "type": "number"
-              }
-            }
-          },
-          "deliveryAttempts": {
-            "description": "FP3b — every time the driver stood at the door and could not hand over. The load stays in transit.",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/FreightDeliveryAttempt"
-            }
-          },
-          "claim": {
-            "description": "FP3b — the sender's claim against the delivered goods, and how it ended. One per load.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/FreightClaim"
-              }
-            ]
-          },
-          "priceOrigin": {
-            "type": "string",
-            "description": "FB0c — where lockedPrice came from. 'computed' (or absent, for anything locked before FB0c) means it IS\n priceBreakdown.total. 'negotiated' means two parties agreed a number, so lockedPrice is authoritative and\n may differ from the breakdown — which is kept anyway, because its distances are real and are what the\n market series reads. Every money path already reads lockedPrice; nothing bills off the breakdown.",
-            "enum": [
-              "computed",
-              "negotiated"
-            ]
-          },
-          "paidStatus": {
-            "type": "string",
-            "enum": [
-              "unpaid",
-              "billed",
-              "billing_failed"
-            ]
-          },
-          "commitMode": {
-            "type": "string",
-            "description": "FB0c — how this load may be taken. 'instant' (the default, and what every pre-FB0c load is read as) means\n a fit driver claims it at the computed price. 'negotiate' means the minter wants to agree a price first:\n drivers PROPOSE, the poster accepts one, and only that acceptance claims the load.",
-            "enum": [
-              "instant",
-              "negotiate"
-            ]
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "scheduled",
-              "available",
-              "claimed",
-              "in_transit",
-              "delivered",
-              "cancelled"
-            ]
-          },
-          "freightId": {
-            "type": "string"
-          },
-          "code": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "pickupLocation": {
-            "$ref": "#/components/schemas/GeoPoint"
-          },
-          "pickupLabel": {
-            "type": "string"
-          },
-          "destLabel": {
-            "type": "string"
-          },
-          "destLocation": {
-            "$ref": "#/components/schemas/GeoPoint"
-          },
-          "weightKg": {
-            "type": "number"
-          },
-          "indivisible": {
-            "type": "boolean",
-            "description": "Can the load be split into two smaller ones? The single most decision-changing fact about anything\n oversize: a divisible 30 t is two ordinary trips, an indivisible 30 t is a low-loader and a permit."
-          },
-          "bodyDerived": {
-            "description": "FB0b — the body this load canonically needs, STAMPED at registration (and the basis it was derived on).\n Frozen rather than computed on read for the same reason a price is frozen at claim: \"kilometres of\n flatbed offered in 2026\" must not change when someone tunes a threshold in 2027. Absent on a pre-FB0b\n freight, which is derived live and reports itself as weight-only.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/DerivedBody"
-              }
-            ]
-          },
-          "fragile": {
-            "type": "boolean"
-          },
-          "bulk": {
-            "type": "boolean",
-            "description": "DERIVED from packaging (`loose`), and kept because vehicle matching is written against it.\n\nIt used to be the stored truth and it meant two opposite things — \"loose, it tips or augers\" in the body\nderivation, \"sugar/cement bags\" in the vehicle spec. It now has exactly one meaning, the loose one, which\nis what `Vehicle.carriesBulk` and the board's NO_BULK_BODY blocker already assumed."
-          },
-          "requiredCapabilities": {
-            "type": "array",
-            "items": {
-              "type": "object"
-            }
-          },
-          "requiredEquipment": {
-            "type": "array",
-            "items": {
-              "type": "object"
-            }
-          },
-          "equipmentGaps": {
-            "description": "S32c — the ends whose SITE cannot handle this cargo (no qualifying load/unload equipment on hand). An\n ADVISORY flag (\"arrange a forklift at the destination\"), not a block — a Local Admin resolves it. Empty\n when both ends are equipped (or their equipment is unknown, e.g. a bulletin freight with only geo labels).",
-            "type": "array",
-            "items": {
-              "type": "object"
-            }
-          },
-          "shipperDid": {
-            "type": "string"
-          },
-          "maxSpend": {
-            "type": "number"
-          },
-          "buyerPhoneHash": {
-            "type": "string"
-          },
-          "trackingKey": {
-            "type": "string"
-          },
-          "externalOrderId": {
-            "type": "string"
-          },
-          "claimedAt": {
-            "type": "string"
-          },
-          "pickedUpAt": {
-            "type": "string"
-          },
-          "deliveredAt": {
-            "type": "string"
-          },
-          "lockedPrice": {
-            "type": "number"
-          },
-          "priceBreakdown": {
-            "$ref": "#/components/schemas/PriceBreakdown"
-          },
-          "lockedAt": {
-            "type": "string"
-          },
-          "billed": {
-            "type": "object",
-            "properties": {
-              "net": {
-                "required": true,
-                "type": "number"
-              },
-              "tax": {
-                "required": true,
-                "type": "number"
-              },
-              "gross": {
-                "required": true,
-                "type": "number"
-              },
-              "feePct": {
-                "required": true,
-                "type": "number"
-              },
-              "taxPct": {
-                "required": true,
-                "type": "number"
-              },
-              "provision": {
-                "required": true,
-                "type": "number"
-              }
-            }
-          },
-          "driverPaid": {
-            "type": "boolean"
-          },
-          "loadSafety": {
-            "type": "object",
-            "properties": {
-              "confirmed": {
-                "required": true,
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "securementPhotoRef": {
-                "required": true,
-                "type": "string"
-              },
-              "at": {
-                "required": true,
-                "type": "string"
-              },
-              "by": {
-                "required": false,
-                "type": "string"
-              }
-            }
-          },
-          "unloadReport": {
-            "type": "object",
-            "properties": {
-              "confirmed": {
-                "required": true,
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "at": {
-                "required": true,
-                "type": "string"
-              },
-              "by": {
-                "required": false,
-                "type": "string"
-              }
-            }
-          },
-          "tempReadings": {
-            "type": "array",
-            "items": {
-              "type": "object"
-            }
-          },
-          "tempBreached": {
-            "type": "boolean"
-          },
-          "scheduledPickupAt": {
-            "type": "string"
-          },
-          "allowEarlyClaim": {
-            "type": "boolean"
-          },
-          "postedByDid": {
-            "type": "string",
-            "description": "FB0c — who posted the load, and therefore who negotiates for it. Distinct from shipperDid, which is who\n PAYS: a counter booking deliberately has no shipperDid (the customer's cash settles off-platform) yet\n still has a shop that must be able to answer a proposal. Absent for a bulletin freight → operators only."
-          },
-          "claimedBy": {
-            "type": "string"
-          },
-          "carriedBy": {
-            "description": "FB4a — what actually CARRIED it, stamped at claim. The mirror of `bodyDerived`: that one records the body\nthe load needed, this one the body that turned up.\n\nFrozen for exactly the reason the derived body and the price are frozen. Only `claimedBy` was ever\nrecorded, so \"kilometres moved by container chassis in 2026\" could only be answered by looking up what\nthat driver is coupled to TODAY — and a driver who sells a flatbed and buys a box van would silently\nrewrite every haul they have ever done. A market series that changes retroactively is not a series.\n\nAbsent on a load claimed before FB4a, and on one whose claimer had no truck subtype (a van or a bus).\nSuch a haul is counted as UNKNOWN in the analytics, never attributed to a body by inference.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/CarriedBody"
-              }
-            ]
-          },
-          "createdAt": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "cargoClass",
-          "natureCode",
-          "carriage",
-          "proofOfDelivery",
-          "reservations",
-          "cancellation",
-          "status",
-          "freightId",
-          "code",
-          "description",
-          "pickupLocation",
-          "pickupLabel",
-          "destLabel",
-          "weightKg",
-          "fragile",
-          "bulk",
-          "requiredCapabilities",
-          "requiredEquipment",
-          "equipmentGaps",
-          "billed",
-          "loadSafety",
-          "unloadReport",
-          "createdAt"
         ]
       },
       "BoardBlocker": {

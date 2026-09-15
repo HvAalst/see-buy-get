@@ -330,6 +330,23 @@ export const ARTICLES: GuideArticle[] = [
     ]
   },
   {
+    id: "manager-dispatch",
+    apps: [
+      "fleet",
+      "driver"
+    ],
+    title: "Dispatch: the office puts a load on a driver",
+    summary: "A load used to reach a fleet’s driver in two ways only: the driver claimed it, or the network offered it. Now the fleet office can put one on a driver on shift. The office sees the market exactly as that driver would — priced against their vehicle, judged from where they are, every reason it cannot be taken marked — so it can never assign what the driver could not have claimed.",
+    steps: [
+      "Fleet app, Fleet → Dispatch, or “Find a load” beside a driver on the Shifts tab: choose the driver, choose how far from where they are to look, and read the market for them. What they would earn is their vehicle’s own rate.",
+      "Tap “Put on <name>”. The price is locked at that moment, the load goes on the driver’s list, they are told, and the office’s name is recorded on the load. A load posted for negotiation cannot be assigned — the driver can send the shipper a price from their own board.",
+      "Driver app, My loads: a load the office put on you says so, and by whom. It is collected, carried and delivered exactly like one you claimed, and you are paid the same way."
+    ],
+    notes: [
+      "A driver has to be on a shift to be given a load, because a load goes on a vehicle and the price is that vehicle’s. What the driver could not take — too heavy, the wrong body, a road that will not carry it — the office cannot force either."
+    ]
+  },
+  {
     id: "papers-that-expire",
     apps: [
       "fleet",

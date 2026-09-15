@@ -57,7 +57,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyRecordDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto } from './pudo.dto';
+  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, FleetDispatchQueryDto, FleetAssignDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { classifySize, MAX_CLAIM_AWARD, measuredFactor, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
@@ -2554,6 +2554,56 @@ export class SbgController {
   private assertFleetSelf(did: string, actor: IntrospectionResult): void {
     this.managers.get(did); // 404 if unknown
     if (actor?.role !== 'operator' && actingTenant(actor) !== did) throw new GlosError('FORBIDDEN', 'This fleet is not yours');
+  }
+
+  /**
+   * FP5 — the fleet's dispatch view: who is on a shift, and the market as one of them would see it.
+   *
+   * The rows are the same board a driver reads (priced against THAT driver's vehicle, every reason it
+   * cannot be taken marked), judged from where the driver last reported, or from the depot when the shift
+   * has never said where it is — and the response says which, because every distance and price below
+   * hangs off that point. The office sees exactly what the driver would, so the two cannot disagree about
+   * whether a load can be taken.
+   */
+  @Get('fleet/managers/:did/dispatch')
+  fleetDispatch(@Param('did') did: string, @Query() q: FleetDispatchQueryDto, @Actor() actor: IntrospectionResult) {
+    this.assertFleetSelf(did, actor);
+    const manager = this.managers.get(did);
+    const { dids, nameOf } = this.fleetDrivers(did);
+    const drivers = this.fleet
+      .list({ status: 'active' })
+      .filter((a) => dids.has(a.driverDid))
+      .map((a) => {
+        const v = this.vehicles.list().find((x) => x.vehicleId === a.vehicleId);
+        return {
+          did: a.driverDid,
+          name: nameOf(a.driverDid),
+          vehicleId: a.vehicleId,
+          plate: v?.plate ?? a.vehicleId,
+          vehicleClass: v?.vehicleClass ?? '',
+          truckSubtype: v?.truckSubtype,
+          remainingKg: this.dispatch.remainingCapacity(a.driverDid),
+          location: a.location,
+          lastLocatedAt: a.lastLocatedAt,
+        };
+      });
+    const chosen = q.driver && dids.has(q.driver) ? drivers.find((d) => d.did === q.driver) : undefined;
+    const from = chosen?.location ?? manager.location;
+    const rows = chosen ? this.dispatch.board({ driverDid: chosen.did, from, radiusKm: q.radiusKm }) : [];
+    return { drivers, driver: chosen?.did ?? null, from: { ...from, source: chosen?.location ? 'driver' : 'depot' }, rows, total: rows.length };
+  }
+
+  /**
+   * FP5 — put a load on one of this fleet's drivers. The driver must be the fleet's own and on a shift; the
+   * service applies every gate a claim would. The office's name goes on the freight.
+   */
+  @Post('fleet/managers/:did/dispatch')
+  fleetAssign(@Param('did') did: string, @Body() dto: FleetAssignDto, @Actor() actor: IntrospectionResult) {
+    this.assertFleetSelf(did, actor);
+    const driver = this.drivers.get(dto.driverDid);
+    if (driver.managerDid !== did) throw new GlosError('FORBIDDEN', 'This driver is not in your fleet');
+    const name = actor?.actorName ?? this.managers.get(did).companyName;
+    return this.dispatch.assign(dto.freightId, dto.driverDid, { managerDid: did, name });
   }
 
   /** The fleet's drivers as a set, and their names — the two things every fleet register needs. */

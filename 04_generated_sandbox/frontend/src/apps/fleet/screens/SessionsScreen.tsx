@@ -105,6 +105,10 @@ export function SessionsScreen({ state, actions }: SessionsScreenProps) {
                       </span>
                     </span>
                     <span class="row__end">
+                      {/* FP5 — from the shift to the market: this driver, this vehicle, what they could take. */}
+                      <Button variant="link" full={false} onClick={() => actions.openDispatch(a.driverDid)}>
+                        {t('fleet.dispatch.findLoad')}
+                      </Button>
                       <Button variant="link" full={false} danger busy={state.busy === `uncouple:${a.driverDid}`} onClick={() => void actions.uncouple(a.driverDid)}>
                         {t('fleet.sessions.endSession')}
                       </Button>

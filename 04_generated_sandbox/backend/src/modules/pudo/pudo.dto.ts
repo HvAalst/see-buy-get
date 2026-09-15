@@ -1265,6 +1265,18 @@ export class BookFreightDto {
  * those would REMOVE a row, and the board's whole purpose is that a load you cannot take still appears, marked
  * with why. Narrowing happens on the client, over a complete answer.
  */
+/** FP5 — the fleet's dispatch view: which driver on shift to judge the market against, and how far out. */
+export class FleetDispatchQueryDto {
+  @IsOptional() @IsString() driver?: string;
+  @IsOptional() @IsNumber() @Type(() => Number) @Min(1) radiusKm?: number;
+}
+
+/** FP5 — put this load on this driver. Both must be the fleet's own. */
+export class FleetAssignDto {
+  @IsString() freightId!: string;
+  @IsString() driverDid!: string;
+}
+
 export class FreightBoardQueryDto {
   @IsNumber() @Type(() => Number) @Min(-90) @Max(90) lat!: number;
   @IsNumber() @Type(() => Number) @Min(-180) @Max(180) lng!: number;

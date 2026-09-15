@@ -9,6 +9,7 @@ import { LinesScreen } from './screens/LinesScreen';
 import { SessionsScreen } from './screens/SessionsScreen';
 import { SignInScreen } from './screens/SignInScreen';
 import { VehiclesScreen } from './screens/VehiclesScreen';
+import { DispatchScreen } from './screens/DispatchScreen';
 import { useFleetApp, type FleetActions, type FleetState, type Screen } from './useFleetApp';
 import '../../shared/screens.css';
 import './fleet.css';
@@ -103,6 +104,8 @@ function ScreenRouter({ screen, state, actions }: { screen: Screen; state: Fleet
       return <LinesScreen state={state} actions={actions} />;
     case 'earnings':
       return <EarningsScreen state={state} actions={actions} />;
+    case 'dispatch':
+      return <DispatchScreen state={state} actions={actions} />;
     default:
       return <DashboardScreen state={state} actions={actions} />;
   }

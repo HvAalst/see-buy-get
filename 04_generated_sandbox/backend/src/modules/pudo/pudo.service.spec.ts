@@ -3755,6 +3755,37 @@ describe('PUDO Light', () => {
     expect(dispatch.listFreight().find((x) => x.freightId === f.freightId)!.driverPaid).toBe(true);
   });
 
+  it('FP5: the fleet office puts a load on a driver on shift — the same gates as a claim, the office on the record, the shipper billed', () => {
+    const d = drivers.register({ displayName: 'AS', fullName: 'A', nationalId: 'ID-AS', mobile: '+254770555', licenceClasses: ['truck'], licenceNumber: 'L-AS', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const truck = vehicles.register({ plate: 'AS-1', vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 10_000, ownerName: 'X', equipment: ['TLT'], baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5 });
+    const vendor = vendors.register({ name: 'AssignVendor' });
+    vendors.topUp(vendor.vendorId, 500);
+    const pickup = { lat: -1.2, lng: 36.8 };
+    const f = dispatch.registerFreight({ description: 'Machinery', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', destLocation: pickup, weightKg: 200, packaging: 'palletised', shipperDid: vendor.vendorId });
+    const office = { managerDid: 'did:fleet:office', name: 'Kilima office' };
+    // Off shift: a load goes on a vehicle, and there is none.
+    expect(() => dispatch.assign(f.freightId, d.did, office)).toThrow(/not on a shift/);
+    fleet.couple(d.did, truck.vehicleId);
+    // A negotiate load has no settled price to assign at.
+    const nego = dispatch.registerFreight({ description: 'Nego', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', destLocation: pickup, weightKg: 100, packaging: 'palletised', commitMode: 'negotiate' });
+    expect(() => dispatch.assign(nego.freightId, d.did, office)).toThrow(/negotiation/);
+    const noon = new Date('2026-07-22T11:00:00').getTime();
+    const before = vendors.balanceOf(vendor.vendorId);
+    const assigned = dispatch.assign(f.freightId, d.did, office, noon);
+    expect(assigned).toMatchObject({ status: 'claimed', claimedBy: d.did, lockedPrice: 10, paidStatus: 'billed', assignedBy: { managerDid: 'did:fleet:office', name: 'Kilima office' } });
+    expect(vendors.balanceOf(vendor.vendorId)).toBeCloseTo(before - shipperCharge(10), 2);
+    // The driver's own list says it was put on them, and by whom.
+    expect(dispatch.claimsFor(d.did).find((c) => c.ref === f.freightId)?.assignedBy).toMatchObject({ name: 'Kilima office' });
+    // Taken means taken: a second office cannot put it on somebody else.
+    expect(() => dispatch.assign(f.freightId, d.did, office)).toThrow(/claimed/);
+    // And it advances like any claim, so the driver is paid on delivery.
+    pickupOk(f, d.did);
+    expect(deliverOk(f, d.did).status).toBe('delivered');
+    expect(gate.entries({ type: 'DRIVER_PAYOUT' }).filter((e) => e.reference === d.did)).toHaveLength(1);
+  });
+
   it('FB0a: the locked price keeps the deadhead/loaded split — a claimed haul is not recorded as all-empty running', () => {
     const d = drivers.register({ displayName: 'SP', fullName: 'S', nationalId: 'ID-SP', mobile: '+254770123', licenceClasses: ['truck'], licenceNumber: 'L-SP', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
     drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });

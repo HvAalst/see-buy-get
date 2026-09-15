@@ -38,6 +38,11 @@ export function DashboardScreen({ state, actions }: DashboardScreenProps) {
           server has no report, so an old backend does not read as "all in date". */}
       {d?.papers ? <PapersCard report={d.papers} /> : null}
 
+      {/* FP5 — the office puts a load on a driver. Reached from here and from a shift row, never a sixth tab. */}
+      <Card title={t('fleet.dispatch.cardTitle')} aside={<Button variant="link" full={false} onClick={() => actions.openDispatch()}>{t('fleet.dispatch.cardOpen')}</Button>}>
+        <p class="card__note">{t('fleet.dispatch.cardBody', { n: d?.drivers.onShift ?? 0 })}</p>
+      </Card>
+
       {/* FP1 — the one thing a fleet owner asks first, and the one screen this app never had. */}
       <Card title={t('fleet.earn.cardTitle')} aside={<Button variant="link" full={false} onClick={() => actions.go('earnings')}>{t('fleet.earn.cardOpen')}</Button>}>
         <p class="card__note">{t('fleet.earn.cardBody')}</p>

@@ -5,6 +5,9 @@ import { ageWords, signalState,
   EMPTY_VEHICLE,
   bodyPickerOptions,
   corridorState,
+  dispatchDistanceLine,
+  dispatchRowState,
+  dispatchSummary,
   driverAction,
   driverMissing,
   freeDrivers,
@@ -265,5 +268,20 @@ describe('FP4 — the papers that switch things off', () => {
     expect(papersAloud({ lapsed: [], due: [], inDate: 4, unrecorded: 1 }, t)).toBe('');
     const row = { subject: 'vehicle' as const, id: 'v', label: 'P', kind: 'insurance' as const, expiresAt: '2026-09-01', onShift: false };
     expect(papersAloud({ lapsed: [{ ...row, state: 'lapsed' }], due: [{ ...row, state: 'due' }, { ...row, state: 'due' }], inDate: 0, unrecorded: 0 }, t)).toBe(' 1 off the road for lapsed papers. 2 papers running out within thirty days.');
+  });
+});
+
+describe('FP5 — dispatch from the office', () => {
+  it('a negotiate load is never "take", a blocked one is blocked, the rest can be put on the driver', () => {
+    expect(dispatchRowState({ canTake: true, commitMode: 'instant' })).toBe('take');
+    expect(dispatchRowState({ canTake: true, commitMode: 'negotiate' })).toBe('negotiate');
+    expect(dispatchRowState({ canTake: false, commitMode: 'instant' })).toBe('blocked');
+  });
+
+  it('says the legs the way the money splits, and the market the way the office asks', () => {
+    expect(dispatchDistanceLine({ deadheadKm: 3.25, loadedKm: 12 }, t)).toBe('3.3 km empty · 12.0 km loaded');
+    expect(dispatchSummary(null, t)).toBe('Nobody is on a shift, so there is nobody to put a load on.');
+    const row = (canTake: boolean) => ({ freightId: 'f', code: 'FRT-1', description: '', pickupLabel: '', destLabel: '', weightKg: 1, commitMode: 'instant' as const, deadheadKm: 0, loadedKm: 0, totalKm: 0, canTake, blockers: [] });
+    expect(dispatchSummary({ drivers: [{ did: 'd', name: 'Amos K.', vehicleId: 'v', plate: 'P', vehicleClass: 'bike', remainingKg: 20 }], driver: 'd', from: { lat: 0, lng: 0, source: 'depot' }, rows: [row(true), row(false)], total: 2 }, t)).toBe('2 loads on the market for Amos K., 1 they could take.');
   });
 });

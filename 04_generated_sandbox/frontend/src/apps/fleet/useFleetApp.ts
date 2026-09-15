@@ -8,6 +8,7 @@ import type { IconName } from '../../shared/ui/Icon';
 import { clearManager, createFleetClient, managerLookup, managerSession, managerChoices, managerSessionByFleet, changeManagerPin, purgeFleetTokens, readManager, saveManager } from './api';
 import { EMPTY_DRIVER, EMPTY_LINE, EMPTY_VEHICLE, isHeavySelection, lineBlocker, type DriverForm, type LineForm, type VehicleForm } from './logic';
 import type { FleetEarningsSummary, FleetJobRow,
+  DispatchView,
   AssignmentRow,
   CorridorRow,
   DashboardView,
@@ -16,7 +17,7 @@ import type { FleetEarningsSummary, FleetJobRow,
   VehicleRow,
 } from './types';
 
-export type Screen = 'dash' | 'vehicles' | 'drivers' | 'sessions' | 'lines' | 'earnings';
+export type Screen = 'dash' | 'vehicles' | 'drivers' | 'sessions' | 'lines' | 'earnings' | 'dispatch';
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
 
 export interface Toast {
@@ -57,6 +58,13 @@ export interface FleetState {
   earnState: 'idle' | 'loading' | 'ready' | 'error';
   earnQuery: EarningsQuery;
   earnSummary: FleetEarningsSummary | null;
+  /* FP5 — dispatch: the market as one driver on shift would see it. */
+  dispatch: DispatchView | null;
+  /** The driver being dispatched for ('' = let the server's first driver on shift stand in). */
+  dispatchDriver: string;
+  /** Reach in km from where they are; 0 = the whole market. */
+  dispatchRadius: number;
+  dispatchState: 'idle' | 'loading' | 'ready' | 'error';
 }
 
 export interface EarningsQuery {
@@ -81,6 +89,10 @@ const EMPTY_COUPLE = { driverDid: '', vehicleId: '', corridorId: '' };
 const EMPTY_KYC = { for: null, idCopyRef: '', licenceCopyRef: '', photoRef: '' } as const;
 
 const INITIAL: FleetState = {
+  dispatch: null,
+  dispatchDriver: '',
+  dispatchRadius: 50,
+  dispatchState: 'idle',
   earnRows: [],
   earnTotal: 0,
   earnState: 'idle',
@@ -425,6 +437,60 @@ export function useFleetApp() {
     }
   }, [client, fail, pushToast]);
 
+  /* ------------------------------------------------------ FP5: dispatch */
+
+  const dispatchEpoch = useRef(0);
+  /**
+   * Read the market for one driver on shift. With no driver chosen, the first on shift stands in — the
+   * office opening this screen wants the market, not a form — and the choice is kept so a refresh does not
+   * silently switch whose prices are on the screen.
+   */
+  const fetchDispatchWith = useCallback(
+    async (driver: string, radius: number) => {
+      const did = stateRef.current.manager?.did;
+      if (!client || !did) return;
+      const epoch = ++dispatchEpoch.current;
+      setState((s) => ({ ...s, dispatchState: 'loading' }));
+      const r = await client.api.dispatchView(did, { driver: driver || undefined, radiusKm: radius > 0 ? String(radius) : undefined });
+      if (epoch !== dispatchEpoch.current) return;
+      if (r.error) {
+        setState((s) => ({ ...s, dispatchState: 'error' }));
+        return fail(r.error);
+      }
+      const view = narrow<DispatchView>(r.data);
+      if (!driver && view.drivers.length) {
+        setState((s) => ({ ...s, dispatch: view, dispatchDriver: view.drivers[0].did }));
+        void fetchDispatchWith(view.drivers[0].did, radius);
+        return;
+      }
+      setState((s) => ({ ...s, dispatch: view, dispatchState: 'ready' }));
+    },
+    [client, fail],
+  );
+  /** Open the dispatch screen, for a named driver (from a shift row) or whoever was last chosen. */
+  const openDispatch = useCallback(
+    (driverDid?: string) => {
+      const driver = driverDid ?? stateRef.current.dispatchDriver;
+      setState((s) => ({ ...s, screen: 'dispatch', error: null, dispatchDriver: driver }));
+      void fetchDispatchWith(driver, stateRef.current.dispatchRadius);
+    },
+    [fetchDispatchWith],
+  );
+  const setDispatchDriver = useCallback(
+    (did: string) => {
+      setState((s) => ({ ...s, dispatchDriver: did }));
+      void fetchDispatchWith(did, stateRef.current.dispatchRadius);
+    },
+    [fetchDispatchWith],
+  );
+  const setDispatchRadius = useCallback(
+    (km: number) => {
+      setState((s) => ({ ...s, dispatchRadius: km }));
+      void fetchDispatchWith(stateRef.current.dispatchDriver, km);
+    },
+    [fetchDispatchWith],
+  );
+
   /* ----------------------------------------------------------- navigation */
 
   const go = useCallback(
@@ -650,6 +716,22 @@ export function useFleetApp() {
     [client, run, fail, pushToast, refresh],
   );
 
+  /** Put a load on a driver. The server applies every gate a claim would, and tells the driver. */
+  const assignLoad = useCallback(
+    async (freightId: string, driverDid: string, code: string, name: string) => {
+      const did = stateRef.current.manager?.did;
+      if (!client || !did) return;
+      await run('assign:' + freightId, async () => {
+        const r = await client.api.assign(did, { freightId, driverDid });
+        if (r.error) return fail(r.error);
+        pushToast({ tone: 'ok', icon: 'truck', title: t('fleet.dispatch.assigned', { code, name }), detail: t('fleet.dispatch.assignedDetail') });
+        await fetchDispatchWith(driverDid, stateRef.current.dispatchRadius);
+        await refresh();
+      });
+    },
+    [client, run, fail, pushToast, fetchDispatchWith, refresh],
+  );
+
   const couple = useCallback(async () => {
     if (!client) return;
     const f = stateRef.current.cForm;
@@ -757,6 +839,10 @@ export function useFleetApp() {
       proposeLine,
       queryEarnings,
       exportEarnings,
+      openDispatch,
+      setDispatchDriver,
+      setDispatchRadius,
+      assignLoad,
       /** FP2 — the consignment note of a haul one of this fleet's drivers carried. */
       freightNote: (freightId: string) => client!.api.freightNote(freightId),
       pushToast,

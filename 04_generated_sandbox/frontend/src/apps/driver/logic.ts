@@ -288,28 +288,8 @@ export function priceBreakdownLines(price: PriceBreakdown | undefined, t: Transl
 
 /* ------------------------------------------------------------- the board -- */
 
-/**
- * FB1 — the colour a blocker is shown in. Grouped by KIND, never by code, so a new reason from the server
- * renders sensibly on an app that has never heard of it.
- *
- * 'unknown' is deliberately not a danger tone. It is not a refusal — it is the system admitting it could not
- * check bridge clearances or axle limits, and painting that red would train an operator to ignore the one
- * warning that could actually hurt them.
- */
-export function blockerTone(kind: BlockerKind): 'danger' | 'warn' | 'info' | 'idle' {
-  switch (kind) {
-    case 'legal':
-      return 'danger';
-    case 'physical':
-      return 'danger';
-    case 'resolvable':
-      return 'warn';
-    case 'preference':
-      return 'info';
-    default:
-      return 'idle';
-  }
-}
+// The colour table lives in shared/board.ts — the fleet's dispatch view (FP5) reads the same board.
+export { blockerTone } from '../../shared/board';
 
 /** One change, and what taking it would open up. */
 export interface Unlock {

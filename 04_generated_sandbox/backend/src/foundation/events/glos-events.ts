@@ -79,6 +79,7 @@ export const GlosEvent = {
     ToteAvailable: 'pudo.tote_available', // a full/aged/SEALED tote published to the claim marketplace
     ToteNeedsSeal: 'pudo.tote_needs_seal', // a SHOP bag is full/aged but still open — ask the shop to close it
     FreightPosted: 'pudo.freight_posted',
+    FreightAssigned: 'pudo.freight_assigned', // FP5 — the fleet office put a load on one of its drivers; the driver is told
     FreightDelivered: 'pudo.freight_delivered', // FP2 — the consignment closes: the sender is sent its receipt // a dedicated-freight load registered → ping drivers near its pickup
     FreightCancelled: 'pudo.freight_cancelled', // FP3 — the sender (or the network) withdrew a load before it was taken over; a driver who had claimed it is told
     FreightDeliveryFailed: 'pudo.freight_delivery_failed', // FP3b — the driver was at the door and could not hand over; the load stays on the van, the sender is told
