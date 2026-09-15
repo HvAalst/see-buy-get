@@ -10477,7 +10477,7 @@
       "post": {
         "operationId": "Sbg.updateVehicleDocs",
         "summary": "",
-        "description": "Upload / update registration docs — re-evaluates the verified (dispatch-priority) flag.",
+        "description": "Upload / update registration docs — re-evaluates the verified (dispatch-priority) flag.\n\nFP4 made a document CONSEQUENTIAL: an insurance date that has passed takes the vehicle off the road. Until\nnow this route, like ground and retire below it, took any valid token — which would have let anyone with\na shop login park a competitor's fleet by typing last year's date. Owner or operator, all three.",
         "parameters": [
           {
             "name": "id",
@@ -10504,7 +10504,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Vehicle"
+                  "type": "object"
                 }
               }
             }
@@ -10666,6 +10666,38 @@
         ],
         "responses": {
           "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/drivers/{did}/licence": {
+      "post": {
+        "operationId": "Sbg.renewDriverLicence",
+        "summary": "",
+        "description": "FP4 — the fleet office records a renewed driving licence. The DATE is what puts the driver back on the road\n(papers.ts derives everything from it), so this is the whole of \"renewal\": no flag to clear, no re-vetting.\nThe fleet the driver belongs to, or an operator — never the driver, whose own word on their own licence is\nexactly what the date is there to replace.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenewLicenceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
             "description": ""
           }
         }
@@ -20668,9 +20700,42 @@
             "type": "string"
           },
           "insuranceExpiresAt": {
+            "type": "string",
+            "description": "FP4 — a passed insurance expiry takes the vehicle OFF THE ROAD (see papers.ts); no date recorded switches nothing off."
+          },
+          "inspectionRef": {
+            "type": "string",
+            "description": "FP4 — the roadworthiness / inspection certificate, enforced the same way."
+          },
+          "inspectionExpiresAt": {
             "type": "string"
           }
         }
+      },
+      "PaperStatusView": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "object"
+          },
+          "state": {
+            "type": "object"
+          },
+          "expiresAt": {
+            "type": "string"
+          },
+          "daysLeft": {
+            "type": "number",
+            "description": "Whole days until it lapses — negative once it has. Absent without a date."
+          },
+          "reference": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "state"
+        ]
       },
       "Vehicle": {
         "type": "object",
@@ -20764,6 +20829,20 @@
           },
           "status": {
             "type": "object"
+          },
+          "papers": {
+            "description": "FP4 — DERIVED on the owner's read, never stored: each paper's state today.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PaperStatusView"
+            }
+          },
+          "offRoad": {
+            "description": "FP4 — DERIVED: the papers that have lapsed, in words; non-empty means the vehicle cannot start a shift.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "createdAt": {
             "type": "string"
@@ -21428,7 +21507,16 @@
             "type": "string"
           },
           "insuranceExpiresAt": {
+            "type": "string",
+            "description": "FP4 — YYYY-MM-DD; the day after it, the vehicle is off the road until renewed.",
+            "pattern": "/^\\d{4}-\\d{2}-\\d{2}/"
+          },
+          "inspectionRef": {
             "type": "string"
+          },
+          "inspectionExpiresAt": {
+            "type": "string",
+            "pattern": "/^\\d{4}-\\d{2}-\\d{2}/"
           }
         }
       },
@@ -21557,7 +21645,16 @@
             "type": "string"
           },
           "insuranceExpiresAt": {
+            "type": "string",
+            "description": "FP4 — YYYY-MM-DD; the day after it, the vehicle is off the road until renewed.",
+            "pattern": "/^\\d{4}-\\d{2}-\\d{2}/"
+          },
+          "inspectionRef": {
             "type": "string"
+          },
+          "inspectionExpiresAt": {
+            "type": "string",
+            "pattern": "/^\\d{4}-\\d{2}-\\d{2}/"
           }
         }
       },
@@ -21737,6 +21834,19 @@
           },
           "lastSeenAt": {
             "type": "string"
+          },
+          "papers": {
+            "description": "FP4 — DERIVED on read: the licence's state today; non-empty offRoad means no shift can start.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PaperStatusView"
+            }
+          },
+          "offRoad": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -21768,6 +21878,22 @@
         "required": [
           "phone",
           "pin"
+        ]
+      },
+      "RenewLicenceDto": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "expiresAt": {
+            "type": "string",
+            "pattern": "/^\\d{4}-\\d{2}-\\d{2}/"
+          }
+        },
+        "required": [
+          "expiresAt"
         ]
       },
       "DriverKycDto": {

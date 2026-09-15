@@ -1,10 +1,10 @@
 import { useRef, useState } from 'preact/hooks';
-import { AuthImage, Button, Card, ErrorNote, Icon, OptionInfo, OptionPicker, Pill, QrBlock, ReadAloud, Sheet } from '../../../shared/ui';
+import { AuthImage, Button, Card, ErrorNote, Icon, Note, OptionInfo, OptionPicker, Pill, QrBlock, ReadAloud, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { qrPayload } from '../../../shared/qr';
 import type { MediaKind } from '../../../lib/sbg/personas/media';
 import { fleetConfig } from '../api';
-import { bodyPickerOptions, equipmentHelp, equipmentOptions, subtypeLine, vehicleMissing } from '../logic';
+import { bodyPickerOptions, equipmentHelp, equipmentOptions, paperLine, paperLineClass, papersToShow, subtypeLine, vehicleMissing } from '../logic';
 import { VEHICLE_CLASSES, type VehicleRow } from '../types';
 import type { FleetActions, FleetState } from '../useFleetApp';
 
@@ -90,6 +90,7 @@ export function VehiclesScreen({ state, actions }: VehiclesScreenProps) {
   const t = useT();
   const [priceFor, setPriceFor] = useState<VehicleRow | null>(null);
   const [qrFor, setQrFor] = useState<VehicleRow | null>(null);
+  const [papersFor, setPapersFor] = useState<VehicleRow | null>(null);
   const f = state.vForm;
   const missing = vehicleMissing(f, t);
   const isTruck = f.vehicleClass === 'truck';
@@ -212,6 +213,37 @@ export function VehiclesScreen({ state, actions }: VehiclesScreenProps) {
             <input id="v-vin" class="input input--mono" value={f.factoryId} onInput={(e) => actions.setVForm({ factoryId: e.currentTarget.value })} placeholder="VIN-…" spellcheck={false} />
           </div>
         </div>
+        {/* FP4 — the papers, asked for here because here is where the vehicle is described. Optional: a blank
+            date switches nothing off (we cannot enforce what we never asked for), and the list says so as a gap. */}
+        <div class="grid2" style="margin-top:12px">
+          <div class="field">
+            <label class="field__label" for="v-ins-ref">
+              {t('fleet.vehicles.insuranceRef')}
+            </label>
+            <input id="v-ins-ref" class="input input--mono" value={f.insuranceRef} onInput={(e) => actions.setVForm({ insuranceRef: e.currentTarget.value })} spellcheck={false} />
+          </div>
+          <div class="field">
+            <label class="field__label" for="v-ins-exp">
+              {t('fleet.vehicles.insuranceExpires')}
+            </label>
+            <input id="v-ins-exp" class="input" type="date" value={f.insuranceExpiresAt} onInput={(e) => actions.setVForm({ insuranceExpiresAt: e.currentTarget.value })} />
+          </div>
+        </div>
+        <div class="grid2" style="margin-top:12px">
+          <div class="field">
+            <label class="field__label" for="v-insp-ref">
+              {t('fleet.vehicles.inspectionRef')}
+            </label>
+            <input id="v-insp-ref" class="input input--mono" value={f.inspectionRef} onInput={(e) => actions.setVForm({ inspectionRef: e.currentTarget.value })} spellcheck={false} />
+          </div>
+          <div class="field">
+            <label class="field__label" for="v-insp-exp">
+              {t('fleet.vehicles.inspectionExpires')}
+            </label>
+            <input id="v-insp-exp" class="input" type="date" value={f.inspectionExpiresAt} onInput={(e) => actions.setVForm({ inspectionExpiresAt: e.currentTarget.value })} />
+          </div>
+        </div>
+        <p class="hint" style="margin-top:6px">{t('fleet.vehicles.papersHint')}</p>
         {/* S34 — the freight-pricing profile. All optional; each defaults per class. The base fee starts every
             freight price; the market may only flex the per-km rate between the two multipliers the fleet owns. */}
         <div class="grid2" style="margin-top:12px">
@@ -314,6 +346,12 @@ export function VehiclesScreen({ state, actions }: VehiclesScreenProps) {
                   <span class="row__s">
                     {`${v.vehicleClass}${v.truckSubtype ? ` · ${v.truckSubtype.replace(/_/g, ' ')}` : ''} · ${v.capacityKg} kg · QR ${v.qr} · ${Number(v.pricePerKm ?? 0).toFixed(3)}/km`}
                   </span>
+                  {/* FP4 — a paper that has lapsed, is running out, or was never dated. In date says nothing. */}
+                  {papersToShow(v.papers).map((p) => (
+                    <span key={p.kind} class={paperLineClass(p.state)}>
+                      {paperLine(p, t)}
+                    </span>
+                  ))}
                   {photos.length ? (
                     <span class="photos photos--sm">
                       {photos.slice(0, 4).map((id) => (
@@ -321,17 +359,24 @@ export function VehiclesScreen({ state, actions }: VehiclesScreenProps) {
                       ))}
                     </span>
                   ) : null}
+                  {/* The three things you do to a vehicle, under its name rather than beside it: the trailing
+                      column never shrinks, and three links plus a pill there left the plate two letters wide. */}
+                  <span style="display:flex;flex-wrap:wrap;gap:2px 16px;margin-top:6px">
+                    <Button variant="link" full={false} onClick={() => setQrFor(v)}>
+                      {t('fleet.vehicles.qrBtn')}
+                    </Button>
+                    <Button variant="link" full={false} onClick={() => setPapersFor(v)}>
+                      {t('fleet.vehicles.papersBtn')}
+                    </Button>
+                    <Button variant="link" full={false} onClick={() => setPriceFor(v)}>
+                      {t('fleet.vehicles.rateBtn')}
+                    </Button>
+                  </span>
                 </span>
                 <span class="row__end">
-                  <Pill tone={v.status === 'ACTIVE' ? 'ok' : 'idle'} dot>
-                    {v.verified ? t('fleet.vehicles.verified') : v.status.toLowerCase()}
+                  <Pill tone={v.offRoad?.length ? 'danger' : v.status === 'ACTIVE' ? 'ok' : 'idle'} dot>
+                    {v.offRoad?.length ? t('fleet.papers.offRoad') : v.verified ? t('fleet.vehicles.verified') : v.status.toLowerCase()}
                   </Pill>
-                  <Button variant="link" full={false} onClick={() => setQrFor(v)}>
-                    {t('fleet.vehicles.qrBtn')}
-                  </Button>
-                  <Button variant="link" full={false} onClick={() => setPriceFor(v)}>
-                    {t('fleet.vehicles.rateBtn')}
-                  </Button>
                 </span>
               </div>
               );
@@ -367,7 +412,85 @@ export function VehiclesScreen({ state, actions }: VehiclesScreenProps) {
       </Sheet>
 
       <PriceSheet vehicle={priceFor} onClose={() => setPriceFor(null)} state={state} actions={actions} />
+      <PapersSheet vehicle={papersFor} onClose={() => setPapersFor(null)} state={state} actions={actions} />
     </div>
+  );
+}
+
+/**
+ * FP4 — the vehicle's papers. Four fields and one rule, said on the sheet: the day after a date passes, the
+ * vehicle is off the road until the renewal is recorded HERE. So this sheet is also the renewal — there is no
+ * separate "put it back" because the date is the switch in both directions.
+ */
+function PapersSheet({ vehicle, onClose, state, actions }: { vehicle: VehicleRow | null; onClose: () => void; state: FleetState; actions: FleetActions }) {
+  const t = useT();
+  const [draft, setDraft] = useState<{ insuranceRef: string; insuranceExpiresAt: string; inspectionRef: string; inspectionExpiresAt: string } | null>(null);
+  const d = draft ?? {
+    insuranceRef: vehicle?.documents?.insuranceRef ?? '',
+    insuranceExpiresAt: (vehicle?.documents?.insuranceExpiresAt ?? '').slice(0, 10),
+    inspectionRef: vehicle?.documents?.inspectionRef ?? '',
+    inspectionExpiresAt: (vehicle?.documents?.inspectionExpiresAt ?? '').slice(0, 10),
+  };
+  const patch = (p: Partial<typeof d>) => setDraft({ ...d, ...p });
+  const close = () => {
+    setDraft(null);
+    onClose();
+  };
+  return (
+    <Sheet open={Boolean(vehicle)} onClose={close} title={vehicle ? t('fleet.vehicles.papersSheetTitle', { plate: vehicle.plate }) : ''}>
+      <p class="t-body">{t('fleet.vehicles.papersBody')}</p>
+      {vehicle?.offRoad?.length ? <Note tone="danger" icon="clock" title={t('fleet.papers.offRoad')} detail={vehicle.offRoad.join(' · ')} /> : null}
+      <div class="grid2">
+        <div class="field">
+          <label class="field__label" for="p-ins-ref">
+            {t('fleet.vehicles.insuranceRef')}
+          </label>
+          <input id="p-ins-ref" class="input input--mono" value={d.insuranceRef} onInput={(e) => patch({ insuranceRef: e.currentTarget.value })} spellcheck={false} />
+        </div>
+        <div class="field">
+          <label class="field__label" for="p-ins-exp">
+            {t('fleet.vehicles.insuranceExpires')}
+          </label>
+          <input id="p-ins-exp" class="input" type="date" value={d.insuranceExpiresAt} onInput={(e) => patch({ insuranceExpiresAt: e.currentTarget.value })} />
+        </div>
+      </div>
+      <div class="grid2" style="margin-top:12px">
+        <div class="field">
+          <label class="field__label" for="p-insp-ref">
+            {t('fleet.vehicles.inspectionRef')}
+          </label>
+          <input id="p-insp-ref" class="input input--mono" value={d.inspectionRef} onInput={(e) => patch({ inspectionRef: e.currentTarget.value })} spellcheck={false} />
+        </div>
+        <div class="field">
+          <label class="field__label" for="p-insp-exp">
+            {t('fleet.vehicles.inspectionExpires')}
+          </label>
+          <input id="p-insp-exp" class="input" type="date" value={d.inspectionExpiresAt} onInput={(e) => patch({ inspectionExpiresAt: e.currentTarget.value })} />
+        </div>
+      </div>
+      <p class="hint" style="margin-top:6px">{t('fleet.vehicles.papersHint')}</p>
+      <Button
+        chevron={false}
+        disabled={!draft}
+        busy={vehicle ? state.busy === 'papers:' + vehicle.vehicleId : false}
+        onClick={() => {
+          if (!vehicle) return;
+          const body = {
+            insuranceRef: d.insuranceRef.trim() || undefined,
+            insuranceExpiresAt: d.insuranceExpiresAt || undefined,
+            inspectionRef: d.inspectionRef.trim() || undefined,
+            inspectionExpiresAt: d.inspectionExpiresAt || undefined,
+          };
+          close();
+          void actions.setVehiclePapers(vehicle.vehicleId, body);
+        }}
+      >
+        {t('fleet.vehicles.savePapers')}
+      </Button>
+      <Button variant="link" onClick={close}>
+        {t('common.cancel')}
+      </Button>
+    </Sheet>
   );
 }
 

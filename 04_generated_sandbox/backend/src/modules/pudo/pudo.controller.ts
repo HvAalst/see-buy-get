@@ -1,4 +1,6 @@
-﻿import { ConsignmentNoteService } from './consignment-note.service';
+﻿import { driverPapers, lapsedOf, offRoadLine } from './papers';
+import { PapersWatchService } from './papers-watch.service';
+import { ConsignmentNoteService } from './consignment-note.service';
 import { MailService } from '../../foundation/mail/mail.service';
 import { isSandbox } from '../../foundation/runtime/sandbox';
 import { Body, Controller, Delete, Get, Header, Inject, Param, Patch, Post, Query, Res, StreamableFile, Optional } from '@nestjs/common';
@@ -55,7 +57,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyRecordDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto } from './pudo.dto';
+  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { classifySize, MAX_CLAIM_AWARD, measuredFactor, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
@@ -160,6 +162,7 @@ export class SbgController {
     private readonly market: MarketPulseService,
     @Inject(GEOCODER) private readonly geocoder: Geocoder,
     @Optional() private readonly mail?: MailService,
+    @Optional() private readonly papers?: PapersWatchService,
   ) {}
 
   // --- phone verification (mandatory at onboarding — control-tower contact + GPS) ---
@@ -2619,20 +2622,35 @@ export class SbgController {
     return this.vehicles.viewFor(id, actingTenant(actor), actor?.role === 'operator');
   }
 
-  /** Upload / update registration docs — re-evaluates the verified (dispatch-priority) flag. */
+  /**
+   * Upload / update registration docs — re-evaluates the verified (dispatch-priority) flag.
+   *
+   * FP4 made a document CONSEQUENTIAL: an insurance date that has passed takes the vehicle off the road. Until
+   * now this route, like ground and retire below it, took any valid token — which would have let anyone with
+   * a shop login park a competitor's fleet by typing last year's date. Owner or operator, all three.
+   */
   @Post('vehicles/:id/documents')
-  updateVehicleDocs(@Param('id') id: string, @Body() dto: VehicleDocsDto) {
-    return this.vehicles.updateDocuments(id, dto);
+  updateVehicleDocs(@Param('id') id: string, @Body() dto: VehicleDocsDto, @Actor() actor: IntrospectionResult) {
+    this.assertVehicleOwner(id, actor);
+    return this.vehicles.viewFor(this.vehicles.updateDocuments(id, dto).vehicleId, actingTenant(actor), actor?.role === 'operator');
   }
 
   @Post('vehicles/:id/ground')
-  groundVehicle(@Param('id') id: string) {
+  groundVehicle(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    this.assertVehicleOwner(id, actor);
     return this.vehicles.ground(id);
   }
 
   @Post('vehicles/:id/retire')
-  retireVehicle(@Param('id') id: string) {
+  retireVehicle(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    this.assertVehicleOwner(id, actor);
     return this.vehicles.retire(id);
+  }
+
+  /** The vehicle's owning fleet, or an operator. A vehicle with no fleet (an independent courier's) is operator-only. */
+  private assertVehicleOwner(vehicleId: string, actor: IntrospectionResult): void {
+    const v = this.vehicles.get(vehicleId); // 404 if unknown
+    if (actor?.role !== 'operator' && (!v.managerDid || actingTenant(actor) !== v.managerDid)) throw new GlosError('FORBIDDEN', 'This vehicle is not yours');
   }
 
   // --- fleet: drivers (own ID, staged onboarding) ---
@@ -2690,7 +2708,7 @@ export class SbgController {
   listFleetDrivers(@Actor() actor: IntrospectionResult) {
     return this.drivers
       .list({ managerDid: actingTenant(actor) })
-      .map((d) => ({ ...d, rateReach: this.dispatch.rateReachFor(d.did) }));
+      .map((d) => ({ ...d, rateReach: this.dispatch.rateReachFor(d.did), papers: driverPapers(d), offRoad: lapsedOf(driverPapers(d)).map(offRoadLine) }));
   }
 
   @Roles('operator')
@@ -2705,7 +2723,22 @@ export class SbgController {
     // REP4 — the driver's own rating + whether it has fallen below the enforcing floor, so the app can explain
     // WHY freight vanished (rather than the driver seeing an empty marketplace with no reason).
     const rating = this.ratings.driverRating(did);
-    return { ...driver, rating, freightPaused: belowFloor(rating) };
+    // FP4 — and the state of their licence, so the app can say why a shift will not start before they try.
+    return { ...driver, rating, freightPaused: belowFloor(rating), papers: driverPapers(driver), offRoad: lapsedOf(driverPapers(driver)).map(offRoadLine) };
+  }
+
+  /**
+   * FP4 — the fleet office records a renewed driving licence. The DATE is what puts the driver back on the road
+   * (papers.ts derives everything from it), so this is the whole of "renewal": no flag to clear, no re-vetting.
+   * The fleet the driver belongs to, or an operator — never the driver, whose own word on their own licence is
+   * exactly what the date is there to replace.
+   */
+  @Post('fleet/drivers/:did/licence')
+  renewDriverLicence(@Param('did') did: string, @Body() dto: RenewLicenceDto, @Actor() actor: IntrospectionResult) {
+    const driver = this.drivers.get(did);
+    if (actor?.role !== 'operator' && (!driver.managerDid || actingTenant(actor) !== driver.managerDid)) throw new GlosError('FORBIDDEN', 'This driver is not in your fleet');
+    const renewed = this.drivers.renewLicence(did, dto);
+    return { ...renewed, papers: driverPapers(renewed), offRoad: lapsedOf(driverPapers(renewed)).map(offRoadLine) };
   }
 
   /** Heavy registry: upload ID + licence copy → KYC_PENDING. */
@@ -3353,7 +3386,9 @@ export class SbgController {
     const driverDids = managerDid ? new Set(this.drivers.list().filter((d) => d.managerDid === managerDid).map((d) => d.did)) : undefined;
     const cargo = this.dispatch.activeCargo(driverDids);
     const items = cargo.items.map((c) => ({ ...c, driver: this.driverNameOf(c.driverDid) }));
-    return { managerDid: managerDid ?? null, ...overview, cargo: { ...cargo, items } };
+    // FP4 — what is off the road and what is running out, read live from the same rules the sweep enforces.
+    const papers = managerDid && this.papers ? this.papers.reportFor(managerDid) : null;
+    return { managerDid: managerDid ?? null, ...overview, cargo: { ...cargo, items }, papers };
   }
 
   private driverNameOf(did: string): string {

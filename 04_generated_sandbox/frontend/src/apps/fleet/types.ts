@@ -20,6 +20,51 @@ export interface ManagerView {
   loginCode?: string;
 }
 
+/* ------------------------------------------------- FP4: the papers that switch things off -- */
+
+export type PaperKind = 'insurance' | 'inspection' | 'licence';
+/** ok = in date · due = within 30 days · lapsed = the date has passed · none = no date recorded (switches nothing off). */
+export type PaperState = 'ok' | 'due' | 'lapsed' | 'none';
+
+/** One paper's state today — DERIVED by the server from its expiry date at the moment of asking, never stored. */
+export interface PaperView {
+  kind: PaperKind;
+  state: PaperState;
+  expiresAt?: string;
+  /** Whole days until it lapses; negative once it has. Absent without a date. */
+  daysLeft?: number;
+  reference?: string;
+}
+
+/** A paper on the dashboard's list: which thing, and whether it is on a shift the sweep will end. */
+export interface PaperRow {
+  subject: 'vehicle' | 'driver';
+  id: string;
+  label: string;
+  kind: PaperKind;
+  state: 'due' | 'lapsed';
+  expiresAt?: string;
+  daysLeft?: number;
+  onShift: boolean;
+}
+
+export interface PapersReport {
+  lapsed: PaperRow[];
+  due: PaperRow[];
+  /** Papers with a date that is neither due nor lapsed — so "nothing listed" can be told from "nothing recorded". */
+  inDate: number;
+  unrecorded: number;
+}
+
+export interface VehicleDocumentsView {
+  registrationPhotoRef?: string;
+  factoryId?: string;
+  insuranceRef?: string;
+  insuranceExpiresAt?: string;
+  inspectionRef?: string;
+  inspectionExpiresAt?: string;
+}
+
 export interface VehicleRow {
   vehicleId: string;
   qr: string;
@@ -33,6 +78,10 @@ export interface VehicleRow {
   managerDid?: string;
   vehiclePhotoRefs?: string[]; // S26 — mediaIds of the vehicle-body photos
   trailerPhotoRefs?: string[]; // S26 — mediaIds of a coupled trailer's photos
+  /** FP4 — the owner's read carries the papers as recorded, their state today, and the lapsed ones in words. */
+  documents?: VehicleDocumentsView;
+  papers?: PaperView[];
+  offRoad?: string[];
 }
 
 export interface DriverRow {
@@ -54,6 +103,9 @@ export interface DriverRow {
    * and putting it in front of whoever schedules them turns a setting into a negotiation.
    */
   rateReach?: { overBudget: number; ratePerKm?: number; rateLooksHigh: boolean };
+  /** FP4 — the licence's state today, and why no shift can start when it has lapsed. */
+  papers?: PaperView[];
+  offRoad?: string[];
 }
 
 export interface AssignmentRow {
@@ -123,6 +175,8 @@ export interface DashboardView {
   sessions: { active?: number; todayHours?: number; list?: SessionRow[] };
   positions?: PositionRow[];
   cargo: { count?: number; totalKg?: number; items?: CargoRow[] };
+  /** FP4 — what is off the road and what is running out, from the same rules the six-hourly sweep enforces. */
+  papers?: PapersReport | null;
 }
 
 /* ------------------------------------------------- FP1: the fleet's earnings register -- */

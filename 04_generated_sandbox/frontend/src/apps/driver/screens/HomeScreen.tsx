@@ -31,7 +31,11 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
 function OffShift({ state, actions }: HomeScreenProps) {
   const t = useT();
   const notice = driverStatusNotice(state.driver?.status, t);
-  const ready = canStartShift(state.driver?.status);
+  // FP4 — a lapsed licence stops the shift before the walk to the yard, in the server's own words (the same
+  // ones the coupling would refuse with). A licence running out is said here too, once, where it can be acted on.
+  const offRoad = state.driver?.offRoad ?? [];
+  const licenceDue = (state.driver?.papers ?? []).find((p) => p.kind === 'licence' && p.state === 'due');
+  const ready = canStartShift(state.driver?.status) && offRoad.length === 0;
   // Which of this driver's usual roads they are running today. Optional: a driver who does not yet know
   // starts the shift anyway and says it later, when they look for work.
   const [legIndex, setLegIndex] = useState<number | null>(null);
@@ -39,7 +43,7 @@ function OffShift({ state, actions }: HomeScreenProps) {
   // Which vehicle, before walking to it. A driver opens the app over a coffee; the one they drove yesterday
   // is one tap, and the dashboard QR below stays the way a NEW vehicle joins the list.
   const [vehicleId, setVehicleId] = useState<string | null>(null);
-  const free = state.vehicles.filter((v) => !v.busy);
+  const free = state.vehicles.filter((v) => !v.busy && !v.offRoad?.length);
 
   return (
     <div class="scr">
@@ -47,7 +51,12 @@ function OffShift({ state, actions }: HomeScreenProps) {
       <p class="scr__lede">{t('driver.home.startLede')}</p>
 
       {notice ? <Note tone="warn" icon="clock" title={t('driver.home.notActivated')} detail={notice} /> : null}
-      {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
+      {offRoad.length ? <Note tone="danger" icon="clock" title={t('driver.home.offRoadTitle')} detail={offRoad.join('. ') + '. ' + t('driver.home.offRoadDetail')} /> : null}
+      {!offRoad.length && licenceDue ? (
+        <Note tone="warn" icon="clock" title={t('driver.home.licenceDueTitle', { days: licenceDue.daysLeft ?? 0 })} detail={t('driver.home.licenceDueDetail')} />
+      ) : null}
+      {/* A refused start names the paper (FP4) — that sentence was written for the driver, so it is shown. */}
+      {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} showDetail={state.error.code === 'CANNOT_COUPLE'} /> : null}
       <DarkSpellNote />
 
       {/* Your own vehicles first — the morning question is "which one today?", and it has an answer before
@@ -62,7 +71,7 @@ function OffShift({ state, actions }: HomeScreenProps) {
                 class={`row${vehicleId === v.vehicleId ? ' row--on' : ''}`}
                 role="listitem"
                 aria-pressed={vehicleId === v.vehicleId}
-                disabled={v.busy}
+                disabled={v.busy || Boolean(v.offRoad?.length)}
                 onClick={() => setVehicleId(vehicleId === v.vehicleId ? null : v.vehicleId)}
               >
                 <span class="row__ic">
@@ -75,12 +84,23 @@ function OffShift({ state, actions }: HomeScreenProps) {
                     {v.truckSubtype ? ` · ${v.truckSubtype.replace(/_/g, ' ')}` : ''}
                     {t('driver.home.carriesUpTo', { kg: v.capacityKg })}
                   </span>
+                  {/* FP4 — why it cannot be taken today, in the words the office and the driver both see. */}
+                  {v.offRoad?.length ? <span class="row__s">{v.offRoad.join(' · ')}</span> : null}
                 </span>
-                {v.busy ? <Pill tone="warn" dot>{t('driver.home.vehicleBusy')}</Pill> : null}
+                {v.offRoad?.length ? (
+                  <Pill tone="danger" dot>
+                    {t('driver.home.vehicleOffRoad')}
+                  </Pill>
+                ) : v.busy ? (
+                  <Pill tone="warn" dot>
+                    {t('driver.home.vehicleBusy')}
+                  </Pill>
+                ) : null}
               </button>
             ))}
           </div>
-          {free.length === 0 ? <p class="card__note">{t('driver.home.allBusy')}</p> : null}
+          {/* Nothing to pick: say which reason, because "out with someone else" is untrue of a vehicle off the road. */}
+          {free.length === 0 ? <p class="card__note">{t(state.vehicles.every((v) => v.busy) ? 'driver.home.allBusy' : 'driver.home.allOffRoad')}</p> : null}
         </Card>
       ) : null}
 

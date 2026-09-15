@@ -49,7 +49,7 @@ export function createFleetApi(sbg: SbgClient) {
       baseFee?: number; // S34 — freight flag-down fee (defaults per class)
       minMultiplier?: number; // S34 — the fleet's price-floor multiplier (default 0.8)
       maxMultiplier?: number; // S34 — the fleet's price-ceiling multiplier (default 1.5)
-      documents?: { registrationPhotoRef?: string; factoryId?: string };
+      documents?: { registrationPhotoRef?: string; factoryId?: string; insuranceRef?: string; insuranceExpiresAt?: string; inspectionRef?: string; inspectionExpiresAt?: string };
       vehiclePhotoRefs?: string[]; // S26 — mediaIds of the vehicle-body photos
       trailerPhotoRefs?: string[]; // S26 — mediaIds of a coupled trailer's photos
       equipment?: string[]; // S32 — declared load/unload equipment (tail-lift, pallet jack, …)
@@ -60,6 +60,14 @@ export function createFleetApi(sbg: SbgClient) {
     /** Set a vehicle's public per-km rate (open data). */
     setVehiclePrice: (vehicleId: string, price: number) =>
       sbg.request((c) => c.PATCH('/v1/sbg/vehicles/{id}/pricing', { params: { path: { id: vehicleId } }, body: { price } })),
+
+    /** FP4 — record the vehicle's papers: insurance and inspection references and expiry dates (YYYY-MM-DD). Owner only. */
+    setVehicleDocuments: (vehicleId: string, documents: { insuranceRef?: string; insuranceExpiresAt?: string; inspectionRef?: string; inspectionExpiresAt?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/vehicles/{id}/documents', { params: { path: { id: vehicleId } }, body: documents as never })),
+
+    /** FP4 — record a driver's renewed licence: the new expiry date, and the number if it changed. */
+    renewLicence: (did: string, body: { number?: string; expiresAt: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/licence', { params: { path: { did } }, body: body as never })),
 
     /** This fleet's drivers. */
     drivers: () => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers', {})),

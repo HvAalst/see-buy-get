@@ -54,6 +54,16 @@ export class FleetManager {
   createdAt: string;
 }
 
+/** FP4 — one paper's state today, DERIVED at read time from its expiry date (see papers.ts); never stored. */
+export class PaperStatusView {
+  kind!: 'insurance' | 'inspection' | 'licence';
+  state!: 'ok' | 'due' | 'lapsed' | 'none';
+  expiresAt?: string;
+  /** Whole days until it lapses — negative once it has. Absent without a date. */
+  daysLeft?: number;
+  reference?: string;
+}
+
 export type VehicleStatus = 'ACTIVE' | 'GROUNDED' | 'RETIRED';
 export type VehicleOwnerType = 'driver_owned' | 'fleet_owned' | 'third_party';
 
@@ -61,8 +71,12 @@ export type VehicleOwnerType = 'driver_owned' | 'fleet_owned' | 'third_party';
 export class VehicleDocuments {
   registrationPhotoRef?: string; // photo of the registration papers
   factoryId?: string; // VIN / chassis / factory number
-  insuranceRef?: string; // optional — insurance is government-regulated, not enforced here
+  insuranceRef?: string;
+  /** FP4 — a passed insurance expiry takes the vehicle OFF THE ROAD (see papers.ts); no date recorded switches nothing off. */
   insuranceExpiresAt?: string;
+  /** FP4 — the roadworthiness / inspection certificate, enforced the same way. */
+  inspectionRef?: string;
+  inspectionExpiresAt?: string;
 }
 
 export class Vehicle {
@@ -107,6 +121,10 @@ export class Vehicle {
   trailerPhotoRefs?: string[];
   verified: boolean; // full registration + doc photo + factory ID present → dispatch priority
   status: VehicleStatus;
+  /** FP4 — DERIVED on the owner's read, never stored: each paper's state today. */
+  papers?: PaperStatusView[];
+  /** FP4 — DERIVED: the papers that have lapsed, in words; non-empty means the vehicle cannot start a shift. */
+  offRoad?: string[];
   createdAt: string;
 }
 
@@ -186,6 +204,9 @@ export class FleetDriver {
   assignedVehicleId?: string; // convenience mirror of the active coupling
   createdAt: string;
   lastSeenAt: string;
+  /** FP4 — DERIVED on read: the licence's state today; non-empty offRoad means no shift can start. */
+  papers?: PaperStatusView[];
+  offRoad?: string[];
 }
 
 export type AssignmentStatus = 'active' | 'ended';

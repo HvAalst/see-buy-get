@@ -57,7 +57,7 @@ const SAY: Record<string, string> = {
 const OVERRIDE: Record<string, string> = {
   NOT_COUPLED: 'You are not on shift. Scan a vehicle first.',
   ALREADY_COUPLED: 'You are already on a shift, or that van is taken.',
-  CANNOT_COUPLE: 'You cannot take this vehicle. Check your licence with the office.',
+  CANNOT_COUPLE: 'That shift cannot start.', // FP4 — the detail names the paper, or the status
   BAG_RESERVED: 'That bag is being held for another driver.',
   CONFLICT: 'Someone got there first.',
   INTERNAL: 'The system had a problem. Try again shortly.',

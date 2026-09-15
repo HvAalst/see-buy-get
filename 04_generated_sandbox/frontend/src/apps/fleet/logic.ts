@@ -4,13 +4,17 @@
  * the legacy fleet.js so console and PWA can never disagree about who may drive what.
  */
 
-import type { MessageKey, Translate } from '../../shared/i18n';
+import { formatDate, type MessageKey, type Translate } from '../../shared/i18n';
 import {
   HEAVY_CLASSES,
   type AssignmentRow,
   type CorridorRow,
   type DriverRow,
   type DriverStatus,
+  type PaperKind,
+  type PapersReport,
+  type PaperState,
+  type PaperView,
   type PositionRow,
   type SubtypeRow,
   type VehicleClass,
@@ -45,6 +49,11 @@ export interface VehicleForm {
   vehiclePhotoRefs: string[];
   trailerPhotoRefs: string[];
   equipment: Equipment[]; // S32 — declared load/unload equipment (a tail-lift, a pallet jack, …)
+  // FP4 — the papers, asked for where the vehicle is registered. Dates are YYYY-MM-DD; blank switches nothing off.
+  insuranceRef: string;
+  insuranceExpiresAt: string;
+  inspectionRef: string;
+  inspectionExpiresAt: string;
 }
 
 /** Load/unload equipment a fleet manager can declare (S32). Mirrors the backend EQUIPMENT tuple; plain
@@ -87,6 +96,10 @@ export const EMPTY_VEHICLE: VehicleForm = {
   vehiclePhotoRefs: [],
   trailerPhotoRefs: [],
   equipment: [],
+  insuranceRef: '',
+  insuranceExpiresAt: '',
+  inspectionRef: '',
+  inspectionExpiresAt: '',
 };
 
 /** The next thing the vehicle form needs, or null when it can submit. */
@@ -204,6 +217,53 @@ export function signalState(lastLocatedAt: string | undefined | null, now: numbe
 
 
 /* ------------------------------------------------------------------ views -- */
+
+/* ------------------------------------------------------------ FP4: papers -- */
+
+/** A stop, a warning, a gap, or quiet. */
+export function paperTone(state: PaperState): 'danger' | 'warn' | 'idle' | 'ok' {
+  return state === 'lapsed' ? 'danger' : state === 'due' ? 'warn' : state === 'none' ? 'idle' : 'ok';
+}
+
+export function paperKindLabel(kind: PaperKind, t: Translate): string {
+  return t(kind === 'insurance' ? 'fleet.papers.insurance' : kind === 'inspection' ? 'fleet.papers.inspection' : 'fleet.papers.licence');
+}
+
+/**
+ * The day a paper runs out, in the viewer's locale. A date-only expiry ("2026-09-03") is read as that calendar
+ * day, not as midnight UTC — which in a western time zone would print the day before.
+ */
+export function paperDay(expiresAt: string | undefined): string {
+  if (!expiresAt) return '';
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(expiresAt);
+  return formatDate(m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : expiresAt);
+}
+
+/** One line that says what the date did: "Insurance lapsed 3 Sep 2026", "Driving licence runs out 12 Oct 2026 (27 days)". */
+export function paperLine(p: Pick<PaperView, 'kind' | 'state' | 'expiresAt' | 'daysLeft'>, t: Translate): string {
+  const kind = paperKindLabel(p.kind, t);
+  const day = paperDay(p.expiresAt);
+  if (p.state === 'lapsed') return t('fleet.papers.lapsed', { kind, day });
+  if (p.state === 'due') return (p.daysLeft ?? 0) <= 1 ? t('fleet.papers.dueToday', { kind }) : t('fleet.papers.due', { kind, day, days: p.daysLeft ?? 0 });
+  if (p.state === 'none') return t('fleet.papers.none', { kind });
+  return t('fleet.papers.ok', { kind, day });
+}
+
+/** The row line's class: red for a stop, navy for a warning, the quiet grey for a gap. */
+export function paperLineClass(state: PaperState): string {
+  return state === 'lapsed' ? 'row__s row__s--danger' : state === 'due' ? 'row__s row__s--warn' : 'row__s';
+}
+
+/** The papers worth a line on a list row: everything that is not simply in date. */
+export function papersToShow(papers: PaperView[] | undefined): PaperView[] {
+  return (papers ?? []).filter((p) => p.state !== 'ok');
+}
+
+/** Read aloud after the dashboard summary: only what needs acting on, and nothing when nothing does. */
+export function papersAloud(report: PapersReport | null | undefined, t: Translate): string {
+  if (!report) return '';
+  return (report.lapsed.length ? t('fleet.papers.aloudLapsed', { count: report.lapsed.length }) : '') + (report.due.length ? t('fleet.papers.aloudDue', { count: report.due.length }) : '');
+}
 
 export function shortDid(s: string | undefined | null): string {
   const v = s ?? '';

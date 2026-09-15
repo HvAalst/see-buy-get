@@ -985,7 +985,10 @@ class VehicleDocumentsDto {
   @IsOptional() @IsString() registrationPhotoRef?: string;
   @IsOptional() @IsString() factoryId?: string;
   @IsOptional() @IsString() insuranceRef?: string;
-  @IsOptional() @IsString() insuranceExpiresAt?: string;
+  /** FP4 — YYYY-MM-DD; the day after it, the vehicle is off the road until renewed. */
+  @IsOptional() @IsString() @Matches(/^\d{4}-\d{2}-\d{2}/) insuranceExpiresAt?: string;
+  @IsOptional() @IsString() inspectionRef?: string;
+  @IsOptional() @IsString() @Matches(/^\d{4}-\d{2}-\d{2}/) inspectionExpiresAt?: string;
 }
 
 export class RegisterVehicleDto {
@@ -1012,7 +1015,16 @@ export class VehicleDocsDto {
   @IsOptional() @IsString() registrationPhotoRef?: string;
   @IsOptional() @IsString() factoryId?: string;
   @IsOptional() @IsString() insuranceRef?: string;
-  @IsOptional() @IsString() insuranceExpiresAt?: string;
+  /** FP4 — YYYY-MM-DD; the day after it, the vehicle is off the road until renewed. */
+  @IsOptional() @IsString() @Matches(/^\d{4}-\d{2}-\d{2}/) insuranceExpiresAt?: string;
+  @IsOptional() @IsString() inspectionRef?: string;
+  @IsOptional() @IsString() @Matches(/^\d{4}-\d{2}-\d{2}/) inspectionExpiresAt?: string;
+}
+
+/** FP4 — a renewed driving licence: the new expiry (YYYY-MM-DD), and the number if it changed. */
+export class RenewLicenceDto {
+  @IsOptional() @IsString() @MaxLength(64) number?: string;
+  @IsString() @Matches(/^\d{4}-\d{2}-\d{2}/) expiresAt!: string;
 }
 
 export class RegisterDriverDto {

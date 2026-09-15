@@ -26,6 +26,9 @@ export interface DriverRecord {
   // until it recovers). So the app can explain WHY the freight marketplace went quiet.
   rating?: { average: number; count: number; isNew?: boolean } | null;
   freightPaused?: boolean;
+  /** FP4 — the licence's state today, and why no shift can start (the server's words) when it has lapsed. */
+  papers?: Array<{ kind: 'insurance' | 'inspection' | 'licence'; state: 'ok' | 'due' | 'lapsed' | 'none'; expiresAt?: string; daysLeft?: number }>;
+  offRoad?: string[];
 }
 
 /** R5 — one row of the driver jobs + earnings register (a claimed freight haul). No buyer identity. */
@@ -97,6 +100,8 @@ export interface RecentVehicleView {
   verified: boolean;
   /** Someone else is on shift with it right now. Shown and blocked, never hidden. */
   busy: boolean;
+  /** FP4 — the papers that have lapsed, in words. Non-empty: listed, marked, and refused at the coupling. */
+  offRoad?: string[];
 }
 
 /**

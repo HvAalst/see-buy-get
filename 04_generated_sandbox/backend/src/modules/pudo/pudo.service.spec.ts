@@ -5069,6 +5069,39 @@ describe('PUDO Light', () => {
     expect(() => dispatch.cancelFreight(f.freightId, { did: vendor.vendorId, role: 'shipper' }, 'again')).toThrow(/already cancelled/);
   });
 
+  it('FP4: a lapsed insurance or inspection keeps a vehicle off the road, by name, until the paper is renewed; a lapsed licence keeps the driver off', () => {
+    const d = coupleTipper('PP1', { min: 0.8, max: 1.5 });
+    fleet.uncouple(d.did);
+    const v = vehicles.register({ plate: 'PAPERS-1', vehicleClass: 'truck', truckSubtype: 'tipper', capacityKg: 20_000, ownerName: 'X', baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5, documents: { insuranceRef: 'POL-1', insuranceExpiresAt: '2026-01-31' } });
+    expect(vehicles.isUsable(v.vehicleId)).toBe(false);
+    expect(vehicles.offRoadReasons(v.vehicleId)).toEqual(['Insurance lapsed 31 Jan 2026']);
+    expect(() => fleet.couple(d.did, v.vehicleId)).toThrow(/PAPERS-1 is off the road: Insurance lapsed 31 Jan 2026/);
+    // Renewed: the date does the work, no flag to clear.
+    vehicles.updateDocuments(v.vehicleId, { insuranceExpiresAt: '2099-12-31', inspectionExpiresAt: '2025-12-31' });
+    expect(() => fleet.couple(d.did, v.vehicleId)).toThrow(/Inspection certificate lapsed 31 Dec 2025/);
+    vehicles.updateDocuments(v.vehicleId, { inspectionExpiresAt: '2099-06-30' });
+    expect(vehicles.isUsable(v.vehicleId)).toBe(true);
+    expect(vehicles.viewFor(v.vehicleId, undefined, true)).toMatchObject({ offRoad: [], papers: [expect.objectContaining({ kind: 'insurance', state: 'ok' }), expect.objectContaining({ kind: 'inspection', state: 'ok' })] });
+    fleet.couple(d.did, v.vehicleId);
+    fleet.uncouple(d.did);
+    // A driver with a recorded expiry that has passed — any registry — cannot start.
+    const lapsed = drivers.register({ displayName: 'Lapsed L.', fullName: 'Lapsed L', nationalId: 'ID-LL', mobile: '+254700000777', licenceClasses: ['bike'], licenceNumber: 'L-LL', licenceExpiresAt: '2026-02-01', criminalRecordClear: true });
+    expect(lapsed.status).toBe('ACTIVE'); // light registry activates at once; the date is what stops the shift
+    expect(drivers.canOperate(lapsed.did)).toBe(false);
+    expect(drivers.offRoadReasons(lapsed.did)).toEqual(['Driving licence lapsed 1 Feb 2026']);
+    const bike = vehicles.register({ plate: 'PAPERS-B', vehicleClass: 'bike', ownerName: 'X', pricePerKm: 0.1 });
+    expect(() => fleet.couple(lapsed.did, bike.vehicleId)).toThrow(/Driver cannot start a shift: Driving licence lapsed 1 Feb 2026/);
+    // The fleet office records the renewal: a past date is refused as the typo it is, a future one puts them back.
+    expect(() => drivers.renewLicence(lapsed.did, { expiresAt: '2026-02-01' })).toThrow(/already passed/);
+    expect(() => drivers.renewLicence(lapsed.did, { number: 'L-LL', expiresAt: '2099-01-01' })).not.toThrow();
+    expect(drivers.canOperate(lapsed.did)).toBe(true);
+    expect(drivers.offRoadReasons(lapsed.did)).toEqual([]);
+    // A new number must still be one driver's only.
+    expect(() => drivers.renewLicence(lapsed.did, { number: 'L-PP1', expiresAt: '2099-01-01' })).toThrow(/already exists/);
+    fleet.couple(lapsed.did, bike.vehicleId);
+    fleet.uncouple(lapsed.did);
+  });
+
   it('FP3b: a delivery that could not be made is written down, the load stays in transit, and the sender is told', () => {
     const pickup = { lat: -1.88, lng: 36.38 };
     const d = coupleTipper('DF1', { min: 0.8, max: 1.5 });

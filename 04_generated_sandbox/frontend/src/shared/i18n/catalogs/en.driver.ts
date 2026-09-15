@@ -117,6 +117,13 @@ export const enDriver = {
   'driver.home.whichVehicle': 'Which vehicle today?',
   'driver.home.vehicleBusy': 'In use',
   'driver.home.allBusy': 'All of your vehicles are out with someone else. Scan the one you are taking instead.',
+  // FP4 — papers that switch things off, said before the walk to the yard rather than at the coupling.
+  'driver.home.offRoadTitle': 'You cannot start a shift',
+  'driver.home.offRoadDetail': 'Renew it and show the fleet office; they record the new date, and shifts start again from then.',
+  'driver.home.licenceDueTitle': 'Your licence runs out in {days} days',
+  'driver.home.licenceDueDetail': 'Renew it in time and give the fleet office the new date, or shifts stop on that day.',
+  'driver.home.vehicleOffRoad': 'Off the road',
+  'driver.home.allOffRoad': 'None of your usual vehicles can be taken today: off the road until the office records the renewed paper, or out with someone else. Scan another one if you are taking it.',
   'driver.home.orScan': 'Or scan a different vehicle',
   // The declared leg — what "a load near you" is matched against.
   'driver.home.whereToday': 'Where are you going today?',

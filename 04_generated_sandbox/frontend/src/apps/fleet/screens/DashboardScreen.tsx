@@ -3,7 +3,8 @@ import { pinChangeBlocker } from '../../../shared/account/password';
 import { useState, useEffect } from 'preact/hooks';
 import { Button, Card, ErrorNote, Icon, PlaceMap, Pill, ReadAloud, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
-import { ageWords, signalState, dashboardSummary, hoursLabel, vehiclePins } from '../logic';
+import { ageWords, signalState, dashboardSummary, hoursLabel, paperLine, paperLineClass, papersAloud, vehiclePins } from '../logic';
+import type { PapersReport } from '../types';
 import type { FleetActions, FleetState } from '../useFleetApp';
 
 export interface DashboardScreenProps {
@@ -31,6 +32,11 @@ export function DashboardScreen({ state, actions }: DashboardScreenProps) {
         <Tile value={`${d?.cargo.count ?? 0}·${d?.cargo.totalKg ?? 0}kg`} label={t('fleet.dash.tileCargo')} />
         <Tile value={hoursLabel(d?.sessions.todayHours)} label={t('fleet.dash.tileHours')} />
       </div>
+
+      {/* FP4 — what is off the road and what is running out. Read from the same rules the six-hourly sweep
+          enforces, so this card and the email the fleet gets cannot disagree. Absent entirely (not empty) when the
+          server has no report, so an old backend does not read as "all in date". */}
+      {d?.papers ? <PapersCard report={d.papers} /> : null}
 
       {/* FP1 — the one thing a fleet owner asks first, and the one screen this app never had. */}
       <Card title={t('fleet.earn.cardTitle')} aside={<Button variant="link" full={false} onClick={() => actions.go('earnings')}>{t('fleet.earn.cardOpen')}</Button>}>
@@ -133,11 +139,46 @@ export function DashboardScreen({ state, actions }: DashboardScreenProps) {
 
       <div class="scr__foot">
         <ReadAloud
-          text={() => (d ? dashboardSummary(d, t) : t('fleet.dash.aloudLoading'))}
+          text={() => (d ? dashboardSummary(d, t) + papersAloud(d.papers, t) : t('fleet.dash.aloudLoading'))}
           label={t('fleet.readAloud')}
         />
       </div>
     </div>
+  );
+}
+
+function PapersCard({ report }: { report: PapersReport }) {
+  const t = useT();
+  const rows = [...report.lapsed, ...report.due];
+  return (
+    <Card title={t('fleet.papers.cardTitle')}>
+      <p class="card__note">{t('fleet.papers.cardNote')}</p>
+      {rows.length === 0 ? (
+        <p class="hint">{t('fleet.papers.clear')}</p>
+      ) : (
+        <div class="rows" role="list">
+          {rows.map((r) => (
+            <div key={r.subject + ':' + r.id + ':' + r.kind} class="row row--static" role="listitem">
+              <span class="row__ic">
+                <Icon name={r.subject === 'vehicle' ? 'truck' : 'person'} size={24} />
+              </span>
+              <span class="row__body">
+                <span class="row__t">{r.label}</span>
+                <span class={paperLineClass(r.state)}>{paperLine(r, t)}</span>
+                {/* Still driving on it: for a lapsed paper that is the shift the next check ends. */}
+                {r.onShift ? <span class="row__s">{t(r.state === 'lapsed' ? 'fleet.papers.onShiftEnds' : 'fleet.papers.onShift')}</span> : null}
+              </span>
+              <span class="row__end">
+                <Pill tone={r.state === 'lapsed' ? 'danger' : 'warn'} dot>
+                  {r.state === 'lapsed' ? t('fleet.papers.offRoad') : t('fleet.papers.runningOut')}
+                </Pill>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      <p class="hint" style="margin-top:8px">{t('fleet.papers.counts', { inDate: report.inDate, unrecorded: report.unrecorded })}</p>
+    </Card>
   );
 }
 

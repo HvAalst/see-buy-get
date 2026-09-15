@@ -1,7 +1,7 @@
 import { Button, Card, ErrorNote, Note, PhotoField, Pill, ReadAloud, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
-import { driverAction, driverMissing, isHeavySelection, shortDid, statusTone, toggleClass } from '../logic';
-import { VEHICLE_CLASSES } from '../types';
+import { driverAction, driverMissing, isHeavySelection, paperLine, paperLineClass, papersToShow, shortDid, statusTone, toggleClass } from '../logic';
+import { VEHICLE_CLASSES, type DriverRow } from '../types';
 import type { FleetActions, FleetState } from '../useFleetApp';
 import { useState } from 'preact/hooks';
 import { ConversationList, ConversationSheet } from '../../../shared/conversation/Conversations';
@@ -24,6 +24,8 @@ export function DriversScreen({ state, actions }: DriversScreenProps) {
   const heavy = isHeavySelection(f.classes);
   // CV3 — the thread a driver shared, open read-only.
   const [thread, setThread] = useState<ChatThread | null>(null);
+  // FP4 — whose renewed licence is being recorded.
+  const [licenceFor, setLicenceFor] = useState<DriverRow | null>(null);
 
   return (
     <div class="scr">
@@ -129,6 +131,12 @@ export function DriversScreen({ state, actions }: DriversScreenProps) {
                     {/* The work this driver's RATE is turning away — said here because this is where the
                         lever is. Only once enough loads have been refused to mean something, and never as
                         a benchmark against what anybody else charges. */}
+                    {/* FP4 — the licence, when it is not simply in date: lapsed (no shift can start), running out, or undated. */}
+                    {papersToShow(d.papers).map((p) => (
+                      <span key={p.kind} class={paperLineClass(p.state)}>
+                        {paperLine(p, t)}
+                      </span>
+                    ))}
                     {d.rateReach?.rateLooksHigh ? (
                       <span class="row__s">
                         {d.rateReach.ratePerKm
@@ -138,9 +146,12 @@ export function DriversScreen({ state, actions }: DriversScreenProps) {
                     ) : null}
                   </span>
                   <span class="row__end">
-                    <Pill tone={statusTone(d.status)} dot>
-                      {d.status === 'KYC_PENDING' ? t('fleet.drivers.beingChecked') : d.status.replace(/_/g, ' ').toLowerCase()}
+                    <Pill tone={d.offRoad?.length ? 'danger' : statusTone(d.status)} dot>
+                      {d.offRoad?.length ? t('fleet.papers.offRoad') : d.status === 'KYC_PENDING' ? t('fleet.drivers.beingChecked') : d.status.replace(/_/g, ' ').toLowerCase()}
                     </Pill>
+                    <Button variant="link" full={false} onClick={() => setLicenceFor(d)}>
+                      {t('fleet.drivers.licenceBtn')}
+                    </Button>
                     {action === 'submit-kyc' ? (
                       <Button variant="link" full={false} onClick={() => actions.setKyc({ for: d.did, idCopyRef: '', licenceCopyRef: '', photoRef: '' })}>
                         {t('fleet.drivers.sendPapers')}
@@ -204,6 +215,8 @@ export function DriversScreen({ state, actions }: DriversScreenProps) {
         </Button>
       </Sheet>
 
+      <LicenceSheet driver={licenceFor} onClose={() => setLicenceFor(null)} state={state} actions={actions} />
+
       <div class="scr__foot">
         <ReadAloud
           text={() => {
@@ -214,5 +227,59 @@ export function DriversScreen({ state, actions }: DriversScreenProps) {
         />
       </div>
     </div>
+  );
+}
+
+/**
+ * FP4 — the renewed licence, recorded by the fleet office. The new date is the whole of the renewal: the day it
+ * is saved the driver can start a shift again, and nothing else has to be cleared. The driver's own word is
+ * deliberately not enough — the office records what it has seen.
+ */
+function LicenceSheet({ driver, onClose, state, actions }: { driver: DriverRow | null; onClose: () => void; state: FleetState; actions: FleetActions }) {
+  const t = useT();
+  const [number, setNumber] = useState<string | null>(null);
+  const [expiresAt, setExpiresAt] = useState('');
+  const current = driver?.licence?.number && driver.licence.number !== 'n/a' ? driver.licence.number : '';
+  const close = () => {
+    setNumber(null);
+    setExpiresAt('');
+    onClose();
+  };
+  return (
+    <Sheet open={Boolean(driver)} onClose={close} title={driver ? t('fleet.drivers.licenceSheetTitle', { name: driver.displayName }) : ''}>
+      <p class="t-body">{t('fleet.drivers.licenceBody')}</p>
+      {driver?.offRoad?.length ? <Note tone="danger" icon="clock" title={t('fleet.papers.offRoad')} detail={driver.offRoad.join(' · ')} /> : null}
+      <div class="grid2">
+        <div class="field">
+          <label class="field__label" for="l-num">
+            {t('fleet.drivers.licenceNumber')}
+          </label>
+          <input id="l-num" class="input input--mono" value={number ?? current} onInput={(e) => setNumber(e.currentTarget.value)} spellcheck={false} />
+        </div>
+        <div class="field">
+          <label class="field__label" for="l-exp">
+            {t('fleet.drivers.licenceNewExpires')}
+          </label>
+          <input id="l-exp" class="input" type="date" value={expiresAt} onInput={(e) => setExpiresAt(e.currentTarget.value)} />
+        </div>
+      </div>
+      <Button
+        chevron={false}
+        disabled={!expiresAt}
+        busy={driver ? state.busy === 'licence:' + driver.did : false}
+        onClick={() => {
+          if (!driver || !expiresAt) return;
+          const n = (number ?? current).trim();
+          const body = { expiresAt, ...(n && n !== current ? { number: n } : {}) };
+          close();
+          void actions.renewLicence(driver.did, body);
+        }}
+      >
+        {t('fleet.drivers.saveLicence')}
+      </Button>
+      <Button variant="link" onClick={close}>
+        {t('common.cancel')}
+      </Button>
+    </Sheet>
   );
 }

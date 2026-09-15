@@ -272,6 +272,22 @@
   text-overflow: ellipsis;
 }
 
+/* FP4 — a paper's line under a row: lapsed in red, running out in navy. A sentence like "Inspection
+   certificate runs out 5 Oct 2026 (21 days)" is too long for a pill on a phone, and a pill that clips
+   its own date says nothing; so it is text, and it wraps. */
+.row__s--danger,
+.row__s--warn {
+  font-weight: 600;
+  white-space: normal;
+  overflow: visible;
+}
+.row__s--danger {
+  color: var(--dang);
+}
+.row__s--warn {
+  color: var(--navy);
+}
+
 .row__end {
   flex: none;
   display: flex;

@@ -10,6 +10,12 @@ import { ageWords, signalState,
   freeDrivers,
   freeVehicles,
   isHeavySelection,
+  paperDay,
+  paperLine,
+  paperLineClass,
+  papersAloud,
+  papersToShow,
+  paperTone,
   vehiclePins,
   shortDid,
   statusTone,
@@ -224,5 +230,40 @@ describe('a vehicle that went dark', () => {
       { plate: 'KLM 002B', driverName: 'Amos', vehicleClass: 'bike', hoursOnDuty: 3, location: { lat: -1.2, lng: 36.9 }, lastLocatedAt: '2026-09-14T14:00:00Z' },
     ];
     expect(vehiclePins(rows, now).map((p) => p.label)).toEqual(['KLM 001V · Grace', 'KLM 002B · Amos · no signal 35 min']);
+  });
+});
+
+describe('FP4 — the papers that switch things off', () => {
+  it('tones: a lapsed paper is a stop, a due one a warning, no date a gap, in date quiet', () => {
+    expect(paperTone('lapsed')).toBe('danger');
+    expect(paperTone('due')).toBe('warn');
+    expect(paperTone('none')).toBe('idle');
+    expect(paperTone('ok')).toBe('ok');
+    expect(paperLineClass('lapsed')).toBe('row__s row__s--danger');
+    expect(paperLineClass('due')).toBe('row__s row__s--warn');
+    expect(paperLineClass('none')).toBe('row__s');
+  });
+
+  it('reads a date-only expiry as that calendar day, whatever the time zone', () => {
+    expect(paperDay('2026-09-03')).toMatch(/3.*2026|2026.*3/);
+    expect(paperDay('2026-09-03')).not.toMatch(/\b2\b/);
+    expect(paperDay(undefined)).toBe('');
+  });
+
+  it('says in words what the date did', () => {
+    expect(paperLine({ kind: 'insurance', state: 'lapsed', expiresAt: '2026-09-03' }, t)).toMatch(/^Insurance lapsed .*2026$/);
+    expect(paperLine({ kind: 'inspection', state: 'due', expiresAt: '2026-10-10', daysLeft: 27 }, t)).toMatch(/^Inspection certificate runs out .*\(27 days\)$/);
+    expect(paperLine({ kind: 'licence', state: 'due', daysLeft: 1 }, t)).toBe('Driving licence runs out today');
+    expect(paperLine({ kind: 'licence', state: 'none' }, t)).toBe('Driving licence: no date recorded');
+    expect(paperLine({ kind: 'licence', state: 'ok', expiresAt: '2027-01-01' }, t)).toMatch(/^Driving licence to .*2027$/);
+  });
+
+  it('pins only what is not simply in date, and reads aloud only what needs acting on', () => {
+    expect(papersToShow([{ kind: 'insurance', state: 'ok' }, { kind: 'inspection', state: 'none' }]).map((p) => p.kind)).toEqual(['inspection']);
+    expect(papersToShow(undefined)).toEqual([]);
+    expect(papersAloud(null, t)).toBe('');
+    expect(papersAloud({ lapsed: [], due: [], inDate: 4, unrecorded: 1 }, t)).toBe('');
+    const row = { subject: 'vehicle' as const, id: 'v', label: 'P', kind: 'insurance' as const, expiresAt: '2026-09-01', onShift: false };
+    expect(papersAloud({ lapsed: [{ ...row, state: 'lapsed' }], due: [{ ...row, state: 'due' }, { ...row, state: 'due' }], inDate: 0, unrecorded: 0 }, t)).toBe(' 1 off the road for lapsed papers. 2 papers running out within thirty days.');
   });
 });

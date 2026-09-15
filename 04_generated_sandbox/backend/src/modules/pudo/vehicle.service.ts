@@ -1,3 +1,4 @@
+import { lapsedOf, offRoadLine, vehiclePapers } from './papers';
 import { Injectable } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
@@ -145,7 +146,8 @@ export class VehicleService {
    * raw-object-leak lesson). Used by both the detail and the (open-data) list surfaces.
    */
   private scopedView(v: Vehicle, tenant: string | undefined, isOperator: boolean): Vehicle | Partial<Vehicle> {
-    if (isOperator || (tenant && v.managerDid === tenant)) return v;
+    // FP4 — the owner sees the papers as they stand today, derived here and never written back.
+    if (isOperator || (tenant && v.managerDid === tenant)) return { ...v, papers: vehiclePapers(v), offRoad: this.offRoadReasons(v.vehicleId) };
     const publicView: Partial<Vehicle> = { ...v };
     delete publicView.managerDid;
     delete publicView.documents;
@@ -176,8 +178,17 @@ export class VehicleService {
     return v;
   }
 
-  isUsable(vehicleId: string): boolean {
-    return this.vehicles.get(vehicleId)?.status === 'ACTIVE';
+  /** ACTIVE, and no paper has lapsed (FP4). Grounding by paper is derived: renew the paper and the vehicle is back. */
+  isUsable(vehicleId: string, now: number = Date.now()): boolean {
+    const v = this.vehicles.get(vehicleId);
+    return v?.status === 'ACTIVE' && lapsedOf(vehiclePapers(v, now)).length === 0;
+  }
+
+  /** FP4 — why this vehicle cannot start a shift, paper by paper, in words. Empty when it can. */
+  offRoadReasons(vehicleId: string, now: number = Date.now()): string[] {
+    const v = this.vehicles.get(vehicleId);
+    if (!v) return [];
+    return lapsedOf(vehiclePapers(v, now)).map(offRoadLine);
   }
 
   /** Resolve a scanned dashboard sticker (the QR, or the plate / id typed as a fallback). */

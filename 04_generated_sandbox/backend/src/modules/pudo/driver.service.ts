@@ -1,3 +1,4 @@
+import { driverPapers, lapsedOf, offRoadLine, paperLapsesAt } from './papers';
 import { Injectable } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
 import { MAX_NUDGE_MIN_EARN } from './pudo.config';
@@ -243,6 +244,26 @@ export class DriverService {
     return driver;
   }
 
+  /**
+   * FP4 — record a renewed licence. The date must lie ahead: a "renewal" already in the past is a typo, and
+   * recording it would take the driver off the road the moment it was saved. A changed number keeps the
+   * one-licence-one-driver rule: the old print is released, the new one claimed.
+   */
+  renewLicence(did: string, input: { number?: string; expiresAt: string }, now: number = Date.now()): FleetDriver {
+    const driver = this.require(did);
+    if (paperLapsesAt(input.expiresAt) <= now) throw new GlosError('LICENCE_EXPIRED', 'The expiry date given has already passed — a renewed licence runs into the future');
+    const number = input.number?.trim();
+    if (number && number !== driver.licence.number) {
+      const print = fp(number);
+      if (this.fingerprints.has(print)) throw new GlosError('DUPLICATE', 'A driver with this licence number already exists');
+      if (driver.licence.number && driver.licence.number !== 'n/a') this.fingerprints.delete(fp(driver.licence.number));
+      this.fingerprints.add(print);
+      driver.licence.number = number;
+    }
+    driver.licence.expiresAt = input.expiresAt;
+    return driver;
+  }
+
   suspend(did: string, reason?: string): FleetDriver {
     const driver = this.require(did);
     driver.status = 'SUSPENDED';
@@ -250,12 +271,18 @@ export class DriverService {
     return driver;
   }
 
-  /** A driver may operate only if ACTIVE and (heavy) the licence has not expired. */
-  canOperate(did: string): boolean {
+  /** A driver may operate only if ACTIVE and no recorded licence expiry has passed (FP4 — any registry: a date given is a date kept). */
+  canOperate(did: string, now: number = Date.now()): boolean {
     const driver = this.drivers.get(did);
     if (!driver || driver.status !== 'ACTIVE') return false;
-    if (driver.registry === 'heavy' && this.isExpired(driver.licence.expiresAt)) return false;
-    return true;
+    return lapsedOf(driverPapers(driver, now)).length === 0;
+  }
+
+  /** FP4 — why this driver cannot start a shift, in words. Empty when they can (status aside). */
+  offRoadReasons(did: string, now: number = Date.now()): string[] {
+    const driver = this.drivers.get(did);
+    if (!driver) return [];
+    return lapsedOf(driverPapers(driver, now)).map(offRoadLine);
   }
 
   /** Whether the driver's licence clears them for a given vehicle class. */

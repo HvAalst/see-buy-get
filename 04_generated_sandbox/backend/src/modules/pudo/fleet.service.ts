@@ -35,6 +35,8 @@ export interface RecentVehicle {
   verified: boolean;
   /** Someone else is on shift with it — shown, not hidden, so "where is my bus?" has an answer. */
   busy: boolean;
+  /** FP4 — the papers that have lapsed, in words. Non-empty: listed, marked, and refused at the coupling. */
+  offRoad: string[];
 }
 
 /**
@@ -78,8 +80,16 @@ export class FleetService {
   couple(driverDid: string, vehicleId: string, corridorId?: string, leg?: LegInput): Assignment {
     const driver = this.drivers.get(driverDid);
     const vehicle = this.vehicles.get(vehicleId);
-    if (!this.drivers.canOperate(driverDid)) throw new GlosError('CANNOT_COUPLE', `Driver is ${driver.status} (or licence expired) — cannot be coupled`);
-    if (!this.vehicles.isUsable(vehicleId)) throw new GlosError('CANNOT_COUPLE', `Vehicle is ${vehicle.status} — cannot be coupled`);
+    // FP4 — a refusal names the paper: "off the road: Insurance lapsed 3 Sep 2026" is something a driver can act on
+    // at six in the morning; "cannot be coupled" is not.
+    if (!this.drivers.canOperate(driverDid)) {
+      const why = this.drivers.offRoadReasons(driverDid);
+      throw new GlosError('CANNOT_COUPLE', why.length ? `Driver cannot start a shift: ${why.join('; ')}` : `Driver is ${driver.status} — cannot be coupled`);
+    }
+    if (!this.vehicles.isUsable(vehicleId)) {
+      const why = this.vehicles.offRoadReasons(vehicleId);
+      throw new GlosError('CANNOT_COUPLE', why.length ? `Vehicle ${vehicle.plate} is off the road: ${why.join('; ')}` : `Vehicle is ${vehicle.status} — cannot be coupled`);
+    }
     if (!this.drivers.clearedFor(driverDid, vehicle.vehicleClass)) throw new GlosError('CANNOT_COUPLE', `Driver is not licence-cleared for a ${vehicle.vehicleClass}`);
     if (this.activeForDriver(driverDid)) throw new GlosError('ALREADY_COUPLED', 'Driver is already coupled to a vehicle — uncouple first');
     if (this.activeForVehicle(vehicleId)) throw new GlosError('ALREADY_COUPLED', 'Vehicle is already coupled to a driver — uncouple first');
@@ -133,6 +143,7 @@ export class FleetService {
         capacityKg: v.capacityKg,
         verified: v.verified,
         busy: !!this.activeForVehicle(v.vehicleId),
+        offRoad: this.vehicles.offRoadReasons(v.vehicleId),
       }));
   }
 

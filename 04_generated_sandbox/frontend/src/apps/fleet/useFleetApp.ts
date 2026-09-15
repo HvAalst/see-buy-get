@@ -516,8 +516,18 @@ export function useFleetApp() {
         ...(f.baseFee ? { baseFee: Number(f.baseFee) } : {}),
         ...(f.minMultiplier ? { minMultiplier: Number(f.minMultiplier) } : {}),
         ...(f.maxMultiplier ? { maxMultiplier: Number(f.maxMultiplier) } : {}),
-        ...(f.registrationPhotoRef || f.factoryId
-          ? { documents: { registrationPhotoRef: f.registrationPhotoRef || undefined, factoryId: f.factoryId || undefined } }
+        ...(f.registrationPhotoRef || f.factoryId || f.insuranceRef.trim() || f.insuranceExpiresAt || f.inspectionRef.trim() || f.inspectionExpiresAt
+          ? {
+              documents: {
+                registrationPhotoRef: f.registrationPhotoRef || undefined,
+                factoryId: f.factoryId || undefined,
+                // FP4 — the papers; a blank date is simply absent (it switches nothing off).
+                insuranceRef: f.insuranceRef.trim() || undefined,
+                insuranceExpiresAt: f.insuranceExpiresAt || undefined,
+                inspectionRef: f.inspectionRef.trim() || undefined,
+                inspectionExpiresAt: f.inspectionExpiresAt || undefined,
+              },
+            }
           : {}),
         ...(f.vehiclePhotoRefs.length ? { vehiclePhotoRefs: f.vehiclePhotoRefs } : {}),
         ...(f.trailerPhotoRefs.length ? { trailerPhotoRefs: f.trailerPhotoRefs } : {}),
@@ -606,6 +616,34 @@ export function useFleetApp() {
         const r = await client.api.setVehiclePrice(vehicleId, price);
         if (r.error) return fail(r.error);
         pushToast({ tone: 'ok', icon: 'wallet', title: t('fleet.toast.rateUpdated'), detail: t('fleet.toast.rateUpdatedDetail', { price: price.toFixed(3) }) });
+        await refresh();
+      });
+    },
+    [client, run, fail, pushToast, refresh],
+  );
+
+  /** FP4 — record a vehicle's papers. The DATE is the switch: the day after it passes, the vehicle is off the road. */
+  const setVehiclePapers = useCallback(
+    async (vehicleId: string, documents: { insuranceRef?: string; insuranceExpiresAt?: string; inspectionRef?: string; inspectionExpiresAt?: string }) => {
+      if (!client) return;
+      await run('papers:' + vehicleId, async () => {
+        const r = await client.api.setVehicleDocuments(vehicleId, documents);
+        if (r.error) return fail(r.error);
+        pushToast({ tone: 'ok', icon: 'check', title: t('fleet.toast.papersSaved'), detail: t('fleet.toast.papersSavedDetail') });
+        await refresh();
+      });
+    },
+    [client, run, fail, pushToast, refresh],
+  );
+
+  /** FP4 — record a driver's renewed licence. The new date is the whole of the renewal. */
+  const renewLicence = useCallback(
+    async (did: string, body: { number?: string; expiresAt: string }) => {
+      if (!client || !body.expiresAt) return;
+      await run('licence:' + did, async () => {
+        const r = await client.api.renewLicence(did, body);
+        if (r.error) return fail(r.error);
+        pushToast({ tone: 'ok', icon: 'check', title: t('fleet.toast.licenceSaved'), detail: t('fleet.toast.licenceSavedDetail') });
         await refresh();
       });
     },
@@ -708,6 +746,8 @@ export function useFleetApp() {
       submitKyc,
       setKyc,
       setVehiclePrice,
+      setVehiclePapers,
+      renewLicence,
       couple,
       uncouple,
       assignCorridor,

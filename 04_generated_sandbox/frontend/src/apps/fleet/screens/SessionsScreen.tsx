@@ -33,7 +33,7 @@ export function SessionsScreen({ state, actions }: SessionsScreenProps) {
 
   return (
     <div class="scr">
-      {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
+      {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} showDetail={state.error.code === 'CANNOT_COUPLE'} /> : null}
 
       <Card title={t('fleet.sessions.coupleTitle')}>
         <p class="card__note">{t('fleet.sessions.coupleNote')}</p>

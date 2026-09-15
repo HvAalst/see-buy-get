@@ -74,6 +74,7 @@ export interface MailParams {
   'access-removed': { email: string; what: string; removedBy: string; when: string };
   'fleet-code-issued': { company: string; when: string; byStaff: boolean };
   'fleet-code-due': { company: string; days: number };
+  'papers-due': { company: string; lapsed: string[]; due: string[] };
   'order-on-its-way': { store: string; orderRef?: string; shop: string; trackingUrl: string };
   'ready-for-collection': { shop: string; address?: string; collectBy: string; openUrl?: string };
   'freight-delivered': { code: string; description: string; destination: string; deliveredAt: string; carrier: string; driver?: string; receiverName?: string; amount?: number; currency?: string; noteNumber: string };
@@ -268,6 +269,34 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
     }),
   },
 
+  'papers-due': {
+    title: 'Papers running out, and vehicles off the road (fleet)',
+    sentWhen: 'The six-hourly papers check finds a vehicle or driver paper lapsed or due within 30 days — once per paper per expiry date.',
+    wired: true,
+    sample: { company: 'Kilima Logistics', lapsed: ['Vehicle KLM 002B — Insurance lapsed 3 Sep 2026'], due: ['Vehicle KLM 001V — Inspection certificate runs out 12 Oct 2026 (28 day(s))', 'Driver Amos K. — Driving licence runs out 20 Oct 2026 (36 day(s))'] },
+    build: (p) => ({
+      subject: p.lapsed.length ? `${p.lapsed.length} off the road at ${p.company} — papers lapsed` : `Papers running out at ${p.company}`,
+      preheader: p.lapsed.length ? `${p.lapsed.length} vehicle(s) or driver(s) cannot start a shift until their papers are renewed.` : `${p.due.length} paper(s) run out within 30 days.`,
+      blocks: [
+        { kind: 'heading', text: p.lapsed.length ? 'Papers lapsed — off the road' : 'Papers running out' },
+        ...(p.lapsed.length
+          ? [
+              { kind: 'paragraph', text: 'These cannot start a shift, and any shift they were on has been ended, until the renewed paper and its new date are recorded in the Fleet app:' } as const,
+              { kind: 'facts', rows: p.lapsed.map((l, i) => [String(i + 1), l] as [string, string]) } as const,
+            ]
+          : []),
+        ...(p.due.length
+          ? [
+              { kind: 'paragraph', text: 'Running out within 30 days — renew in time and record the new date, or shifts stop on that day:' } as const,
+              { kind: 'facts', rows: p.due.map((l, i) => [String(i + 1), l] as [string, string]) } as const,
+            ]
+          : []),
+        { kind: 'button', label: 'Open the Fleet app', href: appUrl('fleet') },
+        { kind: 'note', text: 'A paper with no date recorded switches nothing off — but nothing protects you either. Record the dates and the network watches them for you.' },
+      ],
+      reason: 'You are getting this email because it is the contact address of a fleet on SeeBuyGet.',
+    }),
+  },
   'order-on-its-way': {
     title: 'Order on its way (buyer)',
     sentWhen: 'A store hands an order to the network, to the email the buyer gave the store.',
