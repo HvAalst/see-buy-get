@@ -4,17 +4,14 @@
  * the legacy fleet.js so console and PWA can never disagree about who may drive what.
  */
 
-import { formatDate, type MessageKey, type Translate } from '../../shared/i18n';
+import type { MessageKey, Translate } from '../../shared/i18n';
 import {
   HEAVY_CLASSES,
   type AssignmentRow,
   type CorridorRow,
   type DriverRow,
   type DriverStatus,
-  type PaperKind,
   type PapersReport,
-  type PaperState,
-  type PaperView,
   type PositionRow,
   type SubtypeRow,
   type VehicleClass,
@@ -220,44 +217,9 @@ export function signalState(lastLocatedAt: string | undefined | null, now: numbe
 
 /* ------------------------------------------------------------ FP4: papers -- */
 
-/** A stop, a warning, a gap, or quiet. */
-export function paperTone(state: PaperState): 'danger' | 'warn' | 'idle' | 'ok' {
-  return state === 'lapsed' ? 'danger' : state === 'due' ? 'warn' : state === 'none' ? 'idle' : 'ok';
-}
-
-export function paperKindLabel(kind: PaperKind, t: Translate): string {
-  return t(kind === 'insurance' ? 'fleet.papers.insurance' : kind === 'inspection' ? 'fleet.papers.inspection' : 'fleet.papers.licence');
-}
-
-/**
- * The day a paper runs out, in the viewer's locale. A date-only expiry ("2026-09-03") is read as that calendar
- * day, not as midnight UTC — which in a western time zone would print the day before.
- */
-export function paperDay(expiresAt: string | undefined): string {
-  if (!expiresAt) return '';
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(expiresAt);
-  return formatDate(m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : expiresAt);
-}
-
-/** One line that says what the date did: "Insurance lapsed 3 Sep 2026", "Driving licence runs out 12 Oct 2026 (27 days)". */
-export function paperLine(p: Pick<PaperView, 'kind' | 'state' | 'expiresAt' | 'daysLeft'>, t: Translate): string {
-  const kind = paperKindLabel(p.kind, t);
-  const day = paperDay(p.expiresAt);
-  if (p.state === 'lapsed') return t('fleet.papers.lapsed', { kind, day });
-  if (p.state === 'due') return (p.daysLeft ?? 0) <= 1 ? t('fleet.papers.dueToday', { kind }) : t('fleet.papers.due', { kind, day, days: p.daysLeft ?? 0 });
-  if (p.state === 'none') return t('fleet.papers.none', { kind });
-  return t('fleet.papers.ok', { kind, day });
-}
-
-/** The row line's class: red for a stop, navy for a warning, the quiet grey for a gap. */
-export function paperLineClass(state: PaperState): string {
-  return state === 'lapsed' ? 'row__s row__s--danger' : state === 'due' ? 'row__s row__s--warn' : 'row__s';
-}
-
-/** The papers worth a line on a list row: everything that is not simply in date. */
-export function papersToShow(papers: PaperView[] | undefined): PaperView[] {
-  return (papers ?? []).filter((p) => p.state !== 'ok');
-}
+// The paper helpers live in shared/papers.ts, because the operator console reads the same dates for the
+// couriers and vehicles no fleet office looks after; re-exported so this app's screens and tests keep one door.
+export { paperDay, paperKindLabel, paperLine, paperLineClass, papersToShow, paperTone } from '../../shared/papers';
 
 /** Read aloud after the dashboard summary: only what needs acting on, and nothing when nothing does. */
 export function papersAloud(report: PapersReport | null | undefined, t: Translate): string {

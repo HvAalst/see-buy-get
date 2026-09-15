@@ -462,6 +462,12 @@
   color: #8a3b00;
 }
 
+/* A stop, not a warning: the thing this tags cannot work until somebody acts. */
+.ctag--danger {
+  background: #fdecec;
+  color: var(--dang);
+}
+
 .ctag--info {
   background: var(--blue-light);
   color: var(--blue-dark);

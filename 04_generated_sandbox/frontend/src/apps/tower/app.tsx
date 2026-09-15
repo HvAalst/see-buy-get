@@ -9,6 +9,8 @@ import { BordersScreen } from './screens/BordersScreen';
 import { CorridorsScreen } from './screens/CorridorsScreen';
 import { PresenceScreen } from './screens/PresenceScreen';
 import { HazardsScreen } from './screens/HazardsScreen';
+import { PapersScreen } from './screens/PapersScreen';
+import { stuckCount } from './papers';
 import { ApprovalsScreen, ClaimsScreen, DisposalScreen } from './screens/QueuesScreen';
 import { ReportsScreen } from './screens/ReportsScreen';
 import { MoneyScreen } from './screens/MoneyScreen';
@@ -77,7 +79,7 @@ export function App() {
   const isOperator = state.who?.mode === 'operator';
   const manyCompanies = (state.entities?.length ?? 0) > 1;
   const available: Screen[] = [
-    ...(isOperator ? (['network', 'hazards', 'claims', 'disposal', 'approvals', 'reports', 'support', 'corridors', 'presence', 'pictures', 'company', 'borders'] as Screen[]) : []),
+    ...(isOperator ? (['network', 'hazards', 'claims', 'disposal', 'approvals', 'papers', 'reports', 'support', 'corridors', 'presence', 'pictures', 'company', 'borders'] as Screen[]) : []),
     ...(manyCompanies ? (['companies'] as Screen[]) : []),
     'money',
     'rates',
@@ -97,6 +99,8 @@ export function App() {
     claims: state.claims == null && state.freightClaims == null ? null : (state.claims?.length ?? 0) + (state.freightClaims?.length ?? 0),
     disposal: state.disposal?.length ?? null,
     approvals: state.approvals?.length ?? null,
+    // FP4 — only the STUCK count: a courier whose licence is merely running out is not waiting on anybody here.
+    papers: stuckCount(state.papers),
     reports: state.reports?.length ?? null,
   };
 
@@ -180,6 +184,8 @@ export function App() {
             <ReportsScreen state={state} actions={actions} />
           ) : state.screen === 'approvals' ? (
             <ApprovalsScreen state={state} actions={actions} />
+          ) : state.screen === 'papers' ? (
+            <PapersScreen state={state} actions={actions} />
           ) : (
             <HazardsScreen state={state} actions={actions} />
           )}

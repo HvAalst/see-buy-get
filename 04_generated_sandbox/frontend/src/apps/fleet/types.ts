@@ -22,19 +22,8 @@ export interface ManagerView {
 
 /* ------------------------------------------------- FP4: the papers that switch things off -- */
 
-export type PaperKind = 'insurance' | 'inspection' | 'licence';
-/** ok = in date · due = within 30 days · lapsed = the date has passed · none = no date recorded (switches nothing off). */
-export type PaperState = 'ok' | 'due' | 'lapsed' | 'none';
-
-/** One paper's state today — DERIVED by the server from its expiry date at the moment of asking, never stored. */
-export interface PaperView {
-  kind: PaperKind;
-  state: PaperState;
-  expiresAt?: string;
-  /** Whole days until it lapses; negative once it has. Absent without a date. */
-  daysLeft?: number;
-  reference?: string;
-}
+export type { PaperKind, PaperState, PaperView } from '../../shared/papers';
+import type { PaperKind, PaperView } from '../../shared/papers';
 
 /** A paper on the dashboard's list: which thing, and whether it is on a shift the sweep will end. */
 export interface PaperRow {

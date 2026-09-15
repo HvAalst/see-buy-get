@@ -5,7 +5,7 @@ import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { FleetService } from './fleet.service';
 import { NotificationService } from './notification.service';
-import { driverPapers, offRoadLine, paperDay, paperLabel, PaperStatus, vehiclePapers } from './papers';
+import { driverPapers, lapsedOf, offRoadLine, paperDay, paperLabel, PaperStatus, vehiclePapers } from './papers';
 import { VehicleService } from './vehicle.service';
 
 const SWEEP_MS = 6 * 60 * 60 * 1000;
@@ -33,6 +33,58 @@ export interface PapersReport {
   unrecorded: number;
 }
 
+/** A courier who rides without a fleet — nobody's office records their renewal, so the network's staff do. */
+export interface CourierPaperRow {
+  did: string;
+  displayName: string;
+  badgeId?: string;
+  status: string;
+  registry: string;
+  jurisdiction?: string;
+  licence: { number?: string; expiresAt?: string };
+  papers: PaperStatus[];
+  offRoad: string[];
+  onShift: boolean;
+  /** The plates they have driven, newest first — where their vehicle's papers will be found. */
+  drives: string[];
+}
+
+/** A vehicle no fleet owns — registered by a courier, so only an operator can touch its papers. */
+export interface LooseVehicleRow {
+  vehicleId: string;
+  plate: string;
+  vehicleClass: string;
+  status: string;
+  documents: { insuranceRef?: string; insuranceExpiresAt?: string; inspectionRef?: string; inspectionExpiresAt?: string };
+  papers: PaperStatus[];
+  offRoad: string[];
+  /** Who is on a shift with it right now, by display name. */
+  onShiftWith?: string;
+}
+
+export interface SweepRun {
+  at: string;
+  shiftsEnded: number;
+  notified: number;
+  mails: number;
+}
+
+/**
+ * The network's view: what only an operator can put right, plus what the fleets are handling themselves.
+ * Sorted worst first — a lapsed paper before a due one before an undated one — because the list is a
+ * queue of people who cannot work until somebody here types a date.
+ */
+export interface PapersNetworkReport {
+  couriers: CourierPaperRow[];
+  vehicles: LooseVehicleRow[];
+  fleets: { count: number; withLapsed: number; lapsed: number; due: number };
+  sweep: SweepRun | null;
+  sweepEveryHours: number;
+}
+
+const RANK: Record<PaperStatus['state'], number> = { lapsed: 0, due: 1, none: 2, ok: 3 };
+const worst = (papers: PaperStatus[]): number => Math.min(...papers.map((p) => RANK[p.state]), RANK.ok);
+
 /**
  * FP4 — the six-hourly look at every fleet's papers.
  *
@@ -48,6 +100,8 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
   private readonly logger = new Logger(PapersWatchService.name);
   private readonly told = new PersistentMap<string, string>('papers-reminders');
   private timer?: ReturnType<typeof setInterval>;
+  /** The last pass, so a screen can say when the network last looked rather than implying it always is. */
+  lastRun: SweepRun | null = null;
 
   constructor(
     private readonly managers: FleetManagerService,
@@ -92,6 +146,63 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
     return report;
   }
 
+  /**
+   * What only the network's staff can act on, as of now: couriers without a fleet, vehicles without an
+   * owner, and how the fleets are doing with their own. The same date rules as everything else.
+   */
+  networkReport(now: number = Date.now()): PapersNetworkReport {
+    const nameOf = (did: string) => this.drivers.list().find((d) => d.did === did)?.displayName ?? did;
+    const couriers: CourierPaperRow[] = this.drivers
+      .list()
+      .filter((d) => !d.managerDid && d.status !== 'SUSPENDED')
+      .map((d) => {
+        const papers = driverPapers(d, now);
+        return {
+          did: d.did,
+          displayName: d.displayName,
+          badgeId: d.badgeId,
+          status: d.status,
+          registry: d.registry,
+          jurisdiction: d.jurisdiction,
+          licence: { number: d.licence?.number && d.licence.number !== 'n/a' ? d.licence.number : undefined, expiresAt: d.licence?.expiresAt },
+          papers,
+          offRoad: lapsedOf(papers).map(offRoadLine),
+          onShift: Boolean(this.fleet.activeForDriver(d.did)),
+          drives: this.fleet.recentVehicles(d.did).map((v) => v.plate),
+        };
+      })
+      .sort((a, b) => worst(a.papers) - worst(b.papers) || a.displayName.localeCompare(b.displayName));
+    const vehicles: LooseVehicleRow[] = this.vehicles
+      .list()
+      .filter((v) => !v.managerDid && v.status !== 'RETIRED')
+      .map((v) => {
+        const papers = vehiclePapers(v, now);
+        const active = this.fleet.activeForVehicle(v.vehicleId);
+        const d = v.documents ?? {};
+        return {
+          vehicleId: v.vehicleId,
+          plate: v.plate,
+          vehicleClass: v.vehicleClass,
+          status: v.status,
+          documents: { insuranceRef: d.insuranceRef, insuranceExpiresAt: d.insuranceExpiresAt, inspectionRef: d.inspectionRef, inspectionExpiresAt: d.inspectionExpiresAt },
+          papers,
+          offRoad: lapsedOf(papers).map(offRoadLine),
+          ...(active ? { onShiftWith: nameOf(active.driverDid) } : {}),
+        };
+      })
+      .sort((a, b) => worst(a.papers) - worst(b.papers) || a.plate.localeCompare(b.plate));
+    const fleets = { count: 0, withLapsed: 0, lapsed: 0, due: 0 };
+    for (const m of this.managers.list()) {
+      if (m.status !== 'ACTIVE') continue;
+      const r = this.reportFor(m.did, now);
+      fleets.count++;
+      if (r.lapsed.length) fleets.withLapsed++;
+      fleets.lapsed += r.lapsed.length;
+      fleets.due += r.due.length;
+    }
+    return { couriers, vehicles, fleets, sweep: this.lastRun, sweepEveryHours: SWEEP_MS / 3_600_000 };
+  }
+
   /** Returns what the pass did. */
   async sweep(now: number = Date.now()): Promise<{ shiftsEnded: number; notified: number; mails: number }> {
     const out = { shiftsEnded: 0, notified: 0, mails: 0 };
@@ -128,6 +239,7 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
         }
       }
     }
+    this.lastRun = { at: new Date(now).toISOString(), ...out };
     return out;
   }
 

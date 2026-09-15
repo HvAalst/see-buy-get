@@ -1771,9 +1771,17 @@ export class SbgController {
     return this.mdps.setPrice(id, dto.price);
   }
 
-  /** A driver / fleet manager sets a vehicle's open-data per-km transport rate. */
+  /**
+   * A vehicle's open-data per-km rate, set by the fleet that owns it, the driver on a shift with it right
+   * now, or an operator. It took any valid token before — a public rate is still not a public knob.
+   */
   @Patch('vehicles/:id/pricing')
-  setVehiclePrice(@Param('id') id: string, @Body() dto: SetPriceDto) {
+  setVehiclePrice(@Param('id') id: string, @Body() dto: SetPriceDto, @Actor() actor: IntrospectionResult) {
+    const v = this.vehicles.get(id); // 404 if unknown
+    // The fleet's MANAGER, not any token the fleet issued: a driver's token carries the fleet as its tenant too.
+    const owner = actor?.role === 'fleet_manager' && Boolean(v.managerDid) && actingTenant(actor) === v.managerDid;
+    const onIt = Boolean(actor?.did) && this.fleet.activeForVehicle(id)?.driverDid === actor.did;
+    if (actor?.role !== 'operator' && !owner && !onIt) throw new GlosError('FORBIDDEN', 'Only the fleet that owns this vehicle, or the driver on shift with it, sets its rate');
     return this.vehicles.setPrice(id, dto.price);
   }
 
@@ -2715,6 +2723,27 @@ export class SbgController {
   @Get('fleet/drivers/kyc-queue')
   driverKycQueue() {
     return this.drivers.kycQueue();
+  }
+
+  /**
+   * FP4 — the papers only the network's staff can put right: couriers who ride without a fleet and
+   * vehicles no fleet owns (nobody's office records their renewal), what the fleets are handling
+   * themselves, and when the six-hourly check last ran.
+   */
+  @Roles('operator')
+  @Get('fleet/papers')
+  papersReport() {
+    if (!this.papers) throw new GlosError('INVALID_STATE', 'The papers check is not running in this deployment');
+    return this.papers.networkReport();
+  }
+
+  /** FP4 — run the papers check now rather than waiting for the clock. Answers what it did. */
+  @Roles('operator')
+  @Post('fleet/papers/sweep')
+  async papersSweep() {
+    if (!this.papers) throw new GlosError('INVALID_STATE', 'The papers check is not running in this deployment');
+    const did = await this.papers.sweep();
+    return { ...did, at: this.papers.lastRun?.at ?? new Date().toISOString() };
   }
 
   @Get('fleet/drivers/:did')

@@ -333,7 +333,8 @@ export const ARTICLES: GuideArticle[] = [
     id: "papers-that-expire",
     apps: [
       "fleet",
-      "driver"
+      "driver",
+      "console"
     ],
     title: "Papers that run out: insurance, inspection, licence",
     summary: "A vehicle’s insurance and inspection certificate and a driver’s licence each carry an expiry date. The day after that date passes, the vehicle or driver is off the road until the fleet office records the renewal. A paper with no date recorded switches nothing off — and nothing watches it for you either.",
@@ -342,7 +343,8 @@ export const ARTICLES: GuideArticle[] = [
       "Fleet app, Drivers: “Licence” under a driver records the renewed licence and its new expiry. Only the fleet office can; the driver’s own word about their own licence is what the date is there to replace.",
       "Fleet app, Fleet: the Papers card lists what has lapsed and what runs out within 30 days, soonest first, and says how many papers are in date and how many have no date at all.",
       "Every six hours the network checks every fleet. A vehicle or driver already on a shift when a paper lapses has the shift ended and the driver told why, and the fleet’s contact address is emailed what is off the road and what is running out — once per paper, so a renewed paper starts a new clock and an ignored email is never repeated.",
-      "Driver app: a licence running out is said on the start screen ahead of the day it stops you. A vehicle off the road is listed, marked, and refused at the scan with the paper named, so you know what to ask the office for."
+      "Driver app: a licence running out is said on the start screen ahead of the day it stops you. A vehicle off the road is listed, marked, and refused at the scan with the paper named, so you know what to ask the office for.",
+      "Operator console, Papers: a courier who rides without a fleet, and a vehicle no fleet owns, have no office to record a renewal — network staff record it there, and the same screen runs the six-hourly check by hand and shows when it last ran."
     ],
     notes: [
       "Nothing is written into a record as “grounded”: the date is the switch in both directions, so a renewal takes effect the moment it is recorded and there is nothing to unwind."

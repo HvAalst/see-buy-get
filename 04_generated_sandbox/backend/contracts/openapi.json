@@ -8205,7 +8205,7 @@
       "patch": {
         "operationId": "Sbg.setVehiclePrice",
         "summary": "",
-        "description": "A driver / fleet manager sets a vehicle's open-data per-km transport rate.",
+        "description": "A vehicle's open-data per-km rate, set by the fleet that owns it, the driver on a shift with it right\nnow, or an operator. It took any valid token before — a public rate is still not a public knob.",
         "parameters": [
           {
             "name": "id",
@@ -10647,6 +10647,39 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/papers": {
+      "get": {
+        "operationId": "Sbg.papersReport",
+        "summary": "",
+        "description": "FP4 — the papers only the network's staff can put right: couriers who ride without a fleet and\nvehicles no fleet owns (nobody's office records their renewal), what the fleets are handling\nthemselves, and when the six-hourly check last ran.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/papers/sweep": {
+      "post": {
+        "operationId": "Sbg.papersSweep",
+        "summary": "",
+        "description": "FP4 — run the papers check now rather than waiting for the clock. Answers what it did.",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
           }
         }
       }

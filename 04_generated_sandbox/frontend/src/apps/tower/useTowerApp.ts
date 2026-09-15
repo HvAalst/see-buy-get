@@ -1,3 +1,4 @@
+import type { PapersNetworkView } from './papers';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { narrow, type SbgError } from '../../lib/sbg';
 import { downscaleImage } from '../../shared/media';
@@ -16,7 +17,7 @@ import type { HelpOption } from './pictures';
 import { resolveBaseUrl } from '../../lib/sbg';
 
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
-export type Screen = 'network' | 'hazards' | 'claims' | 'disposal' | 'approvals' | 'reports' | 'support' | 'pictures' | 'money' | 'rates' | 'companies' | 'company' | 'corridors' | 'borders' | 'presence';
+export type Screen = 'network' | 'hazards' | 'claims' | 'disposal' | 'approvals' | 'papers' | 'reports' | 'support' | 'pictures' | 'money' | 'rates' | 'companies' | 'company' | 'corridors' | 'borders' | 'presence';
 
 export interface TowerState {
   phase: Phase;
@@ -72,6 +73,8 @@ export interface TowerState {
   stalled: StalledRow[] | null;
   /** A refusal the SCREEN made before the server had to — a missing reason, an award over the cover. */
   queueError: string | null;
+  /** FP4 — the papers only network staff can put right, and when the check last ran. Null while unread. */
+  papers: PapersNetworkView | null;
 
   /* ---- support: one parcel, looked up because somebody is on the phone about it ---- */
   lookup: ParcelView | null;
@@ -190,6 +193,10 @@ export interface RateImpactView {
 
 export interface TowerActions {
   signIn(name: string, key: string): Promise<void>;
+  /** FP4 — the papers only network staff can put right: a courier's renewed licence, a fleetless vehicle's papers, and the check run now. */
+  recordCourierLicence(did: string, body: { number?: string; expiresAt: string }, name: string): Promise<void>;
+  recordVehiclePapers(vehicleId: string, documents: { insuranceRef?: string; insuranceExpiresAt?: string; inspectionRef?: string; inspectionExpiresAt?: string }, plate: string): Promise<void>;
+  runPapersSweep(): Promise<void>;
   signInAsCompany(email: string, password: string): Promise<void>;
   /** A member of network staff, with an account of their own. */
   signInAsStaff(email: string, password: string): Promise<void>;
@@ -300,6 +307,7 @@ const INITIAL: TowerState = {
   hubs: null,
   totes: null,
   coverage: null,
+  papers: null,
 };
 
 /**
@@ -333,6 +341,17 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     }
     const items = narrow<{ items: ConstraintView[]; total: number }>(data)?.items ?? [];
     setState((s) => ({ ...s, loading: false, error: null, hazards: items, readAt: Date.now() }));
+  }, []);
+
+  /** FP4 — read fresh every time: a licence that lapsed since sign-in is exactly the row this screen is for. */
+  const loadPapers = useCallback(async (client: TowerClient) => {
+    const { data, error } = await client.api.papersReport();
+    if (error) {
+      if (error.code === 'CLIENT_OUTDATED') setState((s) => ({ ...s, phase: 'outdated' }));
+      else setState((s) => ({ ...s, error }));
+      return;
+    }
+    setState((s) => ({ ...s, error: null, papers: narrow<PapersNetworkView>(data), readAt: Date.now() }));
   }, []);
 
   /**
@@ -578,6 +597,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'operator', name: creds.name } }));
       void loadHazards(client);
       void loadQueues(client);
+      void loadPapers(client);
       void loadNetwork(client);
       void loadEntities(client);
       return;
@@ -593,6 +613,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'operator', name: data.name, named: true } }));
         void loadHazards(client);
         void loadQueues(client);
+        void loadPapers(client);
         void loadNetwork(client);
         void loadEntities(client);
       });
@@ -610,7 +631,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'company', name: data.name, entityId: data.entityId }, screen: 'rates' }));
       void loadEntities(client);
     });
-  }, [loadHazards, loadQueues, loadNetwork, loadEntities]);
+  }, [loadHazards, loadQueues, loadNetwork, loadEntities, loadPapers]);
 
   const signIn = useCallback(
     async (name: string, key: string) => {
@@ -629,10 +650,11 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'operator', name: creds.name }, signInError: null }));
       await loadHazards(client);
       await loadQueues(client);
+      await loadPapers(client);
       await loadNetwork(client);
       await loadEntities(client);
     },
-    [loadHazards, loadQueues, loadNetwork, loadEntities],
+    [loadHazards, loadQueues, loadNetwork, loadEntities, loadPapers],
   );
 
   /**
@@ -689,10 +711,11 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'operator', name: data.name, named: true }, screen: 'network', signInError: null, loading: false }));
       await loadHazards(client);
       await loadQueues(client);
+      await loadPapers(client);
       await loadNetwork(client);
       await loadEntities(client);
     },
-    [loadHazards, loadQueues, loadNetwork, loadEntities],
+    [loadHazards, loadQueues, loadNetwork, loadEntities, loadPapers],
   );
 
   const signOut = useCallback(() => {
@@ -742,13 +765,14 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     else if (state.screen === 'reports') await loadReports(client);
     else if (state.screen === 'presence') await loadPresence(client);
     else if (state.screen === 'companies') await loadEntities(client);
+    else if (state.screen === 'papers') await loadPapers(client);
     else if (state.screen === 'support') {
       // Refreshing the support screen means re-reading the parcel somebody is on the phone about, not
       // reloading a list — there is no list here.
       if (state.lookup) await lookupParcel(state.lookup.parcelId);
     }
     else await loadHazards(client);
-  }, [loadHazards, loadQueues, loadNetwork, loadMoney, loadHelp, loadCorridors, loadReports, loadPresence, lookupParcel, loadPricing, state.screen, state.entityId, state.lookup, state.helpTopic]);
+  }, [loadHazards, loadQueues, loadNetwork, loadMoney, loadHelp, loadCorridors, loadReports, loadPresence, lookupParcel, loadPricing, loadPapers, state.screen, state.entityId, state.lookup, state.helpTopic]);
 
   const open = useCallback((constraintId: string | null) => {
     setState((s) => ({ ...s, openId: constraintId, clearError: null }));
@@ -830,6 +854,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         if (screen === 'presence' && client && stateRef.current.presence === null) void loadPresence(client);
         // CA5 — the lapsing list is only worth reading fresh: a policy that lapsed since sign-in must show.
         if (screen === 'companies' && client) void loadEntities(client);
+        if (screen === 'papers' && client) void loadPapers(client);
       },
       refresh,
       open,
@@ -1201,6 +1226,46 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         }
         setState((s) => ({ ...s, busyId: null, done: t('tower.pictures.reverted', { key }) }));
         await loadHelp(client, topic);
+      },
+      /** FP4 — a courier's renewed licence, recorded by network staff because no fleet office exists to. */
+      recordCourierLicence: async (did: string, body: { number?: string; expiresAt: string }, name: string) => {
+        const client = clientRef.current;
+        if (!client) return;
+        setState((s) => ({ ...s, busyId: did, queueError: null, done: null }));
+        const { error } = await client.api.renewLicence(did, body);
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, openId: null, done: t('tower.papers.licenceDone', { name }) }));
+        await loadPapers(client);
+      },
+      /** FP4 — a fleetless vehicle's papers. The date is the switch in both directions. */
+      recordVehiclePapers: async (vehicleId: string, documents: { insuranceRef?: string; insuranceExpiresAt?: string; inspectionRef?: string; inspectionExpiresAt?: string }, plate: string) => {
+        const client = clientRef.current;
+        if (!client) return;
+        setState((s) => ({ ...s, busyId: vehicleId, queueError: null, done: null }));
+        const { error } = await client.api.setVehicleDocuments(vehicleId, documents);
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, openId: null, done: t('tower.papers.vehicleDone', { plate }) }));
+        await loadPapers(client);
+      },
+      /** FP4 — run the six-hourly check now. What it did is said, even when that is nothing. */
+      runPapersSweep: async () => {
+        const client = clientRef.current;
+        if (!client) return;
+        setState((s) => ({ ...s, busyId: 'sweep', queueError: null, done: null }));
+        const { data, error } = await client.api.papersSweep();
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        const r = narrow<{ shiftsEnded: number; notified: number; mails: number }>(data);
+        setState((s) => ({ ...s, busyId: null, done: t('tower.papers.sweepDone', { shifts: r?.shiftsEnded ?? 0, told: r?.notified ?? 0, mails: r?.mails ?? 0 }) }));
+        await loadPapers(client);
       },
       saveRates: (body, lane) => saveKnob(lane, (client, entityId) => client.api.setRates(entityId, body)),
       saveTax: (body, lane) => saveKnob(lane, (client, entityId) => client.api.setTax(entityId, body)),

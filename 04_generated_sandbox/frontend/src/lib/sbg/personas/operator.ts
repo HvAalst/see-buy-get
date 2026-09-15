@@ -312,6 +312,20 @@ export function createOperatorApi(sbg: SbgClient) {
     revokeStaff: (operatorId: string) => sbg.request((c) => c.DELETE('/v1/sbg/operators/{operatorId}', { params: { path: { operatorId } } })),
 
     /**
+     * FP4 — the papers only network staff can put right: couriers without a fleet, vehicles without an
+     * owner, what the fleets are handling themselves, and when the six-hourly check last ran.
+     */
+    papersReport: () => sbg.request((c) => c.GET('/v1/sbg/fleet/papers', {})),
+    /** Run the papers check now rather than waiting for the clock. */
+    papersSweep: () => sbg.request((c) => c.POST('/v1/sbg/fleet/papers/sweep', {})),
+    /** Record a courier's renewed licence — the new date is the whole of the renewal. */
+    renewLicence: (did: string, body: { number?: string; expiresAt: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/licence', { params: { path: { did } }, body: body as never })),
+    /** Record a fleetless vehicle's papers (YYYY-MM-DD dates). */
+    setVehicleDocuments: (vehicleId: string, documents: { insuranceRef?: string; insuranceExpiresAt?: string; inspectionRef?: string; inspectionExpiresAt?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/vehicles/{id}/documents', { params: { path: { id: vehicleId } }, body: documents as never })),
+
+    /**
      * What a rate change actually DID — the shipments either side of it, as a timeline of spells.
      *
      * The half of "how are we doing" that is not arithmetic. What a rate earned per shipment anybody can
