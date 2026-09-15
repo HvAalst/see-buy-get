@@ -244,6 +244,11 @@ export interface AcceptForm {
   // the shipper's own refusal and binds a claim. At a counter the walk-in customer IS the shipper, so it is
   // theirs to say and the clerk's only to record. Empty = they ruled out nothing, which is the normal case.
   excludedBodies: ExcludedBody[];
+  // FP7 — CMR box 13 at the counter: what the driver needs at the door, a contact to dial, a delivery window.
+  instructions: string;
+  contactName: string;
+  contactPhone: string;
+  deliveryWindow: string;
 }
 
 /**
@@ -371,6 +376,10 @@ export const EMPTY_ACCEPT: AcceptForm = {
   bodyHint: '',
   packaging: '', // asked, never assumed — a fresh booking has no answer yet
   excludedBodies: [],
+  instructions: '',
+  contactName: '',
+  contactPhone: '',
+  deliveryWindow: '',
 };
 
 /** The smallest measurement we accept, in cm — 1 mm, so a thin item (a letter ~0.5 cm) is shippable.

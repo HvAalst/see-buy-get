@@ -330,6 +330,25 @@ export const ARTICLES: GuideArticle[] = [
     ]
   },
   {
+    id: "sender-instructions",
+    apps: [
+      "agent",
+      "driver",
+      "fleet"
+    ],
+    title: "Instructions for the driver: box 13 of the note",
+    summary: "Every load has a box for what the sender wants the driver to know at the door — the consignment note calls it box 13. A free note, a contact the driver can call, and a delivery window. It goes on the note and to the driver who takes the load.",
+    steps: [
+      "Shop app, at the counter: when a load is booked as freight, take down the contact at delivery and their phone, when it should be delivered (“before 10:00”, “second trip”), and anything else the driver needs (“gate on the north side”). All optional.",
+      "Shop app, Freight you posted: open the load to read or change the instructions. Until the goods are taken over you can rewrite them. Once the load is on the road you can only add an instruction; it is added with the time, and what the driver was already told stays on the note.",
+      "Driver app, My loads: the instructions are on the load card and again at the gate. The phone is a button — tap to call.",
+      "Fleet app, Dispatch: the delivery window shows on the load, so the office can choose who to put it on. The contact does not; only the driver holding the load sees a phone number."
+    ],
+    notes: [
+      "Instructions are for the door, not for money — the price is agreed on the load itself. The tracking link never shows them, and never the contact’s phone."
+    ]
+  },
+  {
     id: "freight-tracking",
     apps: [
       "agent",

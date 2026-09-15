@@ -10819,6 +10819,38 @@
         }
       }
     },
+    "/v1/sbg/dispatch/freight/{id}/instructions": {
+      "patch": {
+        "operationId": "Sbg.setFreightInstructions",
+        "summary": "",
+        "description": "FP7 — the sender's instructions (CMR box 13). Rewritten until the goods are taken over; added to once\nthey are on the road. The sender or the store that shipped it; the driver holding the load is told.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FreightInstructionsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/dispatch/freight/{id}/rate": {
       "post": {
         "operationId": "Sbg.rateFreight",
@@ -19967,6 +19999,22 @@
           "customerMobile": {
             "type": "string"
           },
+          "instructions": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "contactName": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "contactPhone": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "deliveryWindow": {
+            "type": "string",
+            "maxLength": 80
+          },
           "budgetCap": {
             "type": "number",
             "minimum": 0.01
@@ -21729,6 +21777,50 @@
           "paidTo"
         ]
       },
+      "FreightInstructions": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "contactName": {
+            "type": "string"
+          },
+          "contactPhone": {
+            "type": "string"
+          },
+          "deliveryWindow": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "at"
+        ]
+      },
+      "FreightInstructionAmendment": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "at"
+        ]
+      },
       "DerivedBody": {
         "type": "object",
         "properties": {
@@ -22172,6 +22264,21 @@
                 "required": true,
                 "type": "string"
               }
+            }
+          },
+          "instructions": {
+            "description": "FP7 — CMR box 13, as given at posting (or edited before the goods were taken over).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FreightInstructions"
+              }
+            ]
+          },
+          "instructionAmendments": {
+            "description": "FP7 — subsequent instructions, given while the goods are on the road. Appended, never overwritten.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FreightInstructionAmendment"
             }
           },
           "freightId": {
@@ -22846,6 +22953,27 @@
           "expiresAt"
         ]
       },
+      "FreightInstructionsDto": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "contactName": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "contactPhone": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "deliveryWindow": {
+            "type": "string",
+            "maxLength": 80
+          }
+        }
+      },
       "RateFreightDto": {
         "type": "object",
         "properties": {
@@ -23160,6 +23288,23 @@
           "description": {
             "type": "string"
           },
+          "instructions": {
+            "type": "string",
+            "description": "FP7 — CMR box 13 at posting: instructions for the door, a contact to dial, a delivery window.",
+            "maxLength": 500
+          },
+          "contactName": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "contactPhone": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "deliveryWindow": {
+            "type": "string",
+            "maxLength": 80
+          },
           "pickupCountry": {
             "type": "string",
             "description": "CA6 — the country at each end, where the poster knows it; the rules of crossing are only asked of a known country."
@@ -23437,6 +23582,10 @@
             "items": {
               "$ref": "#/components/schemas/BoardBlocker"
             }
+          },
+          "deliveryWindow": {
+            "type": "string",
+            "description": "FP7 — the sender's delivery window, the one instruction a dispatcher decides against. Never the contact."
           }
         },
         "required": [
@@ -23915,6 +24064,32 @@
           "totals"
         ]
       },
+      "FreightInstructionsView": {
+        "type": "object",
+        "properties": {
+          "amendments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FreightInstructionAmendment"
+            }
+          },
+          "text": {
+            "type": "string"
+          },
+          "contactName": {
+            "type": "string"
+          },
+          "contactPhone": {
+            "type": "string"
+          },
+          "deliveryWindow": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        }
+      },
       "PostedFreightRow": {
         "type": "object",
         "properties": {
@@ -23988,6 +24163,22 @@
               }
             }
           },
+          "instructions": {
+            "description": "FP7 — the sender's own instructions, and whether they can still be rewritten (before pickup) or only added to.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FreightInstructionsView"
+              }
+            ]
+          },
+          "instructionsMode": {
+            "type": "string",
+            "enum": [
+              "edit",
+              "amend",
+              "none"
+            ]
+          },
           "freightId": {
             "type": "string"
           },
@@ -24060,6 +24251,7 @@
           "commitMode",
           "carrier",
           "rating",
+          "instructionsMode",
           "freightId",
           "code",
           "description",

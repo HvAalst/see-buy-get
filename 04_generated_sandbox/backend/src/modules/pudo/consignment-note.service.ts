@@ -81,6 +81,11 @@ export class ConsignmentNoteService implements OnModuleInit {
     if (f.indivisible) instructions.push('Indivisible load — do not split');
     if (f.requiredEquipment?.length) instructions.push(`Equipment required: ${f.requiredEquipment.join(', ')}`);
     if (f.scheduledPickupAt) instructions.push(`Taking over booked for ${when(f.scheduledPickupAt)}`);
+    // FP7 — what the sender actually wrote, after what the load's facts imply; then every subsequent instruction, dated.
+    if (f.instructions?.deliveryWindow) instructions.push(`Deliver: ${f.instructions.deliveryWindow}`);
+    if (f.instructions?.contactName || f.instructions?.contactPhone) instructions.push(`Contact at delivery: ${[f.instructions.contactName, f.instructions.contactPhone].filter(Boolean).join(', ')}`);
+    if (f.instructions?.text) instructions.push(f.instructions.text);
+    for (const a of f.instructionAmendments ?? []) instructions.push(`Subsequent instruction, ${when(a.at)}: ${a.text}`);
     const reservations: string[] = [];
     if (f.reservations) reservations.push(`At taking over: ${f.reservations.note}`);
     if (f.tempBreached) reservations.push('Cold chain breached in transit — see the temperature log');

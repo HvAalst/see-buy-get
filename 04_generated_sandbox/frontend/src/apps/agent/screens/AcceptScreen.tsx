@@ -606,6 +606,36 @@ function FreightBookingCard({ state, actions }: { state: AgentState; actions: Ag
         <input id="freight-phone" class="input" type="tel" inputMode="tel" value={f.customerMobile} onInput={(e) => actions.setAccept({ customerMobile: e.currentTarget.value })} placeholder="07…" autocomplete="off" />
       </div>
       <p class="card__note">{t('agent.accept.customerPhoneNote')}</p>
+
+      {/* FP7 — CMR box 13, taken down at the counter. The contact is a FIELD, not a line in the note: the driver
+          dials it, and the public tracking page must be able to leave it out. */}
+      <div class="grid2" style="margin-top:12px">
+        <div class="field">
+          <label class="field__label" for="freight-contact">
+            {t('agent.accept.contactName')}
+          </label>
+          <input id="freight-contact" class="input" value={f.contactName} onInput={(e) => actions.setAccept({ contactName: e.currentTarget.value })} autocomplete="off" />
+        </div>
+        <div class="field">
+          <label class="field__label" for="freight-contact-phone">
+            {t('agent.accept.contactPhone')}
+          </label>
+          <input id="freight-contact-phone" class="input" type="tel" inputMode="tel" value={f.contactPhone} onInput={(e) => actions.setAccept({ contactPhone: e.currentTarget.value })} placeholder="07…" autocomplete="off" />
+        </div>
+      </div>
+      <div class="field" style="margin-top:12px">
+        <label class="field__label" for="freight-window">
+          {t('agent.accept.deliveryWindow')}
+        </label>
+        <input id="freight-window" class="input" value={f.deliveryWindow} onInput={(e) => actions.setAccept({ deliveryWindow: e.currentTarget.value })} placeholder={t('agent.accept.deliveryWindowPh')} autocomplete="off" />
+      </div>
+      <div class="field" style="margin-top:12px">
+        <label class="field__label" for="freight-instructions">
+          {t('agent.accept.instructions')}
+        </label>
+        <textarea id="freight-instructions" class="input" rows={2} maxLength={500} value={f.instructions} onInput={(e) => actions.setAccept({ instructions: e.currentTarget.value })} placeholder={t('agent.accept.instructionsPh')} />
+      </div>
+      <p class="card__note">{t('agent.accept.instructionsNote')}</p>
     </Card>
   );
 }

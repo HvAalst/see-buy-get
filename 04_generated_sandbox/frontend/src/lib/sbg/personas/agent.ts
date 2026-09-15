@@ -180,6 +180,11 @@ export function createAgentApi(sbg: SbgClient) {
       /** FB2d — bodies the CUSTOMER rules out. Unlike the hint above this one BINDS: a driver on an excluded
        *  body still sees the load on the board, marked with the shipper's refusal, and is refused the claim. */
       excludedBodies?: ('flatbed' | 'box' | 'curtain_side' | 'refrigerated' | 'tipper' | 'lowboy' | 'skeletal')[];
+      // FP7 — box 13 at the counter.
+      instructions?: string;
+      contactName?: string;
+      contactPhone?: string;
+      deliveryWindow?: string;
     }) => sbg.request((c) => c.POST('/v1/sbg/parcels/book-freight', { body })),
 
     /** FB2b — the loads THIS shop posted, each with how many prices are waiting for an answer. Owner-scoped
@@ -191,6 +196,9 @@ export function createAgentApi(sbg: SbgClient) {
     freightNote: (freightId: string) => sbg.request((c) => c.GET('/v1/sbg/dispatch/freight/{id}/consignment-note.html', { params: { path: { id: freightId } }, parseAs: 'text' })),
     /** FP3 — withdraw a posted load before the goods are taken over. The reason goes on the consignment note. */
     cancelFreight: (freightId: string, reason: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/cancel', { params: { path: { id: freightId } }, body: { reason } })),
+    /** FP7 — the sender's instructions (CMR box 13): rewritten before pickup, added to on the road. */
+    setFreightInstructions: (freightId: string, body: { text?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string }) =>
+      sbg.request((c) => c.PATCH('/v1/sbg/dispatch/freight/{id}/instructions', { params: { path: { id: freightId } }, body: body as never })),
     /** FP6 — the shop rates the carrier on a delivered load: stars, and what went wrong if anything. */
     rateFreight: (freightId: string, body: { stars: number; issues?: string[] }) =>
       sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/rate', { params: { path: { id: freightId } }, body: body as never })),

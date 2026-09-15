@@ -3786,6 +3786,44 @@ describe('PUDO Light', () => {
     expect(gate.entries({ type: 'DRIVER_PAYOUT' }).filter((e) => e.reference === d.did)).toHaveLength(1);
   });
 
+  it('FP7: the sender’s instructions are rewritten before pickup, only added to on the road, reach the driver and the board, and never the tracking page', () => {
+    const d = drivers.register({ displayName: 'IN', fullName: 'I', nationalId: 'ID-IN', mobile: '+254770777', licenceClasses: ['truck'], licenceNumber: 'L-IN', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const truck = vehicles.register({ plate: 'IN-1', vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 10_000, ownerName: 'X', equipment: ['TLT'], baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5 });
+    fleet.couple(d.did, truck.vehicleId);
+    const pickup = { lat: -1.2, lng: 36.8 };
+    const f = dispatch.registerFreight({ description: 'Machinery', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', destLocation: pickup, weightKg: 200, packaging: 'palletised', postedByDid: 'did:shop:inst', instructions: 'Gate on the north side', contactName: 'Joseph', contactPhone: '+254700999888', deliveryWindow: 'before 10:00' });
+    expect(f.instructions).toMatchObject({ text: 'Gate on the north side', contactName: 'Joseph', contactPhone: '+254700999888', deliveryWindow: 'before 10:00', by: 'did:shop:inst' });
+    // The board carries the window (a dispatcher decides against it) and never the contact.
+    const row = dispatch.board({ driverDid: d.did, from: pickup }).find((r) => r.freightId === f.freightId)!;
+    expect(row.deliveryWindow).toBe('before 10:00');
+    expect(JSON.stringify(row)).not.toContain('Joseph');
+    // Before pickup the sender rewrites the box; blank clears it.
+    dispatch.setInstructions(f.freightId, 'did:shop:inst', { text: 'Second trip', contactName: 'Joseph', contactPhone: '+254700999888' });
+    let posted = dispatch.postedBy('did:shop:inst').find((r) => r.freightId === f.freightId)!;
+    expect(posted.instructions).toMatchObject({ text: 'Second trip', contactName: 'Joseph' });
+    expect(posted.instructions?.deliveryWindow).toBeUndefined();
+    expect(posted.instructionsMode).toBe('edit');
+    const noon = new Date('2026-07-22T11:00:00').getTime();
+    const [offer] = dispatch.suggest(d.did, { from: pickup, to: pickup }, noon);
+    dispatch.claim(offer.offerId, noon);
+    // The driver holding it reads the box, phone included.
+    expect(dispatch.claimsFor(d.did).find((c) => c.ref === f.freightId)?.instructions).toMatchObject({ text: 'Second trip', contactPhone: '+254700999888' });
+    pickupOk(f, d.did);
+    // On the road: a rewrite is refused unless it says something, and what it says is APPENDED with its time.
+    expect(() => dispatch.setInstructions(f.freightId, 'did:shop:inst', { contactName: 'Somebody else' })).toThrow(/say what it is/);
+    dispatch.setInstructions(f.freightId, 'did:shop:inst', { text: 'Leave it with the guard if nobody answers' }, noon + 3_600_000);
+    posted = dispatch.postedBy('did:shop:inst').find((r) => r.freightId === f.freightId)!;
+    expect(posted.instructionsMode).toBe('amend');
+    expect(posted.instructions?.text).toBe('Second trip'); // the box is not overwritten
+    expect(posted.instructions?.amendments).toEqual([{ text: 'Leave it with the guard if nobody answers', at: new Date(noon + 3_600_000).toISOString() }]);
+    expect(dispatch.claimsFor(d.did).find((c) => c.ref === f.freightId)?.instructions?.amendments).toHaveLength(1);
+    deliverOk(f, d.did);
+    expect(() => dispatch.setInstructions(f.freightId, 'did:shop:inst', { text: 'too late' })).toThrow(/nobody left/);
+    expect(dispatch.postedBy('did:shop:inst').find((r) => r.freightId === f.freightId)!.instructionsMode).toBe('none');
+  });
+
   it('FP6: the shipper rates the carrier once the load is delivered — one verdict per load, last wins, and the driver’s composite moves', () => {
     const d = drivers.register({ displayName: 'RT', fullName: 'R', nationalId: 'ID-RT', mobile: '+254770666', licenceClasses: ['truck'], licenceNumber: 'L-RT', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
     drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });

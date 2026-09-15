@@ -472,6 +472,13 @@ export const en = {
   'send.freight.withdrawnBySender': 'The sender withdrew this load on {when}.',
   'send.freight.withdrawnByNetwork': 'The network withdrew this load on {when}.',
   'send.logic.freightTrack': 'Load {ref}: {status}, going to {dest}.',
+  // FP7 — the sender's instructions (CMR box 13), read by the shop, the driver and the fleet office alike.
+  'common.instructions.title': 'Instructions from the sender',
+  'common.instructions.deliver': 'Deliver: {window}',
+  'common.instructions.contact': 'Contact at delivery: {name}',
+  'common.instructions.call': 'Call {phone}',
+  'common.instructions.amended': 'Added {when}: {text}',
+  'common.instructions.none': 'No instructions from the sender.',
 
   // My parcels screen.
   'send.parcels.title': 'My parcels',

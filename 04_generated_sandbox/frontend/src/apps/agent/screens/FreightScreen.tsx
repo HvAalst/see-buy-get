@@ -1,6 +1,8 @@
 import { useState } from 'preact/hooks';
 import { DocumentButton, Button, Card, Checklist, ErrorNote, Icon, PhotoField, Pill, QrBlock, Sheet } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
+import { InstructionsBlock } from '../../../shared/InstructionsBlock';
+import { hasInstructions } from '../../../shared/instructions';
 import { ConversationList, ConversationSheet } from '../../../shared/conversation/Conversations';
 import type { ChatThread } from '../../../shared/conversation/logic';
 import type { AgentActions, AgentState, FreightClaim, FreightPrice, PostedFreight } from '../useAgentApp';
@@ -142,6 +144,8 @@ function Prices({ load, state, actions }: { load: PostedFreight } & FreightScree
   // FP6 — the link to hand on, and the verdict.
   const [sharing, setSharing] = useState(false);
   const [rating, setRating] = useState(false);
+  // FP7 — box 13.
+  const [instructing, setInstructing] = useState(false);
   const [claimKind, setClaimKind] = useState<'damaged' | 'short' | 'not_received'>('damaged');
   const [claimText, setClaimText] = useState('');
   const [claimPhoto, setClaimPhoto] = useState('');
@@ -172,6 +176,14 @@ function Prices({ load, state, actions }: { load: PostedFreight } & FreightScree
           <p class="card__note">{claimLine(load.claim, t)}</p>
         </Card>
       ) : null}
+      {/* FP7 — box 13: what the driver is told at the door, and the door to change it while it still can be. */}
+      {hasInstructions(load.instructions) || load.instructionsMode !== 'none' ? (
+        <Card title={t('common.instructions.title')} aside={load.instructionsMode !== 'none' ? <Button variant="link" full={false} onClick={() => setInstructing(true)}>{t(load.instructionsMode === 'amend' ? 'agent.freight.instructAdd' : hasInstructions(load.instructions) ? 'agent.freight.instructEdit' : 'agent.freight.instructOpen')}</Button> : undefined}>
+          {hasInstructions(load.instructions) ? <InstructionsBlock view={load.instructions} /> : <p class="card__note">{t('common.instructions.none')}</p>}
+        </Card>
+      ) : null}
+      <InstructionsSheet load={load} open={instructing} onClose={() => setInstructing(false)} state={state} actions={actions} />
+
       <div class="btnrow">
         <DocumentButton label={t('common.cmr.open')} title={t('common.cmr.title')} fetch={() => actions.freightNote(load.freightId)} />
         {/* FP3 — withdrawing is possible only until the goods are on a truck; the server says the same. A quiet
@@ -481,6 +493,74 @@ function RatingSheet({ load, open, onClose, state, actions }: { load: PostedFrei
           }}
         >
           {t('agent.freight.rateConfirm')}
+        </Button>
+        <Button variant="link" onClick={onClose}>
+          {t('agent.cancel')}
+        </Button>
+      </div>
+    </Sheet>
+  );
+}
+
+/**
+ * FP7 — the sender's instructions after posting. Until the goods are taken over the whole box is the shop's to
+ * rewrite; once on the road only a subsequent instruction can be added, dated, never overwriting what the driver
+ * was already told — which is how the CMR does it, and why the sheet changes shape with the load's status.
+ */
+function InstructionsSheet({ load, open, onClose, state, actions }: { load: PostedFreight; open: boolean; onClose: () => void } & FreightScreenProps) {
+  const t = useT();
+  const amend = load.instructionsMode === 'amend';
+  const [text, setText] = useState(amend ? '' : (load.instructions?.text ?? ''));
+  const [contactName, setContactName] = useState(load.instructions?.contactName ?? '');
+  const [contactPhone, setContactPhone] = useState(load.instructions?.contactPhone ?? '');
+  const [deliveryWindow, setDeliveryWindow] = useState(load.instructions?.deliveryWindow ?? '');
+  const busy = state.busy === `instruct-freight:${load.freightId}`;
+  const ready = amend ? text.trim().length >= 2 : true;
+  return (
+    <Sheet open={open} onClose={onClose} title={t(amend ? 'agent.freight.instructAddTitle' : 'agent.freight.instructTitle', { code: load.code })}>
+      <p class="t-body">{t(amend ? 'agent.freight.instructAddBody' : 'agent.freight.instructBody')}</p>
+      {amend ? null : (
+        <>
+          <div class="grid2">
+            <div class="field">
+              <label class="field__label" for={`ic-name-${load.freightId}`}>
+                {t('agent.accept.contactName')}
+              </label>
+              <input id={`ic-name-${load.freightId}`} class="input" value={contactName} onInput={(e) => setContactName(e.currentTarget.value)} />
+            </div>
+            <div class="field">
+              <label class="field__label" for={`ic-phone-${load.freightId}`}>
+                {t('agent.accept.contactPhone')}
+              </label>
+              <input id={`ic-phone-${load.freightId}`} class="input" type="tel" inputMode="tel" value={contactPhone} onInput={(e) => setContactPhone(e.currentTarget.value)} />
+            </div>
+          </div>
+          <div class="field" style="margin-top:12px">
+            <label class="field__label" for={`ic-window-${load.freightId}`}>
+              {t('agent.accept.deliveryWindow')}
+            </label>
+            <input id={`ic-window-${load.freightId}`} class="input" value={deliveryWindow} onInput={(e) => setDeliveryWindow(e.currentTarget.value)} placeholder={t('agent.accept.deliveryWindowPh')} />
+          </div>
+        </>
+      )}
+      <div class="field" style="margin-top:12px">
+        <label class="field__label" for={`ic-text-${load.freightId}`}>
+          {t(amend ? 'agent.freight.instructAddLabel' : 'agent.accept.instructions')}
+        </label>
+        <textarea id={`ic-text-${load.freightId}`} class="input" rows={3} maxLength={500} value={text} onInput={(e) => setText(e.currentTarget.value)} placeholder={t('agent.accept.instructionsPh')} />
+      </div>
+      <p class="card__note">{t('agent.accept.instructionsNote')}</p>
+      <div style="margin-top:14px">
+        <Button
+          chevron={false}
+          busy={busy}
+          disabled={!ready}
+          onClick={() => {
+            onClose();
+            void actions.setFreightInstructions(load.freightId, amend ? { text: text.trim() } : { text: text.trim() || undefined, contactName: contactName.trim() || undefined, contactPhone: contactPhone.trim() || undefined, deliveryWindow: deliveryWindow.trim() || undefined });
+          }}
+        >
+          {t(amend ? 'agent.freight.instructAddConfirm' : 'agent.freight.instructConfirm')}
         </Button>
         <Button variant="link" onClick={onClose}>
           {t('agent.cancel')}

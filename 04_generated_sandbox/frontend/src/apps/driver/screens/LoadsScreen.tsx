@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { DocumentButton, Button, Card, CheckGate, Checklist, ErrorNote, GlanceNumber, Icon, Note, OpenInMaps, PhotoField, Pill, ReadAloud, Sheet } from '../../../shared/ui';
+import { InstructionsBlock } from '../../../shared/InstructionsBlock';
+import { hasInstructions } from '../../../shared/instructions';
 import { useT } from '../../../shared/i18n';
 import { canLoadBag, capacitySubLine, claimControl, isFull, loadsSummary, money, usedPercent } from '../logic';
 import type { Claimable } from '../types';
@@ -65,6 +67,8 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                   {c.lockedPrice != null ? <span class="load__earn">{t('driver.loads.youEarn', { amount: money(c.lockedPrice) })}</span> : null}
                   {/* FP5 — not their choice: said plainly, with whose it was. */}
                   {c.assignedBy ? <span class="load__meta">{t('driver.loads.assignedBy', { name: c.assignedBy.name ?? t('driver.loads.theOffice') })}</span> : null}
+                  {/* FP7 — what the sender wrote for the door, on the card so it is read before the walk to the gate. */}
+                  {hasInstructions(c.instructions) ? <InstructionsBlock view={c.instructions} compact /> : null}
                 </span>
               </>
             );
@@ -299,6 +303,12 @@ function FreightGate({ claim, state, actions, onClose }: { claim: Claimable | nu
               ? t('driver.loads.gateBodyPickup', { ref: claim.code ?? claim.ref, kg: claim.weightKg, dest: claim.destLabel })
               : t('driver.loads.gateBodyDeliver', { ref: claim.code ?? claim.ref, kg: claim.weightKg, dest: claim.destLabel })}
           </p>
+          {/* FP7 — the sender's instructions, at the gate where they are acted on. */}
+          {hasInstructions(claim.instructions) ? (
+            <Card title={t('common.instructions.title')} tone="soft">
+              <InstructionsBlock view={claim.instructions} />
+            </Card>
+          ) : null}
           <CheckGate items={items} checked={checked} onChange={setChecked} disabled={busy} />
           {isPickup ? (
             <>

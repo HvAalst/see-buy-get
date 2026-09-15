@@ -1,3 +1,4 @@
+import type { InstructionsView } from '../../shared/instructions';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import {
   isMintSourced,
@@ -77,6 +78,9 @@ export interface PostedFreight {
   carrier?: { driverName?: string; plate?: string; vehicleClass?: string };
   rating?: { stars: number; issues: string[]; at: string };
   canRate: boolean;
+  /** FP7 — box 13, and whether it is still the sender's to rewrite (before pickup), only to add to (on the road), or closed. */
+  instructions?: InstructionsView;
+  instructionsMode: 'edit' | 'amend' | 'none';
 }
 
 export interface FreightClaim {
@@ -1185,6 +1189,11 @@ export function useAgentApp() {
         // FB2d — likewise absent when the customer ruled nothing out, which is the ordinary case. An empty
         // array would post a shipper preference nobody expressed, and this one REFUSES claims.
         excludedBodies: excludedBodiesValue(f.excludedBodies),
+        // FP7 — box 13, sent only when the clerk took anything down.
+        instructions: f.instructions.trim() || undefined,
+        contactName: f.contactName.trim() || undefined,
+        contactPhone: f.contactPhone.trim() || undefined,
+        deliveryWindow: f.deliveryWindow.trim() || undefined,
       });
       if (r.error) return fail(r.error);
       buzz();
@@ -1235,6 +1244,20 @@ export function useAgentApp() {
       });
     },
     [client, run, fail, pushToast, t, loadPosted, openPrices],
+  );
+
+  /** FP7 — the sender's instructions: rewritten before pickup, added to on the road. The driver holding it is told. */
+  const setFreightInstructions = useCallback(
+    async (freightId: string, body: { text?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string }) => {
+      if (!client) return;
+      await run(`instruct-freight:${freightId}`, async () => {
+        const r = await client.api.setFreightInstructions(freightId, body);
+        if (r.error) return fail(r.error);
+        pushToast({ tone: 'ok', icon: 'edit', title: t('agent.freight.instructedToast'), detail: t('agent.freight.instructedDetail') });
+        await loadPosted();
+      });
+    },
+    [client, run, fail, pushToast, t, loadPosted],
   );
 
   /** FP6 — the shop's verdict on the carrier, once the load is delivered. Last wins on the same load. */
@@ -1877,6 +1900,7 @@ export function useAgentApp() {
       declinePrice,
       cancelFreight,
       rateFreight,
+      setFreightInstructions,
       openFreightClaim,
       loadConsignments,
       openConsignment,

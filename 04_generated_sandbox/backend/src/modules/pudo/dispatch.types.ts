@@ -74,6 +74,38 @@ export class FreightDeliveryAttempt {
   by?: string;
 }
 
+/**
+ * FP7 — the sender's instructions: CMR box 13. Free text for the door ("call Joseph on arrival", "gate on the
+ * north side"), plus the two things something else has to ACT on and so are fields of their own: a contact the
+ * driver can dial, and a delivery window the office can dispatch against. The phone is a field so it can be
+ * redacted from the public tracking page — free text cannot be.
+ */
+export class FreightInstructions {
+  text?: string;
+  contactName?: string;
+  contactPhone?: string;
+  deliveryWindow?: string;
+  at: string;
+  by?: string;
+}
+
+/** FP7 — a "subsequent instruction" (CMR practice): given while the goods are on the road, appended never overwritten. */
+export class FreightInstructionAmendment {
+  text: string;
+  at: string;
+  by?: string;
+}
+
+/** FP7 — the instructions as the driver, the sender and the office read them. */
+export class FreightInstructionsView {
+  text?: string;
+  contactName?: string;
+  contactPhone?: string;
+  deliveryWindow?: string;
+  at?: string;
+  @ApiPropertyOptional({ type: [FreightInstructionAmendment] }) amendments?: Array<Pick<FreightInstructionAmendment, 'text' | 'at'>>;
+}
+
 /** FP3b — what the sender says went wrong with a delivered load. */
 export const FREIGHT_CLAIM_KINDS = ['damaged', 'short', 'not_received'] as const;
 export type FreightClaimKind = (typeof FREIGHT_CLAIM_KINDS)[number];
@@ -277,6 +309,10 @@ export class Freight {
   @ApiPropertyOptional() assignedBy?: { managerDid: string; name?: string; at: string };
   /** FP6 — the shipper's rating of the carrier after delivery: stars, the tags, and when. One per load, last wins. */
   @ApiPropertyOptional() rating?: { stars: number; issues: string[]; at: string; by: string };
+  /** FP7 — CMR box 13, as given at posting (or edited before the goods were taken over). */
+  @ApiPropertyOptional({ type: FreightInstructions }) instructions?: FreightInstructions;
+  /** FP7 — subsequent instructions, given while the goods are on the road. Appended, never overwritten. */
+  @ApiPropertyOptional({ type: [FreightInstructionAmendment] }) instructionAmendments?: FreightInstructionAmendment[];
   /**
    * FB4a — what actually CARRIED it, stamped at claim. The mirror of `bodyDerived`: that one records the body
    * the load needed, this one the body that turned up.
@@ -359,6 +395,8 @@ export class BoardRow {
   /** True when nothing but an 'unknown' stands in the way. */
   canTake: boolean;
   blockers: BoardBlocker[];
+  /** FP7 — the sender's delivery window, the one instruction a dispatcher decides against. Never the contact. */
+  deliveryWindow?: string;
 }
 
 /**
@@ -570,6 +608,10 @@ export class PostedFreightRow {
   @ApiPropertyOptional() rating?: { stars: number; issues: string[]; at: string };
   /** FP6 — true while the shipper may rate: delivered, within the rating window. Re-rating is allowed (last wins). */
   canRate: boolean;
+  /** FP7 — the sender's own instructions, and whether they can still be rewritten (before pickup) or only added to. */
+  @ApiPropertyOptional({ type: FreightInstructionsView }) instructions?: FreightInstructionsView;
+  @ApiProperty({ enum: ['edit', 'amend', 'none'] })
+  instructionsMode: 'edit' | 'amend' | 'none';
   /** FP3b — true while the sender may still claim: delivered, no claim yet, within the claim window. */
   canClaim: boolean;
 }
@@ -672,6 +714,8 @@ export class Claimable {
   status?: string;
   /** FP5 — put on this driver by their fleet office (by whom, when), so the app can say it was not their choice. */
   @ApiPropertyOptional() assignedBy?: { name?: string; at: string };
+  /** FP7 — the sender's instructions for the door, with a contact to dial. Only the driver holding the load reads them. */
+  @ApiPropertyOptional({ type: FreightInstructionsView }) instructions?: FreightInstructionsView;
   /** F1 — a booked-for-later freight's pickup date, so the driver's offer reads "reserve now, pick up on <date>". */
   scheduledPickupAt?: string;
   /** CA6 — the country at each end of a freight, where it is known. */

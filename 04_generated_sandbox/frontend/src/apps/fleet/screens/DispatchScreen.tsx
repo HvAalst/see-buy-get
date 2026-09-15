@@ -107,6 +107,7 @@ function LoadRow({ row, driver, state, actions }: { row: DispatchRow; driver: { 
           {row.price ? ' · ' + t('fleet.dispatch.earns', { name: driver.name, amount: formatMoney(row.price.total) }) : ''}
         </span>
         {row.scheduledPickupAt ? <span class="row__s">{t('fleet.dispatch.scheduled', { date: formatDate(row.scheduledPickupAt) })}</span> : null}
+        {row.deliveryWindow ? <span class="row__s row__s--warn">{t('common.instructions.deliver', { window: row.deliveryWindow })}</span> : null}
         {kind === 'negotiate' ? <span class="row__s">{t('fleet.dispatch.negotiate')}</span> : null}
         {row.blockers.length ? (
           <span class="chips" style="margin-top:4px">

@@ -204,6 +204,8 @@ export interface Claimable {
   tempBreached?: boolean; // S33b — the chain has been broken
   /** FP5 — put on this driver by their fleet office, so the app can say it was the office's call, and whose. */
   assignedBy?: { name?: string; at: string };
+  /** FP7 — the sender's instructions for the door, with a contact to dial. Only the driver holding the load has them. */
+  instructions?: InstructionsView;
 }
 
 /**
@@ -213,6 +215,7 @@ export interface Claimable {
  * limits — no data exists) rather than pretending it did. A row whose only marks are 'unknown' is still
  * takeable, because deciding otherwise would be the platform overruling the operator who drives the road.
  */
+import type { InstructionsView } from '../../shared/instructions';
 export type { BlockerKind, BoardBlocker } from '../../shared/board';
 import type { BoardBlocker } from '../../shared/board';
 

@@ -92,6 +92,30 @@ export const FREIGHT_CLAIM_WINDOW_DAYS = 7;
 /** FP6 — how long after delivery the shipper may still rate the carrier. Longer than the claim window: a verdict is not a dispute. */
 export const FREIGHT_RATING_WINDOW_DAYS = 30;
 
+/** FP7 — the box-13 record from what the sender typed: nothing, when every field is blank. */
+function instructionsOf(input: { text?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string }, by: string | undefined, now: number): { instructions: Freight['instructions'] } | undefined {
+  const text = input.text?.trim();
+  const contactName = input.contactName?.trim();
+  const contactPhone = input.contactPhone?.trim();
+  const deliveryWindow = input.deliveryWindow?.trim();
+  if (!text && !contactName && !contactPhone && !deliveryWindow) return undefined;
+  return { instructions: { ...(text ? { text } : {}), ...(contactName ? { contactName } : {}), ...(contactPhone ? { contactPhone } : {}), ...(deliveryWindow ? { deliveryWindow } : {}), at: new Date(now).toISOString(), ...(by ? { by } : {}) } };
+}
+
+/** FP7 — the instructions as read: the box, plus every subsequent instruction with its time. Nothing when there are none. */
+function instructionsViewOf(f: Freight): { text?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; at?: string; amendments?: Array<{ text: string; at: string }> } | undefined {
+  if (!f.instructions && !f.instructionAmendments?.length) return undefined;
+  const i = f.instructions;
+  return {
+    ...(i?.text ? { text: i.text } : {}),
+    ...(i?.contactName ? { contactName: i.contactName } : {}),
+    ...(i?.contactPhone ? { contactPhone: i.contactPhone } : {}),
+    ...(i?.deliveryWindow ? { deliveryWindow: i.deliveryWindow } : {}),
+    ...(i?.at ? { at: i.at } : {}),
+    ...(f.instructionAmendments?.length ? { amendments: f.instructionAmendments.map((a) => ({ text: a.text, at: a.at })) } : {}),
+  };
+}
+
 /** FP6 — the public tracking link for a key: the Send app's track page, which now answers loads as well as parcels. */
 function trackingUrlOf(trackingKey: string): string {
   return `${appUrl('send')}?track=${encodeURIComponent(trackingKey)}`;
@@ -368,7 +392,7 @@ export class DispatchService {
     return { code: t.code, status: t.status };
   }
 
-  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string }, now: number = Date.now()): Freight {
+  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string }, now: number = Date.now()): Freight {
     this.freightSeq += 1;
     // A future pickup date parks the load for later; a past/absent date ships now. A supplied-but-unparseable
     // date is a CALLER ERROR — fail closed (never silently ship-now what was meant to be scheduled). Store the
@@ -454,6 +478,8 @@ export class DispatchService {
       buyerPhoneHash: input.buyerMobile ? hashPhone(input.buyerMobile) || undefined : undefined,
       trackingKey: `T-${randomBytes(5).toString('hex').toUpperCase()}`,
       externalOrderId: input.externalOrderId,
+      // FP7 — box 13 at posting, when the poster said anything.
+      ...(instructionsOf({ text: input.instructions, contactName: input.contactName, contactPhone: input.contactPhone, deliveryWindow: input.deliveryWindow }, input.postedByDid, now) ?? {}),
       // S34c — a positive, finite cap only; a zero/negative/NaN budget is treated as "no cap" (never a load
       // nobody can ever afford to move) so a bad value can't silently strand a diverted order.
       maxSpend: input.maxSpend != null && Number.isFinite(input.maxSpend) && input.maxSpend > 0 ? Math.round(input.maxSpend * 100) / 100 : undefined,
@@ -1206,6 +1232,7 @@ export class DispatchService {
         earningsPerKm: earningsPerKm(price),
         canTake: takeable(blockers),
         blockers,
+        ...(f.instructions?.deliveryWindow ? { deliveryWindow: f.instructions.deliveryWindow } : {}),
       });
     }
 
@@ -1407,7 +1434,41 @@ export class DispatchService {
         ...(f.carriage ? { carrier: { driverName: this.driverNameOf(f.carriage.driverDid), plate: f.carriage.plate, vehicleClass: f.carriage.vehicleClass } } : {}),
         ...(f.rating ? { rating: { stars: f.rating.stars, issues: f.rating.issues, at: f.rating.at } } : {}),
         canRate: f.status === 'delivered' && Boolean(f.claimedBy) && (f.deliveredAt ? Date.now() - new Date(f.deliveredAt).getTime() <= FREIGHT_RATING_WINDOW_DAYS * 86_400_000 : true),
+        // FP7 — box 13, and whether it is still the sender's to rewrite or only to add to.
+        ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}),
+        instructionsMode: f.status === 'scheduled' || f.status === 'available' || f.status === 'claimed' ? 'edit' : f.status === 'in_transit' ? 'amend' : 'none',
       }));
+  }
+
+  /**
+   * FP7 — the sender's instructions, after posting. Until the goods are taken over the box is the sender's to
+   * rewrite. Once on the road it can only be ADDED to — a subsequent instruction with its own time, as the
+   * CMR does it — so the note shows what the driver was told and when. The driver holding the load is told.
+   */
+  setInstructions(freightId: string, byDid: string, input: { text?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string }, now: number = Date.now()): Freight {
+    const f = this.requireFreight(freightId);
+    const at = new Date(now).toISOString();
+    let amended = false;
+    if (f.status === 'scheduled' || f.status === 'available' || f.status === 'claimed') {
+      const next = instructionsOf(input, byDid, now);
+      if (next) f.instructions = next.instructions;
+      else delete f.instructions;
+    } else if (f.status === 'in_transit') {
+      const text = input.text?.trim();
+      if (!text) throw new GlosError('FIELD_REQUIRED', 'The goods are on the road — an instruction now is added to what the driver was told, so say what it is');
+      f.instructionAmendments = [...(f.instructionAmendments ?? []), { text, at, by: byDid }];
+      amended = true;
+    } else {
+      throw new GlosError('INVALID_STATE', `Freight is ${f.status} — there is nobody left to instruct`);
+    }
+    this.freights.set(f.freightId, f);
+    if (f.claimedBy) {
+      const v = instructionsViewOf(f);
+      void this.events
+        .publish(GlosEvent.Pudo.FreightInstructed, { freightId: f.freightId, code: f.code, driverDid: f.claimedBy, amended, text: amended ? f.instructionAmendments![f.instructionAmendments!.length - 1].text : v?.text, contactName: v?.contactName, contactPhone: v?.contactPhone, deliveryWindow: v?.deliveryWindow }, { source: 'pudo' })
+        .catch(() => undefined);
+    }
+    return f;
   }
 
   /** FP6 — the load behind a tracking key, or nothing. The key is the credential: no other lookup is offered. */
@@ -2164,7 +2225,7 @@ export class DispatchService {
   private wrapFreight(f: Freight): Claimable {
     // S32: freight now carries its cargo model, so it matches vehicles on capability AND equipment like a tote.
     // S32b: status lets the driver app drive the claimed → picked-up → delivered flow in-app.
-    return { kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}) };
+    return { kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}) };
   }
 
   /** CA6 — why the law does not let this vehicle carry this load (cabotage, a crossing's weight limit). Empty = it may. */

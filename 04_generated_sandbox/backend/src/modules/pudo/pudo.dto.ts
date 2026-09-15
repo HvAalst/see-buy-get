@@ -314,6 +314,14 @@ export class RateDriverDto {
   @IsOptional() @IsArray() @IsIn([...DRIVER_ISSUES], { each: true }) @ApiPropertyOptional({ enum: DRIVER_ISSUES, isArray: true }) issues?: DriverIssue[];
 }
 
+/** FP7 — CMR box 13: the sender's instructions for the door. All optional; blank clears. */
+export class FreightInstructionsDto {
+  @IsOptional() @IsString() @MaxLength(500) text?: string;
+  @IsOptional() @IsString() @MaxLength(80) contactName?: string;
+  @IsOptional() @IsString() @MaxLength(32) contactPhone?: string;
+  @IsOptional() @IsString() @MaxLength(80) deliveryWindow?: string;
+}
+
 /** FP6 — the shipper's verdict on a delivered load: stars, and what went wrong if anything. */
 export class RateFreightDto {
   @IsNumber() @Min(1) @Max(5) stars!: number;
@@ -1181,6 +1189,11 @@ export class SuggestRouteDto {
 
 export class RegisterFreightDto {
   @IsString() description!: string;
+  /** FP7 — CMR box 13 at posting: instructions for the door, a contact to dial, a delivery window. */
+  @IsOptional() @IsString() @MaxLength(500) instructions?: string;
+  @IsOptional() @IsString() @MaxLength(80) contactName?: string;
+  @IsOptional() @IsString() @MaxLength(32) contactPhone?: string;
+  @IsOptional() @IsString() @MaxLength(80) deliveryWindow?: string;
   /** CA6 — the country at each end, where the poster knows it; the rules of crossing are only asked of a known country. */
   @IsOptional() @IsString() pickupCountry?: string;
   @IsOptional() @IsString() destCountry?: string;
@@ -1238,6 +1251,11 @@ export class BookFreightDto {
   @IsOptional() @IsBoolean() fragile?: boolean;
   @IsString() destPudoDid!: string; // a network PUDO — its coordinates + equipment drive routing, pricing and the site-gap advisory
   @IsOptional() @IsString() customerMobile?: string; // optional — the walk-in customer's phone (joins it to their "my shipments")
+  /** FP7 — CMR box 13 at the counter: instructions for the door, a contact to dial, a delivery window. */
+  @IsOptional() @IsString() @MaxLength(500) instructions?: string;
+  @IsOptional() @IsString() @MaxLength(80) contactName?: string;
+  @IsOptional() @IsString() @MaxLength(32) contactPhone?: string;
+  @IsOptional() @IsString() @MaxLength(80) deliveryWindow?: string;
   @IsNumber() @Min(0.01) budgetCap!: number; // the cash cap the customer prepays → the freight's maxSpend ceiling
   /** FB0c/FB2b — 'negotiate' posts the load for drivers to name a price the counter then accepts, instead of
    *  the first fit truck taking it at the computed rate. The cash cap still binds either way: a price above

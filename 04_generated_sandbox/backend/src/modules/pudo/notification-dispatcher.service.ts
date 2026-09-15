@@ -122,6 +122,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<{ freightId: string; destLabel?: string; pickupLocation?: GeoPoint }>(GlosEvent.Pudo.FreightPosted, (e) => this.onFreightPosted(e.payload));
     // FP5 (driver) — their fleet office put a load on them: it is on their list before they looked, so say so.
     this.events.subscribe<{ freightId: string; code: string; driverDid: string; byName?: string; pickupLabel: string; destLabel: string; weightKg: number; earning?: number }>(GlosEvent.Pudo.FreightAssigned, (e) => this.onFreightAssigned(e.payload));
+    // FP7 (driver) — the sender changed the instructions on a load they hold: what to do at the door has changed.
+    this.events.subscribe<{ freightId: string; code: string; driverDid: string; amended: boolean; text?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string }>(GlosEvent.Pudo.FreightInstructed, (e) => this.onFreightInstructed(e.payload));
     // FP3 (driver) — a load they had claimed was withdrawn by its sender: their day just changed, tell them why.
     this.events.subscribe<{ freightId: string; code: string; driverDid?: string; reason: string; destLabel?: string }>(GlosEvent.Pudo.FreightCancelled, (e) => this.onFreightCancelled(e.payload));
     // FP3b (sender) — the driver is at the door and cannot hand over: the sender is the one who can fix it.
@@ -177,6 +179,25 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       });
     } catch (err) {
       this.logger.warn(`freight-assigned notify failed for ${payload.freightId}: ${(err as Error).message}`);
+    }
+  }
+
+  private async onFreightInstructed(payload: { freightId: string; code: string; driverDid: string; amended: boolean; text?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string }): Promise<void> {
+    const lines = payload.amended
+      ? [payload.text]
+      : [payload.deliveryWindow ? `Deliver: ${payload.deliveryWindow}` : undefined, payload.contactName || payload.contactPhone ? `Contact: ${[payload.contactName, payload.contactPhone].filter(Boolean).join(', ')}` : undefined, payload.text];
+    const body = lines.filter(Boolean).join(' · ') || 'The sender cleared their instructions.';
+    try {
+      await this.notifications.notify(payload.driverDid, {
+        kind: 'load_instructions',
+        title: payload.amended ? `New instruction for ${payload.code}` : `Instructions for ${payload.code} changed`,
+        body,
+        link: '/',
+        tag: `freight:${payload.freightId}:instructions`,
+        data: { freightId: payload.freightId },
+      });
+    } catch (err) {
+      this.logger.warn(`freight-instructed notify failed for ${payload.freightId}: ${(err as Error).message}`);
     }
   }
 

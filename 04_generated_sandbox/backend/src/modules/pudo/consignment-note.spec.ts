@@ -66,6 +66,12 @@ describe('the consignment note', () => {
     expect(n.documents).toEqual(['Photo of the secured load (med_1)', 'Unload report, 2 item(s) confirmed']);
   });
 
+  it('FP7: box 13 carries what the sender wrote after what the load implies, and every subsequent instruction dated', () => {
+    const note = service.build(base({ instructions: { text: 'Gate on the north side', contactName: 'Joseph', contactPhone: '+254700999888', deliveryWindow: 'before 10:00', at: '2026-09-14T07:30:00Z' }, instructionAmendments: [{ text: 'Leave it with the guard', at: '2026-09-14T10:00:00Z' }] }));
+    expect(note.instructions).toEqual(['Deliver: before 10:00', 'Contact at delivery: Joseph, +254700999888', 'Gate on the north side', expect.stringMatching(/^Subsequent instruction, .*: Leave it with the guard$/)]);
+    expect(service.build(base({})).instructions).toEqual([]);
+  });
+
   it('FP3: the carrier’s reservations fill box 18, the proof of delivery fills box 24, and a cancelled load says so', () => {
     freights.fr_1 = base({ status: 'delivered', pickedUpAt: '2026-09-14T09:00:00Z', deliveredAt: '2026-09-14T12:00:00Z', reservations: { note: 'Two sacks torn', at: '2026-09-14T09:00:00Z', by: 'did:drv:amos' }, proofOfDelivery: { receiverName: 'Joseph Mwangi', photoRef: 'med_pod', remarks: 'One sack short', at: '2026-09-14T12:00:00Z', by: 'did:drv:amos' } });
     const n = service.build(freights.fr_1);
@@ -128,6 +134,9 @@ describe('the consignment note', () => {
     expect(view.attempts).toEqual([{ outcome: 'absent', at: '2026-09-14T11:00:00Z' }]);
     const text = JSON.stringify(view);
     for (const secret of ['ph_secret', 'Gate locked', 'One sack torn', 'T-ABC', '350', 'did:']) expect(text).not.toContain(secret);
+    // FP7 — the sender's instructions, contact phone first of all, stay off the public page entirely.
+    const instructed = service.trackView(base({ instructions: { text: 'North gate', contactName: 'Joseph', contactPhone: '+254700999888', deliveryWindow: 'before 10:00', at: '2026-09-14T07:30:00Z' }, instructionAmendments: [{ text: 'Leave with the guard', at: '2026-09-14T10:00:00Z' }] }));
+    for (const secret of ['North gate', 'Joseph', '+254700999888', 'before 10:00', 'guard']) expect(JSON.stringify(instructed)).not.toContain(secret);
     // Withdrawn: when and by whom, never why.
     const gone = service.trackView(base({ status: 'cancelled', cancellation: { by: 'did:shop:a1', role: 'shipper', reason: 'Customer changed their mind', at: '2026-09-14T08:30:00Z' } }));
     expect(gone.cancelled).toEqual({ at: '2026-09-14T08:30:00Z', by: 'sender' });

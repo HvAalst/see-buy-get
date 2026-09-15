@@ -236,6 +236,8 @@ export interface DispatchRow {
   earningsPerKm?: number | null;
   canTake: boolean;
   blockers: BoardBlocker[];
+  /** FP7 — the sender's delivery window, the one instruction the office dispatches against. */
+  deliveryWindow?: string;
 }
 
 export interface DispatchView {
