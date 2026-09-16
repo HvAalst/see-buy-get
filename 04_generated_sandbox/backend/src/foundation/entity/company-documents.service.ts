@@ -26,6 +26,15 @@ export const DOCUMENT_KINDS = [
   'representative_id',
   'beneficial_ownership',
   'obligation_registration',
+  // CL2a — the papers an IMPORT needs. They are kinds of company paper like any other: fingerprinted,
+  // versioned, and verified by a second person. What sets them apart is that most belong to ONE container
+  // rather than to the company, which they say by carrying that consignment's code as `relatesTo` — the
+  // same field a licence uses to say which licence it is the paper for.
+  'packing_list',
+  'commercial_invoice',
+  'bill_of_lading',
+  'certificate_of_origin',
+  'import_permit',
   'other',
 ] as const;
 export type DocumentKind = (typeof DOCUMENT_KINDS)[number];

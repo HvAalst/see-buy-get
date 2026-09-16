@@ -4485,6 +4485,409 @@
         }
       }
     },
+    "/v1/sbg/imports": {
+      "post": {
+        "operationId": "Sbg.registerImport",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterImportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportConsignment"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "Sbg.listImports",
+        "summary": "",
+        "description": "The consignments this company is a party to. Staff naming no company see the network's.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/imports/known-papers": {
+      "get": {
+        "operationId": "Sbg.knownImportPapers",
+        "summary": "",
+        "description": "WHAT AGENTS HAVE BEEN ASKED FOR AT A PORT — the foreknowledge that separates the user's two imports.\n\nDeclared BEFORE `imports/:importId`, because a path parameter would otherwise swallow it.\n\nEvery row is first-hand: it exists only because an agent clearing a real container published it as\nsomething they would need. There is no route that accepts a claim about a border from somebody who was\nnot clearing anything, which is how rumour is refused at intake rather than stored at low confidence.\nIt is never phrased as a requirement — we say who asked, how often, and when.",
+        "parameters": [
+          {
+            "name": "country",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "maxLength": 2,
+              "type": "string"
+            }
+          },
+          {
+            "name": "port",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 80,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/imports/{importId}": {
+      "get": {
+        "operationId": "Sbg.importDetail",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/imports/{importId}/appoint": {
+      "post": {
+        "operationId": "Sbg.appointClearingAgent",
+        "summary": "",
+        "description": "Appoint a clearing agent — the act that grants them the papers. The importer's decision alone.",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppointAgentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/imports/{importId}/revoke": {
+      "post": {
+        "operationId": "Sbg.revokeClearingAgent",
+        "summary": "",
+        "description": "End it. Immediate, and visible to both sides: the grants are marked revoked, never deleted.",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeAgentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/imports/{importId}/required": {
+      "post": {
+        "operationId": "Sbg.publishRequiredPapers",
+        "summary": "",
+        "description": "The agent publishes what they will need. We never assert this list — see the service.",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishRequiredDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/imports/{importId}/supply": {
+      "post": {
+        "operationId": "Sbg.supplyRequiredPaper",
+        "summary": "",
+        "description": "The importer attaches one of their own papers. There is deliberately no upload on this route.",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SupplyPaperDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/imports/{importId}/required/{key}/accept": {
+      "post": {
+        "operationId": "Sbg.acceptRequiredPaper",
+        "summary": "",
+        "description": "The agent ticks one off. An expired paper is refused HERE, not at the counter.",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaperDecisionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/imports/{importId}/required/{key}/reject": {
+      "post": {
+        "operationId": "Sbg.rejectRequiredPaper",
+        "summary": "",
+        "description": "Send one back, always with a reason.",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaperDecisionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/imports/{importId}/documents/{documentId}/file": {
+      "get": {
+        "operationId": "Sbg.importDocumentFile",
+        "summary": "",
+        "description": "Read a shared paper. The grant decides, and the same rule serves this route and the screens.\n\nA document the caller may not read answers NOT FOUND rather than FORBIDDEN: the alternative confirms to\nsomebody probing that a document with this id exists on a company they cannot see.",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "documentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/entities/{entityId}/books": {
       "get": {
         "operationId": "Sbg.entityBooks",
@@ -18239,6 +18642,11 @@
               "representative_id",
               "beneficial_ownership",
               "obligation_registration",
+              "packing_list",
+              "commercial_invoice",
+              "bill_of_lading",
+              "certificate_of_origin",
+              "import_permit",
               "other"
             ]
           },
@@ -18318,6 +18726,555 @@
             "type": "string"
           },
           "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "RegisterImportDto": {
+        "type": "object",
+        "properties": {
+          "importerEntityId": {
+            "type": "string",
+            "description": "Whose goods. A company administrator may only name their own; staff must name one."
+          },
+          "goodsDescription": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "originCountry": {
+            "type": "string",
+            "maxLength": 2
+          },
+          "destCountry": {
+            "type": "string",
+            "maxLength": 2
+          },
+          "destPort": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "containerNo": {
+            "type": "string",
+            "maxLength": 20
+          },
+          "carrierRef": {
+            "type": "string",
+            "description": "The carrier's own reference. Recorded, and read by nothing yet — the carrier seam is not wired.",
+            "maxLength": 60
+          },
+          "etaAt": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "goodsDescription",
+          "originCountry",
+          "destCountry",
+          "destPort"
+        ]
+      },
+      "RequiredPaper": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "A slug the agent chooses, unique within this consignment — what `supply` and `accept` name."
+          },
+          "label": {
+            "type": "string",
+            "description": "The agent's own words: \"Investment licence\", \"Ministry of Agriculture permit\"."
+          },
+          "copies": {
+            "type": "number",
+            "description": "How many physical copies the counter wants. Some of the user's papers were wanted in ten."
+          },
+          "note": {
+            "type": "string"
+          },
+          "addedBy": {
+            "type": "string"
+          },
+          "addedAt": {
+            "type": "string"
+          },
+          "documentId": {
+            "type": "string",
+            "description": "What the importer attached. One of THEIR OWN documents, never a file uploaded into this list."
+          },
+          "suppliedAt": {
+            "type": "string"
+          },
+          "suppliedBy": {
+            "type": "string"
+          },
+          "acceptedAt": {
+            "type": "string"
+          },
+          "acceptedBy": {
+            "type": "string"
+          },
+          "rejectedAt": {
+            "type": "string"
+          },
+          "rejectedBy": {
+            "type": "string"
+          },
+          "rejectionReason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "addedBy",
+          "addedAt"
+        ]
+      },
+      "ImportConsignment": {
+        "type": "object",
+        "properties": {
+          "importId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "description": "IMP-001. Also the `relatesTo` every paper belonging to THIS container is filed under."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "appointed"
+            ]
+          },
+          "importerEntityId": {
+            "type": "string",
+            "description": "The company that owns the goods."
+          },
+          "goodsDescription": {
+            "type": "string"
+          },
+          "containerNo": {
+            "type": "string",
+            "description": "The carrier's own container number, as printed on the box — MSCU1234567. Free text: we do not validate\n a format we are not the registrar of."
+          },
+          "originCountry": {
+            "type": "string"
+          },
+          "destCountry": {
+            "type": "string"
+          },
+          "destPort": {
+            "type": "string",
+            "description": "Where it is cleared — \"Djibouti\", \"Mombasa\". A label, not a modelled port: we do not run ports."
+          },
+          "carrierRef": {
+            "type": "string"
+          },
+          "etaAt": {
+            "type": "string",
+            "description": "Expected arrival, when somebody knows it. NOTHING FILLS THIS AUTOMATICALLY — see the service comment."
+          },
+          "etaSource": {
+            "type": "string",
+            "description": "How the arrival information got here. `manual` is the only value anything writes today.",
+            "enum": [
+              "manual",
+              "carrier_webhook"
+            ]
+          },
+          "agentEntityId": {
+            "type": "string"
+          },
+          "appointedAt": {
+            "type": "string"
+          },
+          "appointedBy": {
+            "type": "string"
+          },
+          "required": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RequiredPaper"
+            }
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "createdBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "importId",
+          "code",
+          "status",
+          "importerEntityId",
+          "goodsDescription",
+          "originCountry",
+          "destCountry",
+          "destPort",
+          "required",
+          "createdAt",
+          "createdBy"
+        ]
+      },
+      "RequiredPaperView": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "A slug the agent chooses, unique within this consignment — what `supply` and `accept` name."
+          },
+          "label": {
+            "type": "string",
+            "description": "The agent's own words: \"Investment licence\", \"Ministry of Agriculture permit\"."
+          },
+          "copies": {
+            "type": "number",
+            "description": "How many physical copies the counter wants. Some of the user's papers were wanted in ten."
+          },
+          "note": {
+            "type": "string"
+          },
+          "addedBy": {
+            "type": "string"
+          },
+          "addedAt": {
+            "type": "string"
+          },
+          "documentId": {
+            "type": "string",
+            "description": "What the importer attached. One of THEIR OWN documents, never a file uploaded into this list."
+          },
+          "suppliedAt": {
+            "type": "string"
+          },
+          "suppliedBy": {
+            "type": "string"
+          },
+          "acceptedAt": {
+            "type": "string"
+          },
+          "acceptedBy": {
+            "type": "string"
+          },
+          "rejectedAt": {
+            "type": "string"
+          },
+          "rejectedBy": {
+            "type": "string"
+          },
+          "rejectionReason": {
+            "type": "string"
+          },
+          "document": {
+            "description": "The attached document, as much of it as this reader may see. Absent until the importer supplies one.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CompanyDocument"
+              }
+            ]
+          },
+          "stale": {
+            "type": "boolean",
+            "description": "The importer replaced the attached paper with a newer version. We do NOT follow it silently — see the\n service — so the agent is told the version they accepted is no longer the current one."
+          },
+          "expired": {
+            "type": "boolean",
+            "description": "The attached document's expiry has passed. Said before it is relied on, never discovered at the counter."
+          },
+          "state": {
+            "type": "string",
+            "description": "`waiting` nobody has supplied it · `supplied` waiting on the agent · `accepted` · `rejected`.",
+            "enum": [
+              "waiting",
+              "supplied",
+              "accepted",
+              "rejected"
+            ]
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "addedBy",
+          "addedAt",
+          "stale",
+          "expired",
+          "state"
+        ]
+      },
+      "DocumentGrant": {
+        "type": "object",
+        "properties": {
+          "grantId": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "company",
+              "consignment"
+            ]
+          },
+          "ownerEntityId": {
+            "type": "string",
+            "description": "Whose papers these are — the importer."
+          },
+          "readerEntityId": {
+            "type": "string",
+            "description": "Who may read them — the clearing agent. Exactly one company, never a list."
+          },
+          "importId": {
+            "type": "string",
+            "description": "Which container, on a `consignment` grant. Absent on a standing one."
+          },
+          "grantedBy": {
+            "type": "string"
+          },
+          "grantedAt": {
+            "type": "string"
+          },
+          "revokedBy": {
+            "type": "string"
+          },
+          "revokedAt": {
+            "type": "string"
+          },
+          "revokedReason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "grantId",
+          "scope",
+          "ownerEntityId",
+          "readerEntityId",
+          "grantedBy",
+          "grantedAt"
+        ]
+      },
+      "ImportDetail": {
+        "type": "object",
+        "properties": {
+          "importId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "appointed"
+            ]
+          },
+          "goodsDescription": {
+            "type": "string"
+          },
+          "containerNo": {
+            "type": "string"
+          },
+          "originCountry": {
+            "type": "string"
+          },
+          "destCountry": {
+            "type": "string"
+          },
+          "destPort": {
+            "type": "string"
+          },
+          "etaAt": {
+            "type": "string"
+          },
+          "importerEntityId": {
+            "type": "string"
+          },
+          "importerName": {
+            "type": "string"
+          },
+          "agentEntityId": {
+            "type": "string"
+          },
+          "agentName": {
+            "type": "string"
+          },
+          "youAre": {
+            "type": "string",
+            "description": "Which side of this the reader is on. An operator reading over the network's shoulder is `onlooker`.",
+            "enum": [
+              "importer",
+              "agent",
+              "onlooker"
+            ]
+          },
+          "accepted": {
+            "type": "number",
+            "description": "Derived every read, never stored: how many of the agent's list are accepted, out of how many."
+          },
+          "asked": {
+            "type": "number"
+          },
+          "waitingOnYou": {
+            "type": "number",
+            "description": "Lines waiting on THIS reader to act. What the console counts on the group badge."
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "required": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RequiredPaperView"
+            }
+          },
+          "documents": {
+            "description": "The importer's papers this reader may see: their own, or whatever the grants reach.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CompanyDocument"
+            }
+          },
+          "grants": {
+            "description": "Every grant over these papers, live and revoked, so both sides see what was shared and when.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentGrant"
+            }
+          }
+        },
+        "required": [
+          "importId",
+          "code",
+          "status",
+          "goodsDescription",
+          "originCountry",
+          "destCountry",
+          "destPort",
+          "importerEntityId",
+          "youAre",
+          "accepted",
+          "asked",
+          "waitingOnYou",
+          "createdAt",
+          "required",
+          "documents",
+          "grants"
+        ]
+      },
+      "AppointAgentDto": {
+        "type": "object",
+        "properties": {
+          "agentEntityId": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "agentEntityId"
+        ]
+      },
+      "RevokeAgentDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        }
+      },
+      "RequiredPaperItemDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "copies": {
+            "type": "number"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 300
+          }
+        },
+        "required": [
+          "label"
+        ]
+      },
+      "PublishRequiredDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RequiredPaperItemDto"
+            }
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "SupplyPaperDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "documentId": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "documentId"
+        ]
+      },
+      "PaperDecisionDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "by": {
             "type": "string"
           }
         }

@@ -209,6 +209,60 @@ export function createOperatorApi(sbg: SbgClient) {
     /** CA5 — licences and policies lapsing soon (or already), across every company. */
     expiringCompanyPapers: (withinDays = 60) => sbg.request((c) => c.GET('/v1/sbg/companies/expiring', { params: { query: { withinDays: String(withinDays) } } })),
 
+    /* ---- CL2a: a container, its papers, and the agent appointed to clear it ----
+     *
+     * `entityId` says which company is acting, and it is only ever sent by NETWORK STAFF — a company
+     * administrator's token already carries their company, and the server refuses a token that names a
+     * different one. So every call here takes it optionally and the company screens simply omit it.
+     */
+
+    /** The importer records a container that is on its way. It exists before it arrives — that is the point. */
+    registerImport: (body: { importerEntityId?: string; goodsDescription: string; originCountry: string; destCountry: string; destPort: string; containerNo?: string; carrierRef?: string; etaAt?: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/imports', { body: body as never })),
+
+    /** The consignments this company is a party to. Staff naming no company see the network's. */
+    imports: (entityId?: string) => sbg.request((c) => c.GET('/v1/sbg/imports', { params: { query: entityId ? { entityId } : {} } as never })),
+
+    importDetail: (importId: string, entityId?: string) =>
+      sbg.request((c) => c.GET('/v1/sbg/imports/{importId}', { params: { path: { importId }, query: entityId ? { entityId } : {} } as never })),
+
+    /**
+     * What agents have actually been asked for at a port — the foreknowledge that separated the user's two
+     * imports. Counts and dates, never a requirement: we say who asked and when, and nothing about duty.
+     */
+    knownImportPapers: (country: string, port?: string) =>
+      sbg.request((c) => c.GET('/v1/sbg/imports/known-papers', { params: { query: { country, ...(port ? { port } : {}) } } as never })),
+
+    /** Appoint a clearing agent — the act that grants them the papers. The importer's decision alone. */
+    appointClearingAgent: (importId: string, body: { agentEntityId: string; entityId?: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/appoint', { params: { path: { importId } }, body: body as never })),
+
+    /** End it. Immediate, and visible to both sides — the grant is marked revoked, never deleted. */
+    revokeClearingAgent: (importId: string, body: { reason?: string; entityId?: string; by?: string } = {}) =>
+      sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/revoke', { params: { path: { importId } }, body: body as never })),
+
+    /** The agent publishes what they will need. We never assert this list. */
+    publishRequiredPapers: (importId: string, body: { items: Array<{ key?: string; label: string; copies?: number; note?: string }>; entityId?: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/required', { params: { path: { importId } }, body: body as never })),
+
+    /** The importer attaches one of their OWN papers. There is deliberately no upload on this route. */
+    supplyRequiredPaper: (importId: string, body: { key: string; documentId: string; entityId?: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/supply', { params: { path: { importId } }, body: body as never })),
+
+    /** The agent ticks one off. An expired paper is refused here, not at the counter. */
+    acceptRequiredPaper: (importId: string, key: string, body: { entityId?: string; by?: string } = {}) =>
+      sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/required/{key}/accept', { params: { path: { importId, key } }, body: body as never })),
+
+    /** Send one back, always with a reason. */
+    rejectRequiredPaper: (importId: string, key: string, body: { reason: string; entityId?: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/required/{key}/reject', { params: { path: { importId, key } }, body: body as never })),
+
+    /** Read a shared paper. The grant decides; a paper you may not read answers NOT FOUND, never FORBIDDEN. */
+    importDocumentFile: (importId: string, documentId: string, entityId?: string) =>
+      sbg.request((c) =>
+        c.GET('/v1/sbg/imports/{importId}/documents/{documentId}/file', { params: { path: { importId, documentId }, query: entityId ? { entityId } : {} }, parseAs: 'blob' } as never),
+      ),
+
     /** The fleets on the network — with their sign-in codes, which only network staff and the fleet itself see. */
     fleets: () => sbg.request((c) => c.GET('/v1/sbg/fleet/managers', {})),
 

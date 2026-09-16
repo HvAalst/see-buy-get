@@ -254,6 +254,73 @@ export class DocumentDecisionDto {
   @IsOptional() @IsString() reason?: string;
 }
 
+/* ------------------------------------------ CL2a — importing a container -- */
+
+/** CL2a — a container on its way. Countries are two-letter codes; the port is a label, not a modelled place. */
+export class RegisterImportDto {
+  /** Whose goods. A company administrator may only name their own; staff must name one. */
+  @IsOptional() @IsString() importerEntityId?: string;
+  @IsString() @MaxLength(200) goodsDescription!: string;
+  @IsString() @MaxLength(2) originCountry!: string;
+  @IsString() @MaxLength(2) destCountry!: string;
+  @IsString() @MaxLength(80) destPort!: string;
+  @IsOptional() @IsString() @MaxLength(20) containerNo?: string;
+  /** The carrier's own reference. Recorded, and read by nothing yet — the carrier seam is not wired. */
+  @IsOptional() @IsString() @MaxLength(60) carrierRef?: string;
+  @IsOptional() @IsString() etaAt?: string;
+  @IsOptional() @IsString() by?: string;
+}
+
+/** CL2a — appoint a clearing agent, which is what creates the two grants over the papers. */
+export class AppointAgentDto {
+  @IsString() agentEntityId!: string;
+  @IsOptional() @IsString() entityId?: string;
+  @IsOptional() @IsString() by?: string;
+}
+
+/** CL2a — end an appointment. A reason is optional; the revocation itself is not negotiable. */
+export class RevokeAgentDto {
+  @IsOptional() @IsString() @MaxLength(300) reason?: string;
+  @IsOptional() @IsString() entityId?: string;
+  @IsOptional() @IsString() by?: string;
+}
+
+/** CL2a — one line of the list the agent publishes. */
+export class RequiredPaperItemDto {
+  @IsOptional() @IsString() @MaxLength(60) key?: string;
+  @IsString() @MaxLength(120) label!: string;
+  @IsOptional() @IsNumber() copies?: number;
+  @IsOptional() @IsString() @MaxLength(300) note?: string;
+}
+
+/** CL2a — the agent publishes what this consignment will need. Replaces the list, keeps what was supplied. */
+export class PublishRequiredDto {
+  @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => RequiredPaperItemDto) items!: RequiredPaperItemDto[];
+  @IsOptional() @IsString() entityId?: string;
+  @IsOptional() @IsString() by?: string;
+}
+
+/** CL2a — the importer attaches one of their OWN papers to a line. No upload here, by design. */
+export class SupplyPaperDto {
+  @IsString() @MaxLength(60) key!: string;
+  @IsString() documentId!: string;
+  @IsOptional() @IsString() entityId?: string;
+  @IsOptional() @IsString() by?: string;
+}
+
+/** CL2a — the agent ticks a paper off, or sends it back with a reason. */
+export class PaperDecisionDto {
+  @IsOptional() @IsString() @MaxLength(300) reason?: string;
+  @IsOptional() @IsString() entityId?: string;
+  @IsOptional() @IsString() by?: string;
+}
+
+/** CL2a — what agents have been asked for at one port. A country, and optionally the port itself. */
+export class KnownPapersQueryDto {
+  @IsString() @MaxLength(2) country!: string;
+  @IsOptional() @IsString() @MaxLength(80) port?: string;
+}
+
 /** CA6 — the rule for crossing from one country into another. Absent a rule, a foreign vehicle may not carry inside. */
 export class BorderRuleDto {
   @IsString() from!: string;

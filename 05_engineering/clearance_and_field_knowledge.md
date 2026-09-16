@@ -307,7 +307,7 @@ award without knowing which party owned the loss.
 - **Gate:** on a C term a receiver opens and wins a claim, and the sender is refused with a sentence that
   names the term; on a D term the existing sender path is untouched; no money is billed differently.
 
-### CL2 — The importer's papers, and the agent who clears them
+### CL2 — The importer's papers, and the agent who clears them — CL2a SHIPPED 2026-09-16, driven
 
 **Rewritten 2026-09-16 from two real imports the user ran.** The first draft of this slice had a clearing
 agent as a record with licences that expire. That is not the job. The job is the importer's, and it is worth
@@ -373,8 +373,8 @@ scope: *share the documents digitally, grant access, pay the agent, get the cont
 
 #### Cut into two pieces
 
-- **CL2a, first:** the consignment, the documents, the two grants, and the agent's required list. No money and
-  no road leg. This is the piece that answers the two weeks.
+- **CL2a — SHIPPED 2026-09-16, driven.** The consignment, the documents, the two grants, and the agent's
+  required list. No money and no road leg. This is the piece that answers the two weeks.
 - **CL2b, after:** paying the agent, and minting the road leg from the port. **Payment is gated by presence** —
   where we only match we cannot be the one who bills, and the screen must say so at the start rather than
   fail at the end.
@@ -387,6 +387,39 @@ scope: *share the documents digitally, grant access, pay the agent, get the cont
 - **Gate:** an importer uploads once and appoints an agent, who sees exactly that consignment's papers and
   nothing else; revoking is immediate and visible to both; a document that expires says so before it is
   relied on; and what the agent was asked for at the border is recorded against that border, dated.
+
+#### What CL2a shipped, and what building it turned up
+
+- **The new unit is `ImportConsignment` (`IMP-nnn`), NOT `Consignment`.** That name was already taken by
+  F3's consolidation lot (`LOT-nnn`), and the only other container in the code is a truck body that can carry
+  one. Three different things; kept apart by name rather than by hoping nobody reads them together.
+- **The reader primitive is `DocumentGrant`:** one named counterparty, explicit, revocable, and KEPT after
+  revocation, so "who could read our invoices in March" stays answerable. A container's own papers are filed
+  under its CODE as `relatesTo`, and that is precisely what confines a per-consignment grant to one box.
+- **A DEFECT THE UNIT TESTS DID NOT FIND AND THE DRIVE DID.** A standing grant is shared with the AGENT, not
+  with the container, so revoking one appointment silently withdrew that agent's access to every other
+  container they were still clearing. Fixed two ways: the company-scope grant is taken back only by the LAST
+  appointment, and appointing the same agent again no longer mints a second one. Pinned by its own test.
+- **The importer could not put their own papers on record.** `POST entities/:id/documents` was operator-only,
+  which made "share your documents digitally" impossible without posting them to network staff first — the
+  exact paper shuffle this slice exists to end. Widened to a company administrator over their own company,
+  with `requireReach` unchanged. **Verifying stays operator-only:** a second pair of eyes on a paper is a
+  different act from owning it.
+- **Five document kinds added** to the catalogue, because the import papers had nowhere honest to live:
+  packing list, commercial invoice, bill of lading, certificate of origin, import permit.
+- **§7's observations arrived early, as that section predicted.** `GET imports/known-papers` answers what
+  agents clearing at a port have ACTUALLY asked for — how many asked, how many containers, and when — and
+  never as a requirement. It is first-hand by construction: there is no route that accepts a claim about a
+  border from somebody who was not clearing anything, which is how rumour is refused at intake. The console
+  shows an agent only what is NOT already on their own list, which is the two-week container as a function.
+- **Driven as THREE separate companies with three separate sign-ins**, because an operator reads everything
+  by construction and could not have proven the confinement. Agent A gets NOT FOUND on the other container
+  and on its packing list; a permit that lapsed in 2020 is refused by date at the moment of acceptance; the
+  published list survives revocation; another port shows nothing.
+- **Left undone, deliberately:** there is no directory of clearing agents, so appointing one means typing
+  their company id. A directory is a larger question than this slice — who may appear in it, and on whose say.
+- **Noticed while driving and NOT ours:** the console asks `GET /v1/sbg/finance` on a company sign-in and
+  takes a 403, because that route is operator-only by design. Pre-existing, untouched here, worth fixing.
 
 ### CL3 — Scarcity, derived
 No dependencies. Cheap, and it is the slice that pays for the epic early.

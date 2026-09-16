@@ -25,6 +25,13 @@ export const DOCUMENT_KINDS = [
   'representative_id',
   'beneficial_ownership',
   'obligation_registration',
+  // CL2a — the papers an import needs. Most belong to ONE container, which they say by carrying that
+  // consignment's code as `relatesTo`.
+  'packing_list',
+  'commercial_invoice',
+  'bill_of_lading',
+  'certificate_of_origin',
+  'import_permit',
   'other',
 ] as const;
 export type DocumentKind = (typeof DOCUMENT_KINDS)[number];
@@ -184,6 +191,11 @@ export const DOCUMENT_LABEL: Record<DocumentKind, MessageKey> = {
   representative_id: 'tower.company.docKind.representative_id',
   beneficial_ownership: 'tower.company.docKind.beneficial_ownership',
   obligation_registration: 'tower.company.docKind.obligation_registration',
+  packing_list: 'tower.company.docKind.packing_list',
+  commercial_invoice: 'tower.company.docKind.commercial_invoice',
+  bill_of_lading: 'tower.company.docKind.bill_of_lading',
+  certificate_of_origin: 'tower.company.docKind.certificate_of_origin',
+  import_permit: 'tower.company.docKind.import_permit',
   other: 'tower.company.docKind.other',
 };
 

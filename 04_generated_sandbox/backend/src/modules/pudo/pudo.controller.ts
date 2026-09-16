@@ -11,6 +11,8 @@ import { countryImpactOf } from './country-impact';
 import { BorderRuleService } from './border-rules.service';
 import type { Response } from 'express';
 import { CompanyDocumentService } from '../../foundation/entity/company-documents.service';
+import { ImportService } from './import.service';
+import { ImportDetail, ImportRow, KnownPaper } from './import.types';
 import { CompanyReadinessService } from '../../foundation/entity/company-readiness.service';
 import type { Entity } from '../../foundation/entity/entity.types';
 import { COUNTRY_CATALOGUE, catalogueEntry } from '../../foundation/countries/catalogue';
@@ -51,6 +53,13 @@ import { PersonService } from './person.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
 import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDepositDto, ArriveDto, AssignCorridorDto, AssignNodeDto, AssignToteDto, AvailabilityDto, CheckoutDto, ClassifyDto, CollectDto, CorridorDto, CorridorStatusDto,
   ProposeLineDto,
+  RegisterImportDto,
+  AppointAgentDto,
+  RevokeAgentDto,
+  PublishRequiredDto,
+  SupplyPaperDto,
+  PaperDecisionDto,
+  KnownPapersQueryDto,
   PresenceDto,
   PresenceDecisionDto,
   CreateCompanyDto,
@@ -130,6 +139,7 @@ export class SbgController {
     private readonly entities: EntityService,
     private readonly presence: PresenceService,
     private readonly companyDocuments: CompanyDocumentService,
+    private readonly imports: ImportService,
     private readonly readiness: CompanyReadinessService,
     private readonly borderRules: BorderRuleService,
     private readonly entityAdmins: EntityAdminService,
@@ -348,6 +358,25 @@ export class SbgController {
       throw new GlosError('FORBIDDEN', 'A decision that needs two people needs a named sign-in — the shared operator key cannot say who is at the keyboard');
     }
     return auditActor(actor, typed);
+  }
+
+  /**
+   * CL2a — WHICH COMPANY IS ACTING, for a route where that is the whole access question.
+   *
+   * A company administrator acts as their own company and cannot name another: the token carries the entity,
+   * so naming a different one is refused rather than ignored. Network staff hold no company of their own, so
+   * they must say which one they are acting for — there is no sensible default, and defaulting to the first
+   * company on the system would put a decision on a real importer's record.
+   */
+  private actingCompany(actor: IntrospectionResult, typed?: string): string {
+    if (actor?.role === 'entity_admin') {
+      const own = actingTenant(actor);
+      if (!own) throw new GlosError('FORBIDDEN', 'This sign-in carries no company');
+      if (typed && typed !== own) throw new GlosError('FORBIDDEN', 'You administer one company, and it is not that one');
+      return own;
+    }
+    if (!typed) throw new GlosError('FIELD_REQUIRED', 'Name the company you are acting for');
+    return this.entities.get(typed).entityId;
   }
 
   private requireReach(actor: IntrospectionResult, entityId: string): void {
@@ -578,9 +607,10 @@ export class SbgController {
   }
 
   /** CA4 — put a document on record: fingerprinted, versioned, waiting for a second person to verify it. */
-  @Roles('operator')
+  @Roles('operator', 'entity_admin')
   @Post('entities/:entityId/documents')
   uploadCompanyDocument(@Param('entityId') entityId: string, @Body() dto: CompanyDocumentDto, @Actor() actor: IntrospectionResult) {
+    this.requireReach(actor, entityId);
     return this.companyDocuments.upload({
       entityId,
       kind: dto.kind,
@@ -631,6 +661,122 @@ export class SbgController {
   expiringCompanyPapers(@Query('withinDays') withinDays?: string) {
     const days = Number(withinDays);
     return { items: this.entities.expiring(Date.now(), Number.isFinite(days) && days > 0 ? Math.min(days, 365) : 60) };
+  }
+
+  /* ------------------------------------------- CL2a — a container, and its papers -- */
+
+  /**
+   * THE IMPORTER'S SIDE and THE AGENT'S SIDE, on one set of routes.
+   *
+   * Both parties are companies, so both sign in as a company administrator and act as themselves — there is
+   * no shared login anywhere in this, and the service decides which side of a consignment the caller is on
+   * rather than the route trusting a claim in the body. Network staff reach every consignment, the same
+   * reach `requireReach` already gives them over every company record; they are an onlooker on each, and
+   * an onlooker is owed nothing and can act on nothing.
+   */
+  @Roles('operator', 'entity_admin')
+  @Post('imports')
+  registerImport(@Body() dto: RegisterImportDto, @Actor() actor: IntrospectionResult) {
+    return this.imports.register({ ...dto, importerEntityId: this.actingCompany(actor, dto.importerEntityId) }, this.namedActor(actor, dto.by));
+  }
+
+  /** The consignments this company is a party to. Staff naming no company see the network's. */
+  @Roles('operator', 'entity_admin')
+  @Get('imports')
+  listImports(@Actor() actor: IntrospectionResult, @Query('entityId') entityId?: string): { items: ImportRow[] } {
+    if (actor?.role === 'operator' && !entityId) return { items: this.imports.list('', { all: true }) };
+    return { items: this.imports.list(this.actingCompany(actor, entityId)) };
+  }
+
+  /**
+   * WHAT AGENTS HAVE BEEN ASKED FOR AT A PORT — the foreknowledge that separates the user's two imports.
+   *
+   * Declared BEFORE `imports/:importId`, because a path parameter would otherwise swallow it.
+   *
+   * Every row is first-hand: it exists only because an agent clearing a real container published it as
+   * something they would need. There is no route that accepts a claim about a border from somebody who was
+   * not clearing anything, which is how rumour is refused at intake rather than stored at low confidence.
+   * It is never phrased as a requirement — we say who asked, how often, and when.
+   */
+  @Roles('operator', 'entity_admin')
+  @Get('imports/known-papers')
+  knownImportPapers(@Query() q: KnownPapersQueryDto): { items: KnownPaper[] } {
+    return { items: this.imports.knownPapers(q.country, q.port) };
+  }
+
+  @Roles('operator', 'entity_admin')
+  @Get('imports/:importId')
+  importDetail(@Param('importId') importId: string, @Actor() actor: IntrospectionResult, @Query('entityId') entityId?: string): ImportDetail {
+    if (actor?.role === 'operator' && !entityId) return this.imports.detail(importId, '', { all: true });
+    return this.imports.detail(importId, this.actingCompany(actor, entityId));
+  }
+
+  /** Appoint a clearing agent — the act that grants them the papers. The importer's decision alone. */
+  @Roles('operator', 'entity_admin')
+  @Post('imports/:importId/appoint')
+  appointClearingAgent(@Param('importId') importId: string, @Body() dto: AppointAgentDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    return this.imports.appoint(importId, dto.agentEntityId, this.actingCompany(actor, dto.entityId), this.namedActor(actor, dto.by));
+  }
+
+  /** End it. Immediate, and visible to both sides: the grants are marked revoked, never deleted. */
+  @Roles('operator', 'entity_admin')
+  @Post('imports/:importId/revoke')
+  revokeClearingAgent(@Param('importId') importId: string, @Body() dto: RevokeAgentDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    return this.imports.revoke(importId, this.actingCompany(actor, dto.entityId), this.namedActor(actor, dto.by), dto.reason);
+  }
+
+  /** The agent publishes what they will need. We never assert this list — see the service. */
+  @Roles('operator', 'entity_admin')
+  @Post('imports/:importId/required')
+  publishRequiredPapers(@Param('importId') importId: string, @Body() dto: PublishRequiredDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    return this.imports.publishRequired(importId, this.actingCompany(actor, dto.entityId), dto.items, this.namedActor(actor, dto.by));
+  }
+
+  /** The importer attaches one of their own papers. There is deliberately no upload on this route. */
+  @Roles('operator', 'entity_admin')
+  @Post('imports/:importId/supply')
+  supplyRequiredPaper(@Param('importId') importId: string, @Body() dto: SupplyPaperDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    return this.imports.supply(importId, this.actingCompany(actor, dto.entityId), dto.key, dto.documentId, this.namedActor(actor, dto.by));
+  }
+
+  /** The agent ticks one off. An expired paper is refused HERE, not at the counter. */
+  @Roles('operator', 'entity_admin')
+  @Post('imports/:importId/required/:key/accept')
+  acceptRequiredPaper(@Param('importId') importId: string, @Param('key') key: string, @Body() dto: PaperDecisionDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    return this.imports.accept(importId, this.actingCompany(actor, dto.entityId), key, this.namedActor(actor, dto.by));
+  }
+
+  /** Send one back, always with a reason. */
+  @Roles('operator', 'entity_admin')
+  @Post('imports/:importId/required/:key/reject')
+  rejectRequiredPaper(@Param('importId') importId: string, @Param('key') key: string, @Body() dto: PaperDecisionDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    return this.imports.reject(importId, this.actingCompany(actor, dto.entityId), key, this.namedActor(actor, dto.by), dto.reason);
+  }
+
+  /**
+   * Read a shared paper. The grant decides, and the same rule serves this route and the screens.
+   *
+   * A document the caller may not read answers NOT FOUND rather than FORBIDDEN: the alternative confirms to
+   * somebody probing that a document with this id exists on a company they cannot see.
+   */
+  @Roles('operator', 'entity_admin')
+  @Get('imports/:importId/documents/:documentId/file')
+  @Header('Cache-Control', 'private, no-store')
+  @Header('X-Content-Type-Options', 'nosniff')
+  importDocumentFile(
+    @Param('importId') importId: string,
+    @Param('documentId') documentId: string,
+    @Actor() actor: IntrospectionResult,
+    @Res({ passthrough: true }) res: Response,
+    @Query('entityId') entityId?: string,
+  ): StreamableFile {
+    const reader = actor?.role === 'operator' && !entityId ? '' : this.actingCompany(actor, entityId);
+    const found = this.imports.readableDocument(importId, reader, documentId);
+    const file = this.companyDocuments.file(found.entityId, found.documentId);
+    res.setHeader('X-Fingerprint', file.fingerprint);
+    res.setHeader('X-Fingerprint-Intact', String(file.intact));
+    res.setHeader('Access-Control-Expose-Headers', 'X-Fingerprint, X-Fingerprint-Intact');
+    return new StreamableFile(file.bytes, { type: file.contentType });
   }
 
   /**

@@ -18,6 +18,7 @@ import { PicturesScreen } from './screens/PicturesScreen';
 import { SupportScreen } from './screens/SupportScreen';
 import { NetworkScreen } from './screens/NetworkScreen';
 import { RatesScreen } from './screens/RatesScreen';
+import { ImportsScreen } from './screens/ImportsScreen';
 import { SignInScreen } from './screens/SignInScreen';
 import { ConsolePhoneNav, ConsoleRail } from './ConsoleNav';
 import { groupsFor } from './nav';
@@ -83,6 +84,7 @@ export function App() {
     ...(manyCompanies ? (['companies'] as Screen[]) : []),
     'money',
     'rates',
+    'imports',
   ];
   const groups = groupsFor(available);
 
@@ -174,6 +176,8 @@ export function App() {
             <CompanyRecordScreen state={state} actions={actions} />
           ) : state.screen === 'companies' ? (
             <CompaniesScreen state={state} actions={actions} />
+          ) : state.screen === 'imports' ? (
+            <ImportsScreen state={state} actions={actions} />
           ) : state.screen === 'rates' ? (
             <RatesScreen state={state} actions={actions} />
           ) : state.screen === 'claims' ? (

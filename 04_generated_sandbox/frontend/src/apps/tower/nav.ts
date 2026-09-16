@@ -39,7 +39,7 @@ export const NAV_GROUPS: NavGroup[] = [
     icon: 'clock',
     // `support` belongs here rather than in a group of its own: somebody looking a parcel up is doing it
     // because a person is waiting on the other end of a phone.
-    screens: ['hazards', 'claims', 'disposal', 'approvals', 'papers', 'reports', 'support'],
+    screens: ['hazards', 'claims', 'disposal', 'approvals', 'papers', 'imports', 'reports', 'support'],
   },
   { key: 'money', labelKey: 'tower.group.money', icon: 'wallet', screens: ['money'] },
   { key: 'setup', labelKey: 'tower.group.setup', icon: 'edit', screens: ['companies', 'company', 'rates', 'corridors', 'borders', 'presence', 'pictures'] },
@@ -59,6 +59,7 @@ export const SCREEN_META: Record<Screen, { labelKey: MessageKey; icon: IconName 
   disposal: { labelKey: 'tower.nav.disposal', icon: 'box' },
   approvals: { labelKey: 'tower.nav.approvals', icon: 'badge' },
   papers: { labelKey: 'tower.nav.papers', icon: 'truck' },
+  imports: { labelKey: 'tower.nav.imports', icon: 'box' },
   reports: { labelKey: 'tower.nav.reports', icon: 'send' },
   support: { labelKey: 'tower.nav.support', icon: 'search' },
   money: { labelKey: 'tower.nav.money', icon: 'wallet' },
