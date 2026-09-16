@@ -104,8 +104,14 @@ A clearing agent is not a new kind of thing. It is the shape we already have twi
 
 ### Which terms may be offered, and who decides — DECIDED 2026-09-16
 
-**Term availability is not a product setting and not a shop's choice.** It is held **per jurisdiction,
-default off**, and switched on by the **super admin**. The shape is the one countries already use: a country
+**Term availability is not a product setting and not a shop's choice.** It is held **per jurisdiction as two
+sets, permitted-as-origin and permitted-as-destination, both default off**, and switched on by the **super
+admin**.
+
+**Two sets rather than one, decided 2026-09-16.** The terms are not symmetric about a border. EXW burdens the
+buyer with export clearance at the **origin**; DDP burdens the seller with import clearance at the
+**destination**. A single list per country would have to be true of both directions at once, which means it
+would be wrong in one of them. The shape is the one countries already use: a country
 is *selected from a catalogue rather than created*, and the eleven terms are likewise a catalogue from which
 a jurisdiction carries the subset that has been activated for it. Nobody can invent a term; they can only
 switch on one of the eleven.
@@ -268,7 +274,9 @@ The largest slice, and the one that closes a live defect.
   to the sender.
 - **Also build the activation surface**, which the §5 decision forces into this slice. Terms default off
   everywhere, so without the means to switch one on the field is inert and the slice cannot be exercised at
-  all. It is small: a selection on the country's presence record, guarded by two names.
+  all. It is small: a selection on the country's presence record, guarded by two names. **Two sets per
+  country, origin and destination** (decided 2026-09-16), and a load is judged against the origin set of
+  where it starts and the destination set of where it ends.
 - **Fallback, stated once:** a shipment with **no term recorded keeps today's behaviour** and the sender has
   standing. Every existing load is in that state, so this is what stops the slice rewriting history.
 - **Answer first:** what happens when the party with standing is a walk-in receiver with no account. Decision
@@ -304,14 +312,49 @@ No dependencies. Cheap, and it is the slice that pays for the epic early.
   anything.
 
 ### CL4 — Mobilisation, measured
-- **Build:** posted-to-claimed, fill rate while a corridor is tight, delivery under scarcity — per lane and
-  per commodity class, with the reputation floors so a small denominator shows nothing rather than a
-  flattering average.
-- **Answer first:** who sees it. Operators only, or shippers too? Publishing it shapes who gets appointed,
-  which is influence over a liability we do not carry.
-- **Screens:** the console first, and only the console until that question has an answer.
-- **Gate:** an agent with three loads shows no score; an agent who delivered while a corridor was tight scores
-  above one who only worked easy weeks.
+
+**Audience and honesty decided 2026-09-16.** Two questions were open here. Both are answered, and the second
+answer overturned a proposal made in this document's first draft.
+
+**Who sees it: both, and not the same view.** The shipper sees it because the shipper is the one choosing. An
+operator-only signal does not remove our influence over who gets appointed, it conceals it: work still gets
+steered by suggestion, and nobody outside can audit a nudge. Operators additionally see the state-controlled
+portion of §6, because they are the ones who handle a complaint about it.
+
+**What is published: what happened, including the bad.** The user's reasoning, and it replaces the
+publish-only-positives rule this document originally proposed:
+
+> Ever positive publishing is not the real world of business. Like survival of the fittest, the lessons
+> learned from bad experiences are necessary for the hardening. It also does not mean that it will benefit
+> the fittest only, newcomers have always been a reality and truth is more important than a polish of good
+> news only.
+
+The earlier proposal was to surface only demonstrated capability and let silence mean "nothing measured". Its
+defect was named in the same breath as the proposal and never answered: it protects nobody from an agent who
+is genuinely unreliable, because the only thing a shipper could ever see was good news. A record that can
+only flatter is not a record.
+
+- **Build:** posted-to-claimed **net of hand-backs**, fill rate while a corridor is tight, delivery under
+  scarcity, per lane and per commodity class.
+- **Hand-backs net off, and this is not a detail.** Mobilisation counted as loads claimed is gamed by
+  claiming quickly and handing back later, which FP8 made possible and, to its credit, recorded with reasons.
+  A measure that ignores them rewards precisely the behaviour it exists to detect.
+- **Truth applies to a thin record too.** An agent with three loads shows **three loads**, and no average.
+  Not hidden, because hiding is the polish just refused. Not averaged, because five stars from three loads is
+  the same untruth wearing the opposite sign. Newcomers are visible as newcomers, which is what they are.
+- **Say what was measured, beside the figure and not in a footnote.** We measured whether they find and move
+  trucks. We did not measure filing accuracy, and §6 explains why integrity can never be measured by elapsed
+  time at a border. A strong mobilisation record read as a general endorsement is this slice's failure mode.
+- **Reciprocal visibility is the condition that makes a published negative fair.** The agent sees exactly what
+  a shipper sees about them, at the same moment, with no version they cannot read and nothing they can
+  suppress. Without it a record handed down is a verdict; with it, it is an account both parties hold.
+- **Screens:** the shipper's view where an agent is chosen; the console's fuller view for operators; and the
+  agent's own copy of both.
+- **Gate:** an agent with three loads shows three loads and no score; a hand-back after a claim reduces the
+  count; an agent who delivered while a corridor was tight is distinguishable from one who only worked easy
+  weeks; and what the agent sees about themselves matches what the shipper sees, field for field.
+- **Before it reaches shippers:** confirm the network earns nothing from an appointment (§5, CL2). If it ever
+  does, the view discloses it or it does not ship.
 
 ### CL5 — Field knowledge, first-hand only
 Last, and blocked twice over.
@@ -336,11 +379,6 @@ jurisdiction is not a product decision.
 
 ## 11. Open
 
-- **Does the activated set need a direction?** §5 settles who decides and that it is held per country. It
-  does not settle whether one set is enough. EXW burdens a buyer with export clearance at the **origin**;
-  DDP burdens a seller with import clearance at the **destination**. So the honest unit may be two sets per
-  country, permitted-as-origin and permitted-as-destination, which is still selection from the same
-  catalogue. One set is simpler and coarser. Decide before CL1 builds the selection.
 - **The super admin is not built.** §5 depends on a role that does not exist; today these are operator-only
   routes with a shared key. Either that role lands first, or CL1 ships on operator-plus-two-names and
   inherits the honesty limit that `country_activation.md` §11 already records.
@@ -356,8 +394,10 @@ jurisdiction is not a product decision.
 - **A disputed observation has no adjudication.** The road map's refuter defect is still open — a refuter's
   words are appended to the reporter's note, so the queue cannot tell a dispute from a report. The same shape
   would repeat here, and here it matters more.
-- **Who sees mobilisation ratings** — shippers, or operators only? Publishing them shapes who gets appointed,
-  which is influence over a liability we do not carry.
+- **Is a published record shown per agent, or as a league table?** CL4 settles that the bad is published, not
+  only the good. It does not settle the presentation, and the two pull in different directions: a table ranks
+  and therefore manufactures a loser, while a per-agent account states what happened to whoever is being
+  considered. This document assumes per-agent until told otherwise.
 - **Language.** Observations will arrive in Swahili, Amharic and French. The real translation pass is still
   deferred, and a dated note nobody can read is not knowledge.
 
