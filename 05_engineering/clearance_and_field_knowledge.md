@@ -209,16 +209,86 @@ policy applied later; it is a thing the intake does not accept.
    driver was standing at anyway. **Never pay for information**: paying for the unverifiable manufactures it.
    Reciprocity, where access is earned by contributing, is the fallback for the typed layer.
 
-## 10. The staged plan, and the line we do not cross
+## 10. The order of work, and the line we do not cross
 
-1. **Record the term and the named place, and fix claim standing in the same slice.** The term comes from a
-   catalogue, never inferred — the countries precedent. Derive only statements of expectation: who clears
-   which side, who pays carriage, where risk passes. Carriage prepaid or collect reaches the note. Nothing is
-   billed differently yet. §3 ships here or the slice does not ship.
-2. **Clearance as a capability with papers and a jurisdiction** (§5). Appointment by the party the term names.
-   Nothing promised where the presence ladder says we have no standing.
-3. **Mobilisation as a measure** (§6), which is mostly reading data we already have.
-4. **The told layer** (§7–§9), last, because it is the only part that asks a person for anything.
+Five slices, in the order they will be built. The order is not preference: **CL1 is first because §3 is a
+defect that is moving money today**, and CL5 is last because it is the only slice that asks a person to do
+something they were not already doing.
+
+Every slice names its screens. A slice that cannot name them is backend-only and becomes tracked ui-debt,
+which is a standing rule of this project, not a preference of this document.
+
+**The only safe reordering is pulling CL3 forward.** It has no dependency on the other four and it reads data
+we already hold, so it can fill a gap at any point. Nothing else may be resequenced: CL2 needs to know who
+bears clearance, CL4 needs an agent to attach a measure to, and CL5 needs an answer we do not yet have.
+
+### PRE — fix the refuter defect on the road map
+Not part of this epic, and it blocks CL5. Today a refuter's words are **appended to the reporter's note**, so
+the operator queue cannot tell a dispute from the report it disputes. CL5 builds a second, larger observation
+store on that same pattern, where the cost of confusing the two is a seizure rather than a detour. Fix the
+shape once, on the smaller surface, before repeating it.
+
+### CL1 — The term, and who may claim
+The largest slice, and the one that closes a live defect.
+
+- **Build:** the eleven Incoterms 2020 as a catalogue, never inferred; `incoterm` and `namedPlace` on the
+  shipment; the derived expectations of §2; and **claim standing derived from the term** instead of hard-coded
+  to the sender.
+- **Answer first:** what happens when the party with standing is a walk-in receiver with no account. Decision
+  for this slice: **refuse by name, with the reason**, never silently. Identity for that receiver is §11's
+  problem, not this slice's.
+- **Screens:** the counter, when a load is booked; the shop's freight detail, saying the term and what it
+  means in words a clerk can act on; the note's carriage-payment indication; the console's freight claims,
+  showing who has standing and why.
+- **Gate:** on a C term a receiver opens and wins a claim, and the sender is refused with a sentence that
+  names the term; on a D term the existing sender path is untouched; no money is billed differently.
+
+### CL2 — Clearance as a capability
+- **Build:** a clearing agent as a party whose licence, bond and registration are **papers with dates**,
+  reusing the FP4 pattern exactly; the capability held per jurisdiction on the presence ladder; appointment by
+  the party the term names, never by us.
+- **Answer first:** which terms may be offered where. DDP into a jurisdiction where no sister can be importer
+  of record should not be offerable at all, which makes this a presence question before it is a UI question.
+- **Screens:** the console's papers screen, extended to agents; the appointing party's own screen. Nothing
+  reaches the driver, who is not a party to it.
+- **Gate:** a lapsed licence removes the capability with nobody deciding to, and the refusal names the paper
+  and the date it lapsed.
+
+### CL3 — Scarcity, derived
+No dependencies. Cheap, and it is the slice that pays for the epic early.
+
+- **Build:** extend the market series with loads posted against loads claimed, time-to-claim stretching, price
+  against the rate stack, and corridors going quiet.
+- **Hold the line:** parcels do not surge. This signal informs dispatch and the freight side only.
+- **Screens:** the console's market view; a context line on fleet dispatch, so an office reading a thin board
+  knows whether the market is thin or only their board is.
+- **Gate:** withdraw capacity in the sandbox and the series shows it within a day, with nobody reporting
+  anything.
+
+### CL4 — Mobilisation, measured
+- **Build:** posted-to-claimed, fill rate while a corridor is tight, delivery under scarcity — per lane and
+  per commodity class, with the reputation floors so a small denominator shows nothing rather than a
+  flattering average.
+- **Answer first:** who sees it. Operators only, or shippers too? Publishing it shapes who gets appointed,
+  which is influence over a liability we do not carry.
+- **Screens:** the console first, and only the console until that question has an answer.
+- **Gate:** an agent with three loads shows no score; an agent who delivered while a corridor was tight scores
+  above one who only worked easy weeks.
+
+### CL5 — Field knowledge, first-hand only
+Last, and blocked twice over.
+
+- **Blocked by:** PRE above, and by a lawyer's answer on holding photographs of official documents, which
+  §11 records as open.
+- **Build:** an observation carrying its tier, jurisdiction, subject, date and optional photograph; rumour
+  refused at intake; ageing derived from the date the way papers are; **positive observations enforced by the
+  shape of the form**, so that "they asked me for X" is expressible and "X is no longer required" is not.
+- **Screens:** capture on the driver's and the shop's phone at the moment it happens, because a form that
+  waits until the evening collects nothing; review in the console; and for readers, the date and the tier
+  shown before the content.
+- **Gate:** an observation cannot be recorded without saying who was standing there; an entry from last year
+  reads as last year's without anyone marking it stale; a disputed entry is distinguishable from the entry it
+  disputes.
 
 **We will not build duty calculation or HS classification.** A tariff code determines the duty rate, it is
 jurisdiction-specific and it is regulated advice. A wrong code is expensive for the trader and the liability
