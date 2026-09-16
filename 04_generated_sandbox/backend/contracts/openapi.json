@@ -10819,6 +10819,60 @@
         }
       }
     },
+    "/v1/sbg/dispatch/freight/{id}/hand-back": {
+      "post": {
+        "operationId": "Sbg.handBackFreight",
+        "summary": "",
+        "description": "FP8 — the driver hands a claimed load back before pickup. Only the driver it is on (or staff); the service\nunwinds the price and the charge and puts the load back on the market, and the sender is told why.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HandBackDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/drivers/{did}/hours": {
+      "get": {
+        "operationId": "Sbg.driverHours",
+        "summary": "",
+        "description": "FP8 — the driver's own hours, as the app says them: on duty, the limit, whether it is passed.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/dispatch/freight/{id}/instructions": {
       "patch": {
         "operationId": "Sbg.setFreightInstructions",
@@ -21094,6 +21148,15 @@
           "buyerEmail": {
             "type": "string"
           },
+          "instructions": {
+            "type": "string",
+            "description": "FP8 — box 13 for an order that ships as freight: what the driver needs at the door, and when. No contact —\n the goods go to a shop, whose counter is the contact. Ignored for a parcel-sized order, which has no box 13.",
+            "maxLength": 500
+          },
+          "deliveryWindow": {
+            "type": "string",
+            "maxLength": 80
+          },
           "size": {
             "type": "string",
             "enum": [
@@ -22266,6 +22329,30 @@
               }
             }
           },
+          "handBacks": {
+            "description": "FP8 — every time a driver gave this load back before pickup: who, why, when. The load went back on the market.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "clawback": {
+            "type": "object",
+            "properties": {
+              "amount": {
+                "required": true,
+                "type": "number"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "note": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
           "instructions": {
             "description": "FP7 — CMR box 13, as given at posting (or edited before the goods were taken over).",
             "allOf": [
@@ -22496,6 +22583,7 @@
           "status",
           "assignedBy",
           "rating",
+          "clawback",
           "freightId",
           "code",
           "description",
@@ -22951,6 +23039,18 @@
         },
         "required": [
           "expiresAt"
+        ]
+      },
+      "HandBackDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "reason"
         ]
       },
       "FreightInstructionsDto": {
@@ -24161,6 +24261,13 @@
                 "required": true,
                 "type": "string"
               }
+            }
+          },
+          "handBacks": {
+            "description": "FP8 — the times a driver handed this load back before pickup, most recent last. Reason and time only.",
+            "type": "array",
+            "items": {
+              "type": "string"
             }
           },
           "instructions": {

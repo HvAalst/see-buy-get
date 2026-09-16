@@ -132,6 +132,9 @@ export function createVendorApi(sbg: SbgClient) {
       routeMode?: 'flexible' | 'locked';
       fragile?: boolean;
       items?: Array<{ name: string; qty: number }>;
+      /** FP8 — box 13 when the order ships as freight. */
+      instructions?: string;
+      deliveryWindow?: string;
     }) => sbg.request((c) => c.POST('/v1/sbg/inbound/orders', { body })),
 
     /** Derive the size tier from dimensions + weight — the live preview for the mint form. */

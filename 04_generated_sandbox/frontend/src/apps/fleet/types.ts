@@ -146,6 +146,8 @@ export interface SessionRow {
   plate: string;
   vehicleClass: string;
   hoursOnDuty: number;
+  /** FP8 — past the shift limit: the driver delivers what is aboard and takes nothing new. */
+  overLimit?: boolean;
   location?: { lat: number; lng: number } | null;
   lastLocatedAt?: string;
 }
@@ -164,6 +166,8 @@ export interface DashboardView {
   drivers: { total?: number; onShift?: number; offShift?: number };
   sessions: { active?: number; todayHours?: number; list?: SessionRow[] };
   positions?: PositionRow[];
+  /** FP8 — the limits every hours figure is read against: one shift, and the rest between two. */
+  hours?: { limit: number; rest: number };
   cargo: { count?: number; totalKg?: number; items?: CargoRow[] };
   /** FP4 — what is off the road and what is running out, from the same rules the six-hourly sweep enforces. */
   papers?: PapersReport | null;
@@ -182,6 +186,8 @@ export interface FleetJobRow {
   earning?: number;
   /** BOOKED by the network at delivery — owed to the fleet, not yet money that moved. */
   paid: boolean;
+  /** FP8 — what an upheld claim took back from this haul's pay. */
+  clawback?: number;
   claimedAt?: string;
   deliveredAt?: string;
   createdAt: string;

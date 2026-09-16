@@ -274,7 +274,12 @@ function FreightGate({ claim, state, actions, onClose }: { claim: Claimable | nu
   const [failing, setFailing] = useState(false);
   const [failure, setFailure] = useState<'absent' | 'refused' | 'unreachable'>('absent');
   const [failNote, setFailNote] = useState('');
+  // FP8 — the way out before pickup: hand the load back, with a reason.
+  const [handing, setHanding] = useState(false);
+  const [handReason, setHandReason] = useState('');
   useEffect(() => {
+    setHanding(false);
+    setHandReason('');
     setChecked([]);
     setPhotoId('');
     setReservations('');
@@ -388,6 +393,44 @@ function FreightGate({ claim, state, actions, onClose }: { claim: Claimable | nu
               <p class="hint" style="margin-top:8px">{t('driver.loads.addPodPhoto')}</p>
             ) : null}
           </div>
+          {/* FP8 — the other half of dispatch: a load can be put on a driver, so a driver can say no — and a driver
+              who claimed it can change their mind. Only before the goods are on the vehicle; from pickup on, the
+              way out is delivery or the sender's withdrawal. The reason travels to the sender and the office. */}
+          {isPickup ? (
+            !handing ? (
+              <Button variant="link" onClick={() => setHanding(true)}>
+                {t('driver.loads.handBackOpen')}
+              </Button>
+            ) : (
+              <div class="card card--soft" style="margin-top:14px">
+                <p class="t-body">{t('driver.loads.handBackBody')}</p>
+                <div class="field">
+                  <label class="field__label" for={`hb-${claim.ref}`}>
+                    {t('driver.loads.handBackWhy')}
+                  </label>
+                  <textarea id={`hb-${claim.ref}`} class="input" rows={2} maxLength={500} value={handReason} onInput={(e) => setHandReason(e.currentTarget.value)} disabled={busy} />
+                </div>
+                <div style="margin-top:12px">
+                  <Button
+                    variant="outline"
+                    chevron={false}
+                    busy={busy}
+                    disabled={handReason.trim().length < 3}
+                    onClick={() => {
+                      const ref = claim.ref;
+                      void actions.handBack(ref, handReason.trim());
+                      onClose();
+                    }}
+                  >
+                    {t('driver.loads.handBackConfirm')}
+                  </Button>
+                  <Button variant="link" onClick={() => setHanding(false)}>
+                    {t('driver.loads.handBackKeep')}
+                  </Button>
+                </div>
+              </div>
+            )
+          ) : null}
           {/* FP3b — the delivery that cannot be made. Not a way out of the proof above: it records that the driver
               was at the door and why the goods are still on the van, and it tells the sender, who is the one
               who can do something about it. */}

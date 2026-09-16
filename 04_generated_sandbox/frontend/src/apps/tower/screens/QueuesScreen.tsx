@@ -15,6 +15,7 @@ import {
   money,
   shelfSlots,
   stuckDays,
+  carrierBearsLine,
   stuckLabel,
   type ApprovalRow,
   type ClaimDecision,
@@ -186,7 +187,11 @@ function FreightClaimRowView({ row, now, state, actions }: { row: FreightClaimRo
             {row.attempts ? ` · ${t('tower.claims.freightAttempts', { n: row.attempts })}` : ''}
           </div>
         </td>
-        <td class="ctbl__sub">{freightCoverLine(row, t)}</td>
+        <td class="ctbl__sub">
+          {freightCoverLine(row, t)}
+          {/* FP8 — the other side of an award: the carrier bears it up to the haul's price. Said before deciding. */}
+          {carrierBearsLine(row, t) ? <div>{carrierBearsLine(row, t)}</div> : null}
+        </td>
         <td class="ctbl__mono">{row.evidence.length ? t('tower.claims.nPhotos', { n: row.evidence.length }) : t('tower.claims.noEvidence')}</td>
         <td>
           <div>{waited == null ? '—' : t('tower.wait.days', { n: waited })}</div>

@@ -326,7 +326,8 @@ export const ARTICLES: GuideArticle[] = [
       "Shop app, when something is wrong with what arrived: open the load and tap “Report a problem with the goods” within seven days — damaged, short, or not received — with a photo if you have one. A network operator decides it and you are shown their reason. Money can only be awarded where the network billed the load; otherwise the decision says who was right and the carriage is yours and the carrier’s to settle."
     ],
     notes: [
-      "Nobody signs on a screen: the driver records the name, and the photo is the proof. A delivered load cannot be withdrawn — a problem with the goods is a claim, not a cancellation."
+      "Nobody signs on a screen: the driver records the name, and the photo is the proof. A delivered load cannot be withdrawn — a problem with the goods is a claim, not a cancellation.",
+      "When a claim is upheld the carrier bears it, up to what they were paid for the haul and never more: the amount taken back shows on that load in the driver’s and the fleet’s earnings."
     ]
   },
   {
@@ -401,6 +402,42 @@ export const ARTICLES: GuideArticle[] = [
     ],
     notes: [
       "Nothing is written into a record as “grounded”: the date is the switch in both directions, so a renewal takes effect the moment it is recorded and there is nothing to unwind."
+    ]
+  },
+  {
+    id: "hand-back",
+    apps: [
+      "driver",
+      "agent",
+      "fleet"
+    ],
+    title: "Handing a load back before pickup",
+    summary: "The office can put a load on a driver, so a driver must be able to say no — and a driver who claimed a load can change their mind. Until the goods are on the vehicle a load can be handed back: it goes back on the market as if untouched, the sender’s charge comes back, and the reason is on the record.",
+    steps: [
+      "Driver app, My loads: open the load as if to collect it and tap “I cannot take this load”. Say why — a breakdown, a road, a change of plan — and hand it back. It leaves your list.",
+      "Shop app, Freight you posted: the load shows who handed it back, when and why, and is on the market again. Any charge for it has come back. Nothing has moved.",
+      "Fleet app: the office that put the load on the driver is told too, with the reason, and can put it on somebody else from Dispatch.",
+      "Once the goods are on the vehicle this is no longer the way out: a load that has been taken over is delivered, or the sender is asked to withdraw it."
+    ],
+    notes: [
+      "Every hand-back stays on the load’s record with the driver’s reason — it is not a rating, and it is not hidden either."
+    ]
+  },
+  {
+    id: "hours-of-service",
+    apps: [
+      "driver",
+      "fleet"
+    ],
+    title: "Hours: the shift limit, and the rest between shifts",
+    summary: "A shift has a limit — 13 hours — after which no new load is offered, shown as takeable or put on a driver, though what is already aboard is delivered. After a real working day of four hours or more, the next shift waits for 9 hours of rest.",
+    steps: [
+      "Driver app, Home: the clock on the shift shows the hours on duty against the limit. Past it, the board marks every load, no offer comes, and the start screen says so plainly.",
+      "Driver app, starting a shift too soon after a working day: the start is refused, and the refusal says how many hours since the last shift ended and how many are needed. A coupling of a few minutes — a wrong scan, a short move — owes no rest.",
+      "Fleet app, Dashboard and Shifts: a driver over the limit is marked. Dispatch will not put a load on them; end the shift and let them rest."
+    ],
+    notes: [
+      "The limits are the network’s, between the EU’s daily driving limit and its reduced daily rest, and they are not a claim about any country’s law. Where a jurisdiction sets its own, that becomes the limit."
     ]
   },
   {

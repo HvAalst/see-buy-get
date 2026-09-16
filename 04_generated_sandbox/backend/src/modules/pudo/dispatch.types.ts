@@ -309,6 +309,10 @@ export class Freight {
   @ApiPropertyOptional() assignedBy?: { managerDid: string; name?: string; at: string };
   /** FP6 — the shipper's rating of the carrier after delivery: stars, the tags, and when. One per load, last wins. */
   @ApiPropertyOptional() rating?: { stars: number; issues: string[]; at: string; by: string };
+  /** FP8 — every time a driver gave this load back before pickup: who, why, when. The load went back on the market. */
+  @ApiPropertyOptional() handBacks?: Array<{ driverDid: string; reason: string; at: string }>;
+  /** FP8 — what the carrier bore of an upheld claim, taken back from what they were paid for the haul. */
+  @ApiPropertyOptional() clawback?: { amount: number; at: string; note: string };
   /** FP7 — CMR box 13, as given at posting (or edited before the goods were taken over). */
   @ApiPropertyOptional({ type: FreightInstructions }) instructions?: FreightInstructions;
   /** FP7 — subsequent instructions, given while the goods are on the road. Appended, never overwritten. */
@@ -608,6 +612,8 @@ export class PostedFreightRow {
   @ApiPropertyOptional() rating?: { stars: number; issues: string[]; at: string };
   /** FP6 — true while the shipper may rate: delivered, within the rating window. Re-rating is allowed (last wins). */
   canRate: boolean;
+  /** FP8 — the times a driver handed this load back before pickup, most recent last. Reason and time only. */
+  @ApiPropertyOptional() handBacks?: Array<{ reason: string; at: string }>;
   /** FP7 — the sender's own instructions, and whether they can still be rewritten (before pickup) or only added to. */
   @ApiPropertyOptional({ type: FreightInstructionsView }) instructions?: FreightInstructionsView;
   @ApiProperty({ enum: ['edit', 'amend', 'none'] })
@@ -639,6 +645,8 @@ export class FreightClaimQueueRow {
   carrierName?: string;
   /** What the sender paid for carriage through the network, if anything — a figure, never a cap. */
   carriage?: number;
+  /** FP8 — what the network paid the carrier for the haul (accrued at delivery); an upheld award is taken back up to this. */
+  @ApiPropertyOptional() carrierPaid?: number;
   currency?: string;
   /** Whether a sister billed this load and so holds a provision to award from. False = decide with a reason only. */
   coverable: boolean;

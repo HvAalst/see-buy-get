@@ -292,6 +292,17 @@ export function subtypeLine(sub: SubtypeRow | undefined, t: Translate): string |
   return caps.length ? `${base} · ${caps.join(', ')}` : base;
 }
 
+/** FP8 — hours on a shift from when it started, to a tenth; the shift rows the office holds carry only the start. */
+export function shiftHours(startedAt: string, now: number = Date.now()): number {
+  const ms = now - new Date(startedAt).getTime();
+  return Number.isFinite(ms) && ms > 0 ? Math.round((ms / 3_600_000) * 10) / 10 : 0;
+}
+
+/** Over the shift limit as the server judges it — its limit once the dashboard has said it, 13 h until then. */
+export function overShiftLimit(startedAt: string, limit: number | undefined, now: number = Date.now()): boolean {
+  return shiftHours(startedAt, now) > (limit ?? 13);
+}
+
 export function hoursLabel(h: number | undefined): string {
   return `${h ?? 0}h`;
 }

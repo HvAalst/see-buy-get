@@ -25,6 +25,17 @@ const LEG_HISTORY = 5;
 /** …and how many vehicles. A driver has one bus, or swaps between a couple; nobody scrolls their history. */
 const VEHICLE_HISTORY = 5;
 
+/**
+ * FP8 — hours of service. Two limits, network-wide until a jurisdiction says otherwise: how long one shift may
+ * run before no new load is taken, and how long a driver rests after a real working day before the next
+ * shift starts. The numbers sit between the EU's daily driving limit and its reduced daily rest; they are
+ * deliberately not a claim about any country's law, and the console can move them when it is.
+ */
+export const MAX_ON_DUTY_HOURS = 13;
+export const MIN_REST_HOURS = 9;
+/** A coupling shorter than this was not a working day — a wrong scan, a five-minute move — so no rest is owed after it. */
+export const REST_OWED_AFTER_HOURS = 4;
+
 /** One vehicle a driver could start today on — projected for the picker, with whether it is free right now. */
 export interface RecentVehicle {
   vehicleId: string;
@@ -94,6 +105,9 @@ export class FleetService {
     if (this.activeForDriver(driverDid)) throw new GlosError('ALREADY_COUPLED', 'Driver is already coupled to a vehicle — uncouple first');
     if (this.activeForVehicle(vehicleId)) throw new GlosError('ALREADY_COUPLED', 'Vehicle is already coupled to a driver — uncouple first');
     if (corridorId) this.corridors.requireUsableBy(corridorId, driver.managerDid);
+    // FP8 — rest after a working day, before the next one starts. A short coupling owes none.
+    const rest = this.restHoursSince(driverDid);
+    if (rest != null && rest < MIN_REST_HOURS) throw new GlosError('HOURS_EXCEEDED', `Rest first: ${rest.toFixed(1)} h since the last shift ended, ${MIN_REST_HOURS} h needed before the next`);
 
     const assignment: Assignment = {
       assignmentId: `asg_${randomBytes(6).toString('hex')}`,
@@ -300,6 +314,35 @@ export class FleetService {
     return this.uncouple(driverDid);
   }
 
+  /* ------------------------------------------------------------ FP8: hours of service -- */
+
+  /** Hours on the current shift; 0 off duty. */
+  hoursOnDuty(driverDid: string, now: number = Date.now()): number {
+    const a = this.activeForDriver(driverDid);
+    if (!a) return 0;
+    return Math.round(((now - new Date(a.startedAt).getTime()) / 3_600_000) * 100) / 100;
+  }
+
+  /** Hours since the last REAL working day ended (a shift of at least REST_OWED_AFTER_HOURS); null when there was none. */
+  restHoursSince(driverDid: string, now: number = Date.now()): number | null {
+    const ended = [...this.assignments.values()]
+      .filter((a) => a.driverDid === driverDid && a.status === 'ended' && a.endedAt && new Date(a.endedAt).getTime() - new Date(a.startedAt).getTime() >= REST_OWED_AFTER_HOURS * 3_600_000)
+      .sort((x, y) => new Date(y.endedAt!).getTime() - new Date(x.endedAt!).getTime());
+    if (!ended.length) return null;
+    return Math.round(((now - new Date(ended[0].endedAt!).getTime()) / 3_600_000) * 100) / 100;
+  }
+
+  /** Over the shift limit: no new load, though the ones already aboard are delivered. */
+  overHours(driverDid: string, now: number = Date.now()): boolean {
+    return this.hoursOnDuty(driverDid, now) > MAX_ON_DUTY_HOURS;
+  }
+
+  /** The driver's hours as their app says them: on duty, the limit, and whether it is passed. */
+  hoursFor(driverDid: string, now: number = Date.now()): { onDuty: number; limit: number; over: boolean; restHours: number } {
+    const onDuty = this.hoursOnDuty(driverDid, now);
+    return { onDuty, limit: MAX_ON_DUTY_HOURS, over: onDuty > MAX_ON_DUTY_HOURS, restHours: MIN_REST_HOURS };
+  }
+
   /** The driver's current shift session (active coupling + the vehicle), or null when off duty. */
   sessionFor(driverDid: string): { active: boolean; assignment: Assignment; vehicle: ReturnType<VehicleService['get']> } | { active: false } {
     const assignment = this.activeForDriver(driverDid);
@@ -338,7 +381,9 @@ export class FleetService {
   overview(managerDid?: string, now: number = Date.now()): {
     vehicles: { total: number; active: number; inUse: number; byClass: Record<string, number> };
     drivers: { total: number; onShift: number; offShift: number; byStatus: Record<string, number> };
-    sessions: { active: number; todayHours: number; list: Array<{ driverDid: string; driverName: string; plate: string; vehicleClass: string; startedAt: string; hoursOnDuty: number; location?: { lat: number; lng: number }; lastLocatedAt?: string }> };
+    sessions: { active: number; todayHours: number; list: Array<{ driverDid: string; driverName: string; plate: string; vehicleClass: string; startedAt: string; hoursOnDuty: number; overLimit: boolean; location?: { lat: number; lng: number }; lastLocatedAt?: string }> };
+    /** FP8 — the limits every hours figure above is read against. */
+    hours: { limit: number; rest: number };
     /** A position carries WHEN it was reported: a vehicle that went dark an hour ago must not read as moving. */
     positions: Array<{ plate: string; vehicleClass: string; driverName: string; location: { lat: number; lng: number }; hoursOnDuty: number; lastLocatedAt?: string }>;
   } {
@@ -351,7 +396,7 @@ export class FleetService {
     const list = activeSessions.map((a) => {
       const d = this.drivers.get(a.driverDid);
       const v = this.vehicles.get(a.vehicleId);
-      return { driverDid: a.driverDid, driverName: d.displayName, plate: v.plate, vehicleClass: v.vehicleClass, startedAt: a.startedAt, hoursOnDuty: hoursOf(a), location: a.location, ...(a.lastLocatedAt ? { lastLocatedAt: a.lastLocatedAt } : {}) };
+      return { driverDid: a.driverDid, driverName: d.displayName, plate: v.plate, vehicleClass: v.vehicleClass, startedAt: a.startedAt, hoursOnDuty: hoursOf(a), overLimit: hoursOf(a) > MAX_ON_DUTY_HOURS, location: a.location, ...(a.lastLocatedAt ? { lastLocatedAt: a.lastLocatedAt } : {}) };
     });
     const todayHours = Math.round(all.filter((a) => new Date(a.startedAt).getTime() >= dayStart).reduce((s, a) => s + hoursOf(a), 0) * 100) / 100;
 
@@ -367,6 +412,7 @@ export class FleetService {
       vehicles: { total: allVehicles.length, active: allVehicles.filter((v) => v.status === 'ACTIVE').length, inUse: activeSessions.length, byClass },
       drivers: { total: allDrivers.length, onShift, offShift: allDrivers.length - onShift, byStatus },
       sessions: { active: activeSessions.length, todayHours, list },
+      hours: { limit: MAX_ON_DUTY_HOURS, rest: MIN_REST_HOURS },
       positions: list.filter((s) => s.location).map((s) => ({ plate: s.plate, vehicleClass: s.vehicleClass, driverName: s.driverName, location: s.location!, hoursOnDuty: s.hoursOnDuty, ...(s.lastLocatedAt ? { lastLocatedAt: s.lastLocatedAt } : {}) })),
     };
   }

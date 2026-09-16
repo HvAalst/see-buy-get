@@ -112,6 +112,9 @@ export interface MintForm {
   buyerMobile: string;
   buyerEmail: string;
   externalOrderId: string;
+  /** FP8 — box 13 for an order that ships as freight: what the driver needs at the door, and when. Ignored for a parcel. */
+  instructions: string;
+  deliveryWindow: string;
 }
 
 export const EMPTY_MINT: MintForm = {
@@ -130,6 +133,8 @@ export const EMPTY_MINT: MintForm = {
   buyerMobile: '',
   buyerEmail: '',
   externalOrderId: '',
+  instructions: '',
+  deliveryWindow: '',
 };
 
 /** All four measurements present and positive — the classify call's gate. */

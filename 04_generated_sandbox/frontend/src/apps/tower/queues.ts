@@ -51,9 +51,18 @@ export interface FreightClaimRow {
   coverable: boolean;
   awardCap: number;
   capBasis: 'sanity-bound' | 'none';
+  /** FP8 — what the network paid the carrier for the haul; an upheld award is taken back from them up to this. */
+  carrierPaid?: number;
   evidence: string[];
   attempts: number;
   receiverName?: string;
+}
+
+/** FP8 — what an upheld award costs the carrier: taken back from what they were paid for the haul, never more. Only
+ *  where the network paid them — a haul settled between the parties has nothing on our books to take back. */
+export function carrierBearsLine(row: FreightClaimRow, t: Translate): string | null {
+  if (!row.coverable || !row.carrierPaid || row.carrierPaid <= 0) return null;
+  return t('tower.claims.carrierBears', { amount: amount(row.carrierPaid, row.currency) });
 }
 
 /** What a decision is checked against — the part of a row claimBlocker reads, shared by parcels and freight. */

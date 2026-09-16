@@ -50,7 +50,8 @@ export function BoardScreen({ state, actions }: BoardScreenProps) {
       <h1 class="scr__title">{t('driver.board.title')}</h1>
       <p class="scr__lede">{t('driver.board.lede')}</p>
 
-      {state.error ? <ErrorNote error={state.error} /> : null}
+      {/* FP8 — an hours refusal carries the numbers in its detail; they are the whole answer to "why not". */}
+      {state.error ? <ErrorNote error={state.error} showDetail={state.error.code === 'HOURS_EXCEEDED'} /> : null}
       {askFailed ? <Note tone="warn" icon="warning" title={askFailed} detail="" /> : null}
 
       {/* CV1 — the questions this driver has asked, and the answers waiting. Above the market, because an

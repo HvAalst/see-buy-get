@@ -90,6 +90,8 @@ export function blockersFor(
   ctx: {
     remainingKg: number;
     ratingBelowFloor: boolean;
+    /** FP8 — over the shift's hours limit: the vehicle is fine, the day is not. */
+    overHours?: boolean;
     indicativeCharge?: number;
     /**
      * What the crowd-sourced constraint map says about this road, computed by the caller.
@@ -112,6 +114,9 @@ export function blockersFor(
 
   if (ctx.ratingBelowFloor) {
     out.push({ kind: 'resolvable', code: 'RATING_BELOW_FLOOR', message: 'Your rating is below the network minimum — freight is paused until it recovers' });
+  }
+  if (ctx.overHours) {
+    out.push({ kind: 'resolvable', code: 'HOURS_EXCEEDED', message: 'Over the shift hours limit — deliver what is aboard, end the shift and rest before taking more' });
   }
   if (load.weightKg > vehicle.capacityKg) {
     out.push({ kind: 'physical', code: 'OVER_VEHICLE_CAPACITY', message: `${fmt(load.weightKg)} kg — ${fmt(load.weightKg - vehicle.capacityKg)} kg over what your vehicle can carry` });

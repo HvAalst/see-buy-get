@@ -42,6 +42,8 @@ export interface DriverJobRow {
   weightKg: number;
   earning?: number;
   paid: boolean;
+  /** FP8 — what an upheld claim took back from that pay. The earning above is what was agreed; net is the difference. */
+  clawback?: number;
   claimedAt?: string;
   deliveredAt?: string;
   createdAt: string;
@@ -136,6 +138,8 @@ export interface AssignmentView {
 
 export interface SessionView {
   active: boolean;
+  /** FP8 — the shift clock: hours on duty, the limit, whether it is passed, and the rest owed after a working day. */
+  hours?: { onDuty: number; limit: number; over: boolean; restHours: number };
   assignment?: AssignmentView;
   vehicle?: VehicleView;
   /**

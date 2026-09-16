@@ -92,6 +92,8 @@ export function DashboardScreen({ state, actions }: DashboardScreenProps) {
       </Sheet>
 
       <Card title={t('fleet.dash.hoursTitle')}>
+        {/* FP8 — the limits every figure below is read against, said once. */}
+        {d?.hours ? <p class="hint">{t('fleet.dash.hoursLimits', { limit: d.hours.limit, rest: d.hours.rest })}</p> : null}
         {sessions.length === 0 ? (
           <p class="hint">{t('fleet.dash.noDrivers')}</p>
         ) : (
@@ -104,6 +106,8 @@ export function DashboardScreen({ state, actions }: DashboardScreenProps) {
                 <span class="row__body">
                   <span class="row__t">{s.driverName}</span>
                   <span class="row__s">{t('fleet.dash.onDutyRow', { plate: s.plate, cls: s.vehicleClass, hours: hoursLabel(s.hoursOnDuty) })}</span>
+                  {/* FP8 — over the limit: they finish what is aboard; the office puts nothing more on them. */}
+                  {s.overLimit ? <span class="row__s row__s--danger">{t('fleet.dash.overLimit', { limit: d?.hours?.limit ?? 13 })}</span> : null}
                 </span>
                 <span class="row__end">
                   {/* Located means heard from lately. A vehicle silent for ten minutes is said to be dark, with how long:

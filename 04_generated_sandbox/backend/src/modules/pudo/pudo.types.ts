@@ -941,7 +941,7 @@ export class Parcel {
 
 // 'OVERDRAFT' was removed with the trade-credit line — there is no way to create one any more. Any row
 // on disk from before still renders (the type word falls back to the raw string), it just cannot recur.
-export type LedgerType = 'TOP_UP' | 'FEE' | 'LABOR_PAYOUT' | 'DRIVER_PAYOUT' | 'REFUND' | 'SETTLEMENT' | 'BILLING' | 'REBATE';
+export type LedgerType = 'TOP_UP' | 'FEE' | 'LABOR_PAYOUT' | 'DRIVER_PAYOUT' | 'DRIVER_CLAWBACK' | 'REFUND' | 'SETTLEMENT' | 'BILLING' | 'REBATE';
 
 export class PudoLedgerEntry {
   id: string;

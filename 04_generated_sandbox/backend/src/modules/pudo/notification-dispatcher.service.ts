@@ -122,6 +122,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<{ freightId: string; destLabel?: string; pickupLocation?: GeoPoint }>(GlosEvent.Pudo.FreightPosted, (e) => this.onFreightPosted(e.payload));
     // FP5 (driver) — their fleet office put a load on them: it is on their list before they looked, so say so.
     this.events.subscribe<{ freightId: string; code: string; driverDid: string; byName?: string; pickupLabel: string; destLabel: string; weightKg: number; earning?: number }>(GlosEvent.Pudo.FreightAssigned, (e) => this.onFreightAssigned(e.payload));
+    // FP8 (sender + office) — a driver gave a claimed load back: it is on the market again, and here is why.
+    this.events.subscribe<{ freightId: string; code: string; driverName?: string; reason: string; posterDid?: string; managerDid?: string; destLabel?: string }>(GlosEvent.Pudo.FreightHandedBack, (e) => this.onFreightHandedBack(e.payload));
     // FP7 (driver) — the sender changed the instructions on a load they hold: what to do at the door has changed.
     this.events.subscribe<{ freightId: string; code: string; driverDid: string; amended: boolean; text?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string }>(GlosEvent.Pudo.FreightInstructed, (e) => this.onFreightInstructed(e.payload));
     // FP3 (driver) — a load they had claimed was withdrawn by its sender: their day just changed, tell them why.
@@ -179,6 +181,17 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       });
     } catch (err) {
       this.logger.warn(`freight-assigned notify failed for ${payload.freightId}: ${(err as Error).message}`);
+    }
+  }
+
+  private async onFreightHandedBack(payload: { freightId: string; code: string; driverName?: string; reason: string; posterDid?: string; managerDid?: string; destLabel?: string }): Promise<void> {
+    const body = `${payload.driverName ?? 'The driver'} could not take ${payload.code}${payload.destLabel ? ` to ${payload.destLabel}` : ''}: ${payload.reason}. It is back on the market for another driver; any charge has come back.`;
+    for (const to of [payload.posterDid, payload.managerDid].filter((x): x is string => Boolean(x))) {
+      try {
+        await this.notifications.notify(to, { kind: 'freight_problem', title: `Load ${payload.code} was handed back`, body, link: '/', tag: `freight:${payload.freightId}:handback`, data: { freightId: payload.freightId } });
+      } catch (err) {
+        this.logger.warn(`freight-handed-back notify failed for ${payload.freightId}: ${(err as Error).message}`);
+      }
     }
   }
 

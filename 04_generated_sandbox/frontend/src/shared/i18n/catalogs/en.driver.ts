@@ -122,6 +122,11 @@ export const enDriver = {
   'driver.home.offRoadDetail': 'Renew it and show the fleet office; they record the new date, and shifts start again from then.',
   'driver.home.licenceDueTitle': 'Your licence runs out in {days} days',
   'driver.home.licenceDueDetail': 'Renew it in time and give the fleet office the new date, or shifts stop on that day.',
+  // FP8 — hours of service.
+  'driver.home.hoursLine': 'On duty {onDuty} h of {limit} h',
+  'driver.home.hoursOverLine': 'On duty {onDuty} h — over the {limit} h limit',
+  'driver.home.hoursOverTitle': 'Over the hours limit',
+  'driver.home.hoursOverDetail': 'You have been on duty more than {limit} h. Deliver what is aboard, then end the shift and rest {rest} h — no new load is offered or taken until then.',
   'driver.home.vehicleOffRoad': 'Off the road',
   'driver.home.allOffRoad': 'None of your usual vehicles can be taken today: off the road until the office records the renewed paper, or out with someone else. Scan another one if you are taking it.',
   'driver.home.orScan': 'Or scan a different vehicle',
@@ -274,6 +279,12 @@ export const enDriver = {
   'driver.loads.failNoteLabel': 'Anything the sender should know? (optional)',
   'driver.loads.failConfirm': 'Record the failed attempt',
   'driver.loads.failBack': 'Back to delivering',
+  // FP8 — handing a load back before pickup.
+  'driver.loads.handBackOpen': 'I cannot take this load',
+  'driver.loads.handBackBody': 'Before pickup a load can go back on the market. Say why — the sender and your office are told, and it stays on your record.',
+  'driver.loads.handBackWhy': 'Why not',
+  'driver.loads.handBackConfirm': 'Hand it back',
+  'driver.loads.handBackKeep': 'Keep it',
 
   // Offers screen.
   'driver.offers.pausedTitle': 'Freight is paused',
@@ -364,6 +375,7 @@ export const enDriver = {
   'driver.earn.aloudEmpty': 'Your earnings will show here.',
   'driver.earn.rowDesc': '{description} · {dest}',
   'driver.earn.rowMeta': '{status} · {kg} kg · {payment}',
+  'driver.earn.clawbackLine': '{amount} taken back after a claim on this load',
   'driver.earn.rowDate': ' · {date}',
   'driver.earn.paid': 'Paid',
   'driver.earn.owed': 'Owed',
@@ -526,6 +538,8 @@ export const enDriver = {
   'driver.toast.freightDeliveredDetail': 'Your van capacity is freed.',
   'driver.toast.attemptRecorded': 'Attempt recorded',
   'driver.toast.attemptRecordedDetail': 'The sender has been told. The load stays on your van until it is delivered.',
+  'driver.toast.handedBack': 'Load handed back',
+  'driver.toast.handedBackDetail': 'It is back on the market. The sender has been told why.',
   'driver.toast.tempOutOfRange': 'Temperature out of range',
   'driver.toast.tempOutOfRangeDetail': 'Logged — the control tower is alerted.',
   'driver.toast.tempLogged': 'Temperature logged',

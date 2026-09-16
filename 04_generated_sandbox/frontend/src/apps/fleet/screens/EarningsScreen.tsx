@@ -222,6 +222,8 @@ function JobRow({ j, actions }: { j: FleetJobRow; actions: FleetActions }) {
           {t('fleet.earn.rowMeta', { status: statusWord(j.status, t), kg: j.weightKg })}
           {when ? ` · ${new Date(when).toLocaleDateString()}` : ''}
         </span>
+        {/* FP8 — an upheld claim took part of this haul's pay back. */}
+        {j.clawback ? <span class="row__meta row__s--danger">{t('fleet.earn.clawbackLine', { amount: money(j.clawback) })}</span> : null}
         <span class="row__meta">
           <DocumentButton label={t('common.cmr.open')} title={t('common.cmr.title')} fetch={() => actions.freightNote(j.freightId)} />
         </span>

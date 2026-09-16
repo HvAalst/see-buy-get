@@ -217,6 +217,10 @@ export function createDriverApi(sbg: SbgClient) {
     failDelivery: (freightId: string, driverDid: string, body: { outcome: 'absent' | 'refused' | 'unreachable'; note?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/delivery-failed', { params: { path: { id: freightId } }, body: { driverDid, ...body } })),
 
+    /** FP8 — the driver hands a claimed load back before pickup: back on the market, the sender told why. */
+    handBack: (freightId: string, reason: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/hand-back', { params: { path: { id: freightId } }, body: { reason } })),
+
     /** S33b — log a temperature reading for a cold-chain freight in transit (a breach flags it for the tower). */
     recordTemp: (freightId: string, driverDid: string, celsius: number) =>
       sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/temperature', { params: { path: { id: freightId } }, body: { driverDid, celsius } })),

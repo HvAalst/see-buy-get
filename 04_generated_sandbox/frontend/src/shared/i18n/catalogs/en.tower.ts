@@ -580,6 +580,7 @@ export const enTowerQueues = {
   // adjudicator the carriage was free.
   'tower.claims.priceNotRecorded': 'No shipping price recorded against this parcel',
   'tower.claims.coveredTo': 'covered to {amount} {basis}',
+  'tower.claims.carrierBears': 'The carrier bears an award up to {amount} — what they were paid for the haul',
   'tower.claims.becauseDeclared': '(declared)',
   'tower.claims.becauseFreeLimit': '(the free limit — nothing was declared)',
   'tower.claims.noCover': 'NO COVER on this shipment — an award here is a goodwill decision',

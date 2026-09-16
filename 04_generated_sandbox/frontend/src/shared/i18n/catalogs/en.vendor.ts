@@ -355,6 +355,12 @@ export const enVendor = {
   'vendor.mint.buyerByHand': 'Buyer (by hand)',
   'vendor.mint.buyerPhone': 'Buyer phone',
   'vendor.mint.orderRef': 'Your order reference (optional)',
+  // FP8 — box 13 for an order that ships as freight.
+  'vendor.mint.freightTitle': 'If this ships as freight',
+  'vendor.mint.freightWindow': 'Delivery window (optional)',
+  'vendor.mint.freightWindowPlaceholder': 'before 10:00 · second trip',
+  'vendor.mint.freightNote': 'For the driver at the door (optional)',
+  'vendor.mint.freightHint': 'A heavy or oversized order goes by dedicated freight, and these go on its consignment note for the driver. A parcel-sized order ignores them.',
   'vendor.mint.measurementsFirst': 'Measurements and the photo first.',
   'vendor.mint.buyerChose': 'The buyer already chose their collection shop',
   'vendor.mint.destTitle': 'Where does the buyer collect?',

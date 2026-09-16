@@ -165,6 +165,8 @@ function JobRow({ j }: { j: DriverJobRow }) {
           {t('driver.earn.rowMeta', { status: statusWord(j.status, t), kg: j.weightKg, payment: j.paid ? t('driver.earn.paid') : t('driver.earn.owed') })}
           {when ? t('driver.earn.rowDate', { date: new Date(when).toLocaleDateString() }) : ''}
         </span>
+        {/* FP8 — an upheld claim took part of this pay back. The agreed figure stays; the line says what left. */}
+        {j.clawback ? <span class="row__meta row__s--danger">{t('driver.earn.clawbackLine', { amount: money(j.clawback) })}</span> : null}
       </span>
       <span class="row__end">
         <b class="amt amt--in">{money(j.earning)}</b>

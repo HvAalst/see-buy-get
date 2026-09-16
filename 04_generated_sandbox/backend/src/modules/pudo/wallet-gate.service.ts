@@ -443,6 +443,30 @@ export class WalletGateService {
     return this.record('DRIVER_PAYOUT', '-', amount, undefined, driverId, 'driver', entryId);
   }
 
+  /**
+   * FP8 — what the carrier bears of an upheld claim, taken back from what the sister owes them for the haul.
+   *
+   * The mirror of driverPayout, line for line: the provider expense comes down, the payable to whoever we
+   * contract with comes down with it. Never more than was paid for the load — a carrier's liability beyond
+   * the carriage price is a matter for their insurance and the courts, not for a ledger line. Null where no
+   * sister pays this driver, for the same reason the payout was null: nothing was accrued to take back.
+   */
+  driverClawback(driverId: string, amount: number, freightId: string): PudoLedgerEntry | null {
+    if (amount <= 0) return null;
+    const { entityId, payeeDid } = this.drivers.payeeOrNone(driverId);
+    if (!entityId) return null;
+    const entryId = this.books.post({
+      entityId,
+      kind: 'driver-clawback',
+      ref: freightId,
+      lines: [
+        { code: ACCOUNT_CODES.EXPENSE_PROVIDER_FEES, amount: -amount },
+        { code: ACCOUNT_CODES.PAYABLE_PROVIDER, counterparty: payeeDid, amount },
+      ],
+    }).entryId;
+    return this.record('DRIVER_CLAWBACK', '+', amount, undefined, driverId, 'driver', entryId);
+  }
+
   /** MDP sort labour — the hub is a provider like any other, so the sister accrues what it owes. A hub in
    *  another country recharges its sister's outlay to the seller exactly as a shop does. */
   sortLabour(mdpId: string, amount: number, reference: string, entityId?: string, sellerEntityId?: string): PudoLedgerEntry {

@@ -374,6 +374,12 @@ export function claimControl(claim: Claimable): ClaimControl {
   return 'none';
 }
 
+/** FP8 — the shift clock in one line: how long on duty against the limit, and the plain word once it is passed. */
+export function hoursWords(h: { onDuty: number; limit: number; over: boolean } | undefined, t: Translate): string | null {
+  if (!h) return null;
+  return h.over ? t('driver.home.hoursOverLine', { onDuty: h.onDuty, limit: h.limit }) : t('driver.home.hoursLine', { onDuty: h.onDuty, limit: h.limit });
+}
+
 /** Loading a bag books the driver's payout against their badge; without one, nothing is booked. */
 export function canLoadBag(badgeId: string | undefined): boolean {
   return typeof badgeId === 'string' && badgeId.length > 0;

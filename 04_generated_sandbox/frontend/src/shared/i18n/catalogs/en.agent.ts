@@ -497,6 +497,9 @@ export const enAgent = {
   'agent.freight.attemptRefused': 'the receiver refused it',
   'agent.freight.attemptUnreachable': 'the driver could not reach the place',
   'agent.freight.attemptAdvice': 'The goods are still on the van. Ring the receiver, or message the driver about where to take them.',
+  // FP8 — a driver handed the load back before pickup.
+  'agent.freight.handBackLine': 'Handed back by the driver {when}: “{reason}”',
+  'agent.freight.handBackAdvice': 'The load is on the market again and any charge has come back. Nothing has moved.',
   'agent.freight.claimOpen': 'Report a problem with the goods',
   // FP6 — the link to hand on, and the verdict on the carrier.
   'agent.freight.carrierLine': 'Carried by {driver} · {plate}',

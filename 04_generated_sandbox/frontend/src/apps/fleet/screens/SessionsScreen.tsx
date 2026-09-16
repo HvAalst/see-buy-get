@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks';
 import { Button, Card, ErrorNote, Pill, ReadAloud } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
-import { corridorState, freeDrivers, freeVehicles, shortDid, usableCorridors } from '../logic';
+import { corridorState, freeDrivers, freeVehicles, overShiftLimit, shortDid, usableCorridors } from '../logic';
 import type { AssignmentRow, CorridorRow } from '../types';
 import type { FleetActions, FleetState } from '../useFleetApp';
 
@@ -33,7 +33,7 @@ export function SessionsScreen({ state, actions }: SessionsScreenProps) {
 
   return (
     <div class="scr">
-      {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} showDetail={state.error.code === 'CANNOT_COUPLE'} /> : null}
+      {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} showDetail={state.error.code === 'CANNOT_COUPLE' || state.error.code === 'HOURS_EXCEEDED'} /> : null}
 
       <Card title={t('fleet.sessions.coupleTitle')}>
         <p class="card__note">{t('fleet.sessions.coupleNote')}</p>
@@ -102,6 +102,8 @@ export function SessionsScreen({ state, actions }: SessionsScreenProps) {
                       <span class="row__s">{v ? `${v.plate} · ${v.vehicleClass}` : shortDid(a.vehicleId)}</span>
                       <span class="row__meta">
                         <CorridorTag assignment={a} corridors={state.corridors} />
+                        {/* FP8 — the office's own clock on the shift, against the server's limit. */}
+                        {overShiftLimit(a.startedAt, state.dashboard?.hours?.limit) ? <Pill tone="danger">{t('fleet.sessions.overLimit')}</Pill> : null}
                       </span>
                     </span>
                     <span class="row__end">

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { t } from '../../shared/i18n'; // English is the base catalog, so the real `t` yields the English literals
 import {
+  hoursWords,
   blockerTone,
   roadBlocks,
   roadMeasure,
@@ -487,5 +488,13 @@ describe('the road, as drivers report it', () => {
     expect(roadSummary([], t)).toBe('Nothing reported here yet — that is not the same as clear');
     expect(roadSummary([c({ kind: 'FERRY' }), c({ kind: 'WEIGHBRIDGE' })], t)).toBe('2 reported, none of them in your way');
     expect(roadSummary([c(), c({ kind: 'FERRY' })], t)).toBe('2 reported, 1 could stop you');
+  });
+});
+
+describe('FP8 — the shift clock', () => {
+  it('says the hours against the limit, and the plain word once over it', () => {
+    expect(hoursWords(undefined, t)).toBeNull();
+    expect(hoursWords({ onDuty: 3.2, limit: 13, over: false }, t)).toBe('On duty 3.2 h of 13 h');
+    expect(hoursWords({ onDuty: 13.4, limit: 13, over: true }, t)).toBe('On duty 13.4 h — over the 13 h limit');
   });
 });

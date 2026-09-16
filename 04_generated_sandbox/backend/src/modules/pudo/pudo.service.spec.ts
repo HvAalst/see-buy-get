@@ -3786,6 +3786,91 @@ describe('PUDO Light', () => {
     expect(gate.entries({ type: 'DRIVER_PAYOUT' }).filter((e) => e.reference === d.did)).toHaveLength(1);
   });
 
+  it('FP8: a driver hands a claimed load back before pickup — the charge comes back, the load is on the market again, the record keeps why', () => {
+    const d = drivers.register({ displayName: 'HB', fullName: 'H', nationalId: 'ID-HB', mobile: '+254770888', licenceClasses: ['truck'], licenceNumber: 'L-HB', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const truck = vehicles.register({ plate: 'HB-1', vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 10_000, ownerName: 'X', equipment: ['TLT'], baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5 });
+    fleet.couple(d.did, truck.vehicleId);
+    const vendor = vendors.register({ name: 'HandBackVendor' });
+    vendors.topUp(vendor.vendorId, 500);
+    const pickup = { lat: -1.2, lng: 36.8 };
+    const f = dispatch.registerFreight({ description: 'Machinery', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', destLocation: pickup, weightKg: 200, packaging: 'palletised', shipperDid: vendor.vendorId });
+    const before = vendors.balanceOf(vendor.vendorId);
+    const noon = new Date('2026-07-22T11:00:00').getTime();
+    dispatch.assign(f.freightId, d.did, { managerDid: 'did:fleet:office', name: 'Office' }, noon);
+    expect(vendors.balanceOf(vendor.vendorId)).toBeLessThan(before);
+    expect(() => dispatch.handBack(f.freightId, 'did:someone-else', 'not mine')).toThrow(/another driver/);
+    expect(() => dispatch.handBack(f.freightId, d.did, '')).toThrow(/why/);
+    const back = dispatch.handBack(f.freightId, d.did, 'Truck broke down at the depot', noon + 60_000);
+    expect(back.status).toBe('available');
+    expect(back.claimedBy).toBeUndefined();
+    expect(back.lockedPrice).toBeUndefined();
+    expect(back.assignedBy).toBeUndefined();
+    expect(back.handBacks).toEqual([{ driverDid: d.did, reason: 'Truck broke down at the depot', at: new Date(noon + 60_000).toISOString() }]);
+    expect(vendors.balanceOf(vendor.vendorId)).toBeCloseTo(before, 2); // the charge came back
+    expect(dispatch.claimsFor(d.did).find((c) => c.ref === f.freightId)).toBeUndefined();
+    expect(dispatch.postedBy(vendor.vendorId).find((r) => r.freightId === f.freightId)?.handBacks).toEqual([{ reason: 'Truck broke down at the depot', at: new Date(noon + 60_000).toISOString() }]);
+    // Somebody else takes it, picks it up — and from then on it cannot be handed back.
+    dispatch.assign(f.freightId, d.did, { managerDid: 'did:fleet:office' }, noon + 120_000);
+    pickupOk(f, d.did);
+    expect(() => dispatch.handBack(f.freightId, d.did, 'changed my mind')).toThrow(/taken over/);
+  });
+
+  it('FP8: over the shift limit nothing new is taken — the board marks it, no offer comes, the commit refuses — and a real working day owes a rest', () => {
+    const d = drivers.register({ displayName: 'HS', fullName: 'H', nationalId: 'ID-HS', mobile: '+254770999', licenceClasses: ['truck'], licenceNumber: 'L-HS', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const truck = vehicles.register({ plate: 'HS-1', vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 10_000, ownerName: 'X', equipment: ['TLT'], baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5 });
+    fleet.couple(d.did, truck.vehicleId);
+    const pickup = { lat: -1.2, lng: 36.8 };
+    const f = dispatch.registerFreight({ description: 'Machinery', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', destLocation: pickup, weightKg: 200, packaging: 'palletised' });
+    // Fourteen hours in: the shift started long ago.
+    const started = Date.now() - 14 * 3_600_000;
+    fleet.activeForDriver(d.did)!.startedAt = new Date(started).toISOString();
+    expect(fleet.hoursFor(d.did)).toMatchObject({ limit: 13, over: true });
+    expect(dispatch.suggest(d.did, { from: pickup, to: pickup })).toEqual([]);
+    const row = dispatch.board({ driverDid: d.did, from: pickup }).find((r) => r.freightId === f.freightId)!;
+    expect(row.canTake).toBe(false);
+    expect(row.blockers.map((b) => b.code)).toContain('HOURS_EXCEEDED');
+    expect(() => dispatch.assign(f.freightId, d.did, { managerDid: 'did:fleet:office' })).toThrow(/over the 13 h limit/);
+    // The shift ends; a working day was done, so the next shift waits for the rest.
+    fleet.uncouple(d.did);
+    expect(fleet.restHoursSince(d.did)).toBeLessThan(1);
+    expect(() => fleet.couple(d.did, truck.vehicleId)).toThrow(/Rest first/);
+    // Whereas a five-minute coupling owes nothing.
+    const ended = [...(fleet as unknown as { assignments: Map<string, { driverDid: string; startedAt: string; endedAt?: string }> }).assignments.values()].find((a) => a.driverDid === d.did && a.endedAt)!;
+    ended.startedAt = new Date(new Date(ended.endedAt!).getTime() - 5 * 60_000).toISOString();
+    expect(fleet.restHoursSince(d.did)).toBeNull();
+    fleet.couple(d.did, truck.vehicleId);
+    expect(fleet.hoursFor(d.did).over).toBe(false);
+  });
+
+  it('FP8: an upheld claim takes back from the carrier what they were paid for the haul, never more, and the registers show it', () => {
+    const d = drivers.register({ displayName: 'CB', fullName: 'C', nationalId: 'ID-CB', mobile: '+254771000', licenceClasses: ['truck'], licenceNumber: 'L-CB', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const truck = vehicles.register({ plate: 'CB-1', vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 10_000, ownerName: 'X', equipment: ['TLT'], baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5 });
+    fleet.couple(d.did, truck.vehicleId);
+    const vendor = vendors.register({ name: 'ClawbackVendor' });
+    vendors.topUp(vendor.vendorId, 500);
+    const pickup = { lat: -1.2, lng: 36.8 };
+    const f = dispatch.registerFreight({ description: 'Machinery', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', destLocation: pickup, weightKg: 200, packaging: 'palletised', shipperDid: vendor.vendorId });
+    const noon = new Date('2026-07-22T11:00:00').getTime();
+    dispatch.assign(f.freightId, d.did, { managerDid: 'did:fleet:office' }, noon);
+    pickupOk(f, d.did);
+    deliverOk(f, d.did);
+    expect(dispatch.listFreight().find((x) => x.freightId === f.freightId)!.lockedPrice).toBe(10);
+    dispatch.openFreightClaim(f.freightId, vendor.vendorId, { kind: 'damaged', description: 'Crushed' }, noon + 3_600_000);
+    // Awarded 40 on a haul that paid 10: the carrier bears 10, the rest is the sister's provision.
+    const decided = dispatch.resolveFreightClaim(f.freightId, { decision: 'upheld', award: 40, note: 'Photo shows crush damage' }, noon + 7_200_000);
+    expect(decided.clawback).toMatchObject({ amount: 10 });
+    expect(gate.entries({ type: 'DRIVER_CLAWBACK' }).filter((e) => e.reference === d.did)).toHaveLength(1);
+    const row = dispatch.driverJobsPage(d.did, {} as never).items.find((r) => r.freightId === f.freightId)!;
+    expect(row).toMatchObject({ earning: 10, paid: true, clawback: 10 });
+    expect(dispatch.driverJobsSummary(d.did, {} as never).earned).toBe(0);
+  });
+
   it('FP7: the sender’s instructions are rewritten before pickup, only added to on the road, reach the driver and the board, and never the tracking page', () => {
     const d = drivers.register({ displayName: 'IN', fullName: 'I', nationalId: 'ID-IN', mobile: '+254770777', licenceClasses: ['truck'], licenceNumber: 'L-IN', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
     drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });

@@ -1260,6 +1260,25 @@ const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehic
     [client, run, fail, pushToast, refresh],
   );
 
+  /** FP8 — the driver gives a claimed load back before pickup. It goes back on the market, the sender's charge
+   *  comes back, and the sender (and the office that put it on them) is told why. Their list loses the row. */
+  const handBack = useCallback(
+    async (ref: string, reason: string) => {
+      const did = stateRef.current.driver?.did;
+      if (!client || !did) return;
+      await run(`freight:${ref}`, async () => {
+        const r = await client.api.handBack(ref, reason);
+        if (r.error) {
+          if (!isOffline(r.error)) await refresh();
+          return fail(r.error);
+        }
+        pushToast({ tone: 'info', icon: 'truck', title: t('driver.toast.handedBack'), detail: t('driver.toast.handedBackDetail') });
+        await refresh();
+      });
+    },
+    [client, run, fail, pushToast, refresh],
+  );
+
   /** S33b — log a temperature reading for a cold-chain freight in transit. An out-of-band reading warns the
    *  driver (and flags the load for the control tower). */
   const logTemp = useCallback(
@@ -1385,6 +1404,7 @@ const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehic
       pickupFreight,
       deliverFreight,
       failDelivery,
+      handBack,
       logTemp,
       pushToast,
       dismissToast,

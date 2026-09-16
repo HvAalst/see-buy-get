@@ -177,6 +177,24 @@ function ParcelStep({ state, actions }: MintScreenProps) {
         </Card>
       ) : null}
 
+      {/* FP8 — box 13 of the consignment note, for the order that turns out to be freight. Taken down here because
+          the store knows the door and the parcel network never asks; the server ignores it for a parcel. */}
+      <Card label={t('vendor.mint.freightTitle')}>
+        <div class="field">
+          <label class="field__label" for="freight-window">
+            {t('vendor.mint.freightWindow')}
+          </label>
+          <input id="freight-window" class="input" maxLength={80} value={f.deliveryWindow} onInput={(e) => actions.setForm({ deliveryWindow: e.currentTarget.value })} placeholder={t('vendor.mint.freightWindowPlaceholder')} />
+        </div>
+        <div class="field" style="margin-top:12px">
+          <label class="field__label" for="freight-note">
+            {t('vendor.mint.freightNote')}
+          </label>
+          <textarea id="freight-note" class="input" rows={2} maxLength={500} value={f.instructions} onInput={(e) => actions.setForm({ instructions: e.currentTarget.value })} />
+        </div>
+        <p class="card__note">{t('vendor.mint.freightHint')}</p>
+      </Card>
+
       <div class="scr__cta">
         {/* A handoff already carries the destination — Continue goes straight to pricing the drop-offs. */}
         <Button onClick={() => (f.checkoutId && f.destDid ? void actions.pickDest(f.destDid) : actions.toStep('dest'))} disabled={!ready}>

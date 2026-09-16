@@ -62,6 +62,7 @@ export const ERROR_CODES = {
   NOT_COUPLED: { status: 400, title: 'Driver is not coupled to a vehicle' },
   ALREADY_COUPLED: { status: 400, title: 'Already coupled — uncouple first' },
   CANNOT_COUPLE: { status: 400, title: 'These cannot be coupled' },
+  HOURS_EXCEEDED: { status: 400, title: 'Over the hours limit' },
 
   // --- 400 Bad Request: capacity / routing -----------------------------------------------------
   CAPACITY_EXCEEDED: { status: 400, title: 'Exceeds the available capacity' },

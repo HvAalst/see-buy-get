@@ -752,6 +752,9 @@ export function useVendorApp() {
         contentPhotoRef: f.photoRef,
         routeMode: f.routeMode,
         fragile: f.fragile,
+        // FP8 — box 13, for the freight lane. The server ignores them on a parcel-sized order.
+        ...(f.instructions.trim() ? { instructions: f.instructions.trim() } : {}),
+        ...(f.deliveryWindow.trim() ? { deliveryWindow: f.deliveryWindow.trim() } : {}),
       });
       if (r.error) return fail(r.error);
       // S32: a heavy/oversized order (cargo class P4+) is DIVERTED into the dedicated-freight lane — the

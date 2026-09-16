@@ -78,6 +78,8 @@ export interface PostedFreight {
   carrier?: { driverName?: string; plate?: string; vehicleClass?: string };
   rating?: { stars: number; issues: string[]; at: string };
   canRate: boolean;
+  /** FP8 — the times a driver handed this load back before pickup, oldest first. Reason and time only. */
+  handBacks?: Array<{ reason: string; at: string }>;
   /** FP7 — box 13, and whether it is still the sender's to rewrite (before pickup), only to add to (on the road), or closed. */
   instructions?: InstructionsView;
   instructionsMode: 'edit' | 'amend' | 'none';

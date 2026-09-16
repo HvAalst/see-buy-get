@@ -8,6 +8,7 @@ import {
   canStartShift,
   capacitySubLine,
   driverStatusNotice,
+  hoursWords,
   isFull,
   minEarnFilter,
   offShiftSummary,
@@ -56,7 +57,8 @@ function OffShift({ state, actions }: HomeScreenProps) {
         <Note tone="warn" icon="clock" title={t('driver.home.licenceDueTitle', { days: licenceDue.daysLeft ?? 0 })} detail={t('driver.home.licenceDueDetail')} />
       ) : null}
       {/* A refused start names the paper (FP4) — that sentence was written for the driver, so it is shown. */}
-      {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} showDetail={state.error.code === 'CANNOT_COUPLE'} /> : null}
+      {/* FP8 — and a refused start after a working day names the rest owed (HOURS_EXCEEDED), the same way. */}
+      {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} showDetail={state.error.code === 'CANNOT_COUPLE' || state.error.code === 'HOURS_EXCEEDED'} /> : null}
       <DarkSpellNote />
 
       {/* Your own vehicles first — the morning question is "which one today?", and it has an answer before
@@ -244,6 +246,8 @@ function WorkCard({ state, actions }: HomeScreenProps) {
       <Button variant="link" full={false} onClick={() => actions.go('route')}>
         {work ? t('driver.home.headingChange') : t('driver.home.headingSet')}
       </Button>
+      {/* FP8 — the shift clock, where the shift is. A limit nobody can see coming is a refusal nobody understands. */}
+      {state.session.hours ? <p class={state.session.hours.over ? 'card__note row__s--danger' : 'card__note'}>{hoursWords(state.session.hours, t)}</p> : null}
       {/* The standing floor, and — the half that makes it safe to be standing — what it kept quiet today.
           A silencer nobody can see working is how somebody hears nothing for a week and blames us, so the
           setting and its effect are one line, never a number buried in a settings screen. */}
@@ -360,6 +364,11 @@ function OnShift({ state, actions }: HomeScreenProps) {
     <div class="scr">
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
       <DarkSpellNote />
+      {/* FP8 — over the shift limit: said once, at the top, with what still happens (deliveries) and what does not
+          (new loads). The board and the offers say it again in their own place. */}
+      {state.session.hours?.over ? (
+        <Note tone="danger" icon="clock" title={t('driver.home.hoursOverTitle')} detail={t('driver.home.hoursOverDetail', { limit: state.session.hours.limit, rest: state.session.hours.restHours })} />
+      ) : null}
 
       {/* The one big number: how much room is left, readable at arm's length. */}
       <GlanceNumber

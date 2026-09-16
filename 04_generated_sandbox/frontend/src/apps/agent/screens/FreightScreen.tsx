@@ -115,6 +115,8 @@ function PostedRow({ f, onOpen }: { f: PostedFreight; onOpen: () => void }) {
         {/* FP3 — what became of it: who signed for the goods, or that the shop withdrew it. */}
         {f.receiverName && f.deliveredAt ? <span class="row__s">{t('agent.freight.receivedBy', { name: f.receiverName, when: formatDate(f.deliveredAt) })}</span> : null}
         {f.cancelledAt ? <span class="row__s">{t('agent.freight.cancelledLine', { when: formatDate(f.cancelledAt) })}</span> : null}
+        {/* FP8 — a driver gave it back: the latest, with their reason, while the load is still looking for a carrier. */}
+        {f.handBacks?.length && !f.pickedUpAt ? <span class="row__s">{t('agent.freight.handBackLine', { when: formatDate(f.handBacks[f.handBacks.length - 1].at), reason: f.handBacks[f.handBacks.length - 1].reason })}</span> : null}
         {f.attempts?.length && f.status === 'in_transit' ? <span class="row__s">{attemptLine(f.attempts[f.attempts.length - 1], t)}</span> : null}
         {f.claim ? <span class="row__s">{claimLine(f.claim, t)}</span> : null}
         {/* FP6 — who has it, and what the shop said of them. */}
@@ -160,6 +162,17 @@ function Prices({ load, state, actions }: { load: PostedFreight } & FreightScree
       {/* FP2 — the load's own document, from posting to delivery. */}
       {load.receiverName && load.deliveredAt ? <p class="scr__lede">{t('agent.freight.receivedBy', { name: load.receiverName, when: formatDate(load.deliveredAt) })}</p> : null}
       {load.cancelledAt ? <p class="scr__lede">{t('agent.freight.cancelledLine', { when: formatDate(load.cancelledAt) })}</p> : null}
+      {/* FP8 — every hand-back, with the driver's reason: the load is on the market again and nothing has moved. */}
+      {load.handBacks?.length ? (
+        <Card tone="soft">
+          {load.handBacks.map((h) => (
+            <p key={h.at} class="card__note">
+              {t('agent.freight.handBackLine', { when: formatDate(h.at), reason: h.reason })}
+            </p>
+          ))}
+          {!load.pickedUpAt && !load.cancelledAt ? <p class="card__note">{t('agent.freight.handBackAdvice')}</p> : null}
+        </Card>
+      ) : null}
       {/* FP3b — every failed attempt, and the claim: the two things a shop rings about. */}
       {load.attempts?.length ? (
         <Card tone="soft">

@@ -142,6 +142,8 @@ export interface DriverJobRow {
   weightKg: number;
   earning?: number; // lockedPrice — the driver's agreed pay for the haul
   paid: boolean; // driverPaid
+  /** FP8 — what an upheld claim took back from that pay. */
+  clawback?: number;
   claimedAt?: string;
   deliveredAt?: string;
   createdAt: string;
@@ -153,7 +155,7 @@ function jobDate(f: Freight): string {
 }
 
 export function driverJobRowOf(f: Freight): DriverJobRow {
-  return { freightId: f.freightId, code: f.code, description: f.description, destLabel: f.destLabel, status: f.status, cargoClass: f.cargoClass, weightKg: f.weightKg, earning: f.status === 'cancelled' ? undefined : f.lockedPrice, paid: Boolean(f.driverPaid), claimedAt: f.claimedAt, deliveredAt: f.deliveredAt, createdAt: f.createdAt };
+  return { freightId: f.freightId, code: f.code, description: f.description, destLabel: f.destLabel, status: f.status, cargoClass: f.cargoClass, weightKg: f.weightKg, earning: f.status === 'cancelled' ? undefined : f.lockedPrice, paid: Boolean(f.driverPaid), ...(f.clawback ? { clawback: f.clawback.amount } : {}), claimedAt: f.claimedAt, deliveredAt: f.deliveredAt, createdAt: f.createdAt };
 }
 
 export interface DriverJobsSummary {
@@ -169,7 +171,7 @@ export function driverJobsSummaryOf(rows: Freight[]): DriverJobsSummary {
   let paid = 0;
   let delivered = 0;
   for (const f of rows) {
-    const e = f.status === 'cancelled' ? 0 : (f.lockedPrice ?? 0); // FP3 — a withdrawn load pays nothing
+    const e = f.status === 'cancelled' ? 0 : (f.lockedPrice ?? 0) - (f.clawback?.amount ?? 0); // FP3 — a withdrawn load pays nothing; FP8 — an upheld claim takes back
     earned += e;
     if (f.driverPaid) paid += e;
     if (f.status === 'delivered') delivered += 1;
@@ -238,7 +240,7 @@ export function fleetEarningsSummaryOf(rows: Freight[], nameOf: (did: string) =>
     const d = drivers.get(did) ?? { driverDid: did, driverName: nameOf(did), earned: 0, delivered: 0, count: 0 };
     const month = jobDate(f).slice(0, 7);
     const m = months.get(month) ?? { month, earned: 0, delivered: 0, count: 0 };
-    const e = f.status === 'cancelled' ? 0 : (f.lockedPrice ?? 0); // FP3 — a withdrawn load pays nothing
+    const e = f.status === 'cancelled' ? 0 : (f.lockedPrice ?? 0) - (f.clawback?.amount ?? 0); // FP3 — a withdrawn load pays nothing; FP8 — an upheld claim takes back
     d.earned += e;
     m.earned += e;
     d.count += 1;
@@ -601,6 +603,7 @@ export class DispatchService {
   /** Suggest the loads sitting along a driver's A→B route, within remaining vehicle capacity. `minEarn` is the
    *  driver's own floor: hide freight paying less than this (their surge-threshold filter). */
   suggest(driverDid: string, route: RoutePlan, now: number = Date.now(), minEarn?: number): Offer[] {
+    if (this.fleet.overHours(driverDid, now)) return []; // FP8 — nothing is offered to a driver who may not take it
     const vehicle = this.fleet.vehicleForDriver(driverDid);
     if (!vehicle) throw new GlosError('NOT_COUPLED', 'Couple the driver to a vehicle before requesting work');
     if (!this.fleet.acceptingWork(driverDid, now)) return []; // snoozed: the screen says so, and says how to undo it
@@ -724,6 +727,7 @@ export class DispatchService {
    * there is only how far they must ride to fetch it, which is what `detourKm` carries here.
    */
   suggestNearby(driverDid: string, from: GeoPoint, radiusKm: number, now: number = Date.now(), minEarn?: number): Offer[] {
+    if (this.fleet.overHours(driverDid, now)) return []; // FP8
     const vehicle = this.fleet.vehicleForDriver(driverDid);
     if (!vehicle) throw new GlosError('NOT_COUPLED', 'Couple the driver to a vehicle before requesting work');
     if (!this.fleet.acceptingWork(driverDid, now)) return [];
@@ -1056,6 +1060,12 @@ export class DispatchService {
     // REP4 — bar a below-floor driver from CLAIMING freight (defence-in-depth behind suggest's withholding, and
     // it also catches a stale offer claimed after the driver dropped below the floor). Recoverable; cold-start safe.
     if (belowFloor(this.ratings.driverRating(driverDid))) throw new GlosError('REPUTATION_BELOW_FLOOR', 'Your rating is below the network minimum — freight is paused until it recovers. Keep delivering to bring it back up.');
+    // FP8 — over the shift limit: what is aboard is delivered, nothing new is taken. The board marks it, the offers
+    // stop, and this — the one commit — refuses it, so an office cannot put a load on a driver the board would not.
+    if (this.fleet.overHours(driverDid, now)) {
+      const h = this.fleet.hoursFor(driverDid, now);
+      throw new GlosError('HOURS_EXCEEDED', `On duty ${h.onDuty} h — over the ${h.limit} h limit. End the shift and rest before taking another load`);
+    }
     // FB2c — the shipper's own exclusion now BINDS, deliberately only from the moment the board can explain
     // it. Enforcing it while no screen could show it would have dropped qualifying drivers with no reason
     // given, which is the invisible exclusion the whole board exists to remove; enforcing it here, where the
@@ -1148,6 +1158,7 @@ export class DispatchService {
     const profile = vehicle ? this.pricingProfile(vehicle) : null;
     const remainingKg = input.driverDid ? this.remainingCapacity(input.driverDid) : 0;
     const ratingBelowFloor = input.driverDid ? belowFloor(this.ratings.driverRating(input.driverDid)) : false;
+    const overHours = input.driverDid ? this.fleet.overHours(input.driverDid, now) : false; // FP8
     // A radius is the operator narrowing the market. Absent, or non-positive, means they have not narrowed it.
     const radius = input.radiusKm != null && Number.isFinite(input.radiusKm) && input.radiusKm > 0 ? input.radiusKm : undefined;
 
@@ -1189,6 +1200,7 @@ export class DispatchService {
         {
           remainingKg,
           ratingBelowFloor,
+          overHours,
           indicativeCharge: price ? this.shipperBill(price.total, f).gross : undefined,
           // The road, as drivers reported it.
           //
@@ -1434,6 +1446,7 @@ export class DispatchService {
         ...(f.carriage ? { carrier: { driverName: this.driverNameOf(f.carriage.driverDid), plate: f.carriage.plate, vehicleClass: f.carriage.vehicleClass } } : {}),
         ...(f.rating ? { rating: { stars: f.rating.stars, issues: f.rating.issues, at: f.rating.at } } : {}),
         canRate: f.status === 'delivered' && Boolean(f.claimedBy) && (f.deliveredAt ? Date.now() - new Date(f.deliveredAt).getTime() <= FREIGHT_RATING_WINDOW_DAYS * 86_400_000 : true),
+        ...(f.handBacks?.length ? { handBacks: f.handBacks.map((h) => ({ reason: h.reason, at: h.at })) } : {}),
         // FP7 — box 13, and whether it is still the sender's to rewrite or only to add to.
         ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}),
         instructionsMode: f.status === 'scheduled' || f.status === 'available' || f.status === 'claimed' ? 'edit' : f.status === 'in_transit' ? 'amend' : 'none',
@@ -1994,6 +2007,8 @@ export class DispatchService {
       senderName: names.sender,
       ...(names.carrier ? { carrierName: names.carrier } : {}),
       ...(f.billed ? { carriage: f.billed.gross, currency: NETWORK_CURRENCY } : f.lockedPrice != null ? { carriage: f.lockedPrice, currency: NETWORK_CURRENCY } : {}),
+      // FP8 — what the network paid the carrier for this haul, and so the most an upheld award takes back from them.
+      ...(f.driverPaid && f.claimedBy && (f.lockedPrice ?? 0) > 0 ? { carrierPaid: f.lockedPrice } : {}),
       coverable,
       awardCap: coverable ? MAX_CLAIM_AWARD : 0,
       capBasis: coverable ? 'sanity-bound' : 'none',
@@ -2031,10 +2046,47 @@ export class DispatchService {
       paidTo = { kind: 'between_parties' };
     }
     const at = new Date(now).toISOString();
+    // FP8 — the carrier bears what was awarded, up to what they were paid for the haul. Only where the network
+    // actually paid them (accrued at delivery); a haul settled between the parties has nothing here to take back.
+    if (award > 0 && f.claimedBy && f.driverPaid && (f.lockedPrice ?? 0) > 0) {
+      const back = Math.round(Math.min(award, f.lockedPrice!) * 100) / 100;
+      if (this.gate.driverClawback(f.claimedBy, back, f.freightId)) f.clawback = { amount: back, at, note: `claim upheld · ${f.code}` };
+    }
     f.claim = { ...c, state: 'resolved', decision: input.decision, award, note: note.slice(0, 1000), ...(input.by ? { decidedBy: input.by } : {}), decidedAt: at, ...(funding ? { funding } : {}), ...(paidTo ? { paidTo } : {}) };
     this.freights.set(f.freightId, f);
     void this.events
       .publish(GlosEvent.Pudo.FreightClaimDecided, { freightId: f.freightId, code: f.code, decision: input.decision, award, note, posterDid: f.postedByDid ?? f.shipperDid, claimantDid: c.raisedBy, driverDid: f.claimedBy }, { source: 'pudo' })
+      .catch(() => undefined);
+    return f;
+  }
+
+  /**
+   * FP8 — the driver hands a claimed load back before pickup. The other half of FP5: an office can put a load
+   * on a driver, so a driver must be able to say no — and a driver who claimed it themselves can change their
+   * mind before anything physical has happened. Nothing has been taken over, so it all unwinds the way a
+   * withdrawal does: the sender's charge comes back, the price lock goes, and the load is on the market again
+   * as if untouched — except that the hand-back is on the record, with the reason, and the sender and the
+   * office that assigned it are told. From pickup on the goods are on the truck and this is no longer the word.
+   */
+  handBack(freightId: string, driverDid: string, reason: string, now: number = Date.now()): Freight {
+    const f = this.requireFreight(freightId);
+    const why = (reason ?? '').trim();
+    if (why.length < 3) throw new GlosError('REASON_REQUIRED', 'Say why you cannot take this load — the sender and your office are told');
+    if (f.status !== 'claimed') throw new GlosError('INVALID_STATE', f.status === 'in_transit' ? 'The goods are on your vehicle — a load that has been taken over is delivered, or the sender is asked to turn it back' : `Freight is ${f.status}`);
+    if (f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This load is on another driver');
+    const at = new Date(now).toISOString();
+    if (f.paidStatus === 'billed' && f.shipperDid && this.vendors.has(f.shipperDid)) {
+      const charged = f.billed ?? this.shipperBill(f.lockedPrice ?? 0, f);
+      this.vendors.rebate(f.shipperDid, f.freightId, charged.gross, 'load handed back by the driver before pickup', charged.tax, charged.provision);
+    }
+    const assignedBy = f.assignedBy;
+    f.handBacks = [...(f.handBacks ?? []), { driverDid, reason: why.slice(0, 500), at }];
+    // Back on the market as if untouched: a booked-for-later load whose day has not come goes back to waiting for it.
+    f.status = f.scheduledPickupAt && new Date(f.scheduledPickupAt).getTime() > now ? 'scheduled' : 'available';
+    for (const k of ['claimedBy', 'claimedAt', 'lockedPrice', 'priceBreakdown', 'priceOrigin', 'lockedAt', 'paidStatus', 'billed', 'assignedBy', 'carriedBy', 'driverPaid'] as const) delete (f as unknown as Record<string, unknown>)[k];
+    this.freights.set(f.freightId, f);
+    void this.events
+      .publish(GlosEvent.Pudo.FreightHandedBack, { freightId: f.freightId, code: f.code, driverDid, driverName: this.driverNameOf(driverDid), reason: why, posterDid: f.postedByDid ?? f.shipperDid, managerDid: assignedBy?.managerDid, destLabel: f.destLabel }, { source: 'pudo' })
       .catch(() => undefined);
     return f;
   }

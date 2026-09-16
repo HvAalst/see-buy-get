@@ -57,7 +57,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyRecordDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto } from './pudo.dto';
+  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { classifySize, MAX_CLAIM_AWARD, measuredFactor, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
@@ -1972,6 +1972,9 @@ export class SbgController {
         // S32d: keep the buyer joined to their order so it stays in their "my shipments" with a tracking key.
         buyerMobile: dto.buyerMobile ?? handoff?.buyerMobile,
         externalOrderId: dto.externalOrderId ?? handoff?.externalOrderId,
+        // FP8 — box 13 from the store's order, when it said anything.
+        instructions: dto.instructions,
+        deliveryWindow: dto.deliveryWindow,
         // S34c: the vendor's freight-spend cap — dispatch won't move this order above it.
         maxSpend: vendor.shippingPolicy?.maxTransportSpend,
       });
@@ -2831,6 +2834,25 @@ export class SbgController {
   }
 
   /**
+   * FP8 — the driver hands a claimed load back before pickup. Only the driver it is on (or staff); the service
+   * unwinds the price and the charge and puts the load back on the market, and the sender is told why.
+   */
+  @Post('dispatch/freight/:id/hand-back')
+  handBackFreight(@Param('id') id: string, @Body() dto: HandBackDto, @Actor() actor: IntrospectionResult) {
+    const f = this.dispatch.requireFreightPublic(id);
+    if (actor?.role !== 'operator' && (!actor?.did || actor.did !== f.claimedBy)) throw new GlosError('FORBIDDEN', 'This load is not on you');
+    const out = this.dispatch.handBack(id, f.claimedBy ?? actor.did!, dto.reason);
+    return { freightId: out.freightId, code: out.code, status: out.status };
+  }
+
+  /** FP8 — the driver's own hours, as the app says them: on duty, the limit, whether it is passed. */
+  @Get('fleet/drivers/:did/hours')
+  driverHours(@Param('did') did: string) {
+    this.drivers.get(did);
+    return this.fleet.hoursFor(did);
+  }
+
+  /**
    * FP7 — the sender's instructions (CMR box 13). Rewritten until the goods are taken over; added to once
    * they are on the road. The sender or the store that shipped it; the driver holding the load is told.
    */
@@ -3009,7 +3031,8 @@ export class SbgController {
    *  was never saying, their own floor and their own rate, travel with the card that shows them. */
   @Get('fleet/drivers/:did/session')
   driverSession(@Param('did') did: string) {
-    return { ...this.fleet.sessionFor(did), quiet: this.dispatch.quietReport(did) };
+    // FP8 — the shift clock rides with the session: the home screen reads it without a second call.
+    return { ...this.fleet.sessionFor(did), quiet: this.dispatch.quietReport(did), hours: this.fleet.hoursFor(did) };
   }
 
   @Post('fleet/drivers/:did/assign-corridor')

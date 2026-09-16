@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  carrierBearsLine,
   CLAIM_SLOW_DAYS,
   DISPOSAL_LONG_DAYS,
   amount,
@@ -188,5 +189,14 @@ describe('the shops that started and stopped', () => {
   it('passes through a document this console has no word for', () => {
     // A silent gap would tell a caller the shop is done when it is not.
     expect(missingWords(['id', 'tax-number'], t)).toBe('tower.stalled.doc.id, tax-number');
+  });
+});
+
+describe('FP8 — what the carrier bears of an award', () => {
+  const base = { freightId: 'f1', code: 'FRT-1', description: 'x', destLabel: 'y', kind: 'damaged' as const, reason: 'r', raisedAt: '2026-09-15T00:00:00.000Z', raisedBy: 's', senderName: 'S', capBasis: 'sanity-bound' as const, evidence: [], attempts: 0, currency: 'KES' };
+  it('names the haul price where the network paid the carrier, and nothing where it did not', () => {
+    expect(carrierBearsLine({ ...base, coverable: true, awardCap: 100, carrierPaid: 10 }, t)).toContain('10');
+    expect(carrierBearsLine({ ...base, coverable: true, awardCap: 100 }, t)).toBeNull(); // paid nothing yet — or settled between the parties
+    expect(carrierBearsLine({ ...base, coverable: false, awardCap: 0, capBasis: 'none', carrierPaid: 10 }, t)).toBeNull();
   });
 });

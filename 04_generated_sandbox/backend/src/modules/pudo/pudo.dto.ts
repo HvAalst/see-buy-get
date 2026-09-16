@@ -322,6 +322,11 @@ export class FreightInstructionsDto {
   @IsOptional() @IsString() @MaxLength(80) deliveryWindow?: string;
 }
 
+/** FP8 — a driver hands a claimed load back before pickup. */
+export class HandBackDto {
+  @IsString() @MaxLength(500) reason!: string;
+}
+
 /** FP6 — the shipper's verdict on a delivered load: stars, and what went wrong if anything. */
 export class RateFreightDto {
   @IsNumber() @Min(1) @Max(5) stars!: number;
@@ -585,6 +590,10 @@ export class InboundOrderDto {
   @IsString() destPudoDid!: string;
   @IsOptional() @IsString() buyerMobile?: string;
   @IsOptional() @IsString() buyerEmail?: string;
+  /** FP8 — box 13 for an order that ships as freight: what the driver needs at the door, and when. No contact —
+   *  the goods go to a shop, whose counter is the contact. Ignored for a parcel-sized order, which has no box 13. */
+  @IsOptional() @IsString() @MaxLength(500) instructions?: string;
+  @IsOptional() @IsString() @MaxLength(80) deliveryWindow?: string;
   @IsOptional() @IsIn(['S', 'M', 'L', 'HEAVY']) size?: 'S' | 'M' | 'L' | 'HEAVY';
   @IsOptional() @ValidateNested() @Type(() => DimensionsDto) dimensionsCm?: DimensionsDto;
   @IsOptional() @IsNumber() @Min(0.01) weightKg?: number;

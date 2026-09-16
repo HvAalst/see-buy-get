@@ -43,7 +43,7 @@ export function OffersScreen({ state, actions }: OffersScreenProps) {
         <h1 class="scr__title">{t('driver.offers.emptyTitle')}</h1>
         <p class="scr__lede">{t('driver.offers.emptyLede')}</p>
 
-        {state.error ? <ErrorNote error={state.error} /> : null}
+        {state.error ? <ErrorNote error={state.error} showDetail={state.error.code === 'HOURS_EXCEEDED'} /> : null}
         {pausedNote}
 
         <Card title={t('driver.offers.whyTitle')} tone="soft">
@@ -79,7 +79,7 @@ export function OffersScreen({ state, actions }: OffersScreenProps) {
       <h1 class="scr__title">{t('driver.offers.title')}</h1>
       <p class="scr__lede">{offersSummary(offers.length, t)}</p>
 
-      {state.error ? <ErrorNote error={state.error} /> : null}
+      {state.error ? <ErrorNote error={state.error} showDetail={state.error.code === 'HOURS_EXCEEDED'} /> : null}
       {pausedNote}
 
       <SwipeDeck

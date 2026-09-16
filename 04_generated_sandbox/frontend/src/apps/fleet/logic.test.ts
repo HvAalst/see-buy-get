@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n'; // English is the base catalog, so the real `t` yields the English literals
-import { ageWords, signalState,
+import { ageWords, signalState, shiftHours, overShiftLimit,
   EMPTY_DRIVER,
   EMPTY_VEHICLE,
   bodyPickerOptions,
@@ -283,5 +283,20 @@ describe('FP5 — dispatch from the office', () => {
     expect(dispatchSummary(null, t)).toBe('Nobody is on a shift, so there is nobody to put a load on.');
     const row = (canTake: boolean) => ({ freightId: 'f', code: 'FRT-1', description: '', pickupLabel: '', destLabel: '', weightKg: 1, commitMode: 'instant' as const, deadheadKm: 0, loadedKm: 0, totalKm: 0, canTake, blockers: [] });
     expect(dispatchSummary({ drivers: [{ did: 'd', name: 'Amos K.', vehicleId: 'v', plate: 'P', vehicleClass: 'bike', remainingKg: 20 }], driver: 'd', from: { lat: 0, lng: 0, source: 'depot' }, rows: [row(true), row(false)], total: 2 }, t)).toBe('2 loads on the market for Amos K., 1 they could take.');
+  });
+});
+
+describe('FP8 — the shift clock the office reads', () => {
+  const started = '2026-09-15T06:00:00.000Z';
+  it('counts hours from the start of the shift, to a tenth', () => {
+    expect(shiftHours(started, Date.parse('2026-09-15T09:15:00.000Z'))).toBe(3.3);
+    expect(shiftHours(started, Date.parse('2026-09-15T05:00:00.000Z'))).toBe(0); // a clock ahead of the server is not negative hours
+    expect(shiftHours('not a date', Date.parse('2026-09-15T09:15:00.000Z'))).toBe(0);
+  });
+  it('marks over the limit the server gave, and 13 h when it has not', () => {
+    expect(overShiftLimit(started, 13, Date.parse('2026-09-15T18:59:00.000Z'))).toBe(false);
+    expect(overShiftLimit(started, 13, Date.parse('2026-09-15T19:30:00.000Z'))).toBe(true);
+    expect(overShiftLimit(started, undefined, Date.parse('2026-09-15T19:30:00.000Z'))).toBe(true);
+    expect(overShiftLimit(started, 10, Date.parse('2026-09-15T16:30:00.000Z'))).toBe(true);
   });
 });
