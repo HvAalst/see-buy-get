@@ -31,6 +31,8 @@ export interface PresenceRow {
   setAt?: string;
   /** CA3/CA7 — the companies standing (or being prepared) in this country, and whether each is ready. */
   companies?: Array<{ entityId: string; name: string; kind: 'sister' | 'partner'; status: 'draft' | 'active'; ready: boolean }>;
+  /** CL1 — the trade terms switched on here, per direction. Empty everywhere until somebody selects one. */
+  incoterms?: { origin: string[]; destination: string[] };
   /** CA5 — capabilities switched off by a lapsed licence or policy. */
   lapses?: Array<{ capability: PresenceCapability; entityId: string; source: 'licence' | 'insurance'; kind: string; reference: string; expiredAt: string }>;
 }
@@ -281,4 +283,36 @@ export function newCountryCode(form: NewCountryForm): string {
 export function alreadyListed(form: NewCountryForm, rows: PresenceRow[]): boolean {
   const code = newCountryCode(form);
   return Boolean(code) && rows.some((r) => r.jurisdiction === code);
+}
+
+/* ------------------------------------------------------------------ CL1: the trade terms -- */
+
+/**
+ * The eleven, for the picker. The BACKEND catalogue is the authority and refuses anything not in it; this
+ * list only decides what a person can tick, and carries the one sentence that stops the two dangerous
+ * choices being made by accident.
+ */
+export const INCOTERMS: ReadonlyArray<{ code: string; name: string; sea?: boolean; care?: boolean }> = [
+  { code: 'EXW', name: 'Ex Works', care: true },
+  { code: 'FCA', name: 'Free Carrier' },
+  { code: 'CPT', name: 'Carriage Paid To' },
+  { code: 'CIP', name: 'Carriage and Insurance Paid To' },
+  { code: 'DAP', name: 'Delivered At Place' },
+  { code: 'DPU', name: 'Delivered at Place Unloaded' },
+  { code: 'DDP', name: 'Delivered Duty Paid', care: true },
+  { code: 'FAS', name: 'Free Alongside Ship', sea: true },
+  { code: 'FOB', name: 'Free On Board', sea: true },
+  { code: 'CFR', name: 'Cost and Freight', sea: true },
+  { code: 'CIF', name: 'Cost, Insurance and Freight', sea: true },
+];
+
+/** The sets as they stand, with the defaults filled in — "none are on here" is an answer, not a blank. */
+export function termsOf(row: PresenceRow): { origin: string[]; destination: string[] } {
+  return { origin: row.incoterms?.origin ?? [], destination: row.incoterms?.destination ?? [] };
+}
+
+/** Tick or untick one code, keeping the catalogue order so the list never reshuffles under somebody. */
+export function toggleTerm(list: string[], code: string): string[] {
+  const next = list.includes(code) ? list.filter((c) => c !== code) : [...list, code];
+  return INCOTERMS.map((t) => t.code).filter((c) => next.includes(c));
 }

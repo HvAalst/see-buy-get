@@ -14,6 +14,7 @@ import { Freight, FreightTrackView } from './dispatch.types';
 import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { tempBand } from './heavy-cargo';
+import { incotermEntry } from '../../foundation/incoterms/catalogue';
 import { NETWORK_CURRENCY } from './pudo.config';
 import { VendorService } from './vendor.service';
 import { ConsignmentNote, NoteParty } from './consignment-note.types';
@@ -249,9 +250,14 @@ export class ConsignmentNoteService implements OnModuleInit {
   }
 
   private carriageOf(f: Freight): ConsignmentNote['carriage'] {
-    if (f.lockedPrice == null) return { paidBy: 'not-priced', note: 'Carriage charges not yet agreed' };
-    if (!f.shipperDid) return { amount: f.lockedPrice, currency: NETWORK_CURRENCY, paidBy: 'between-parties', note: 'Carriage charges settled between sender and carrier; the network holds no money for this load' };
-    return { amount: f.lockedPrice, currency: NETWORK_CURRENCY, paidBy: 'sender', note: 'Carriage charges paid by the sender through SeeBuyGet' };
+    // CL1 — the agreed term decides who BEARS the carriage, which is the carriage-level shadow of it and the
+    // only part of a sale term that belongs on a carriage document. The term itself is not a box of the CMR.
+    const term = incotermEntry(f.incoterm);
+    const borne = term ? (term.riskPassesAt === 'origin' && term.code !== 'CPT' && term.code !== 'CIP' && term.code !== 'CFR' && term.code !== 'CIF' ? 'collect' : 'prepaid') : undefined;
+    const termNote = term ? ' Agreed ' + term.code + (f.namedPlace ? ' ' + f.namedPlace : '') + ', so carriage is ' + (borne === 'collect' ? 'COLLECT (payable by the consignee).' : 'PREPAID (borne by the sender).') : '';
+    if (f.lockedPrice == null) return { paidBy: 'not-priced', note: 'Carriage charges not yet agreed' + termNote };
+    if (!f.shipperDid) return { amount: f.lockedPrice, currency: NETWORK_CURRENCY, paidBy: 'between-parties', note: 'Carriage charges settled between sender and carrier; the network holds no money for this load.' + termNote };
+    return { amount: f.lockedPrice, currency: NETWORK_CURRENCY, paidBy: 'sender', note: 'Carriage charges paid by the sender through SeeBuyGet.' + termNote };
   }
 
   /* ------------------------------------------------------------------ the receipt -- */

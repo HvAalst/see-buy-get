@@ -2,6 +2,7 @@ import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { catalogueEntry } from '../countries/catalogue';
 import { GlosError } from '../http/glos-error';
+import { incotermEntry, putsDutyOnSeller } from '../incoterms/catalogue';
 import { PersistentMap } from '../store/persistent-map';
 import { EntityService } from '../entity/entity.service';
 import { canTransact } from '../entity/entity.types';
@@ -69,6 +70,8 @@ export class PresenceService implements OnApplicationBootstrap {
       jurisdiction: key || '',
       level,
       capabilities: withoutLapses(capabilitiesOf(level, record?.overrides), lapses),
+      // CL1 — always an answer, never undefined: "no terms are switched on here" is a fact, not a missing field.
+      incoterms: { origin: record?.incoterms?.origin ?? [], destination: record?.incoterms?.destination ?? [] },
       lapses,
       hasEntity,
       recorded: Boolean(record),
@@ -158,8 +161,10 @@ export class PresenceService implements OnApplicationBootstrap {
     by?: string;
     /** CA2 — the second person, when this change raised the country. */
     approvedBy?: string;
+    /** CL1 — the trade terms allowed here, per direction. Replaces the stored sets outright when given. */
+    incoterms?: { origin?: string[]; destination?: string[] };
   }): ResolvedPresence {
-    const key = this.check(input.jurisdiction, input.level, input.overrides);
+    const key = this.check(input.jurisdiction, input.level, input.overrides, false, input.incoterms);
     this.presences.set(key, {
       jurisdiction: key,
       level: input.level,
@@ -167,6 +172,7 @@ export class PresenceService implements OnApplicationBootstrap {
       ...(input.note?.trim() ? { note: input.note.trim() } : {}),
       ...(input.by?.trim() ? { setBy: input.by.trim() } : {}),
       ...(input.approvedBy?.trim() ? { approvedBy: input.approvedBy.trim() } : {}),
+      ...(input.incoterms ? { incoterms: normaliseTerms(input.incoterms) } : {}),
       setAt: new Date().toISOString(),
     });
     return this.resolve(key);
@@ -182,14 +188,16 @@ export class PresenceService implements OnApplicationBootstrap {
    * direction and an emergency must not wait for a second signature.
    */
   propose(
-    input: { jurisdiction: string; level: PresenceLevel; overrides?: Partial<Record<PresenceCapability, boolean>>; note?: string; by?: string },
+    input: { jurisdiction: string; level: PresenceLevel; overrides?: Partial<Record<PresenceCapability, boolean>>; note?: string; by?: string; incoterms?: { origin?: string[]; destination?: string[] } },
     now = Date.now(),
   ): { applied?: ResolvedPresence; proposal?: PresenceProposal } {
     const by = input.by?.trim();
     if (!by) throw new GlosError('FIELD_REQUIRED', 'Say who you are — every change to a country names the person who made it');
-    const key = this.check(input.jurisdiction, input.level, input.overrides, true);
+    const key = this.check(input.jurisdiction, input.level, input.overrides, true, input.incoterms);
     const gains = this.gainsOf(key, input.level, input.overrides);
-    if (!gains.length) return { applied: this.set({ ...input, jurisdiction: key, by }) };
+    // CL1 — a term switched on is a gain like any other, and needs the second person.
+    const termGains = this.termGainsOf(key, input.incoterms);
+    if (!gains.length && !termGains.length) return { applied: this.set({ ...input, jurisdiction: key, by }) };
     const waiting = this.pendingFor(key, now);
     if (waiting) {
       throw new GlosError('CONFLICT', `A change to ${key} proposed by ${waiting.proposedBy} is already waiting for a second person — approve or decline it first`);
@@ -202,6 +210,8 @@ export class PresenceService implements OnApplicationBootstrap {
       ...(overrides ? { overrides } : {}),
       ...(input.note?.trim() ? { note: input.note.trim() } : {}),
       gains,
+      ...(termGains.length ? { termGains } : {}),
+      ...(input.incoterms ? { incoterms: input.incoterms } : {}),
       proposedBy: by,
       proposedAt: new Date(now).toISOString(),
       expiresAt: new Date(now + PROPOSAL_TTL_DAYS * 86_400_000).toISOString(),
@@ -220,6 +230,7 @@ export class PresenceService implements OnApplicationBootstrap {
       jurisdiction: proposal.jurisdiction,
       level: proposal.level,
       overrides: proposal.overrides,
+      incoterms: proposal.incoterms,
       note: proposal.note,
       by: proposal.proposedBy,
       approvedBy: who,
@@ -262,6 +273,25 @@ export class PresenceService implements OnApplicationBootstrap {
   }
 
   /** What this change would let the country do that it cannot do now. Empty means nobody needs to second it. */
+  /**
+   * CL1 — the terms this change would SWITCH ON that are not on now. Switching a term on is raising a
+   * promise about what the network will accept, so it needs the second person exactly as a capability does.
+   * Switching one OFF is a lowering and stays a one-person act, for the same reason a lapsed licence must
+   * not wait for a signature.
+   */
+  termGainsOf(jurisdiction: string, incoterms?: { origin?: string[]; destination?: string[] }): string[] {
+    if (!incoterms) return [];
+    const now = this.resolve(jurisdiction).incoterms;
+    const gained: string[] = [];
+    for (const direction of ['origin', 'destination'] as const) {
+      for (const code of incoterms[direction] ?? []) {
+        const term = incotermEntry(code)?.code;
+        if (term && !now[direction].includes(term)) gained.push(direction === 'origin' ? term + ' (as origin)' : term + ' (as destination)');
+      }
+    }
+    return gained;
+  }
+
   gainsOf(jurisdiction: string, level: PresenceLevel, overrides?: Partial<Record<PresenceCapability, boolean>>): PresenceCapability[] {
     const current = this.resolve(jurisdiction).capabilities;
     const next = capabilitiesOf(level, overrides);
@@ -269,7 +299,7 @@ export class PresenceService implements OnApplicationBootstrap {
   }
 
   /** The rules every standing obeys, asked by a proposal and again when it is applied. */
-  private check(jurisdiction: string, level: PresenceLevel, overrides?: Partial<Record<PresenceCapability, boolean>>, proposing = false): string {
+  private check(jurisdiction: string, level: PresenceLevel, overrides?: Partial<Record<PresenceCapability, boolean>>, proposing = false, incoterms?: { origin?: string[]; destination?: string[] }): string {
     const key = normalise(jurisdiction);
     if (!key) throw new GlosError('INVALID_INPUT', 'A presence needs the country it is about');
     // Only a country that exists may have a standing. Two letters are not a country.
@@ -285,6 +315,25 @@ export class PresenceService implements OnApplicationBootstrap {
     }
     if (level === 'partnered' && !this.entities.partnerFor(key, { includeDraft: proposing })) {
       throw new GlosError('INVALID_STATE', `${key} cannot be partnered: no partner company is recorded there. Record the partner first — this flag does not create one.`);
+    }
+    // CL1 — a term is SELECTED from the eleven, never invented, and the level floors the menu: a term that
+    // obliges us to clear the import and bill the duty cannot be switched on where we neither collect tax
+    // nor pay out. Refused when the person DECIDES, which is the same bargain as refusing a country whose
+    // currency is not yet on the rate book — not discovered later at somebody's first shipment.
+    if (incoterms) {
+      const can = capabilitiesOf(level, overrides);
+      for (const direction of ['origin', 'destination'] as const) {
+        for (const code of incoterms[direction] ?? []) {
+          const term = incotermEntry(code);
+          if (!term) throw new GlosError('INVALID_INPUT', code + ' is not an Incoterm');
+          if (direction === 'destination' && putsDutyOnSeller(term.code) && (!can.tax || !can.payouts)) {
+            throw new GlosError(
+              'INVALID_STATE',
+              term.code + ' puts the import clearance and the duty on the seller, and ' + normalise(jurisdiction) + ' can neither collect tax nor pay out yet. Raise those first, or offer DAP or DPU instead.',
+            );
+          }
+        }
+      }
     }
     // An override for a capability that does not exist is a silent no-op, and a silent no-op on a
     // permission is how somebody believes they granted something they did not.
@@ -368,3 +417,9 @@ const LEVEL_WORD: Record<PresenceLevel, string> = {
   partnered: 'local partner',
   established: 'established',
 };
+
+/** CL1 — canonical codes, de-duplicated, unknown ones already refused by check(). Order is the catalogue's. */
+function normaliseTerms(input: { origin?: string[]; destination?: string[] }): { origin: string[]; destination: string[] } {
+  const clean = (list?: string[]) => [...new Set((list ?? []).map((c) => incotermEntry(c)?.code).filter((c): c is string => Boolean(c)))];
+  return { origin: clean(input.origin), destination: clean(input.destination) };
+}

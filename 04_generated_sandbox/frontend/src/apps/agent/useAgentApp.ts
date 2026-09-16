@@ -17,7 +17,7 @@ import type { IconName } from '../../shared/ui/Icon';
 import { agentConfig, clearDid, createAgentClient, purgeAgentTokens, readDid, readEmail, saveDid, saveEmail } from './api';
 import { signal } from '../../shared/feedback';
 import { triggerDownload } from '../../shared/download';
-import { bodyHintValue, bookFreightMissing, EMPTY_ACCEPT, excludedBodiesValue, handoverRoute, otpValid, packagingValue, parseBudget, parseDims, plannedPickupIso, termsBlock, type AcceptForm, type DimsForm } from './logic';
+import { bodyHintValue, bookFreightMissing, EMPTY_ACCEPT, excludedBodiesValue, handoverRoute, incotermValue, otpValid, packagingValue, parseBudget, parseDims, plannedPickupIso, termsBlock, type AcceptForm, type DimsForm } from './logic';
 import type { GeoPoint } from '../../shared/geo';
 import type {
   AgentLedgerRow,
@@ -80,6 +80,10 @@ export interface PostedFreight {
   canRate: boolean;
   /** FP8 — the times a driver handed this load back before pickup, oldest first. Reason and time only. */
   handBacks?: Array<{ reason: string; at: string }>;
+  /** CL1 — the agreed term, the place it names, and who a loss in transit belongs to. */
+  incoterm?: string;
+  namedPlace?: string;
+  claimant?: 'sender' | 'receiver';
   /** FP7 — box 13, and whether it is still the sender's to rewrite (before pickup), only to add to (on the road), or closed. */
   instructions?: InstructionsView;
   instructionsMode: 'edit' | 'amend' | 'none';
@@ -1196,6 +1200,9 @@ export function useAgentApp() {
         contactName: f.contactName.trim() || undefined,
         contactPhone: f.contactPhone.trim() || undefined,
         deliveryWindow: f.deliveryWindow.trim() || undefined,
+        // CL1 — sent only when the clerk was told. No term means the sender claims, as before.
+        incoterm: incotermValue(f.incoterm),
+        namedPlace: f.namedPlace.trim() || undefined,
       });
       if (r.error) return fail(r.error);
       buzz();

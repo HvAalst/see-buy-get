@@ -53,6 +53,10 @@ export interface FreightClaimRow {
   capBasis: 'sanity-bound' | 'none';
   /** FP8 — what the network paid the carrier for the haul; an upheld award is taken back from them up to this. */
   carrierPaid?: number;
+  /** CL1 — the agreed term, who it gives standing to, and why. Absent where no term was recorded. */
+  incoterm?: string;
+  claimant?: 'sender' | 'receiver';
+  standingWhy?: string;
   evidence: string[];
   attempts: number;
   receiverName?: string;

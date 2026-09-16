@@ -191,6 +191,8 @@ function FreightClaimRowView({ row, now, state, actions }: { row: FreightClaimRo
           {freightCoverLine(row, t)}
           {/* FP8 — the other side of an award: the carrier bears it up to the haul's price. Said before deciding. */}
           {carrierBearsLine(row, t) ? <div>{carrierBearsLine(row, t)}</div> : null}
+          {/* CL1 — which party owns this loss, and why. An award decided without it is decided blind. */}
+          {row.standingWhy ? <div class="ctbl__sub">{row.standingWhy}</div> : null}
         </td>
         <td class="ctbl__mono">{row.evidence.length ? t('tower.claims.nPhotos', { n: row.evidence.length }) : t('tower.claims.noEvidence')}</td>
         <td>

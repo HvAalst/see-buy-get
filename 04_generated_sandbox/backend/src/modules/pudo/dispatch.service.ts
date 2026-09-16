@@ -2,6 +2,7 @@
 import { BorderRuleService } from './border-rules.service';
 import type { BorderAdvice, BorderRefusal } from './border-rules.types';
 import { GlosError } from '../../foundation/http/glos-error';
+import { incotermEntry, riskBearerOf } from '../../foundation/incoterms/catalogue';
 import { randomBytes } from 'crypto';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
@@ -394,7 +395,7 @@ export class DispatchService {
     return { code: t.code, status: t.status };
   }
 
-  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string }, now: number = Date.now()): Freight {
+  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string }, now: number = Date.now()): Freight {
     this.freightSeq += 1;
     // A future pickup date parks the load for later; a past/absent date ships now. A supplied-but-unparseable
     // date is a CALLER ERROR — fail closed (never silently ship-now what was meant to be scheduled). Store the
@@ -478,6 +479,10 @@ export class DispatchService {
       // the raw Freight goes to drivers/operators). Plus a public tracking key + the order ref. Only when a
       // buyer is known (a diverted order; not a bulletin freight).
       buyerPhoneHash: input.buyerMobile ? hashPhone(input.buyerMobile) || undefined : undefined,
+      // CL1 — the agreed term, canonicalised. An unknown code is dropped rather than stored: the caller was
+      // already refused at the door, and a term nobody recognises must never end up deciding who may claim.
+      ...(incotermEntry(input.incoterm) ? { incoterm: incotermEntry(input.incoterm)!.code } : {}),
+      ...(input.namedPlace?.trim() ? { namedPlace: input.namedPlace.trim().slice(0, 120) } : {}),
       trackingKey: `T-${randomBytes(5).toString('hex').toUpperCase()}`,
       externalOrderId: input.externalOrderId,
       // FP7 — box 13 at posting, when the poster said anything.
@@ -1446,6 +1451,8 @@ export class DispatchService {
         ...(f.carriage ? { carrier: { driverName: this.driverNameOf(f.carriage.driverDid), plate: f.carriage.plate, vehicleClass: f.carriage.vehicleClass } } : {}),
         ...(f.rating ? { rating: { stars: f.rating.stars, issues: f.rating.issues, at: f.rating.at } } : {}),
         canRate: f.status === 'delivered' && Boolean(f.claimedBy) && (f.deliveredAt ? Date.now() - new Date(f.deliveredAt).getTime() <= FREIGHT_RATING_WINDOW_DAYS * 86_400_000 : true),
+        ...(f.incoterm ? { incoterm: f.incoterm, claimant: riskBearerOf(f.incoterm) } : {}),
+        ...(f.namedPlace ? { namedPlace: f.namedPlace } : {}),
         ...(f.handBacks?.length ? { handBacks: f.handBacks.map((h) => ({ reason: h.reason, at: h.at })) } : {}),
         // FP7 — box 13, and whether it is still the sender's to rewrite or only to add to.
         ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}),
@@ -1982,6 +1989,29 @@ export class DispatchService {
     return f;
   }
 
+  /**
+   * CL1 — WHO OWNS THE LOSS, and therefore who may open a claim on this load.
+   *
+   * Derived from the agreed term and nothing else. Under a C term the seller pays the carriage to the
+   * destination while risk passed to the buyer at origin, so goods damaged on the road are the buyer's loss
+   * and the sender is not the party to claim for them. Under the D terms the seller carries the risk the
+   * whole way and the sender is.
+   *
+   * A load with no term recorded answers 'sender', which is what this system did before the term existed and
+   * is what every load already on the record is entitled to. That default is the reason this change can ship
+   * without rewriting history.
+   */
+  claimantOf(f: Freight): { party: 'sender' | 'receiver'; term?: string; why: string } {
+    const term = incotermEntry(f.incoterm);
+    if (!term) return { party: 'sender', why: 'No trade term was recorded for this load, so the sender claims, as before' };
+    const party = riskBearerOf(term.code);
+    const why =
+      party === 'receiver'
+        ? term.code + ' passes the risk at the origin, so a loss in transit belongs to the receiver'
+        : term.code + ' keeps the risk with the sender until delivery, so a loss in transit belongs to the sender';
+    return { party, term: term.code, why };
+  }
+
   /** The claims waiting on a person, oldest first — the one somebody has waited longest for needs answering most. */
   openFreightClaims(): Freight[] {
     return [...this.freights.values()].filter((f) => f.claim?.state === 'open').sort((a, b) => (a.claim?.raisedAt ?? '').localeCompare(b.claim?.raisedAt ?? ''));
@@ -2007,6 +2037,9 @@ export class DispatchService {
       senderName: names.sender,
       ...(names.carrier ? { carrierName: names.carrier } : {}),
       ...(f.billed ? { carriage: f.billed.gross, currency: NETWORK_CURRENCY } : f.lockedPrice != null ? { carriage: f.lockedPrice, currency: NETWORK_CURRENCY } : {}),
+      // CL1 — the term, and who it gives standing to. An operator awarding money should see which party owns
+      // the loss and why, not just who happened to file.
+      ...(f.incoterm ? { incoterm: f.incoterm, claimant: this.claimantOf(f).party, standingWhy: this.claimantOf(f).why } : {}),
       // FP8 — what the network paid the carrier for this haul, and so the most an upheld award takes back from them.
       ...(f.driverPaid && f.claimedBy && (f.lockedPrice ?? 0) > 0 ? { carrierPaid: f.lockedPrice } : {}),
       coverable,

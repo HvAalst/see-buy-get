@@ -3786,6 +3786,82 @@ describe('PUDO Light', () => {
     expect(gate.entries({ type: 'DRIVER_PAYOUT' }).filter((e) => e.reference === d.did)).toHaveLength(1);
   });
 
+  /* ------------------------------------------------------------------ CL1: the agreed term -- */
+
+  // NOTE ON WHAT THESE CAN AND CANNOT SEE. Standing is DERIVED here and ENFORCED in the controller, and a
+  // service spec never reaches a controller. So these prove the derivation, the activation and the floor;
+  // the two guards that actually refuse a caller (assertFreightClaimant, requireActiveTerm) are proven in
+  // the browser drive. Writing that down because this repo has been bitten once by a suite that passed
+  // while the app could not do the thing.
+
+  it('CL1: a term is selected from the eleven, per direction, and switching one ON needs a second person', () => {
+    // Nothing is allowed until somebody selects it: the sets start empty everywhere.
+    expect(presence.resolve('UG').incoterms).toEqual({ origin: [], destination: [] });
+
+    // DE already stands at 'matched' in this harness, so there is no CAPABILITY gain here — only a term.
+    // That alone must still become a proposal, which is the whole point of treating a term as a promise.
+    const proposed = presence.propose({ jurisdiction: 'UG', level: 'matched', incoterms: { origin: ['FCA', 'CIF'] }, by: 'Amina Otieno' });
+    expect(proposed.applied).toBeUndefined();
+    expect(proposed.proposal?.termGains).toEqual(['FCA (as origin)', 'CIF (as origin)']);
+    expect(presence.resolve('UG').incoterms.origin).toEqual([]); // nothing behaves differently until a second person
+
+    presence.approve(proposed.proposal!.proposalId, 'Brian Kamau');
+    expect(presence.resolve('UG').incoterms).toEqual({ origin: ['FCA', 'CIF'], destination: [] });
+
+    // Selected, never invented.
+    expect(() => presence.set({ jurisdiction: 'UG', level: 'matched', incoterms: { origin: ['XYZ'] } })).toThrow(/not an Incoterm/);
+    // Case and duplicates are the same selection, not three.
+    presence.set({ jurisdiction: 'UG', level: 'matched', incoterms: { origin: ['fca', 'FCA', ' fca '] } });
+    expect(presence.resolve('UG').incoterms.origin).toEqual(['FCA']);
+  });
+
+  it('CL1: presence floors the menu — a term that bills duty cannot be switched on where we cannot bill', () => {
+    // ZM is recorded and observed: no tax, no payouts, no money of ours at all.
+    presence.set({ jurisdiction: 'MW', level: 'observed' });
+    expect(presence.resolve('MW').capabilities.tax).toBe(false);
+    expect(() => presence.set({ jurisdiction: 'MW', level: 'observed', incoterms: { destination: ['DDP'] } })).toThrow(/neither collect tax nor pay out/);
+    // The same term as ORIGIN is untouched by that floor — it is the import side DDP puts on the seller.
+    expect(() => presence.set({ jurisdiction: 'MW', level: 'observed', incoterms: { origin: ['DDP'] } })).not.toThrow();
+    // And a term that bills nobody is fine either way.
+    expect(() => presence.set({ jurisdiction: 'MW', level: 'observed', incoterms: { destination: ['DAP'] } })).not.toThrow();
+  });
+
+  it('CL1: who may claim follows the term — the C terms put a loss in transit on the RECEIVER', () => {
+    const vendor = vendors.register({ name: 'TermVendor' });
+    const at = { lat: -1.2, lng: 36.8 };
+    const post = (incoterm?: string) =>
+      dispatch.registerFreight({ description: 'Machinery', pickupLocation: at, pickupLabel: 'Depot', destLabel: 'Site', destLocation: at, weightKg: 200, packaging: 'palletised', shipperDid: vendor.vendorId, buyerMobile: '+254700111222', ...(incoterm ? { incoterm } : {}) });
+
+    // Cost and risk come apart under CIF: the seller pays the freight to destination, risk passed at origin.
+    expect(dispatch.claimantOf(post('CIF'))).toMatchObject({ party: 'receiver', term: 'CIF' });
+    expect(dispatch.claimantOf(post('FCA'))).toMatchObject({ party: 'receiver', term: 'FCA' });
+    expect(dispatch.claimantOf(post('EXW'))).toMatchObject({ party: 'receiver', term: 'EXW' });
+    // The D terms keep the risk with the seller the whole way.
+    expect(dispatch.claimantOf(post('DAP'))).toMatchObject({ party: 'sender', term: 'DAP' });
+    expect(dispatch.claimantOf(post('DDP'))).toMatchObject({ party: 'sender', term: 'DDP' });
+
+    // THE FALLBACK THAT STOPS THIS REWRITING HISTORY: a load with no term behaves exactly as before.
+    const untermed = post(undefined);
+    expect(untermed.incoterm).toBeUndefined();
+    expect(dispatch.claimantOf(untermed)).toMatchObject({ party: 'sender' });
+    expect(dispatch.claimantOf(untermed).why).toMatch(/No trade term was recorded/);
+
+    // An unrecognised code is dropped rather than stored — it must never end up deciding who may claim.
+    const bogus = dispatch.registerFreight({ description: 'Machinery', pickupLocation: at, pickupLabel: 'Depot', destLabel: 'Site', destLocation: at, weightKg: 200, packaging: 'palletised', incoterm: 'NOPE' });
+    expect(bogus.incoterm).toBeUndefined();
+    expect(dispatch.claimantOf(bogus).party).toBe('sender');
+  });
+
+  it('CL1: the shop sees the term it agreed, the place it names, and who it puts the loss on', () => {
+    const vendor = vendors.register({ name: 'TermRowVendor' });
+    const at = { lat: -1.2, lng: 36.8 };
+    const f = dispatch.registerFreight({ description: 'Coffee', pickupLocation: at, pickupLabel: 'Depot', destLabel: 'Site', destLocation: at, weightKg: 300, packaging: 'palletised', shipperDid: vendor.vendorId, incoterm: 'cif', namedPlace: 'Mombasa' });
+    expect(f.incoterm).toBe('CIF'); // canonicalised on the way in
+    expect(f.namedPlace).toBe('Mombasa');
+    const row = dispatch.postedBy(vendor.vendorId).find((r) => r.freightId === f.freightId);
+    expect(row).toMatchObject({ incoterm: 'CIF', namedPlace: 'Mombasa', claimant: 'receiver' });
+  });
+
   it('FP8: a driver hands a claimed load back before pickup — the charge comes back, the load is on the market again, the record keeps why', () => {
     const d = drivers.register({ displayName: 'HB', fullName: 'H', nationalId: 'ID-HB', mobile: '+254770888', licenceClasses: ['truck'], licenceNumber: 'L-HB', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
     drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });

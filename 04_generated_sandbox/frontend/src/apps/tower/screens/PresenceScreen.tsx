@@ -12,6 +12,9 @@ import {
   countryNameOf,
   impactIsEmpty,
   type CountryImpactView,
+  INCOTERMS,
+  termsOf,
+  toggleTerm,
   levelBlocker,
   levelEffect,
   needsSecondPerson,
@@ -408,6 +411,45 @@ function PresenceEditor({ row, state, actions }: { row: PresenceRow; state: Towe
 
       {/* CA9 — a move that takes something away shows what it leaves behind, before it is pressed. */}
       {level !== row.level && lost.length ? <Impact jurisdiction={row.jurisdiction} level={level} actions={actions} /> : null}
+
+      {/* CL1 — which trade terms this country allows, as two sets, because the terms are not symmetric
+          about a border: EXW burdens the buyer where the goods START, DDP burdens the seller where they END.
+          Everything is off until somebody ticks it, and switching one ON needs a second person exactly as
+          raising a capability does — the server holds that rule, and the line above says so. */}
+      <div class="twr-presedit__terms">
+        <span class="cfield__label">{t('tower.presence.f.terms')}</span>
+        <p class="chint">{t('tower.presence.f.termsHint')}</p>
+        {(['origin', 'destination'] as const).map((direction) => {
+          const chosen = (state.presenceForm.incoterms ?? termsOf(row))[direction];
+          return (
+            <div key={direction} class="twr-presedit__termrow">
+              <span class="ctbl__sub">{t(direction === 'origin' ? 'tower.presence.f.asOrigin' : 'tower.presence.f.asDest')}</span>
+              <span class="twr-caps">
+                {INCOTERMS.map((term) => {
+                  const on = chosen.includes(term.code);
+                  return (
+                    <button
+                      key={term.code}
+                      type="button"
+                      class={'ctag ' + (on ? 'ctag--quiet' : '')}
+                      title={term.name}
+                      onClick={() => {
+                        const base = state.presenceForm.incoterms ?? termsOf(row);
+                        actions.setPresenceForm({ incoterms: { ...base, [direction]: toggleTerm(base[direction], term.code) } });
+                      }}
+                    >
+                      {on ? '\u2713 ' : ''}
+                      {term.code}
+                      {term.care ? ' !' : ''}
+                    </button>
+                  );
+                })}
+              </span>
+            </div>
+          );
+        })}
+        <p class="chint">{t('tower.presence.f.termsCare')}</p>
+      </div>
 
       <div class="twr-presedit__act">
         <button type="button" class="cbtn cbtn--primary" disabled={busy || blocker !== null || level === row.level} onClick={() => void actions.savePresence(row.jurisdiction)}>

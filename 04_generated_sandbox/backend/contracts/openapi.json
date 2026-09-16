@@ -17215,6 +17215,29 @@
           }
         }
       },
+      "IncotermSets": {
+        "type": "object",
+        "properties": {
+          "origin": {
+            "description": "Permitted where this country is the ORIGIN of the load.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "destination": {
+            "description": "Permitted where this country is the DESTINATION.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "origin",
+          "destination"
+        ]
+      },
       "PresenceProposal": {
         "type": "object",
         "properties": {
@@ -17223,6 +17246,21 @@
           },
           "jurisdiction": {
             "type": "string"
+          },
+          "termGains": {
+            "description": "CL1 — the terms this proposal would switch on, as words a second person can read.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "incoterms": {
+            "description": "CL1 — the full sets as proposed, applied verbatim on approval.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/IncotermSets"
+              }
+            ]
           },
           "level": {
             "type": "string",
@@ -17416,6 +17454,14 @@
             "type": "boolean",
             "description": "Whether this country was ever recorded, or is simply unknown — which resolves to `observed`."
           },
+          "incoterms": {
+            "description": "CL1 — the trade terms allowed here, per direction. Always present, empty where none are switched on.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/IncotermSets"
+              }
+            ]
+          },
           "note": {
             "type": "string"
           },
@@ -17436,7 +17482,8 @@
           "capabilities",
           "hasEntity",
           "lapses",
-          "recorded"
+          "recorded",
+          "incoterms"
         ]
       },
       "PresenceDto": {
@@ -17454,6 +17501,25 @@
           "overrides": {
             "type": "object"
           },
+          "incoterms": {
+            "type": "object",
+            "properties": {
+              "origin": {
+                "required": false,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "destination": {
+                "required": false,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
           "note": {
             "type": "string",
             "description": "Why. A country’s standing is a decision, and a decision with no reason cannot be reviewed."
@@ -17463,7 +17529,8 @@
           }
         },
         "required": [
-          "level"
+          "level",
+          "incoterms"
         ]
       },
       "BorderRuleDto": {
@@ -19966,6 +20033,22 @@
       "BookFreightDto": {
         "type": "object",
         "properties": {
+          "incoterm": {
+            "type": "string",
+            "enum": [
+              "EXW",
+              "FCA",
+              "CPT",
+              "CIP",
+              "DAP",
+              "DPU",
+              "DDP",
+              "FAS",
+              "FOB",
+              "CFR",
+              "CIF"
+            ]
+          },
           "commitMode": {
             "type": "string",
             "enum": [
@@ -20053,8 +20136,13 @@
           "customerMobile": {
             "type": "string"
           },
+          "namedPlace": {
+            "type": "string",
+            "maxLength": 120
+          },
           "instructions": {
             "type": "string",
+            "description": "FP7 — CMR box 13 at the counter: instructions for the door, a contact to dial, a delivery window.",
             "maxLength": 500
           },
           "contactName": {
@@ -21127,6 +21215,23 @@
       "InboundOrderDto": {
         "type": "object",
         "properties": {
+          "incoterm": {
+            "type": "string",
+            "description": "CL1 — the trade term the parties agreed, and the place it names. Selected from the eleven, never invented.",
+            "enum": [
+              "EXW",
+              "FCA",
+              "CPT",
+              "CIP",
+              "DAP",
+              "DPU",
+              "DDP",
+              "FAS",
+              "FOB",
+              "CFR",
+              "CIF"
+            ]
+          },
           "vendorId": {
             "type": "string"
           },
@@ -21147,6 +21252,10 @@
           },
           "buyerEmail": {
             "type": "string"
+          },
+          "namedPlace": {
+            "type": "string",
+            "maxLength": 120
           },
           "instructions": {
             "type": "string",
@@ -22329,8 +22438,14 @@
               }
             }
           },
+          "incoterm": {
+            "type": "string",
+            "description": "FP8 — every time a driver gave this load back before pickup: who, why, when. The load went back on the market."
+          },
+          "namedPlace": {
+            "type": "string"
+          },
           "handBacks": {
-            "description": "FP8 — every time a driver gave this load back before pickup: who, why, when. The load went back on the market.",
             "type": "array",
             "items": {
               "type": "string"
@@ -23331,6 +23446,23 @@
       "RegisterFreightDto": {
         "type": "object",
         "properties": {
+          "incoterm": {
+            "type": "string",
+            "description": "CL1 — the trade term the parties agreed, and the place it names. Selected from the eleven, never invented.",
+            "enum": [
+              "EXW",
+              "FCA",
+              "CPT",
+              "CIP",
+              "DAP",
+              "DPU",
+              "DDP",
+              "FAS",
+              "FOB",
+              "CFR",
+              "CIF"
+            ]
+          },
           "packaging": {
             "type": "string",
             "description": "FB5 — how the goods are PACKED, which decides the body and what has to lift it. Omitted falls back to\n the DEPLOYMENT's default (sacks here, loose in a European deployment), never to a network-wide guess.",
@@ -23387,6 +23519,14 @@
           },
           "description": {
             "type": "string"
+          },
+          "namedPlace": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "buyerMobile": {
+            "type": "string",
+            "description": "CL1 — who the goods are FOR. The service has always accepted it and this DTO never offered it, so a\n load posted through this route recorded no receiver at all. That was harmless while only the sender\n could claim; it stops being harmless the moment a term can put the loss on the receiver, because the\n party with standing then has no way to be recognised."
           },
           "instructions": {
             "type": "string",
@@ -24263,8 +24403,21 @@
               }
             }
           },
+          "incoterm": {
+            "type": "string",
+            "description": "FP8 — the times a driver handed this load back before pickup, most recent last. Reason and time only."
+          },
+          "namedPlace": {
+            "type": "string"
+          },
+          "claimant": {
+            "type": "string",
+            "enum": [
+              "sender",
+              "receiver"
+            ]
+          },
           "handBacks": {
-            "description": "FP8 — the times a driver handed this load back before pickup, most recent last. Reason and time only.",
             "type": "array",
             "items": {
               "type": "string"

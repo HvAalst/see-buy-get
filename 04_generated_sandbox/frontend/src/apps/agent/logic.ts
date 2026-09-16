@@ -249,6 +249,9 @@ export interface AcceptForm {
   contactName: string;
   contactPhone: string;
   deliveryWindow: string;
+  // CL1 — the trade term the customer agreed with their buyer, and the place it names.
+  incoterm: IncotermChoice;
+  namedPlace: string;
 }
 
 /**
@@ -326,6 +329,22 @@ export function bodyHintValue(hint: BodyHint): ExcludedBody | undefined {
   return hint === '' ? undefined : hint;
 }
 
+/**
+ * CL1 — the eleven trade terms, plus the empty choice that means the customer agreed none.
+ *
+ * The union rather than a string, for the same reason packaging is a union: the server takes exactly these
+ * eleven and a typo would be refused at the counter with nothing useful to say about it.
+ */
+export type Incoterm = 'EXW' | 'FCA' | 'CPT' | 'CIP' | 'DAP' | 'DPU' | 'DDP' | 'FAS' | 'FOB' | 'CFR' | 'CIF';
+export type IncotermChoice = Incoterm | '';
+
+export const INCOTERM_CHOICES: readonly Incoterm[] = ['EXW', 'FCA', 'CPT', 'CIP', 'DAP', 'DPU', 'DDP', 'FAS', 'FOB', 'CFR', 'CIF'];
+
+/** No term agreed is an ABSENT field, not an empty string — absent is what leaves standing where it was. */
+export function incotermValue(choice: IncotermChoice): Incoterm | undefined {
+  return choice === '' ? undefined : choice;
+}
+
 /** Likewise: ruling nothing out is an ABSENT list, not an empty one. An empty array would post a shipper
  *  preference that the shipper never expressed. */
 export function excludedBodiesValue(bodies: ExcludedBody[]): ExcludedBody[] | undefined {
@@ -380,6 +399,8 @@ export const EMPTY_ACCEPT: AcceptForm = {
   contactName: '',
   contactPhone: '',
   deliveryWindow: '',
+  incoterm: '',
+  namedPlace: '',
 };
 
 /** The smallest measurement we accept, in cm — 1 mm, so a thin item (a letter ~0.5 cm) is shippable.

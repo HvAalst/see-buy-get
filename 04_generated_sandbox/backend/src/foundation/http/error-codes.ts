@@ -63,6 +63,8 @@ export const ERROR_CODES = {
   ALREADY_COUPLED: { status: 400, title: 'Already coupled — uncouple first' },
   CANNOT_COUPLE: { status: 400, title: 'These cannot be coupled' },
   HOURS_EXCEEDED: { status: 400, title: 'Over the hours limit' },
+  // CL1 — the trade term is not switched on for this country, in this direction.
+  TERM_NOT_ACTIVE: { status: 400, title: 'That trade term is not available here' },
 
   // --- 400 Bad Request: capacity / routing -----------------------------------------------------
   CAPACITY_EXCEEDED: { status: 400, title: 'Exceeds the available capacity' },
@@ -109,6 +111,8 @@ export const ERROR_CODES = {
 
   // --- 403 Forbidden ---------------------------------------------------------------------------
   FORBIDDEN: { status: 403, title: 'Not allowed' },
+  // CL1 — the agreed term puts the loss on the other party, so this one cannot claim for it.
+  NOT_THE_CLAIMANT: { status: 403, title: 'The agreed term puts this loss on the other party' },
   WRONG_PUDO: { status: 403, title: 'This must happen at a different pick-up point' },
   AGENT_LOCKED: { status: 403, title: 'This account is locked' },
   REPUTATION_BELOW_FLOOR: { status: 403, title: 'Rating below the network minimum' },

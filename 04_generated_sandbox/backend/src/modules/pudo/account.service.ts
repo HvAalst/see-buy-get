@@ -131,6 +131,15 @@ export class AccountService implements OnApplicationBootstrap {
   }
 
   /** The email behind an entity's DID — for the receipts a shop is sent about its own loads. Undefined for a store or a stranger. */
+  /**
+   * CL1 — the join key for "is this signed-in person the receiver of that load". A freight records its buyer
+   * as a PHONE HASH and never as a party, so this is the only honest way to answer it.
+   */
+  phoneHashForDid(did: string): string | undefined {
+    for (const account of this.accounts.values()) if (account.did === did) return account.phoneHash;
+    return undefined;
+  }
+
   emailForDid(did: string): string | undefined {
     for (const a of this.accounts.values()) if (a.did === did) return a.email;
     return undefined;

@@ -1,4 +1,5 @@
 import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsIn, IsNumber, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
+import { INCOTERM_CODES } from '../../foundation/incoterms/catalogue';
 import { PRESENCE_LEVELS, type PresenceLevel } from '../../foundation/presence/presence.types';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
@@ -192,6 +193,8 @@ export class VoidDto {
 export class PresenceDto {
   @IsIn(PRESENCE_LEVELS as unknown as string[]) level!: PresenceLevel;
   @IsOptional() @IsObject() overrides?: Record<string, boolean>;
+  /** CL1 — the trade terms this country allows, per direction. Replaces the stored sets outright. */
+  @IsOptional() @IsObject() incoterms?: { origin?: string[]; destination?: string[] };
   /** Why. A country’s standing is a decision, and a decision with no reason cannot be reviewed. */
   @IsOptional() @IsString() note?: string;
   @IsOptional() @IsString() by?: string;
@@ -590,6 +593,9 @@ export class InboundOrderDto {
   @IsString() destPudoDid!: string;
   @IsOptional() @IsString() buyerMobile?: string;
   @IsOptional() @IsString() buyerEmail?: string;
+  /** CL1 — the trade term the parties agreed, and the place it names. Selected from the eleven, never invented. */
+  @IsOptional() @IsIn(INCOTERM_CODES as string[]) @ApiPropertyOptional({ enum: INCOTERM_CODES }) incoterm?: string;
+  @IsOptional() @IsString() @MaxLength(120) namedPlace?: string;
   /** FP8 — box 13 for an order that ships as freight: what the driver needs at the door, and when. No contact —
    *  the goods go to a shop, whose counter is the contact. Ignored for a parcel-sized order, which has no box 13. */
   @IsOptional() @IsString() @MaxLength(500) instructions?: string;
@@ -1198,6 +1204,14 @@ export class SuggestRouteDto {
 
 export class RegisterFreightDto {
   @IsString() description!: string;
+  /** CL1 — the trade term the parties agreed, and the place it names. Selected from the eleven, never invented. */
+  @IsOptional() @IsIn(INCOTERM_CODES as string[]) @ApiPropertyOptional({ enum: INCOTERM_CODES }) incoterm?: string;
+  @IsOptional() @IsString() @MaxLength(120) namedPlace?: string;
+  /** CL1 — who the goods are FOR. The service has always accepted it and this DTO never offered it, so a
+   *  load posted through this route recorded no receiver at all. That was harmless while only the sender
+   *  could claim; it stops being harmless the moment a term can put the loss on the receiver, because the
+   *  party with standing then has no way to be recognised. */
+  @IsOptional() @IsString() buyerMobile?: string;
   /** FP7 — CMR box 13 at posting: instructions for the door, a contact to dial, a delivery window. */
   @IsOptional() @IsString() @MaxLength(500) instructions?: string;
   @IsOptional() @IsString() @MaxLength(80) contactName?: string;
@@ -1260,6 +1274,9 @@ export class BookFreightDto {
   @IsOptional() @IsBoolean() fragile?: boolean;
   @IsString() destPudoDid!: string; // a network PUDO — its coordinates + equipment drive routing, pricing and the site-gap advisory
   @IsOptional() @IsString() customerMobile?: string; // optional — the walk-in customer's phone (joins it to their "my shipments")
+  /** CL1 — the trade term the parties agreed, and the place it names. Selected from the eleven, never invented. */
+  @IsOptional() @IsIn(INCOTERM_CODES as string[]) @ApiPropertyOptional({ enum: INCOTERM_CODES }) incoterm?: string;
+  @IsOptional() @IsString() @MaxLength(120) namedPlace?: string;
   /** FP7 — CMR box 13 at the counter: instructions for the door, a contact to dial, a delivery window. */
   @IsOptional() @IsString() @MaxLength(500) instructions?: string;
   @IsOptional() @IsString() @MaxLength(80) contactName?: string;

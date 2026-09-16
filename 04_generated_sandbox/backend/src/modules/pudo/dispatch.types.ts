@@ -310,6 +310,15 @@ export class Freight {
   /** FP6 — the shipper's rating of the carrier after delivery: stars, the tags, and when. One per load, last wins. */
   @ApiPropertyOptional() rating?: { stars: number; issues: string[]; at: string; by: string };
   /** FP8 — every time a driver gave this load back before pickup: who, why, when. The load went back on the market. */
+  /**
+   * CL1 — the trade term the two parties agreed, and the place it names. Recorded, never inferred: it is a
+   * term of THEIR sale contract, and guessing it would be guessing who owns a loss.
+   *
+   * It changes exactly one thing in this system, and that thing is money: who may claim when the goods are
+   * damaged in transit. See riskBearerOf in foundation/incoterms/catalogue.
+   */
+  @ApiPropertyOptional() incoterm?: string;
+  @ApiPropertyOptional() namedPlace?: string;
   @ApiPropertyOptional() handBacks?: Array<{ driverDid: string; reason: string; at: string }>;
   /** FP8 — what the carrier bore of an upheld claim, taken back from what they were paid for the haul. */
   @ApiPropertyOptional() clawback?: { amount: number; at: string; note: string };
@@ -613,6 +622,10 @@ export class PostedFreightRow {
   /** FP6 — true while the shipper may rate: delivered, within the rating window. Re-rating is allowed (last wins). */
   canRate: boolean;
   /** FP8 — the times a driver handed this load back before pickup, most recent last. Reason and time only. */
+  /** CL1 — the agreed term, the place it names, and who it puts the loss on. */
+  @ApiPropertyOptional() incoterm?: string;
+  @ApiPropertyOptional() namedPlace?: string;
+  @ApiPropertyOptional({ enum: ['sender', 'receiver'] }) claimant?: 'sender' | 'receiver';
   @ApiPropertyOptional() handBacks?: Array<{ reason: string; at: string }>;
   /** FP7 — the sender's own instructions, and whether they can still be rewritten (before pickup) or only added to. */
   @ApiPropertyOptional({ type: FreightInstructionsView }) instructions?: FreightInstructionsView;
@@ -647,6 +660,11 @@ export class FreightClaimQueueRow {
   carriage?: number;
   /** FP8 — what the network paid the carrier for the haul (accrued at delivery); an upheld award is taken back up to this. */
   @ApiPropertyOptional() carrierPaid?: number;
+  /** CL1 — the agreed trade term, and who it puts a loss in transit on. Absent where no term was recorded. */
+  @ApiPropertyOptional() incoterm?: string;
+  @ApiPropertyOptional({ enum: ['sender', 'receiver'] }) claimant?: 'sender' | 'receiver';
+  /** CL1 — why that party has standing, in the words the console shows beside the decision. */
+  @ApiPropertyOptional() standingWhy?: string;
   currency?: string;
   /** Whether a sister billed this load and so holds a provision to award from. False = decide with a reason only. */
   coverable: boolean;

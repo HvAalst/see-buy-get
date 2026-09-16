@@ -690,6 +690,12 @@ export const enTowerQueues = {
   'tower.presence.change': 'Change',
   'tower.presence.close': 'Close',
   'tower.presence.f.level': 'Standing',
+  // CL1 — activating trade terms, per direction.
+  'tower.presence.f.terms': 'Trade terms allowed here',
+  'tower.presence.f.termsHint': 'Two sets, because the terms are not symmetric about a border. Everything is off until you tick it, and switching one on needs a second person.',
+  'tower.presence.f.asOrigin': 'Shipping FROM here',
+  'tower.presence.f.asDest': 'Shipping TO here',
+  'tower.presence.f.termsCare': 'The two marked ! are the ones that usually go wrong: EXW makes a foreign buyer file the export, DDP makes a foreign seller the importer of record. Prefer FCA and DAP unless somebody has checked.',
   'tower.presence.f.note': 'Why',
   'tower.presence.f.notePlaceholder': 'What changed on the ground',
   'tower.presence.needsCompany': 'No company of ours is ready here yet. Established is what a registered company MEANS \u2014 create it under The companies, complete its record and have its papers verified, then propose it here.',

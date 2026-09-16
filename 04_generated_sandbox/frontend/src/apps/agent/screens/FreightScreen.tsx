@@ -162,6 +162,14 @@ function Prices({ load, state, actions }: { load: PostedFreight } & FreightScree
       {/* FP2 — the load's own document, from posting to delivery. */}
       {load.receiverName && load.deliveredAt ? <p class="scr__lede">{t('agent.freight.receivedBy', { name: load.receiverName, when: formatDate(load.deliveredAt) })}</p> : null}
       {load.cancelledAt ? <p class="scr__lede">{t('agent.freight.cancelledLine', { when: formatDate(load.cancelledAt) })}</p> : null}
+      {/* CL1 — the agreed term, and the one consequence of it a shop actually needs: who claims if the goods
+          are damaged on the road. Said in words, because "CIF Mombasa" tells a clerk nothing on its own. */}
+      {load.incoterm ? (
+        <p class="scr__lede">
+          {t('agent.freight.termLine', { term: load.incoterm, place: load.namedPlace ?? '' })}
+          {load.claimant ? ' ' + t(load.claimant === 'receiver' ? 'agent.freight.termReceiverClaims' : 'agent.freight.termSenderClaims') : ''}
+        </p>
+      ) : null}
       {/* FP8 — every hand-back, with the driver's reason: the load is on the market again and nothing has moved. */}
       {load.handBacks?.length ? (
         <Card tone="soft">

@@ -572,6 +572,15 @@ export const enAgent = {
   'agent.accept.deliveryWindowPh': 'e.g. before 10:00, or second trip',
   'agent.accept.instructions': 'Instructions for the driver (optional)',
   'agent.accept.instructionsPh': 'e.g. Call Joseph on arrival. Gate on the north side.',
+  // CL1 — the trade term at the counter.
+  'agent.accept.incoterm': 'Trade term agreed with the buyer (optional)',
+  'agent.accept.incotermNone': 'No term agreed',
+  'agent.accept.incotermHint': 'Only the terms this country has switched on can be used. Leave it alone if the customer did not agree one — the sender claims for damage, as before.',
+  'agent.accept.namedPlace': 'The place the term names',
+  'agent.accept.namedPlacePh': 'e.g. Mombasa',
+  'agent.freight.termLine': 'Agreed {term} {place}.',
+  'agent.freight.termReceiverClaims': 'Risk passed at the origin, so the receiver claims for damage on the road, not you.',
+  'agent.freight.termSenderClaims': 'You carry the risk to delivery, so you claim for damage on the road.',
   'agent.accept.instructionsNote': 'Goes on the consignment note (box 13) and to the driver who takes the load. Not for the price — that is agreed on the load itself.',
   'agent.accept.closedNow': 'Closed right now',
 

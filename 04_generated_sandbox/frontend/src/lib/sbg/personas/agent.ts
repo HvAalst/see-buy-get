@@ -163,6 +163,10 @@ export function createAgentApi(sbg: SbgClient) {
       destPudoDid: string;
       customerMobile?: string;
       budgetCap: number;
+      /** CL1 — the trade term the customer agreed with their buyer, and the place it names. Optional: most
+       *  walk-ups have agreed none, and a load with no term leaves standing where it has always been. */
+      incoterm?: 'EXW' | 'FCA' | 'CPT' | 'CIP' | 'DAP' | 'DPU' | 'DDP' | 'FAS' | 'FOB' | 'CFR' | 'CIF';
+      namedPlace?: string;
       scheduledPickupAt?: string;
       allowEarlyClaim?: boolean;
       /** FB2b — 'negotiate' posts the load for drivers to name a price the counter then accepts, rather than

@@ -85,7 +85,7 @@ export interface TowerState {
   /** Every country with a company, plus every one an operator has decided about. Null while unread. */
   presence: PresenceRow[] | null;
   /** The row being changed. `level` empty means 'whatever that country already stands at'. */
-  presenceForm: { level: PresenceLevel | ''; note: string };
+  presenceForm: { level: PresenceLevel | ''; note: string; incoterms?: { origin: string[]; destination: string[] } };
   /** Recording a country that is not on the map yet — the only way the FIRST country we are not in gets one. */
   countryForm: NewCountryForm;
   /** CA1 — every country that exists. Null while unread. */
@@ -207,7 +207,7 @@ export interface TowerActions {
   revokeAdmin(entityId: string, adminId: string): Promise<void>;
   signOut(): void;
   go(screen: Screen): void;
-  setPresenceForm(patch: Partial<{ level: PresenceLevel; note: string }>): void;
+  setPresenceForm(patch: Partial<{ level: PresenceLevel; note: string; incoterms: { origin: string[]; destination: string[] } }>): void;
   setCountryForm(patch: Partial<NewCountryForm>): void;
   recordCountry(): Promise<void>;
   savePresence(jurisdiction: string): Promise<void>;
@@ -918,6 +918,9 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         const { data, error } = await client.api.setPresence(jurisdiction, {
           level,
           overrides: overridesOf(row) as Record<string, boolean>,
+          // CL1 — the trade terms, sent only when this editor actually touched them. Sending the row back
+          // unchanged would be harmless, but sending nothing is what makes "I did not open that" true.
+          ...(current.presenceForm.incoterms ? { incoterms: current.presenceForm.incoterms } : {}),
           ...(current.who?.name ? { by: current.who.name } : {}),
           ...(current.presenceForm.note.trim() ? { note: current.presenceForm.note.trim() } : {}),
         });

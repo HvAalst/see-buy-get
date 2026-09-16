@@ -58,6 +58,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyDocumentDto,
   DocumentDecisionDto,
   BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto } from './pudo.dto';
+import { incotermEntry } from '../../foundation/incoterms/catalogue';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { classifySize, MAX_CLAIM_AWARD, measuredFactor, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
@@ -382,6 +383,37 @@ export class SbgController {
    * CA1 — a country is switched on only from the catalogue, and only once the network can price in its money:
    * "refuse until mapped", asked of the person deciding instead of discovered at the first price.
    */
+  /**
+   * CL1 — a trade term may only be used where it has been switched ON, in the right direction.
+   *
+   * Modelled on requirePriceableSwitchOn below: refused where the person is DECIDING, in words naming the
+   * term and the country, rather than discovered later by whoever is standing at a counter.
+   *
+   * A term names a border, so a load carrying one must say which countries it runs between. Both ends are
+   * asked because the terms are not symmetric: EXW burdens the buyer with export clearance where the goods
+   * START, DDP burdens the seller with import clearance where they END.
+   */
+  private requireActiveTerm(incoterm: string | undefined, pickupCountry?: string, destCountry?: string): void {
+    const term = incotermEntry(incoterm);
+    if (!term) return;
+    if (!pickupCountry?.trim() || !destCountry?.trim()) {
+      throw new GlosError('TERM_NOT_ACTIVE', 'A trade term names a border, so say which countries this load runs between before agreeing ' + term.code + '.');
+    }
+    const ends: Array<{ country: string; direction: 'origin' | 'destination' }> = [
+      { country: pickupCountry.trim(), direction: 'origin' },
+      { country: destCountry.trim(), direction: 'destination' },
+    ];
+    for (const end of ends) {
+      const allowed = this.presence.resolve(end.country).incoterms[end.direction];
+      if (!allowed.includes(term.code)) {
+        throw new GlosError(
+          'TERM_NOT_ACTIVE',
+          term.code + ' is not switched on for ' + end.country.toUpperCase() + ' as ' + end.direction + '. Network staff activate a term per country, per direction, and two of them are needed to switch one on.',
+        );
+      }
+    }
+  }
+
   private requirePriceableSwitchOn(jurisdiction: string, level: string): void {
     const country = catalogueEntry(jurisdiction);
     if (!country) throw new GlosError('INVALID_INPUT', `${jurisdiction.toUpperCase()} is not a country in the catalogue`);
@@ -467,6 +499,9 @@ export class SbgController {
     this.requireReadyCompanyFor(jurisdiction, dto.level);
     // CA2 — a change that raises the country becomes a proposal for a second person; a lowering is applied now.
     return this.presence.propose({
+      // CL1 — the trade terms this country allows, per direction. A term switched ON is a gain like any
+      // other, so the service holds it to the same two-person rule.
+      incoterms: dto.incoterms,
       jurisdiction,
       level: dto.level,
       overrides: dto.overrides as never,
@@ -3085,6 +3120,8 @@ export class SbgController {
     const dimensionsCm: [number, number, number] | undefined = dto.dimensionsCm ? [dto.dimensionsCm.l, dto.dimensionsCm.w, dto.dimensionsCm.h] : undefined;
     // FB0c — whoever posted it is who negotiates for it. Read straight off the actor rather than through
     // actingDid: a bulletin freight posted with no identity legitimately has no owner, and must not 403 here.
+    // CL1 — refuse a term this country has not switched on, before the load exists rather than after.
+    this.requireActiveTerm(dto.incoterm, dto.pickupCountry, dto.destCountry);
     return this.dispatch.registerFreight({ ...dto, dimensionsCm, bodyHint: dto.bodyHint as never, excludedBodies: dto.excludedBodies as never, postedByDid: actor?.did });
   }
 
@@ -3342,6 +3379,42 @@ export class SbgController {
   }
 
   /** FP3 — the poster, the shipper (a store's order under its store id) or staff; anybody else is told the load does not exist. */
+  /**
+   * CL1 — WHO MAY OPEN A CLAIM ON THIS LOAD. The defect this slice exists to close.
+   *
+   * Until now this was assertFreightSender, which assumed the sender still carried the risk when the goods
+   * were damaged. Under a C term they do not: the seller pays the carriage to the destination while risk
+   * passed to the buyer at origin, so a loss in transit belongs to the receiver and the sender is being
+   * handed money for goods that were not theirs. Since the carrier clawback shipped, that mistake takes pay
+   * off a driver.
+   *
+   * So standing follows the agreed term. No term recorded means the sender, which is what every load already
+   * on the record is entitled to and is what keeps this change from rewriting history.
+   *
+   * Where the receiver owns the loss and this load records no receiver we can recognise, the refusal SAYS SO
+   * rather than failing quietly — a walk-in receiver with no account is a real case, and §11 of the design
+   * note carries it as open.
+   */
+  private assertFreightClaimant(freightId: string, actor: IntrospectionResult): { did: string; why: string } {
+    const f = this.dispatch.requireFreightPublic(freightId);
+    const standing = this.dispatch.claimantOf(f);
+    if (actor?.role === 'operator') return { did: actor.did ?? 'operator', why: standing.why };
+    if (standing.party === 'sender') return { did: this.assertFreightSender(freightId, actor).did, why: standing.why };
+    // A freight records its buyer as a phone hash and never as a party, so that is the only honest way to
+    // recognise the receiver.
+    if (!f.buyerPhoneHash) {
+      throw new GlosError(
+        'NOT_THE_CLAIMANT',
+        standing.why + ', and this load records no receiver we can identify. A claim here is settled between the sender and the receiver directly.',
+      );
+    }
+    const mine = actor?.did ? this.accounts.phoneHashForDid(actor.did) : undefined;
+    if (!mine || mine !== f.buyerPhoneHash) {
+      throw new GlosError('NOT_THE_CLAIMANT', standing.why + '. Sign in as the receiver of these goods to claim for them.');
+    }
+    return { did: actor.did!, why: standing.why };
+  }
+
   private assertFreightSender(freightId: string, actor: IntrospectionResult): { did: string; role: 'shipper' | 'operator' } {
     const f = this.dispatch.requireFreightPublic(freightId);
     const did = actor.did;
@@ -3361,7 +3434,7 @@ export class SbgController {
   /** FP3b — the sender's claim against a delivered load: damaged, short, or not received. Answers with the claim, never the record. */
   @Post('dispatch/freight/:id/claim')
   freightClaim(@Param('id') id: string, @Body() dto: OpenFreightClaimDto, @Actor() actor: IntrospectionResult): FreightClaimResponse {
-    const { did } = this.assertFreightSender(id, actor);
+    const { did } = this.assertFreightClaimant(id, actor);
     const f = this.dispatch.openFreightClaim(id, did, { kind: dto.kind, description: dto.description, photoRef: dto.photoRef });
     return { freightId: f.freightId, code: f.code, claim: f.claim! };
   }

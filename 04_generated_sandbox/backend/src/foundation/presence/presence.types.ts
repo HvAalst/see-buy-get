@@ -67,6 +67,22 @@ export const TAKE_IN_PROMISES = ['ours', 'theirs', 'none'] as const;
 export type TakeInPromise = (typeof TAKE_IN_PROMISES)[number];
 
 /** One country's standing, and who last changed it. */
+/**
+ * CL1 — WHICH TRADE TERMS THIS COUNTRY ALLOWS, held as two sets because the terms are not symmetric about a
+ * border. EXW burdens the buyer with export clearance where the goods START; DDP burdens the seller with
+ * import clearance where they END. One list would have to be true of both directions at once, so it would
+ * be wrong in one of them.
+ *
+ * Both empty by default. A term is SELECTED from the catalogue of eleven, never invented, exactly as a
+ * country is selected rather than created.
+ */
+export class IncotermSets {
+  /** Permitted where this country is the ORIGIN of the load. */
+  @ApiProperty({ type: [String] }) origin: string[];
+  /** Permitted where this country is the DESTINATION. */
+  @ApiProperty({ type: [String] }) destination: string[];
+}
+
 export class Presence {
   @ApiProperty() jurisdiction: string;
   @ApiProperty({ enum: PRESENCE_LEVELS }) level: PresenceLevel;
@@ -81,6 +97,8 @@ export class Presence {
   /** CA2 — the second person, on a change that raised the country. Absent on a lowering, which one person may make. */
   @ApiPropertyOptional() approvedBy?: string;
   @ApiProperty() setAt: string;
+  /** CL1 — the trade terms switched on here, per direction. Absent means none, which is the default. */
+  @ApiPropertyOptional({ type: IncotermSets }) incoterms?: { origin?: string[]; destination?: string[] };
 }
 
 /**
@@ -97,6 +115,10 @@ export type ProposalStatus = (typeof PROPOSAL_STATUSES)[number];
 export class PresenceProposal {
   @ApiProperty() proposalId: string;
   @ApiProperty() jurisdiction: string;
+  /** CL1 — the terms this proposal would switch on, as words a second person can read. */
+  @ApiPropertyOptional({ type: [String] }) termGains?: string[];
+  /** CL1 — the full sets as proposed, applied verbatim on approval. */
+  @ApiPropertyOptional({ type: IncotermSets }) incoterms?: { origin?: string[]; destination?: string[] };
   @ApiProperty({ enum: PRESENCE_LEVELS }) level: PresenceLevel;
   @ApiPropertyOptional() overrides?: Partial<Record<PresenceCapability, boolean>>;
   @ApiPropertyOptional() note?: string;
@@ -141,6 +163,8 @@ export class ResolvedPresence {
   @ApiProperty({ type: [CapabilityLapse] }) lapses: CapabilityLapse[];
   /** Whether this country was ever recorded, or is simply unknown — which resolves to `observed`. */
   @ApiProperty() recorded: boolean;
+  /** CL1 — the trade terms allowed here, per direction. Always present, empty where none are switched on. */
+  @ApiProperty({ type: IncotermSets }) incoterms: IncotermSets;
   @ApiPropertyOptional() note?: string;
   @ApiPropertyOptional() setBy?: string;
   /** CA2 — the second person who approved the change that raised this country. */

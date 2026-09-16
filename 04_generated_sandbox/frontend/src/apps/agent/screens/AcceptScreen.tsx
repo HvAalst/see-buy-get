@@ -1,3 +1,5 @@
+const INCOTERM_OPTIONS = ['EXW', 'FCA', 'CPT', 'CIP', 'DAP', 'DPU', 'DDP', 'FAS', 'FOB', 'CFR', 'CIF'];
+
 import { Button, Card, Chip, CodeCard, ErrorNote, GlanceNumber, Icon, Note, OptionPicker, PlaceMap, Pill, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
 import { agentConfig } from '../api';
 import { useT, type Translate } from '../../../shared/i18n';
@@ -627,6 +629,30 @@ function FreightBookingCard({ state, actions }: { state: AgentState; actions: Ag
         <label class="field__label" for="freight-window">
           {t('agent.accept.deliveryWindow')}
         </label>
+        {/* CL1 — the trade term, if the customer agreed one with their buyer. Optional on purpose: most
+            walk-ups have not, and a load with no term behaves exactly as it always has. */}
+        <div class="field">
+          <label class="field__label" for="freight-term">
+            {t('agent.accept.incoterm')}
+          </label>
+          <select id="freight-term" class="input" value={f.incoterm} onChange={(e) => actions.setAccept({ incoterm: e.currentTarget.value as never })}>
+            <option value="">{t('agent.accept.incotermNone')}</option>
+            {INCOTERM_OPTIONS.map((code) => (
+              <option key={code} value={code}>
+                {code}
+              </option>
+            ))}
+          </select>
+          <p class="hint">{t('agent.accept.incotermHint')}</p>
+        </div>
+        {f.incoterm ? (
+          <div class="field">
+            <label class="field__label" for="freight-place">
+              {t('agent.accept.namedPlace')}
+            </label>
+            <input id="freight-place" class="input" value={f.namedPlace} onInput={(e) => actions.setAccept({ namedPlace: e.currentTarget.value })} placeholder={t('agent.accept.namedPlacePh')} autocomplete="off" />
+          </div>
+        ) : null}
         <input id="freight-window" class="input" value={f.deliveryWindow} onInput={(e) => actions.setAccept({ deliveryWindow: e.currentTarget.value })} placeholder={t('agent.accept.deliveryWindowPh')} autocomplete="off" />
       </div>
       <div class="field" style="margin-top:12px">
