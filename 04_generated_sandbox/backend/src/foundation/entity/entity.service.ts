@@ -605,6 +605,19 @@ export class EntityService implements OnApplicationBootstrap {
    * The group reaching its sisters does not touch the isolation rule the money model rests on: setting a
    * rate is a management act, never a transaction, and the group still cannot be a party to one.
    */
+  /**
+   * The company a DID belongs to.
+   *
+   * Nothing had ever needed to map one back: a DID is handed out and carried forward, and every reader
+   * already knew which company it was holding. The payout gate is the first caller that does not — it is
+   * given a payee's DID and nothing else, and has to decide whether money may leave to where that payee
+   * stands. A linear scan over a handful of companies, which is what this list is.
+   */
+  byDid(did?: string): Entity | undefined {
+    if (!did) return undefined;
+    return this.list().find((e) => e.did === did);
+  }
+
   mayAdminister(adminEntityId: string | undefined, targetEntityId: string): boolean {
     if (!adminEntityId) return false;
     if (adminEntityId === targetEntityId) return true;

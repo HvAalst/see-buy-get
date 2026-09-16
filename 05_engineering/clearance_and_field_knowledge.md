@@ -307,7 +307,7 @@ award without knowing which party owned the loss.
 - **Gate:** on a C term a receiver opens and wins a claim, and the sender is refused with a sentence that
   names the term; on a D term the existing sender path is untouched; no money is billed differently.
 
-### CL2 — The importer's papers, and the agent who clears them — CL2a SHIPPED 2026-09-16, driven
+### CL2 — The importer's papers, and the agent who clears them — CL2a + CL2b SHIPPED 2026-09-16, driven
 
 **Rewritten 2026-09-16 from two real imports the user ran.** The first draft of this slice had a clearing
 agent as a record with licences that expire. That is not the job. The job is the importer's, and it is worth
@@ -375,9 +375,9 @@ scope: *share the documents digitally, grant access, pay the agent, get the cont
 
 - **CL2a — SHIPPED 2026-09-16, driven.** The consignment, the documents, the two grants, and the agent's
   required list. No money and no road leg. This is the piece that answers the two weeks.
-- **CL2b, after:** paying the agent, and minting the road leg from the port. **Payment is gated by presence** —
-  where we only match we cannot be the one who bills, and the screen must say so at the start rather than
-  fail at the end.
+- **CL2b — SHIPPED 2026-09-16, driven.** Paying the agent, and minting the road leg from the port.
+  **Payment is gated by presence** — where we only match we cannot be the one who bills, and the screen says
+  so at the start rather than failing at the end.
 
 - **Screens:** both the importer and the agent are companies, so both work in the console's company half,
   which exists today and holds only the company record, the password panel and the rate card. The importer
@@ -420,6 +420,40 @@ scope: *share the documents digitally, grant access, pay the agent, get the cont
   their company id. A directory is a larger question than this slice — who may appear in it, and on whose say.
 - **Noticed while driving and NOT ours:** the console asks `GET /v1/sbg/finance` on a company sign-in and
   takes a 403, because that route is operator-only by design. Pre-existing, untouched here, worth fixing.
+
+#### What CL2b shipped, and what driving it taught
+
+- **The money is a PASS-THROUGH, and the books prove it rather than promise it.** Receiving the agent's fee
+  posts exactly two lines on the sister in the PAYER's jurisdiction — cash in, and the same amount owed to
+  the agent. There is no revenue line and nowhere for one to go, which makes §10's condition ("the network
+  earns nothing from an appointment") structural instead of a rule somebody has to remember.
+- **Money is created only by an observed external event.** The importer cannot record their own payment: the
+  receipt is operator-only and requires the reference the money arrived under. Somebody pressing "I have
+  paid" is not an event, and a button that mints cash on a claim is the exact shape the books rewrite exists
+  to remove.
+- **Quoting and agreeing are not paying**, and each belongs to one party. The agent quotes, the importer
+  agrees, and a re-quote DROPS the earlier agreement — nobody is held to a price they never saw.
+- **"We cannot be the one who bills here" is said at the START.** `money.canBill` and `money.canPayOut` ride
+  on every read of a consignment, so a person is told before they assemble a fee rather than after they have
+  agreed one. Quoting and agreeing still work where we cannot bill: what two companies agree between them is
+  theirs to agree, and the sentence says so.
+- **THE PAYOUT GATE HAD A HOLE, AND THIS SLICE CLOSED IT.** `PayeeStandingRegistrar` recognised only PUDO
+  shops; for any other DID it answered null, which means "pay them". A clearing agent is a company, so we
+  would have raised a payout into a country we cannot pay into. It now resolves a company from its DID —
+  which needed a `byDid` lookup on `EntityService`, because nothing in the system had ever mapped one back —
+  and the run names the agent and the reason instead of paying.
+- **The road leg rides the machinery that already exists.** Minted by a person from the port, posted with the
+  importer as poster and NO `shipperDid`, so settlement stays off-platform exactly as the consolidation lot
+  does. A second mint is refused, because it would send two trucks for one container.
+- **A DRIVE THAT ASSUMES THE STATE OF THE WORLD TESTS THE ASSUMPTION.** The first run of the CL2b drive
+  hard-coded Malawi as "somewhere we cannot bill" and printed two green-looking passes that were simply
+  false — the sandbox has a Malawian sister at full presence, so neither refusal could ever have fired. The
+  drive now ASKS the network which jurisdiction has no sister of ours and uses that. Both refusals then
+  fired, and the payout run named the agent it could not pay.
+- **Declaration order bit once, and not where a typecheck would catch it.** `ImportConsignment` carries an
+  `ImportFee`, and the swagger plugin evaluates that reference when the consignment class is defined — so
+  declaring the fee class later in the same file typechecked cleanly and then killed the contract emit with
+  a temporal dead zone. A type annotation would have been erased; a metadata factory is not.
 
 ### CL3 — Scarcity, derived
 No dependencies. Cheap, and it is the slice that pays for the epic early.

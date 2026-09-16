@@ -3,6 +3,10 @@ import { ImportService } from './import.service';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { CompanyDocumentService } from '../../foundation/entity/company-documents.service';
 import { DidService } from '../../foundation/did/did.service';
+import { PresenceService } from '../../foundation/presence/presence.service';
+import { BooksService } from '../../foundation/books/books.service';
+import { ACCOUNT_CODES } from '../../foundation/books/books.types';
+import { DispatchService } from './dispatch.service';
 import { LedgerService } from '../../foundation/ledger/ledger.service';
 import { LEDGER_ADAPTER } from '../../foundation/ledger/ledger.types';
 import { InMemoryLedgerAdapter } from '../../foundation/ledger/in-memory-ledger.adapter';
@@ -21,9 +25,13 @@ describe('an import consignment, its papers, and the agent who clears them', () 
   let imports: ImportService;
   let entities: EntityService;
   let documents: CompanyDocumentService;
+  let presence: PresenceService;
+  let books: BooksService;
   let importerId: string;
   let agentId: string;
   let rivalId: string;
+  /** Every load handed to the freight machinery, so the test can check WHAT was handed over. */
+  let minted: Array<Record<string, unknown>>;
 
   /**
    * Every upload gets distinct bytes. Not a convenience: the register refuses a file whose fingerprint
@@ -41,16 +49,44 @@ describe('an import consignment, its papers, and the agent who clears them', () 
     );
 
   beforeEach(async () => {
+    minted = [];
     const moduleRef = await Test.createTestingModule({
       // Hand-listed, which is the very shape that once let 856 green tests sit over an app that could not
       // boot — so `app.boot.spec.ts` is what actually proves this service resolves in the real module, and
       // this list exists only to get an instance to exercise.
-      providers: [ImportService, EntityService, CompanyDocumentService, DidService, LedgerService, EventBus, { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter }],
+      providers: [
+        ImportService,
+        EntityService,
+        CompanyDocumentService,
+        DidService,
+        LedgerService,
+        EventBus,
+        PresenceService,
+        BooksService,
+        { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
+        // The freight machinery is at the EDGE of this slice: CL2b hands it one load and keeps the id it
+        // gives back. Standing up the whole dispatch tree here would be testing another module through this
+        // one; what it must actually do is prove we hand over the right load and store what comes back.
+        {
+          provide: DispatchService,
+          useValue: {
+            registerFreight: (input: Record<string, unknown>) => {
+              minted.push(input);
+              return { freightId: `frt_${minted.length}`, code: `FRT-${minted.length}` };
+            },
+          },
+        },
+      ],
     }).compile();
     entities = moduleRef.get(EntityService);
     entities.seed();
     documents = moduleRef.get(CompanyDocumentService);
+    presence = moduleRef.get(PresenceService);
+    books = moduleRef.get(BooksService);
     imports = moduleRef.get(ImportService);
+    // Ethiopia can bill and pay out, so the money tests are about the money rather than about presence.
+    // The tests that care about presence say so by turning one of these off.
+    presence.set({ jurisdiction: 'ET', level: 'established', overrides: { merchantOfRecord: true, payouts: true } } as never);
     importerId = entities.createCompany({ kind: 'partner', jurisdiction: 'et', name: 'Yukel Trading' }, 'Amina').entityId;
     agentId = entities.createCompany({ kind: 'partner', jurisdiction: 'et', name: 'Addis Clearing' }, 'Amina').entityId;
     rivalId = entities.createCompany({ kind: 'partner', jurisdiction: 'et', name: 'Other Clearing' }, 'Amina').entityId;
@@ -272,6 +308,114 @@ describe('an import consignment, its papers, and the agent who clears them', () 
       // Another port is another border: nothing carries across.
       expect(imports.knownPapers('ET', 'Modjo')).toEqual([]);
       expect(imports.knownPapers('KE')).toEqual([]);
+    });
+  });
+
+  describe('paying the agent', () => {
+    const appointed = () => {
+      const one = register();
+      imports.appoint(one.importId, agentId, importerId, 'Hans');
+      return one;
+    };
+
+    it('quotes, agrees, receives — and the network earns nothing from it', () => {
+      const one = appointed();
+      const quoted = imports.quoteFee(one.importId, agentId, 4500, 'Port dues and our attendance', 'Selam');
+      expect(quoted.feeState).toBe('quoted');
+      expect(quoted.fee).toMatchObject({ amount: 4500, quotedBy: 'Selam', note: 'Port dues and our attendance' });
+      expect(imports.acceptFee(one.importId, importerId, 'Hans').feeState).toBe('accepted');
+
+      const paid = imports.recordFeeReceipt(one.importId, 'MPESA-XYZ-1', 'Amina');
+      expect(paid.feeState).toBe('paid');
+      expect(paid.fee).toMatchObject({ reference: 'MPESA-XYZ-1', recordedBy: 'Amina' });
+
+      // Cash in, and the same amount owed onward to the AGENT — and no third line anywhere. "The network
+      // earns nothing from an appointment" is a condition of this epic, so it is asserted, not assumed.
+      const sister = entities.requireForJurisdiction('ET');
+      const agentDid = entities.get(agentId).did;
+      const entry = books.journal({ entityId: sister.entityId, ref: one.code })[0];
+      expect(entry.lines).toHaveLength(2);
+      // A stored line carries an accountId rather than a code, so the claim is made where it is legible:
+      // nowhere in this sister's book did receiving somebody else's fee put anything into revenue.
+      expect(books.trialBalance(sister.entityId).some((a) => String(a.code).startsWith('revenue') && a.balance !== 0)).toBe(false);
+      expect(books.balance(sister.entityId, ACCOUNT_CODES.PAYABLE_PROVIDER, undefined, agentDid)).toBe(-4500);
+      expect(books.balances(sister.entityId).balanced).toBe(true);
+    });
+
+    it('keeps each side to its own act, and will not receive money nobody agreed to', () => {
+      const one = appointed();
+      expect(() => imports.quoteFee(one.importId, importerId, 100, undefined, 'Hans')).toThrow(/Only the agent appointed/);
+      expect(() => imports.recordFeeReceipt(one.importId, 'REF', 'Amina')).toThrow(/No fee has been quoted/);
+
+      imports.quoteFee(one.importId, agentId, 100, undefined, 'Selam');
+      expect(() => imports.acceptFee(one.importId, agentId, 'Selam')).toThrow(/the importer’s/);
+      // Agreed by nobody yet: receiving money against it would be recording a debt the payer never accepted.
+      expect(() => imports.recordFeeReceipt(one.importId, 'REF', 'Amina')).toThrow(/not been agreed/);
+
+      imports.acceptFee(one.importId, importerId, 'Hans');
+      // Money is never created on somebody saying so — the reference is the observed external event.
+      expect(() => imports.recordFeeReceipt(one.importId, '  ', 'Amina')).toThrow(/needs the reference/);
+      imports.recordFeeReceipt(one.importId, 'REF-1', 'Amina');
+      expect(() => imports.recordFeeReceipt(one.importId, 'REF-2', 'Amina')).toThrow(/already received/);
+      expect(() => imports.quoteFee(one.importId, agentId, 200, undefined, 'Selam')).toThrow(/already been paid/);
+    });
+
+    it('drops an earlier agreement when the agent re-quotes, so nobody is held to a price they never saw', () => {
+      const one = appointed();
+      imports.quoteFee(one.importId, agentId, 100, undefined, 'Selam');
+      imports.acceptFee(one.importId, importerId, 'Hans');
+      const requoted = imports.quoteFee(one.importId, agentId, 250, undefined, 'Selam');
+      expect(requoted.feeState).toBe('quoted');
+      expect(requoted.fee).toMatchObject({ amount: 250 });
+      // toMatchObject with an undefined value asks for the key to EXIST holding undefined; the agreement is
+      // genuinely gone, so it is asserted as absence.
+      expect(requoted.fee?.acceptedAt).toBeUndefined();
+    });
+
+    it('says at the START that we cannot be the one who bills, and refuses the receipt in the country’s own words', () => {
+      // Where we only match, we cannot charge customers — the rule this slice was told to respect.
+      presence.set({ jurisdiction: 'ET', level: 'matched' } as never);
+      const one = appointed();
+      const view = imports.detail(one.importId, importerId);
+      expect(view.money.canBill).toBe(false);
+      expect(view.money.why).toMatch(/settled directly between you and them/);
+
+      // Quoting and agreeing still work: what two companies agree between them is theirs to agree.
+      imports.quoteFee(one.importId, agentId, 100, undefined, 'Selam');
+      imports.acceptFee(one.importId, importerId, 'Hans');
+      expect(() => imports.recordFeeReceipt(one.importId, 'REF-1', 'Amina')).toThrow(/cannot charge customers/);
+    });
+  });
+
+  describe('the road leg from the port', () => {
+    it('mints one load from the port with no shipper on it, and refuses a second', () => {
+      const one = register({ destPort: 'Djibouti' });
+      const out = imports.mintRoadLeg(one.importId, importerId, { pickupLocation: { lat: 11.6, lng: 43.14 }, destLabel: 'Addis Ababa yard', weightKg: 12000 }, 'Hans');
+      expect(out.roadFreightCode).toBe('FRT-1');
+      expect(minted).toHaveLength(1);
+      expect(minted[0]).toMatchObject({
+        pickupLabel: 'Djibouti',
+        destLabel: 'Addis Ababa yard',
+        weightKg: 12000,
+        // Both ends inland of the same border: the sea leg that brought it is not ours and is not modelled.
+        pickupCountry: 'ET',
+        destCountry: 'ET',
+        externalOrderId: one.code,
+        postedByDid: entities.get(importerId).did,
+      });
+      // Off-platform settlement, exactly as the consolidation lot does it.
+      expect(minted[0].shipperDid).toBeUndefined();
+      expect(String(minted[0].description)).toContain(one.code);
+      expect(() => imports.mintRoadLeg(one.importId, importerId, { pickupLocation: { lat: 11.6, lng: 43.14 }, destLabel: 'Anywhere', weightKg: 1 }, 'Hans')).toThrow(/already has a road leg/);
+    });
+
+    it('is the importer’s to mint, and refuses a load with nothing to carry or nowhere to go', () => {
+      const one = register();
+      imports.appoint(one.importId, agentId, importerId, 'Hans');
+      expect(() => imports.mintRoadLeg(one.importId, agentId, { pickupLocation: { lat: 1, lng: 1 }, destLabel: 'X', weightKg: 1 }, 'Selam')).toThrow(/the importer’s/);
+      expect(() => imports.mintRoadLeg(one.importId, importerId, { pickupLocation: { lat: 1, lng: 1 }, destLabel: '  ', weightKg: 1 }, 'Hans')).toThrow(/where the container is going/);
+      expect(() => imports.mintRoadLeg(one.importId, importerId, { pickupLocation: { lat: 1, lng: 1 }, destLabel: 'X', weightKg: 0 }, 'Hans')).toThrow(/what the load weighs/);
+      expect(minted).toHaveLength(0);
     });
   });
 

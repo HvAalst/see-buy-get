@@ -4888,6 +4888,160 @@
         }
       }
     },
+    "/v1/sbg/imports/{importId}/fee": {
+      "post": {
+        "operationId": "Sbg.quoteClearanceFee",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuoteClearanceFeeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/imports/{importId}/fee/accept": {
+      "post": {
+        "operationId": "Sbg.acceptClearanceFee",
+        "summary": "",
+        "description": "CL2b — the importer agrees the figure. Nothing moves here; agreeing is not paying.",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptClearanceFeeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/imports/{importId}/fee/receipt": {
+      "post": {
+        "operationId": "Sbg.recordClearanceReceipt",
+        "summary": "",
+        "description": "CL2b — MONEY ARRIVED, recorded by network staff against a reference.\n\nOperator-only, and that is the point rather than an oversight: money is created only by an observed\nexternal event, and an importer pressing \"I have paid\" is not one. What is received is owed onward in\nfull — the network earns nothing from an appointment.",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClearanceReceiptDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/imports/{importId}/road-leg": {
+      "post": {
+        "operationId": "Sbg.mintImportRoadLeg",
+        "summary": "",
+        "description": "CL2b — mint the road leg from the port. A person does this; we observe no arrival and invent none.",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MintRoadLegDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/entities/{entityId}/books": {
       "get": {
         "operationId": "Sbg.entityBooks",
@@ -18833,6 +18987,57 @@
           "addedAt"
         ]
       },
+      "ImportFee": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string",
+            "description": "The collecting sister's own currency. A sister can only invoice in its own money."
+          },
+          "quotedBy": {
+            "type": "string"
+          },
+          "quotedAt": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "acceptedBy": {
+            "type": "string"
+          },
+          "acceptedAt": {
+            "type": "string"
+          },
+          "collectingEntityId": {
+            "type": "string",
+            "description": "Which sister's books hold it — the one in the PAYER's jurisdiction, because collection follows the payer."
+          },
+          "paidAt": {
+            "type": "string"
+          },
+          "recordedBy": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string",
+            "description": "The rail's or the bank's own reference. Money is only ever created by an observed external event, and\n this is the thing you point at afterwards when somebody says they paid."
+          },
+          "entryId": {
+            "type": "string",
+            "description": "The journal entry that received it. Present only once money actually moved."
+          }
+        },
+        "required": [
+          "amount",
+          "currency",
+          "quotedBy",
+          "quotedAt"
+        ]
+      },
       "ImportConsignment": {
         "type": "object",
         "properties": {
@@ -18900,6 +19105,22 @@
             "items": {
               "$ref": "#/components/schemas/RequiredPaper"
             }
+          },
+          "fee": {
+            "$ref": "#/components/schemas/ImportFee"
+          },
+          "roadFreightId": {
+            "type": "string",
+            "description": "The road leg, once a person has minted it. Stored as id AND code: the id is what the freight\n machinery answers to, the code is what a human reads on a screen beside this container."
+          },
+          "roadFreightCode": {
+            "type": "string"
+          },
+          "roadMintedAt": {
+            "type": "string"
+          },
+          "roadMintedBy": {
+            "type": "string"
           },
           "createdAt": {
             "type": "string"
@@ -19058,6 +19279,31 @@
           "grantedAt"
         ]
       },
+      "MoneyHere": {
+        "type": "object",
+        "properties": {
+          "canBill": {
+            "type": "boolean"
+          },
+          "canPayOut": {
+            "type": "boolean"
+          },
+          "why": {
+            "type": "string",
+            "description": "Said plainly, before anybody starts. Absent when the money can run here normally."
+          },
+          "currency": {
+            "type": "string"
+          },
+          "collectingEntityId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "canBill",
+          "canPayOut"
+        ]
+      },
       "ImportDetail": {
         "type": "object",
         "properties": {
@@ -19124,6 +19370,20 @@
             "type": "number",
             "description": "Lines waiting on THIS reader to act. What the console counts on the group badge."
           },
+          "feeState": {
+            "type": "string",
+            "description": "CL2b — how far the agent's fee has got. Derived on every read.",
+            "enum": [
+              "none",
+              "quoted",
+              "accepted",
+              "paid"
+            ]
+          },
+          "roadFreightCode": {
+            "type": "string",
+            "description": "CL2b — the road leg minted from the port, when one has been."
+          },
           "createdAt": {
             "type": "string"
           },
@@ -19146,6 +19406,25 @@
             "items": {
               "$ref": "#/components/schemas/DocumentGrant"
             }
+          },
+          "fee": {
+            "description": "CL2b — the agent's fee, once quoted.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ImportFee"
+              }
+            ]
+          },
+          "money": {
+            "description": "CL2b — whether the money can run here at all, said before anybody starts assembling it.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MoneyHere"
+              }
+            ]
+          },
+          "roadFreightId": {
+            "type": "string"
           }
         },
         "required": [
@@ -19161,10 +19440,12 @@
           "accepted",
           "asked",
           "waitingOnYou",
+          "feeState",
           "createdAt",
           "required",
           "documents",
-          "grants"
+          "grants",
+          "money"
         ]
       },
       "AppointAgentDto": {
@@ -19278,6 +19559,94 @@
             "type": "string"
           }
         }
+      },
+      "QuoteClearanceFeeDto": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "minimum": 1
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "amount"
+        ]
+      },
+      "AcceptClearanceFeeDto": {
+        "type": "object",
+        "properties": {
+          "entityId": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        }
+      },
+      "ClearanceReceiptDto": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "amount": {
+            "type": "number",
+            "description": "Where what actually arrived differs from what was quoted. Absent means the agreed figure.",
+            "minimum": 1
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reference"
+        ]
+      },
+      "MintRoadLegDto": {
+        "type": "object",
+        "properties": {
+          "pickupLocation": {
+            "$ref": "#/components/schemas/GeoDto"
+          },
+          "pickupLabel": {
+            "type": "string",
+            "description": "Defaults to the port the container is cleared at.",
+            "maxLength": 120
+          },
+          "destLabel": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "destLocation": {
+            "$ref": "#/components/schemas/GeoDto"
+          },
+          "weightKg": {
+            "type": "number",
+            "minimum": 1
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "pickupLocation",
+          "destLabel",
+          "weightKg"
+        ]
       },
       "Payout": {
         "type": "object",

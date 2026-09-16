@@ -60,6 +60,10 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   SupplyPaperDto,
   PaperDecisionDto,
   KnownPapersQueryDto,
+  QuoteClearanceFeeDto,
+  AcceptClearanceFeeDto,
+  ClearanceReceiptDto,
+  MintRoadLegDto,
   PresenceDto,
   PresenceDecisionDto,
   CreateCompanyDto,
@@ -777,6 +781,47 @@ export class SbgController {
     res.setHeader('X-Fingerprint-Intact', String(file.intact));
     res.setHeader('Access-Control-Expose-Headers', 'X-Fingerprint, X-Fingerprint-Intact');
     return new StreamableFile(file.bytes, { type: file.contentType });
+  }
+
+  /* ------------------------------------- CL2b — paying the agent, and the road leg -- */
+
+  /** CL2b — the agent names their price. Allowed even where we cannot handle the money: it is their agreement. */
+  @Roles('operator', 'entity_admin')
+  @Post('imports/:importId/fee')
+  quoteClearanceFee(@Param('importId') importId: string, @Body() dto: QuoteClearanceFeeDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    return this.imports.quoteFee(importId, this.actingCompany(actor, dto.entityId), dto.amount, dto.note, this.namedActor(actor, dto.by));
+  }
+
+  /** CL2b — the importer agrees the figure. Nothing moves here; agreeing is not paying. */
+  @Roles('operator', 'entity_admin')
+  @Post('imports/:importId/fee/accept')
+  acceptClearanceFee(@Param('importId') importId: string, @Body() dto: AcceptClearanceFeeDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    return this.imports.acceptFee(importId, this.actingCompany(actor, dto.entityId), this.namedActor(actor, dto.by));
+  }
+
+  /**
+   * CL2b — MONEY ARRIVED, recorded by network staff against a reference.
+   *
+   * Operator-only, and that is the point rather than an oversight: money is created only by an observed
+   * external event, and an importer pressing "I have paid" is not one. What is received is owed onward in
+   * full — the network earns nothing from an appointment.
+   */
+  @Roles('operator')
+  @Post('imports/:importId/fee/receipt')
+  recordClearanceReceipt(@Param('importId') importId: string, @Body() dto: ClearanceReceiptDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    return this.imports.recordFeeReceipt(importId, dto.reference, this.namedActor(actor, dto.by), dto.amount);
+  }
+
+  /** CL2b — mint the road leg from the port. A person does this; we observe no arrival and invent none. */
+  @Roles('operator', 'entity_admin')
+  @Post('imports/:importId/road-leg')
+  mintImportRoadLeg(@Param('importId') importId: string, @Body() dto: MintRoadLegDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    return this.imports.mintRoadLeg(
+      importId,
+      this.actingCompany(actor, dto.entityId),
+      { pickupLocation: dto.pickupLocation, pickupLabel: dto.pickupLabel, destLabel: dto.destLabel, destLocation: dto.destLocation, weightKg: dto.weightKg },
+      this.namedActor(actor, dto.by),
+    );
   }
 
   /**

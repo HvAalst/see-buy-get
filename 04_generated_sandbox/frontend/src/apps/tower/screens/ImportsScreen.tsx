@@ -3,10 +3,20 @@ import { Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { DOCUMENT_KINDS, DOCUMENT_LABEL, shortFingerprint, type CompanyDocument } from '../company';
 import {
+  EMPTY_FEE_FORM,
   EMPTY_IMPORT_FORM,
+  EMPTY_RECEIPT_FORM,
+  EMPTY_ROAD_FORM,
   companyPapers,
   consignmentPapers,
+  feeQuoteBlocker,
+  feeTone,
   knownNotAsked,
+  receiptBlocker,
+  roadBlocker,
+  type FeeQuoteForm,
+  type ReceiptForm,
+  type RoadLegForm,
   liveGrants,
   outstanding,
   outstandingCount,
@@ -48,6 +58,9 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
   const [lines, setLines] = useState<Array<{ label: string; copies: string; note: string }>>([{ label: '', copies: '', note: '' }]);
   const [pick, setPick] = useState<Record<string, string>>({});
   const [upload, setUpload] = useState({ kind: 'commercial_invoice', title: '', dataUrl: '', expiresAt: '', belongs: 'consignment' });
+  const [feeForm, setFeeForm] = useState<FeeQuoteForm>({ ...EMPTY_FEE_FORM });
+  const [receiptForm, setReceiptForm] = useState<ReceiptForm>({ ...EMPTY_RECEIPT_FORM });
+  const [roadForm, setRoadForm] = useState<RoadLegForm>({ ...EMPTY_ROAD_FORM });
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -273,6 +286,14 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
 
       {detail ? (
         <>
+          {/* CL2b — said the moment the container is opened, never saved up for the moment somebody pays. */}
+          {detail.money.why ? (
+            <p class="cons__caveat">
+              <Icon name="info" size={16} />
+              <span>{detail.money.why}</span>
+            </p>
+          ) : null}
+
           {/* ---- the importer's side: appoint, share, and see what is missing ---- */}
           {detail.youAre === 'importer' ? (
             <>
@@ -529,6 +550,175 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
               </table>
             )}
           </section>
+
+          {/* ---- CL2b: what the agent charges ---- */}
+          <section class="cons__panel">
+            <div class="cons__panelhead">
+              <span class="cons__panelt">{t('tower.imports.feeTitle')}</span>
+              <span class={`ctag ${feeTone(detail.feeState) === 'ok' ? 'ctag--ok' : feeTone(detail.feeState) === 'warn' ? 'ctag--warn' : 'ctag--quiet'}`}>
+                {t(`tower.imports.fee.${detail.feeState}` as never)}
+              </span>
+            </div>
+            <p class="cons__lede">{t('tower.imports.feeHint')}</p>
+
+            {detail.fee ? (
+              <ul class="twr-checklist">
+                <li>
+                  <b>
+                    {detail.fee.amount.toLocaleString()} {detail.fee.currency}
+                  </b>
+                  {detail.fee.note ? <div class="ctbl__sub">{detail.fee.note}</div> : null}
+                  <div class="ctbl__sub">{t('tower.imports.feeBy', { who: detail.fee.quotedBy })}</div>
+                  {detail.fee.paidAt ? <div class="ctbl__sub">{t('tower.imports.feePaid', { when: detail.fee.paidAt.slice(0, 10), reference: detail.fee.reference ?? '' })}</div> : null}
+                  {/* Owed, and not yet sent — the books say so and this screen must not imply otherwise. */}
+                  {detail.fee.paidAt && detail.agentName ? <div class="ctbl__sub">{t('tower.imports.feeOwed', { name: detail.agentName })}</div> : null}
+                </li>
+              </ul>
+            ) : null}
+
+            {detail.youAre === 'agent' && detail.feeState !== 'paid' ? (
+              <>
+                <div class="twr-knobs">
+                  <label class="twr-knob">
+                    <span>{t('tower.imports.f.amount')}</span>
+                    <input type="number" min={1} value={feeForm.amount} onChange={(e) => setFeeForm({ ...feeForm, amount: (e.target as HTMLInputElement).value })} />
+                  </label>
+                  <label class="twr-knob">
+                    <span>{t('tower.imports.f.feeNote')}</span>
+                    <input value={feeForm.note} onChange={(e) => setFeeForm({ ...feeForm, note: (e.target as HTMLInputElement).value })} />
+                  </label>
+                </div>
+                <div class="twr-panelend">
+                  {feeQuoteBlocker(feeForm) ? <span class="ctbl__sub">{t(feeQuoteBlocker(feeForm)!)}</span> : null}
+                  <button
+                    type="button"
+                    class="cbtn"
+                    disabled={Boolean(feeQuoteBlocker(feeForm)) || busy === 'fee'}
+                    onClick={() =>
+                      run(
+                        'fee',
+                        () => client!.api.quoteClearanceFee(detail.importId, { amount: Number(feeForm.amount), ...(feeForm.note.trim() ? { note: feeForm.note.trim() } : {}), ...(who ? { by: who } : {}) }),
+                        t('tower.imports.quoted'),
+                        () => setFeeForm({ ...EMPTY_FEE_FORM }),
+                      )
+                    }
+                  >
+                    {t('tower.imports.quote')}
+                  </button>
+                </div>
+              </>
+            ) : null}
+
+            {detail.youAre === 'importer' && detail.feeState === 'quoted' ? (
+              <div class="twr-panelend">
+                <button
+                  type="button"
+                  class="cbtn"
+                  disabled={busy === 'feeAccept'}
+                  onClick={() => run('feeAccept', () => client!.api.acceptClearanceFee(detail.importId, { ...(who ? { by: who } : {}) }), t('tower.imports.feeAccepted'))}
+                >
+                  {t('tower.imports.feeAccept')}
+                </button>
+              </div>
+            ) : null}
+
+            {/* Network staff only: money is created by an observed event with a reference, never by a claim. */}
+            {!isCompany && detail.feeState === 'accepted' ? (
+              <>
+                <p class="cons__lede">{t('tower.imports.receiptHint')}</p>
+                <div class="twr-knobs">
+                  <label class="twr-knob">
+                    <span>{t('tower.imports.f.reference')}</span>
+                    <input value={receiptForm.reference} onChange={(e) => setReceiptForm({ ...receiptForm, reference: (e.target as HTMLInputElement).value })} />
+                  </label>
+                  <label class="twr-knob">
+                    <span>{t('tower.imports.f.amount')}</span>
+                    <input type="number" min={1} value={receiptForm.amount} onChange={(e) => setReceiptForm({ ...receiptForm, amount: (e.target as HTMLInputElement).value })} />
+                  </label>
+                </div>
+                <div class="twr-panelend">
+                  {receiptBlocker(receiptForm) ? <span class="ctbl__sub">{t(receiptBlocker(receiptForm)!)}</span> : null}
+                  <button
+                    type="button"
+                    class="cbtn"
+                    disabled={Boolean(receiptBlocker(receiptForm)) || busy === 'receipt'}
+                    onClick={() =>
+                      run(
+                        'receipt',
+                        () =>
+                          client!.api.recordClearanceReceipt(detail.importId, {
+                            reference: receiptForm.reference.trim(),
+                            ...(receiptForm.amount.trim() ? { amount: Number(receiptForm.amount) } : {}),
+                            ...(who ? { by: who } : {}),
+                          }),
+                        t('tower.imports.received'),
+                        () => setReceiptForm({ ...EMPTY_RECEIPT_FORM }),
+                      )
+                    }
+                  >
+                    {t('tower.imports.recordReceipt')}
+                  </button>
+                </div>
+              </>
+            ) : null}
+          </section>
+
+          {/* ---- CL2b: the road leg, minted by a person from the port ---- */}
+          {detail.youAre === 'importer' ? (
+            <section class="cons__panel">
+              <div class="cons__panelhead">
+                <span class="cons__panelt">{t('tower.imports.roadTitle')}</span>
+                {detail.roadFreightCode ? <span class="ctag ctag--ok">{t('tower.imports.roadAlready', { code: detail.roadFreightCode })}</span> : null}
+              </div>
+              <p class="cons__lede">{t('tower.imports.roadHint')}</p>
+              {detail.roadFreightCode ? null : (
+                <>
+                  <div class="twr-knobs">
+                    <label class="twr-knob">
+                      <span>{t('tower.imports.f.portLat')}</span>
+                      <input value={roadForm.lat} onChange={(e) => setRoadForm({ ...roadForm, lat: (e.target as HTMLInputElement).value })} />
+                    </label>
+                    <label class="twr-knob">
+                      <span>{t('tower.imports.f.portLng')}</span>
+                      <input value={roadForm.lng} onChange={(e) => setRoadForm({ ...roadForm, lng: (e.target as HTMLInputElement).value })} />
+                    </label>
+                    <label class="twr-knob">
+                      <span>{t('tower.imports.f.roadDest')}</span>
+                      <input value={roadForm.destLabel} onChange={(e) => setRoadForm({ ...roadForm, destLabel: (e.target as HTMLInputElement).value })} />
+                    </label>
+                    <label class="twr-knob">
+                      <span>{t('tower.imports.f.weight')}</span>
+                      <input type="number" min={1} value={roadForm.weightKg} onChange={(e) => setRoadForm({ ...roadForm, weightKg: (e.target as HTMLInputElement).value })} />
+                    </label>
+                  </div>
+                  <div class="twr-panelend">
+                    {roadBlocker(roadForm) ? <span class="ctbl__sub">{t(roadBlocker(roadForm)!)}</span> : null}
+                    <button
+                      type="button"
+                      class="cbtn"
+                      disabled={Boolean(roadBlocker(roadForm)) || busy === 'road'}
+                      onClick={() =>
+                        run(
+                          'road',
+                          () =>
+                            client!.api.mintImportRoadLeg(detail.importId, {
+                              pickupLocation: { lat: Number(roadForm.lat), lng: Number(roadForm.lng) },
+                              destLabel: roadForm.destLabel.trim(),
+                              weightKg: Number(roadForm.weightKg),
+                              ...(who ? { by: who } : {}),
+                            }),
+                          t('tower.imports.roadMinted', { code: '' }),
+                          () => setRoadForm({ ...EMPTY_ROAD_FORM }),
+                        )
+                      }
+                    >
+                      {t('tower.imports.mintRoad')}
+                    </button>
+                  </div>
+                </>
+              )}
+            </section>
+          ) : null}
         </>
       ) : null}
     </>

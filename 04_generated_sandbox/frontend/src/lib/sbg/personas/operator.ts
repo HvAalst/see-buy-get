@@ -263,6 +263,24 @@ export function createOperatorApi(sbg: SbgClient) {
         c.GET('/v1/sbg/imports/{importId}/documents/{documentId}/file', { params: { path: { importId, documentId }, query: entityId ? { entityId } : {} }, parseAs: 'blob' } as never),
       ),
 
+    /* ---- CL2b: the agent's fee, and the road leg minted from the port ---- */
+
+    /** The agent names their price. A quote, not a charge — nothing moves until money actually arrives. */
+    quoteClearanceFee: (importId: string, body: { amount: number; note?: string; entityId?: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/fee', { params: { path: { importId } }, body: body as never })),
+
+    /** The importer agrees the figure. */
+    acceptClearanceFee: (importId: string, body: { entityId?: string; by?: string } = {}) =>
+      sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/fee/accept', { params: { path: { importId } }, body: body as never })),
+
+    /** Money arrived — NETWORK STAFF only, against a reference. An importer saying so is not an event. */
+    recordClearanceReceipt: (importId: string, body: { reference: string; amount?: number; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/fee/receipt', { params: { path: { importId } }, body: body as never })),
+
+    /** Mint the road leg from the port of destination, on the freight machinery that already exists. */
+    mintImportRoadLeg: (importId: string, body: { pickupLocation: { lat: number; lng: number }; pickupLabel?: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; entityId?: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/road-leg', { params: { path: { importId } }, body: body as never })),
+
     /** The fleets on the network — with their sign-in codes, which only network staff and the fleet itself see. */
     fleets: () => sbg.request((c) => c.GET('/v1/sbg/fleet/managers', {})),
 

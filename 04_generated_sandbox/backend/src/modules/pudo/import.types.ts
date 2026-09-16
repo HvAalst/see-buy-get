@@ -99,6 +99,71 @@ export class RequiredPaper {
 }
 
 /**
+ * CL2b — WHAT THE AGENT CHARGES, and how far it has got.
+ *
+ * `none` nobody has quoted · `quoted` the agent named a price · `accepted` the importer agreed to it ·
+ * `paid` money was actually received, against a reference, and the agent is owed it on a sister's books.
+ *
+ * Derived from the record every time it is read rather than stored beside it, for the same reason the
+ * required list derives its own state: a second field saying "paid" is a field that can disagree with the
+ * journal entry that moved the money.
+ */
+export const FEE_STATES = ['none', 'quoted', 'accepted', 'paid'] as const;
+export type FeeState = (typeof FEE_STATES)[number];
+
+/**
+ * The agent's fee for clearing one container.
+ *
+ * **The network earns nothing from an appointment** (§10, and it is a condition of the agent record ever
+ * reaching shippers). So there is no margin field here and nowhere for one to go: what is received is owed
+ * onward in full. The posting is cash in and a liability to the agent — not one line of revenue — which is
+ * "collected is not earned" applied to somebody else's fee rather than to our own carriage.
+ *
+ * DECLARED BEFORE `ImportConsignment`, which carries one. A type annotation alone would be erased, but the
+ * swagger plugin emits a metadata factory that evaluates this class when the consignment class is defined —
+ * so declaring it later is a temporal dead zone, and the contract emit dies rather than the typecheck.
+ */
+export class ImportFee {
+  @ApiProperty() amount: number;
+  /** The collecting sister's own currency. A sister can only invoice in its own money. */
+  @ApiProperty() currency: string;
+  @ApiProperty() quotedBy: string;
+  @ApiProperty() quotedAt: string;
+  @ApiPropertyOptional() note?: string;
+  @ApiPropertyOptional() acceptedBy?: string;
+  @ApiPropertyOptional() acceptedAt?: string;
+  /** Which sister's books hold it — the one in the PAYER's jurisdiction, because collection follows the payer. */
+  @ApiPropertyOptional() collectingEntityId?: string;
+  @ApiPropertyOptional() paidAt?: string;
+  @ApiPropertyOptional() recordedBy?: string;
+  /** The rail's or the bank's own reference. Money is only ever created by an observed external event, and
+   *  this is the thing you point at afterwards when somebody says they paid. */
+  @ApiPropertyOptional() reference?: string;
+  /** The journal entry that received it. Present only once money actually moved. */
+  @ApiPropertyOptional() entryId?: string;
+}
+
+/**
+ * CL2b — WHETHER WE CAN BE THE ONE WHO BILLS THIS, ANSWERED AT THE START.
+ *
+ * The rule from the design note, and the reason this is on the view rather than in an error: *where we only
+ * match we cannot be the one who bills, and the screen must say so at the start rather than fail at the end.*
+ * A person should never assemble a fee, agree it, and only then be told the money cannot run here.
+ *
+ * `canPayOut` is about the AGENT's country, not the importer's. The two are usually the same and do not have
+ * to be — and where they are not, the honest outcome is not a refusal: the fee is received, the agent is owed
+ * it on the books, and the payout run says by name that it cannot send it there yet.
+ */
+export class MoneyHere {
+  @ApiProperty() canBill: boolean;
+  @ApiProperty() canPayOut: boolean;
+  /** Said plainly, before anybody starts. Absent when the money can run here normally. */
+  @ApiPropertyOptional() why?: string;
+  @ApiPropertyOptional() currency?: string;
+  @ApiPropertyOptional() collectingEntityId?: string;
+}
+
+/**
  * The container itself. It exists BEFORE it arrives, which is the entire point of the slice: the journey
  * starts when the container is onboarded and the shipping documents are created, because from that moment
  * arrival is certain and the papers can be assembled while the ship is still moving. Two weeks of hassle at
@@ -133,6 +198,18 @@ export class ImportConsignment {
   @ApiPropertyOptional() appointedAt?: string;
   @ApiPropertyOptional() appointedBy?: string;
   @ApiProperty({ type: [RequiredPaper] }) required: RequiredPaper[];
+
+  /* ---- CL2b: paying the agent, and the road leg minted from the port ---- */
+
+  /** What the agent charges to clear this container, once they have quoted it. */
+  @ApiPropertyOptional() fee?: ImportFee;
+  /** The road leg, once a person has minted it. Stored as id AND code: the id is what the freight
+   *  machinery answers to, the code is what a human reads on a screen beside this container. */
+  @ApiPropertyOptional() roadFreightId?: string;
+  @ApiPropertyOptional() roadFreightCode?: string;
+  @ApiPropertyOptional() roadMintedAt?: string;
+  @ApiPropertyOptional() roadMintedBy?: string;
+
   @ApiProperty() createdAt: string;
   @ApiProperty() createdBy: string;
 }
@@ -197,6 +274,10 @@ export class ImportRow {
   @ApiProperty() asked: number;
   /** Lines waiting on THIS reader to act. What the console counts on the group badge. */
   @ApiProperty() waitingOnYou: number;
+  /** CL2b — how far the agent's fee has got. Derived on every read. */
+  @ApiProperty({ enum: FEE_STATES }) feeState: FeeState;
+  /** CL2b — the road leg minted from the port, when one has been. */
+  @ApiPropertyOptional() roadFreightCode?: string;
   @ApiProperty() createdAt: string;
 }
 
@@ -207,6 +288,11 @@ export class ImportDetail extends ImportRow {
   @ApiProperty() documents: CompanyDocument[];
   /** Every grant over these papers, live and revoked, so both sides see what was shared and when. */
   @ApiProperty({ type: [DocumentGrant] }) grants: DocumentGrant[];
+  /** CL2b — the agent's fee, once quoted. */
+  @ApiPropertyOptional() fee?: ImportFee;
+  /** CL2b — whether the money can run here at all, said before anybody starts assembling it. */
+  @ApiProperty() money: MoneyHere;
+  @ApiPropertyOptional() roadFreightId?: string;
 }
 
 /** What agents have been asked for at one port, most asked first. Never stated as a requirement. */

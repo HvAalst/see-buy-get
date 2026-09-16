@@ -1,6 +1,7 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { PayoutService } from '../../foundation/payouts/payout.service';
 import { PresenceService } from '../../foundation/presence/presence.service';
+import { EntityService } from '../../foundation/entity/entity.service';
 import { AgentService } from './agent.service';
 
 /**
@@ -21,6 +22,7 @@ export class PayeeStandingRegistrar implements OnModuleInit {
     private readonly payouts: PayoutService,
     private readonly agents: AgentService,
     private readonly presence: PresenceService,
+    private readonly entities: EntityService,
   ) {}
 
   onModuleInit(): void {
@@ -33,9 +35,23 @@ export class PayeeStandingRegistrar implements OnModuleInit {
    */
   reasonNotToPay(payeeDid: string): string | null {
     const shop = this.agents.list().find((a) => a.did === payeeDid);
-    if (!shop) return null;
-    const country = this.agents.countryOf(shop);
-    if (this.presence.can(country, 'payouts')) return null;
-    return `${shop.shopName} is owed this, but we cannot pay out in ${country} yet — it stays on the books until we can`;
+    if (shop) {
+      const country = this.agents.countryOf(shop);
+      if (this.presence.can(country, 'payouts')) return null;
+      return `${shop.shopName} is owed this, but we cannot pay out in ${country} yet — it stays on the books until we can`;
+    }
+    /**
+     * CL2b — A COMPANY, which a shop lookup could never find.
+     *
+     * A clearing agent is an entity, not a PUDO shop, and until this branch existed the gate answered null
+     * for one — "pay them" — which is the wrong default for the one question this file exists to ask. The
+     * fee is received from the importer and owed onward, so where money may not leave to the agent's own
+     * country it stays on the books and the run says whose money it is and why it did not move.
+     */
+    const company = this.entities.byDid(payeeDid);
+    if (company && !this.presence.can(company.jurisdiction, 'payouts')) {
+      return `${company.name} is owed this, but we cannot pay out in ${company.jurisdiction ?? 'their country'} yet — it stays on the books until we can`;
+    }
+    return null;
   }
 }

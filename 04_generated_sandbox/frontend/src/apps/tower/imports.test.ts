@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  EMPTY_FEE_FORM,
   EMPTY_IMPORT_FORM,
+  EMPTY_RECEIPT_FORM,
+  EMPTY_ROAD_FORM,
   companyPapers,
   consignmentPapers,
+  feeQuoteBlocker,
+  feeTone,
   knownNotAsked,
   liveGrants,
   outstanding,
@@ -10,7 +15,9 @@ import {
   paperTone,
   publishBlocker,
   readinessOf,
+  receiptBlocker,
   registerBlocker,
+  roadBlocker,
   slugOf,
   type ImportDetailView,
   type ImportRow,
@@ -32,6 +39,7 @@ const row = (over: Partial<ImportRow> = {}): ImportRow => ({
   accepted: 0,
   asked: 0,
   waitingOnYou: 0,
+  feeState: 'none',
   createdAt: '2026-09-16T10:00:00.000Z',
   ...over,
 });
@@ -105,6 +113,7 @@ describe('a container, its papers, and the agent who clears them', () => {
       required: [paper({ key: 'a', label: 'A', state: 'accepted' }), paper({ key: 'b', label: 'B', state: 'waiting' }), paper({ key: 'c', label: 'C', state: 'accepted', expired: true })],
       documents: [],
       grants: [],
+      money: { canBill: true, canPayOut: true },
     } as ImportDetailView;
     expect(outstanding(detail).map((p) => p.key)).toEqual(['b', 'c']);
     expect(readinessOf(detail)).toEqual({ accepted: 2, asked: 3, done: false });
@@ -117,6 +126,33 @@ describe('a container, its papers, and the agent who clears them', () => {
     const docs = [doc({ documentId: 'd1' }), doc({ documentId: 'd2', relatesTo: 'IMP-001', kind: 'packing_list' }), doc({ documentId: 'd3', relatesTo: 'IMP-002', kind: 'packing_list' }), doc({ documentId: 'd4', status: 'superseded' })];
     expect(companyPapers(docs).map((d) => d.documentId)).toEqual(['d1']);
     expect(consignmentPapers(docs, 'imp-001').map((d) => d.documentId)).toEqual(['d2']);
+  });
+
+  it('refuses a fee, a receipt and a road leg that the server would refuse anyway', () => {
+    expect(feeQuoteBlocker(EMPTY_FEE_FORM)).toBe('tower.imports.needAmount');
+    expect(feeQuoteBlocker({ amount: '0', note: '' })).toBe('tower.imports.needAmount');
+    expect(feeQuoteBlocker({ amount: 'lots', note: '' })).toBe('tower.imports.needAmount');
+    expect(feeQuoteBlocker({ amount: '4500', note: 'Port dues' })).toBeNull();
+
+    // The reference is the whole point of a receipt: without it nothing can be checked afterwards.
+    expect(receiptBlocker(EMPTY_RECEIPT_FORM)).toBe('tower.imports.needReference');
+    expect(receiptBlocker({ reference: 'MPESA-1', amount: '' })).toBeNull();
+    expect(receiptBlocker({ reference: 'MPESA-1', amount: '-2' })).toBe('tower.imports.needAmount');
+
+    expect(roadBlocker(EMPTY_ROAD_FORM)).toBe('tower.imports.needPort');
+    expect(roadBlocker({ lat: '11.6', lng: '43.14', destLabel: '', weightKg: '10' })).toBe('tower.imports.needDest');
+    expect(roadBlocker({ lat: '11.6', lng: '43.14', destLabel: 'Addis', weightKg: '0' })).toBe('tower.imports.needAmount');
+    expect(roadBlocker({ lat: '11.6', lng: '43.14', destLabel: 'Addis', weightKg: '12000' })).toBeNull();
+    // Zero is a real coordinate, and a screen that treats it as "not given" refuses a legitimate port.
+    expect(roadBlocker({ lat: '0', lng: '0', destLabel: 'Null Island', weightKg: '1' })).toBeNull();
+  });
+
+  it('shows a fee as settled only once money actually arrived', () => {
+    expect(feeTone('none')).toBe('quiet');
+    expect(feeTone('quoted')).toBe('warn');
+    // Agreed is not paid — it stays somebody's turn to act.
+    expect(feeTone('accepted')).toBe('warn');
+    expect(feeTone('paid')).toBe('ok');
   });
 
   it('reads "who can see our papers" as the live grants only', () => {

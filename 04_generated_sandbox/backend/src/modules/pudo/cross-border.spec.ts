@@ -298,7 +298,7 @@ describe('crossing a border', () => {
       presence.set({ jurisdiction: 'DE', level: 'matched' });
       const de = shop('Kiez Kiosk 3', 'Berlin', BERLIN, 'DE', 2);
       const ke = shop('Nairobi CBD P4c', 'Nairobi', NAIROBI, 'KE', 55);
-      const registrar = new PayeeStandingRegistrar({ registerPayeeGate: () => undefined } as never, agents, presence);
+      const registrar = new PayeeStandingRegistrar({ registerPayeeGate: () => undefined } as never, agents, presence, entities);
       expect(registrar.reasonNotToPay(de.did)).toMatch(/cannot pay out in DE yet/);
       expect(registrar.reasonNotToPay(ke.did)).toBeNull();
       expect(registrar.reasonNotToPay('did:fleet:someone')).toBeNull(); // hubs, fleets, couriers stand where a sister does

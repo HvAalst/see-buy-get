@@ -321,6 +321,40 @@ export class KnownPapersQueryDto {
   @IsOptional() @IsString() @MaxLength(80) port?: string;
 }
 
+/** CL2b — the agent names their price for clearing one container. A quote, not a charge. */
+export class QuoteClearanceFeeDto {
+  @IsNumber() @Min(1) amount!: number;
+  @IsOptional() @IsString() @MaxLength(300) note?: string;
+  @IsOptional() @IsString() entityId?: string;
+  @IsOptional() @IsString() by?: string;
+}
+
+/** CL2b — the importer agrees the figure. Nothing moves; agreeing is not paying. */
+export class AcceptClearanceFeeDto {
+  @IsOptional() @IsString() entityId?: string;
+  @IsOptional() @IsString() by?: string;
+}
+
+/** CL2b — money arrived. The reference is what anybody points at afterwards, so it is required. */
+export class ClearanceReceiptDto {
+  @IsString() @MaxLength(80) reference!: string;
+  /** Where what actually arrived differs from what was quoted. Absent means the agreed figure. */
+  @IsOptional() @IsNumber() @Min(1) amount?: number;
+  @IsOptional() @IsString() by?: string;
+}
+
+/** CL2b — the road leg from the port of destination, minted by a person on the existing freight machinery. */
+export class MintRoadLegDto {
+  @ValidateNested() @Type(() => GeoDto) pickupLocation!: GeoDto;
+  /** Defaults to the port the container is cleared at. */
+  @IsOptional() @IsString() @MaxLength(120) pickupLabel?: string;
+  @IsString() @MaxLength(120) destLabel!: string;
+  @IsOptional() @ValidateNested() @Type(() => GeoDto) destLocation?: GeoDto;
+  @IsNumber() @Min(1) weightKg!: number;
+  @IsOptional() @IsString() entityId?: string;
+  @IsOptional() @IsString() by?: string;
+}
+
 /** CA6 — the rule for crossing from one country into another. Absent a rule, a foreign vehicle may not carry inside. */
 export class BorderRuleDto {
   @IsString() from!: string;

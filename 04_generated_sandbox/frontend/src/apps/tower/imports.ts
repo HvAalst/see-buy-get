@@ -64,6 +64,10 @@ export interface ImportRow {
   accepted: number;
   asked: number;
   waitingOnYou: number;
+  /** CL2b — how far the agent's fee has got. Derived by the server on every read. */
+  feeState: FeeState;
+  /** CL2b — the road leg on the freight board, once somebody has minted it. */
+  roadFreightCode?: string;
   createdAt: string;
 }
 
@@ -71,6 +75,35 @@ export interface ImportDetailView extends ImportRow {
   required: RequiredPaperView[];
   documents: CompanyDocument[];
   grants: DocumentGrant[];
+  fee?: ImportFee;
+  /** CL2b — whether the money can run here at all. Shown at the START, never saved for a failure. */
+  money: MoneyHere;
+  roadFreightId?: string;
+}
+
+export type FeeState = 'none' | 'quoted' | 'accepted' | 'paid';
+
+export interface ImportFee {
+  amount: number;
+  currency: string;
+  quotedBy: string;
+  quotedAt: string;
+  note?: string;
+  acceptedBy?: string;
+  acceptedAt?: string;
+  collectingEntityId?: string;
+  paidAt?: string;
+  recordedBy?: string;
+  reference?: string;
+  entryId?: string;
+}
+
+export interface MoneyHere {
+  canBill: boolean;
+  canPayOut: boolean;
+  why?: string;
+  currency?: string;
+  collectingEntityId?: string;
 }
 
 /** `GET /imports/known-papers`. What agents have BEEN ASKED FOR here — never what is required. */
@@ -199,4 +232,64 @@ export function companyPapers(documents: CompanyDocument[]): CompanyDocument[] {
 /** The papers filed under this container — what a per-consignment grant reaches. */
 export function consignmentPapers(documents: CompanyDocument[], code: string): CompanyDocument[] {
   return documents.filter((d) => d.relatesTo?.toUpperCase() === code.toUpperCase() && d.status !== 'superseded');
+}
+
+/* ------------------------------------------------- CL2b: the fee and the road leg -- */
+
+export interface FeeQuoteForm {
+  amount: string;
+  note: string;
+}
+export const EMPTY_FEE_FORM: FeeQuoteForm = { amount: '', note: '' };
+
+export interface ReceiptForm {
+  reference: string;
+  amount: string;
+}
+export const EMPTY_RECEIPT_FORM: ReceiptForm = { reference: '', amount: '' };
+
+export interface RoadLegForm {
+  lat: string;
+  lng: string;
+  destLabel: string;
+  weightKg: string;
+}
+export const EMPTY_ROAD_FORM: RoadLegForm = { lat: '', lng: '', destLabel: '', weightKg: '' };
+
+/** A fee is a figure somebody will be asked to pay, so it is a real number above zero or it is nothing. */
+export function feeQuoteBlocker(form: FeeQuoteForm): MessageKey | null {
+  return positive(form.amount) ? null : 'tower.imports.needAmount';
+}
+
+/**
+ * A receipt without a reference is refused here as well as on the server.
+ *
+ * Not defensive duplication: this is the one field that makes a recorded payment checkable afterwards, and
+ * the screen should not let somebody get as far as pressing the button without it.
+ */
+export function receiptBlocker(form: ReceiptForm): MessageKey | null {
+  if (!form.reference.trim()) return 'tower.imports.needReference';
+  if (form.amount.trim() && !positive(form.amount)) return 'tower.imports.needAmount';
+  return null;
+}
+
+/** A road leg needs somewhere to collect from, somewhere to go, and something to carry. */
+export function roadBlocker(form: RoadLegForm): MessageKey | null {
+  if (!numeric(form.lat) || !numeric(form.lng)) return 'tower.imports.needPort';
+  if (!form.destLabel.trim()) return 'tower.imports.needDest';
+  if (!positive(form.weightKg)) return 'tower.imports.needAmount';
+  return null;
+}
+
+/** How loudly the fee reads. Only `paid` is settled; everything else is somebody's turn to act. */
+export function feeTone(state: FeeState): 'ok' | 'warn' | 'quiet' {
+  return state === 'paid' ? 'ok' : state === 'none' ? 'quiet' : 'warn';
+}
+
+function numeric(value: string): boolean {
+  return value.trim() !== '' && Number.isFinite(Number(value));
+}
+
+function positive(value: string): boolean {
+  return numeric(value) && Number(value) > 0;
 }
