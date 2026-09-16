@@ -142,10 +142,18 @@ than about two typed names. The shared setup key survives for exactly two jobs, 
 and running scripts, and outside a sandbox it cannot take a two-person decision.
 
 **What genuinely does not exist is a privilege TIER.** `OperatorAccount` carries no role or level, and
-`@Roles('operator')` is binary, so every staff account has identical rights. Whether term activation needs a
-tier above ordinary staff, or whether the existing two-person rule is already the right guard, is §11's
-question and is not assumed here. Country activation itself runs today on operator plus the two-person rule,
-with no tier, which is evidence that a tier may not be required.
+`@Roles('operator')` is binary, so every staff account has identical rights.
+
+**Decided 2026-09-16: no tier, for now.** Term activation is guarded by the same two-person rule that raises
+a country, and by nothing further. The user's reason is sequencing rather than principle: a tier is not the
+priority yet. So this is **deferred, not rejected**, and it is recorded here rather than left in §11 because
+it blocks nothing.
+
+Revisit it when there is an actual need, which would look like one of these: term activation turning out to
+want a narrower set of people than every staff member, an account that should read the console without being
+able to change a country's standing, or the first jurisdiction where a regulator asks who specifically holds
+the power to switch a term on. Until one of those arrives, adding a tier would be changing the permission
+model on speculation, and the comparable decision is already running without one.
 
 ## 6. Trust in a clearing agent: two competencies, one of them unmeasurable
 
@@ -393,11 +401,6 @@ jurisdiction is not a product decision.
 
 ## 11. Open
 
-- **Does term activation need a privilege tier, or is the two-person rule enough?** Named per-person staff
-  accounts exist, so the honesty limit this document first described is already closed (see §5). What is
-  absent is any tier: every operator account has identical rights. Country activation runs with no tier and
-  is guarded by two people, which suggests a tier is not required. Building one is a change to the
-  permission model and should be justified rather than assumed.
 - **Who is billed duty under DDP** when no sister is the importer of record? The term says the seller pays.
   The seller is a store, not us, so this only reaches our books where the network performs the clearance and
   recharges it. That is the case §5's presence floor is meant to catch, and it needs confirming against the
