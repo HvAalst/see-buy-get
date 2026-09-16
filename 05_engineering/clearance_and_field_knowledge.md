@@ -281,8 +281,12 @@ the operator queue cannot tell a dispute from the report it disputes. CL5 builds
 store on that same pattern, where the cost of confusing the two is a seizure rather than a detour. Fix the
 shape once, on the smaller surface, before repeating it.
 
-### CL1 — The term, and who may claim
-The largest slice, and the one that closes a live defect.
+### CL1 — The term, and who may claim — SHIPPED 2026-09-16, commit `fa1a407`
+The largest slice, and the one that closed a live defect. Driven end to end; the two guards a service spec
+cannot reach were proven in the browser. Two further holes surfaced while building and were closed with it:
+the posting route had no field for a buyer at all, so under a term giving the receiver standing there was
+nobody the system could recognise; and the claims queue carried no term, so an operator would have decided an
+award without knowing which party owned the loss.
 
 - **Build:** the eleven Incoterms 2020 as a catalogue, never inferred; `incoterm` and `namedPlace` on the
   shipment; the derived expectations of §2; and **claim standing derived from the term** instead of hard-coded
@@ -303,17 +307,86 @@ The largest slice, and the one that closes a live defect.
 - **Gate:** on a C term a receiver opens and wins a claim, and the sender is refused with a sentence that
   names the term; on a D term the existing sender path is untouched; no money is billed differently.
 
-### CL2 — Clearance as a capability
-- **Build:** a clearing agent as a party whose licence, bond and registration are **papers with dates**,
-  reusing the FP4 pattern exactly; the capability held per jurisdiction on the presence ladder; appointment by
-  the party the term names, never by us.
-- **Decided, see §5:** which terms may be offered where is the super admin's, held per jurisdiction, default
-  off, selected from the catalogue of eleven, two names to switch one on and one to switch it off. The
-  mechanism ships in CL1; what remains here is the agent who performs the clearance the term allocated.
-- **Screens:** the console's papers screen, extended to agents; the appointing party's own screen. Nothing
-  reaches the driver, who is not a party to it.
-- **Gate:** a lapsed licence removes the capability with nobody deciding to, and the refusal names the paper
-  and the date it lapsed.
+### CL2 — The importer's papers, and the agent who clears them
+
+**Rewritten 2026-09-16 from two real imports the user ran.** The first draft of this slice had a clearing
+agent as a record with licences that expire. That is not the job. The job is the importer's, and it is worth
+setting down what actually happened, because the whole design falls out of it.
+
+> **One 20ft container, Netherlands to Ethiopia.** At customs he needed an investment licence, a tax number,
+> a packing list, invoices, some in ten copies. A bag of fertilizer needed the Ministry of Agriculture. A fax
+> machine needed the telecommunications corporation. Some chairs came in free and a manager's chair did not.
+> The container sat for two weeks. **The agent was not unreliable — they were pleasant, and they simply did
+> not know.**
+>
+> **An entire factory from India, five containers.** He never went to customs. Cleared in a morning. A
+> different agent, their own trucker agreements, a different clearing port, and **they knew every document
+> they needed before the clearance started.**
+
+**So the lever is foreknowledge, not diligence.** A document wallet that still lets an agent discover a
+manager's chair at the counter has changed nothing. And the user's own statement of the requirement is the
+scope: *share the documents digitally, grant access, pay the agent, get the containers.*
+
+#### Where this starts and stops
+
+- **The journey starts when the container is onboarded and the shipping documents are created.** At that
+  moment arrival is certain and the papers can be assembled during the voyage, which is the whole point:
+  two weeks of hassle at the far end was two weeks nobody used while the ship was moving.
+- **Ocean carriage and vessel schedules are not our business.** We do not model vessels, schedules or ports
+  of loading. **Leave the seam only:** the consignment carries externally-sourced arrival fields that nothing
+  fills yet, and the API is shaped so a global carrier (Maersk and the like) could push them by webhook
+  later. Documented as NOT WIRED, in the manner of the callbacks section of the shipping API, because an
+  endpoint that never fires should be learned about in the documentation and not in production.
+- **The road shipment is minted from the port of destination**, by a person, using the freight machinery that
+  already exists. That is the leg this network is actually good at.
+
+#### The consignment, and the grant
+
+- **A consignment is the new unit** and it is a container, not a load: a reference, the goods, the importer,
+  the destination port, a document set, and later an appointed agent. It exists BEFORE it arrives. Nothing in
+  the system models a container today — the only container in the code is a truck body that can carry one.
+- **The document register already exists and is close to right.** `CompanyDocument` carries kind, what licence
+  or obligation it is the paper for, a version, a sha256 fingerprint (never named `hash`, the response mask
+  strips that), content type, size, uploader, expiry, a verification trail and a rejection reason. Company
+  papers (investment licence, tax number) carry no `relatesTo`; a packing list for one container does. **Ten
+  paper copies become one file with a fingerprint**, which is also how a copy is provably the same document.
+- **THE MISSING PRIMITIVE IS A READER.** Every field on a document is about the company that owns it; nothing
+  can be shared. Copy the shape conversations already use: shared with exactly one named counterparty,
+  explicit, revocable, on the record, both sides seeing what was shared and when. **Two grants, because the
+  papers are of two kinds:** a standing grant over company papers, and a per-consignment grant over that
+  container's own.
+- **Never a shared login.** The administrator record already refuses one person administering two companies,
+  in writing, because a credential reaching two companies is one neither controls. An appointment is the
+  answer; borrowing the client's sign-in is not.
+
+#### The required list — and the line we keep
+
+- **The agent publishes what they will need for this consignment.** We do not assert it. The importer
+  fulfils, the agent ticks off what has arrived, and the importer sees what is still missing. That is the
+  difference between the two stories, made into a screen.
+- **What was actually asked for at that border accumulates as dated observations** — the fertilizer permit,
+  the telecoms permit — which is §7's provenance model arriving earlier than planned because this demands it.
+  First-hand or evidenced, never rumour.
+- **The line from §10 holds: no tariff classification and no duty calculation.** "You will need a permit from
+  the Ministry of Agriculture" is a list of papers. "This chair attracts duty at X%" is regulated advice whose
+  penalty lands on the importer. We do the first and never the second.
+
+#### Cut into two pieces
+
+- **CL2a, first:** the consignment, the documents, the two grants, and the agent's required list. No money and
+  no road leg. This is the piece that answers the two weeks.
+- **CL2b, after:** paying the agent, and minting the road leg from the port. **Payment is gated by presence** —
+  where we only match we cannot be the one who bills, and the screen must say so at the start rather than
+  fail at the end.
+
+- **Screens:** both the importer and the agent are companies, so both work in the console's company half,
+  which exists today and holds only the company record, the password panel and the rate card. The importer
+  gets their papers, their consignments, the appointment, and what is still missing. The agent gets the
+  consignments shared with them, the list they publish, and the ticking off. Nothing reaches the driver, who
+  is not a party to any of it.
+- **Gate:** an importer uploads once and appoints an agent, who sees exactly that consignment's papers and
+  nothing else; revoking is immediate and visible to both; a document that expires says so before it is
+  relied on; and what the agent was asked for at the border is recorded against that border, dated.
 
 ### CL3 — Scarcity, derived
 No dependencies. Cheap, and it is the slice that pays for the epic early.
