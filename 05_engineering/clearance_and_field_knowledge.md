@@ -348,6 +348,13 @@ only flatter is not a record.
 - **Reciprocal visibility is the condition that makes a published negative fair.** The agent sees exactly what
   a shipper sees about them, at the same moment, with no version they cannot read and nothing they can
   suppress. Without it a record handed down is a verdict; with it, it is an account both parties hold.
+- **Shown per agent, never as a league table. Decided 2026-09-16.** The apparent tension with "in African
+  business there are two winners" is not a tension at all, and the resolution is the user's: **an unreliable
+  agent means two losers.** The shipper loses cargo, time and money; the agent loses the work that would have
+  followed. So reporting a bad outcome does not violate the principle, it records that a two-loser outcome
+  happened. A table does something categorically different: it imposes an ordering on people whether or not
+  anything went wrong, manufacturing a loser out of relative position alone. Two winners describes a good
+  deal and two losers a bad one. Neither is a ranking, and the account states what happened on real loads.
 - **Screens:** the shipper's view where an agent is chosen; the console's fuller view for operators; and the
   agent's own copy of both.
 - **Gate:** an agent with three loads shows three loads and no score; a hand-back after a claim reduces the
@@ -394,10 +401,6 @@ jurisdiction is not a product decision.
 - **A disputed observation has no adjudication.** The road map's refuter defect is still open — a refuter's
   words are appended to the reporter's note, so the queue cannot tell a dispute from a report. The same shape
   would repeat here, and here it matters more.
-- **Is a published record shown per agent, or as a league table?** CL4 settles that the bad is published, not
-  only the good. It does not settle the presentation, and the two pull in different directions: a table ranks
-  and therefore manufactures a loser, while a per-agent account states what happened to whoever is being
-  considered. This document assumes per-agent until told otherwise.
 - **Language.** Observations will arrive in Swahili, Amharic and French. The real translation pass is still
   deferred, and a dated note nobody can read is not knowledge.
 
