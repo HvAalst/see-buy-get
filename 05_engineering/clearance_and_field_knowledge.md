@@ -134,11 +134,18 @@ network to clear and bill duty cannot be activated where `tax` or `payouts` is o
 cover is zero by construction where `claims` is off. The super admin chooses among the terms a country's
 standing already permits.
 
-**Caveat, and it is a real one: the super admin does not exist yet.** These routes are `@Roles('operator')`
-today. Named staff accounts are real and `actorName` is enforced outside the sandbox, but the operator key is
-still shared, which is precisely the gap `country_activation.md` §11 records as open. Until that role lands,
-term activation runs on operator plus two names, exactly as country activation runs now, and inherits the
-same honesty limit.
+**What exists, corrected 2026-09-16.** An earlier draft of this section claimed the super admin does not
+exist. That was wrong, and it was repeating a stale open item in `country_activation.md` §11.
+`OperatorAccountService` already gives network staff **one named account each**: email-keyed, scrypt-hashed,
+with the person's name carried in the token, so a two-person rule is finally a statement about people rather
+than about two typed names. The shared setup key survives for exactly two jobs, creating the first account
+and running scripts, and outside a sandbox it cannot take a two-person decision.
+
+**What genuinely does not exist is a privilege TIER.** `OperatorAccount` carries no role or level, and
+`@Roles('operator')` is binary, so every staff account has identical rights. Whether term activation needs a
+tier above ordinary staff, or whether the existing two-person rule is already the right guard, is §11's
+question and is not assumed here. Country activation itself runs today on operator plus the two-person rule,
+with no tier, which is evidence that a tier may not be required.
 
 ## 6. Trust in a clearing agent: two competencies, one of them unmeasurable
 
@@ -386,9 +393,11 @@ jurisdiction is not a product decision.
 
 ## 11. Open
 
-- **The super admin is not built.** §5 depends on a role that does not exist; today these are operator-only
-  routes with a shared key. Either that role lands first, or CL1 ships on operator-plus-two-names and
-  inherits the honesty limit that `country_activation.md` §11 already records.
+- **Does term activation need a privilege tier, or is the two-person rule enough?** Named per-person staff
+  accounts exist, so the honesty limit this document first described is already closed (see §5). What is
+  absent is any tier: every operator account has identical rights. Country activation runs with no tier and
+  is guarded by two people, which suggests a tier is not required. Building one is a change to the
+  permission model and should be justified rather than assumed.
 - **Who is billed duty under DDP** when no sister is the importer of record? The term says the seller pays.
   The seller is a store, not us, so this only reaches our books where the network performs the clearance and
   recharges it. That is the case §5's presence floor is meant to catch, and it needs confirming against the
