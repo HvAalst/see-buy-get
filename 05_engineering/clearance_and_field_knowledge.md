@@ -102,6 +102,38 @@ A clearing agent is not a new kind of thing. It is the shape we already have twi
   import clearance. That party appoints the agent. The network never appoints one on a party's behalf,
   because appointing one is accepting a liability that lands on the importer of record.
 
+### Which terms may be offered, and who decides — DECIDED 2026-09-16
+
+**Term availability is not a product setting and not a shop's choice.** It is held **per jurisdiction,
+default off**, and switched on by the **super admin**. The shape is the one countries already use: a country
+is *selected from a catalogue rather than created*, and the eleven terms are likewise a catalogue from which
+a jurisdiction carries the subset that has been activated for it. Nobody can invent a term; they can only
+switch on one of the eleven.
+
+Mechanically this rides on the presence record and **not** inside `PRESENCE_CAPABILITIES`. That list is seven
+booleans about money and custody, each with its own refusal sentence, and eleven trade terms do not belong in
+it. The activated set is its own list on the country's presence record, empty until somebody selects into it.
+
+Two rules carry straight over from switching a country on:
+
+- **Refuse when the person decides, not at the first shipment.** CA1 already refuses to switch a country on
+  before its currency is on the rate book, and it asks the person deciding rather than discovering it at the
+  first price. A term whose obligations the jurisdiction cannot support is refused the same way, by name, at
+  the moment of activation.
+- **Two people to switch one on, one person to switch it off.** Reuses `samePerson`, as country activation
+  does. Raising a promise needs a second person; withdrawing one must never be slowed down.
+
+**Presence floors the menu; activation selects within it and cannot escape it.** A term that obliges the
+network to clear and bill duty cannot be activated where `tax` or `payouts` is off, for exactly the reason
+cover is zero by construction where `claims` is off. The super admin chooses among the terms a country's
+standing already permits.
+
+**Caveat, and it is a real one: the super admin does not exist yet.** These routes are `@Roles('operator')`
+today. Named staff accounts are real and `actorName` is enforced outside the sandbox, but the operator key is
+still shared, which is precisely the gap `country_activation.md` §11 records as open. Until that role lands,
+term activation runs on operator plus two names, exactly as country activation runs now, and inherits the
+same honesty limit.
+
 ## 6. Trust in a clearing agent: two competencies, one of them unmeasurable
 
 A practitioner's judgement, from the user, is that the best agent is the one who knows the most **and** has
@@ -234,6 +266,11 @@ The largest slice, and the one that closes a live defect.
 - **Build:** the eleven Incoterms 2020 as a catalogue, never inferred; `incoterm` and `namedPlace` on the
   shipment; the derived expectations of §2; and **claim standing derived from the term** instead of hard-coded
   to the sender.
+- **Also build the activation surface**, which the §5 decision forces into this slice. Terms default off
+  everywhere, so without the means to switch one on the field is inert and the slice cannot be exercised at
+  all. It is small: a selection on the country's presence record, guarded by two names.
+- **Fallback, stated once:** a shipment with **no term recorded keeps today's behaviour** and the sender has
+  standing. Every existing load is in that state, so this is what stops the slice rewriting history.
 - **Answer first:** what happens when the party with standing is a walk-in receiver with no account. Decision
   for this slice: **refuse by name, with the reason**, never silently. Identity for that receiver is §11's
   problem, not this slice's.
@@ -247,8 +284,9 @@ The largest slice, and the one that closes a live defect.
 - **Build:** a clearing agent as a party whose licence, bond and registration are **papers with dates**,
   reusing the FP4 pattern exactly; the capability held per jurisdiction on the presence ladder; appointment by
   the party the term names, never by us.
-- **Answer first:** which terms may be offered where. DDP into a jurisdiction where no sister can be importer
-  of record should not be offerable at all, which makes this a presence question before it is a UI question.
+- **Decided, see §5:** which terms may be offered where is the super admin's, held per jurisdiction, default
+  off, selected from the catalogue of eleven, two names to switch one on and one to switch it off. The
+  mechanism ships in CL1; what remains here is the agent who performs the clearance the term allocated.
 - **Screens:** the console's papers screen, extended to agents; the appointing party's own screen. Nothing
   reaches the driver, who is not a party to it.
 - **Gate:** a lapsed licence removes the capability with nobody deciding to, and the refusal names the paper
@@ -298,9 +336,18 @@ jurisdiction is not a product decision.
 
 ## 11. Open
 
-- **Who is billed duty under DDP** when no sister is the importer of record? The term says the seller pays;
-  our money model says a sister contracts. Those can disagree, and the answer probably restricts which terms
-  may be offered where — see the presence ladder.
+- **Does the activated set need a direction?** §5 settles who decides and that it is held per country. It
+  does not settle whether one set is enough. EXW burdens a buyer with export clearance at the **origin**;
+  DDP burdens a seller with import clearance at the **destination**. So the honest unit may be two sets per
+  country, permitted-as-origin and permitted-as-destination, which is still selection from the same
+  catalogue. One set is simpler and coarser. Decide before CL1 builds the selection.
+- **The super admin is not built.** §5 depends on a role that does not exist; today these are operator-only
+  routes with a shared key. Either that role lands first, or CL1 ships on operator-plus-two-names and
+  inherits the honesty limit that `country_activation.md` §11 already records.
+- **Who is billed duty under DDP** when no sister is the importer of record? The term says the seller pays.
+  The seller is a store, not us, so this only reaches our books where the network performs the clearance and
+  recharges it. That is the case §5's presence floor is meant to catch, and it needs confirming against the
+  money model rather than assumed.
 - **A receiver with standing may not be an identified party.** Under a C term the claimant is the receiver,
   but a counter booking can have a walk-in receiver with no account and no verified phone. Standing without
   identity is unsolved.
