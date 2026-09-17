@@ -275,11 +275,32 @@ which is a standing rule of this project, not a preference of this document.
 we already hold, so it can fill a gap at any point. Nothing else may be resequenced: CL2 needs to know who
 bears clearance, CL4 needs an agent to attach a measure to, and CL5 needs an answer we do not yet have.
 
-### PRE — fix the refuter defect on the road map
-Not part of this epic, and it blocks CL5. Today a refuter's words are **appended to the reporter's note**, so
-the operator queue cannot tell a dispute from the report it disputes. CL5 builds a second, larger observation
+### PRE — fix the refuter defect on the road map — SHIPPED 2026-09-17, commit `8df85ba`, driven
+Not part of this epic, and it blocked CL5. A refuter's words were **appended to the reporter's note**, so the
+operator queue could not tell a dispute from the report it disputes. CL5 builds a second, larger observation
 store on that same pattern, where the cost of confusing the two is a seizure rather than a detour. Fix the
 shape once, on the smaller surface, before repeating it.
+
+**CLOSED, and it went further than the note required** — because a driver using the app asked the obvious
+next question: there was a claim and no proof, and the console offered a coordinate to open in a map, which
+cannot tell anybody whether a bridge is still standing.
+
+- **`ConstraintAccount`** — every report, agreement and refutation is its own dated account, taking a side
+  (`there` / `gone`), with its own words and its own photograph. One per person, so nobody becomes two
+  witnesses; changing your mind replaces what you said. Identities still never cross the wire.
+- **The photograph is OPTIONAL**, and that is the shape CL5 should copy: a driver who cannot safely stop
+  must still be able to warn, so evidence STRENGTHENS a report and never gates it. One report warns
+  identically either way — the picture is what a reviewer later decides on.
+- **The asymmetry reached the interface:** agreeing costs a tap, claiming a hazard is gone now asks for a
+  photograph and a caption. The dangerous direction is the one that has to prove itself.
+- **Retention:** a hazard photo is linked to its constraint or the sweep reclaims it as an abandoned
+  upload, and its clock starts only when an operator clears the hazard. A new bin (`road-report`), because
+  borrowing one that meant something else is how a retention rule stops being true.
+
+**FOR CL5, the pattern to reuse verbatim:** accounts kept apart and attributed, evidence optional but
+recorded, and the reviewer shown both sides beside each other rather than a merged narrative. The second
+CL5 blocker — a lawyer's answer on holding photographs of official documents — is untouched and is not
+ours to resolve.
 
 ### CL1 — The term, and who may claim — SHIPPED 2026-09-16, commit `fa1a407`
 The largest slice, and the one that closed a live defect. Driven end to end; the two guards a service spec
