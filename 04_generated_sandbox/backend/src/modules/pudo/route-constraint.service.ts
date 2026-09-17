@@ -5,7 +5,8 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
 import { haversineKm } from './geo';
 import { GeoPoint } from './pudo.types';
 import { BoardBlocker } from './dispatch.types';
-import { CONSTRAINT_EFFECT, ConstraintKind, ConstraintView, RouteConstraint } from './route-constraint.types';
+import { CONSTRAINT_EFFECT, ConstraintAccount, ConstraintKind, ConstraintStance, ConstraintView, RouteConstraint } from './route-constraint.types';
+import { MediaService } from './media.service';
 
 /** How near a point has to be to count as "on this road" — the corridor is a straight line, so this is
  *  generous on purpose. A warning about a bridge 4 km off your line is a nuisance; missing one is not. */
@@ -47,6 +48,8 @@ export const SAME_SPOT_KM = 0.3;
 export class RouteConstraintService {
   private readonly constraints = new PersistentMap<string, RouteConstraint>('pudo-route-constraints');
 
+  constructor(private readonly media: MediaService) {}
+
   /**
    * One tap from the cab.
    *
@@ -54,7 +57,7 @@ export class RouteConstraintService {
    * three drivers reporting the same bridge should make the network more sure of one bridge, not draw
    * three bridges on the map.
    */
-  report(input: { kind: ConstraintKind; at: GeoPoint; value?: number; note?: string; by: string }): ConstraintView {
+  report(input: { kind: ConstraintKind; at: GeoPoint; value?: number; note?: string; photoRef?: string; by: string }): ConstraintView {
     const effect = CONSTRAINT_EFFECT[input.kind];
     if (!effect) throw new GlosError('VALIDATION_FAILED', `Unknown constraint kind: ${input.kind}`);
     if (!Number.isFinite(input.at?.lat) || !Number.isFinite(input.at?.lng)) {
@@ -78,6 +81,9 @@ export class RouteConstraintService {
         existing.status = 'active';
         delete existing.disputedAt; // no longer waiting on an operator, so it leaves their queue and its clock
       }
+      // A second sighting is an ACCOUNT in its own right: its own words, its own photograph, its own date.
+      // This is the whole reason the report of a known hazard is worth more than a bumped counter.
+      this.account(existing, input.by, 'there', input.note, input.photoRef);
       this.constraints.set(existing.constraintId, existing);
       return constraintView(existing);
     }
@@ -92,15 +98,37 @@ export class RouteConstraintService {
       reportedAt: new Date().toISOString(),
       confirmedBy: [],
       refutedBy: [],
+      accounts: [],
       // ACTIVE from one report. This is the cheap half of the asymmetry, and it is deliberate.
       status: 'active',
     };
+    this.account(constraint, input.by, 'there', input.note, input.photoRef);
     this.constraints.set(constraint.constraintId, constraint);
     return constraintView(constraint);
   }
 
+  /**
+   * Record what one person said about this hazard.
+   *
+   * One account per person per stance: somebody who says the same thing twice has not become two
+   * witnesses. Changing their mind REPLACES what they said rather than adding to it, for the same reason
+   * the DID lists drop them from the other side — the record must never cite one driver on both sides of
+   * the same question.
+   */
+  private account(c: RouteConstraint, by: string, stance: ConstraintStance, note?: string, photoRef?: string): void {
+    if (!c.accounts) c.accounts = [];
+    const said = note?.trim();
+    const entry: ConstraintAccount = { by, at: new Date().toISOString(), stance, ...(said ? { note: said } : {}), ...(photoRef ? { photoRef } : {}) };
+    const mine = c.accounts.findIndex((a) => a.by === by);
+    if (mine >= 0) c.accounts[mine] = entry;
+    else c.accounts.push(entry);
+    // LINKED, or the retention sweep reclaims it as an abandoned upload and the account is left citing a
+    // photograph that no longer exists. No expiry is set here: that waits for an operator to clear it.
+    if (photoRef) this.media.link(photoRef, { type: 'constraint', id: c.constraintId }, 'hazard');
+  }
+
   /** A later passer-by agrees. One vote each; the original reporter's is already counted. */
-  confirm(constraintId: string, by: string): ConstraintView {
+  confirm(constraintId: string, by: string, note?: string, photoRef?: string): ConstraintView {
     const c = this.require(constraintId);
     if (c.reportedBy !== by && !c.confirmedBy.includes(by)) c.confirmedBy.push(by);
     c.refutedBy = c.refutedBy.filter((d) => d !== by);
@@ -108,6 +136,9 @@ export class RouteConstraintService {
       c.status = 'active';
       delete c.disputedAt;
     }
+    // Agreement is an account too, and a photograph from somebody who saw it standing this morning is
+    // what settles a dispute in the safe direction.
+    this.account(c, by, 'there', note, photoRef);
     this.constraints.set(c.constraintId, c);
     return constraintView(c);
   }
@@ -120,7 +151,7 @@ export class RouteConstraintService {
    * front of an operator. Letting the crowd delete a hazard would mean one mistaken tap, or one driver
    * who wanted a shorter route, could remove a low bridge from everybody's map.
    */
-  refute(constraintId: string, by: string, note?: string): ConstraintView {
+  refute(constraintId: string, by: string, note?: string, photoRef?: string): ConstraintView {
     const c = this.require(constraintId);
     if (c.status === 'cleared') return constraintView(c);
     if (!c.refutedBy.includes(by)) c.refutedBy.push(by);
@@ -129,7 +160,10 @@ export class RouteConstraintService {
     // for a fortnight must not be pushed back down the queue by a second driver reporting the same thing.
     if (c.status !== 'disputed') c.disputedAt = new Date().toISOString();
     c.status = 'disputed';
-    if (note?.trim()) c.note = c.note ? `${c.note} · ${note.trim()}` : note.trim();
+    // THE REFUTER'S WORDS ARE THEIR OWN. This used to be `c.note = c.note + ' · ' + note`, which handed
+    // the operator's queue a single sentence built out of both sides of the argument it existed to settle.
+    // A photograph of a clear road is the strongest thing anybody can offer here, and it had nowhere to go.
+    this.account(c, by, 'gone', note, photoRef);
     this.constraints.set(c.constraintId, c);
     return constraintView(c);
   }
@@ -149,6 +183,9 @@ export class RouteConstraintService {
     c.clearedAt = new Date().toISOString();
     c.clearReason = reason.trim();
     this.constraints.set(c.constraintId, c);
+    // The photographs stop being live evidence here and only here — the clearance is the lifecycle event
+    // their retention clock hangs off, exactly as a parcel's terminal state is for a delivery photo.
+    this.media.anchorConstraintCleared(c.constraintId);
     return constraintView(c);
   }
 
@@ -266,6 +303,14 @@ export function constraintView(c: RouteConstraint): ConstraintView {
     disputedAt: c.disputedAt,
     confirmations: c.confirmedBy.length,
     refutations: c.refutedBy.length,
+    // Dated, in order, and with the author stripped — the accounts are what the operator weighs, and the
+    // one thing they must never carry is who said it.
+    accounts: (c.accounts ?? []).map((a) => ({
+      at: a.at,
+      stance: a.stance,
+      ...(a.note ? { note: a.note } : {}),
+      ...(a.photoRef ? { photoRef: a.photoRef } : {}),
+    })),
   };
 }
 

@@ -13,7 +13,8 @@ export type MediaKind =
   | 'kyc_licence'
   | 'shop'
   | 'avatar'
-  | 'securement'; // S33 — a driver's photo of a secured dedicated-freight load at pickup
+  | 'securement' // S33 — a driver's photo of a secured dedicated-freight load at pickup
+  | 'hazard'; // a driver's photo of a road constraint — the bridge, the washout, or the road now clear
 
 /**
  * Media facade (S26) — the operations any authenticated app shares for real image upload + display.

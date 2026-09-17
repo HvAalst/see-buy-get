@@ -12433,6 +12433,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmConstraintDto"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "",
@@ -25265,10 +25275,40 @@
           "note": {
             "type": "string",
             "maxLength": 200
+          },
+          "photoRef": {
+            "type": "string",
+            "description": "A media id of the thing itself — the bridge, the washout, the sign.\n\nOPTIONAL, and that is the design rather than laziness: a driver at a washout at night who cannot\nsafely stop must still be able to warn everybody, and a photograph as a gate would suppress reports\nexactly where they matter most. A report with no photo warns identically; the picture is what an\nOPERATOR later clears or keeps the hazard on."
           }
         },
         "required": [
           "kind",
+          "at"
+        ]
+      },
+      "ConstraintAccountView": {
+        "type": "object",
+        "properties": {
+          "stance": {
+            "type": "string",
+            "enum": [
+              "there",
+              "gone"
+            ]
+          },
+          "note": {
+            "type": "string"
+          },
+          "photoRef": {
+            "type": "string",
+            "description": "The media id of what they photographed, when they did. Fetchable by an operator."
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "stance",
           "at"
         ]
       },
@@ -25306,6 +25346,13 @@
             "type": "string",
             "description": "When somebody first said it was gone. Absent unless the status is 'disputed'.\n\nThe operator's queue is sorted on this and not on the report date: a bridge reported two years ago and\ndisputed this morning has been waiting for an operator since this morning. Sorting the queue by the\nreport date would bury today's dispute under every old hazard on the map."
           },
+          "accounts": {
+            "description": "WHAT EACH SIDE ACTUALLY SAID, in order, with no identities.\n\nThe counts above say how many; this says what. An operator deciding whether a bridge is still\nstanding is doing exactly one thing — weighing one account against another — and until now the\nscreen handed them two numbers and a merged sentence. `photoRef` is a media id the operator can\nfetch; every other reader gets the field and a refusal, which is the media route's rule and not\nthis module's to bend.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConstraintAccountView"
+            }
+          },
           "constraintId": {
             "type": "string"
           },
@@ -25327,6 +25374,7 @@
         "required": [
           "kind",
           "status",
+          "accounts",
           "constraintId",
           "at",
           "reportedAt",
@@ -25334,12 +25382,28 @@
           "refutations"
         ]
       },
+      "ConfirmConstraintDto": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "photoRef": {
+            "type": "string"
+          }
+        }
+      },
       "RefuteConstraintDto": {
         "type": "object",
         "properties": {
           "note": {
             "type": "string",
             "maxLength": 200
+          },
+          "photoRef": {
+            "type": "string",
+            "description": "A photo of the road now clear — the strongest thing anybody can offer for the dangerous direction."
           }
         }
       },
@@ -26957,7 +27021,8 @@
               "kyc_licence",
               "shop",
               "avatar",
-              "securement"
+              "securement",
+              "hazard"
             ]
           },
           "dataUrl": {

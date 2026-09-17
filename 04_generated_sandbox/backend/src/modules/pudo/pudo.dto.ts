@@ -1567,11 +1567,28 @@ export class ReportConstraintDto {
    *  the service refuses those without it, because an unmeasured limit cannot be checked against a load. */
   @IsOptional() @IsNumber() @Min(0.01) value?: number;
   @IsOptional() @IsString() @MaxLength(200) note?: string;
+  /**
+   * A media id of the thing itself — the bridge, the washout, the sign.
+   *
+   * OPTIONAL, and that is the design rather than laziness: a driver at a washout at night who cannot
+   * safely stop must still be able to warn everybody, and a photograph as a gate would suppress reports
+   * exactly where they matter most. A report with no photo warns identically; the picture is what an
+   * OPERATOR later clears or keeps the hazard on.
+   */
+  @IsOptional() @IsString() photoRef?: string;
 }
 
-/** A later passer-by saying it is not there any more. The note is the only place they can say why. */
+/** A later passer-by saying it is not there any more, with their own words and their own photograph. */
 export class RefuteConstraintDto {
   @IsOptional() @IsString() @MaxLength(200) note?: string;
+  /** A photo of the road now clear — the strongest thing anybody can offer for the dangerous direction. */
+  @IsOptional() @IsString() photoRef?: string;
+}
+
+/** A later passer-by saying it IS still there. Same shape: agreement is evidence too. */
+export class ConfirmConstraintDto {
+  @IsOptional() @IsString() @MaxLength(200) note?: string;
+  @IsOptional() @IsString() photoRef?: string;
 }
 
 /**

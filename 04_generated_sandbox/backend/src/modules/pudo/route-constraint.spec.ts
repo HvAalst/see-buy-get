@@ -27,7 +27,24 @@ const ON_THE_ROAD = { lat: -0.7976, lng: 36.451 };
 // Far off it, and well outside any radius these tests ask about.
 const ELSEWHERE = { lat: -1.5, lng: 37.9 };
 
-const svc = () => new RouteConstraintService();
+/**
+ * A hazard photo is LINKED to its constraint so the retention sweep cannot reclaim it as an abandoned
+ * upload, and its clock starts only when an operator clears the hazard. The fake records both so the
+ * tests can assert them without dragging a BlobStore into every case.
+ */
+const mediaFake = () => {
+  const linked: Array<{ mediaId: string; type: string; id: string; kind: string }> = [];
+  const anchored: string[] = [];
+  return {
+    calls: { linked, anchored },
+    service: {
+      link: (mediaId: string, link: { type: string; id: string }, kind: string) => linked.push({ mediaId, type: link.type, id: link.id, kind }),
+      anchorConstraintCleared: (constraintId: string) => anchored.push(constraintId),
+    },
+  };
+};
+
+const svc = (media = mediaFake().service) => new RouteConstraintService(media as never);
 const codesOf = (bs: { code: string }[]) => bs.map((b) => b.code);
 
 describe('route constraints — the road as its drivers report it', () => {
@@ -145,6 +162,89 @@ describe('route constraints — the road as its drivers report it', () => {
       s.confirm(c.constraintId, 'did:driver:c');
       s.confirm(c.constraintId, 'did:driver:d');
       expect(s.get(c.constraintId).status).toBe('active');
+    });
+  });
+
+  /**
+   * WHAT EACH SIDE SAID, kept apart — the defect that made the operator's queue undecidable.
+   *
+   * A refutation used to append its words to the reporter's note with a '·' between them, so the one
+   * screen whose job is choosing between "it is there" and "it is gone" was handed a single sentence
+   * built out of both. Add a photograph to each side and the merge becomes indefensible.
+   */
+  describe('the accounts: who said what, and what they photographed', () => {
+    it('keeps the refuter’s words OFF the reporter’s note', () => {
+      const s = svc();
+      const c = s.report({ kind: 'LOW_BRIDGE', at: ON_THE_ROAD, value: 4.2, note: 'Just past the river bend', by: 'did:driver:a' });
+      const after = s.refute(c.constraintId, 'did:driver:b', 'Bridge is gone, road is wide open');
+
+      // The reporter's note is still the reporter's, word for word.
+      expect(after.note).toBe('Just past the river bend');
+      expect(after.note).not.toContain('wide open');
+      // …and both accounts are on the record, each on its own side of the question.
+      expect(after.accounts).toHaveLength(2);
+      expect(after.accounts[0]).toMatchObject({ stance: 'there', note: 'Just past the river bend' });
+      expect(after.accounts[1]).toMatchObject({ stance: 'gone', note: 'Bridge is gone, road is wide open' });
+    });
+
+    it('carries a photograph on either side, and never an identity', () => {
+      const s = svc();
+      const c = s.report({ kind: 'WASHOUT', at: ON_THE_ROAD, note: 'Whole lane went', photoRef: 'med_washout', by: 'did:driver:a' });
+      const after = s.refute(c.constraintId, 'did:driver:b', 'Graded and open', 'med_clear');
+
+      expect(after.accounts.map((a) => a.photoRef)).toEqual(['med_washout', 'med_clear']);
+      // A driver identifiable as the one who slowed a corridor down is a driver who stops reporting.
+      for (const a of after.accounts) expect(a).not.toHaveProperty('by');
+    });
+
+    it('LINKS each photo to the constraint, so the retention sweep cannot reclaim it', () => {
+      // An unlinked upload is purged as an abandoned capture, which would leave an account citing a
+      // photograph that no longer exists — a footnote pointing at nothing.
+      const m = mediaFake();
+      const s = svc(m.service);
+      const c = s.report({ kind: 'WASHOUT', at: ON_THE_ROAD, photoRef: 'med_washout', by: 'did:driver:a' });
+      s.refute(c.constraintId, 'did:driver:b', undefined, 'med_clear');
+
+      expect(m.calls.linked).toEqual([
+        { mediaId: 'med_washout', type: 'constraint', id: c.constraintId, kind: 'hazard' },
+        { mediaId: 'med_clear', type: 'constraint', id: c.constraintId, kind: 'hazard' },
+      ]);
+      // No retention clock yet: a bridge does not come down because a window elapsed.
+      expect(m.calls.anchored).toEqual([]);
+      s.clear(c.constraintId, 'ops', 'Confirmed rebuilt by the county');
+      expect(m.calls.anchored).toEqual([c.constraintId]);
+    });
+
+    it('does not turn one driver saying the same thing twice into two witnesses', () => {
+      const s = svc();
+      const c = s.report({ kind: 'LOW_BRIDGE', at: ON_THE_ROAD, value: 4.2, by: 'did:driver:a' });
+      s.refute(c.constraintId, 'did:driver:b', 'gone');
+      const after = s.refute(c.constraintId, 'did:driver:b', 'still gone, I looked again');
+
+      expect(after.accounts).toHaveLength(2);
+      // Their account is REPLACED, not appended: the record cites each person once.
+      expect(after.accounts[1].note).toBe('still gone, I looked again');
+    });
+
+    it('stops citing somebody on both sides when they change their mind', () => {
+      const s = svc();
+      const c = s.report({ kind: 'LOW_BRIDGE', at: ON_THE_ROAD, value: 4.2, by: 'did:driver:a' });
+      s.refute(c.constraintId, 'did:driver:b', 'gone');
+      const after = s.confirm(c.constraintId, 'did:driver:b', 'my mistake — it is there, I was a turn early');
+
+      expect(after.accounts).toHaveLength(2);
+      expect(after.accounts[1]).toMatchObject({ stance: 'there' });
+      expect(after.refutations).toBe(0);
+    });
+
+    it('a report with NO photo is exactly as much of a warning as one with', () => {
+      // The photo is what an OPERATOR clears on. It is never what makes the road dangerous, and requiring
+      // it would silence the driver at a washout at night who cannot safely stop.
+      const s = svc();
+      const c = s.report({ kind: 'WASHOUT', at: ON_THE_ROAD, by: 'did:driver:a' });
+      expect(c.status).toBe('active');
+      expect(c.accounts[0].photoRef).toBeUndefined();
+      expect(codesOf(s.checkRoute({ from: NAIROBI, to: NAKURU }))).toContain('ROAD_WASHED_OUT');
     });
   });
 

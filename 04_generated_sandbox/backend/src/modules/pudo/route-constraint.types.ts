@@ -67,14 +67,44 @@ export const CONSTRAINT_EFFECT: Record<ConstraintKind, ConstraintEffect> = {
 export const CONSTRAINT_STATUSES = ['active', 'disputed', 'cleared'] as const;
 export type ConstraintStatus = (typeof CONSTRAINT_STATUSES)[number];
 
+/** Which side of the question somebody is on: it is there, or it is gone. */
+export const CONSTRAINT_STANCES = ['there', 'gone'] as const;
+export type ConstraintStance = (typeof CONSTRAINT_STANCES)[number];
+
+/**
+ * ONE PERSON'S ACCOUNT of this hazard — what they said, when, and what they photographed.
+ *
+ * This replaces a single `note` that every voice was concatenated onto. A refutation used to append its
+ * words to the reporter's with a '·' between, which left the operator's queue holding one blob it could
+ * not attribute: the screen that exists to decide between "it is there" and "it is gone" could not tell
+ * which half of its own text was which. Two accounts of the same road are the whole substance of that
+ * decision, so they are kept apart, dated, and each with its own photograph.
+ *
+ * `by` never leaves this module — see ConstraintView. A driver identifiable as the one who slowed a
+ * corridor down is a driver who stops reporting.
+ */
+export interface ConstraintAccount {
+  by: string;
+  at: string;
+  stance: ConstraintStance;
+  /** What they typed. Never required — a photo, or the tap alone, is a complete report. */
+  note?: string;
+  /** A media id. Optional BY DESIGN: a driver at a washout at night who cannot safely stop must still be
+   *  able to warn, and requiring a photograph would suppress reports exactly where they matter most. */
+  photoRef?: string;
+}
+
 export interface RouteConstraint {
   constraintId: string;
   kind: ConstraintKind;
   at: GeoPoint;
   /** Metres for a height, kilograms for a limit. Absent where the kind has nothing to measure. */
   value?: number;
-  /** What the driver typed, if anything — a road name, a landmark. Never required. */
+  /** What the REPORTER typed, if anything — a road name, a landmark. Never required.
+   *  No longer a scratchpad every later voice is appended to: see `accounts`. */
   note?: string;
+  /** Every account given of this hazard, oldest first, including the original report. */
+  accounts: ConstraintAccount[];
   reportedBy: string;
   reportedAt: string;
   /** Driver DIDs who passed it later and agreed. One vote each, and never the reporter's own. */
@@ -89,6 +119,24 @@ export interface RouteConstraint {
   clearedBy?: string;
   clearedAt?: string;
   clearReason?: string;
+}
+
+/**
+ * One account, as anybody may read it — dated, taken a side, and with no author.
+ *
+ * DECLARED ABOVE ConstraintView deliberately: the swagger plugin evaluates an `@ApiProperty` class
+ * reference when the referring class is DEFINED, so a class declared after its user typechecks cleanly
+ * and then kills the contract emit with a temporal dead zone. That cost a session once already.
+ */
+export class ConstraintAccountView {
+  at: string;
+  @ApiProperty({ enum: CONSTRAINT_STANCES })
+  stance: ConstraintStance;
+  @ApiPropertyOptional()
+  note?: string;
+  /** The media id of what they photographed, when they did. Fetchable by an operator. */
+  @ApiPropertyOptional()
+  photoRef?: string;
 }
 
 /**
@@ -124,6 +172,17 @@ export class ConstraintView {
   confirmations: number;
   /** How many say it is gone. Recorded and shown, and deliberately not enough to clear it. */
   refutations: number;
+  /**
+   * WHAT EACH SIDE ACTUALLY SAID, in order, with no identities.
+   *
+   * The counts above say how many; this says what. An operator deciding whether a bridge is still
+   * standing is doing exactly one thing — weighing one account against another — and until now the
+   * screen handed them two numbers and a merged sentence. `photoRef` is a media id the operator can
+   * fetch; every other reader gets the field and a refusal, which is the media route's rule and not
+   * this module's to bend.
+   */
+  @ApiProperty({ type: [ConstraintAccountView] })
+  accounts: ConstraintAccountView[];
 }
 
 /** What is around here, or on the corridor ahead. Named so the rows emit — see ConstraintView. */

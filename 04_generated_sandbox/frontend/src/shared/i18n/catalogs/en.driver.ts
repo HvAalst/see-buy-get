@@ -567,6 +567,21 @@ export const enDriver = {
   'driver.road.sheetTitle': 'What can you see?',
   'driver.road.sheetLede': 'One tap. We take the position from your phone.',
   'driver.road.valueTitle': 'What does the sign say?',
+  /* One step per report now, whatever the kind: the number if there is a sign, then the photo, then the
+     caption. The photo is never a gate — see the sheet's own comment. */
+  'driver.road.detailTitle': '{kind} — what did you see?',
+  'driver.road.photoLabel': 'A photo of it (if you can)',
+  'driver.road.photoAria': 'Photograph the hazard',
+  'driver.road.photoHint': 'Only if you can stop safely. Your report warns everybody either way — the picture is what lets an operator decide later whether it is still there.',
+  /* Saying it is gone, which is the direction that has to prove itself. */
+  'driver.road.goneTitle': 'Say it is gone',
+  'driver.road.goneWarnTitle': 'This does not take it off the map',
+  'driver.road.goneWarnBody': 'It stays and keeps warning, and goes to an operator to decide. Being wrong about a bridge that is still standing is what this rule exists to prevent.',
+  'driver.road.gonePhotoLabel': 'A photo of the road (if you can)',
+  'driver.road.gonePhotoAria': 'Photograph the clear road',
+  'driver.road.goneNoteLabel': 'What did you see?',
+  'driver.road.goneNotePh': 'Road is open, barrier removed',
+  'driver.road.goneSend': 'Send it to an operator',
   'driver.road.heightLabel': 'Height on the sign, in metres',
   'driver.road.heightPh': 'e.g. 4.2',
   'driver.road.weightLabel': 'Limit on the sign, in tonnes',

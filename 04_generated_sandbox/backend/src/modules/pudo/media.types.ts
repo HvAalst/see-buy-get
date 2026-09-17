@@ -17,16 +17,17 @@ export const MEDIA_KINDS = [
   'shop', // shop premises photo
   'avatar', // a person's profile picture (S29)
   'securement', // S33 — a driver's photo of a secured dedicated-freight load at pickup
+  'hazard', // a driver's photo of a road constraint — the bridge, the washout, or the road now clear
 ] as const;
 
 export type MediaKind = (typeof MEDIA_KINDS)[number];
 
-export type RetentionClass = 'shipment-proof' | 'dispute-evidence' | 'account-doc' | 'vehicle-asset';
+export type RetentionClass = 'shipment-proof' | 'dispute-evidence' | 'account-doc' | 'vehicle-asset' | 'road-report';
 export type MediaStatus = 'active' | 'expired';
 
 /** What a media item is attached to — drives who may see it and when its retention clock starts. */
 export interface MediaLink {
-  type: 'parcel' | 'vehicle' | 'agent' | 'driver' | 'person' | 'freight';
+  type: 'parcel' | 'vehicle' | 'agent' | 'driver' | 'person' | 'freight' | 'constraint';
   id: string;
 }
 
@@ -65,6 +66,11 @@ export const RETENTION_DAYS: Record<RetentionClass, number> = {
   'dispute-evidence': 180, // after the dispute is resolved
   'account-doc': 30, // grace after the account/entity is closed
   'vehicle-asset': 30, // grace after the vehicle is retired; user-managed while the vehicle is active
+  // A road hazard's photo is kept for as long as the hazard is on the map, and its clock starts only when
+  // an operator CLEARS it — the one moment the evidence stops being live and starts being a record of a
+  // decision somebody may have to review. Nothing here expires on a timer, because time passing is not
+  // evidence that a bridge came down.
+  'road-report': 180,
 };
 
 /** The bin a kind lands in. */
@@ -80,6 +86,7 @@ export const KIND_RETENTION: Record<MediaKind, RetentionClass> = {
   kyc_licence: 'account-doc',
   shop: 'account-doc',
   avatar: 'account-doc', // kept while the account is active (linked to the person → never orphan-reaped)
+  hazard: 'road-report',
   securement: 'shipment-proof', // S33 — proof of a secured load, kept 90d after the freight is delivered
 };
 

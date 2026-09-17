@@ -180,6 +180,24 @@ export class MediaService implements OnApplicationBootstrap, OnModuleDestroy {
    * dispute photo (which otherwise never anchors). No resolution event exists yet, so the clock is
    * anchored at filing — a bounded, honest approximation of "180 days after resolution".
    */
+  /**
+   * An operator cleared a road hazard: its photographs stop being live evidence and start their clock.
+   *
+   * Until this moment they have NO expiry at all, which is the point — a bridge does not come down
+   * because a retention window elapsed, and a photo reaped while the hazard is still on the map would
+   * leave the warning standing with nothing behind it. The link is what keeps them out of the
+   * orphan sweep meanwhile (an unlinked upload is reclaimed as an abandoned capture).
+   */
+  anchorConstraintCleared(constraintId: string, at: Date = new Date()): void {
+    const until = new Date(at.getTime() + RETENTION_DAYS['road-report'] * DAY_MS).toISOString();
+    for (const ref of this.refs.values()) {
+      if (ref.link?.type !== 'constraint' || ref.link.id !== constraintId) continue;
+      if (ref.status !== 'active' || ref.expiresAt) continue;
+      ref.expiresAt = until;
+      this.refs.set(ref.mediaId, ref);
+    }
+  }
+
   /** FP3b — a claim was opened against a delivered freight: its securement + delivery proof and the claim photo go onto one dispute-evidence clock. */
   holdFreightForDispute(freightId: string, at: Date = new Date()): void {
     const until = new Date(at.getTime() + RETENTION_DAYS['dispute-evidence'] * DAY_MS).toISOString();

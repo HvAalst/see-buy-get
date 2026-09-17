@@ -1314,7 +1314,7 @@ const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehic
    * says so and changes nothing.
    */
   const reportRoad = useCallback(
-    async (kind: string, value?: number, note?: string) => {
+    async (kind: string, value?: number, note?: string, photoRef?: string) => {
       if (!client) return;
       await run('report-road', async () => {
         const at = await currentPosition();
@@ -1322,7 +1322,7 @@ const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehic
           pushToast({ tone: 'warn', icon: 'pin', title: t('driver.toast.noLocation'), detail: t('driver.toast.noLocationDetail') });
           return;
         }
-        const r = await client.api.reportRoad({ kind, at, ...(value != null ? { value } : {}), ...(note?.trim() ? { note: note.trim() } : {}) });
+        const r = await client.api.reportRoad({ kind, at, ...(value != null ? { value } : {}), ...(note?.trim() ? { note: note.trim() } : {}), ...(photoRef ? { photoRef } : {}) });
         if (r.error) return fail(r.error);
         buzz();
         pushToast({ tone: 'ok', icon: 'check', title: t('driver.toast.roadReported'), detail: t('driver.toast.roadReportedDetail') });
@@ -1340,10 +1340,11 @@ const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehic
    * has: being wrong about a bridge that is still standing is the failure the whole feature exists around.
    */
   const answerRoad = useCallback(
-    async (constraintId: string, stillThere: boolean) => {
+    async (constraintId: string, stillThere: boolean, note?: string, photoRef?: string) => {
       if (!client) return;
       await run(`road:${constraintId}`, async () => {
-        const r = stillThere ? await client.api.confirmRoad(constraintId) : await client.api.refuteRoad(constraintId);
+        const body = { ...(note?.trim() ? { note: note.trim() } : {}), ...(photoRef ? { photoRef } : {}) };
+        const r = stillThere ? await client.api.confirmRoad(constraintId, body) : await client.api.refuteRoad(constraintId, body);
         if (r.error) return fail(r.error);
         buzz();
         pushToast(

@@ -134,6 +134,41 @@
   color: var(--tx2);
 }
 
+/* ---------------------------------------------------------- hazard accounts -- */
+
+/* TWO SIDES, SIDE BY SIDE. The decision is a comparison, so the layout is the comparison — not a
+   timeline, which is what a flat list of accounts would have drawn. Stacks on a narrow window rather
+   than squeezing two columns of photographs into a phone. */
+.twr-accounts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.twr-accounts__h {
+  font-size: var(--c-fs);
+  font-weight: 700;
+  color: var(--navy);
+  margin-bottom: 8px;
+}
+
+.twr-accounts__one + .twr-accounts__one {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--bd-soft);
+}
+
+.twr-accounts__said {
+  margin: 2px 0 6px;
+  color: var(--tx);
+}
+
+.twr-accounts__said--none {
+  color: var(--tx3);
+  font-style: italic;
+}
+
 /* ------------------------------------------------------------ claim evidence -- */
 
 /* The photographs an adjudicator decides on. The queue said "2 photos" and showed none, which is the

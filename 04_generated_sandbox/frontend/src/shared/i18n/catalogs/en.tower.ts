@@ -98,7 +98,16 @@ export const enTower = {
   'tower.hazards.advisory': 'Costs time',
   'tower.hazards.evidence': '{confirmations} saw it · {refutations} say it is gone',
   'tower.hazards.reportedAt': 'Reported {date}',
+  /* Kept for hazards reported before accounts existed, where one merged note is all there is. */
   'tower.hazards.noteLabel': 'Driver notes',
+  /* The two sides of the question, which is the whole decision. Counts read correctly at one. */
+  'tower.hazards.accountsCount': 'accounts on the record: {n}',
+  'tower.hazards.sideThere': 'Say it is there ({n})',
+  'tower.hazards.sideGone': 'Say it is gone ({n})',
+  'tower.hazards.saidNothing': 'They added no words.',
+  'tower.hazards.photoTitle': 'What they photographed',
+  'tower.hazards.photoNone': 'No photograph with this one. That is not a reason to discount it — a driver who could not safely stop still reported what they saw.',
+  'tower.hazards.noAccounts': 'This hazard was reported before accounts were kept, so all there is to go on is the note and the counts above. Ring the fleet before clearing it.',
   'tower.hazards.openMap': 'Open in a map',
   'tower.hazards.longWait': 'Waiting a while',
 

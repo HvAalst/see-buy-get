@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, Icon, Note, Pill, Sheet, type IconName } from '../../../shared/ui';
+import { Button, Card, Icon, Note, PhotoField, Pill, Sheet, type IconName } from '../../../shared/ui';
 import { useT, type Translate } from '../../../shared/i18n';
 import { haversineKm } from '../../../shared/geo';
 import { ROAD_KINDS, roadBlocks, roadMeasure, roadSummary, roadTone, roadValueLabel, type RoadKind } from '../logic';
@@ -106,6 +106,7 @@ function RoadRow({
   const value = roadValueLabel(c, t);
   const km = at ? Math.round(haversineKm(at, c.at) * 10) / 10 : null;
   const mine = `road:${c.constraintId}`;
+  const [gone, setGone] = useState(false);
 
   return (
     <li class={`road__row road__row--${roadTone(c)}`}>
@@ -137,12 +138,83 @@ function RoadRow({
           <Button variant="outline" full={false} busy={busy === mine} onClick={() => void actions.answerRoad(c.constraintId, true)}>
             {t('driver.road.stillThere')}
           </Button>
-          <Button variant="link" full={false} busy={busy === mine} onClick={() => void actions.answerRoad(c.constraintId, false)}>
+          {/* "It's gone" now ASKS, where "still there" does not. The asymmetry, carried into the interface:
+              agreeing costs a tap because being wrong costs a detour, and claiming a hazard has gone is the
+              direction that kills somebody, so it is the one we ask to see. */}
+          <Button variant="link" full={false} busy={busy === mine} onClick={() => setGone(true)}>
             {t('driver.road.itsGone')}
           </Button>
         </div>
       </div>
+      <GoneSheet open={gone} onClose={() => setGone(false)} constraintId={c.constraintId} busy={busy === mine} actions={actions} />
     </li>
+  );
+}
+
+/**
+ * SAYING IT IS GONE — with a photograph of the road, if they can take one.
+ *
+ * The strongest thing anybody can offer here, and until now there was nowhere to put it: a refutation
+ * carried words that were appended to the reporter's own note, so an operator read one merged sentence
+ * and could not tell which half was the claim and which was the answer to it.
+ *
+ * Still optional. A driver who cannot stop must still be able to say it, and the report stays disputed
+ * either way — this sheet changes what an operator can DECIDE on, never whether the road keeps warning.
+ */
+function GoneSheet({
+  open,
+  onClose,
+  constraintId,
+  busy,
+  actions,
+}: {
+  open: boolean;
+  onClose: () => void;
+  constraintId: string;
+  busy: boolean;
+  actions: DriverActions;
+}) {
+  const t = useT();
+  const [note, setNote] = useState('');
+  const [photo, setPhoto] = useState('');
+
+  const close = () => {
+    setNote('');
+    setPhoto('');
+    onClose();
+  };
+
+  return (
+    <Sheet open={open} onClose={close} title={t('driver.road.goneTitle')}>
+      {/* Said before they act, not after: the tap does not remove anything, and a driver who believes it
+          did is the failure mode this whole surface is arranged around. */}
+      <Note tone="warn" icon="warning" title={t('driver.road.goneWarnTitle')} detail={t('driver.road.goneWarnBody')} />
+
+      <div class="field" style="margin-top:16px">
+        <span class="field__label">{t('driver.road.gonePhotoLabel')}</span>
+        <PhotoField id={`gone-${constraintId}`} value={photo} upload={(f) => actions.uploadPhoto('hazard', f)} onCapture={setPhoto} label={t('driver.road.gonePhotoAria')} disabled={busy} />
+      </div>
+
+      <div class="field" style="margin-top:16px">
+        <label class="field__label" for={`gone-note-${constraintId}`}>
+          {t('driver.road.goneNoteLabel')}
+        </label>
+        <input id={`gone-note-${constraintId}`} class="input" type="text" placeholder={t('driver.road.goneNotePh')} value={note} onInput={(e) => setNote(e.currentTarget.value)} />
+      </div>
+
+      <Button
+        busy={busy}
+        onClick={async () => {
+          await actions.answerRoad(constraintId, false, note, photo || undefined);
+          close();
+        }}
+      >
+        {t('driver.road.goneSend')}
+      </Button>
+      <Button variant="link" onClick={close}>
+        {t('driver.road.back')}
+      </Button>
+    </Sheet>
   );
 }
 
@@ -168,11 +240,13 @@ function ReportSheet({
   const [kind, setKind] = useState<RoadKind | null>(null);
   const [value, setValue] = useState('');
   const [note, setNote] = useState('');
+  const [photo, setPhoto] = useState('');
 
   const close = () => {
     setKind(null);
     setValue('');
     setNote('');
+    setPhoto('');
     onClose();
   };
 
@@ -181,12 +255,10 @@ function ReportSheet({
 
   const choose = (k: RoadKind) => {
     setKind(k);
-    // Nothing to measure means nothing more to ask: the tap IS the report.
-    if (roadMeasure(k) == null) void send(k, undefined);
   };
 
   const send = async (k: RoadKind, v: number | undefined) => {
-    await actions.reportRoad(k, v, note);
+    await actions.reportRoad(k, v, note, photo || undefined);
     close();
   };
 
@@ -196,9 +268,10 @@ function ReportSheet({
   const ready = measure == null || (Number.isFinite(num) && num > 0);
 
   return (
-    <Sheet open={open} onClose={close} title={kind && measure ? t('driver.road.valueTitle') : t('driver.road.sheetTitle')}>
-      {kind && measure ? (
+    <Sheet open={open} onClose={close} title={kind ? t('driver.road.detailTitle', { kind: kindName(kind, t) }) : t('driver.road.sheetTitle')}>
+      {kind ? (
         <>
+          {measure ? (
           <div class="field">
             <label class="field__label" for="road-value">
               {measure === 'height_m' ? t('driver.road.heightLabel') : t('driver.road.weightLabel')}
@@ -215,6 +288,25 @@ function ReportSheet({
               onInput={(e) => setValue(e.currentTarget.value)}
             />
           </div>
+          ) : null}
+
+          {/* THE PHOTOGRAPH. Optional, and that is the design: a driver at a washout at night who cannot
+              safely stop must still be able to warn everybody, and a camera as a gate would silence the
+              reports that matter most. It never makes the warning stronger — one report already warns —
+              it is what an OPERATOR later clears or keeps the hazard on, and until now they had nothing. */}
+          <div class="field" style="margin-top:16px">
+            <span class="field__label">{t('driver.road.photoLabel')}</span>
+            <PhotoField
+              id="road-photo"
+              value={photo}
+              upload={(f) => actions.uploadPhoto('hazard', f)}
+              onCapture={setPhoto}
+              label={t('driver.road.photoAria')}
+              disabled={busy}
+            />
+            <p class="card__note">{t('driver.road.photoHint')}</p>
+          </div>
+
           <div class="field" style="margin-top:16px">
             <label class="field__label" for="road-note">
               {t('driver.road.noteLabel')}

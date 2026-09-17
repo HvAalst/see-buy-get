@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { mapsSearchUrl } from '../../../shared/maps';
+import { DocumentStrip } from './DocumentStrip';
 import {
   CLEAR_REASON_MAX,
   canClear,
@@ -132,7 +133,12 @@ function HazardRow({ row, now, state, actions }: { row: ConstraintView; now: num
         <td>
           <div>{t('tower.hazards.evidence', { confirmations: row.confirmations, refutations: row.refutations })}</div>
           <div class="ctbl__sub">{t('tower.hazards.reportedAt', { date: new Date(row.reportedAt).toLocaleDateString() })}</div>
-          {row.note ? (
+          {/* The counts say how many. Only the accounts say WHAT, and this column used to hold a single
+              `note` that every voice was appended to — so the screen whose job is choosing between "it is
+              there" and "it is gone" showed one sentence built out of both sides. */}
+          {(row.accounts?.length ?? 0) > 0 ? (
+            <div class="ctbl__sub">{t('tower.hazards.accountsCount', { n: row.accounts.length })}</div>
+          ) : row.note ? (
             <div class="ctbl__sub">
               <b>{t('tower.hazards.noteLabel')}:</b> {row.note}
             </div>
@@ -156,11 +162,67 @@ function HazardRow({ row, now, state, actions }: { row: ConstraintView; now: num
       {open ? (
         <tr class="is-open ctbl__editor">
           <td colSpan={6}>
+            {/* BOTH ACCOUNTS FIRST, then the form. This decision is one thing only — weighing what one
+                driver saw against what another saw — and the screen used to offer a coordinate to open in
+                Google Maps, which cannot tell anybody whether a bridge is still standing. */}
+            <Accounts row={row} state={state} actions={actions} />
             <ClearForm row={row} hazard={name} state={state} actions={actions} />
           </td>
         </tr>
       ) : null}
     </>
+  );
+}
+
+/**
+ * WHAT EACH SIDE SAID, in order, with what they photographed.
+ *
+ * Grouped by stance rather than listed flat: an operator is not reading a timeline, they are comparing two
+ * claims, and the arrangement should be the question. Dates are shown because a photograph of a standing
+ * bridge from this morning beats one of a clear road from March, and nothing else on this screen carried
+ * that.
+ */
+function Accounts({ row, state, actions }: { row: ConstraintView; state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const accounts = row.accounts ?? [];
+  if (!accounts.length) {
+    return (
+      <p class="cons__caveat">
+        <Icon name="info" size={16} />
+        <span>{t('tower.hazards.noAccounts')}</span>
+      </p>
+    );
+  }
+
+  const side = (stance: 'there' | 'gone') => accounts.filter((a) => a.stance === stance);
+
+  return (
+    <div class="twr-accounts">
+      {(['there', 'gone'] as const).map((stance) => {
+        const rows = side(stance);
+        if (!rows.length) return null;
+        return (
+          <section key={stance} class="twr-accounts__side">
+            <h3 class="twr-accounts__h">
+              {stance === 'there' ? t('tower.hazards.sideThere', { n: rows.length }) : t('tower.hazards.sideGone', { n: rows.length })}
+            </h3>
+            {rows.map((a, i) => (
+              <div key={`${stance}-${i}`} class="twr-accounts__one">
+                <div class="ctbl__sub">{new Date(a.at).toLocaleString()}</div>
+                {a.note ? <p class="twr-accounts__said">“{a.note}”</p> : <p class="twr-accounts__said twr-accounts__said--none">{t('tower.hazards.saidNothing')}</p>}
+                <DocumentStrip
+                  refs={[a.photoRef].filter((x): x is string => Boolean(x))}
+                  state={state}
+                  actions={actions}
+                  titleKey="tower.hazards.photoTitle"
+                  emptyKey="tower.hazards.photoNone"
+                />
+              </div>
+            ))}
+          </section>
+        );
+      })}
+    </div>
   );
 }
 
