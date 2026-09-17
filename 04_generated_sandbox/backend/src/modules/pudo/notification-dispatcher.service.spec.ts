@@ -5,7 +5,8 @@ import { NotificationDispatcher } from './notification-dispatcher.service';
 import { OutboxPushSender } from './push-sender';
 import type { ParcelService } from './parcel.service';
 import type { PersonService } from './person.service';
-import type { AgentService } from './agent.service';
+import { signupGapOf, type AgentService } from './agent.service';
+import type { AgentStatus } from './pudo.types';
 import type { FleetService } from './fleet.service';
 import type { ToteService } from './tote.service';
 import type { MdpService } from './mdp.service';
@@ -16,6 +17,8 @@ import type { VendorService } from './vendor.service';
 type Geo = { lat: number; lng: number };
 
 interface HarnessOpts {
+  /** Shops mid-onboarding, keyed by did. MUTABLE: the dispatcher stamps its nudge onto these records. */
+  signups?: Record<string, { status: AgentStatus; shopName?: string; kyc?: { idCopyRef?: string; tradingLicenceRef?: string; shopPhotoRefs?: string[] }; kycRejection?: { reason: string; at: string }; signupNudgedFor?: string }>;
   /** What the window-closing half of the shelf sweep found, so the final-notice cases can name it. */
   unclaimedSweep?: () => Array<{ parcelId: string }>;
   // rule 1 + rule 4 (senderMobile picks the peer-send vs vendor copy)
@@ -61,6 +64,13 @@ function harness(opts: HarnessOpts) {
       if (!a) throw new Error('no such agent');
       return a;
     },
+    // Onboarding: the dispatcher reads the shop RECORD (and writes its nudge stamp onto it), so the fake
+    // hands back the same mutable object the test holds — a copy would hide the stamp that stops a repeat.
+    find: (did: string) => opts.signups?.[did],
+    unfinished: () =>
+      Object.entries(opts.signups ?? {})
+        .filter(([, a]) => a.status === 'DRAFT' || a.status === 'APPROVED_UNFUNDED')
+        .map(([did, a]) => ({ did, told: Boolean(a.signupNudgedFor) && a.signupNudgedFor === signupGapOf(a) })),
   } as unknown as AgentService;
   const fleet = {
     list: (_filter: { status?: string } = {}) => opts.activeDrivers ?? [],
@@ -583,5 +593,81 @@ describe('NotificationDispatcher — FP3b: the sender whose load could not be de
     await events.publish(GlosEvent.Pudo.FreightClaimDecided, { freightId: 'frt_7', code: 'FRT-007', decision: 'partly_upheld', award: 120, note: 'Two boxes short of the manifest', posterDid: 'did:shop:p', claimantDid: 'ven_1' });
     expect(notifications.inboxFor('ven_1')[0]).toMatchObject({ kind: 'claim_decided', title: 'Your claim on FRT-007 was upheld in part', body: '120.00 is credited to your balance. Two boxes short of the manifest' });
     expect(notifications.inboxFor('did:shop:p')).toHaveLength(0);
+  });
+});
+
+/**
+ * ONBOARDING — the loose end: a shop that registered and heard nothing.
+ *
+ * The console could see these shops and could even name the missing papers. The applicant, who is the
+ * only party able to finish the job, was told nothing at all — so an application that stopped looked
+ * from the inside exactly like one that had been submitted and was being reviewed.
+ */
+describe('NotificationDispatcher — onboarding: the applicant is told what is missing', () => {
+  it('names the missing documents the moment they finish registering', async () => {
+    const shop: { status: AgentStatus; shopName: string } = { status: 'DRAFT', shopName: 'Yukel Shop' };
+    const { events, notifications } = harness({ signups: { 'did:agent:new': shop } });
+    await events.publish(GlosEvent.Pudo.AgentRegistered, { did: 'did:agent:new', shopName: 'Yukel Shop' });
+    const inbox = notifications.inboxFor('did:agent:new');
+    expect(inbox).toHaveLength(1);
+    expect(inbox[0]).toMatchObject({ kind: 'signup_incomplete', title: 'Your shop application is not finished' });
+    // Named, not counted: "3 missing" is a number somebody has to ring us to decode.
+    expect(inbox[0].body).toBe('We still need a copy of your ID, your trading licence and photos of the shop. Nobody is reviewing it until then.');
+    // …and it says nobody is reviewing it, which is the thing they had assumed was happening.
+  });
+
+  it('says it ONCE per gap, and says it again when the gap changes', async () => {
+    const shop: { status: AgentStatus; kyc?: { idCopyRef?: string }; signupNudgedFor?: string } = { status: 'DRAFT' };
+    const { events, notifications, dispatcher } = harness({ signups: { 'did:agent:s': shop } });
+    await events.publish(GlosEvent.Pudo.AgentRegistered, { did: 'did:agent:s' });
+    expect(notifications.inboxFor('did:agent:s')).toHaveLength(1);
+
+    // A sweep over an unchanged gap adds nothing: a notification repeated on a timer is how an inbox
+    // becomes a thing people stop reading.
+    expect(await dispatcher.sweepSignups()).toBe(0);
+    expect(notifications.inboxFor('did:agent:s')).toHaveLength(1);
+
+    // They send the ID. That is progress, so what is LEFT is news again.
+    shop.kyc = { idCopyRef: 'med_id' };
+    expect(await dispatcher.sweepSignups()).toBe(1);
+    const inbox = notifications.inboxFor('did:agent:s');
+    expect(inbox).toHaveLength(2);
+    expect(inbox[0].body).toBe('We still need your trading licence and photos of the shop. Nobody is reviewing it until then.');
+  });
+
+  it('tells a shop that was REJECTED what was wrong with it', async () => {
+    const shop: { status: AgentStatus; kycRejection: { reason: string; at: string } } = { status: 'DRAFT', kycRejection: { reason: 'The trading licence had expired.', at: '2026-09-17T10:00:00.000Z' } };
+    const { events, notifications } = harness({ signups: { 'did:agent:r': shop } });
+    await events.publish(GlosEvent.Pudo.AgentKycRejected, { did: 'did:agent:r', reason: 'The trading licence had expired.' });
+    const inbox = notifications.inboxFor('did:agent:r');
+    expect(inbox[0]).toMatchObject({ kind: 'signup_rejected', title: 'Your application needs another look' });
+    // The REASON travels with the refusal. A rejection they cannot act on leaves them where silence did.
+    expect(inbox[0].body).toContain('The trading licence had expired.');
+    expect(inbox[0].body).toContain('Send the documents again');
+  });
+
+  it('sweeps up everyone who was already stuck before any of this existed', async () => {
+    // Nothing happens when a person goes quiet, so no event will ever fire for these two. The sweep is
+    // the only shape that fits the absence of an event — the uncollected shelf's reasoning exactly.
+    const { notifications, dispatcher } = harness({
+      signups: {
+        'did:agent:old': { status: 'DRAFT' },
+        'did:agent:unfunded': { status: 'APPROVED_UNFUNDED' },
+        'did:agent:live': { status: 'ACTIVE' }, // nothing to say to a shop that is simply open
+      },
+    });
+    expect(await dispatcher.sweepSignups()).toBe(2);
+    expect(notifications.inboxFor('did:agent:old')).toHaveLength(1);
+    expect(notifications.inboxFor('did:agent:unfunded')[0]).toMatchObject({ title: 'One step left to open' });
+    expect(notifications.inboxFor('did:agent:live')).toHaveLength(0);
+  });
+
+  it('stamps the shop even when the notification cannot be delivered, so no backlog builds up', async () => {
+    // The uncollected-reminder rule: a shop that enables notifications next week must not be greeted by
+    // a pile of nudges about one gap it has been sitting in all along.
+    const shop: { status: AgentStatus; signupNudgedFor?: string } = { status: 'DRAFT' };
+    const { dispatcher } = harness({ signups: { 'did:agent:q': shop } });
+    await dispatcher.sweepSignups();
+    expect(shop.signupNudgedFor).toBe('missing:id,licence,photos');
   });
 });

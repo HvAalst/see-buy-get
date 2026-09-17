@@ -277,6 +277,51 @@ describe('PUDO Light', () => {
     expect(events.getLog().some((e) => e.type === GlosEvent.Pudo.AgentActivated)).toBe(true);
   });
 
+  /**
+   * A REFUSAL CARRIES A REASON — the rule the claims queue already obeys, arriving late here.
+   *
+   * Rejecting sent a shop back to DRAFT and said nothing, which left it indistinguishable from a shop
+   * that had never sent anything: the chase list reported no missing documents (the rejected refs were
+   * still on the record), the applicant was told neither the decision nor what was wrong, and
+   * `submitKyc` only accepts a full set from DRAFT, so they could not replace one bad licence anyway.
+   */
+  it('refuses to reject a shop without saying why', () => {
+    const a = agents.register({ shopName: 'No Reason', zone: 'NorthTown', location: { lat: -1.2, lng: 36.8 }, landmark: 'gate', openingHours: uniformHours(), shelf: defaultShelf, fullName: 'R K', nationalId: 'ID-R', mobile: '+254700444', deviceImei: 'IMEI-R', requirements: eligibleReqs() });
+    agents.submitKyc(a.did, kycDocs);
+    expect(() => agents.decideKyc(a.did, false)).toThrow(/why/i);
+    expect(() => agents.decideKyc(a.did, false, 'ops', '   ')).toThrow(/why/i);
+    // Refused, so the application is untouched and still awaiting a decision.
+    expect(agents.get(a.did).status).toBe('KYC_PENDING');
+  });
+
+  it('records a rejection, clears the papers, and makes the shop chaseable as REJECTED', () => {
+    const a = agents.register({ shopName: 'Second Look', zone: 'NorthTown', location: { lat: -1.2, lng: 36.8 }, landmark: 'gate', openingHours: uniformHours(), shelf: defaultShelf, fullName: 'S L', nationalId: 'ID-S', mobile: '+254700555', deviceImei: 'IMEI-S', requirements: eligibleReqs() });
+    agents.submitKyc(a.did, kycDocs);
+    const rejected = agents.decideKyc(a.did, false, 'ops', 'The trading licence had expired.');
+    expect(rejected.status).toBe('DRAFT');
+    expect(rejected.kycRejection).toMatchObject({ reason: 'The trading licence had expired.', by: 'ops' });
+    // The papers are CLEARED, or the chase list reads "nothing missing" for a shop that cannot proceed
+    // and `submitKyc` (DRAFT + a full set only) gives them no way to send a replacement.
+    expect(rejected.kyc).toBeUndefined();
+    const row = agents.unfinished().find((r) => r.did === a.did);
+    expect(row).toMatchObject({ reason: 'was-rejected', rejectedWhy: 'The trading licence had expired.', told: false });
+    expect(row?.missing).toEqual(['id', 'licence', 'photos']);
+    // The applicant can be told, and the event that tells them carries the reason.
+    expect(events.getLog().some((e) => e.type === GlosEvent.Pudo.AgentKycRejected)).toBe(true);
+
+    // They send a fresh set and are approved: the old refusal stops being the news.
+    agents.submitKyc(a.did, kycDocs);
+    expect(agents.decideKyc(a.did, true).kycRejection).toBeUndefined();
+  });
+
+  it('publishes a registration so the applicant can be told what is still needed', () => {
+    // Nothing used to fire here, so nobody could be told anything at the one moment they are certain to
+    // be holding the phone — and a form that answers with silence reads as "submitted, now wait".
+    const a = agents.register({ shopName: 'Told Now', zone: 'NorthTown', location: { lat: -1.2, lng: 36.8 }, landmark: 'gate', openingHours: uniformHours(), shelf: defaultShelf, fullName: 'T N', nationalId: 'ID-T', mobile: '+254700666', deviceImei: 'IMEI-T', requirements: eligibleReqs() });
+    expect(events.getLog().some((e) => e.type === GlosEvent.Pudo.AgentRegistered)).toBe(true);
+    expect(agents.unfinished().find((r) => r.did === a.did)).toMatchObject({ reason: 'needs-documents', told: false });
+  });
+
   it('rejects applicants that fail the eligibility filter (Ch 18.1)', () => {
     const base = { shopName: 'S', zone: 'NorthTown', location: { lat: -1, lng: 36 }, landmark: 'x', openingHours: uniformHours(), shelf: defaultShelf, fullName: 'A', nationalId: 'ID-E', mobile: '+254E', deviceImei: 'IMEI-E', requirements: eligibleReqs() };
     expect(() => agents.register({ ...base, shelf: { rows: 1, cols: 1 } })).toThrow(/slots/);
@@ -2779,6 +2824,37 @@ describe('PUDO Light', () => {
     drivers.decideKyc(d.did, true, 'ops');
     expect(drivers.get(d.did).status).toBe('ACTIVE');
     expect(drivers.get(d.did).badgeId).toMatch(/^DRV-/);
+  });
+
+  /**
+   * A DRIVER'S REFUSAL CARRIES A REASON TOO — and their papers are cleared so they can send new ones.
+   *
+   * The whole decision had no test: 1375 passing tests and nothing had ever refused a driver. It also had
+   * no SCREEN — `fleet/drivers/kyc-queue` was live from the day the registry shipped and no console read
+   * it, so a driver who uploaded an ID and a licence waited in KYC_PENDING with nobody able to look at
+   * either. Silence at both ends of the same decision.
+   */
+  it('refuses to reject a driver without saying why, and clears their papers when it does', () => {
+    const future = new Date(Date.now() + 365 * 86_400_000).toISOString();
+    const d = drivers.register({ displayName: 'Grace', fullName: 'Grace M', nationalId: 'DRV-ID-REJ', mobile: '+254900777', licenceClasses: ['van'], licenceNumber: 'L-REJ', licenceExpiresAt: future, criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'med_id', licenceCopyRef: 'med_lic' });
+
+    expect(() => drivers.decideKyc(d.did, false, 'ops')).toThrow(/why/i);
+    expect(() => drivers.decideKyc(d.did, false, 'ops', '  ')).toThrow(/why/i);
+    // Refused, so the application still stands where it was.
+    expect(drivers.get(d.did).status).toBe('KYC_PENDING');
+
+    const rejected = drivers.decideKyc(d.did, false, 'ops', 'The licence photo was unreadable.');
+    expect(rejected.status).toBe('DRAFT');
+    expect(rejected.kycRejection).toMatchObject({ reason: 'The licence photo was unreadable.', by: 'ops' });
+    // Cleared, or `submitKyc` (DRAFT + a full pair only) gives them no way to replace the bad photo.
+    expect(rejected.kyc).toBeUndefined();
+    expect(events.getLog().some((e) => e.type === GlosEvent.Pudo.DriverKycRejected)).toBe(true);
+
+    // A fresh pair, and an approval drops the old refusal — a driver who got in carries no note saying
+    // they once did not.
+    drivers.submitKyc(d.did, { idCopyRef: 'med_id2', licenceCopyRef: 'med_lic2' });
+    expect(drivers.decideKyc(d.did, true, 'ops').kycRejection).toBeUndefined();
   });
 
   it('registers vehicles with system-computed capacity + a verified (priority) flag from docs', () => {

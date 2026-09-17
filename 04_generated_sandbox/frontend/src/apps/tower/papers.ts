@@ -15,6 +15,8 @@ export interface CourierPaperRow {
   registry: string;
   jurisdiction?: string;
   licence: { number?: string; expiresAt?: string };
+  /** The licence and ID the driver submitted, so a new expiry is typed while LOOKING at the document. */
+  documents?: { licenceCopyRef?: string; idCopyRef?: string; submittedAt?: string };
   papers: PaperView[];
   /** The lapsed papers, in the server's words. Non-empty means no shift can start. */
   offRoad: string[];

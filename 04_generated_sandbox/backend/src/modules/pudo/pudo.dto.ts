@@ -92,6 +92,9 @@ export class SubmitKycDto {
 export class KycDecisionDto {
   @IsBoolean() approve!: boolean;
   @IsOptional() @IsString() by?: string;
+  /** Required when refusing: the applicant is SHOWN this, and a refusal they cannot act on leaves them
+   *  exactly where a silent one did. Validated in the service, where the approve flag is known. */
+  @IsOptional() @IsString() reason?: string;
 }
 
 export class AvailabilityDto {
@@ -1183,6 +1186,8 @@ export class DriverKycDto {
 export class DriverKycDecisionDto {
   @IsBoolean() approve!: boolean;
   @IsOptional() @IsString() by?: string;
+  /** Required when refusing: the driver is shown it, and is the only person who can put it right. */
+  @IsOptional() @IsString() reason?: string;
 }
 
 /** The road a driver says they are running this shift — both ends named AND pinned (see DeclaredLeg). */

@@ -211,6 +211,27 @@ export const QUEUE_LABEL: Record<'claims' | 'disposal' | 'approvals', MessageKey
   approvals: 'tower.nav.approvals',
 };
 
+/* ----------------------------------------------------------- driver applications -- */
+
+/**
+ * A heavy-registry driver waiting to be vetted.
+ *
+ * `GET fleet/drivers/kyc-queue` had existed on the server all along with no console reading it, so a
+ * driver who uploaded an ID and a licence copy waited in KYC_PENDING with no screen able to look at
+ * either. The documents are the whole substance of the decision: what is being judged is whether this
+ * person may legally drive, and that cannot be judged off a typed date.
+ */
+export interface DriverApplication {
+  did: string;
+  displayName: string;
+  registry: string;
+  jurisdiction?: string;
+  criminalRecordClear: boolean;
+  licence?: { number?: string; expiresAt?: string };
+  /** The media ids the driver submitted. Whether bytes exist behind them is the media route's answer. */
+  kyc?: { idCopyRef?: string; licenceCopyRef?: string; submittedAt?: string };
+}
+
 /* ------------------------------------------------------------- stalled sign-ups -- */
 
 /**
@@ -228,9 +249,14 @@ export interface StalledRow {
   status: string;
   /** When they registered. */
   since: string;
-  reason: 'needs-documents' | 'needs-first-top-up';
+  reason: 'needs-documents' | 'needs-first-top-up' | 'was-rejected';
   /** Which documents are missing — empty for a shop that sent them all and never funded its float. */
   missing: string[];
+  /** What we told them was wrong, on a shop we REJECTED rather than one that never sent anything. */
+  rejectedWhy?: string;
+  /** Whether the applicant has been told about the state they are in. False is the loose end: somebody
+   *  is waiting on a message that was never sent. Absent on a server that predates the field. */
+  told?: boolean;
 }
 
 /**
@@ -249,6 +275,9 @@ export function stuckDays(since: string, now = Date.now()): number {
 export const STALLED_REASON: Record<StalledRow['reason'], MessageKey> = {
   'needs-documents': 'tower.stalled.reason.documents',
   'needs-first-top-up': 'tower.stalled.reason.topup',
+  // A shop WE turned down is not a shop that never sent anything: what you say on the phone differs, and
+  // only one of the two is our own doing. They read as one row until the rejection was recorded.
+  'was-rejected': 'tower.stalled.reason.rejected',
 };
 
 /**

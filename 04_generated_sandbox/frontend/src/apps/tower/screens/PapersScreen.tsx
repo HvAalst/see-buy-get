@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
+import { DocumentStrip } from './DocumentStrip';
 import { paperLine, papersToShow, paperTone, renewalBlocker } from '../../../shared/papers';
 import { isStuck, type CourierPaperRow, type LooseVehicleRow } from '../papers';
 import type { TowerActions, TowerState } from '../useTowerApp';
@@ -201,6 +202,16 @@ function LicenceForm({ row, state, actions }: { row: CourierPaperRow; state: Tow
     <div class="twr-clear">
       <p class="twr-clear__t">{t('tower.papers.licenceTitle', { name: row.displayName })}</p>
       <p class="twr-clear__b">{t('tower.papers.licenceBody')}</p>
+      {/* THE PAPER, above the field. This form's own comment has always said "recorded by staff who have
+          seen the paper" and the screen showed them none — so the date was typed against nothing, on the
+          one control that decides whether somebody may legally be on the road. */}
+      <DocumentStrip
+        refs={[row.documents?.licenceCopyRef].filter((x): x is string => Boolean(x))}
+        state={state}
+        actions={actions}
+        titleKey="tower.papers.licenceProof"
+        emptyKey="tower.papers.licenceNoProof"
+      />
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
         <label class="cfield">
           <span class="cfield__label">{t('tower.papers.licenceNumber')}</span>

@@ -17499,6 +17499,27 @@
           "kyc": {
             "$ref": "#/components/schemas/KycDocuments"
           },
+          "kycRejection": {
+            "type": "object",
+            "properties": {
+              "reason": {
+                "required": true,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "by": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
+          "signupNudgedFor": {
+            "type": "string",
+            "description": "What the last onboarding nudge was ABOUT — the missing set it named, e.g. \"id,licence,photos\" or\n \"rejected\" or \"unfunded\". Said once per distinct gap: progress starts a new clock, and an ignored\n nudge is never repeated. Follows CredentialReminderService's stamp-against-the-state rule."
+          },
           "equipmentDepositPaid": {
             "type": "boolean"
           },
@@ -17527,6 +17548,7 @@
           "equipment",
           "deviceImei",
           "requirements",
+          "kycRejection",
           "equipmentDepositPaid",
           "status",
           "lastPingAt",
@@ -17563,6 +17585,10 @@
           },
           "by": {
             "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Required when refusing: the applicant is SHOWN this, and a refusal they cannot act on leaves them\n exactly where a silent one did. Validated in the service, where the approve flag is known."
           }
         },
         "required": [
@@ -24399,6 +24425,23 @@
           "kyc": {
             "$ref": "#/components/schemas/DriverKyc"
           },
+          "kycRejection": {
+            "type": "object",
+            "properties": {
+              "reason": {
+                "required": true,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "by": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
           "criminalRecordClear": {
             "type": "boolean"
           },
@@ -24442,6 +24485,7 @@
           "displayName",
           "registry",
           "licence",
+          "kycRejection",
           "criminalRecordClear",
           "status",
           "createdAt",
@@ -24569,6 +24613,10 @@
           },
           "by": {
             "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Required when refusing: the driver is shown it, and is the only person who can put it right."
           }
         },
         "required": [

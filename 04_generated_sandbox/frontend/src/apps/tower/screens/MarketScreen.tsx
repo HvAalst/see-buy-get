@@ -84,13 +84,16 @@ export function MarketScreen({ actions }: { actions: TowerActions }) {
           <span class="cons__panelt">{t('tower.market.shapeTitle')}</span>
           <span class={`ctag ${mood === 'tight' ? 'ctag--warn' : mood === 'easing' ? 'ctag--ok' : 'ctag--quiet'}`}>{t(MOOD_LABEL[mood])}</span>
         </div>
-        <div class="chips">
+        {/* The console's own pick-one control, not the `chip` the phone apps use: those classes live in
+            four app stylesheets and in none of the console's, so they rendered as bare buttons with no
+            gap between them. Orange means chosen here, the same signal as the rail. */}
+        <nav class="twr-sisters" aria-label={t('tower.market.pickRange')}>
           {RANGES.map((n) => (
-            <button key={n} type="button" class={`chip chip--tap${days === n ? ' chip--on' : ''}`} aria-pressed={days === n} onClick={() => setDays(n)}>
-              {t('tower.market.range', { n })}
+            <button key={n} type="button" class={`twr-sister${days === n ? ' twr-sister--on' : ''}`} aria-pressed={days === n} onClick={() => setDays(n)}>
+              <span class="twr-sister__n">{t('tower.market.range', { n })}</span>
             </button>
           ))}
-        </div>
+        </nav>
 
         {loading && !series ? (
           <p class="cons__empty">{t('tower.market.loading')}</p>

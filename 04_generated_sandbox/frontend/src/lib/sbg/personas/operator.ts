@@ -196,6 +196,17 @@ export function createOperatorApi(sbg: SbgClient) {
     companyDocumentFile: (entityId: string, documentId: string) =>
       sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/documents/{documentId}/file', { params: { path: { entityId, documentId } }, parseAs: 'blob' })),
 
+    /**
+     * The bytes of one media, for `AuthImage`. The console needs this to show CLAIM EVIDENCE.
+     *
+     * The route is owner-or-operator gated and sends `Cache-Control: private, no-store`, which is why a
+     * bare `<img src>` cannot load it: the browser sends no bearer. The photographs belong to the claimant,
+     * never to the operator — staff read them because deciding a claim on evidence they cannot see is not
+     * deciding, and for no other reason.
+     */
+    mediaBlob: (mediaId: string, variant?: 'full' | 'thumb') =>
+      sbg.request((c) => c.GET('/v1/sbg/media/{id}', { params: { path: { id: mediaId }, query: variant ? { variant } : {} }, parseAs: 'blob' } as never)),
+
     verifyCompanyDocument: (entityId: string, documentId: string, by?: string) =>
       sbg.request((c) =>
         c.POST('/v1/sbg/entities/{entityId}/documents/{documentId}/verify', { params: { path: { entityId, documentId } }, body: { ...(by ? { by } : {}) } }),
@@ -368,6 +379,18 @@ export function createOperatorApi(sbg: SbgClient) {
     kycQueue: () => sbg.request((c) => c.GET('/v1/sbg/agents/kyc-queue', {})),
 
     /**
+     * Heavy-registry drivers waiting to be vetted, and the decision.
+     *
+     * Both routes have been live since the driver registry shipped and NOTHING read the queue: a driver
+     * who uploaded an ID and a licence copy waited in KYC_PENDING with no screen able to look at either.
+     * The refusal carries a reason, because the driver is shown it.
+     */
+    driverKycQueue: () => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/kyc-queue', {})),
+
+    decideDriverKyc: (did: string, body: { approve: boolean; by?: string; reason?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/kyc-decision', { params: { path: { did } }, body: body as never })),
+
+    /**
      * Shops that started joining and STOPPED — a chase list, not a queue.
      *
      * Nothing in it is waiting on a decision by us: a draft shop is waiting on the shopkeeper to send
@@ -378,7 +401,9 @@ export function createOperatorApi(sbg: SbgClient) {
     unfinishedSignups: () => sbg.request((c) => c.GET('/v1/sbg/agents/unfinished', {})),
 
     /** Let a shop in, or refuse it. */
-    decideKyc: (did: string, body: { approve: boolean; by?: string }) =>
+    /** `reason` is REQUIRED by the server when refusing: the applicant is shown it, and a refusal they
+     *  cannot act on leaves them exactly where saying nothing did. */
+    decideKyc: (did: string, body: { approve: boolean; by?: string; reason?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/agents/{did}/kyc-decision', { params: { path: { did } }, body: body as never })),
 
     /** A company's books: the trial balance, whether it balances, and what it holds against what it owes. */

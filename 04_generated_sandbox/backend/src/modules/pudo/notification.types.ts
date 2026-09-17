@@ -33,7 +33,32 @@ export interface PushSubscriptionRecord {
 
 /** The closed vocabulary of what we push. The spine (N1) fires `test`; N2/N3 add the rest;
  *  `intake_expected` (a parcel minted → its drop-off PUDO should expect it) is the genesis rule. */
-export const NOTIFICATION_KINDS = ['test', 'parcel_ready', 'load_nearby', 'load_assigned', 'load_instructions', 'load_cancelled', 'freight_problem', 'claim_decided', 'papers_due', 'papers_lapsed', 'bus_inbound', 'intake_expected', 'bag_ready_to_close', 'message'] as const;
+export const NOTIFICATION_KINDS = [
+  'test',
+  'parcel_ready',
+  'load_nearby',
+  'load_assigned',
+  'load_instructions',
+  'load_cancelled',
+  'freight_problem',
+  'claim_decided',
+  'papers_due',
+  'papers_lapsed',
+  'bus_inbound',
+  'intake_expected',
+  'bag_ready_to_close',
+  'message',
+  /**
+   * Joining stopped short, and the applicant is the one who can finish it.
+   *
+   * A shop that registers and sends no documents sits in DRAFT for ever. The console could see it — a
+   * chase list names the missing papers — and the shop itself was told nothing at all, so the one party
+   * who could act was the only party kept in the dark. Both halves of onboarding now speak: what is
+   * still needed, and what a rejection decided and why.
+   */
+  'signup_incomplete',
+  'signup_rejected',
+] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 
 /**

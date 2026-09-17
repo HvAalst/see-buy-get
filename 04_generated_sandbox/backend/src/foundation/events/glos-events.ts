@@ -52,6 +52,19 @@ export const GlosEvent = {
   Pudo: {
     AgentActivated: 'pudo.agent_activated',
     AgentLocked: 'pudo.agent_locked',
+    /**
+     * A shop finished the registration form. It is in DRAFT and has sent nothing yet.
+     *
+     * Published so the applicant can be told what is still needed AT THAT MOMENT, which is the only
+     * moment they are certain to be holding the phone. The sweep that follows catches everyone who was
+     * already stuck when this shipped, and everyone who half-finishes later — but a sweep alone would
+     * mean a shop finishes a form, is told nothing, and hears from us hours later.
+     */
+    AgentRegistered: 'pudo.agent_registered',
+    /** A KYC decision went against the applicant. Carries the reason, because they are shown it. */
+    AgentKycRejected: 'pudo.agent_kyc_rejected',
+    /** The same, for a heavy-registry driver: they are shown the reason and can send fresh papers. */
+    DriverKycRejected: 'pudo.driver_kyc_rejected',
     WalletToppedUp: 'pudo.wallet_topped_up',
     InboundCreated: 'pudo.inbound_created',
     ParcelPaid: 'pudo.parcel_paid', // vendor prepaid the full cost → label unblocked + drop-off PUDO notified

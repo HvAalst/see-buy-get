@@ -20,6 +20,30 @@ import { averageOpenHours } from './hours';
 import { Agent, AgentRequirements, AgentStatus, KycDocuments, ShelfConfig, WeeklyHours } from './pudo.types';
 import { Equipment } from './cargo.types';
 
+/**
+ * WHAT THIS SHOP IS STUCK ON, as one short key — and the single definition of it.
+ *
+ * Used for two things that must never disagree: the stamp recording what the applicant was last told,
+ * and the sweep deciding whether to tell them again. Two expressions of "the same gap" would mean a shop
+ * nudged twice about one thing, or never nudged about a new one.
+ *
+ * Empty string = nothing to say, which is the honest answer for a shop that is simply live.
+ */
+export function signupGapOf(a: {
+  status: AgentStatus;
+  /** Only the refs are read — never `submittedAt` — so this takes the shape it actually needs rather
+   *  than a whole KycDocuments, and a caller holding a partial record can ask the same question. */
+  kyc?: { idCopyRef?: string; tradingLicenceRef?: string; shopPhotoRefs?: string[] };
+  kycRejection?: { at: string };
+}): string {
+  if (a.status === 'APPROVED_UNFUNDED') return 'unfunded';
+  if (a.status !== 'DRAFT') return '';
+  // A rejection is keyed to its own text: a second look that fails for a NEW reason is news again.
+  if (a.kycRejection) return `rejected:${a.kycRejection.at}`;
+  const missing = [a.kyc?.idCopyRef ? null : 'id', a.kyc?.tradingLicenceRef ? null : 'licence', a.kyc?.shopPhotoRefs?.length ? null : 'photos'].filter(Boolean);
+  return missing.length ? `missing:${missing.join(',')}` : '';
+}
+
 interface RegisterAgentInput {
   shopName: string;
   zone: string;
@@ -182,6 +206,11 @@ export class AgentService {
       createdAt: new Date().toISOString(),
     };
     this.agents.set(did, agent);
+    // Tell them what is still needed while they are still holding the phone. Fire-and-forget like every
+    // other publish here: a notification that fails must never fail a registration.
+    void this.events
+      .publish(GlosEvent.Pudo.AgentRegistered, { did, agentId: agent.agentId, shopName: agent.shopName }, { source: 'pudo' })
+      .catch(() => undefined);
     return agent;
   }
 
@@ -196,11 +225,36 @@ export class AgentService {
     return this.transition(agent, 'KYC_PENDING');
   }
 
-  /** Vetting decision (18.5): approve → APPROVED_UNFUNDED (+ wallet); reject → DRAFT. Requirements + docs re-checked. */
-  decideKyc(did: string, approve: boolean, by?: string): Agent {
+  /**
+   * Vetting decision (18.5): approve → APPROVED_UNFUNDED (+ wallet); reject → DRAFT. Requirements + docs re-checked.
+   *
+   * A REJECTION CARRIES A REASON, and it is not optional — the same rule the claims queue already obeys,
+   * for the same reason: the applicant is shown it. Without one, a rejection sent a shop back to DRAFT
+   * silently, where it was indistinguishable from a shop that had never sent anything, and the person who
+   * had to fix it was told neither that a decision had been made nor what was wrong with what they sent.
+   *
+   * The documents are CLEARED on a rejection. They have to be: `unfinished()` reads the papers to work out
+   * what is missing, so refs left behind on a rejected record made the chase list report nothing missing
+   * for a shop that could not proceed — and the shop would have had no way to replace a rejected licence,
+   * because `submitKyc` only accepts a full set and only from DRAFT.
+   */
+  decideKyc(did: string, approve: boolean, by?: string, reason?: string): Agent {
     const agent = this.require(did);
     if (agent.status !== 'KYC_PENDING') throw new GlosError('INVALID_STATE', `Agent is ${agent.status}, expected KYC_PENDING`);
-    if (!approve) return this.transition(agent, 'DRAFT');
+    if (!approve) {
+      const why = reason?.trim();
+      if (!why) throw new GlosError('REASON_REQUIRED', 'A rejection must say why: the applicant is shown it');
+      agent.kycRejection = { reason: why, at: new Date().toISOString(), ...(by ? { by } : {}) };
+      agent.kyc = undefined;
+      const rejected = this.transition(agent, 'DRAFT');
+      void this.events
+        .publish(GlosEvent.Pudo.AgentKycRejected, { did, agentId: agent.agentId, shopName: agent.shopName, reason: why }, { source: 'pudo' })
+        .catch(() => undefined);
+      return rejected;
+    }
+    // Approved: the old refusal stops being the news. Kept nowhere, because a shop that got in does not
+    // carry a note saying it once did not.
+    agent.kycRejection = undefined;
     if (!agent.kyc) throw new GlosError('KYC_INCOMPLETE', 'Cannot approve: KYC documents missing');
     const unmet = this.unmetRequirements(agent);
     if (unmet.length) throw new GlosError('APPROVAL_BLOCKED', `Cannot approve: ${unmet.join('; ')}`);
@@ -245,28 +299,40 @@ export class AgentService {
     status: string;
     since: string;
     /** Why they are stuck — the thing to say when somebody rings them. */
-    reason: 'needs-documents' | 'needs-first-top-up';
+    reason: 'needs-documents' | 'needs-first-top-up' | 'was-rejected';
     /** For a DRAFT shop, which documents are actually missing. Empty for an unfunded one. */
     missing: string[];
+    /** Why we said no, on a shop that was rejected rather than one that never sent anything. */
+    rejectedWhy?: string;
+    /** Whether the applicant has been told about the state they are in. A row that says NO here is the
+     *  loose end itself: somebody is waiting on us to have already spoken. */
+    told: boolean;
   }> {
     return [...this.agents.values()]
       .filter((a) => a.status === 'DRAFT' || a.status === 'APPROVED_UNFUNDED')
-      .map((a) => ({
-        did: a.did,
-        shopName: a.shopName,
-        zone: a.zone,
-        status: a.status,
-        since: a.createdAt,
-        reason: a.status === 'DRAFT' ? ('needs-documents' as const) : ('needs-first-top-up' as const),
-        missing:
-          a.status === 'DRAFT'
-            ? [
-                a.kyc?.idCopyRef ? null : 'id',
-                a.kyc?.tradingLicenceRef ? null : 'licence',
-                a.kyc?.shopPhotoRefs?.length ? null : 'photos',
-              ].filter((x): x is string => Boolean(x))
-            : [],
-      }))
+      .map((a) => {
+        // A shop we REJECTED is not a shop that never sent anything, and the chase list must not read the
+        // two as one row: what you say on the phone is different, and only one of them is our own doing.
+        const reason = a.status !== 'DRAFT' ? ('needs-first-top-up' as const) : a.kycRejection ? ('was-rejected' as const) : ('needs-documents' as const);
+        return {
+          did: a.did,
+          shopName: a.shopName,
+          zone: a.zone,
+          status: a.status,
+          since: a.createdAt,
+          reason,
+          missing:
+            a.status === 'DRAFT'
+              ? [
+                  a.kyc?.idCopyRef ? null : 'id',
+                  a.kyc?.tradingLicenceRef ? null : 'licence',
+                  a.kyc?.shopPhotoRefs?.length ? null : 'photos',
+                ].filter((x): x is string => Boolean(x))
+              : [],
+          ...(a.kycRejection ? { rejectedWhy: a.kycRejection.reason } : {}),
+          told: Boolean(a.signupNudgedFor) && a.signupNudgedFor === signupGapOf(a),
+        };
+      })
       // Longest stuck first: the shop that signed up a month ago and never came back is the one nobody
       // has called, and the one most likely to be gone for good.
       .sort((a, b) => a.since.localeCompare(b.since));
@@ -418,6 +484,12 @@ export class AgentService {
 
   get(did: string): Agent {
     return this.require(did);
+  }
+
+  /** The same lookup that does NOT throw — for callers whose whole job is best-effort, like the
+   *  notification dispatcher: a shop that no longer exists is a reason to say nothing, not to raise. */
+  find(did: string): Agent | undefined {
+    return this.agents.get(did);
   }
 
   /** Set the agent's open-data per-parcel handling price (public, drives the shipment quote). */

@@ -231,11 +231,28 @@ export class DriverService {
     return driver;
   }
 
-  /** Operator vetting (heavy): approve → ACTIVE (+ badge); reject → DRAFT. Re-checks licence + record. */
-  decideKyc(did: string, approve: boolean, by?: string): FleetDriver {
+  /**
+   * Operator vetting (heavy): approve → ACTIVE (+ badge); reject → DRAFT. Re-checks licence + record.
+   *
+   * A REFUSAL CARRIES A REASON, exactly as a shop's does and for the same reason: the driver is shown it,
+   * and a refusal they cannot act on leaves them where saying nothing did. Their papers are cleared so a
+   * replacement pair can be sent — `submitKyc` only accepts a full set, and only from DRAFT.
+   */
+  decideKyc(did: string, approve: boolean, by?: string, reason?: string): FleetDriver {
     const driver = this.require(did);
     if (driver.status !== 'KYC_PENDING') throw new GlosError('INVALID_STATE', `Driver is ${driver.status}, expected KYC_PENDING`);
-    if (!approve) { driver.status = 'DRAFT'; return driver; }
+    if (!approve) {
+      const why = reason?.trim();
+      if (!why) throw new GlosError('REASON_REQUIRED', 'A rejection must say why: the driver is shown it');
+      driver.kycRejection = { reason: why, at: new Date().toISOString(), ...(by ? { by } : {}) };
+      driver.kyc = undefined;
+      driver.status = 'DRAFT';
+      void this.events
+        .publish(GlosEvent.Pudo.DriverKycRejected, { did, driverId: driver.driverId, displayName: driver.displayName, reason: why }, { source: 'pudo' })
+        .catch(() => undefined);
+      return driver;
+    }
+    driver.kycRejection = undefined;
     if (!driver.kyc) throw new GlosError('KYC_INCOMPLETE', 'Cannot approve: KYC documents missing');
     if (!driver.criminalRecordClear) throw new GlosError('APPROVAL_BLOCKED', 'Cannot approve: criminal-record check not cleared');
     if (this.isExpired(driver.licence.expiresAt)) throw new GlosError('APPROVAL_BLOCKED', 'Cannot approve: the driving licence has expired');

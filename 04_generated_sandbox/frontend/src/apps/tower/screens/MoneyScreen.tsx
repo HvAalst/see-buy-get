@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
+import { EntityPicker } from './EntityPicker';
 import { amount, money } from '../queues';
 import { PAYOUT_ACTIONS, payoutTone } from '../settlement';
 import type { TowerActions, TowerState } from '../useTowerApp';
@@ -42,20 +43,12 @@ export function MoneyScreen({ state, actions }: { state: TowerState; actions: To
 
       {/* The same company selection as the rates screen: one "which company am I looking at" for the
           whole console, because two would be two answers to one question. */}
-      <nav class="twr-sisters" aria-label={t('tower.rates.pickSister')}>
-        {(state.entities ?? []).map((e) => (
-          <button
-            key={e.entityId}
-            type="button"
-            class={`twr-sister${state.entityId === e.entityId ? ' twr-sister--on' : ''}`}
-            aria-pressed={state.entityId === e.entityId}
-            onClick={() => void actions.chooseEntity(e.entityId)}
-          >
-            <span class="twr-sister__n">{e.name}</span>
-            <span class="twr-sister__m">{e.kind === 'group' ? t('tower.rates.group') : `${e.jurisdiction ?? '—'} · ${e.currency ?? '—'}`}</span>
-          </button>
-        ))}
-      </nav>
+      <EntityPicker
+        entities={state.entities ?? []}
+        chosen={state.entityId}
+        onChoose={(id) => void actions.chooseEntity(id)}
+        label={t('tower.rates.pickSister')}
+      />
 
       {state.error ? (
         <p class="cerr" style="max-width:96ch">

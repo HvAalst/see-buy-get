@@ -61,7 +61,16 @@
 /* The masthead: who we are on the left, who is at the keyboard on the right. Deliberately quiet — an
    operator's screen belongs to the work, and the identity has already been established by the time
    somebody is signed in and looking at a queue. */
+/* STUCK TO THE TOP, and the rail below it is stuck too.
+
+   Both used to scroll away with the page: `.cons` is a grid whose rows grow with their content, so on a
+   long table the masthead and the whole sidebar travelled up and off. On a console that is worse than
+   untidy — the rail is how you leave a screen, so scrolling down a queue took the way out with it, and
+   who you are signed in as is the thing an operator checks before a decision that names them. */
 .cons__mast {
+  position: sticky;
+  top: 0;
+  z-index: 30;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -117,7 +126,15 @@
   min-height: 0;
 }
 
+/* `align-self: start` is what makes the sticky work: a stretched grid item is already as tall as the body
+   it sits in, so it has nowhere to stick to. Held to the viewport under the masthead and scrolling on its
+   own when the groups outgrow a short window. */
 .cons__rail {
+  position: sticky;
+  top: var(--c-mast-h);
+  align-self: start;
+  height: calc(100dvh - var(--c-mast-h));
+  overflow-y: auto;
   border-right: 1px solid var(--bd-soft);
   background: var(--bg);
   padding: 14px 10px;

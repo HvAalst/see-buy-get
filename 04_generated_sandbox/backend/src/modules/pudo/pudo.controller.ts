@@ -269,7 +269,7 @@ export class SbgController {
   @Roles('operator')
   @Post('agents/:did/kyc-decision')
   decideKyc(@Param('did') did: string, @Body() dto: KycDecisionDto, @Actor() actor: IntrospectionResult) {
-    return this.agents.decideKyc(did, dto.approve, auditActor(actor, dto.by));
+    return this.agents.decideKyc(did, dto.approve, auditActor(actor, dto.by), dto.reason);
   }
 
   /** Record the refundable equipment/starter-kit deposit. */
@@ -3110,7 +3110,7 @@ export class SbgController {
   @Roles('operator')
   @Post('fleet/drivers/:did/kyc-decision')
   driverDecideKyc(@Param('did') did: string, @Body() dto: DriverKycDecisionDto, @Actor() actor: IntrospectionResult) {
-    return this.drivers.decideKyc(did, dto.approve, auditActor(actor, dto.by));
+    return this.drivers.decideKyc(did, dto.approve, auditActor(actor, dto.by), dto.reason);
   }
 
   @Roles('operator')

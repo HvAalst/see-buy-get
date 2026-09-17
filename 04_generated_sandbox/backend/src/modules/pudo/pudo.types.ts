@@ -105,6 +105,13 @@ export class Agent {
   deviceImei: string; // Golden Record device — agent binds to this tablet
   requirements: AgentRequirements;
   kyc?: KycDocuments;
+  /** Why the last KYC decision went against them, and when. Cleared the moment they are approved.
+   *  Present on a DRAFT shop = "we looked and said no", which is a different state from "never sent". */
+  kycRejection?: { reason: string; at: string; by?: string };
+  /** What the last onboarding nudge was ABOUT — the missing set it named, e.g. "id,licence,photos" or
+   *  "rejected" or "unfunded". Said once per distinct gap: progress starts a new clock, and an ignored
+   *  nudge is never repeated. Follows CredentialReminderService's stamp-against-the-state rule. */
+  signupNudgedFor?: string;
   equipmentDepositPaid: boolean; // $50 refundable starter-kit deposit (18.3)
   status: AgentStatus;
   lastPingAt: string;

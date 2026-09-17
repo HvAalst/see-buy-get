@@ -11,6 +11,8 @@
  * Sandbox-only by construction: it uses the public phone-OTP echo and the ungated
  * operator mint, both of which die the moment GLOS_CLIENT_SECRET is configured.
  */
+import { documentDataUrl } from './seed-image.mjs';
+
 const API = process.env.SBG_API ?? 'http://localhost:3000';
 const PASSWORD = 'seebuyget';
 const stamp = Date.now().toString(36).slice(-5).toUpperCase();
@@ -38,6 +40,19 @@ async function req(method, path, { token, body } = {}) {
     /* empty */
   }
   return { ok: res.ok, status: res.status, data };
+}
+
+/**
+ * Upload a real image and return its media id, so a seeded document can actually be LOOKED at.
+ *
+ * Every photo in this world used to be a filename with no bytes behind it, which was invisible until
+ * three console screens tried to show one. Returns undefined rather than throwing: a demo world that
+ * cannot upload a picture should still come up, just without the pictures.
+ */
+async function uploadDoc(token, kind, sort, seed) {
+  const r = await req('POST', '/v1/sbg/media', { token, body: { kind, dataUrl: documentDataUrl(sort, seed) } });
+  if (!r.ok || !r.data?.mediaId) return undefined;
+  return r.data.mediaId;
 }
 
 const need = (r, what) => {
@@ -283,11 +298,38 @@ const run = async () => {
       }),
       'driver grace',
     );
-    // Papers in → KYC_PENDING; the decision stays with GLOS ops so the fleet app shows "GLOS checking".
-    await req('POST', `/v1/sbg/fleet/drivers/${encodeURIComponent(grace.did)}/submit-kyc`, {
-      token: fm,
-      body: { idCopyRef: 'grace-id.jpg', licenceCopyRef: 'grace-licence.jpg' },
-    });
+  }
+
+  /*
+   * Papers in → KYC_PENDING; the decision stays with GLOS ops so the fleet app shows "GLOS checking".
+   *
+   * REAL UPLOADS, not filenames. These were 'grace-id.jpg' and 'grace-licence.jpg' with no bytes anywhere,
+   * so the driver sat in the vetting queue holding two documents nobody could open — and when the vetting
+   * screen was finally built there was still nothing for it to show.
+   *
+   * REPAIRED RATHER THAN ONLY SEEDED, and this is the part that matters on a long-lived sandbox: Grace
+   * already existed from an earlier run, so a fix applied only inside `if (!grace)` changed nothing at all
+   * and the drive said so. A ref that is not a `med_…` id is a placeholder, and a placeholder is repaired
+   * by refusing the old papers (which is now possible, with a reason, and sends her back to DRAFT) and
+   * submitting a real pair.
+   */
+  {
+    const fresh = need(await req('GET', `/v1/sbg/fleet/drivers/${encodeURIComponent(grace.did)}`, { token: fm }), 'grace').driver ?? {};
+    const real = (ref) => typeof ref === 'string' && ref.startsWith('med_');
+    if (!real(fresh.kyc?.licenceCopyRef) || !real(fresh.kyc?.idCopyRef)) {
+      if (fresh.status === 'KYC_PENDING') {
+        await req('POST', `/v1/sbg/fleet/drivers/${encodeURIComponent(grace.did)}/kyc-decision`, {
+          token: op,
+          body: { approve: false, reason: 'Re-seeding the demo world with documents that can actually be opened.' },
+        });
+      }
+      const graceLicence = await uploadDoc(fm, 'kyc_licence', 'licence', 1);
+      const graceId = await uploadDoc(fm, 'kyc_id', 'id', 4);
+      await req('POST', `/v1/sbg/fleet/drivers/${encodeURIComponent(grace.did)}/submit-kyc`, {
+        token: fm,
+        body: { idCopyRef: graceId ?? 'grace-id.jpg', licenceCopyRef: graceLicence ?? 'grace-licence.jpg' },
+      });
+    }
   }
   say(`drivers Amos K. (badge ${amos.badgeId ?? '—'}) · Grace M. (papers with GLOS)`);
 

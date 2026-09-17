@@ -6,7 +6,7 @@ import { t } from '../../shared/i18n'; // plain t(): these strings are built at 
 import { changeCompanyPassword, changeStaffPassword, clearCreds, companyLogin, createTowerClient, readCreds, saveCreds, staffLogin, type TowerClient, type TowerCreds } from './api';
 import type { ConstraintView } from './logic';
 import type { EntityPricing, EntityRow } from './money';
-import type { ApprovalRow, ClaimDecision, ClaimRow, DisposalRow, FreightClaimRow, StalledRow } from './queues';
+import type { ApprovalRow, ClaimDecision, ClaimRow, DisposalRow, DriverApplication, FreightClaimRow, StalledRow } from './queues';
 import { EMPTY_CORRIDOR_FORM, corridorName, type CorridorForm, type CorridorRow, type CouplingRow } from './corridors';
 import type { DisputeReportRow, ReportRow } from './reports';
 import { EMPTY_COUNTRY_FORM, newCountryCode, overridesOf, type CatalogueCountry, type NewCountryForm, type PresenceLevel, type PresenceProposalRow, type PresenceRow } from './presence';
@@ -71,6 +71,9 @@ export interface TowerState {
   /** Shops that started signing up and stopped — read beside the applications, counted with none of
    *  them. Null while unread, like every other list here. */
   stalled: StalledRow[] | null;
+  /** Heavy-registry drivers waiting to be vetted. A real queue — somebody is waiting on US — and it had
+   *  no screen at all until now, though the route has been live the whole time. Null while unread. */
+  driverApplications: DriverApplication[] | null;
   /** A refusal the SCREEN made before the server had to — a missing reason, an award over the cover. */
   queueError: string | null;
   /** FP4 — the papers only network staff can put right, and when the check last ran. Null while unread. */
@@ -234,7 +237,10 @@ export interface TowerActions {
   /** FP3b — decide a freight claim; same three endings, same note. */
   resolveFreightClaim(freightId: string, decision: ClaimDecision, award: number | undefined, note: string): Promise<void>;
   closeDisposal(parcelId: string, reason: string): Promise<void>;
-  decideApproval(did: string, approve: boolean): Promise<void>;
+  /** `reason` is required by the server when refusing — the applicant is shown it. */
+  decideApproval(did: string, approve: boolean, reason?: string): Promise<void>;
+  /** Vet a heavy-registry driver. A refusal carries the reason the driver is shown. */
+  decideDriver(did: string, approve: boolean, reason?: string): Promise<void>;
   runPayouts(): Promise<void>;
   movePayout(payoutId: string, action: PayoutAction, reason?: string): Promise<void>;
   lookupParcel(parcelId: string): Promise<void>;
@@ -285,6 +291,7 @@ const INITIAL: TowerState = {
   disposal: null,
   approvals: null,
   stalled: null,
+  driverApplications: null,
   presence: null,
   presenceForm: { level: '', note: '' },
   countryForm: { ...EMPTY_COUNTRY_FORM },
@@ -503,7 +510,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
    */
   const loadQueues = useCallback(async (client: TowerClient) => {
     setState((s) => ({ ...s, loading: true }));
-    const [claims, freightClaims, disposal, approvals, stalled] = await Promise.all([
+    const [claims, freightClaims, disposal, approvals, stalled, driverApplications] = await Promise.all([
       client.api.disputes(),
       client.api.freightClaims(),
       client.api.disposalQueue(),
@@ -511,6 +518,8 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       // Read with the queues and kept apart from them everywhere after: it shares a screen with the
       // applications and shares neither their count nor their badge.
       client.api.unfinishedSignups(),
+      // The queue that had no screen: read here because it IS a decision we owe, unlike the chase list.
+      client.api.driverKycQueue(),
     ]);
     setState((s) => ({
       ...s,
@@ -520,6 +529,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       disposal: disposal.error ? null : (narrow<{ rows: DisposalRow[] }>(disposal.data)?.rows ?? []),
       approvals: approvals.error ? null : (narrow<ApprovalRow[]>(approvals.data) ?? []),
       stalled: stalled.error ? null : (narrow<{ items: StalledRow[] }>(stalled.data)?.items ?? []),
+      driverApplications: driverApplications.error ? null : (narrow<DriverApplication[]>(driverApplications.data) ?? []),
       readAt: Date.now(),
     }));
   }, []);
@@ -1086,17 +1096,34 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         setState((s) => ({ ...s, busyId: null, openId: null, queueError: null, done: t('tower.disposal.closed', { parcel: parcelId, amount: paid.toFixed(2) }) }));
         await loadQueues(client);
       },
-      /** Let a shop in, or refuse it. */
-      decideApproval: async (did: string, approve: boolean) => {
+      /** Let a shop in, or refuse it — and a refusal carries the reason the applicant is shown. */
+      decideApproval: async (did: string, approve: boolean, reason?: string) => {
         const client = clientRef.current;
         if (!client) return;
         setState((s) => ({ ...s, busyId: did, queueError: null }));
-        const { error } = await client.api.decideKyc(did, { approve, by: stateRef.current.who?.name });
+        const { error } = await client.api.decideKyc(did, { approve, by: stateRef.current.who?.name, ...(reason ? { reason } : {}) });
         if (error) {
           setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
           return;
         }
         setState((s) => ({ ...s, busyId: null, queueError: null, done: approve ? t('tower.approvals.approved') : t('tower.approvals.refused') }));
+        await loadQueues(client);
+      },
+      /**
+       * Vet a heavy-registry driver — the decision that had no screen.
+       *
+       * A refusal carries the reason: the driver is shown it and is the only person who can put it right.
+       */
+      decideDriver: async (did: string, approve: boolean, reason?: string) => {
+        const client = clientRef.current;
+        if (!client) return;
+        setState((s) => ({ ...s, busyId: did, queueError: null }));
+        const { error } = await client.api.decideDriverKyc(did, { approve, by: stateRef.current.who?.name, ...(reason ? { reason } : {}) });
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, queueError: null, done: approve ? t('tower.drivers.approved') : t('tower.drivers.refused') }));
         await loadQueues(client);
       },
       addAdmin: async (entityId: string, email: string, name: string) => {

@@ -7,7 +7,7 @@ import { GlosEvent } from '../../foundation/events/glos-events';
 import { NotificationService } from './notification.service';
 import { ParcelService } from './parcel.service';
 import { PersonService } from './person.service';
-import { AgentService } from './agent.service';
+import { AgentService, signupGapOf } from './agent.service';
 import { FleetService } from './fleet.service';
 import { ToteService } from './tote.service';
 import { MdpService } from './mdp.service';
@@ -17,6 +17,22 @@ import { GeoPoint } from './pudo.types';
 import { UnclaimedService } from './unclaimed.service';
 import { VendorService } from './vendor.service';
 import { HOLDING_FEE_PER_DAY, MARKET_SUPPLY_STALE_MIN, NETWORK_CURRENCY, NUDGE_COOLDOWN_MIN, NUDGE_MIN_MOVE_KM, TOTE_LOAD_FEE, UNCOLLECTED_REMINDER_H, UNCOLLECTED_SWEEP_MS } from './pudo.config';
+
+/** How often to look for somebody who started joining and stopped. */
+const SIGNUP_SWEEP_MS = 60 * 60 * 1000;
+
+/**
+ * The missing documents as a sentence, NAMED rather than counted.
+ *
+ * "2 missing" is a number the applicant has to ring somebody to decode, which is the opposite of the
+ * point — the console already learned this lesson for the staff side of the same list. The last item gets
+ * an "and" because this is read by a shopkeeper, not parsed.
+ */
+function wordsFor(missing: string[]): string {
+  const words = missing.map((m) => (m === 'id' ? 'a copy of your ID' : m === 'licence' ? 'your trading licence' : m === 'photos' ? 'photos of the shop' : m));
+  if (words.length <= 1) return words[0] ?? 'your documents';
+  return `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`;
+}
 
 /**
  * NotificationDispatcher (N2/N3) — the bridge from the event cascade to a person's devices. It
@@ -67,6 +83,9 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
   /** The uncollected sweep's timer. Self-unref'd: a reminder is never a reason to hold the process open. */
   private uncollectedTimer?: ReturnType<typeof setInterval>;
 
+  /** The stalled-sign-up sweep's timer, self-unref'd for the same reason. */
+  private signupTimer?: ReturnType<typeof setInterval>;
+
   onApplicationBootstrap(): void {
     // Every other notification here is a REACTION to an event. This one cannot be: nothing happens when a
     // parcel is not collected, which is exactly why nobody was ever told. A sweep is the only shape that
@@ -74,10 +93,16 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     void this.sweepShelf().catch(() => undefined);
     this.uncollectedTimer = setInterval(() => void this.sweepShelf().catch(() => undefined), UNCOLLECTED_SWEEP_MS);
     this.uncollectedTimer.unref?.();
+    // And the same shape for the people who started joining and stopped. Runs at boot so a shop stuck
+    // since before any of this existed is told on the next restart rather than never.
+    void this.sweepSignups().catch(() => undefined);
+    this.signupTimer = setInterval(() => void this.sweepSignups().catch(() => undefined), SIGNUP_SWEEP_MS);
+    this.signupTimer.unref?.();
   }
 
   onModuleDestroy(): void {
     if (this.uncollectedTimer) clearInterval(this.uncollectedTimer);
+    if (this.signupTimer) clearInterval(this.signupTimer);
   }
 
   onModuleInit(): void {
@@ -132,6 +157,13 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<{ freightId: string; code: string; posterDid?: string; outcome: string; note?: string; destLabel?: string; attempts: number }>(GlosEvent.Pudo.FreightDeliveryFailed, (e) => this.onFreightDeliveryFailed(e.payload));
     // FP3b (claimant) — their claim was decided; they are shown the reason.
     this.events.subscribe<{ freightId: string; code: string; decision: string; award: number; note: string; posterDid?: string; claimantDid?: string }>(GlosEvent.Pudo.FreightClaimDecided, (e) => this.onFreightClaimDecided(e.payload));
+    // ONBOARDING (applicant) — they finished the form and are not finished. Told now, while they are still
+    // holding the phone; the sweep below is for everyone this event never fired for.
+    this.events.subscribe<{ did: string; shopName?: string }>(GlosEvent.Pudo.AgentRegistered, (e) => this.onSignupStalled(e.payload.did));
+    // ONBOARDING (applicant) — we looked and said no. A decision they are shown, with its reason.
+    this.events.subscribe<{ did: string; reason: string }>(GlosEvent.Pudo.AgentKycRejected, (e) => this.onSignupStalled(e.payload.did));
+    // …and the same for a driver, who was left in exactly the same silence.
+    this.events.subscribe<{ did: string; reason: string }>(GlosEvent.Pudo.DriverKycRejected, (e) => this.onDriverRefused(e.payload));
   }
 
   private async onFreightDeliveryFailed(payload: { freightId: string; code: string; posterDid?: string; outcome: string; note?: string; destLabel?: string; attempts: number }): Promise<void> {
@@ -352,6 +384,94 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
    * its entire job is to stop the second half being needed. Only then does a parcel nobody answered for
    * become 'Unclaimed', and only then is its store asked whether it wants it home.
    */
+  /* ------------------------------------------------------------------ onboarding -- */
+
+  /**
+   * TELL AN APPLICANT WHAT IS STILL NEEDED — or that we said no, and why.
+   *
+   * The loose end this closes: a shop that registered and sent nothing sat in DRAFT indefinitely. The
+   * console could see it and could even name the missing papers, and the shop was told nothing, so the
+   * only party who could finish the job was the only party not informed. Registering and hearing silence
+   * reads as "submitted, now wait" — which is why these applications went quiet rather than being
+   * abandoned.
+   *
+   * SAID ONCE PER GAP, stamped against the gap itself (`signupGapOf`). Sending one document changes the
+   * gap and earns a fresh message about what is left; ignoring one earns nothing further, because a
+   * notification repeated on a timer is how an inbox becomes something people stop reading.
+   */
+  private async onSignupStalled(did: string): Promise<void> {
+    const agent = this.agents.find(did);
+    if (!agent) return;
+    const gap = signupGapOf(agent);
+    if (!gap) return; // nothing to say
+    if (agent.signupNudgedFor === gap) return; // already said, about exactly this
+    // Stamped BEFORE the send and regardless of whether it lands, the uncollected-reminder rule: a shop
+    // that enables notifications next week must not be greeted by a backlog of nudges about one gap.
+    agent.signupNudgedFor = gap;
+
+    const rejected = gap.startsWith('rejected:');
+    const message = rejected
+      ? { kind: 'signup_rejected' as const, title: 'Your application needs another look', body: `${agent.kycRejection?.reason ?? 'Something was wrong with the documents.'} Send the documents again when you have them.` }
+      : gap === 'unfunded'
+        ? { kind: 'signup_incomplete' as const, title: 'One step left to open', body: 'Your shop is approved. Put the first money into your float and you can start taking parcels.' }
+        : { kind: 'signup_incomplete' as const, title: 'Your shop application is not finished', body: `We still need ${wordsFor(gap.slice('missing:'.length).split(','))}. Nobody is reviewing it until then.` };
+
+    try {
+      await this.notifications.notify(did, {
+        ...message,
+        link: '/',
+        // Keyed to the GAP, not to the shop: a new gap is a new notification rather than one quietly
+        // overwriting the message about the last one.
+        tag: `signup:${did}:${gap}`,
+        data: { did, gap },
+      });
+    } catch (err) {
+      this.logger.warn(`signup nudge failed for ${did}: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * A DRIVER whose papers we refused — told, with the reason, on the event alone.
+   *
+   * No sweep behind this one: a rejection is an event, so there is no absence to sweep for. A driver who
+   * simply never sent papers sits in DRAFT and is the fleet's or their own business, not a queue anybody
+   * here is waiting on.
+   */
+  private async onDriverRefused(payload: { did: string; reason: string }): Promise<void> {
+    try {
+      await this.notifications.notify(payload.did, {
+        kind: 'signup_rejected',
+        title: 'Your papers need another look',
+        body: `${payload.reason} Send your ID and licence again when you have them.`,
+        link: '/',
+        tag: `driver-papers:${payload.did}:${Date.now()}`,
+        data: { did: payload.did },
+      });
+    } catch (err) {
+      this.logger.warn(`driver refusal notice failed for ${payload.did}: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * One pass over everybody who started joining and stopped.
+   *
+   * The event above cannot cover the ones that matter most: a shop that registered before any of this
+   * existed, one that sent two documents of three and drifted, one approved and never funded. Nothing
+   * happens when a person goes quiet, and a sweep is the only shape that fits the absence of an event —
+   * the same reasoning as the uncollected shelf, and the reason that list existed in the console with
+   * nobody having told any of the shops on it.
+   */
+  async sweepSignups(): Promise<number> {
+    let sent = 0;
+    for (const row of this.agents.unfinished()) {
+      if (row.told) continue;
+      const before = this.agents.find(row.did)?.signupNudgedFor;
+      await this.onSignupStalled(row.did);
+      if (this.agents.find(row.did)?.signupNudgedFor !== before) sent += 1;
+    }
+    return sent;
+  }
+
   async sweepShelf(now: number = Date.now()): Promise<{ reminded: number; closed: number }> {
     const reminded = await this.remindUncollected(now);
     let closed = 0;

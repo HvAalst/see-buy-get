@@ -182,6 +182,9 @@ export class FleetDriver {
   registry: DriverRegistry; // light (bike/motorcycle) | heavy (everything else)
   licence: DriverLicence;
   kyc?: DriverKyc;
+  /** Why the last vetting decision went against them, and when. Cleared on approval. Present on a DRAFT
+   *  driver = "we looked and said no", which is a different state from "never sent anything". */
+  kycRejection?: { reason: string; at: string; by?: string };
   criminalRecordClear: boolean;
   homeZone?: string;
   status: DriverStatus;

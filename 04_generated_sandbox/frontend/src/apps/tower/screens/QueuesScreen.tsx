@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
+import { DocumentStrip } from './DocumentStrip';
 import { useT } from '../../../shared/i18n';
 import {
   CLAIM_SLOW_DAYS,
@@ -23,6 +24,7 @@ import {
   type DisposalRow,
   type FreightClaimRow,
   type StalledRow,
+  type DriverApplication,
 } from '../queues';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
@@ -34,6 +36,13 @@ import type { TowerActions, TowerState } from '../useTowerApp';
  * On this side of the console the alternative is finding out from a refusal, which is exactly what the
  * old claims panel did.
  */
+
+/* ------------------------------------------------------------------ evidence -- */
+
+/** The claim's own words for the same strip. Two callers, one implementation. */
+function ClaimEvidence({ refs, state, actions }: { refs: string[]; state: TowerState; actions: TowerActions }) {
+  return <DocumentStrip refs={refs} state={state} actions={actions} titleKey="tower.claims.evidenceTitle" emptyKey="tower.claims.evidenceNone" />;
+}
 
 /* -------------------------------------------------------------------- claims -- */
 
@@ -148,6 +157,8 @@ function ClaimRowView({ row, now, state, actions }: { row: ClaimRow; now: number
       {open ? (
         <tr class="is-open ctbl__editor">
           <td colSpan={5}>
+            {/* The evidence FIRST, above the form: look, then decide. */}
+            <ClaimEvidence refs={row.evidence ?? []} state={state} actions={actions} />
             <ClaimForm
               id={row.parcelId}
               cap={row}
@@ -208,6 +219,7 @@ function FreightClaimRowView({ row, now, state, actions }: { row: FreightClaimRo
       {open ? (
         <tr class="is-open ctbl__editor">
           <td colSpan={5}>
+            <ClaimEvidence refs={row.evidence ?? []} state={state} actions={actions} />
             <ClaimForm
               id={row.code}
               cap={row}
@@ -469,7 +481,127 @@ export function ApprovalsScreen({ state, actions }: { state: TowerState; actions
         ) : null}
       </QueuePanel>
 
+      <DriverApplicationsPanel state={state} actions={actions} />
+
       <StalledPanel rows={state.stalled} />
+    </>
+  );
+}
+
+/**
+ * HEAVY-REGISTRY DRIVERS WAITING TO BE VETTED — the queue that had no screen.
+ *
+ * `GET fleet/drivers/kyc-queue` has existed on the server the whole time and nothing in any console read
+ * it, so a driver who uploaded an ID and a licence copy sat in KYC_PENDING with nobody able to look: the
+ * documents were submitted, the decision route was live, and there was no surface between them. The
+ * sandbox had one waiting since the 9th of August.
+ *
+ * It belongs on this screen because this is the screen about people joining, and it is a real queue —
+ * somebody is waiting on US — so it sits above the chase list rather than below it.
+ *
+ * THE DOCUMENTS ARE THE POINT. A vetting decision taken without looking at the licence is a rubber stamp,
+ * and the one thing it guards is whether this person may legally drive.
+ */
+function DriverApplicationsPanel({ state, actions }: { state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const rows = state.driverApplications;
+
+  return (
+    <section class="cons__panel">
+      <div class="cons__panelhead">
+        <span class="cons__panelt">{t('tower.drivers.title')}</span>
+        {/* Null is "not read yet" and must never render as a zero. */}
+        {rows === null ? null : <span class="ctbl__sub">{t('tower.drivers.count', { n: rows.length })}</span>}
+      </div>
+      <p class="cons__lede">{t('tower.drivers.lede')}</p>
+      {rows === null ? (
+        <p class="cons__empty">{t('tower.drivers.loading')}</p>
+      ) : rows.length === 0 ? (
+        <p class="cons__empty">{t('tower.drivers.none')}</p>
+      ) : (
+        <table class="ctbl">
+          <thead>
+            <tr>
+              <th>{t('tower.drivers.col.driver')}</th>
+              <th>{t('tower.drivers.col.licence')}</th>
+              <th>{t('tower.drivers.col.papers')}</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <DriverApplicationRow key={row.did} row={row} state={state} actions={actions} />
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
+
+function DriverApplicationRow({ row, state, actions }: { row: DriverApplication; state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const busy = state.busyId === row.did;
+  const [why, setWhy] = useState<string | null>(null);
+  const refs = [row.kyc?.licenceCopyRef, row.kyc?.idCopyRef].filter((x): x is string => Boolean(x));
+
+  return (
+    <>
+      <tr>
+        <td>
+          <div class="ctbl__strong">{row.displayName}</div>
+          <div class="ctbl__sub">
+            {row.registry} · {row.jurisdiction ?? '—'}
+            {row.criminalRecordClear ? '' : ` · ${t('tower.drivers.recordNotClear')}`}
+          </div>
+        </td>
+        <td class="ctbl__sub">
+          <div class="ctbl__mono">{row.licence?.number ?? '—'}</div>
+          <div>{row.licence?.expiresAt ? row.licence.expiresAt.slice(0, 10) : t('tower.papers.noDate')}</div>
+        </td>
+        <td class="ctbl__sub">{row.kyc?.submittedAt ? t('tower.drivers.sent', { date: row.kyc.submittedAt.slice(0, 10) }) : t('tower.drivers.noPapers')}</td>
+        <td class="ctbl__num">
+          <span class="twr-clear__act">
+            <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy} onClick={() => void actions.decideDriver(row.did, true)}>
+              {t('tower.approvals.approve')}
+            </button>
+            <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} aria-expanded={why != null} onClick={() => setWhy(why == null ? '' : null)}>
+              {t('tower.approvals.refuse')}
+            </button>
+          </span>
+        </td>
+      </tr>
+      <tr class="ctbl__editor">
+        <td colSpan={4}>
+          {/* The papers themselves, open on the row rather than behind a tap: this decision should not be
+              possible to take without having looked, and a click to reveal is a click people skip. */}
+          <DocumentStrip refs={refs} state={state} actions={actions} emptyKey="tower.drivers.nothingToSee" titleKey="tower.drivers.whatTheySent" />
+          {why != null ? (
+            <>
+              <label class="cfield">
+                <span class="cfield__label">{t('tower.drivers.whyLabel')}</span>
+                <textarea class="ctextarea" rows={2} value={why} disabled={busy} onInput={(e) => setWhy((e.target as HTMLTextAreaElement).value)} />
+              </label>
+              <span class="twr-clear__act">
+                <button
+                  type="button"
+                  class="cbtn cbtn--danger cbtn--sm"
+                  disabled={busy || !why.trim()}
+                  onClick={() => {
+                    void actions.decideDriver(row.did, false, why.trim());
+                    setWhy(null);
+                  }}
+                >
+                  {t('tower.approvals.refuseConfirm')}
+                </button>
+                <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => setWhy(null)}>
+                  {t('common.close')}
+                </button>
+              </span>
+            </>
+          ) : null}
+        </td>
+      </tr>
     </>
   );
 }
@@ -524,7 +656,14 @@ function StalledPanel({ rows }: { rows: StalledRow[] | null }) {
                   <div class="ctbl__sub">{row.zone || '—'}</div>
                 </td>
                 <td class="ctbl__num">{stuckLabel(stuckDays(row.since, now), t)}</td>
-                <td class="ctbl__sub">{t(STALLED_REASON[row.reason] ?? 'tower.stalled.reason.documents')}</td>
+                <td class="ctbl__sub">
+                  {t(STALLED_REASON[row.reason] ?? 'tower.stalled.reason.documents')}
+                  {/* What WE said, on a shop we turned down — so whoever rings them is not guessing. */}
+                  {row.rejectedWhy ? <div>{t('tower.stalled.rejectedWhy', { why: row.rejectedWhy })}</div> : null}
+                  {/* THE LOOSE END ITSELF. A row that says this is one where somebody is waiting on a
+                      message we have not sent — which is the state this whole list used to be in. */}
+                  {row.told === false ? <span class="ctag ctag--warn">{t('tower.stalled.notTold')}</span> : null}
+                </td>
                 <td class="ctbl__sub">
                   {/* An approved shop that never topped up is missing no documents at all, and an empty
                       cell there would read as "not loaded" rather than as "nothing outstanding". */}
@@ -543,8 +682,13 @@ function ApprovalRowView({ row, state, actions }: { row: ApprovalRow; state: Tow
   const t = useT();
   const busy = state.busyId === row.did;
   const docs = documentsOf(row);
+  // Refusing asks WHY before it will go through — the applicant is shown this sentence, and it is the only
+  // thing that tells them what to fix. Approving needs no form: nothing about a yes needs explaining to
+  // somebody who just got in.
+  const [why, setWhy] = useState<string | null>(null);
 
   return (
+    <>
     <tr>
       <td>
         <div class="ctbl__strong">{row.shopName ?? row.did}</div>
@@ -565,12 +709,40 @@ function ApprovalRowView({ row, state, actions }: { row: ApprovalRow; state: Tow
           <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy} onClick={() => void actions.decideApproval(row.did, true)}>
             {t('tower.approvals.approve')}
           </button>
-          <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => void actions.decideApproval(row.did, false)}>
+          <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} aria-expanded={why != null} onClick={() => setWhy(why == null ? '' : null)}>
             {t('tower.approvals.refuse')}
           </button>
         </span>
       </td>
     </tr>
+    {why != null ? (
+      <tr class="is-open ctbl__editor">
+        <td colSpan={5}>
+          <label class="cfield">
+            <span class="cfield__label">{t('tower.approvals.whyLabel')}</span>
+            <textarea class="ctextarea" rows={2} value={why} disabled={busy} onInput={(e) => setWhy((e.target as HTMLTextAreaElement).value)} />
+          </label>
+          <p class="chint">{t('tower.approvals.whyHint')}</p>
+          <span class="twr-clear__act">
+            <button
+              type="button"
+              class="cbtn cbtn--danger cbtn--sm"
+              disabled={busy || !why.trim()}
+              onClick={() => {
+                void actions.decideApproval(row.did, false, why.trim());
+                setWhy(null);
+              }}
+            >
+              {t('tower.approvals.refuseConfirm')}
+            </button>
+            <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => setWhy(null)}>
+              {t('common.close')}
+            </button>
+          </span>
+        </td>
+      </tr>
+    ) : null}
+    </>
   );
 }
 

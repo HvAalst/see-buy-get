@@ -42,6 +42,16 @@ export interface CourierPaperRow {
   registry: string;
   jurisdiction?: string;
   licence: { number?: string; expiresAt?: string };
+  /**
+   * The licence and ID the driver actually submitted, so a new expiry date is typed while LOOKING at the
+   * document it came from.
+   *
+   * Without these the screen asked an operator to put a driver back on the road on the strength of a date
+   * they had no way to check — which makes the control a formality rather than a check, and the one thing
+   * it is guarding is whether somebody may legally drive. The refs ride on the row; whether there are
+   * bytes behind them is the media route's answer, and the screen says plainly when there are none.
+   */
+  documents?: { licenceCopyRef?: string; idCopyRef?: string; submittedAt?: string };
   papers: PaperStatus[];
   offRoad: string[];
   onShift: boolean;
@@ -165,6 +175,7 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
           registry: d.registry,
           jurisdiction: d.jurisdiction,
           licence: { number: d.licence?.number && d.licence.number !== 'n/a' ? d.licence.number : undefined, expiresAt: d.licence?.expiresAt },
+          ...(d.kyc ? { documents: { licenceCopyRef: d.kyc.licenceCopyRef, idCopyRef: d.kyc.idCopyRef, submittedAt: d.kyc.submittedAt } } : {}),
           papers,
           offRoad: lapsedOf(papers).map(offRoadLine),
           onShift: Boolean(this.fleet.activeForDriver(d.did)),
