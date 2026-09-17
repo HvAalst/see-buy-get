@@ -11,6 +11,9 @@ import { countryImpactOf } from './country-impact';
 import { BorderRuleService } from './border-rules.service';
 import type { Response } from 'express';
 import { CompanyDocumentService } from '../../foundation/entity/company-documents.service';
+import { HandleService } from '../../foundation/handle/handle.service';
+import { HandleDirectory } from './handle-directory.service';
+import { ProfileView, presenceSays, profileDoes } from './profile.types';
 import { ImportService } from './import.service';
 import { ImportDetail, ImportRow, KnownPaper } from './import.types';
 import { CompanyReadinessService } from '../../foundation/entity/company-readiness.service';
@@ -143,6 +146,8 @@ export class SbgController {
     private readonly entities: EntityService,
     private readonly presence: PresenceService,
     private readonly companyDocuments: CompanyDocumentService,
+    private readonly handles: HandleService,
+    private readonly handleDirectory: HandleDirectory,
     private readonly imports: ImportService,
     private readonly readiness: CompanyReadinessService,
     private readonly borderRules: BorderRuleService,
@@ -2461,6 +2466,65 @@ export class SbgController {
       return { did: mdp.did, kind: 'mdp' as const, name: mdp.name, scorecard: this.monitor.mdpScorecard(mdp.mdpId) };
     }
     throw new GlosError('NOT_FOUND', 'No rated provider with that id');
+  }
+
+  /* ---- the directory: one public page per participant, addressed by a handle ---- */
+
+  /**
+   * `GET /v1/sbg/profiles/:handle` — what `seebuyget.com/@fedex` renders.
+   *
+   * @Public, and it has to be: the gap this closes is that appointing a clearing agent meant typing a
+   * company id somebody had to send you out of band, so a page nobody can read without an account would
+   * close nothing. Every field is already public elsewhere (the reputation route, the network map) or is a
+   * fact about OUR standing; nothing here comes out of the identity vault.
+   *
+   * It states what we know and never what we vouch for. The presence level travels with the identity
+   * because a reader has no other way to know that `observed` means we match and hold nothing — and a
+   * page that lets itself be read as an endorsement is the self-dealing §6 warns about in a new hat.
+   */
+  @Public()
+  @Get('profiles/:handle')
+  profile(@Param('handle') handle: string): ProfileView {
+    // Issue anything missing first, so a shop that registered a minute ago is reachable at its page
+    // without waiting for a restart. Idempotent, and skipped entirely when the population has not moved.
+    this.handleDirectory.ensure();
+    const held = this.handles.require(handle);
+    const shop = held.kind === 'shop' ? this.agents.list().find((a) => a.did === held.id) : undefined;
+    const hub = held.kind === 'hub' ? this.mdps.list().find((m) => m.did === held.id) : undefined;
+    const fleet = held.kind === 'fleet' ? this.managers.list().find((m) => m.did === held.id) : undefined;
+    const company = held.kind === 'company' ? this.entities.list().find((e) => e.entityId === held.id) : undefined;
+
+    const name = shop?.shopName ?? hub?.name ?? fleet?.companyName ?? company?.name;
+    if (!name) throw new GlosError('NOT_FOUND', 'No such profile');
+    const country = shop ? this.agents.countryOf(shop) : hub ? this.mdps.countryOf(hub) : (fleet?.jurisdiction ?? company?.jurisdiction);
+    // Only claim a standing where we know WHICH country to claim it in — resolve() answers 'observed' for
+    // an unknown jurisdiction, which is right for the ladder and reads as a falsehood on a public page.
+    const presence = country ? this.presence.resolve(country) : undefined;
+
+    // A verified paper is named, with its date, and an empty list is a real answer shown as one. Only a
+    // COMPANY has a document register; the rest carry what their own record can honestly attest.
+    const verified = company
+      ? this.companyDocuments
+          .list(company.entityId)
+          .filter((d) => d.status === 'verified')
+          .map((d) => ({ what: d.kind.replace(/_/g, ' '), at: d.verifiedAt ?? d.uploadedAt }))
+      : shop?.kyc
+        ? [{ what: 'identity and trading licence', at: shop.kyc.submittedAt }]
+        : [];
+
+    return {
+      handle: held.handle,
+      kind: held.kind,
+      name,
+      ...(held.derivedFrom !== name ? { formerly: held.derivedFrom } : {}),
+      ...(country ? { country } : {}),
+      ...(shop ? { at: shop.location, area: shop.zone } : {}),
+      ...(hub ? { at: hub.location } : {}),
+      since: shop?.createdAt ?? hub?.createdAt ?? fleet?.createdAt ?? company?.createdAt ?? new Date(0).toISOString(),
+      ...(presence ? { presence: { level: presence.level, says: presenceSays(presence.level) } } : {}),
+      does: profileDoes(held.kind),
+      verified,
+    };
   }
 
   // --- operator control tower (↔ M7/SSE light) — operator only ---

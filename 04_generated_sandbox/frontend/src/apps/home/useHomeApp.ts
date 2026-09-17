@@ -7,11 +7,13 @@ import {
   fetchMarket,
   fetchMarketSeries,
   fetchPoints,
+  fetchProfile,
   fetchStoreReputation,
   geocode,
   handOff,
   type MarketRow,
   type MarketSeriesView,
+  type ProfileView,
   type StoreReputation,
   registerStore,
   requestCode,
@@ -24,7 +26,7 @@ import {
 } from './api';
 import { EMPTY_JOIN, nextStep, normalizePhone, prevStep, roleById, signupBody, stepBlocker, type JoinForm, type JoinStep, type RoleSpec } from './logic';
 
-export type Screen = 'welcome' | 'roles' | 'join' | 'signin' | 'market' | 'store';
+export type Screen = 'welcome' | 'roles' | 'join' | 'signin' | 'market' | 'store' | 'profile';
 
 /** FB3b — how far the visitor cares to look. `null` IS a choice: the whole market. */
 export type MarketReach = number | null;
@@ -46,6 +48,10 @@ export interface HomeState {
   account: SignupView | null;
   store: VendorRegisteredView | null;
   /** A store's public reputation, reached by ?store=<id> from the widget or a link. */
+  /** The public profile at /@handle. Null until one is asked for. */
+  profile: ProfileView | null;
+  profileState: 'idle' | 'loading' | 'ready' | 'error';
+  profileError: string | null;
   reputation: StoreReputation | null;
   reputationState: 'idle' | 'loading' | 'ready' | 'error';
   reputationError: SbgError | null;
@@ -82,6 +88,9 @@ const INITIAL: HomeState = {
   countriesState: 'idle',
   account: null,
   store: null,
+  profile: null,
+  profileState: 'idle',
+  profileError: null,
   reputation: null,
   reputationState: 'idle',
   reputationError: null,
@@ -168,6 +177,42 @@ export function useHomeApp() {
     }
     setState((s) => ({ ...s, reputation: r.data, reputationState: 'ready', reputationError: null }));
   }, []);
+
+  /**
+   * A participant's public page, by handle.
+   *
+   * The directory, and deliberately not a list: a ranked list of clearing agents would impose an ordering
+   * on people whether or not anything went wrong, and while the network is the party appointing them,
+   * publishing that ordering is self-dealing. A page per participant carries the same facts and
+   * manufactures no loser out of relative position.
+   */
+  const openProfile = useCallback(async (handle: string) => {
+    if (!handle) return;
+    setState((s) => ({ ...s, screen: 'profile', profileState: 'loading', profileError: null }));
+    const r = await fetchProfile(handle);
+    if (r.error) {
+      setState((s) => ({ ...s, profileState: 'error', profileError: r.error.detail || r.error.title }));
+      return;
+    }
+    setState((s) => ({ ...s, profile: r.data, profileState: 'ready', profileError: null }));
+  }, []);
+
+  /**
+   * `/@handle` — read from the PATH, and deliberately NOT stripped afterwards.
+   *
+   * The store deep link below is a query param that gets cleaned away, because a refresh should not
+   * re-jump somebody onto a page they navigated off. A handle is the opposite: `/@fedex` is the canonical
+   * address of that participant, so it belongs in the bar where it can be copied, shared and bookmarked.
+   * Taking it out would break the one thing the address shape exists for.
+   *
+   * A static host needs a rewrite so `/@*` serves this app's index.html. NOT WIRED here, documented the
+   * way the carrier webhook seam is: the sandbox's dev server already falls through to index.html.
+   */
+  useEffect(() => {
+    const path = globalThis.location?.pathname ?? '';
+    const handle = /^\/@([A-Za-z0-9][A-Za-z0-9-]*)\/?$/.exec(path)?.[1];
+    if (handle) void openProfile(handle);
+  }, [openProfile]);
 
   // The deep link, read once and stripped as it is used — a refresh should not re-jump somebody onto a
   // store page they have already read and navigated away from.

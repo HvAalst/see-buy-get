@@ -5,6 +5,7 @@ import { JoinScreen } from './screens/JoinScreen';
 import { MarketScreen } from './screens/MarketScreen';
 import { RolesScreen } from './screens/RolesScreen';
 import { StoreScreen } from './screens/StoreScreen';
+import { ProfileScreen } from './screens/ProfileScreen';
 import { SignInScreen } from './screens/SignInScreen';
 import { WelcomeScreen } from './screens/WelcomeScreen';
 import { roleMeta } from './logic';
@@ -67,6 +68,7 @@ export function App() {
       <main class="app__scroll app__scroll--nonav">
         {state.screen === 'market' ? <MarketScreen state={state} actions={actions} /> : null}
         {state.screen === 'store' ? <StoreScreen state={state} actions={actions} /> : null}
+        {state.screen === 'profile' ? <ProfileScreen state={state} actions={actions} /> : null}
         {state.screen === 'roles' ? <RolesScreen actions={actions} /> : null}
         {state.screen === 'join' ? <JoinScreen state={state} actions={actions} /> : null}
         {state.screen === 'signin' ? <SignInScreen actions={actions} /> : null}

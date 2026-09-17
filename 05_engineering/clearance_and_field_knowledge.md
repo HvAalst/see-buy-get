@@ -190,6 +190,41 @@ Two constraints carry over from the reputation work: rate per lane and per commo
 dry goods is not comparable to one on perishables or regulated cargo; and if the network ever appoints or
 earns from an agent, publishing a ranking of them is self-dealing.
 
+### 6a. The directory is a PROFILE PAGE, not a list. Decided 2026-09-17 (user)
+
+CL2a left a gap: appointing a clearing agent means typing their company id, which somebody has to have sent
+you out of band. §6 refused to solve it in passing, because a directory "decides who may appear in it, on
+whose say, and what a listing implies about them".
+
+**The user's answer, which is better than a list: `seebuyget.com/@fedex`.** One public profile page per
+participant, addressed by a handle. It resolves the objection rather than answering it, because a page is
+the per-agent form CL4 already requires — and a network of pages cannot impose an ordering on anybody. **We
+never build a ranked directory at all.**
+
+- **`@` IS LOAD-BEARING.** The home app ships at the web root, so `/@fedex` cannot collide with `/tower/`,
+  `/agent/` or any app path we add later. There is no reserved-word problem and no namespace to police.
+- **A HANDLE IS DERIVED, NEVER CLAIMED**, and this is the whole trust argument. `@fedex` is a real company;
+  a free-text namespace invites squatting, and a fake `@fedex` carrying a mobilisation record would be a
+  serious harm on a platform whose claim is custody and money. So a handle falls out of the VERIFIED record
+  exactly as `entityId` already does (`sbg-ke`, `partner-ke-<slug>`) and as countries and Incoterms are
+  selected rather than created. No reservation queue, no disputes process, no land-grab.
+- **Immutable once issued.** A handle that moves is a rotted link and an impersonation vector.
+- **WHO, decided:** companies and shops — shops, fleets, hubs, clearing agents, sisters and partners.
+  **Individual drivers get no handle page.** Their rating is already public by DID; a searchable identity
+  tied to their delivery and hazard record is employment-adjacent (see the payroll scope boundary) and
+  driver anonymity is what keeps road reports coming. Revisit as an opt-in once we know drivers want it.
+- **WHAT IT PUBLISHES, decided:** only what we measured, split and unblended — §6's division of what the
+  agent controls from what the state controls, per lane and commodity class, net of hand-backs, with what
+  was measured stated beside the figure and never a single blended score. A thin record shows as thin:
+  three loads shows three loads and no average.
+- **It states what we KNOW, never what we vouch for.** A shop at `observed` presence with no verified
+  papers must not read like an established partner. The presence level and the verification date carry on
+  the page, because a page that implies endorsement is the self-dealing §6 warns about wearing a new hat.
+
+**Sequencing:** the page ships FIRST carrying identity, presence and what they do — that alone closes the
+CL2a gap, since it is findability the importer lacked. CL4's measure then publishes onto it. No performance
+figure appears until CL4 is built and driven.
+
 ## 7. First-hand, evidenced, or not at all
 
 > The user's framing, and the governing principle of §8–§9: *right information can only be shared by those who

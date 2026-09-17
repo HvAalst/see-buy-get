@@ -9720,6 +9720,33 @@
         }
       }
     },
+    "/v1/sbg/profiles/{handle}": {
+      "get": {
+        "operationId": "Sbg.profile",
+        "parameters": [
+          {
+            "name": "handle",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/dashboard": {
       "get": {
         "operationId": "Sbg.dashboard",
@@ -22790,6 +22817,111 @@
         },
         "required": [
           "stars"
+        ]
+      },
+      "ProfilePresence": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "string"
+          },
+          "says": {
+            "type": "string",
+            "description": "The promise spelled out, because a public reader has no other way to know what the word means."
+          }
+        },
+        "required": [
+          "level",
+          "says"
+        ]
+      },
+      "ProfileVerification": {
+        "type": "object",
+        "properties": {
+          "what": {
+            "type": "string",
+            "description": "What was checked, in words — 'trading licence', not 'kyc_licence'."
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "what",
+          "at"
+        ]
+      },
+      "ProfileView": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "shop",
+              "hub",
+              "fleet",
+              "company"
+            ]
+          },
+          "formerly": {
+            "type": "string",
+            "description": "The name the handle was derived from, present ONLY when it no longer matches `name`.\n\nA handle does not follow a rename (that would be a rotted link and a way to inherit somebody else's\npage), so when the two diverge a reader is entitled to see both rather than wonder why the address\nsays one thing and the heading another."
+          },
+          "country": {
+            "type": "string",
+            "description": "ISO-3166 alpha-2 where they stand. Absent for the group company, which stands nowhere in particular."
+          },
+          "at": {
+            "description": "A coarse pin, for the kinds that have a place a customer walks to. Never a street address.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GeoPoint"
+              }
+            ]
+          },
+          "area": {
+            "type": "string",
+            "description": "The zone or town, in the words the record uses."
+          },
+          "presence": {
+            "description": "HOW ESTABLISHED THE NETWORK IS WHERE THEY STAND, and what that does and does not promise.\n\nCarried because the page is public and a reader has no other way to know it: `matched` means we hold\nno money there, and cover is zero by construction where nothing can pay a claim.\n\nABSENT WHEN WE DO NOT KNOW WHICH COUNTRY THEY ARE IN, and that is the whole reason this is optional.\nThe presence service answers `observed` for an unknown jurisdiction, which is correct for the ladder\nand a lie on a page: it renders as \"we only observe this country\" about a country nobody named. A\nfleet with no jurisdiction on its record, and the group company that stands nowhere in particular,\nboth hit that. Found by reading the page rather than the code — the sentence was plausible and wrong.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ProfilePresence"
+              }
+            ]
+          },
+          "verified": {
+            "description": "What the network has VERIFIED about them, and when. Empty is a real answer and shows as one.\n\nNever a badge and never a score: the list is what staff checked, so a reader can weigh it themselves\nrather than trusting a tick.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProfileVerification"
+            }
+          },
+          "handle": {
+            "type": "string",
+            "description": "The handle, without the '@'. Immutable once issued, and derived from the verified name."
+          },
+          "name": {
+            "type": "string",
+            "description": "The trading name as the record holds it now — which may differ from what the handle came from."
+          },
+          "since": {
+            "type": "string",
+            "description": "On the network since. The one number that is honest from day one."
+          },
+          "does": {
+            "type": "string",
+            "description": "What this participant does here, in plain words — never a capability list a reader must decode."
+          }
+        },
+        "required": [
+          "kind",
+          "verified",
+          "handle",
+          "name",
+          "since",
+          "does"
         ]
       },
       "ResolveDisputeDto": {

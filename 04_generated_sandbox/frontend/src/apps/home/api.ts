@@ -113,6 +113,32 @@ export function fetchStoreReputation(vendorId: string): Promise<Result<StoreRepu
   return publicRequest<StoreReputation>(homeConfig(), `/v1/sbg/stores/${encodeURIComponent(vendorId)}/reputation`);
 }
 
+/** One participant's public profile — `seebuyget.com/@fedex`. Handle with or without the '@'. */
+export interface ProfileView {
+  handle: string;
+  kind: 'shop' | 'hub' | 'fleet' | 'company';
+  name: string;
+  formerly?: string;
+  country?: string;
+  at?: { lat: number; lng: number };
+  area?: string;
+  since: string;
+  /** Absent when no country is recorded — the ladder answers 'observed' for an unknown jurisdiction,
+   *  which would render as a confident claim about a country nobody named. */
+  presence?: { level: string; says: string };
+  does: string;
+  verified: Array<{ what: string; at: string }>;
+}
+
+/**
+ * The profile page's read. PUBLIC by design and by necessity: the gap this closes is that appointing a
+ * clearing agent meant typing a company id somebody had to send you out of band, so a page nobody can
+ * read without an account would close nothing at all.
+ */
+export function fetchProfile(handle: string): Promise<Result<ProfileView>> {
+  return publicRequest<ProfileView>(homeConfig(), `/v1/sbg/profiles/${encodeURIComponent(handle.replace(/^@/, ''))}`);
+}
+
 export interface MarketRow {
   area?: string;
   destArea?: string;
