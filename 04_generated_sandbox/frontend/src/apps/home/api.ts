@@ -128,6 +128,24 @@ export interface ProfileView {
   presence?: { level: string; says: string };
   does: string;
   verified: Array<{ what: string; at: string }>;
+  /** CL4 — what they did with the loads they took. Absent for a kind that mobilises nothing. */
+  moves?: {
+    claimed: number;
+    handedBack: number;
+    kept: number;
+    delivered: number;
+    inFlight: number;
+    tightKept: number;
+    tightDelivered: number;
+    keptRate?: number | null;
+    deliveredRate?: number | null;
+    thin: boolean;
+    ratesNeed: number;
+    lanes: Array<{ key: string; claimed: number; handedBack: number; kept: number; delivered: number }>;
+    classes: Array<{ key: string; claimed: number; handedBack: number; kept: number; delivered: number }>;
+  };
+  /** What we measured and what we did NOT — carried so no screen can show the figures without it. */
+  movesMeasured?: string;
 }
 
 /**

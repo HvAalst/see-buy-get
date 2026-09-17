@@ -560,6 +560,53 @@ front of them — before calling a view finished.
 - **Gate:** withdraw capacity in the sandbox and the series shows it within a day, with nobody reporting
   anything.
 
+### CL4 — Mobilisation, measured — FIRST HALF SHIPPED 2026-09-17, driven
+
+**THE SCOPE CORRECTION, found in the code rather than reasoned about.** This section was written about the
+CLEARING AGENT, and the platform records nothing about an agent's mobilisation: CL2b mints the road leg with
+`postedByDid` = the importer and **no agent link at all**, so an appointed agent has zero claims, zero
+hand-backs and zero deliveries against their name. The party the platform actually watches finding and
+moving trucks is the **FLEET** — through the drivers it fields, which is REP3's precedent for a derived
+record. So mobilisation ships measured on fleets, where the data is real, and the agent's half is still
+open (see below). Measuring the right thing about the wrong party would have been a page of honest zeroes.
+
+**SHIPPED:** `mobilisation.ts` — pure functions over loads, in the market series' style, so a figure
+somebody's livelihood is judged on can be reproduced from the loads it came from. Published on the
+PUBLIC PROFILE PAGE (§6a), which is what makes the audience decision real: the shipper sees it because the
+shipper is choosing, and one route serves everybody, so reciprocal visibility is structural rather than
+promised — the drive reads the same page as the party and as a stranger and compares the payloads byte for
+byte.
+
+- **Hand-backs net off.** A claim is counted, then netted: `kept = claimed − handedBack`. Claiming fast and
+  handing back later is the behaviour the measure exists to catch, so the claim is never erased. Somebody
+  who handed a load back and later re-took it counts once, on the side they are on now.
+- **A thin record shows as thin.** Under `MOBILISATION_MIN_LOADS` (5) there are counts and NO rate, and the
+  payload carries `ratesNeed` so a screen can say what a rate would need without knowing the config.
+- **Scarcity, read off the load itself.** `TIGHT_WAIT_H` (48): a load nobody else would take for two days
+  was a load trucks were scarce for, by the revealed preference of everybody who passed on it. Deliberately
+  NOT derived from the market series — that is a window-level fact, and making a per-party record depend on
+  re-deriving the whole market at the moment each load was posted gives a figure nobody can reproduce.
+- **Per lane and per commodity class**, and the drive checks the lanes account for every load so nothing is
+  quietly excluded. **No blended score anywhere**, asserted in both the spec and the drive.
+- **The sentence travels in the payload** (`movesMeasured`), not in a screen's footnote, so no surface can
+  render the figures without it. This measure's failure mode is being read as a general endorsement.
+- **A kind that mobilises nothing gets no record at all** rather than a row of zeroes, which would read as
+  a bad one. Shops and hubs have none.
+- **No individual driver is named on a fleet's page.** The record is the fleet's; a driver identifiable as
+  the one who handed a load back is a driver who stops taking the difficult ones.
+
+**STILL OPEN after this half:**
+1. **The clearing agent's own record.** §6's agent-controlled list (documents complete on first submission,
+   entries accepted without amendment, time from papers to filing, responsiveness) is mostly unrecorded. Of
+   it, CL2a/CL2b already hold the appointment, the published required list and the quote→agree→receipt
+   cycle, so **responsiveness is the one honestly available today**. Anything more needs new observations,
+   and per §7 those must be first-hand or evidenced — which puts it next to CL5, not before it.
+2. **The console's fuller operator view**, including the state-controlled portion of §6. Nothing is hidden
+   from operators today because the page is public, but the state-controlled split does not exist yet.
+3. **Hand-back REASONS are not published** — only the count. The reason is context that can be legitimate
+   (a rest-hours hand-back is FP8 working), and publishing it publicly would punish the honest use of a
+   safety rule. An operator should see them; that rides with item 2.
+
 ### CL4 — Mobilisation, measured
 
 **Audience and honesty decided 2026-09-16.** Two questions were open here. Both are answered, and the second

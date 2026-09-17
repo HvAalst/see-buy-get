@@ -50,6 +50,46 @@ export class ProfileVerification {
   at: string;
 }
 
+/** One lane, or one commodity class, of a mobilisation record. Declared above its user. */
+export class ProfileMobilisationSlice {
+  key: string;
+  claimed: number;
+  handedBack: number;
+  kept: number;
+  delivered: number;
+}
+
+/**
+ * CL4 — what they did with the loads they took. Counts always; rates only when there are enough.
+ *
+ * NO BLENDED SCORE, and there must never be one: blending is exactly what makes bribery look like
+ * competence, and the half of this that cannot be measured honestly is left unmeasured rather than
+ * folded in at a guess.
+ */
+export class ProfileMobilisation {
+  claimed: number;
+  handedBack: number;
+  kept: number;
+  delivered: number;
+  /** Neither delivered nor handed back — running. Not a success and not a failure. */
+  inFlight: number;
+  /** Loads they kept that nobody else would take for two days: scarcity work. */
+  tightKept: number;
+  tightDelivered: number;
+  /** Null while the record is thin — three loads shows three loads and no average. */
+  @ApiPropertyOptional()
+  keptRate?: number | null;
+  @ApiPropertyOptional()
+  deliveredRate?: number | null;
+  thin: boolean;
+  /** How many loads a rate needs, so a screen can say so without knowing the server's config. */
+  ratesNeed: number;
+  @ApiProperty({ type: [ProfileMobilisationSlice] })
+  lanes: ProfileMobilisationSlice[];
+  @ApiProperty({ type: [ProfileMobilisationSlice] })
+  classes: ProfileMobilisationSlice[];
+}
+
 /** How established the network is where they stand, and what that does and does not promise. */
 export class ProfilePresence {
   level: string;
@@ -134,4 +174,27 @@ export class ProfileView {
    */
   @ApiProperty({ type: [ProfileVerification] })
   verified: ProfileVerification[];
+
+  /**
+   * CL4 — THE MOBILISATION RECORD: whether they find and move trucks.
+   *
+   * On the PUBLIC page on purpose. An operator-only signal does not remove our influence over who gets
+   * appointed, it conceals it: work still gets steered by suggestion, and nobody outside can audit a
+   * nudge. The shipper sees it because the shipper is the one choosing, and the party sees exactly the
+   * same fields at the same moment — a record handed down is a verdict, one both parties hold is an
+   * account.
+   *
+   * Absent for a kind that does not mobilise anything (a shop, a hub) rather than present and zero. The
+   * counts are always real; the RATES are null while the record is thin, because five stars from three
+   * loads is the same untruth as hiding them.
+   */
+  @ApiPropertyOptional({ type: ProfileMobilisation })
+  moves?: ProfileMobilisation;
+
+  /**
+   * What we measured, and what we did NOT — carried in the payload so no screen can render the figures
+   * without the sentence. This measure's failure mode is being read as a general endorsement.
+   */
+  @ApiPropertyOptional()
+  movesMeasured?: string;
 }

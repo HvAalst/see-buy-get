@@ -14,6 +14,7 @@ import { CompanyDocumentService } from '../../foundation/entity/company-document
 import { HandleService } from '../../foundation/handle/handle.service';
 import { HandleDirectory } from './handle-directory.service';
 import { ProfileView, presenceSays, profileDoes } from './profile.types';
+import { MOBILISATION_MEASURED, mobilisationOf } from './mobilisation';
 import { ImportService } from './import.service';
 import { ImportDetail, ImportRow, KnownPaper } from './import.types';
 import { CompanyReadinessService } from '../../foundation/entity/company-readiness.service';
@@ -2501,6 +2502,11 @@ export class SbgController {
     // an unknown jurisdiction, which is right for the ladder and reads as a falsehood on a public page.
     const presence = country ? this.presence.resolve(country) : undefined;
 
+    // CL4 — the mobilisation record, for the kinds that actually mobilise something. A FLEET moves loads
+    // through the drivers it fields, so its record is the loads any of them took; a shop or a hub moves no
+    // trucks and gets no record rather than a row of honest zeroes, which would read as a bad one.
+    const moves = fleet ? mobilisationOf(this.dispatch.listFreight(), this.drivers.list({ managerDid: fleet.did }).map((d) => d.did)) : undefined;
+
     // A verified paper is named, with its date, and an empty list is a real answer shown as one. Only a
     // COMPANY has a document register; the rest carry what their own record can honestly attest.
     const verified = company
@@ -2524,6 +2530,7 @@ export class SbgController {
       ...(presence ? { presence: { level: presence.level, says: presenceSays(presence.level) } } : {}),
       does: profileDoes(held.kind),
       verified,
+      ...(moves ? { moves, movesMeasured: MOBILISATION_MEASURED } : {}),
     };
   }
 

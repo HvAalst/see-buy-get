@@ -85,6 +85,56 @@ export function ProfileScreen({ state }: ProfileScreenProps) {
       </Card>
       ) : null}
 
+      {/* CL4 — THE MOBILISATION RECORD. Public on purpose: an operator-only signal does not remove our
+          influence over who gets appointed, it conceals it, and the party sees these exact fields. */}
+      {p.moves && p.movesMeasured ? (
+        <Card>
+          <h2 class="h2">{t('home.profile.movesTitle')}</h2>
+          {/* THE SENTENCE COMES FIRST, not in a footnote. This measure's failure mode is being read as a
+              general endorsement, and the only defence is saying what it is not before the numbers. */}
+          <p class="card__note">{p.movesMeasured}</p>
+
+          <ul class="list">
+            <li>{t('home.profile.movesTaken', { n: p.moves.claimed })}</li>
+            {/* What happened, including the bad — a record that can only flatter protects nobody. */}
+            <li>{t('home.profile.movesGaveBack', { n: p.moves.handedBack })}</li>
+            <li>{t('home.profile.movesDelivered', { n: p.moves.delivered })}</li>
+            {p.moves.inFlight > 0 ? <li>{t('home.profile.movesRunning', { n: p.moves.inFlight })}</li> : null}
+          </ul>
+
+          {/* The question the measure exists for: did they turn up when trucks were scarce? */}
+          {p.moves.tightKept > 0 ? (
+            <p>{t('home.profile.movesTight', { kept: p.moves.tightKept, delivered: p.moves.tightDelivered })}</p>
+          ) : null}
+
+          {/* RATES ONLY WHEN THE RECORD CAN CARRY THEM. Three loads shows three loads and no average:
+              hiding it is a polish that flatters, and averaging it is the same untruth wearing the
+              opposite sign. A newcomer reads as a newcomer, which is what they are. */}
+          {p.moves.thin ? (
+            <Note tone="info" icon="info" title={t('home.profile.movesThinTitle')} detail={t('home.profile.movesThinBody', { n: p.moves.ratesNeed })} />
+          ) : (
+            <p>
+              {t('home.profile.movesRates', {
+                kept: Math.round((p.moves.keptRate ?? 0) * 100),
+                delivered: Math.round((p.moves.deliveredRate ?? 0) * 100),
+              })}
+            </p>
+          )}
+
+          {/* Per lane, because moving dry goods on one corridor is not the same job as three corridors. */}
+          {p.moves.lanes.length > 0 ? (
+            <>
+              <h3 class="h3">{t('home.profile.movesLanes')}</h3>
+              <ul class="list">
+                {p.moves.lanes.slice(0, 8).map((l) => (
+                  <li key={l.key}>{t('home.profile.movesLane', { lane: l.key, taken: l.claimed, delivered: l.delivered })}</li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+        </Card>
+      ) : null}
+
       <Card>
         <h2 class="h2">{t('home.profile.checkedTitle')}</h2>
         {p.verified.length === 0 ? (

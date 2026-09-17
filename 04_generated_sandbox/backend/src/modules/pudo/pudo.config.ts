@@ -241,6 +241,28 @@ export const THIN_MARKET_LOADS = 5;
 /** A lane is QUIET when its posted loads fell to this share or less of the window before it. */
 export const QUIET_LANE_RATIO = 0.5;
 
+/* ---- CL4: mobilisation. What may be RATED from a record, and what counts as a scarce load. ---- */
+
+/**
+ * Below this many loads taken, a record shows its COUNTS and no rate.
+ *
+ * "An agent with three loads shows three loads, and no average. Not hidden, because hiding is a polish
+ * that flatters; not averaged, because five stars from three loads is the same untruth wearing the
+ * opposite sign. Newcomers are visible as newcomers, which is what they are."
+ */
+export const MOBILISATION_MIN_LOADS = 5;
+
+/**
+ * A load claimed after waiting THIS LONG was taken under scarcity — and the whole market said so.
+ *
+ * The honest local definition of "tight", and it needed care. The market series knows when the market as
+ * a whole is stretching, but that is a window-level fact and re-deriving it for the moment each load was
+ * posted would make a per-agent record depend on a recomputation of the entire market. This is the same
+ * signal read off the load itself: if nobody took it for two days, trucks were scarce for that load, by
+ * the revealed preference of everybody who passed on it. Taking it then is the thing being measured.
+ */
+export const TIGHT_WAIT_H = 48;
+
 /** Time-to-claim is STRETCHING when the median is at least this much longer than the window before it. */
 export const CLAIM_STRETCH_RATIO = 1.25;
 

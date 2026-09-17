@@ -22851,6 +22851,102 @@
           "at"
         ]
       },
+      "ProfileMobilisationSlice": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "claimed": {
+            "type": "number"
+          },
+          "handedBack": {
+            "type": "number"
+          },
+          "kept": {
+            "type": "number"
+          },
+          "delivered": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "key",
+          "claimed",
+          "handedBack",
+          "kept",
+          "delivered"
+        ]
+      },
+      "ProfileMobilisation": {
+        "type": "object",
+        "properties": {
+          "keptRate": {
+            "type": "number",
+            "nullable": true,
+            "description": "Null while the record is thin — three loads shows three loads and no average."
+          },
+          "deliveredRate": {
+            "type": "number",
+            "nullable": true
+          },
+          "lanes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProfileMobilisationSlice"
+            }
+          },
+          "classes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProfileMobilisationSlice"
+            }
+          },
+          "claimed": {
+            "type": "number"
+          },
+          "handedBack": {
+            "type": "number"
+          },
+          "kept": {
+            "type": "number"
+          },
+          "delivered": {
+            "type": "number"
+          },
+          "inFlight": {
+            "type": "number",
+            "description": "Neither delivered nor handed back — running. Not a success and not a failure."
+          },
+          "tightKept": {
+            "type": "number",
+            "description": "Loads they kept that nobody else would take for two days: scarcity work."
+          },
+          "tightDelivered": {
+            "type": "number"
+          },
+          "thin": {
+            "type": "boolean"
+          },
+          "ratesNeed": {
+            "type": "number",
+            "description": "How many loads a rate needs, so a screen can say so without knowing the server's config."
+          }
+        },
+        "required": [
+          "lanes",
+          "classes",
+          "claimed",
+          "handedBack",
+          "kept",
+          "delivered",
+          "inFlight",
+          "tightKept",
+          "tightDelivered",
+          "thin",
+          "ratesNeed"
+        ]
+      },
       "ProfileView": {
         "type": "object",
         "properties": {
@@ -22897,6 +22993,18 @@
             "items": {
               "$ref": "#/components/schemas/ProfileVerification"
             }
+          },
+          "moves": {
+            "description": "CL4 — THE MOBILISATION RECORD: whether they find and move trucks.\n\nOn the PUBLIC page on purpose. An operator-only signal does not remove our influence over who gets\nappointed, it conceals it: work still gets steered by suggestion, and nobody outside can audit a\nnudge. The shipper sees it because the shipper is the one choosing, and the party sees exactly the\nsame fields at the same moment — a record handed down is a verdict, one both parties hold is an\naccount.\n\nAbsent for a kind that does not mobilise anything (a shop, a hub) rather than present and zero. The\ncounts are always real; the RATES are null while the record is thin, because five stars from three\nloads is the same untruth as hiding them.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ProfileMobilisation"
+              }
+            ]
+          },
+          "movesMeasured": {
+            "type": "string",
+            "description": "What we measured, and what we did NOT — carried in the payload so no screen can render the figures\nwithout the sentence. This measure's failure mode is being read as a general endorsement."
           },
           "handle": {
             "type": "string",
