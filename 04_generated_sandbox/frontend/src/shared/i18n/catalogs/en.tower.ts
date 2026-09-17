@@ -183,6 +183,75 @@ export const enTower = {
   'tower.nav.company': 'Company record',
   'tower.nav.borders': 'Borders',
   'tower.nav.imports': 'Containers',
+  'tower.nav.market': 'The market',
+
+  /* ---- CL3: scarcity, derived ---- */
+  'tower.market.title': 'What the market is doing',
+  'tower.market.lede':
+    'What shippers asked for, against what the fleet actually took — day by day, how long loads are waiting, what negotiated prices cleared at, and which lanes went quiet.',
+  'tower.market.caveatT': 'Nobody reports any of this.',
+  'tower.market.caveat':
+    'Every figure here is derived from timestamps a load already carries. A fleet withdrawing capacity files no notice — it simply stops claiming — so these lines move on their own within a day, which is the only reason they can be trusted in a market where people are busy and forms go unfilled.',
+  'tower.market.range': '{n} days',
+  'tower.market.loading': 'Reading the market…',
+  'tower.market.none': 'Nothing to read yet.',
+  'tower.market.thinWindow': 'Too few loads in this window to read a trend from. The counts are real; the shape of them is not worth much yet.',
+  'tower.market.thin': 'thin',
+
+  'tower.market.shapeTitle': 'The shape of it',
+  'tower.market.mood.tight': 'tightening',
+  'tower.market.mood.easing': 'easing',
+  'tower.market.mood.steady': 'steady',
+  'tower.market.mood.unknown': 'not enough to say',
+  'tower.market.asked': 'Asked for',
+  /* Taken · nobody took · withdrawn add up to "asked for" exactly. "Moved" does not belong among them —
+     it counts loads taken during the window whenever they were posted, so it is kept below with its own
+     sentence saying so. Three numbers under a total have to come to that total. */
+  'tower.market.met': 'Taken',
+  'tower.market.loads': '{n} of them',
+  'tower.market.moved': 'Moved',
+  'tower.market.movedHint': 'A different count: loads taken during this window, whenever they were posted. Not one of the three above.',
+  'tower.market.loadsKm': '{loads} loads · {km} km',
+  'tower.market.takeUp': '{pct}% of loads taken',
+  'tower.market.unmet': 'Nobody took',
+  'tower.market.withdrawn': 'Withdrawn',
+  'tower.market.withdrawnBody': '{n} loads the shipper pulled back. Counted here and kept out of “nobody took”, because a load nobody was asked to carry is not the fleet falling short.',
+  'tower.market.deadhead': 'Empty running',
+  'tower.market.deadheadBody': '{km} km run empty to reach that work. Beside the moved figure, never inside it.',
+
+  'tower.market.waitTitle': 'How long loads wait',
+  'tower.market.waitHint':
+    'Measured on loads that were taken, against the same length of time immediately before. When trucks get scarce, loads still get posted and still get taken — they just wait longer first, and that shows here before it shows anywhere else.',
+  'tower.market.waitNow': '{hours} hours to be taken, typically',
+  'tower.market.waitPrior': 'Before that: {hours} hours',
+  'tower.market.waitNoPrior': 'Nothing to compare against yet.',
+  'tower.market.waitCount': 'from {n} loads',
+  'tower.market.waitNone': 'Nothing was taken in this window.',
+  'tower.market.stretching': 'waits are lengthening',
+
+  'tower.market.priceTitle': 'What agreed prices cleared at',
+  'tower.market.priceHint':
+    'Only loads whose price was NEGOTIATED can answer this. A load taken at the computed price IS the rate card, so counting those would drag every figure back towards it and bury the signal.',
+  'tower.market.priceRatio': '{pct}% above the rate card, typically',
+  'tower.market.priceCount': 'from {n} negotiated loads',
+  'tower.market.priceNone': 'No negotiated loads in this window, so there is nothing to compare.',
+  /* The ratio IS the claim, so too thin a sample withholds the number and not merely the verdict beside it.
+     Counted at one deliberately: "1 in this window" is the case where it matters most. */
+  'tower.market.priceThin': 'Too few negotiated loads to say what the market paid — {n} in this window, so one unusual deal would be the entire figure.',
+
+  'tower.market.daysTitle': 'Posted against taken, by day',
+  'tower.market.daysLegend': 'tall bar posted · short bar taken',
+  'tower.market.daysAria': 'Posted and taken loads across {n} days',
+
+  'tower.market.lanesTitle': 'Lanes',
+  'tower.market.lanesNone': 'No lanes in this window.',
+  'tower.market.lanesFoot': 'A lane is named from its two ends. An end too far from anywhere we know is “unknown” rather than snapped to the nearest big town.',
+  'tower.market.quiet': 'went quiet',
+  'tower.market.quietCount': '{n} lanes went quiet',
+  'tower.market.col.lane': 'Lane',
+  'tower.market.col.posted': 'Posted',
+  'tower.market.col.claimed': 'Taken',
+  'tower.market.col.before': 'Before',
 
   /* ---- CL2a: a container, its papers, and the agent appointed to clear it ---- */
   'tower.imports.title': 'Containers and clearing',

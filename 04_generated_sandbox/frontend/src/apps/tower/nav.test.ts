@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { NAV_GROUPS, SCREEN_META, activeGroupKey, firstScreen, groupBadge, groupOf, groupsFor, opensSheet } from './nav';
 import type { Screen } from './useTowerApp';
 
-const ALL: Screen[] = ['network', 'hazards', 'claims', 'disposal', 'approvals', 'papers', 'imports', 'reports', 'support', 'money', 'companies', 'company', 'rates', 'corridors', 'borders', 'presence', 'pictures'];
+const ALL: Screen[] = ['network', 'market', 'hazards', 'claims', 'disposal', 'approvals', 'papers', 'imports', 'reports', 'support', 'money', 'companies', 'company', 'rates', 'corridors', 'borders', 'presence', 'pictures'];
 
 /**
  * The console's navigation.
@@ -85,7 +85,9 @@ describe('tapping a group', () => {
     // A sheet listing one destination is a tap that asks a question with one answer.
     expect(opensSheet(NAV_GROUPS.find((g) => g.key === 'waiting')!)).toBe(true);
     expect(opensSheet(NAV_GROUPS.find((g) => g.key === 'money')!)).toBe(false);
-    expect(opensSheet(NAV_GROUPS.find((g) => g.key === 'overview')!)).toBe(false);
+    // Overview held one screen until the market view joined it; two destinations is a real choice, so the
+    // sheet is now the right answer there rather than a tap that asks a question with one answer.
+    expect(opensSheet(NAV_GROUPS.find((g) => g.key === 'overview')!)).toBe(true);
   });
 
   it('goes straight to the only screen when a group has been narrowed to one', () => {

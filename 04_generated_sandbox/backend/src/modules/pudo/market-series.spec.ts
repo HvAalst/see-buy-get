@@ -1,4 +1,4 @@
-import { buildSeries, loadedKmOf, UNKNOWN_BODY } from './market-series';
+import { buildSeries, lanesOf, loadedKmOf, median, UNKNOWN_BODY, UNKNOWN_PLACE } from './market-series';
 import { Freight } from './dispatch.types';
 
 /**
@@ -51,6 +51,113 @@ function claimed(over: Partial<Freight> = {}): Freight {
 
 const WINDOW = { from: T0, to: T0 + 30 * DAY };
 const series = (rows: Freight[], w = WINDOW) => buildSeries(rows, w, roadKm);
+
+/**
+ * CL3 — scarcity, derived. Nothing here is reported by anybody: every figure comes from timestamps the
+ * load already carries, which is what lets it keep working in a market where nobody fills anything in.
+ */
+describe('CL3 — scarcity, derived from what the loads already say', () => {
+  it('counts a WITHDRAWN load as withdrawn, never as demand nobody met', () => {
+    // The defect this closes: ANY load with no claim counted as unmet, so a shipper cancelling their own
+    // load registered as the fleet failing to turn up — inflating scarcity in the view built to measure it.
+    const s = series([freight({ status: 'cancelled', createdAt: at(1) }), freight({ createdAt: at(2) })]);
+    expect(s.totals.cancelledLoads).toBe(1);
+    expect(s.totals.unmetLoads).toBe(1);
+  });
+
+  it('partitions what was ASKED FOR into exactly three outcomes, so the three can be added', () => {
+    // The defect a live sandbox showed in one glance: 33 asked for, and moved + unmet + withdrawn came to
+    // 35. `movedLoads` counts loads CLAIMED in the window whenever they were posted, so it cannot complete a
+    // population keyed on posting. `metLoads` can, and must, always.
+    const rows = [
+      claimed({ createdAt: at(1), claimedAt: at(2) }), // met
+      claimed({ createdAt: at(3), claimedAt: at(4) }), // met
+      freight({ createdAt: at(5) }), // nobody took it
+      freight({ status: 'cancelled', createdAt: at(6) }), // withdrawn before anybody took it
+      // Claimed and THEN withdrawn: a truck turned up, the load did not travel. It belongs on the withdrawn
+      // line and nowhere else, or the fleet is credited with work that never happened.
+      claimed({ status: 'cancelled', createdAt: at(7), claimedAt: at(8) }),
+    ];
+    const s = series(rows);
+    expect(s.totals).toMatchObject({ offeredLoads: 5, metLoads: 2, unmetLoads: 1, cancelledLoads: 2 });
+    expect(s.totals.metLoads + s.totals.unmetLoads + s.totals.cancelledLoads).toBe(s.totals.offeredLoads);
+    // …and `moved` is still the other question, over its own population: three loads were claimed here.
+    expect(s.totals.movedLoads).toBe(3);
+  });
+
+  it('gives every day in the window a row, including the silent ones', () => {
+    const s = series([freight({ createdAt: at(1) }), freight({ createdAt: at(1) })]);
+    expect(s.days).toHaveLength(31);
+    expect(s.days[0].day).toBe('2026-06-01');
+    // A market that went quiet must show as zeroes rather than as a gap a chart would draw straight over.
+    expect(s.days.filter((d) => d.postedLoads === 0)).toHaveLength(30);
+    expect(s.days.find((d) => d.day === '2026-06-02')?.postedLoads).toBe(2);
+  });
+
+  it('separates what was POSTED from what was TAKEN on each day', () => {
+    // One load, posted on one day and claimed on the next: two different days, two different facts.
+    const s = series([claimed({ createdAt: at(1), claimedAt: at(2) })]);
+    expect(s.days.find((d) => d.day === '2026-06-02')).toMatchObject({ postedLoads: 1, claimedLoads: 0 });
+    expect(s.days.find((d) => d.day === '2026-06-03')).toMatchObject({ postedLoads: 0, claimedLoads: 1 });
+  });
+
+  it('measures the wait against the window before, and refuses to call it stretching on a thin sample', () => {
+    // Five quick claims before the window, five slow ones inside it: the market is taking longer to answer.
+    const prior = [0, 1, 2, 3, 4].map((i) => claimed({ createdAt: at(-9 + i), claimedAt: at(-8 + i) }));
+    const now = [0, 1, 2, 3, 4].map((i) => claimed({ createdAt: at(1 + i), claimedAt: at(5 + i) }));
+    const s = series([...prior, ...now]);
+    expect(s.timeToClaim).toMatchObject({ loads: 5, priorLoads: 5, thin: false, stretching: true });
+    expect(s.timeToClaim.medianHours).toBe(96);
+    expect(s.timeToClaim.priorMedianHours).toBe(24);
+
+    // The same shape on too few loads states the figures and withholds the verdict.
+    const thin = series([claimed({ createdAt: at(-9), claimedAt: at(-8) }), claimed({ createdAt: at(1), claimedAt: at(5) })]);
+    expect(thin.timeToClaim).toMatchObject({ thin: true, stretching: false });
+    expect(thin.timeToClaim.medianHours).toBe(96);
+  });
+
+  it('compares only NEGOTIATED prices against the stack, because a computed price IS the stack', () => {
+    const computed = claimed({ priceOrigin: 'computed', lockedPrice: 75 });
+    expect(series([computed]).priceVsStack).toMatchObject({ loads: 0, medianRatio: null });
+
+    // Agreed 90 where the stack said 75: the market charging a fifth over the card to get a truck.
+    const negotiated = claimed({ priceOrigin: 'negotiated', lockedPrice: 90 });
+    const s = series([computed, negotiated]);
+    expect(s.priceVsStack).toMatchObject({ loads: 1, medianRatio: 1.2, thin: true });
+  });
+
+  it('names a lane from its two ends and calls it quiet only when it fell from something', () => {
+    const NBO = { lat: -1.286, lng: 36.817 };
+    const MSA = { lat: -4.043, lng: 39.668 };
+    // Twelve before, five during. Quiet means a fall to half or less, and not-thin means at least five in
+    // each window — so a lane can only be BOTH if the window before it carried at least ten.
+    const before = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((i) => freight({ pickupLocation: NBO, destLocation: MSA, createdAt: at(-12 + (i % 6)) }));
+    const during = [0, 1, 2, 3, 4].map((i) => freight({ pickupLocation: NBO, destLocation: MSA, createdAt: at(1 + i) }));
+    const [lane] = lanesOf([...before, ...during], WINDOW);
+    expect(lane).toMatchObject({ postedLoads: 5, priorPostedLoads: 12, thin: false, quiet: true });
+    expect(lane.lane).toContain('→');
+
+    // A lane with no history is EMPTY, not quiet: calling it quiet would invent a decline nobody suffered.
+    const fresh = lanesOf(during, WINDOW)[0];
+    expect(fresh).toMatchObject({ priorPostedLoads: 0, quiet: false });
+  });
+
+  it('buckets a lane end it cannot name honestly as unknown', () => {
+    // Deep ocean: nothing in the gazetteer is near enough to name without implying precision we lack.
+    const nowhere = { lat: -40, lng: -120 };
+    const [lane] = lanesOf([freight({ pickupLocation: nowhere, destLocation: nowhere, createdAt: at(1) })], WINDOW);
+    expect(lane.from).toBe(UNKNOWN_PLACE);
+    expect(lane.to).toBe(UNKNOWN_PLACE);
+  });
+
+  it('takes the median rather than the mean, so one freak wait is not the market', () => {
+    expect(median([])).toBeNull();
+    expect(median([2, 1, 3])).toBe(2);
+    expect(median([1, 2, 3, 4])).toBe(2.5);
+    // The mean of these is 200-odd; the median says what almost every load actually did.
+    expect(median([1, 1, 1, 1, 1000])).toBe(1);
+  });
+});
 
 describe('the market series (FB4)', () => {
   it('counts what was ASKED FOR against what MOVED, per body', () => {
@@ -143,7 +250,7 @@ describe('the market series (FB4)', () => {
     const s = series([]);
     expect(s.from).toBe(new Date(WINDOW.from).toISOString());
     expect(s.to).toBe(new Date(WINDOW.to).toISOString());
-    expect(s.totals).toEqual({ offeredLoads: 0, offeredKm: 0, movedLoads: 0, movedKm: 0, deadheadKm: 0, unmetLoads: 0, unmetKm: 0 });
+    expect(s.totals).toEqual({ offeredLoads: 0, offeredKm: 0, movedLoads: 0, movedKm: 0, deadheadKm: 0, unmetLoads: 0, unmetKm: 0, cancelledLoads: 0, metLoads: 0 });
   });
 
   it('prefers the RECORDED haul distance over one measured now', () => {

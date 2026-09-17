@@ -2,6 +2,7 @@ import { triggerDownload } from '../../shared/download';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { isUnknownIdentity, narrow, type SbgError } from '../../lib/sbg';
 import type { MediaKind } from '../../lib/sbg/personas/media';
+import type { MarketSeriesView } from '../../shared/market';
 import { t } from '../../shared/i18n';
 import { downscaleImage } from '../../shared/media';
 import type { IconName } from '../../shared/ui/Icon';
@@ -60,6 +61,9 @@ export interface FleetState {
   earnSummary: FleetEarningsSummary | null;
   /* FP5 — dispatch: the market as one driver on shift would see it. */
   dispatch: DispatchView | null;
+  /** CL3 — the market as a whole, so an empty board can say whether that is the market or this reach.
+   *  Null until the series has been read; the board never waits on it. */
+  market: MarketSeriesView | null;
   /** The driver being dispatched for ('' = let the server's first driver on shift stand in). */
   dispatchDriver: string;
   /** Reach in km from where they are; 0 = the whole market. */
@@ -90,6 +94,7 @@ const EMPTY_KYC = { for: null, idCopyRef: '', licenceCopyRef: '', photoRef: '' }
 
 const INITIAL: FleetState = {
   dispatch: null,
+  market: null,
   dispatchDriver: '',
   dispatchRadius: 50,
   dispatchState: 'idle',
@@ -464,6 +469,12 @@ export function useFleetApp() {
         return;
       }
       setState((s) => ({ ...s, dispatch: view, dispatchState: 'ready' }));
+      // CL3 — the market series AFTER the board, never beside it. The board is what the dispatcher came
+      // for; an analytics read that is slower must not hold it up, and the line it feeds is a footnote.
+      void client.api.marketSeries().then((m) => {
+        if (epoch !== dispatchEpoch.current || m.error) return;
+        setState((s) => ({ ...s, market: narrow<MarketSeriesView>(m.data) }));
+      });
     },
     [client, fail],
   );

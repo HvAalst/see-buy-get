@@ -280,6 +280,28 @@ export function createOperatorApi(sbg: SbgClient) {
     /** Mint the road leg from the port of destination, on the freight machinery that already exists. */
     mintImportRoadLeg: (importId: string, body: { pickupLocation: { lat: number; lng: number }; pickupLabel?: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; entityId?: string; by?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/road-leg', { params: { path: { importId } }, body: body as never })),
+    /* ---- CL3: scarcity, derived. The same public series both the console and a fleet office read. ---- */
+
+    /**
+     * The market series: what was asked for against what moved, day by day, plus how long loads are waiting,
+     * what negotiated prices cleared at, and which lanes went quiet.
+     *
+     * Every figure is derived from timestamps the loads already carry, so it keeps working in a market where
+     * nobody reports anything — which is the only kind of market this has to work in.
+     */
+    marketSeries: (query: { lat?: number; lng?: number; radiusKm?: number; since?: string; until?: string } = {}) =>
+      sbg.request((c) =>
+        c.GET('/v1/sbg/market/series', {
+          params: {
+            query: {
+              ...(query.lat != null && query.lng != null ? { lat: query.lat, lng: query.lng } : {}),
+              ...(query.radiusKm != null ? { radiusKm: query.radiusKm } : {}),
+              ...(query.since ? { since: query.since } : {}),
+              ...(query.until ? { until: query.until } : {}),
+            },
+          },
+        } as never),
+      ),
 
     /** The fleets on the network — with their sign-in codes, which only network staff and the fleet itself see. */
     fleets: () => sbg.request((c) => c.GET('/v1/sbg/fleet/managers', {})),

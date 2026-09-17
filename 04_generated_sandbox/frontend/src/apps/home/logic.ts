@@ -8,6 +8,7 @@
 
 import type { IconName } from '../../shared/ui/Icon';
 import type { MessageKey, Translate } from '../../shared/i18n';
+import { THIN_MARKET_LOADS } from '../../shared/market';
 
 /* ------------------------------------------------------------------ roles -- */
 
@@ -357,8 +358,13 @@ export function servedPct(row: { offeredKm: number; movedKm: number }): number |
  * The rateBand rule, applied to bodies: a median of one vehicle is not a market. A body with two loads
  * against it says almost nothing, and a percentage computed off two loads says less than nothing because it
  * looks like a measurement. Marked rather than hidden — the count is itself information.
+ *
+ * The threshold itself comes from `shared/market` rather than being declared here. It was declared in both
+ * places, at the same 5, which is the arrangement that ends with two screens calling the same market thin
+ * and not thin — and this app and the console publish their figures to different audiences, so the two would
+ * have disagreed in public.
  */
-export const THIN_MARKET_LOADS = 5;
+export { THIN_MARKET_LOADS };
 export function isThin(row: { offeredLoads: number; movedLoads: number }): boolean {
   return row.offeredLoads + row.movedLoads < THIN_MARKET_LOADS;
 }

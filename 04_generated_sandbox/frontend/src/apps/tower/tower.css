@@ -52,6 +52,14 @@
 /* What this session has just done. Not a toast: a toast takes the record of a decision away on a timer,
    and this line is the only confirmation an operator gets that the clearance actually landed. It stays
    until the next action replaces it. */
+/* CL3 — a two-line day chart with no charting library: one shared scale, so a day nothing moved
+   cannot look like a day everything did. */
+.twr-spark { display: flex; align-items: flex-end; gap: 2px; height: 96px; margin: 8px 0; }
+.twr-spark__day { position: relative; flex: 1 1 0; height: 100%; display: flex; align-items: flex-end; gap: 1px; }
+.twr-spark__posted, .twr-spark__claimed { flex: 1 1 0; border-radius: 2px 2px 0 0; min-height: 1px; }
+.twr-spark__posted { background: var(--next, #3f6ea8); }
+.twr-spark__claimed { background: var(--ship, #1c7c54); }
+
 .twr-done {
   display: flex;
   align-items: center;

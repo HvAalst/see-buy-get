@@ -455,8 +455,46 @@ scope: *share the documents digitally, grant access, pay the agent, get the cont
   declaring the fee class later in the same file typechecked cleanly and then killed the contract emit with
   a temporal dead zone. A type annotation would have been erased; a metadata factory is not.
 
-### CL3 — Scarcity, derived
+### CL3 — Scarcity, derived — SHIPPED 2026-09-17, driven
 No dependencies. Cheap, and it is the slice that pays for the epic early.
+
+**The gate was met as written:** eight loads posted on a lane the seed never used, nobody claiming them, and
+the series showed it the same day — the lane appeared out of the loads themselves, the day's row carried the
+posting, and demand nobody met rose by exactly eight. Nobody reported anything at any point.
+
+**Everything is derived from timestamps the loads already carry**, so no new endpoint exists: `market/series`
+grew a response and the operation count did not move. Thresholds live in `pudo.config` (`THIN_MARKET_LOADS`,
+`QUIET_LANE_RATIO`, `CLAIM_STRETCH_RATIO`) — the first was a rule that had lived only in review comments.
+
+**Rule 4, added to the three the series already had:** a claim about a TREND needs something to compare
+against, so "stretching" and "quiet" are each measured against the window of equal length immediately before
+and refused outright on a thin sample rather than stated softly. A lane that never had traffic is empty, not
+quiet.
+
+**THREE DEFECTS THE DRIVE FOUND AND THE UNIT TESTS DID NOT**, all of them about a console contradicting
+itself rather than about a wrong computation:
+
+1. **The totals did not partition, and said so in one glance:** 33 asked for, 10 moved, 14 unmet, 11
+   withdrawn — which add to 35. `offered` is keyed on POSTING and `moved` on CLAIMING (deliberately, and
+   documented), so moved was never the third number in that column, and a load claimed and then withdrawn
+   appeared in two rows at once. `takeUp` divided across the same two populations, reading 30% where the
+   truth was 24%; on a thinner market it exceeds 100%. Closed by **`metLoads`** — posted in the window,
+   still standing, ever claimed — so `offeredLoads = metLoads + unmetLoads + cancelledLoads` exactly, always.
+   Moved keeps its place below the partition, labelled as the other question.
+2. **A ratio is the claim, not a fact with a claim beside it.** One seeded load negotiated at 350 against a
+   stack of 1.17 gave a 299× median that would have published as "+29,815% above the rate card" beside a tag
+   reading "thin". Nobody reads the tag instead of the number. The server still publishes the ratio (the
+   endpoint is public and a consumer with their own judgement is entitled to it); `priceClaim` is the console
+   declining to say it, keeping only the count of loads. **This is the one exception to "state the figure,
+   withhold the verdict"** — for a count or a duration the two separate, for a ratio they do not.
+3. **`THIN_MARKET_LOADS` was declared twice in the frontend**, at the same 5, in the home app and in the new
+   shared module whose own docstring warns that a rule copied into two apps eventually disagrees with itself.
+   The home app now imports it. The backend copy is unavoidable; a second frontend copy was not.
+
+**The habit worth keeping:** the arithmetic was right in every unit test because each test asserted one
+figure at a time. The defect only exists when four correct numbers are stacked in one column, which is a
+property of the SCREEN and not of the function. Read a console the way a reader does — add up what is in
+front of them — before calling a view finished.
 
 - **Build:** extend the market series with loads posted against loads claimed, time-to-claim stretching, price
   against the rate stack, and corridors going quiet.

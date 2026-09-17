@@ -25567,6 +25567,77 @@
           "deadheadKm"
         ]
       },
+      "MarketDay": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "type": "string",
+            "description": "The day these counts fell in, YYYY-MM-DD in UTC."
+          },
+          "postedLoads": {
+            "type": "number",
+            "description": "Loads POSTED on this day."
+          },
+          "claimedLoads": {
+            "type": "number",
+            "description": "Loads CLAIMED on this day — not necessarily the same loads."
+          },
+          "postedKm": {
+            "type": "number"
+          },
+          "claimedKm": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "day",
+          "postedLoads",
+          "claimedLoads",
+          "postedKm",
+          "claimedKm"
+        ]
+      },
+      "LaneSeries": {
+        "type": "object",
+        "properties": {
+          "lane": {
+            "type": "string",
+            "description": "\"Nairobi → Mombasa\". Either end may be 'unknown'."
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "postedLoads": {
+            "type": "number"
+          },
+          "claimedLoads": {
+            "type": "number"
+          },
+          "priorPostedLoads": {
+            "type": "number"
+          },
+          "quiet": {
+            "type": "boolean",
+            "description": "Posting fell materially against the window before, and both windows are above the thin threshold."
+          },
+          "thin": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "lane",
+          "from",
+          "to",
+          "postedLoads",
+          "claimedLoads",
+          "priorPostedLoads",
+          "quiet",
+          "thin"
+        ]
+      },
       "MarketSeriesTotals": {
         "type": "object",
         "properties": {
@@ -25591,6 +25662,14 @@
           },
           "unmetKm": {
             "type": "number"
+          },
+          "cancelledLoads": {
+            "type": "number",
+            "description": "CL3 — posted in the window and then WITHDRAWN by the shipper. Counted here and excluded from unmet,\n because a load nobody was asked to carry is not demand the fleet failed to meet."
+          },
+          "metLoads": {
+            "type": "number",
+            "description": "CL3 — posted in the window, still standing, and claimed by somebody at some point.\n\nThe ONLY figure that completes the posted population: `offeredLoads` = metLoads + unmetLoads +\ncancelledLoads, exactly, always. `movedLoads` cannot do that job and must not be read as if it could —\nit counts loads CLAIMED in the window whenever they were posted, so it answers a different question over\na different population. Both are real (see `buildSeries`), but only this one partitions what was asked\nfor, and a screen that shows moved beside unmet and withdrawn invites a reader to add three numbers that\ncome to more than the total above them."
           }
         },
         "required": [
@@ -25600,7 +25679,68 @@
           "movedKm",
           "deadheadKm",
           "unmetLoads",
-          "unmetKm"
+          "unmetKm",
+          "cancelledLoads",
+          "metLoads"
+        ]
+      },
+      "TimeToClaim": {
+        "type": "object",
+        "properties": {
+          "medianHours": {
+            "type": "number",
+            "nullable": true,
+            "description": "Median hours from posting to claim. Null when nothing was claimed in the window."
+          },
+          "loads": {
+            "type": "number"
+          },
+          "priorMedianHours": {
+            "type": "number",
+            "nullable": true,
+            "description": "The same figure for the window of equal length immediately before this one."
+          },
+          "priorLoads": {
+            "type": "number"
+          },
+          "stretching": {
+            "type": "boolean",
+            "description": "True only when BOTH windows have a median, BOTH are above the thin threshold, and it has lengthened\n materially. A claim this strong is never made on a guess."
+          },
+          "thin": {
+            "type": "boolean",
+            "description": "Either window is too small to carry the claim. The figures are still shown; the flag says how far to\n trust them."
+          }
+        },
+        "required": [
+          "medianHours",
+          "loads",
+          "priorMedianHours",
+          "priorLoads",
+          "stretching",
+          "thin"
+        ]
+      },
+      "PriceVsStack": {
+        "type": "object",
+        "properties": {
+          "loads": {
+            "type": "number",
+            "description": "Loads with a negotiated price AND a computed one to compare it against."
+          },
+          "medianRatio": {
+            "type": "number",
+            "nullable": true,
+            "description": "Median agreed ÷ computed. Above 1 means shippers paid over the stack to get a truck."
+          },
+          "thin": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "loads",
+          "medianRatio",
+          "thin"
         ]
       },
       "MarketSeries": {
@@ -25612,6 +25752,19 @@
               "$ref": "#/components/schemas/BodySeries"
             }
           },
+          "days": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MarketDay"
+            }
+          },
+          "lanes": {
+            "description": "Busiest lane first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LaneSeries"
+            }
+          },
           "from": {
             "type": "string",
             "description": "The window these figures cover, echoed as ISO instants. A kilometre count means nothing without the\n period it accrued over, and \"yearly km\" is a rate a reader has to be able to check for themselves."
@@ -25621,13 +25774,23 @@
           },
           "totals": {
             "$ref": "#/components/schemas/MarketSeriesTotals"
+          },
+          "timeToClaim": {
+            "$ref": "#/components/schemas/TimeToClaim"
+          },
+          "priceVsStack": {
+            "$ref": "#/components/schemas/PriceVsStack"
           }
         },
         "required": [
           "bodies",
+          "days",
+          "lanes",
           "from",
           "to",
-          "totals"
+          "totals",
+          "timeToClaim",
+          "priceVsStack"
         ]
       },
       "FreightInstructionsView": {

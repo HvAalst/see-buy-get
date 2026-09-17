@@ -511,6 +511,97 @@ export class MarketSeriesTotals {
    *  this and the moved figures is the sentence somebody deciding what to buy is actually paying for. */
   unmetLoads: number;
   unmetKm: number;
+  /** CL3 — posted in the window and then WITHDRAWN by the shipper. Counted here and excluded from unmet,
+   *  because a load nobody was asked to carry is not demand the fleet failed to meet. */
+  cancelledLoads: number;
+  /**
+   * CL3 — posted in the window, still standing, and claimed by somebody at some point.
+   *
+   * The ONLY figure that completes the posted population: `offeredLoads` = metLoads + unmetLoads +
+   * cancelledLoads, exactly, always. `movedLoads` cannot do that job and must not be read as if it could —
+   * it counts loads CLAIMED in the window whenever they were posted, so it answers a different question over
+   * a different population. Both are real (see `buildSeries`), but only this one partitions what was asked
+   * for, and a screen that shows moved beside unmet and withdrawn invites a reader to add three numbers that
+   * come to more than the total above them.
+   */
+  metLoads: number;
+}
+
+/**
+ * CL3 — ONE DAY of the market: what was asked for, and what the fleet took.
+ *
+ * The windowed totals answer "how big was the market"; only a day-by-day line answers "is it turning". A
+ * fleet withdrawing capacity does not change what shippers post — it changes how much of it gets taken, and
+ * that separation is only visible with the two counts side by side, per day.
+ */
+export class MarketDay {
+  /** The day these counts fell in, YYYY-MM-DD in UTC. */
+  day: string;
+  /** Loads POSTED on this day. */
+  postedLoads: number;
+  /** Loads CLAIMED on this day — not necessarily the same loads. */
+  claimedLoads: number;
+  postedKm: number;
+  claimedKm: number;
+}
+
+/**
+ * CL3 — HOW LONG THE MARKET IS TAKING TO ANSWER, this window against the one before it.
+ *
+ * The clearest early sign of scarcity that needs nobody to report anything: when trucks get scarce, loads
+ * still get posted and still get taken, but they wait longer first. Measured on loads CLAIMED in the window
+ * (a load still sitting open has no time-to-claim yet, and treating its age as one would understate the
+ * wait exactly when it is growing).
+ */
+export class TimeToClaim {
+  /** Median hours from posting to claim. Null when nothing was claimed in the window. */
+  medianHours: number | null;
+  loads: number;
+  /** The same figure for the window of equal length immediately before this one. */
+  priorMedianHours: number | null;
+  priorLoads: number;
+  /** True only when BOTH windows have a median, BOTH are above the thin threshold, and it has lengthened
+   *  materially. A claim this strong is never made on a guess. */
+  stretching: boolean;
+  /** Either window is too small to carry the claim. The figures are still shown; the flag says how far to
+   *  trust them. */
+  thin: boolean;
+}
+
+/**
+ * CL3 — WHAT NEGOTIATED LOADS ACTUALLY CLEARED AT, against what the rate stack said.
+ *
+ * Only negotiated loads can answer this, and that is not a limitation but the whole point: a load taken at
+ * the computed price IS the rate stack, so including those would drag every ratio towards 1 and hide the
+ * signal. Where two parties agreed a number instead, the gap between what was agreed and what the stack
+ * would have charged is the market telling you what a truck was worth that day.
+ */
+export class PriceVsStack {
+  /** Loads with a negotiated price AND a computed one to compare it against. */
+  loads: number;
+  /** Median agreed ÷ computed. Above 1 means shippers paid over the stack to get a truck. */
+  medianRatio: number | null;
+  thin: boolean;
+}
+
+/**
+ * CL3 — ONE LANE, town to town, this window against the one before.
+ *
+ * A lane is named from the two ends by the same gazetteer the public market uses to coarsen a pickup, so a
+ * lane here reads the same as an area there. An end we cannot name honestly is 'unknown' rather than
+ * snapped to the nearest big town — the never-infer rule, applied to places instead of bodies.
+ */
+export class LaneSeries {
+  /** "Nairobi → Mombasa". Either end may be 'unknown'. */
+  lane: string;
+  from: string;
+  to: string;
+  postedLoads: number;
+  claimedLoads: number;
+  priorPostedLoads: number;
+  /** Posting fell materially against the window before, and both windows are above the thin threshold. */
+  quiet: boolean;
+  thin: boolean;
 }
 
 /** FB4 — the market series. The response of the analytics endpoint, and the moat. */
@@ -522,6 +613,15 @@ export class MarketSeries {
   @ApiProperty({ type: [BodySeries] })
   bodies: BodySeries[];
   totals: MarketSeriesTotals;
+  /* ---- CL3: scarcity, all of it derived from timestamps the loads already carry ---- */
+  /** One row per day in the window, oldest first. */
+  @ApiProperty({ type: [MarketDay] })
+  days: MarketDay[];
+  timeToClaim: TimeToClaim;
+  priceVsStack: PriceVsStack;
+  /** Busiest lane first. */
+  @ApiProperty({ type: [LaneSeries] })
+  lanes: LaneSeries[];
 }
 
 /** The public market's response. Named for the same reason FreightBoardResponse is. */

@@ -139,6 +139,29 @@ export function createFleetApi(sbg: SbgClient) {
         }),
       ),
 
+    /* ---- CL3: scarcity, derived. The same public series both the console and a fleet office read. ---- */
+
+    /**
+     * The market series: what was asked for against what moved, day by day, plus how long loads are waiting,
+     * what negotiated prices cleared at, and which lanes went quiet.
+     *
+     * Every figure is derived from timestamps the loads already carry, so it keeps working in a market where
+     * nobody reports anything — which is the only kind of market this has to work in.
+     */
+    marketSeries: (query: { lat?: number; lng?: number; radiusKm?: number; since?: string; until?: string } = {}) =>
+      sbg.request((c) =>
+        c.GET('/v1/sbg/market/series', {
+          params: {
+            query: {
+              ...(query.lat != null && query.lng != null ? { lat: query.lat, lng: query.lng } : {}),
+              ...(query.radiusKm != null ? { radiusKm: query.radiusKm } : {}),
+              ...(query.since ? { since: query.since } : {}),
+              ...(query.until ? { until: query.until } : {}),
+            },
+          },
+        } as never),
+      ),
+
     /** FP5 — the market as one of the fleet's drivers on shift would see it, and who is on a shift. */
     dispatchView: (did: string, query: { driver?: string; radiusKm?: string }) =>
       sbg.request((c) => c.GET('/v1/sbg/fleet/managers/{did}/dispatch', { params: { path: { did }, query: query as never } })),

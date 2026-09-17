@@ -1,6 +1,7 @@
 import { Button, Card, ErrorNote, Icon, Pill, ReadAloud } from '../../../shared/ui';
 import { formatDate, formatMoney, useT } from '../../../shared/i18n';
 import { blockerTone } from '../../../shared/board';
+import { boardVsMarket } from '../../../shared/market';
 import { dispatchDistanceLine, dispatchRowState, dispatchSummary } from '../logic';
 import type { DispatchRow } from '../types';
 import type { FleetActions, FleetState } from '../useFleetApp';
@@ -24,6 +25,10 @@ export function DispatchScreen({ state, actions }: { state: FleetState; actions:
   const loading = state.dispatchState === 'loading' || state.dispatchState === 'idle';
   const rows = v?.rows ?? [];
   const can = rows.filter((r) => dispatchRowState(r) === 'take').length;
+  // Only the two answers worth a dispatcher’s attention. "The market is busy and you have work" is a
+  // sentence nobody needs on a screen that is already showing them the work.
+  const verdict = boardVsMarket(rows.length, state.market);
+  const marketLine = verdict === 'market-thin' ? 'fleet.dispatch.market.thin' : verdict === 'board-thin' ? 'fleet.dispatch.market.board' : null;
 
   return (
     <div class="scr">
@@ -72,6 +77,7 @@ export function DispatchScreen({ state, actions }: { state: FleetState; actions:
 
       {me ? (
         <Card title={loading ? t('fleet.dispatch.loading') : t('fleet.dispatch.count', { n: rows.length, can })}>
+          {!loading && marketLine ? <p class="hint">{t(marketLine)}</p> : null}
           {!loading && rows.length === 0 ? (
             <p class="hint">{t('fleet.dispatch.empty')}</p>
           ) : (

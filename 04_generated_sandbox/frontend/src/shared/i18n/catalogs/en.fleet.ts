@@ -171,6 +171,9 @@ export const enFleet = {
   'fleet.dispatch.loading': 'Reading the market…',
   'fleet.dispatch.count': '{n} loads · {can} they could take',
   'fleet.dispatch.empty': 'No loads on the market within this reach.',
+  /* CL3 — whether a thin board is the market or this reach. Derived; nobody reported it. */
+  'fleet.dispatch.market.thin': 'Few loads are being posted anywhere this week, not just within this reach — the market itself is quiet.',
+  'fleet.dispatch.market.board': 'Loads are being posted elsewhere this week. Nothing is within this driver’s reach — try a wider radius, or a driver standing somewhere else.',
   'fleet.dispatch.meta': '{kg} kg · {pickup} → {dest}',
   'fleet.dispatch.distance': '{empty} km empty · {loaded} km loaded',
   'fleet.dispatch.earns': '{name} earns {amount}',

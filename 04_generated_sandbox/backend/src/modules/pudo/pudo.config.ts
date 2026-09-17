@@ -226,6 +226,24 @@ export const MARKET_RAW_MAX = 2.0; // …and ceiling — the market never asks f
 export const MARKET_SUPPLY_STALE_MIN = 30; // a driver's GPS older than this no longer counts as live supply
 export const MARKET_RECOMPUTE_MS = 120_000; // recompute the whole-map pulse every 2 minutes
 
+/* ---- CL3: scarcity, derived. Thresholds for what may be CLAIMED from a sample, not what is hidden. ---- */
+
+/**
+ * Below this many loads, a figure is MARKED thin rather than withheld.
+ *
+ * The memory of the freight-board epic records this rule as durable and the constant was never actually
+ * defined — the rule lived in review comments. Two loads is not a market, and a median with no n beside it
+ * invites somebody to read a fluke as a trend. Marked, not hidden: withholding it tells a reader nothing,
+ * and they are entitled to see a thin market described as one.
+ */
+export const THIN_MARKET_LOADS = 5;
+
+/** A lane is QUIET when its posted loads fell to this share or less of the window before it. */
+export const QUIET_LANE_RATIO = 0.5;
+
+/** Time-to-claim is STRETCHING when the median is at least this much longer than the window before it. */
+export const CLAIM_STRETCH_RATIO = 1.25;
+
 // MDP tote-bag capacity (Compendium Ch 17 — Main Distribution Point sorting).
 // A tote holds at most BAG_CAPACITY_UNITS of "fill". Per-size fill is tuned so the three field rules
 // land exactly: 50 letters + 1 medium = 10, 10 mediums = 10, and a single >20 kg parcel = 10 (it
