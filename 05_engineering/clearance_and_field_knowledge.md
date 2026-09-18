@@ -922,16 +922,29 @@ required-papers list ask for certificates — which is the shape CL2a already es
 
 **WHAT CL7 FORCES NEXT, and the user said so immediately:** modelling the box introduces an asset we do
 not own and have never tracked. A container is a line's property on loan with a clock running, and the
-leg we mint is what starts it — so the empty return leg, the detention clock, the interchange record and
+leg we mint is what starts it — so the return leg, the detention clock, the interchange record and
 "where are the empties" all follow. Designed in `container_yard_and_empties.md`, **nothing built**, and
 its first line is what is NOT ours: yard slots, stacking and gate queues belong to a terminal operating
 system, and demurrage tariffs are the duty line again.
 
-### CL5 — Field knowledge, first-hand only
-Last, and blocked twice over.
+**FOUR DESIGN QUESTIONS ANSWERED BY THE USER 2026-09-18, and two of them changed it.** The **agent who
+booked the box owes its return** — derivable from the appointment rather than typed. But **containers are
+traded goods**: they are bought and sold and very often never returned, so "returned" is one ending of
+three and a sold box must never read as overdue. The leg back is **usually laden**, because a box is a
+dry lockable body and freight goes portward inside it — which turns a repositioning slice into a freight
+slice and answers the no-revenue trap with a market instead of a subsidy. A box that becomes the object
+of **newly minted freight, even domestic with no import behind it**, is freight we take. Empties: we hold
+none, but a **yard may register itself** so that its boxes are findable, with what the yard says kept
+apart from what we derived. And a **binnenvaartschip is a leg of its own** — vessel operator, quays for
+stops, an air draft that is the road bridge check over again — settled through us where presence allows.
+The CSC plate date is carried, with nothing stated about it.
 
-- **Blocked by:** PRE above, and by a lawyer's answer on holding photographs of official documents, which
-  §11 records as open.
+### CL5 — Field knowledge, first-hand only
+Last, and now blocked ONCE rather than twice: PRE shipped 2026-09-17, so the road-map defect it waited on
+is gone.
+
+- **Blocked by:** a lawyer's answer on holding photographs of official documents, which §11 records as
+  open — and nothing else. Every other dependency of this slice is shipped.
 - **Build:** an observation carrying its tier, jurisdiction, subject, date and optional photograph; rumour
   refused at intake; ageing derived from the date the way papers are; **positive observations enforced by the
   shape of the form**, so that "they asked me for X" is expressible and "X is no longer required" is not.

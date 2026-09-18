@@ -1,8 +1,11 @@
-# The box as an asset: interchange, the clock, and the empty leg
+# The box as an asset: interchange, the clock, and the return leg
 
 > Status: **DESIGN ONLY — nothing built.** Written 2026-09-18, straight after CL7 (`2d54ae1`, `ba9a11e`)
 > put real container types into the model, because the user's response was that this forces the question:
 > *"this means we must elaborate about container yard management."*
+>
+> **Four questions this note opened with were answered by the user on 2026-09-18, and two of those answers
+> changed the design rather than confirming it — see §7.**
 >
 > Scope: what happens to the CONTAINER, as distinct from what happens to the cargo inside it.
 > Related: `clearance_and_field_knowledge.md` §CL7 (the box's type), the load-carriers note (the same trap
@@ -24,10 +27,11 @@ Today the system does this and then forgets the box entirely:
 - **The clock is invisible.** A consignment records `containerNo` as free text and nothing else. An
   importer discovers detention on an invoice, which is the two-weeks-at-customs story wearing different
   clothes: the cost was knowable in advance and nobody said it.
-- **THE EMPTY RETURN LEG DOES NOT EXIST.** A laden leg inland implies an empty leg back to a nominated
-  depot. We model the first and not the second, so no driver is ever offered it, the importer arranges it
-  out of band, and the freight board — whose whole subject is repositioning (FB3a) — is blind to what is a
-  large share of real container haulage demand.
+- **THE RETURN LEG DOES NOT EXIST — AND IT IS USUALLY NOT EMPTY.** A laden leg inland implies a leg back
+  to a nominated depot, and that leg carries cargo whenever there is cargo going portward, because a box
+  is a dry, lockable, weatherproof body (§4c). We model the first leg and not the second, so no driver is
+  ever offered it, the agent arranges it out of band, and the freight board — whose whole subject is
+  repositioning (FB3a) — is blind to what is a large share of real container haulage demand.
 - **Nobody can say where the empties are**, which is the question a haulier asks first in the morning.
 - **Condition at handover is unrecorded.** "You damaged my box" against "it was like that when we took
   it" is a dispute with no evidence, and this codebase already built exactly the machinery for that
@@ -42,12 +46,12 @@ Two lifecycles ride one journey, and they are **not** the same shape:
 | | the cargo | the box |
 |---|---|---|
 | owner | the importer (the goods are theirs) | a third party — the line, or a lessor |
-| ends at | delivery | return to a nominated depot |
+| ends at | delivery | a return to a nominated depot — or a sale, because boxes are traded (§4b) |
 | our record of it | the consignment, the papers, the road leg | nothing |
 | what a delay costs | the importer's own time | a charge to the importer from somebody else |
 
 They meet at **stripping** — the moment the goods come out — and part company immediately: the cargo is
-done, and the box has a second journey to make with nothing in it.
+done, and the box has a second journey to make — often not an empty one (§4c).
 
 **Everything below is about the second journey.** The parcel trunk model already says custody is primary
 and that fees follow custody EVENTS; this is that model applied to an asset rather than to goods, which is
@@ -85,37 +89,57 @@ number is a box nobody can trace, a clock nobody can stop and a dispute nobody c
 same argument as validating a UN number's shape and never its choice: we check the arithmetic, not the
 box's existence.
 
-**The entity must NOT belong to a consignment.** The same box comes back next month under a different
-consignment, and a record owned by one of them loses the history at the second use.
+**The entity must NOT belong to a consignment**, and that is now a requirement rather than hygiene. The
+user's second answer settles it: *"if it becomes an object of new minted freight, even domestic, we take
+it."* A box can therefore appear on a domestic load with **no import behind it at all** — somebody moving
+a box they bought, or hauling inside one because it is dry and lockable — and a record owned by a
+consignment could not hold that case, never mind the same box coming back next month under another one.
 
-### b) The clock — said in dates, never in money
+**The CSC plate date is carried — decided by the user 2026-09-18.** A safety-approval plate has a date on
+it, the date is cheap to hold, and it is useful to a haulier who is about to be refused at a gate. We
+carry it and **state nothing about it**: the plate's date is not our verdict on whether the box is fit,
+which §3 refuses.
 
-The papers-that-expire pattern (FP4, CA5) applied to an asset:
+### b) Who owes the return — and the three ways a box stops being ours to watch
 
-- `outGatedAt` — when it left the terminal. We know this: it is the road leg's pickup.
-- `freeDaysClaimed` — **the importer's own statement**, from their contract with the line. Carried,
-  attributed, dated. Never asserted by us, in the manner of CL6's offer: nobody else could know it.
-- `dueBackAt` — derived, never stored (a stored due-date goes stale silently the moment the free days are
-  corrected).
-- `returnedAt`, and who recorded it.
+**The booking agent owes the return.** The user's first answer, from their own experience, and we can know
+it without asking anybody: the appointment is already recorded, so the party who booked the box is
+derivable rather than typed. The importer still sees the clock, because the charge lands on them, but the
+obligation has a named holder — and a clock with no named holder is a number that annoys everybody and
+moves nobody.
 
-**TWO CLOCKS, AND CONFUSING THEM WOULD PRODUCE A NUMBER NOBODY CAN ACT ON.** Demurrage runs while the box
-sits INSIDE the terminal unclaimed; detention runs while it is OUTSIDE and not yet returned. Different
-parties can be at fault for each. Name both or neither — never a single "days" field.
+Then the part that overturns this document's first draft, which quietly assumed every box goes home:
 
-The notification layer already exists, and this is exactly its shape: tell the importer before the date,
-not after. "There should be no loose ends and info needs to be exchanged timely" was the user's rule when
-a shop's onboarding went quiet, and an unwarned detention bill is the same failure.
+> **CONTAINERS ARE TRADED GOODS.** *"In the real world containers are demanded objects and are very often
+> sold in the market and are never returned."*
 
-### c) The empty return leg as a REAL LOAD on the board
+So a return is one ending out of three, and the model has to hold all three or it will be wrong about an
+ordinary case rather than an edge one:
 
-The piece with the most value and the least new machinery. An `empty_return` freight: origin where it was
-stripped, destination the nominated depot, no cargo, and **visible to the market** — which means a driver
-can be offered it, and a haulier can triangulate it against a laden leg going the other way. That is the
-repositioning question FB3a built the board's origin picker for, arriving with a real example.
+| ending | what it means | what the clock does |
+|---|---|---|
+| **returned** | handed back at a depot, interchange recorded | stops, with a date |
+| **bought** | sold on, or bought out of the line's fleet | never starts, or stops on the fact |
+| **out** | still out, and somebody owes a return | runs |
 
-It also makes the market series honest: empty repositioning is a large share of container haulage, and a
-board that shows only laden legs is describing half the work.
+### c) The return leg as a REAL LOAD — and it is very often NOT empty
+
+The piece with the most value and the least new machinery, and the user's first answer sharpened what it
+is. A box travelling back toward the port is **a dry, lockable, weatherproof body**, so it gets used:
+
+> *"They are also used to carry freight to the direction of the port to keep cargo secured — theft, rain
+> or whatever."*
+
+Which is why this is a freight slice and not a logistics-admin one. The leg back is a load: origin where
+the box was stripped, destination the depot or the quay, and **cargo whenever the market has something
+going that way.** A driver can be offered it, a haulier can triangulate it against a laden leg coming the
+other way, and the board — whose whole subject is repositioning (FB3a) — stops describing half the work.
+
+**It also answers trap 2 in the best possible way.** A repositioning leg with no revenue is a leg no
+driver wants, and the answer is not a subsidy but a market, which is the thing we already run. The empty
+case remains, because sometimes there is nothing to carry, so the leg carries cargo *or it does not* — and
+only the honest version of that is publishable: an empty leg must say it is empty rather than be dressed
+up as freight.
 
 ### d) The interchange record — the EIR, with photographs
 
@@ -129,12 +153,53 @@ Condition at gate-out and at gate-in. The machinery exists three times over:
 A box handed over with a hole in it and no photograph is a dispute the importer loses by default, and
 photographing it is the one thing a driver can do in thirty seconds at a gate.
 
-### e) Where the empties are — a count, never a map
+### e) Where the empties are — A REGISTER A YARD OPTS INTO, and we hold nothing
 
-Derived from the boxes whose last recorded movement ended at a depot. That answers the haulier's morning
-question without a single yard slot, and it stays inside §3's line.
+The user's third answer, and it is a better shape than the derived count this document first proposed:
 
-## 5. THE TRAPS — four of them, and the first is already written down
+> *"We don't hold empties, but what's up if we keep a register of where they hang around, if a yard wants
+> a network where they can actually be registered."*
+
+**We take no custody and no responsibility** — that part of §3 does not move. What we offer is the one
+thing a yard cannot build for itself: being **findable**. A yard opts in, says which boxes are hanging
+around, and a haulier's first question of the morning has an answer.
+
+Two sources, and **they must never be added together into one number**:
+
+- what the yard **says** is there — a claim, attributed and dated, exactly as an agent's advertisement and
+  an importer's free days are claims;
+- what we **derived** — boxes whose last recorded movement ended at that yard.
+
+The first can be stale and the second can be incomplete, and a reader who cannot tell which is which has
+been handed a false inventory. `basis`, as on the agent record, already says this in the codebase's own
+words. The presence ladder's shape then applies unchanged: a yard is **observed** before it is
+**registered**, and registered long before anything settles with it.
+
+Still never: a yard map, a stacking plan, a slot.
+
+### f) The water leg — a binnenvaartschip is not a truck
+
+The user's second answer carries a second thing with it, and it is a leg type this system does not have:
+
+> *"In the Netherlands containers also travel in what we call binnenvaartschepen — a unique leg. If it
+> travels via us, it could be settled via us."*
+
+Rotterdam and Antwerp move a large share of their boxes inland by barge, and that leg is not a road leg
+wearing a boat:
+
+- **the carrier is a vessel operator**, and the leg is **scheduled rather than offered** — no spot-claim
+  moment, no driver-hours regime for us to invent, no detour geometry;
+- **the stops are quays**, which the model already tolerates: `destPort` is a label a person types;
+- **the constraint is an air draft** — and this is the reusable part. A barge's problem is the height of a
+  stack of boxes under a fixed bridge, which is **deck height plus load height against a clearance**: the
+  exact arithmetic `checkRoute` already does for a road, where the stack plays the part of the load. That
+  makes this slice smaller than it looks.
+
+**Settlement follows the presence ladder and needs no new rule.** Where a country is established, a barge
+leg settles like any other leg; where a country is only matched, we settle nothing anyway — which is what
+the user's parenthesis says: *"matched countries are exception anyway."*
+
+## 5. THE TRAPS — five of them, and the first was already written down
 
 **1. EMPTIES HAVE NO OWNER.** The load-carriers note recorded this exact trap for pallets and trolleys,
 and a container is the same trap one tier up with a **third** case the note's fork does not cover:
@@ -145,9 +210,9 @@ and a container is the same trap one tier up with a **third** case the note's fo
 A line's container is neither. It is **a third party's asset**, home is a depot the LINE nominates, and
 that nomination can change mid-trip. Get this wrong and empties drift with nobody owed them.
 
-**2. A RETURN LEG WITH NO REVENUE MUST STILL PAY THE DRIVER.** Payout is denominated per unit and per km;
-an empty leg is real work with no cargo to bill. Posting it with nothing attached repeats the bag-return
-problem at container scale, and the driver who notices is the one who stops taking container work.
+**2. A RETURN LEG WITH NO REVENUE MUST STILL PAY THE DRIVER** — answered by §4c rather than by a subsidy.
+The portward leg is a load like any other, and the genuinely empty case must be **published as empty**
+instead of being dressed up as freight.
 
 **3. THE FREE-DAYS FIGURE IS A CLAIM.** It comes from a contract we have not seen. Carried and attributed
 like CL6's advertisement, never as something we checked — and the countdown must say whose number it is.
@@ -157,30 +222,52 @@ are delivered. An overdue box is a separate, later obligation between two other 
 goods for a paperwork clock would be the parcel-trunk rule broken at container scale: *the sender owns the
 shipment, the receiver owns the goods, the network only holds custody.*
 
+**5. A BOX THAT WAS SOLD IS NOT OVERDUE.** The new one, and it falls straight out of §4b. Boxes are bought
+and sold, and a single "not returned" state would raise an alarm against somebody who owes nothing at all.
+The ending is recorded as **a fact** — returned, or bought — and the clock stops on the fact, **never on a
+dismissal**: an alarm a person can wave away teaches them to wave away the next one, and the next one is
+the detention bill this was built to prevent.
+
 ## 6. The slices, in the order they should be built
 
-- **Y0 — the check digit, and the box as a derived entity.** Small, and immediately useful: a mistyped
-  container number is accepted today. Nothing downstream needs to change to benefit.
-- **Y1 — the clock.** Out-gate, claimed free days, derived due-back, returned. A countdown where the
-  importer and an operator can see it, and a notification before the date. **No money anywhere.**
-- **Y2 — the empty return leg on the board**, and the triangulation view for a haulier. The slice with the
-  most commercial value.
+- **Y0 — the check digit, the box as a derived entity, the CSC plate date.** Small, and immediately
+  useful: a mistyped container number is accepted today. Nothing downstream needs to change to benefit.
+- **Y1 — the clock, and who owes the return.** Out-gate, claimed free days, derived due-back, the two
+  clocks, the booking agent as the holder of the obligation, and the three endings of §4b. A countdown
+  the agent and the importer can both see, and a notification before the date. **No money anywhere.**
+- **Y2 — the return leg on the board, laden or empty**, with the portward case first because that is the
+  one that pays. The slice with the most commercial value.
 - **Y3 — the interchange record with photographs**, and the dispute shape when the two sides disagree.
-- **Y4 — empties per depot, derived.**
-- **Never — yard slots, stacking plans, gate queues.** §3.
+- **Y4 — the empties register a yard opts into**, with the yard's claim and our derivation kept apart.
+- **Y5 — the water leg.** Independent of Y0–Y4 and the largest of the six: a leg whose carrier is a
+  vessel, whose stops are quays, and whose height check is the road one over again.
+- **Never — yard slots, stacking plans, gate queues** (§3), and never a demurrage tariff.
 
-Y0 and Y1 are small and independent. Y2 is the one worth doing properly.
+Y0 and Y1 are small, independent, and now unblocked. Y2 is the one worth doing properly.
 
-## 7. Open — and these are the user's to answer, not a slice's
+## 7. Decided by the user, 2026-09-18
 
-- **Who nominates the return depot, and what happens when the line changes it mid-trip?** The answer
-  decides whether the empty leg is planned once or re-planned, and therefore whether Y2 is one load or a
-  load that can be diverted.
-- **Does the network ever want to HOLD empties?** A shop or hub with yard space could be an empty depot,
-  which is a capability and a presence question rather than a feature — and it is the first time this
-  network would store somebody else's asset at scale.
-- **Is an empty repositioning leg billed through us, or settled between the parties** the way a
-  cooperative's consolidated truckload already is? That is a money-model decision (`next-work-money-model`)
-  and it gates Y2's shape, not its existence.
-- **Do we carry the CSC plate date?** Cheap to hold and useful to a haulier; it edges towards fitness,
-  which §3 refuses. Probably: carry the date, state nothing about it.
+All four questions this document opened with are answered, and two of the answers changed the design
+rather than confirming it.
+
+1. **Who owes the return:** the **agent who booked the box** — §4b. And the correction that matters more
+   than the answer itself: **containers are traded, sold, and often never returned**, so "returned" is one
+   ending of three and a sold box is not overdue (§4b, trap 5).
+2. **Is a repositioning leg ours:** yes, and wider than the question asked — *"we must follow real world
+   hardiness"*. A box that becomes the object of newly minted freight is freight, **including a domestic
+   load with no import behind it** (§4a); the portward leg is usually **laden**, because a box is a secure
+   body (§4c); and the **binnenvaartschip is a leg of its own**, settled through us where presence allows
+   (§4f).
+3. **Do we hold empties:** no — **a register a yard opts into**, so a yard can be findable without us
+   taking custody of anything (§4e).
+4. **The CSC plate date:** carried, with nothing stated about it (§4a).
+
+## 8. Still open
+
+- **What a yard is, in the entity model.** A depot that registers empties is not a shop, a hub or a store,
+  and Y4 should not invent a fifth participant type casually. Likely: a site with a capability, the way a
+  border post and a dock already are.
+- **Who may correct a register entry** a yard got wrong — the yard alone, or a haulier who drove there and
+  found nothing? The road map's answer (both, attributed, nothing adjudicated) probably transfers.
+- **Whether a barge leg needs a schedule concept** at all for a first version, or whether a sailing is
+  simply a load with a fixed departure that the market cannot bid on.
