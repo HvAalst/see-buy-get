@@ -840,14 +840,42 @@ had the vocabulary to tell them apart (`HAZ-FLAM`, `FOD`/`FOP`, `TLT`/`CRN`, `sk
 `container_selfloader`, `food_tanker`, `fuel_tanker`, a `hazmat` capability) and **the import slice handed
 it none of it.**
 
-**THE TYPE CODE IS THE FACT THAT UNLOCKS THE REST, and it is a CATALOGUE — selected, never invented**, as
-countries and Incoterms are. `container-type.ts` holds the boxes this network books with their real
-measurements. **Deliberately NOT an ISO 6346 parser:** a parser answers confidently about codes nobody
-here has booked and is wrong in the corners. Adding one is an edit by somebody who has seen the box.
+**THE TYPE CODE IS THE FACT THAT UNLOCKS THE REST — and it is EVERY ISO 6346 CODE, not a shortlist.**
 
-**DERIVED from the code:** external height, whether it has a roof, whether it is a tank, which bodies can
-carry it, what has to lift it, whether it needs power. A shop clerk guessing "skeletal or flatbed" is the
-input FB0b refused to build a market series on.
+The first attempt was twenty-five boxes somebody had seen, plus a way to declare anything missing. The
+user's correction was *"we need to list them all rather"*, and it is right twice over: the shortlist made
+the catalogue's own incompleteness into a second door, and it treated the trader with a 30ft, a
+pallet-wide or a livestock carrier as an exception to a table that should have held them.
+
+**It is also possible, because ISO 6346 does not enumerate containers — it DECOMPOSES a code into three
+published tables.** `4` `5` `G1` is length 40ft, height/width 9'6" at 8'0" wide, type general purpose. So
+`container-type.ts` holds those three tables in full (16 lengths, 15 height/width codes, 47 type codes —
+over two thousand valid combinations, all resolving) and the discipline is unchanged: **the tables ARE the
+standard, transcribed**, exactly as countries and Incoterms are selected rather than invented. A
+correction is an edit to one row rather than a patch to a parser's guesswork. An unresolvable code is not
+"unlisted", it is **invalid** — `45GI` is a typo for `45G1`, and carrying it as a label would lose the
+height, the body and the bridge check in silence.
+
+**COMPLETENESS LIVES IN WHAT WE ACCEPT; CURATION ONLY IN WHAT WE SUGGEST.** Two thousand codes is an
+unusable dropdown, so a screen offers twenty-seven common ones and the field takes anything that
+resolves. Confusing those two is what produced the shortlist.
+
+**FOUR SIZE CODES ARE OPEN RANGES**, and this is the honest half: `6`, `F` and `P` mean "taller than
+2896 mm" and `9` means "shorter than 1219 mm". The standard declines to say how tall, so we do too — the
+height comes back absent, the consignment is refused until somebody MEASURES the box, and the measured
+figure is what reaches the load. Inventing 2.9 m for a code meaning "more than 2.9 m" would be the exact
+silent pass the bridge check exists to refuse.
+
+**DERIVED from the code:** external height and width, pallet-wide or not, whether it has a roof, whether
+it is a tank, which bodies can carry it (length decides: a 20ft rides a flatbed, a 40ft does not, a
+sidelifter handles the 20–40ft family), what has to lift it (a closed box is top-lifted by its corner
+castings; an open one is CRANED, because there is no roof to grip), and whether it needs power. A shop
+clerk guessing "skeletal or flatbed" is the input FB0b refused to build a market series on.
+
+**AND THE ONES THAT ARE NOT GENERAL-PURPOSE BOXES AT ALL**, which the shortlist simply lacked:
+ventilated (`22V0` — what East African coffee leaves in, and its absence was the worst omission of the
+first pass), livestock and automobile carriers, live-fish carriers, insulated boxes with no machinery,
+porthole boxes needing a clip-on unit, bolsters, half-heights, folding flat racks, air/surface boxes.
 
 **DECLARED by the importer, because no code can answer it:** what the goods ARE (`natureCode`, from the
 freight side's own vocabulary). A tank of edible oil and a tank of gas oil are the same box, and reading

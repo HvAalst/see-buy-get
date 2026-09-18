@@ -107,9 +107,20 @@ export class DangerousGoodsDeclaration {
 export class ContainerFacts {
   @ApiProperty() code: string;
   @ApiProperty() label: string;
-  @ApiProperty() lengthFt: number;
-  /** External height in metres. 2.59 standard, 2.90 high-cube — the 30 cm that decides a bridge. */
-  @ApiProperty() heightM: number;
+  @ApiProperty() lengthM: number;
+  @ApiPropertyOptional() lengthFt?: number;
+  /**
+   * External height in metres. 2.591 standard, 2.896 high-cube — the 30 cm that decides a bridge.
+   *
+   * ABSENT for the four size codes that are OPEN RANGES ("taller than 2896 mm"). The standard declines
+   * to say, so we do too, and the road leg then has no height to give the bridge map.
+   */
+  @ApiPropertyOptional() heightM?: number;
+  @ApiPropertyOptional() widthM?: number;
+  /** The 2.5 m class rather than 8'0" — a box that will not fit some older chassis at all. */
+  @ApiProperty() palletWide: boolean;
+  /** The standard's own grouping — 'tank (dangerous liquids)', 'ventilated', 'flat rack'. */
+  @ApiProperty() group: string;
   @ApiProperty() kind: string;
   /** No fixed roof: craned from above, not weatherproof, and the cargo may stand proud of the box. */
   @ApiProperty() openTop: boolean;
@@ -118,6 +129,8 @@ export class ContainerFacts {
   @ApiProperty({ type: [String] }) equipment: string[];
   /** How tall the movement stands, where the cargo was declared taller than an open box. */
   @ApiProperty() outOfGauge: boolean;
+  /** True where the CODE does not state a height, so somebody has to measure the box. */
+  @ApiProperty() heightUnstated: boolean;
 }
 
 /**

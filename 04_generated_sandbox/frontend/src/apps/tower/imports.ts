@@ -89,18 +89,30 @@ export interface ImportDetailView extends ImportRow {
    * discovering it at the moment somebody tries to mint a leg.
    */
   cargoGaps: string[];
-  /** The box's own facts, resolved by the server from the catalogue so no screen re-derives them. */
+  /**
+   * The box's own facts, resolved by the SERVER from the ISO 6346 tables.
+   *
+   * Sent rather than worked out here, and that matters more now than when it was a shortlist: the tables
+   * build thousands of valid codes, and a second copy of them on a screen would drift silently.
+   */
   containerFacts?: {
     code: string;
     label: string;
-    lengthFt: number;
-    heightM: number;
+    lengthM: number;
+    lengthFt?: number;
+    /** Absent where the CODE states only "taller than" a bound — see heightUnstated. */
+    heightM?: number;
+    widthM?: number;
+    palletWide: boolean;
+    group: string;
     kind: string;
     openTop: boolean;
     needsPower: boolean;
     bodies: string[];
     equipment: string[];
     outOfGauge: boolean;
+    /** The standard itself declines to say. Ask for a measurement rather than showing a blank. */
+    heightUnstated: boolean;
   };
 }
 

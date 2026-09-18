@@ -33,7 +33,7 @@ import {
   RequiredPaperView,
 } from './import.types';
 import { AgentRecord, agentRecordOf, isClearingAgent } from './agent-record';
-import { containerType, standsOn, outOfGauge } from './container-type';
+import { containerType, heightUnstated, outOfGauge } from './container-type';
 import { CARGO_NATURES, type CargoNature } from './cargo.types';
 
 /**
@@ -416,14 +416,21 @@ export class ImportService {
             containerFacts: {
               code: spec.code,
               label: spec.label,
-              lengthFt: spec.lengthFt,
-              heightM: spec.heightM,
+              lengthM: spec.lengthM,
+              ...(spec.lengthFt != null ? { lengthFt: spec.lengthFt } : {}),
+              ...(spec.heightM != null ? { heightM: spec.heightM } : {}),
+              ...(spec.widthM != null ? { widthM: spec.widthM } : {}),
+              palletWide: spec.palletWide,
+              group: spec.group,
               kind: spec.kind,
               openTop: spec.openTop,
               needsPower: spec.needsPower,
               bodies: spec.bodies,
               equipment: spec.equipment,
               outOfGauge: outOfGauge(spec, consignment.cargoHeightM),
+              // The standard itself declines to say, for four size codes. Said out loud so a screen can
+              // ask for a measurement rather than showing a blank where a height should be.
+              heightUnstated: heightUnstated(spec),
             },
           }
         : {}),
@@ -561,7 +568,10 @@ export class ImportService {
     if (input.containerType !== undefined) {
       const spec = containerType(input.containerType);
       if (!spec) {
-        throw new GlosError('INVALID_INPUT', `We do not hold a container type called ${input.containerType}. Pick one from the list — the measurements come with it, so a code we do not know would mean a height nobody can check.`);
+        // NOT "unlisted" — invalid. Every ISO 6346 code resolves from the three tables, so a code that
+        // does not is a typo (45GI for 45G1) or not a container code at all, and carrying it as a label
+        // would lose the height, the body and the bridge check in silence.
+        throw new GlosError('INVALID_INPUT', `${input.containerType} is not an ISO 6346 code. It is four characters: length, height, then the type — 45G1, 22U1, 22T4. Check what is printed on the box.`);
       }
       consignment.containerType = spec.code;
     }
@@ -609,6 +619,13 @@ export class ImportService {
   }
 
   /**
+   * THE BOX, whichever way we know it — the catalogue, or its owner's own measurements.
+   *
+   * One resolver, so nothing downstream has to know which path a box came in by. What every reader IS
+   * told is the `basis`, because a catalogued height and a declared one are not equally checkable and
+   * pretending otherwise is the sort of quiet equivalence this codebase keeps refusing.
+   */
+  /**
    * WHAT IS STILL MISSING BEFORE THIS CAN GO ON A TRUCK — derived, every read, never stored.
    *
    * Two combinations must not be minted blind, and both are the question that produced this slice:
@@ -633,6 +650,14 @@ export class ImportService {
     }
     if (nature?.startsWith('HAZ') && !consignment.dangerous) {
       gaps.push('These goods are declared hazardous and there is no UN number. The number decides the placards, the driver’s certificate and which roads are closed to the load — it cannot go on a truck without one.');
+    }
+    /*
+     * A CODE THAT DOES NOT STATE ITS OWN HEIGHT. Four size codes are open ranges — 'taller than 2896 mm'
+     * — and the standard declines to be more specific. So we ask for a measurement rather than inventing
+     * one, because a box that is "more than 2.9 m" tall is exactly the box a 4.2 m bridge is about.
+     */
+    if (spec && heightUnstated(spec) && !spec.openTop && consignment.cargoHeightM == null) {
+      gaps.push('This code says only that the box is taller than 2.896 m, not how tall. Measure it and say so, or no bridge on the route can be checked against it.');
     }
     // An open box tells you the height of the floor the cargo sits on, not the height of the movement.
     if (spec?.openTop && consignment.cargoHeightM == null) {
@@ -953,9 +978,18 @@ export class ImportService {
         ...(consignment.natureCode ? { natureCode: consignment.natureCode as CargoNature } : {}),
         ...(spec ? { bodyHint: spec.bodies[0], packaging: 'piece' as const } : {}),
         ...(spec ? { originEquipment: spec.equipment, destEquipment: spec.equipment } : {}),
-        // How tall the box itself stands. An open top's is the FLOOR its cargo sits on, so the declared
-        // cargo height wins there — and `cargoGaps` has already refused an open box with neither.
-        ...(spec ? { heightM: spec.openTop ? consignment.cargoHeightM : spec.heightM } : {}),
+        /*
+         * How tall it stands. Three cases, and the third is one the tests found:
+         *
+         *  - a closed box states its own height, and that is the answer;
+         *  - AN OPEN TOP's own height is the FLOOR its cargo sits on, so the declared cargo height wins;
+         *  - A CODE THAT STATES NO HEIGHT ("taller than 2896 mm") falls back to the measured figure too —
+         *    dropping it would have thrown away the one number somebody went and measured, leaving the
+         *    bridge map with nothing after they had done exactly what it asked.
+         *
+         * `cargoGaps` has already refused every combination that would leave this undefined.
+         */
+        ...(spec ? { heightM: spec.openTop ? consignment.cargoHeightM : (spec.heightM ?? consignment.cargoHeightM) } : {}),
         // A box that cannot be split, which is what makes it a permit conversation rather than two trips.
         ...(spec ? { indivisible: true } : {}),
         // Both ends are inside the destination country: this is the leg from the quay inland, and the sea

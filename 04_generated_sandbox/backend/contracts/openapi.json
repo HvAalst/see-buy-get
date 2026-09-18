@@ -19892,12 +19892,26 @@
           "label": {
             "type": "string"
           },
+          "lengthM": {
+            "type": "number"
+          },
           "lengthFt": {
             "type": "number"
           },
           "heightM": {
             "type": "number",
-            "description": "External height in metres. 2.59 standard, 2.90 high-cube — the 30 cm that decides a bridge."
+            "description": "External height in metres. 2.591 standard, 2.896 high-cube — the 30 cm that decides a bridge.\n\nABSENT for the four size codes that are OPEN RANGES (\"taller than 2896 mm\"). The standard declines\nto say, so we do too, and the road leg then has no height to give the bridge map."
+          },
+          "widthM": {
+            "type": "number"
+          },
+          "palletWide": {
+            "type": "boolean",
+            "description": "The 2.5 m class rather than 8'0\" — a box that will not fit some older chassis at all."
+          },
+          "group": {
+            "type": "string",
+            "description": "The standard's own grouping — 'tank (dangerous liquids)', 'ventilated', 'flat rack'."
           },
           "kind": {
             "type": "string"
@@ -19924,19 +19938,25 @@
           "outOfGauge": {
             "type": "boolean",
             "description": "How tall the movement stands, where the cargo was declared taller than an open box."
+          },
+          "heightUnstated": {
+            "type": "boolean",
+            "description": "True where the CODE does not state a height, so somebody has to measure the box."
           }
         },
         "required": [
           "code",
           "label",
-          "lengthFt",
-          "heightM",
+          "lengthM",
+          "palletWide",
+          "group",
           "kind",
           "openTop",
           "needsPower",
           "bodies",
           "equipment",
-          "outOfGauge"
+          "outOfGauge",
+          "heightUnstated"
         ]
       },
       "ImportDetail": {
@@ -20608,24 +20628,6 @@
       "DeclareCargoDto": {
         "type": "object",
         "properties": {
-          "containerType": {
-            "type": "string",
-            "enum": [
-              "22G1",
-              "42G1",
-              "45G1",
-              "L5G1",
-              "22U1",
-              "42U1",
-              "22P1",
-              "42P1",
-              "22R1",
-              "45R1",
-              "22T1",
-              "22T6",
-              "22B1"
-            ]
-          },
           "natureCode": {
             "type": "string",
             "enum": [
@@ -20640,6 +20642,11 @@
               "ODR",
               "HUM"
             ]
+          },
+          "containerType": {
+            "type": "string",
+            "description": "ANY ISO 6346 size/type code — not an enum of a shortlist.\n\nFour characters, validated for shape here and RESOLVED by the service against the standard's three\ntables. An enum would have frozen the API at whatever subset somebody had seen, which is the mistake\nthe first version of this made.",
+            "pattern": "/^[0-9A-Za-z]{4}$/"
           },
           "cargoHeightM": {
             "type": "number",

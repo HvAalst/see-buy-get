@@ -10,7 +10,7 @@ import { PACKAGING, type Packaging } from './packaging';
 import { MEDIA_KINDS, MediaKind } from './media.types';
 import { CONSTRAINT_KINDS, ConstraintKind } from './route-constraint.types';
 import { CARGO_LANES, CARGO_NATURES, CargoLane, CargoNature, EQUIPMENT, Equipment } from './cargo.types';
-import { CONTAINER_TYPE_CODES } from './container-type';
+
 import { CLEARANCE_SPECIALISMS, CONSIGNMENT_MODES, CUSTOMS_HOLD_KINDS, HOLD_STANCES } from './import.types';
 
 /** F1 — a scheduled pickup instant must be a full datetime WITH a timezone offset (Z or ±HH:MM), so the
@@ -445,7 +445,14 @@ export class DangerousGoodsDto {
  * from a description would be us classifying goods.
  */
 export class DeclareCargoDto {
-  @IsOptional() @IsIn(CONTAINER_TYPE_CODES) @ApiPropertyOptional({ enum: CONTAINER_TYPE_CODES }) containerType?: string;
+  /**
+   * ANY ISO 6346 size/type code — not an enum of a shortlist.
+   *
+   * Four characters, validated for shape here and RESOLVED by the service against the standard's three
+   * tables. An enum would have frozen the API at whatever subset somebody had seen, which is the mistake
+   * the first version of this made.
+   */
+  @IsOptional() @IsString() @Matches(/^[0-9A-Za-z]{4}$/, { message: 'An ISO 6346 code is four characters — 45G1, 22U1, 22T4' }) containerType?: string;
   @IsOptional() @IsIn(CARGO_NATURES as unknown as string[]) @ApiPropertyOptional({ enum: CARGO_NATURES }) natureCode?: string;
   /** How tall the CARGO stands, for an open box whose own height is only the floor it sits on. */
   @IsOptional() @IsNumber() @Min(0.1) @Max(10) cargoHeightM?: number;

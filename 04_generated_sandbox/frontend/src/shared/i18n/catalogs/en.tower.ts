@@ -463,8 +463,11 @@ export const enTower = {
      of a description would be us classifying goods — the line this epic keeps around duty. */
   'tower.imports.boxTitle': 'The box, and what is in it',
   'tower.imports.boxNone': 'Nobody has said what kind of box this is. An open top, a high-cube and a tank are three different movements, and until one is picked they all look the same to us — and to whatever truck gets offered the leg.',
-  'tower.imports.boxFacts': '{ft}ft · stands {h} m · carried on {bodies} · lifted with {gear}. All of that comes from the code, so nobody has to type it.',
+  'tower.imports.boxFacts': '{label} · stands {h} · carried on {bodies} · lifted with {gear}. All of that comes from the code, so nobody has to type it.',
+  'tower.imports.boxHeightUnstated': 'a height this code does not state',
   'tower.imports.boxPick': 'Pick the box…',
+  'tower.imports.boxAny':
+    'Any ISO 6346 code, exactly as printed on the box — the list is only the common ones. Four characters: the length, then the height and width, then the type. Four of the size codes say only “taller than 2.896 m”; where yours is one of those we ask you to measure it, because inventing a height is how a roof meets a bridge.',
   'tower.imports.f.box': 'Container type (as printed on the box)',
   'tower.imports.f.nature': 'What the goods are',
   'tower.imports.naturePick': 'Say what the goods are…',

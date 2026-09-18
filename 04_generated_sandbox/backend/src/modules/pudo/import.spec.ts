@@ -560,14 +560,40 @@ describe('an import consignment, its papers, and the agent who clears them', () 
     it('derives the box’s facts from its code, and never asks anybody to type them', () => {
       const one = register();
       const after = imports.declareCargo(one.importId, importerId, { containerType: '45g1' }, 'Hans');
-      expect(after.containerFacts).toMatchObject({ code: '45G1', lengthFt: 40, openTop: false, kind: 'dry' });
+      expect(after.containerFacts).toMatchObject({ code: '45G1', lengthFt: 40, openTop: false, kind: 'dry', group: 'general purpose' });
       expect(after.containerFacts!.heightM).toBeCloseTo(2.896, 3);
       expect(after.containerFacts!.bodies).toContain('skeletal');
+      expect(after.containerFacts!.heightUnstated).toBe(false);
     });
 
-    it('refuses a code we do not hold, because a code with no measurements is a height nobody can check', () => {
+    it('refuses what is not an ISO code — 45GI is a typo, not a box', () => {
       const one = register();
-      expect(() => imports.declareCargo(one.importId, importerId, { containerType: '99Z9' }, 'Hans')).toThrow(/do not hold a container type/);
+      expect(() => imports.declareCargo(one.importId, importerId, { containerType: '45GI' }, 'Hans')).toThrow(/not an ISO 6346 code/);
+      expect(() => imports.declareCargo(one.importId, importerId, { containerType: '99Z9' }, 'Hans')).toThrow(/not an ISO 6346 code/);
+    });
+
+    it('takes ANY code the standard can build, not a shortlist somebody kept', () => {
+      // A 30ft ventilated box and a 45ft pallet-wide flat rack were never on the first list, and neither
+      // is exotic. "List them all rather" — so the tables are the standard and these simply work.
+      const one = register();
+      expect(imports.declareCargo(one.importId, importerId, { containerType: '32V0' }, 'Hans').containerFacts).toMatchObject({ lengthFt: 30, kind: 'vented' });
+      expect(imports.declareCargo(one.importId, importerId, { containerType: 'LNP3' }, 'Hans').containerFacts).toMatchObject({ lengthFt: 45, palletWide: true });
+    });
+
+    it('asks for a measurement where the CODE will not state a height', () => {
+      // Four size codes are open ranges — 'taller than 2896 mm' — and the standard stops there. Rather
+      // than inventing 2.9 m for a box that is more than 2.9 m, it is refused until somebody measures it.
+      const one = register();
+      const after = imports.declareCargo(one.importId, importerId, { containerType: '46G1', natureCode: 'GEN' }, 'Hans');
+      expect(after.containerFacts!.heightUnstated).toBe(true);
+      expect(after.containerFacts!.heightM).toBeUndefined();
+      expect(after.cargoGaps.join(' ')).toMatch(/taller than 2.896 m/);
+      expect(() => imports.mintRoadLeg(one.importId, importerId, { pickupLocation: { lat: 11.6, lng: 43.1 }, destLabel: 'Addis', weightKg: 20000 }, 'Hans')).toThrow(/taller than/);
+      // Measured, it goes — and the measured figure is what reaches the load.
+      imports.declareCargo(one.importId, importerId, { cargoHeightM: 3.05 }, 'Hans');
+      expect(imports.detail(one.importId, importerId).cargoGaps).toEqual([]);
+      imports.mintRoadLeg(one.importId, importerId, { pickupLocation: { lat: 11.6, lng: 43.1 }, destLabel: 'Addis', weightKg: 20000 }, 'Hans');
+      expect((minted[minted.length - 1] as { heightM?: number }).heightM).toBeCloseTo(3.05, 2);
     });
 
     it('HANDS THE BOX’S FACTS TO THE ROAD LEG, which used to get a description and a weight', () => {

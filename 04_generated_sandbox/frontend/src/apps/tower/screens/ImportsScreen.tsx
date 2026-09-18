@@ -75,7 +75,7 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
   const [offerForm, setOfferForm] = useState<{ specialisms: string[]; places: string; words: string }>({ specialisms: [], places: '', words: '' });
   /** What kind of box, and what is in it. One form for three acts, because they are one conversation. */
   const [cargoForm, setCargoForm] = useState({ containerType: '', natureCode: '', cargoHeightM: '', lastCargoes: '', cleanedAt: '', certificateDocumentId: '', unNumber: '', imdgClass: '', shippingName: '' });
-  /** The container catalogue, read from the server — two copies of one table drift, and ours would drift silently. */
+  /** The SUGGESTION list — not the boundary of what the server accepts. See the field's own comment. */
   const [boxes, setBoxes] = useState<Array<{ code: string; label: string; openTop: boolean; kind: string }>>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -901,8 +901,10 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
             {detail.containerFacts ? (
               <p class="cons__lede">
                 {t('tower.imports.boxFacts', {
-                  ft: detail.containerFacts.lengthFt,
-                  h: detail.containerFacts.heightM.toFixed(2),
+                  label: detail.containerFacts.label,
+                  // A height the CODE does not state says so in words. Four of the size codes mean only
+                  // "taller than 2.896 m", and a blank where a height belongs is how somebody assumes one.
+                  h: detail.containerFacts.heightUnstated ? t('tower.imports.boxHeightUnstated') : `${detail.containerFacts.heightM!.toFixed(3)} m`,
                   bodies: detail.containerFacts.bodies.join(', '),
                   gear: detail.containerFacts.equipment.join(', '),
                 })}
@@ -914,16 +916,28 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
             {detail.youAre === 'importer' ? (
               <>
                 <div class="twr-knobs">
+                  {/* A SUGGESTION LIST AND FREE ENTRY, because the two are different things. The server
+                      accepts any code ISO 6346 can build — thousands of combinations, and an unusable
+                      dropdown — so the list offers what is common and the field takes whatever is printed
+                      on the box. Confusing "what we suggest" with "what we accept" is exactly what made
+                      the first version of this a shortlist with an escape hatch bolted onto it. */}
                   <label class="twr-knob">
                     <span>{t('tower.imports.f.box')}</span>
-                    <select value={cargoForm.containerType} onChange={(e) => setCargoForm({ ...cargoForm, containerType: (e.target as HTMLSelectElement).value })}>
-                      <option value="">{t('tower.imports.boxPick')}</option>
+                    <input
+                      list="box-codes"
+                      maxLength={4}
+                      placeholder="45G1"
+                      value={cargoForm.containerType}
+                      onChange={(e) => setCargoForm({ ...cargoForm, containerType: (e.target as HTMLInputElement).value.toUpperCase() })}
+                    />
+                    <datalist id="box-codes">
                       {boxes.map((b) => (
                         <option key={b.code} value={b.code}>
-                          {b.code} — {b.label}
+                          {b.label}
                         </option>
                       ))}
-                    </select>
+                    </datalist>
+                    <span class="ctbl__sub">{t('tower.imports.boxAny')}</span>
                   </label>
                   {/* WHAT THE GOODS ARE — the importer's, because we must not read it out of a description.
                       This is the whole distance between a food tank and a fuel tank. */}
@@ -939,7 +953,7 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                     </select>
                   </label>
                   {/* Only for a box with no roof: its own height is the floor the cargo sits on. */}
-                  {detail.containerFacts?.openTop || boxes.find((b) => b.code === cargoForm.containerType)?.openTop ? (
+                  {detail.containerFacts?.openTop || detail.containerFacts?.heightUnstated || boxes.find((b) => b.code === cargoForm.containerType)?.openTop ? (
                     <label class="twr-knob">
                       <span>{t('tower.imports.f.cargoHeight')}</span>
                       <input type="number" min={0.1} max={10} step={0.05} value={cargoForm.cargoHeightM} onChange={(e) => setCargoForm({ ...cargoForm, cargoHeightM: (e.target as HTMLInputElement).value })} />
