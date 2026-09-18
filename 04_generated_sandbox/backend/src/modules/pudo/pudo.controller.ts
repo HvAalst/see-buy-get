@@ -19,7 +19,7 @@ import { AGENT_MEASURED, RECORD_SAYS } from './agent-record';
 import { CONTAINER_TYPES, type ContainerTypeSpec } from './container-type';
 import { MoversView } from './movers.types';
 import { ImportService } from './import.service';
-import { AgentFinderResponse, ClearanceOffer, ClearanceRecordResponse, ImportDetail, ImportRow, KnownPaper } from './import.types';
+import { AgentFinderResponse, ClearanceOffer, ClearanceRecordResponse, ContainerBoxView, ImportDetail, ImportRow, KnownPaper } from './import.types';
 import { CompanyReadinessService } from '../../foundation/entity/company-readiness.service';
 import type { Entity } from '../../foundation/entity/entity.types';
 import { COUNTRY_CATALOGUE, catalogueEntry } from '../../foundation/countries/catalogue';
@@ -76,6 +76,9 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   ClearanceOfferDto,
   FindAgentsQueryDto,
   DeclareCargoDto,
+  BoxArrivedDto,
+  BoxFreeDaysDto,
+  BoxEndingDto,
   MintRoadLegDto,
   PresenceDto,
   PresenceDecisionDto,
@@ -919,6 +922,8 @@ export class SbgController {
         importId,
         this.actingCompany(actor, dto.entityId),
         {
+          containerNo: dto.containerNo,
+          cscPlateDate: dto.cscPlateDate,
           containerType: dto.containerType,
           natureCode: dto.natureCode,
           cargoHeightM: dto.cargoHeightM,
@@ -928,6 +933,79 @@ export class SbgController {
         this.namedActor(actor, dto.by),
       ),
     );
+  }
+
+
+  /* ------------------------- Y0 + Y1 — the box is somebody else's, and a clock runs on it -- */
+
+  /**
+   * WHEN IT LANDED — the demurrage clock's start, and the one date here that a person has to state.
+   *
+   * Detention is derived: the out-gate is our own road leg's pickup, so the leg we mint is literally what
+   * starts it. An arrival is somebody else's event and nothing in this system watches a vessel berth, so
+   * it is recorded with a name against it — and until it is, the clock says in words that demurrage is
+   * not running rather than counting from an ETA that was a guess.
+   */
+  @Roles('operator', 'entity_admin')
+  @Post('imports/:importId/box/arrived')
+  recordBoxArrival(@Param('importId') importId: string, @Body() dto: BoxArrivedDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    return this.withHandles(
+      this.imports.recordBoxArrival(importId, this.actingCompany(actor, dto.entityId), dto.at, this.namedActor(actor, dto.by)),
+    );
+  }
+
+  /**
+   * HOW MANY FREE DAYS THE IMPORTER SAYS THEY WERE GIVEN — the importer's alone, and a claim.
+   *
+   * Not an access decision but a truthfulness one: the free days are in a contract between them and the
+   * shipping line that we have never seen, so nobody else is in a position to state the figure. We carry
+   * it, attribute it, and count — and we never compute what being late costs, because that is the duty
+   * line again and the penalty lands on somebody who is not us.
+   */
+  @Roles('operator', 'entity_admin')
+  @Post('imports/:importId/box/free-days')
+  claimBoxFreeDays(@Param('importId') importId: string, @Body() dto: BoxFreeDaysDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    return this.withHandles(
+      this.imports.claimBoxFreeDays(importId, this.actingCompany(actor, dto.entityId), dto.kind as never, dto.days, this.namedActor(actor, dto.by)),
+    );
+  }
+
+  /**
+   * HOW THE SPELL ENDED: returned, or BOUGHT — and the second is why this takes a kind at all.
+   *
+   * Containers are traded goods, sold in the market and very often never returned, so "returned" is one
+   * ending of three rather than the only exit. The clock stops on a recorded fact with a name and a date,
+   * and never on somebody dismissing an alarm: an alarm a person can wave away teaches them to wave away
+   * the next one, and the next one is the bill this exists to prevent.
+   *
+   * Either party may record it, and usually the agent will — they booked the box, they owe the return and
+   * they are the one standing at the depot gate.
+   */
+  @Roles('operator', 'entity_admin')
+  @Post('imports/:importId/box/ending')
+  endBox(@Param('importId') importId: string, @Body() dto: BoxEndingDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    return this.withHandles(
+      this.imports.endBox(
+        importId,
+        this.actingCompany(actor, dto.entityId),
+        dto.kind as never,
+        { at: dto.at, where: dto.where, note: dto.note },
+        this.namedActor(actor, dto.by),
+      ),
+    );
+  }
+
+  /**
+   * EVERY BOX WE HAVE BEEN TOLD ABOUT, with its clock. Operator-only, because it spans companies.
+   *
+   * The per-container view is on the consignment and both parties see it. This one is the network's own
+   * question — which boxes are out, and which are running out of time — and it is a read with no verdict
+   * in it: no ranking, no charge, and the sentence each box carries says whose numbers produced it.
+   */
+  @Roles('operator')
+  @Get('boxes')
+  boxesOut(): { items: ContainerBoxView[] } {
+    return { items: this.imports.boxesOut() as ContainerBoxView[] };
   }
 
   /**

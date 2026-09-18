@@ -5202,6 +5202,134 @@
         }
       }
     },
+    "/v1/sbg/imports/{importId}/box/arrived": {
+      "post": {
+        "operationId": "Sbg.recordBoxArrival",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoxArrivedDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/imports/{importId}/box/free-days": {
+      "post": {
+        "operationId": "Sbg.claimBoxFreeDays",
+        "summary": "",
+        "description": "HOW MANY FREE DAYS THE IMPORTER SAYS THEY WERE GIVEN — the importer's alone, and a claim.\n\nNot an access decision but a truthfulness one: the free days are in a contract between them and the\nshipping line that we have never seen, so nobody else is in a position to state the figure. We carry\nit, attribute it, and count — and we never compute what being late costs, because that is the duty\nline again and the penalty lands on somebody who is not us.",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoxFreeDaysDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/imports/{importId}/box/ending": {
+      "post": {
+        "operationId": "Sbg.endBox",
+        "summary": "",
+        "description": "HOW THE SPELL ENDED: returned, or BOUGHT — and the second is why this takes a kind at all.\n\nContainers are traded goods, sold in the market and very often never returned, so \"returned\" is one\nending of three rather than the only exit. The clock stops on a recorded fact with a name and a date,\nand never on somebody dismissing an alarm: an alarm a person can wave away teaches them to wave away\nthe next one, and the next one is the bill this exists to prevent.\n\nEither party may record it, and usually the agent will — they booked the box, they owe the return and\nthey are the one standing at the depot gate.",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoxEndingDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/boxes": {
+      "get": {
+        "operationId": "Sbg.boxesOut",
+        "summary": "",
+        "description": "EVERY BOX WE HAVE BEEN TOLD ABOUT, with its clock. Operator-only, because it spans companies.\n\nThe per-container view is on the consignment and both parties see it. This one is the network's own\nquestion — which boxes are out, and which are running out of time — and it is a read with no verdict\nin it: no ranking, no charge, and the sentence each box carries says whose numbers produced it.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/container-types": {
       "get": {
         "operationId": "Sbg.containerTypes",
@@ -19959,6 +20087,170 @@
           "heightUnstated"
         ]
       },
+      "FreeDaysClaimView": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "demurrage",
+              "detention"
+            ]
+          },
+          "days": {
+            "type": "number"
+          },
+          "by": {
+            "type": "string"
+          },
+          "byEntityId": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "days",
+          "by",
+          "byEntityId",
+          "at"
+        ]
+      },
+      "BoxClockView": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "`stopped` has an ending; `unknown` has neither an arrival nor a picked-up road leg.",
+            "enum": [
+              "demurrage",
+              "detention",
+              "stopped",
+              "unknown"
+            ]
+          },
+          "since": {
+            "type": "string",
+            "description": "What the running clock counts from."
+          },
+          "daysElapsed": {
+            "type": "number",
+            "description": "Whole days, floored: a part-day is not a day anybody is charged for, and not one we will invent."
+          },
+          "freeDays": {
+            "type": "number"
+          },
+          "freeDaysBy": {
+            "type": "string",
+            "description": "Whose figure it is. Shown beside the countdown, always."
+          },
+          "freeDaysAt": {
+            "type": "string"
+          },
+          "dueBackAt": {
+            "type": "string",
+            "description": "DERIVED, never stored — a stored due-date goes stale in silence the moment the claim is corrected."
+          },
+          "daysLeft": {
+            "type": "number"
+          },
+          "overdue": {
+            "type": "boolean"
+          },
+          "demurrageDays": {
+            "type": "number",
+            "description": "How long it stood inside the terminal before the gate, where both dates are known. Closed, not running."
+          },
+          "basis": {
+            "type": "string",
+            "description": "One sentence naming what is being counted and whose numbers these are. Screens show it verbatim."
+          }
+        },
+        "required": [
+          "kind",
+          "overdue",
+          "basis"
+        ]
+      },
+      "ContainerBoxView": {
+        "type": "object",
+        "properties": {
+          "containerNo": {
+            "type": "string"
+          },
+          "ownerCode": {
+            "type": "string",
+            "description": "The first three letters are the owner; the fourth says what the equipment is."
+          },
+          "category": {
+            "type": "string"
+          },
+          "typeCode": {
+            "type": "string"
+          },
+          "cscPlateDate": {
+            "type": "string",
+            "description": "The date on the CSC safety-approval plate. Carried, with NOTHING stated about it: whether a box is fit\nis a surveyor's verdict, and the same line that refused to certify a tank holds here."
+          },
+          "firstSeenAt": {
+            "type": "string"
+          },
+          "timesUsed": {
+            "type": "number",
+            "description": "How many spells out of a terminal this box has had with us — the history a per-consignment record loses."
+          },
+          "importCode": {
+            "type": "string"
+          },
+          "owedByName": {
+            "type": "string",
+            "description": "WHO OWES THE RETURN: the agent who booked it, derived from the appointment rather than typed."
+          },
+          "arrivedAt": {
+            "type": "string",
+            "description": "Recorded by a person — nothing here watches a vessel berth, and we do not guess at an arrival."
+          },
+          "outGatedAt": {
+            "type": "string",
+            "description": "DERIVED from the road leg's pickup. The leg we mint is what starts detention, in code and not only in prose."
+          },
+          "returnedAt": {
+            "type": "string"
+          },
+          "ending": {
+            "type": "string",
+            "description": "How the spell ended, and there are two endings rather than one.\n\n`returned` is the one the first draft assumed was the only one. `bought` is the ordinary market case —\ncontainers are traded goods, sold and never returned — and a box that was bought is never overdue.",
+            "enum": [
+              "returned",
+              "bought"
+            ]
+          },
+          "endedBy": {
+            "type": "string"
+          },
+          "endedWhere": {
+            "type": "string"
+          },
+          "freeDays": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FreeDaysClaimView"
+            }
+          },
+          "clock": {
+            "$ref": "#/components/schemas/BoxClockView"
+          }
+        },
+        "required": [
+          "containerNo",
+          "firstSeenAt",
+          "timesUsed",
+          "freeDays",
+          "clock"
+        ]
+      },
       "ImportDetail": {
         "type": "object",
         "properties": {
@@ -20104,6 +20396,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/ContainerFacts"
+              }
+            ]
+          },
+          "box": {
+            "description": "THE BOX ITSELF, and the clock running on it — Y0 and Y1.\n\nAbsent until a container number has been recorded, because the box IS its number: there is nothing to\nderive an entity from until somebody names one. Present for both parties, deliberately — the agent\nwho booked it owes the return and the importer pays for it being late, so hiding the countdown from\neither of them would be choosing which one gets surprised.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ContainerBoxView"
               }
             ]
           }
@@ -20643,6 +20943,15 @@
               "HUM"
             ]
           },
+          "containerNo": {
+            "type": "string",
+            "description": "The container number, usually typed later than the booking: it arrives with the bill of lading.\n\nCHECKED AND NOT TRUSTED — the service runs the ISO 6346 mod-11 arithmetic and refuses a number that\ncannot be right. A field on a service that is not on its DTO is stripped in silence, which is why\nthis line exists at all.",
+            "maxLength": 20
+          },
+          "cscPlateDate": {
+            "type": "string",
+            "description": "The date on the CSC safety-approval plate. Carried, with nothing stated about it."
+          },
           "containerType": {
             "type": "string",
             "description": "ANY ISO 6346 size/type code — not an enum of a shortlist.\n\nFour characters, validated for shape here and RESOLVED by the service against the standard's three\ntables. An enum would have frozen the API at whatever subset somebody had seen, which is the mistake\nthe first version of this made.",
@@ -20667,6 +20976,83 @@
             "type": "string"
           }
         }
+      },
+      "BoxArrivedDto": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "at"
+        ]
+      },
+      "BoxFreeDaysDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "demurrage",
+              "detention"
+            ]
+          },
+          "days": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 365
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "days"
+        ]
+      },
+      "BoxEndingDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "returned",
+              "bought"
+            ]
+          },
+          "at": {
+            "type": "string"
+          },
+          "where": {
+            "type": "string",
+            "description": "The depot it went back to, when it was returned. A label a person types, like a port.",
+            "maxLength": 120
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ]
       },
       "ClearanceOfferDto": {
         "type": "object",

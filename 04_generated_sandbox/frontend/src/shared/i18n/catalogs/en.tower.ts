@@ -514,6 +514,55 @@ export const enTower = {
   'tower.imports.offerSaved': 'Saved. Importers searching for that will find your page.',
   /* CL4 item 1 — what the STATE did to this container. The risk here is the field being read as a free
      excuse box, so the hint says out loud what it does and does not do, before the form. */
+  /* Y0 + Y1 — the box is a shipping line's property on loan, and the leg we mint out of the terminal gate
+     starts a clock on it. Everything here is said in DAYS and DATES: what being late costs is in a
+     contract between the importer and the line, and a figure we invented would be relied on. */
+  'tower.imports.f.containerNo': 'Container number',
+  'tower.imports.containerNoSub':
+    'Four letters, six digits and a check digit — MSCU1234566. The last digit is arithmetic over the other ten, so a mistyped number is refused rather than stored: a number nobody can trace is a clock nobody can stop. It usually arrives with the bill of lading, well after the container was booked.',
+  'tower.imports.f.cscPlateDate': 'CSC plate date',
+  'tower.imports.clockTitle': 'The box itself, and the clock on it',
+  'tower.imports.clockNoBox':
+    'No container number has been recorded, so there is no box here to keep a clock on — a box IS its number. Add it above and the countdown starts itself: detention begins when a driver picks the container up, not when the paperwork was done.',
+  'tower.imports.clockOverdue': '{n} days over',
+  'tower.imports.clockLeft': '{n} days left',
+  'tower.imports.clockEnded.returned': 'Returned',
+  'tower.imports.clockEnded.bought': 'Bought',
+  'tower.imports.clockOwner': 'Owner code',
+  'tower.imports.clockOwed': 'Owes the return',
+  'tower.imports.clockOwedNobody': 'Nobody yet — it follows the appointment, so appointing an agent is what sets it',
+  'tower.imports.clockDates': 'Dates',
+  'tower.imports.clockArrived': 'Arrived {d}',
+  'tower.imports.clockNoArrival': 'No arrival recorded — nothing here watches a vessel berth, so somebody has to say',
+  'tower.imports.clockGated': 'Left the terminal {d}, on its road leg being picked up',
+  'tower.imports.clockNotGated': 'Still in the terminal: {code} is minted and nobody has picked it up yet',
+  'tower.imports.clockNoLeg': 'No road leg yet, so it has not left the terminal',
+  'tower.imports.clockCsc': 'CSC plate',
+  'tower.imports.clockCscSub': 'Carried because a gate may ask for it. We say nothing about whether the box is fit — that is a surveyor’s verdict.',
+  'tower.imports.clockTimes': 'Times used',
+  'tower.imports.clockTimesV': '{n} spells out of a terminal with us — the box is not owned by this consignment, so the earlier ones are still there',
+  'tower.imports.clockClaim': '{kind}: {n} days, said by {by} on {d}',
+  'tower.imports.clockClaimIdle':
+    'That figure belongs to the other clock and starts counting when that clock does — detention free days do nothing while the box is still standing in the terminal, and demurrage free days do nothing once it has left. Both are kept.',
+  'tower.imports.f.arrivedAt': 'When it arrived',
+  'tower.imports.f.freeDayKind': 'Which clock',
+  'tower.imports.freeDays.detention': 'Detention — outside the terminal, not yet returned',
+  'tower.imports.freeDays.demurrage': 'Demurrage — standing inside the terminal',
+  'tower.imports.f.freeDays': 'Free days your contract gives you',
+  'tower.imports.f.endedWhere': 'Depot it went back to, or a note',
+  'tower.imports.f.endedWherePh': 'Modjo depot',
+  'tower.imports.clockArrivedSave': 'Record the arrival',
+  'tower.imports.clockArrivedSaved': 'Recorded. Demurrage runs from that date until a truck takes the box out of the gate.',
+  'tower.imports.clockFreeDaysSave': 'Record the free days',
+  'tower.imports.clockFreeDaysSaved': 'Recorded as yours. The countdown says whose number it is, and a correction is a second entry rather than an edit over the first.',
+  'tower.imports.clockReturnedSave': 'It went back',
+  'tower.imports.clockReturnedSaved': 'Recorded. The clock stops on the date, and the spell is history rather than a field that can be moved.',
+  'tower.imports.clockBoughtSave': 'It was bought',
+  'tower.imports.clockBoughtSaved': 'Recorded. A box that was sold owes nobody a return, so nothing about it will read as overdue.',
+  'tower.imports.clockHint':
+    'Only the importer can state the free days, because they are in the importer’s own contract with the line — we carry the figure, attribute it and count the days. What being late costs stays between those two: we will not compute somebody else’s charge. And a container that was bought is not late, which is why there are two ways to end this and not one.',
+  'tower.imports.clockEndedHint':
+    'This spell is closed. If the same box comes back under another consignment it starts a new one, and this record stays where it is — the history is the first thing anybody asks for in a dispute.',
   'tower.imports.holdsTitle': 'What customs did',
   'tower.imports.holdsHint':
     'Selected, examined, queried, queued. Either party may record one and the other can say it happened differently — both accounts stay, and we do not decide between them. None of this counts for or against the agent anywhere: it is what the state did, kept apart from what the agent did, because a record that blends the two turns a greased queue into a good score.',

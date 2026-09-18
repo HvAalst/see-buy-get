@@ -7,6 +7,7 @@ import { PresenceService } from '../../foundation/presence/presence.service';
 import { BooksService } from '../../foundation/books/books.service';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
 import { DispatchService } from './dispatch.service';
+import { ContainerBoxService } from './container-box.service';
 import { LedgerService } from '../../foundation/ledger/ledger.service';
 import { LEDGER_ADAPTER } from '../../foundation/ledger/ledger.types';
 import { InMemoryLedgerAdapter } from '../../foundation/ledger/in-memory-ledger.adapter';
@@ -32,6 +33,14 @@ describe('an import consignment, its papers, and the agent who clears them', () 
   let rivalId: string;
   /** Every load handed to the freight machinery, so the test can check WHAT was handed over. */
   let minted: Array<Record<string, unknown>>;
+  /**
+   * When each minted leg was actually PICKED UP — which is the box's out-gate.
+   *
+   * Held by the test rather than set by the service, because that is precisely the point: detention starts
+   * when a driver takes the box away, not when somebody posted the load. The test moves the pickup and
+   * watches the clock follow it.
+   */
+  let pickups: Record<string, string>;
 
   /**
    * Every upload gets distinct bytes. Not a convenience: the register refuses a file whose fingerprint
@@ -50,12 +59,14 @@ describe('an import consignment, its papers, and the agent who clears them', () 
 
   beforeEach(async () => {
     minted = [];
+    pickups = {};
     const moduleRef = await Test.createTestingModule({
       // Hand-listed, which is the very shape that once let 856 green tests sit over an app that could not
       // boot — so `app.boot.spec.ts` is what actually proves this service resolves in the real module, and
       // this list exists only to get an instance to exercise.
       providers: [
         ImportService,
+        ContainerBoxService,
         EntityService,
         CompanyDocumentService,
         DidService,
@@ -74,6 +85,8 @@ describe('an import consignment, its papers, and the agent who clears them', () 
               minted.push(input);
               return { freightId: `frt_${minted.length}`, code: `FRT-${minted.length}` };
             },
+            // The out-gate is DERIVED from the leg's pickup, so the stub has to be able to answer for one.
+            requireFreightPublic: (freightId: string) => ({ freightId, pickedUpAt: pickups[freightId] }),
           },
         },
       ],
@@ -94,8 +107,8 @@ describe('an import consignment, its papers, and the agent who clears them', () 
 
   describe('the container exists before it arrives', () => {
     it('records one, codes it, and leaves the carrier seam empty because nothing fills it', () => {
-      const one = register({ containerNo: 'mscu1234567', carrierRef: 'BL-99' });
-      expect(one).toMatchObject({ code: 'IMP-001', status: 'open', importerEntityId: importerId, containerNo: 'MSCU1234567', destPort: 'Djibouti' });
+      const one = register({ containerNo: 'mscu1234566', carrierRef: 'BL-99' });
+      expect(one).toMatchObject({ code: 'IMP-001', status: 'open', importerEntityId: importerId, containerNo: 'MSCU1234566', destPort: 'Djibouti' });
       expect(one.agentEntityId).toBeUndefined();
       // The seam: a reference the importer typed is kept, and NOTHING has filled an arrival.
       expect(one.carrierRef).toBe('BL-99');
@@ -773,6 +786,161 @@ describe('an import consignment, its papers, and the agent who clears them', () 
       const et = imports.findAgents({ country: 'ET' });
       expect(ke.every((a) => a.country === 'KE')).toBe(true);
       expect(et.every((a) => a.country === 'ET')).toBe(true);
+    });
+  });
+
+  /**
+   * Y0 + Y1 — THE BOX IS SOMEBODY ELSE'S PROPERTY, AND A CLOCK RUNS ON IT.
+   *
+   * CL7 settled how a box is carried; this is the asset nobody was tracking. The failures worth guarding
+   * are the silent ones: a mistyped number that still looks like a container number, a clock that would
+   * count from a date nobody gave us, and — the user's own correction — a box that was SOLD reading as
+   * overdue, which is the false alarm that teaches people to ignore the true one.
+   */
+  describe('the box is somebody else’s, and a clock runs on it', () => {
+    const NO = 'MSCU1234566';
+
+    it('refuses a container number whose check digit does not add up', () => {
+      // The arithmetic exists precisely so a typo is detectable, and MSCU1234567 — the number that gets
+      // written in examples everywhere, this project's own design note included — is one.
+      expect(() => register({ containerNo: 'MSCU1234567' })).toThrow(/checks to 6, not 7/);
+      expect(() => register({ containerNo: 'MSCU12345' })).toThrow(/not the shape/);
+      // And nothing about whether the box EXISTS: that is the line's business, not ours.
+      expect(register({ containerNo: NO }).containerNo).toBe(NO);
+    });
+
+    it('derives the box from its number, with no clock running yet', () => {
+      const one = register({ containerNo: `mscu 123456-6` });
+      const box = imports.detail(one.importId, importerId).box!;
+      expect(box).toMatchObject({ containerNo: NO, ownerCode: 'MSCU', category: 'freight container', timesUsed: 1, importCode: one.code });
+      // Nothing has happened to it yet, and the honest answer is that nothing is running — not day zero of
+      // a countdown whose start we would have had to invent.
+      expect(box.clock).toMatchObject({ kind: 'unknown', overdue: false });
+      expect(box.clock.dueBackAt).toBeUndefined();
+    });
+
+    it('has no box at all until a number is recorded', () => {
+      const one = register({});
+      expect(imports.detail(one.importId, importerId).box).toBeUndefined();
+      // The box IS its number, so there is nothing to keep a clock on and the refusal says so.
+      expect(() => imports.recordBoxArrival(one.importId, importerId, '2026-09-10', 'Hans')).toThrow(/no container number yet/);
+    });
+
+    it('makes the agent who was appointed the one who owes the return', () => {
+      const one = register({ containerNo: NO });
+      expect(imports.detail(one.importId, importerId).box!.owedByName).toBeUndefined();
+      imports.appoint(one.importId, agentId, importerId, 'Hans');
+      // DERIVED from the appointment rather than typed, so it cannot drift from who is actually clearing it.
+      expect(imports.detail(one.importId, importerId).box!.owedByName).toBe('Addis Clearing');
+      // And the importer still sees the clock, because the charge lands on them.
+      expect(imports.detail(one.importId, agentId).box!.owedByName).toBe('Addis Clearing');
+    });
+
+    it('starts detention at the driver’s pickup, not at the paperwork', () => {
+      const one = register({ containerNo: NO });
+      imports.recordBoxArrival(one.importId, importerId, new Date(Date.now() - 6 * 86_400_000).toISOString(), 'Hans');
+      expect(imports.detail(one.importId, importerId).box!.clock.kind).toBe('demurrage');
+
+      imports.mintRoadLeg(one.importId, importerId, { pickupLocation: { lat: 11.6, lng: 43.14 }, destLabel: 'Addis Ababa yard', weightKg: 12000 }, 'Hans');
+      // A minted leg is not a gate: the box is still standing in the terminal until a truck takes it, and
+      // a typed out-gate date would have been wrong in exactly the cases that matter.
+      expect(imports.detail(one.importId, importerId).box!.clock.kind).toBe('demurrage');
+      expect(imports.detail(one.importId, importerId).box!.outGatedAt).toBeUndefined();
+
+      pickups['frt_1'] = new Date(Date.now() - 3 * 86_400_000).toISOString();
+      const box = imports.detail(one.importId, importerId).box!;
+      expect(box.outGatedAt).toBe(pickups['frt_1']);
+      expect(box.clock).toMatchObject({ kind: 'detention', daysElapsed: 3, demurrageDays: 3 });
+    });
+
+    it('counts to the free days the importer claims, and only the importer may claim them', () => {
+      const one = register({ containerNo: NO });
+      imports.appoint(one.importId, agentId, importerId, 'Hans');
+      imports.mintRoadLeg(one.importId, importerId, { pickupLocation: { lat: 11.6, lng: 43.14 }, destLabel: 'Addis', weightKg: 12000 }, 'Hans');
+      pickups['frt_1'] = new Date(Date.now() - 10 * 86_400_000).toISOString();
+
+      // Nobody has said, so there is no date — the countdown refuses to be invented.
+      expect(imports.detail(one.importId, importerId).box!.clock.dueBackAt).toBeUndefined();
+      // The free days are in a contract between the importer and the line. The agent is not in a position
+      // to state the figure, so they cannot: this is a truthfulness rule, not an access one.
+      expect(() => imports.claimBoxFreeDays(one.importId, agentId, 'detention', 14, 'Selam')).toThrow(/importer/);
+
+      const detail = imports.claimBoxFreeDays(one.importId, importerId, 'detention', 14, 'Hans');
+      expect(detail.box!.clock).toMatchObject({ freeDays: 14, daysElapsed: 10, daysLeft: 4, overdue: false, freeDaysBy: 'Hans' });
+      expect(detail.box!.clock.basis).toContain('Hans says it was given');
+      // A correction is a second claim, kept beside the first rather than an edit over it.
+      const corrected = imports.claimBoxFreeDays(one.importId, importerId, 'detention', 7, 'Hans');
+      expect(corrected.box!.clock).toMatchObject({ freeDays: 7, overdue: true, daysLeft: -3 });
+      expect(corrected.box!.freeDays).toHaveLength(2);
+    });
+
+    it('lets the agent record the return, and a stranger record nothing', () => {
+      const one = register({ containerNo: NO });
+      imports.appoint(one.importId, agentId, importerId, 'Hans');
+      // A company with nothing to do with this container cannot touch its record, and the refusal names
+      // who can — the two parties who are actually exposed to it.
+      expect(() => imports.endBox(one.importId, rivalId, 'bought', {}, 'Rival')).toThrow(/importer or the appointed agent/);
+      // The agent owes the return and is the one standing at the depot gate, so they can say it happened.
+      const back = imports.endBox(one.importId, agentId, 'returned', { where: 'Modjo depot' }, 'Selam');
+      expect(back.box).toMatchObject({ ending: 'returned', endedBy: 'Selam', endedWhere: 'Modjo depot' });
+      expect(back.box!.clock.kind).toBe('stopped');
+      // Twice is not a record: an ending that can be moved is a field, and this one is history.
+      expect(() => imports.endBox(one.importId, importerId, 'returned', {}, 'Hans')).toThrow(/that spell is history/);
+    });
+
+    it('a box that was sold is never overdue', () => {
+      const one = register({ containerNo: NO });
+      imports.mintRoadLeg(one.importId, importerId, { pickupLocation: { lat: 11.6, lng: 43.14 }, destLabel: 'Addis', weightKg: 12000 }, 'Hans');
+      pickups['frt_1'] = new Date(Date.now() - 60 * 86_400_000).toISOString();
+      imports.claimBoxFreeDays(one.importId, importerId, 'detention', 14, 'Hans');
+      // Forty-six days past the free days, and every other branch would call it overdue.
+      expect(imports.detail(one.importId, importerId).box!.clock.overdue).toBe(true);
+
+      const sold = imports.endBox(one.importId, importerId, 'bought', { note: 'Sold to the consignee' }, 'Hans');
+      expect(sold.box!.clock).toMatchObject({ kind: 'stopped', overdue: false });
+      expect(sold.box!.clock.basis).toContain('No return is owed');
+    });
+
+    it('is the same box next month, and keeps the first spell', () => {
+      const first = register({ containerNo: NO });
+      imports.endBox(first.importId, importerId, 'returned', {}, 'Hans');
+      // THE ENTITY IS NOT OWNED BY A CONSIGNMENT. A record hung on the first import would have lost this
+      // history at the second use, and "when did we have this box" is the first question in any dispute.
+      const second = register({ containerNo: NO });
+      const box = imports.detail(second.importId, importerId).box!;
+      expect(box).toMatchObject({ containerNo: NO, timesUsed: 2, importCode: second.code });
+      expect(box.clock.kind).toBe('unknown');
+      // And the first spell still reads as ended, on its own consignment.
+      expect(imports.detail(first.importId, importerId).box!.ending).toBe('returned');
+    });
+
+    it('carries the CSC plate date and says nothing about it', () => {
+      const one = register({ containerNo: NO });
+      const detail = imports.declareCargo(one.importId, importerId, { containerType: '22G1', cscPlateDate: '2029-04-30' }, 'Hans');
+      expect(detail.box).toMatchObject({ cscPlateDate: '2029-04-30', typeCode: '22G1' });
+      // Whether the box is FIT is a surveyor's verdict. We hold the date because a haulier at a gate needs
+      // it, and we draw no conclusion from it — the same line CL7 held on certifying a tank.
+      expect(detail.cargoGaps.join(' ')).not.toMatch(/plate|CSC/i);
+    });
+
+    it('takes the number with the bill of lading, checked the same way', () => {
+      const one = register({});
+      expect(() => imports.declareCargo(one.importId, importerId, { containerNo: 'MSCU1234567' }, 'Hans')).toThrow(/checks to 6/);
+      const detail = imports.declareCargo(one.importId, importerId, { containerNo: NO }, 'Hans');
+      expect(detail.box!.containerNo).toBe(NO);
+    });
+
+    it('never lets the box’s clock touch the goods', () => {
+      const one = register({ containerNo: NO });
+      imports.mintRoadLeg(one.importId, importerId, { pickupLocation: { lat: 11.6, lng: 43.14 }, destLabel: 'Addis', weightKg: 12000 }, 'Hans');
+      pickups['frt_1'] = new Date(Date.now() - 90 * 86_400_000).toISOString();
+      imports.claimBoxFreeDays(one.importId, importerId, 'detention', 7, 'Hans');
+      const detail = imports.detail(one.importId, importerId);
+      expect(detail.box!.clock.overdue).toBe(true);
+      // An overdue box is a later obligation between two other parties. Nothing about it may gate the
+      // cargo — no new gap, no refusal — or the parcel trunk's rule is broken at container scale.
+      expect(detail.cargoGaps).toEqual([]);
+      expect(detail.roadFreightCode).toBe('FRT-1');
     });
   });
 });

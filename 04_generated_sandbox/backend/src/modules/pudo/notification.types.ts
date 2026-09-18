@@ -56,6 +56,14 @@ export const NOTIFICATION_KINDS = [
    * who could act was the only party kept in the dark. Both halves of onboarding now speak: what is
    * still needed, and what a rejection decided and why.
    */
+  /**
+   * A BOX IS DUE BACK, and this is the notification the detention story turns on.
+   *
+   * The charge arrives on an invoice weeks later, by which time nothing can be done about it. Both the
+   * agent who booked the box and the importer who pays are told before the date, in days rather than in
+   * money — what it costs is between them and the line.
+   */
+  'box_due',
   'signup_incomplete',
   'signup_rejected',
 ] as const;

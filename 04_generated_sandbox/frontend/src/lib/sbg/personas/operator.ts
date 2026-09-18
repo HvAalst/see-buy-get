@@ -302,6 +302,10 @@ export function createOperatorApi(sbg: SbgClient) {
     declareImportCargo: (
       importId: string,
       body: {
+        /** Usually typed later than the booking: the number arrives with the bill of lading. */
+        containerNo?: string;
+        /** The CSC safety-approval plate date. Carried, and nothing stated about it. */
+        cscPlateDate?: string;
         containerType?: string;
         natureCode?: string;
         cargoHeightM?: number;
@@ -314,6 +318,40 @@ export function createOperatorApi(sbg: SbgClient) {
 
     /** The boxes this network books, with their real measurements. A catalogue, sent rather than mirrored. */
     containerTypes: () => sbg.request((c) => c.GET('/v1/sbg/container-types', {})),
+
+
+    /* ---- Y0 + Y1: the box is somebody else's, and a clock runs on it ---- */
+
+    /**
+     * WHEN THE BOX LANDED — the demurrage clock's start, and the one date a person has to state.
+     *
+     * Detention is derived from the road leg's pickup, so nobody types that one. An arrival is somebody
+     * else's event and nothing here watches a vessel berth, so it is recorded with a name against it
+     * rather than guessed from an ETA.
+     */
+    recordBoxArrival: (importId: string, body: { at: string; entityId?: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/box/arrived', { params: { path: { importId } }, body: body as never })),
+
+    /**
+     * HOW MANY FREE DAYS THE IMPORTER SAYS THEY WERE GIVEN — their claim, from their contract.
+     *
+     * Two kinds because there are two clocks: demurrage inside the terminal, detention outside it. No
+     * rate and no amount anywhere: what being late costs is between the importer and the line.
+     */
+    claimBoxFreeDays: (importId: string, body: { kind: 'demurrage' | 'detention'; days: number; entityId?: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/box/free-days', { params: { path: { importId } }, body: body as never })),
+
+    /**
+     * HOW THE SPELL ENDED: returned, or BOUGHT.
+     *
+     * Containers are traded goods, sold and often never returned, so "returned" is one ending of three and
+     * a box that was bought is never overdue. Either party may record it, and usually the agent will.
+     */
+    endBox: (importId: string, body: { kind: 'returned' | 'bought'; at?: string; where?: string; note?: string; entityId?: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/box/ending', { params: { path: { importId } }, body: body as never })),
+
+    /** Every box out, with its clock. Operator-only: it spans companies by construction. */
+    boxesOut: () => sbg.request((c) => c.GET('/v1/sbg/boxes', {})),
 
     /* ---- CL4 item 1: what the state did to a container, and the agent's own record ---- */
 

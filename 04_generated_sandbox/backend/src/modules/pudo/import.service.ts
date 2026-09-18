@@ -8,6 +8,9 @@ import { PresenceService } from '../../foundation/presence/presence.service';
 import { BooksService } from '../../foundation/books/books.service';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
 import { DispatchService } from './dispatch.service';
+import { ContainerBoxService } from './container-box.service';
+import { BoxEnding, FreeDayKind } from './container-box';
+import type { BoxView } from './container-box.service';
 import type { GeoPoint } from './pudo.types';
 import {
   BorderPaperObservation,
@@ -88,6 +91,7 @@ export class ImportService {
     private readonly presence: PresenceService,
     private readonly books: BooksService,
     private readonly dispatch: DispatchService,
+    private readonly boxes: ContainerBoxService,
   ) {}
 
   /* ------------------------------------------------------------ the container -- */
@@ -125,6 +129,17 @@ export class ImportService {
     const originCountry = country(input.originCountry, 'where it is coming from');
     const destCountry = country(input.destCountry, 'where it is going');
     const etaAt = date(input.etaAt, 'An expected arrival');
+    /*
+     * Y0 — THE CHECK DIGIT, and the cheapest honest win in the epic.
+     *
+     * A container number carries a mod-11 check digit precisely so that a mistyped one is detectable, and
+     * until now this field was free text we shouted and stored. A wrong number is a box nobody can trace,
+     * a clock nobody can stop and a dispute nobody can settle — and it is silent, because every wrong
+     * number still looks exactly like a container number.
+     *
+     * THE ARITHMETIC ONLY. Whether the box exists, and whose it is, is the line's business and not ours.
+     */
+    const containerNo = input.containerNo?.trim() ? ContainerBoxService.validate(input.containerNo) : undefined;
 
     const consignment: ImportConsignment = {
       importId: `imp_${randomBytes(8).toString('hex')}`,
@@ -132,7 +147,7 @@ export class ImportService {
       status: 'open',
       importerEntityId: importer.entityId,
       goodsDescription,
-      ...(input.containerNo?.trim() ? { containerNo: input.containerNo.trim().toUpperCase() } : {}),
+      ...(containerNo ? { containerNo } : {}),
       originCountry,
       destCountry,
       destPort,
@@ -145,6 +160,11 @@ export class ImportService {
       createdBy: by,
     };
     this.imports.set(consignment.importId, consignment);
+    // THE BOX IS DERIVED FROM ITS NUMBER, the first time anybody names one — no registry, no onboarding
+    // form, nothing to keep in step. Exactly as being a clearing agent is derived from being appointed.
+    if (containerNo) {
+      this.boxes.see(containerNo, { importId: consignment.importId, importCode: consignment.code, importerEntityId: importer.entityId }, now);
+    }
     return consignment;
   }
 
@@ -191,6 +211,17 @@ export class ImportService {
     }
     Object.assign(consignment, { status: 'appointed', agentEntityId: agent.entityId, appointedAt: at, appointedBy: by });
     this.imports.set(consignment.importId, consignment);
+    /*
+     * Y1 — WHO OWES THE RETURN, and it is the user's own answer: the agent who booked the box.
+     *
+     * DERIVED from this appointment rather than typed anywhere, which means it cannot drift from who is
+     * actually clearing the container, and a replaced agent replaces the obligation in the same act. The
+     * importer still sees the clock, because the charge lands on them — but a clock with nobody's name on
+     * it is a number that annoys everybody and moves nobody.
+     */
+    if (consignment.containerNo) {
+      this.boxes.see(consignment.containerNo, { importId: consignment.importId, owedByEntityId: agent.entityId, owedByName: agent.name }, now);
+    }
     return this.detail(consignment.importId, actorEntityId);
   }
 
@@ -434,7 +465,98 @@ export class ImportService {
             },
           }
         : {}),
+      // Y0/Y1 — the box itself, and the clock. Absent until a number has been recorded, because the box
+      // IS its number: there is no entity to derive before somebody names one.
+      ...(consignment.containerNo ? { box: this.boxes.viewOf(consignment.containerNo, Date.now(), { importId: consignment.importId }) } : {}),
     };
+  }
+
+  /* ------------------------------------------- Y0 + Y1: the box, and its clock -- */
+
+  /**
+   * WHEN IT LANDED — recorded by a person, because nothing here watches a vessel berth.
+   *
+   * Demurrage cannot be derived the way detention can: the out-gate is our own road leg's pickup, but an
+   * arrival is somebody else's event. Approximating it from the ETA was the tempting shortcut and it
+   * would have been an invented number with a real consequence — so the arrival is stated, with a name
+   * against it, and until somebody states one the demurrage clock says in words that it is not running.
+   */
+  recordBoxArrival(importId: string, actorEntityId: string, at: string, by: string, now = Date.now()): ImportDetail {
+    const consignment = this.requireImport(importId);
+    this.requireBoxParty(consignment, actorEntityId);
+    const containerNo = this.requireBox(consignment);
+    this.boxes.recordArrival(containerNo, at, by, { importId }, now);
+    return this.detail(consignment.importId, actorEntityId);
+  }
+
+  /**
+   * THE FREE DAYS — the importer's own claim, from a contract we have never seen.
+   *
+   * The importer's alone, and that is not an access decision but a truth one: the agreement is between
+   * them and the line, so nobody else is in a position to state it. Carried and attributed the way an
+   * agent's advertisement is, kept rather than overwritten, and the countdown that uses it says whose
+   * number it is on every screen that shows it.
+   */
+  claimBoxFreeDays(importId: string, actorEntityId: string, kind: FreeDayKind, days: number, by: string, now = Date.now()): ImportDetail {
+    const consignment = this.requireImport(importId);
+    this.requireImporter(consignment, actorEntityId);
+    const containerNo = this.requireBox(consignment);
+    this.boxes.claimFreeDays(containerNo, kind, days, { entityId: consignment.importerEntityId, by }, { importId }, now);
+    return this.detail(consignment.importId, actorEntityId);
+  }
+
+  /**
+   * HOW THE SPELL ENDED, and the user's correction is the whole reason this takes a kind.
+   *
+   *   > "In the real world containers are demanded objects and are very often sold in the market and are
+   *   > never returned."
+   *
+   * So `bought` is not an exotic case to be handled later; it is the ordinary market and it must stop the
+   * clock cleanly, because a box that was sold on is not late and telling somebody it is would be the
+   * false alarm that teaches them to ignore the true one.
+   *
+   * EITHER PARTY MAY RECORD IT, and usually the agent will: they booked the box, they owe the return, and
+   * they are the one standing at the depot gate. The importer can too, because the charge lands on them.
+   */
+  endBox(
+    importId: string,
+    actorEntityId: string,
+    kind: BoxEnding,
+    input: { at?: string; where?: string; note?: string },
+    by: string,
+    now = Date.now(),
+  ): ImportDetail {
+    const consignment = this.requireImport(importId);
+    this.requireBoxParty(consignment, actorEntityId);
+    const containerNo = this.requireBox(consignment);
+    this.boxes.end(containerNo, kind, input, by, { importId }, now);
+    return this.detail(consignment.importId, actorEntityId);
+  }
+
+  /** Every box, with its clock. Operator-only at the route: it spans companies by construction. */
+  boxesOut(now = Date.now()): BoxView[] {
+    return this.boxes.list(now);
+  }
+
+  private requireBox(consignment: ImportConsignment): string {
+    if (!consignment.containerNo) {
+      throw new GlosError('INVALID_STATE', `${consignment.code} has no container number yet — the box IS its number, so there is nothing to keep a clock on until one is recorded`);
+    }
+    return consignment.containerNo;
+  }
+
+  /**
+   * Who may touch the box's record: the importer, the appointed agent, or network staff.
+   *
+   * Wider than the papers, deliberately. The agent owes the return and the importer pays for it being
+   * late, so a rule that let only one of them record a gate or an ending would leave the other watching a
+   * clock they cannot correct. Network staff act BY NAMING a party, exactly as they do on a customs hold,
+   * so the record says which company the act was for and whose hand it was.
+   */
+  private requireBoxParty(consignment: ImportConsignment, actorEntityId: string): void {
+    if (actorEntityId === consignment.importerEntityId) return;
+    if (consignment.agentEntityId && actorEntityId === consignment.agentEntityId) return;
+    throw new GlosError('FORBIDDEN', 'Only the importer or the appointed agent can record what happened to the box');
   }
 
   /* ------------------------------------------------------- what the state did -- */
@@ -553,6 +675,10 @@ export class ImportService {
     importId: string,
     actorEntityId: string,
     input: {
+      /** Usually typed later than the booking: the number arrives with the bill of lading. */
+      containerNo?: string;
+      /** The date on the CSC safety-approval plate. Carried, and nothing stated about it. */
+      cscPlateDate?: string;
       containerType?: string;
       natureCode?: string;
       cargoHeightM?: number;
@@ -565,6 +691,12 @@ export class ImportService {
     const consignment = this.requireImport(importId);
     this.requireImporter(consignment, actorEntityId);
 
+    const cscPlateDate = date(input.cscPlateDate, 'A CSC plate date');
+    if (input.containerNo !== undefined) {
+      // The number usually arrives with the bill of lading, days after the container was booked, so it is
+      // settable here — and checked by the same arithmetic as at registration rather than a softer copy.
+      consignment.containerNo = ContainerBoxService.validate(input.containerNo);
+    }
     if (input.containerType !== undefined) {
       const spec = containerType(input.containerType);
       if (!spec) {
@@ -615,6 +747,29 @@ export class ImportService {
       };
     }
     this.imports.set(consignment.importId, consignment);
+    /*
+     * Everything the declaration just taught us about the BOX, handed to the box.
+     *
+     * The type code and the CSC plate date belong to the container and not to this consignment — the same
+     * box comes back next month under a different one, and a record owned by one of them loses what we
+     * knew. So the consignment keeps what was declared about the CARGO, and the box keeps what is true of
+     * the box.
+     */
+    if (consignment.containerNo) {
+      const agent = consignment.agentEntityId ? this.entities.find(consignment.agentEntityId) : undefined;
+      this.boxes.see(
+        consignment.containerNo,
+        {
+          importId: consignment.importId,
+          importCode: consignment.code,
+          importerEntityId: consignment.importerEntityId,
+          ...(consignment.containerType ? { typeCode: consignment.containerType } : {}),
+          ...(cscPlateDate ? { cscPlateDate } : {}),
+          ...(agent ? { owedByEntityId: agent.entityId, owedByName: agent.name } : {}),
+        },
+        now,
+      );
+    }
     return this.detail(consignment.importId, actorEntityId);
   }
 
@@ -1009,6 +1164,17 @@ export class ImportService {
       roadMintedBy: by,
     });
     this.imports.set(consignment.importId, consignment);
+    /*
+     * Y1 — THE LEG WE MINT IS WHAT STARTS THE CLOCK, and now that is true in code rather than in prose.
+     *
+     * The box is told which leg carries it, and the out-gate is then DERIVED from that leg's pickup. Not a
+     * field anybody types: a container whose truck has not turned up has not left the terminal, however
+     * long ago the paperwork was done, and a typed gate date would have been wrong in exactly the cases
+     * that matter.
+     */
+    if (consignment.containerNo) {
+      this.boxes.see(consignment.containerNo, { importId: consignment.importId, roadFreightId: freight.freightId }, now);
+    }
     return this.detail(consignment.importId, actorEntityId);
   }
 

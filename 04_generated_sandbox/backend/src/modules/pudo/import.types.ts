@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import type { CompanyDocument } from '../../foundation/entity/company-documents.service';
+import { BOX_ENDINGS, FREE_DAY_KINDS } from './container-box';
 
 /**
  * CL2a — AN IMPORT CONSIGNMENT: one container, its papers, and the agent appointed to clear it.
@@ -131,6 +132,99 @@ export class ContainerFacts {
   @ApiProperty() outOfGauge: boolean;
   /** True where the CODE does not state a height, so somebody has to measure the box. */
   @ApiProperty() heightUnstated: boolean;
+}
+
+/* --------------------------- Y0 + Y1: the box as an asset, and the clock on it -- */
+
+/**
+ * HOW MANY FREE DAYS SOMEBODY SAYS THIS BOX HAS — a claim, carried and attributed, never a finding.
+ *
+ * It comes from a contract between the importer and the shipping line that we have never seen. Sent with
+ * the name on it because the countdown that uses it has to be able to say whose number it is, and every
+ * claim is kept: a corrected figure is a second claim rather than an edit.
+ */
+export class FreeDaysClaimView {
+  @ApiProperty({ enum: FREE_DAY_KINDS }) kind: string;
+  @ApiProperty() days: number;
+  @ApiProperty() by: string;
+  @ApiProperty() byEntityId: string;
+  @ApiProperty() at: string;
+}
+
+/**
+ * WHAT THE CLOCK SAYS, derived on every read and said in DATES — there is no money anywhere in it.
+ *
+ * We do not compute somebody else's charge: the rate is in a contract we have not seen, the penalty lands
+ * on the importer, and a figure we invented would be relied on. So this carries days and dates and the
+ * sentence that explains them, and the charge stays between the importer and the line.
+ *
+ * TWO CLOCKS, because demurrage runs while the box sits INSIDE the terminal and detention runs while it is
+ * OUTSIDE and not yet back. Different parties can be at fault for each, so a single "days" field would be
+ * a number nobody could act on.
+ */
+export class BoxClockView {
+  /** `stopped` has an ending; `unknown` has neither an arrival nor a picked-up road leg. */
+  @ApiProperty({ enum: ['demurrage', 'detention', 'stopped', 'unknown'] }) kind: string;
+  /** What the running clock counts from. */
+  @ApiPropertyOptional() since?: string;
+  /** Whole days, floored: a part-day is not a day anybody is charged for, and not one we will invent. */
+  @ApiPropertyOptional() daysElapsed?: number;
+  @ApiPropertyOptional() freeDays?: number;
+  /** Whose figure it is. Shown beside the countdown, always. */
+  @ApiPropertyOptional() freeDaysBy?: string;
+  @ApiPropertyOptional() freeDaysAt?: string;
+  /** DERIVED, never stored — a stored due-date goes stale in silence the moment the claim is corrected. */
+  @ApiPropertyOptional() dueBackAt?: string;
+  @ApiPropertyOptional() daysLeft?: number;
+  @ApiProperty() overdue: boolean;
+  /** How long it stood inside the terminal before the gate, where both dates are known. Closed, not running. */
+  @ApiPropertyOptional() demurrageDays?: number;
+  /** One sentence naming what is being counted and whose numbers these are. Screens show it verbatim. */
+  @ApiProperty() basis: string;
+}
+
+/**
+ * THE BOX, DERIVED FROM ITS NUMBER and never registered — Y0.
+ *
+ * A container is a shipping line's property on loan, and the road leg we mint out of the terminal gate is
+ * what starts the clock on it. The entity is created the first time anybody names one, is keyed by the
+ * number (globally unique by design, with a check digit so a typo is detectable), and belongs to NO
+ * consignment: the same box comes back next month under a different one, and it can turn up on a purely
+ * domestic load with no import behind it at all.
+ */
+export class ContainerBoxView {
+  @ApiProperty() containerNo: string;
+  /** The first three letters are the owner; the fourth says what the equipment is. */
+  @ApiPropertyOptional() ownerCode?: string;
+  @ApiPropertyOptional() category?: string;
+  @ApiPropertyOptional() typeCode?: string;
+  /**
+   * The date on the CSC safety-approval plate. Carried, with NOTHING stated about it: whether a box is fit
+   * is a surveyor's verdict, and the same line that refused to certify a tank holds here.
+   */
+  @ApiPropertyOptional() cscPlateDate?: string;
+  @ApiProperty() firstSeenAt: string;
+  /** How many spells out of a terminal this box has had with us — the history a per-consignment record loses. */
+  @ApiProperty() timesUsed: number;
+  @ApiPropertyOptional() importCode?: string;
+  /** WHO OWES THE RETURN: the agent who booked it, derived from the appointment rather than typed. */
+  @ApiPropertyOptional() owedByName?: string;
+  /** Recorded by a person — nothing here watches a vessel berth, and we do not guess at an arrival. */
+  @ApiPropertyOptional() arrivedAt?: string;
+  /** DERIVED from the road leg's pickup. The leg we mint is what starts detention, in code and not only in prose. */
+  @ApiPropertyOptional() outGatedAt?: string;
+  @ApiPropertyOptional() returnedAt?: string;
+  /**
+   * How the spell ended, and there are two endings rather than one.
+   *
+   * `returned` is the one the first draft assumed was the only one. `bought` is the ordinary market case —
+   * containers are traded goods, sold and never returned — and a box that was bought is never overdue.
+   */
+  @ApiPropertyOptional({ enum: BOX_ENDINGS }) ending?: string;
+  @ApiPropertyOptional() endedBy?: string;
+  @ApiPropertyOptional() endedWhere?: string;
+  @ApiProperty({ type: [FreeDaysClaimView] }) freeDays: FreeDaysClaimView[];
+  @ApiProperty({ type: BoxClockView }) clock: BoxClockView;
 }
 
 /**
@@ -505,6 +599,15 @@ export class ImportDetail extends ImportRow {
   @ApiProperty({ type: [String] }) cargoGaps: string[];
   /** The container type's own facts, resolved from the catalogue so no screen re-derives them. */
   @ApiPropertyOptional({ type: ContainerFacts }) containerFacts?: ContainerFacts;
+  /**
+   * THE BOX ITSELF, and the clock running on it — Y0 and Y1.
+   *
+   * Absent until a container number has been recorded, because the box IS its number: there is nothing to
+   * derive an entity from until somebody names one. Present for both parties, deliberately — the agent
+   * who booked it owes the return and the importer pays for it being late, so hiding the countdown from
+   * either of them would be choosing which one gets surprised.
+   */
+  @ApiPropertyOptional({ type: ContainerBoxView }) box?: ContainerBoxView;
 }
 
 /* ------------------------- CL6: what a clearing agent says they clear, in their own words -- */

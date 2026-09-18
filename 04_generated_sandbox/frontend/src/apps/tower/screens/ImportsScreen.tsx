@@ -74,8 +74,13 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
   /** Their own advertisement, loaded from their page so the form starts where their claim already is. */
   const [offerForm, setOfferForm] = useState<{ specialisms: string[]; places: string; words: string }>({ specialisms: [], places: '', words: '' });
   /** What kind of box, and what is in it. One form for three acts, because they are one conversation. */
-  const [cargoForm, setCargoForm] = useState({ containerType: '', natureCode: '', cargoHeightM: '', lastCargoes: '', cleanedAt: '', certificateDocumentId: '', unNumber: '', imdgClass: '', shippingName: '' });
+  const [cargoForm, setCargoForm] = useState({ containerNo: '', cscPlateDate: '', containerType: '', natureCode: '', cargoHeightM: '', lastCargoes: '', cleanedAt: '', certificateDocumentId: '', unNumber: '', imdgClass: '', shippingName: '' });
   /** The SUGGESTION list — not the boundary of what the server accepts. See the field's own comment. */
+  /**
+   * Y1 — the box's own dates, kept apart from the cargo declaration because they are a different subject:
+   * one describes the goods and the other describes somebody else's asset.
+   */
+  const [boxForm, setBoxForm] = useState({ arrivedAt: '', freeDayKind: 'detention', freeDays: '', where: '' });
   const [boxes, setBoxes] = useState<Array<{ code: string; label: string; openTop: boolean; kind: string }>>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -158,6 +163,8 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
     setCargoForm((c) => ({
       ...c,
       containerType: view.containerFacts?.code ?? c.containerType,
+      containerNo: view.box?.containerNo ?? c.containerNo,
+      cscPlateDate: view.box?.cscPlateDate?.slice(0, 10) ?? c.cscPlateDate,
     }));
     if (view.youAre === 'agent') {
       setLines(view.required.length ? view.required.map((r2) => ({ label: r2.label, copies: r2.copies ? String(r2.copies) : '', note: r2.note ?? '' })) : [{ label: '', copies: '', note: '' }]);
@@ -921,6 +928,26 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                       dropdown — so the list offers what is common and the field takes whatever is printed
                       on the box. Confusing "what we suggest" with "what we accept" is exactly what made
                       the first version of this a shortlist with an escape hatch bolted onto it. */}
+                  {/* THE NUMBER ON THE BOX, and it usually arrives later than the booking: a container is
+                      recorded the day it is booked and the bill of lading names it weeks afterwards. The
+                      server runs the ISO 6346 check digit over it and refuses one that cannot be right —
+                      a wrong number is a box nobody can trace and a clock nobody can stop. */}
+                  <label class="twr-knob">
+                    <span>{t('tower.imports.f.containerNo')}</span>
+                    <input
+                      maxLength={13}
+                      placeholder="MSCU1234566"
+                      value={cargoForm.containerNo}
+                      onChange={(e) => setCargoForm({ ...cargoForm, containerNo: (e.target as HTMLInputElement).value.toUpperCase() })}
+                    />
+                    <span class="ctbl__sub">{t('tower.imports.containerNoSub')}</span>
+                  </label>
+                  {/* The CSC safety-approval plate date. Carried because a haulier at a gate needs it, and
+                      NOTHING is said about it: whether the box is fit is a surveyor's verdict, not ours. */}
+                  <label class="twr-knob">
+                    <span>{t('tower.imports.f.cscPlateDate')}</span>
+                    <input type="date" value={cargoForm.cscPlateDate} onChange={(e) => setCargoForm({ ...cargoForm, cscPlateDate: (e.target as HTMLInputElement).value })} />
+                  </label>
                   <label class="twr-knob">
                     <span>{t('tower.imports.f.box')}</span>
                     <input
@@ -971,6 +998,8 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                         'cargo',
                         () =>
                           client!.api.declareImportCargo(detail.importId, {
+                            ...(cargoForm.containerNo.trim() ? { containerNo: cargoForm.containerNo.trim() } : {}),
+                            ...(cargoForm.cscPlateDate ? { cscPlateDate: cargoForm.cscPlateDate } : {}),
                             ...(cargoForm.containerType ? { containerType: cargoForm.containerType } : {}),
                             ...(cargoForm.natureCode ? { natureCode: cargoForm.natureCode } : {}),
                             ...(cargoForm.cargoHeightM.trim() ? { cargoHeightM: Number(cargoForm.cargoHeightM) } : {}),
@@ -1084,6 +1113,201 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                 ) : null}
               </>
             ) : null}
+          </section>
+
+          {/* ---- Y0 + Y1: the box is somebody else's property, and a clock is running on it ----
+              The panel exists whether or not a number has been recorded, because the ABSENCE is the thing
+              worth saying: no number means no box, no clock, and nothing anybody can be warned about. */}
+          <section class="cons__panel">
+            <div class="cons__panelhead">
+              <span class="cons__panelt">{t('tower.imports.clockTitle')}</span>
+              {detail.box ? <span class="ctag ctag--quiet">{detail.box.containerNo}</span> : null}
+              {/* The one figure a reader is looking for, and the only place a state is coloured. */}
+              {detail.box?.clock.overdue ? (
+                <span class="ctag ctag--warn">{t('tower.imports.clockOverdue', { n: Math.abs(detail.box.clock.daysLeft ?? 0) })}</span>
+              ) : detail.box?.clock.daysLeft != null ? (
+                <span class="ctag ctag--quiet">{t('tower.imports.clockLeft', { n: detail.box.clock.daysLeft })}</span>
+              ) : null}
+              {detail.box?.ending ? <span class="ctag ctag--quiet">{t(`tower.imports.clockEnded.${detail.box.ending}` as never)}</span> : null}
+            </div>
+
+            {!detail.box ? (
+              <p class="cons__lede">{t('tower.imports.clockNoBox')}</p>
+            ) : (
+              <>
+                {/* THE SENTENCE THE SERVER WROTE, shown verbatim. It names what is being counted and whose
+                    numbers produced it — a countdown with nobody's name on it gets read as ours, and the
+                    free days come from a contract between the importer and the line. */}
+                <p class="cons__lede">{detail.box.clock.basis}</p>
+
+                <div class="ctbl">
+                  <div class="ctbl__row">
+                    <span class="ctbl__k">{t('tower.imports.clockOwner')}</span>
+                    <span class="ctbl__v">
+                      {detail.box.ownerCode ?? '—'}
+                      {detail.box.category ? <span class="ctbl__sub">{detail.box.category}</span> : null}
+                    </span>
+                  </div>
+                  <div class="ctbl__row">
+                    <span class="ctbl__k">{t('tower.imports.clockOwed')}</span>
+                    {/* DERIVED from the appointment. Before anybody is appointed it is nobody, and saying
+                        so is better than leaving the row blank for a reader to fill in themselves. */}
+                    <span class="ctbl__v">{detail.box.owedByName ?? t('tower.imports.clockOwedNobody')}</span>
+                  </div>
+                  <div class="ctbl__row">
+                    <span class="ctbl__k">{t('tower.imports.clockDates')}</span>
+                    <span class="ctbl__v">
+                      {detail.box.arrivedAt ? t('tower.imports.clockArrived', { d: detail.box.arrivedAt.slice(0, 10) }) : t('tower.imports.clockNoArrival')}
+                      {/* The out-gate is the road leg's PICKUP, not the minting of it: a container whose
+                          truck has not turned up has not left the terminal, whatever the paperwork says. */}
+                      <span class="ctbl__sub">
+                        {detail.box.outGatedAt
+                          ? t('tower.imports.clockGated', { d: detail.box.outGatedAt.slice(0, 10) })
+                          : detail.roadFreightCode
+                            ? t('tower.imports.clockNotGated', { code: detail.roadFreightCode })
+                            : t('tower.imports.clockNoLeg')}
+                      </span>
+                    </span>
+                  </div>
+                  {detail.box.cscPlateDate ? (
+                    <div class="ctbl__row">
+                      <span class="ctbl__k">{t('tower.imports.clockCsc')}</span>
+                      {/* Carried, with nothing stated about it: whether a box is FIT is a surveyor's verdict. */}
+                      <span class="ctbl__v">
+                        {detail.box.cscPlateDate.slice(0, 10)}
+                        <span class="ctbl__sub">{t('tower.imports.clockCscSub')}</span>
+                      </span>
+                    </div>
+                  ) : null}
+                  {detail.box.timesUsed > 1 ? (
+                    <div class="ctbl__row">
+                      <span class="ctbl__k">{t('tower.imports.clockTimes')}</span>
+                      {/* The box is not owned by this consignment, and this row is why that matters. */}
+                      <span class="ctbl__v">{t('tower.imports.clockTimesV', { n: detail.box.timesUsed })}</span>
+                    </div>
+                  ) : null}
+                </div>
+
+                {/* EVERY CLAIM, and not only the one in force — which the drive is what taught. Claim 14
+                    detention days on a box still standing in the terminal and the running clock is the
+                    demurrage one, so the panel said "nobody has said how many free days" to somebody who
+                    had just said it. A correction is also a second claim rather than an edit, so both the
+                    old figure and who moved it stay readable. */}
+                {detail.box.freeDays.length > 0 ? (
+                  <p class="cons__lede">
+                    {detail.box.freeDays
+                      .map((c) => t('tower.imports.clockClaim', { kind: c.kind, n: c.days, by: c.by, d: c.at.slice(0, 10) }))
+                      .join(' · ')}
+                  </p>
+                ) : null}
+
+                {/* A figure recorded against the clock that is NOT running. It is not doing nothing, and it
+                    is not being ignored: it starts counting when that clock starts. */}
+                {detail.box.freeDays.length > 0 && detail.box.clock.freeDays == null && detail.box.clock.kind !== 'stopped' ? (
+                  <p class="cons__lede">{t('tower.imports.clockClaimIdle')}</p>
+                ) : null}
+
+                {!detail.box.ending ? (
+                  <>
+                    <div class="twr-knobs">
+                      <label class="twr-knob">
+                        <span>{t('tower.imports.f.arrivedAt')}</span>
+                        <input type="date" value={boxForm.arrivedAt} onChange={(e) => setBoxForm({ ...boxForm, arrivedAt: (e.target as HTMLInputElement).value })} />
+                      </label>
+                      {/* THE IMPORTER'S ALONE, and not as an access rule: the free days are in their own
+                          contract with the line, so nobody else is in a position to state the figure. */}
+                      {detail.youAre === 'importer' ? (
+                        <>
+                          <label class="twr-knob">
+                            <span>{t('tower.imports.f.freeDayKind')}</span>
+                            <select value={boxForm.freeDayKind} onChange={(e) => setBoxForm({ ...boxForm, freeDayKind: (e.target as HTMLSelectElement).value })}>
+                              <option value="detention">{t('tower.imports.freeDays.detention')}</option>
+                              <option value="demurrage">{t('tower.imports.freeDays.demurrage')}</option>
+                            </select>
+                          </label>
+                          <label class="twr-knob">
+                            <span>{t('tower.imports.f.freeDays')}</span>
+                            <input type="number" min={0} max={365} step={1} value={boxForm.freeDays} onChange={(e) => setBoxForm({ ...boxForm, freeDays: (e.target as HTMLInputElement).value })} />
+                          </label>
+                        </>
+                      ) : null}
+                      <label class="twr-knob">
+                        <span>{t('tower.imports.f.endedWhere')}</span>
+                        <input value={boxForm.where} onChange={(e) => setBoxForm({ ...boxForm, where: (e.target as HTMLInputElement).value })} placeholder={t('tower.imports.f.endedWherePh')} />
+                      </label>
+                    </div>
+
+                    <div class="twr-panelend">
+                      <button
+                        type="button"
+                        class="cbtn"
+                        disabled={busy === 'boxArrived' || !boxForm.arrivedAt}
+                        onClick={() =>
+                          run('boxArrived', () => client!.api.recordBoxArrival(detail.importId, { at: boxForm.arrivedAt, ...(who ? { by: who } : {}) }), t('tower.imports.clockArrivedSaved'))
+                        }
+                      >
+                        {t('tower.imports.clockArrivedSave')}
+                      </button>
+                      {detail.youAre === 'importer' ? (
+                        <button
+                          type="button"
+                          class="cbtn"
+                          disabled={busy === 'boxFreeDays' || !boxForm.freeDays.trim()}
+                          onClick={() =>
+                            run(
+                              'boxFreeDays',
+                              () =>
+                                client!.api.claimBoxFreeDays(detail.importId, {
+                                  kind: boxForm.freeDayKind as 'demurrage' | 'detention',
+                                  days: Number(boxForm.freeDays),
+                                  ...(who ? { by: who } : {}),
+                                }),
+                              t('tower.imports.clockFreeDaysSaved'),
+                            )
+                          }
+                        >
+                          {t('tower.imports.clockFreeDaysSave')}
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        class="cbtn"
+                        disabled={busy === 'boxReturned'}
+                        onClick={() =>
+                          run(
+                            'boxReturned',
+                            () => client!.api.endBox(detail.importId, { kind: 'returned', ...(boxForm.where.trim() ? { where: boxForm.where.trim() } : {}), ...(who ? { by: who } : {}) }),
+                            t('tower.imports.clockReturnedSaved'),
+                          )
+                        }
+                      >
+                        {t('tower.imports.clockReturnedSave')}
+                      </button>
+                      {/* THE ENDING A FIRST DRAFT FORGETS. Containers are traded goods: sold in the market
+                          and never returned. Without this button the only way to stop the clock on a box
+                          somebody bought would be to lie and call it returned. */}
+                      <button
+                        type="button"
+                        class="cbtn cbtn--ghost"
+                        disabled={busy === 'boxBought'}
+                        onClick={() =>
+                          run(
+                            'boxBought',
+                            () => client!.api.endBox(detail.importId, { kind: 'bought', ...(boxForm.where.trim() ? { note: boxForm.where.trim() } : {}), ...(who ? { by: who } : {}) }),
+                            t('tower.imports.clockBoughtSaved'),
+                          )
+                        }
+                      >
+                        {t('tower.imports.clockBoughtSave')}
+                      </button>
+                    </div>
+                    <p class="cons__lede">{t('tower.imports.clockHint')}</p>
+                  </>
+                ) : (
+                  <p class="cons__lede">{t('tower.imports.clockEndedHint')}</p>
+                )}
+              </>
+            )}
           </section>
 
           {/* ---- CL4 item 1: what the state did, and the two accounts of it ---- */}

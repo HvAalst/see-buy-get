@@ -114,6 +114,71 @@ export interface ImportDetailView extends ImportRow {
     /** The standard itself declines to say. Ask for a measurement rather than showing a blank. */
     heightUnstated: boolean;
   };
+  /**
+   * Y0 + Y1 — THE BOX ITSELF, and the clock running on it.
+   *
+   * A container is a shipping line's property on loan, and the leg minted out of the terminal gate starts
+   * a clock. Absent until a container number is recorded, because the box IS its number. Both parties get
+   * it: the agent who booked it owes the return, and the importer is the one the charge lands on.
+   */
+  box?: ContainerBoxView;
+}
+
+export type BoxClockKind = 'demurrage' | 'detention' | 'stopped' | 'unknown';
+export type BoxEnding = 'returned' | 'bought';
+export type FreeDayKind = 'demurrage' | 'detention';
+
+export interface FreeDaysClaimView {
+  kind: FreeDayKind;
+  days: number;
+  by: string;
+  byEntityId: string;
+  at: string;
+}
+
+/**
+ * What the clock says — DERIVED by the server on every read, and said in days rather than in money.
+ *
+ * The basis field is one sentence naming what is counted and whose numbers produced it, and the screen
+ * shows it verbatim: a countdown with nobody's name on it gets read as ours, and the free days come from a
+ * contract between the importer and the line that we have never seen.
+ */
+export interface BoxClockView {
+  kind: BoxClockKind;
+  since?: string;
+  daysElapsed?: number;
+  freeDays?: number;
+  freeDaysBy?: string;
+  freeDaysAt?: string;
+  dueBackAt?: string;
+  daysLeft?: number;
+  overdue: boolean;
+  demurrageDays?: number;
+  basis: string;
+}
+
+export interface ContainerBoxView {
+  containerNo: string;
+  ownerCode?: string;
+  category?: string;
+  typeCode?: string;
+  /** The CSC safety-approval plate date. Carried, with nothing stated about it. */
+  cscPlateDate?: string;
+  firstSeenAt: string;
+  /** How many spells out of a terminal this box has had with us — history a per-container record loses. */
+  timesUsed: number;
+  importCode?: string;
+  /** The agent who booked it, derived from the appointment. */
+  owedByName?: string;
+  arrivedAt?: string;
+  /** DERIVED from the road leg's pickup: the leg we mint is what starts detention. */
+  outGatedAt?: string;
+  returnedAt?: string;
+  ending?: BoxEnding;
+  endedBy?: string;
+  endedWhere?: string;
+  freeDays: FreeDaysClaimView[];
+  clock: BoxClockView;
 }
 
 /** What the goods ARE — the importer's declaration, from the vocabulary the freight side already uses. */

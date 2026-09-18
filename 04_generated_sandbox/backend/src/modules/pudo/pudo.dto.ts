@@ -12,6 +12,7 @@ import { CONSTRAINT_KINDS, ConstraintKind } from './route-constraint.types';
 import { CARGO_LANES, CARGO_NATURES, CargoLane, CargoNature, EQUIPMENT, Equipment } from './cargo.types';
 
 import { CLEARANCE_SPECIALISMS, CONSIGNMENT_MODES, CUSTOMS_HOLD_KINDS, HOLD_STANCES } from './import.types';
+import { BOX_ENDINGS, FREE_DAY_KINDS } from './container-box';
 
 /** F1 — a scheduled pickup instant must be a full datetime WITH a timezone offset (Z or ±HH:MM), so the
  *  moment is unambiguous — a date-only or offset-less string would resolve to a server-timezone-dependent
@@ -396,6 +397,50 @@ export class ReleaseCustomsHoldDto {
   @IsOptional() @IsString() by?: string;
 }
 
+
+/* ------------------------------ Y0 + Y1: the box's own dates, and never its money -- */
+
+/**
+ * WHEN IT LANDED. A date, stated by a person, because nothing here watches a vessel berth.
+ *
+ * Deliberately not derived from the ETA: an expectation is not an event, and demurrage counted from a
+ * guess is a number somebody would have acted on.
+ */
+export class BoxArrivedDto {
+  @IsString() at!: string;
+  @IsOptional() @IsString() entityId?: string;
+  @IsOptional() @IsString() by?: string;
+}
+
+/**
+ * HOW MANY FREE DAYS THE IMPORTER SAYS THEY HAVE — a claim, carried and attributed.
+ *
+ * Two kinds, because there are two clocks: demurrage runs inside the terminal and detention outside it,
+ * and a single "days" field would be a number nobody could act on. No rate, no amount, no currency — the
+ * charge is between the importer and the line, exactly as duty is.
+ */
+export class BoxFreeDaysDto {
+  @IsIn(FREE_DAY_KINDS) @ApiProperty({ enum: FREE_DAY_KINDS }) kind!: string;
+  @IsNumber() @Min(0) @Max(365) days!: number;
+  @IsOptional() @IsString() entityId?: string;
+  @IsOptional() @IsString() by?: string;
+}
+
+/**
+ * HOW THE SPELL ENDED — and there are two endings, which is the user's correction to this design.
+ *
+ * `returned` is the one a first draft assumes is the only one. `bought` is the ordinary market: containers
+ * are traded goods, sold and never returned, and a box that was bought must never read as overdue.
+ */
+export class BoxEndingDto {
+  @IsIn(BOX_ENDINGS) @ApiProperty({ enum: BOX_ENDINGS }) kind!: string;
+  @IsOptional() @IsString() at?: string;
+  /** The depot it went back to, when it was returned. A label a person types, like a port. */
+  @IsOptional() @IsString() @MaxLength(120) where?: string;
+  @IsOptional() @IsString() @MaxLength(500) note?: string;
+  @IsOptional() @IsString() entityId?: string;
+  @IsOptional() @IsString() by?: string;
+}
 /**
  * CL6 — what an agent says they clear. A CLAIM, and the only asserted thing in the agent design.
  *
@@ -445,6 +490,16 @@ export class DangerousGoodsDto {
  * from a description would be us classifying goods.
  */
 export class DeclareCargoDto {
+  /**
+   * The container number, usually typed later than the booking: it arrives with the bill of lading.
+   *
+   * CHECKED AND NOT TRUSTED — the service runs the ISO 6346 mod-11 arithmetic and refuses a number that
+   * cannot be right. A field on a service that is not on its DTO is stripped in silence, which is why
+   * this line exists at all.
+   */
+  @IsOptional() @IsString() @MaxLength(20) containerNo?: string;
+  /** The date on the CSC safety-approval plate. Carried, with nothing stated about it. */
+  @IsOptional() @IsString() cscPlateDate?: string;
   /**
    * ANY ISO 6346 size/type code — not an enum of a shortlist.
    *

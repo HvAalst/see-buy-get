@@ -1,6 +1,6 @@
 # The box as an asset: interchange, the clock, and the return leg
 
-> Status: **DESIGN ONLY — nothing built.** Written 2026-09-18, straight after CL7 (`2d54ae1`, `ba9a11e`)
+> Status: **Y0 AND Y1 ARE BUILT AND DRIVEN. Y2–Y5 are design only.** Written 2026-09-18, straight after CL7 (`2d54ae1`, `ba9a11e`)
 > put real container types into the model, because the user's response was that this forces the question:
 > *"this means we must elaborate about container yard management."*
 >
@@ -230,11 +230,19 @@ the detention bill this was built to prevent.
 
 ## 6. The slices, in the order they should be built
 
-- **Y0 — the check digit, the box as a derived entity, the CSC plate date.** Small, and immediately
-  useful: a mistyped container number is accepted today. Nothing downstream needs to change to benefit.
-- **Y1 — the clock, and who owes the return.** Out-gate, claimed free days, derived due-back, the two
-  clocks, the booking agent as the holder of the obligation, and the three endings of §4b. A countdown
-  the agent and the importer can both see, and a notification before the date. **No money anywhere.**
+- **Y0 — SHIPPED 2026-09-18, driven.** The check digit, the box as an entity derived from its number, and
+  the CSC plate date carried with nothing said about it. `container-box.ts` holds the arithmetic and
+  `container-box.service.ts` the lazily-created entity, owned by no consignment. A number whose digit does
+  not add up is refused with the digit it should have been; the shape, the fourth letter and the check
+  digit are three different sentences.
+- **Y1 — SHIPPED 2026-09-18, driven.** The two clocks, the three endings, the booking agent as the holder
+  of the obligation, free days as an attributed claim, a due date derived and never stored, and a warning
+  to BOTH parties three days before it. **No money anywhere, asserted by a test.** The out-gate is the
+  road leg's own pickup, which the drive proved end to end: a minted leg is not a gate, and the box left
+  the terminal when a driver actually took it. **What building it turned up:** a claim recorded against
+  the clock that is not yet running rendered as "nobody has said how many free days" to the person who
+  had just said it — the console showing a state it did hold, again. Every claim is now on the screen,
+  with a line saying which clock it belongs to.
 - **Y2 — the return leg on the board, laden or empty**, with the portward case first because that is the
   one that pays. The slice with the most commercial value.
 - **Y3 — the interchange record with photographs**, and the dispute shape when the two sides disagree.
@@ -243,7 +251,7 @@ the detention bill this was built to prevent.
   vessel, whose stops are quays, and whose height check is the road one over again.
 - **Never — yard slots, stacking plans, gate queues** (§3), and never a demurrage tariff.
 
-Y0 and Y1 are small, independent, and now unblocked. Y2 is the one worth doing properly.
+Y0 and Y1 are done. **Y2 is the one worth doing properly**, and it is next.
 
 ## 7. Decided by the user, 2026-09-18
 
