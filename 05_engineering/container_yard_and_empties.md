@@ -1,6 +1,6 @@
 # The box as an asset: interchange, the clock, and the return leg
 
-> Status: **Y0 AND Y1 ARE BUILT AND DRIVEN. Y2–Y5 are design only.** Written 2026-09-18, straight after CL7 (`2d54ae1`, `ba9a11e`)
+> Status: **Y0, Y1 AND Y2 ARE BUILT AND DRIVEN. Y3–Y5 are design only.** Written 2026-09-18, straight after CL7 (`2d54ae1`, `ba9a11e`)
 > put real container types into the model, because the user's response was that this forces the question:
 > *"this means we must elaborate about container yard management."*
 >
@@ -243,15 +243,21 @@ the detention bill this was built to prevent.
   the clock that is not yet running rendered as "nobody has said how many free days" to the person who
   had just said it — the console showing a state it did hold, again. Every claim is now on the screen,
   with a line saying which clock it belongs to.
-- **Y2 — the return leg on the board, laden or empty**, with the portward case first because that is the
-  one that pays. The slice with the most commercial value.
+- **Y2 — SHIPPED 2026-09-18, driven.** The leg home is a load on the same board as any other: posted from
+  where the box was stripped (derived from the laden leg's own destination), to the nominated depot, laden
+  or empty — and an empty one is marked `emptyRun` on the board and in the driver's list rather than
+  dressed up as freight. The weight is asked for and never invented, because an empty box is not a light
+  one. **And the symmetry closes the clock: the laden leg's PICKUP out-gates the box, the leg home's
+  DELIVERY records the return.** Neither is a date anybody types. A person's own account still wins,
+  because a box can go back without its leg being ours.
 - **Y3 — the interchange record with photographs**, and the dispute shape when the two sides disagree.
 - **Y4 — the empties register a yard opts into**, with the yard's claim and our derivation kept apart.
 - **Y5 — the water leg.** Independent of Y0–Y4 and the largest of the six: a leg whose carrier is a
   vessel, whose stops are quays, and whose height check is the road one over again.
 - **Never — yard slots, stacking plans, gate queues** (§3), and never a demurrage tariff.
 
-Y0 and Y1 are done. **Y2 is the one worth doing properly**, and it is next.
+Y0, Y1 and Y2 are done. What is left is **Y3** (the interchange record), **Y4** (the yard register) and
+**Y5** (the water leg) — and Y5 is independent of all of it.
 
 ## 7. Decided by the user, 2026-09-18
 

@@ -260,6 +260,21 @@ export class Freight {
   buyerPhoneHash?: string;
   trackingKey?: string;
   externalOrderId?: string;
+  /**
+   * Y2 — THE BOX THIS LEG IS CARRYING, where the load is a container rather than goods in one.
+   *
+   * Kept on the leg as well as on the box because the board reads it: a haulier deciding whether to take
+   * a run wants to know it is a box going home, and a driver wants to know before they arrive.
+   */
+  containerNo?: string;
+  /**
+   * TRUE WHERE THERE IS NOTHING IN IT — an empty container being repositioned.
+   *
+   * Said out loud rather than inferred from a small weight, and never dressed up as freight: an empty run
+   * is real work with no cargo to bill, and a board that quietly published it as a load would be lying to
+   * the driver who takes it. The weight is the box's own tare, which is painted on its door.
+   */
+  emptyRun?: boolean;
   claimedAt?: string;
   pickedUpAt?: string;
   deliveredAt?: string;
@@ -424,6 +439,11 @@ export class BoardRow {
   blockers: BoardBlocker[];
   /** FP7 — the sender's delivery window, the one instruction a dispatcher decides against. Never the contact. */
   deliveryWindow?: string;
+  /** Y2 — the container this leg carries, where the load IS a box. */
+  containerNo?: string;
+  /** Y2 — an empty box going home. Real work, no cargo, and it says so on the board rather than reading
+   *  like freight with a suspiciously small weight. */
+  emptyRun?: boolean;
 }
 
 /**

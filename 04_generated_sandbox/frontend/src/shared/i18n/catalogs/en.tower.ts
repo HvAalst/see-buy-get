@@ -561,6 +561,25 @@ export const enTower = {
   'tower.imports.clockBoughtSaved': 'Recorded. A box that was sold owes nobody a return, so nothing about it will read as overdue.',
   'tower.imports.clockHint':
     'Only the importer can state the free days, because they are in the importer’s own contract with the line — we carry the figure, attribute it and count the days. What being late costs stays between those two: we will not compute somebody else’s charge. And a container that was bought is not late, which is why there are two ways to end this and not one.',
+  /* Y2 — the leg home. A laden leg inland implies a leg back, and until this slice nothing modelled it:
+     no driver was ever offered it, so it was arranged by telephone and the board that exists to match
+     repositioning could not see it. It is usually NOT empty — a box is a dry, lockable, weatherproof body
+     and freight goes portward inside it — and when it is empty it says so. */
+  'tower.imports.homeHint':
+    'Post the leg home the way you post any other load. It is usually not empty: a box going back toward the port is a dry, lockable body, so cargo goes inside it whenever there is cargo going that way — and that, rather than a subsidy, is what pays the driver for the run. Leave “what is in it” blank and the leg is published as empty, which is the honest version: a driver who finds out at the quay that there was nothing to carry is a driver who stops taking container work. The weight is what the truck will carry, so for an empty box it is the box’s own tare — it is painted on the door.',
+  'tower.imports.f.depot': 'Depot it goes back to',
+  'tower.imports.f.depotPh': 'Modjo depot',
+  'tower.imports.f.homeWeight': 'What the truck will carry (kg)',
+  'tower.imports.f.homeCargo': 'What is in it (blank = empty)',
+  'tower.imports.f.homeCargoPh': 'Coffee in bags',
+  'tower.imports.homeSave': 'Post the leg home',
+  'tower.imports.homeSavedEmpty': 'Posted as an EMPTY run to the depot — the board says so, and the driver knows before they arrive.',
+  'tower.imports.homeSavedLaden': 'Posted with cargo, portward. The box gets home and the run pays for itself.',
+  'tower.imports.homeLeg.posted': 'The leg home is posted as {code}, to {depot}. A driver can be offered it, and a haulier can triangulate it against a laden run coming the other way.',
+  'tower.imports.homeLeg.moving': '{code} is on its way to {depot} with the box.',
+  'tower.imports.homeLeg.arrived': '{code} delivered the box to {depot} — which is what recorded the return. Nobody had to remember a date.',
+  'tower.imports.homeEmpty': 'Nothing in it.',
+  'tower.imports.homeLaden': 'Carrying cargo.',
   'tower.imports.clockEndedHint':
     'This spell is closed. If the same box comes back under another consignment it starts a new one, and this record stays where it is — the history is the first thing anybody asks for in a dispute.',
   'tower.imports.holdsTitle': 'What customs did',

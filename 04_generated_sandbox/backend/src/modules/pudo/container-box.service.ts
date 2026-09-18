@@ -40,6 +40,15 @@ export interface BoxTerm extends BoxTimes {
   owedByName?: string;
   /** The road leg out of the gate. Its pickup IS the out-gate — see `gateOf`. */
   roadFreightId?: string;
+  /**
+   * Y2 — THE LEG HOME, posted to the same board as any other load.
+   *
+   * Its DELIVERY is the return, in the same way the laden leg's pickup is the out-gate: the box is back
+   * when the leg that took it back arrived, and nobody has to remember to type a date.
+   */
+  returnFreightId?: string;
+  /** The depot it is going back to — a label a person types, as a port is. */
+  returnDepot?: string;
   /** Who recorded the arrival, because nothing tells us and somebody has to have said it. */
   arrivedBy?: string;
 }
@@ -88,6 +97,12 @@ export interface BoxView {
   ending?: BoxEnding;
   endedBy?: string;
   endedWhere?: string;
+  /** Y2 — the leg taking it home, once one is posted, and where it is up to. */
+  returnLegCode?: string;
+  returnLegState?: 'posted' | 'moving' | 'arrived';
+  returnDepot?: string;
+  /** Y2 — true where the leg home has nothing in it. Said out loud, never inferred from a small weight. */
+  returnEmpty?: boolean;
   freeDays: FreeDaysClaim[];
   clock: BoxClock;
 }
@@ -140,6 +155,8 @@ export class ContainerBoxService {
       owedByEntityId?: string;
       owedByName?: string;
       roadFreightId?: string;
+      returnFreightId?: string;
+      returnDepot?: string;
     } = {},
     now = Date.now(),
   ): ContainerBox {
@@ -173,6 +190,8 @@ export class ContainerBoxService {
     if (ctx.owedByEntityId) term.owedByEntityId = ctx.owedByEntityId;
     if (ctx.owedByName) term.owedByName = ctx.owedByName;
     if (ctx.roadFreightId) term.roadFreightId = ctx.roadFreightId;
+    if (ctx.returnFreightId) term.returnFreightId = ctx.returnFreightId;
+    if (ctx.returnDepot) term.returnDepot = ctx.returnDepot;
 
     this.boxes.set(containerNo, box);
     return box;
@@ -248,8 +267,25 @@ export class ContainerBoxService {
     const box = this.boxes.get(normaliseContainerNo(rawNo));
     if (!box) return undefined;
     const term = this.termFor(box, opts.importId);
+    /*
+     * THE LEG HOME CLOSES THE CLOCK, the same way the laden leg's pickup opens it.
+     *
+     * Where a return leg was posted through us and has been delivered, the box is back — so the ending is
+     * DERIVED from that delivery rather than waiting for somebody to remember a date. A hand-recorded
+     * ending still wins, because a box can go back without its leg being ours, and the person who was
+     * standing there beats a machine that was not.
+     */
+    const home = term ? this.returnOf(term) : undefined;
     const times: BoxTimes = term
-      ? { ...term, ...(this.gateOf(term) ? { outGatedAt: this.gateOf(term) } : {}) }
+      ? {
+          ...term,
+          ...(this.gateOf(term) ? { outGatedAt: this.gateOf(term) } : {}),
+          ...(term.ending
+            ? {}
+            : home?.deliveredAt
+              ? { ending: { kind: 'returned' as const, at: home.deliveredAt, by: `${home.code}, the leg that took it back`, ...(term.returnDepot ? { where: term.returnDepot } : {}) } }
+              : {}),
+        }
       : { freeDays: [] };
     return {
       containerNo: box.containerNo,
@@ -266,6 +302,9 @@ export class ContainerBoxService {
       ...(times.ending?.kind === 'returned' ? { returnedAt: times.ending.at } : {}),
       ...(times.ending ? { ending: times.ending.kind, endedBy: times.ending.by } : {}),
       ...(times.ending?.where ? { endedWhere: times.ending.where } : {}),
+      ...(home ? { returnLegCode: home.code, returnLegState: home.state } : {}),
+      ...(home?.empty ? { returnEmpty: true } : {}),
+      ...(term?.returnDepot ? { returnDepot: term.returnDepot } : {}),
       freeDays: times.freeDays,
       clock: boxClock(times, now),
     };
@@ -288,6 +327,22 @@ export class ContainerBoxService {
   }
 
   /* ------------------------------------------------------------------ private -- */
+
+  /** The leg home, as it stands: posted, moving, or arrived — and whether there is anything in it. */
+  private returnOf(term: BoxTerm): { code: string; state: 'posted' | 'moving' | 'arrived'; deliveredAt?: string; empty: boolean } | undefined {
+    if (!term.returnFreightId) return undefined;
+    try {
+      const f = this.dispatch.requireFreightPublic(term.returnFreightId);
+      return {
+        code: f.code,
+        state: f.deliveredAt ? 'arrived' : f.pickedUpAt ? 'moving' : 'posted',
+        ...(f.deliveredAt ? { deliveredAt: f.deliveredAt } : {}),
+        empty: Boolean(f.emptyRun),
+      };
+    } catch {
+      return undefined;
+    }
+  }
 
   /** The out-gate, DERIVED: the road leg's pickup, or nothing. A missing leg is not an out-gate. */
   private gateOf(term: BoxTerm): string | undefined {

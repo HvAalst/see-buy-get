@@ -236,6 +236,10 @@ export interface BoardRow {
   natureCode?: string;
   dimensionsCm?: number[];
   indivisible?: boolean;
+  /** Y2 — the container this load IS, where the load is a box rather than goods in one. */
+  containerNo?: string;
+  /** Y2 — an empty box going back to its depot: real work, no cargo, and it says so before you arrive. */
+  emptyRun?: boolean;
   bodyDerived?: { body: string; basis: 'measured' | 'weight-only' };
   bodyHint?: string;
   commitMode: 'instant' | 'negotiate';

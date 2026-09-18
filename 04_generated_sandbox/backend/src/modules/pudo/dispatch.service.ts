@@ -395,7 +395,7 @@ export class DispatchService {
     return { code: t.code, status: t.status };
   }
 
-  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string }, now: number = Date.now()): Freight {
+  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean }, now: number = Date.now()): Freight {
     this.freightSeq += 1;
     // A future pickup date parks the load for later; a past/absent date ships now. A supplied-but-unparseable
     // date is a CALLER ERROR — fail closed (never silently ship-now what was meant to be scheduled). Store the
@@ -488,6 +488,9 @@ export class DispatchService {
       ...(input.namedPlace?.trim() ? { namedPlace: input.namedPlace.trim().slice(0, 120) } : {}),
       trackingKey: `T-${randomBytes(5).toString('hex').toUpperCase()}`,
       externalOrderId: input.externalOrderId,
+      // Y2 — a box going home is a load whose subject is the CONTAINER, and an empty one says so.
+      ...(input.containerNo ? { containerNo: input.containerNo } : {}),
+      ...(input.emptyRun ? { emptyRun: true } : {}),
       // FP7 — box 13 at posting, when the poster said anything.
       ...(instructionsOf({ text: input.instructions, contactName: input.contactName, contactPhone: input.contactPhone, deliveryWindow: input.deliveryWindow }, input.postedByDid, now) ?? {}),
       // S34c — a positive, finite cap only; a zero/negative/NaN budget is treated as "no cap" (never a load
@@ -1259,6 +1262,10 @@ export class DispatchService {
         canTake: takeable(blockers),
         blockers,
         ...(f.instructions?.deliveryWindow ? { deliveryWindow: f.instructions.deliveryWindow } : {}),
+        // Y2 — a box going home, and whether there is anything in it. A haulier deciding on a run wants
+        // both: an empty box is real work with no cargo, and the tare is why a bike cannot take it.
+        ...(f.containerNo ? { containerNo: f.containerNo } : {}),
+        ...(f.emptyRun ? { emptyRun: true } : {}),
       });
     }
 

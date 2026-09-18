@@ -177,6 +177,12 @@ export interface ContainerBoxView {
   ending?: BoxEnding;
   endedBy?: string;
   endedWhere?: string;
+  /** Y2 — the leg taking it home, and where that leg is up to. Its DELIVERY is what records the return. */
+  returnLegCode?: string;
+  returnLegState?: 'posted' | 'moving' | 'arrived';
+  returnDepot?: string;
+  /** Nothing in it. Said out loud rather than inferred from a small weight. */
+  returnEmpty?: boolean;
   freeDays: FreeDaysClaimView[];
   clock: BoxClockView;
 }

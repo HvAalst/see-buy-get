@@ -533,6 +533,116 @@ export class ImportService {
     return this.detail(consignment.importId, actorEntityId);
   }
 
+  /**
+   * Y2 — THE LEG HOME, POSTED TO THE SAME BOARD AS ANY OTHER LOAD.
+   *
+   * The piece with the most value and the least new machinery. A laden leg inland implies a leg back to a
+   * depot, we modelled the first and not the second, and so no driver was ever offered it: the agent
+   * arranged it out of band, and the freight board — whose whole subject is repositioning — was blind to
+   * what is a large share of real container haulage.
+   *
+   * AND IT IS VERY OFTEN NOT EMPTY, which is the user's correction and the thing that makes this a freight
+   * slice rather than an admin one:
+   *
+   *   > "They are also used to carry freight to the direction of the port to keep cargo secured — theft,
+   *   > rain or whatever."
+   *
+   * A box is a dry, lockable, weatherproof body, so cargo goes portward inside it whenever there is cargo
+   * going that way. That answers the no-revenue trap with a MARKET instead of a subsidy — and the empty
+   * case is published AS empty rather than dressed up, because a driver who finds out at the quay that
+   * there was nothing to carry is a driver who stops taking container work.
+   *
+   * THE WEIGHT IS THE BOX'S OWN TARE on an empty run, and it is refused if nobody states it: a 20ft box is
+   * two and a half tonnes of steel, so "empty" is not "light", and the figure is painted on the door of
+   * the thing the person is standing next to.
+   *
+   * Priced exactly like any other leg, by distance against the claiming vehicle's own profile. That is the
+   * whole answer to "a return leg with no revenue must still pay the driver": it has revenue, from whoever
+   * owes the return, and the driver is paid what the board says.
+   */
+  mintReturnLeg(
+    importId: string,
+    actorEntityId: string,
+    input: { depotLabel: string; depotLocation?: GeoPoint; fromLabel?: string; fromLocation?: GeoPoint; weightKg: number; cargo?: string },
+    by: string,
+    now = Date.now(),
+  ): ImportDetail {
+    const consignment = this.requireImport(importId);
+    this.requireBoxParty(consignment, actorEntityId);
+    const containerNo = this.requireBox(consignment);
+
+    const depotLabel = input.depotLabel?.trim();
+    if (!depotLabel) throw new GlosError('FIELD_REQUIRED', 'Say which depot it goes back to — the line nominates it, and a leg with no destination cannot be offered to anybody');
+    if (!(input.weightKg > 0)) {
+      throw new GlosError(
+        'FIELD_REQUIRED',
+        'Say what the truck will be carrying, in kilos. An empty container is not a light one — a 20ft box is around 2,200 kg of steel, and its tare is painted on the door.',
+      );
+    }
+
+    const box = this.boxes.viewOf(containerNo, now, { importId });
+    if (box?.ending) {
+      throw new GlosError('INVALID_STATE', `${containerNo} is already recorded as ${box.ending} — a box that has gone back, or been bought, has no leg home to post`);
+    }
+    if (box?.returnLegCode) {
+      throw new GlosError('CONFLICT', `${containerNo} already has a leg home (${box.returnLegCode}) — a second one would send two trucks for one box`);
+    }
+
+    /*
+     * WHERE IT STARTS FROM is derived from the laden leg wherever we have one: the box goes home from
+     * wherever it was stripped, which is where that leg ended. Typed only when we do not know — a person
+     * re-typing a place the system already holds is a place the two can disagree about.
+     */
+    let fromLabel = input.fromLabel?.trim();
+    let fromLocation = input.fromLocation;
+    if (!fromLocation && consignment.roadFreightId) {
+      try {
+        const laden = this.dispatch.requireFreightPublic(consignment.roadFreightId);
+        fromLocation = laden.destLocation ?? fromLocation;
+        fromLabel = fromLabel || laden.destLabel;
+      } catch {
+        /* the leg is gone; fall through to asking */
+      }
+    }
+    if (!fromLocation) {
+      throw new GlosError('FIELD_REQUIRED', 'Say where the box is now. It is taken from the laden leg when there is one — there is none here, or it never had a destination pin.');
+    }
+
+    const empty = !input.cargo?.trim();
+    const spec = containerType(consignment.containerType);
+    const importer = this.entities.get(actorEntityId);
+
+    const freight = this.dispatch.registerFreight(
+      {
+        description: empty
+          ? `${containerNo} — empty box back to ${depotLabel}`
+          : `${containerNo} — ${input.cargo!.trim()}, portward to ${depotLabel}`,
+        pickupLocation: fromLocation,
+        pickupLabel: fromLabel || consignment.destPort,
+        destLabel: depotLabel,
+        ...(input.depotLocation ? { destLocation: input.depotLocation } : {}),
+        weightKg: input.weightKg,
+        // The two facts that make this leg what it is, on the leg itself, so the BOARD can say so.
+        containerNo,
+        ...(empty ? { emptyRun: true } : {}),
+        // Everything the box implies for the road is unchanged by whether there is anything in it: the
+        // same gear lifts it, the same bodies carry it, and it is the same height under the same bridge.
+        ...(spec ? { bodyHint: spec.bodies[0], packaging: 'piece' as const } : {}),
+        ...(spec ? { originEquipment: spec.equipment, destEquipment: spec.equipment } : {}),
+        ...(spec ? { heightM: spec.openTop ? consignment.cargoHeightM : (spec.heightM ?? consignment.cargoHeightM) } : {}),
+        ...(spec ? { indivisible: true } : {}),
+        pickupCountry: consignment.destCountry,
+        destCountry: consignment.destCountry,
+        postedByDid: importer.did,
+        externalOrderId: `${consignment.code}-RET`,
+      },
+      now,
+    );
+
+    this.boxes.see(containerNo, { importId, returnFreightId: freight.freightId, returnDepot: depotLabel }, now);
+    return this.detail(consignment.importId, actorEntityId);
+  }
+
   /** Every box, with its clock. Operator-only at the route: it spans companies by construction. */
   boxesOut(now = Date.now()): BoxView[] {
     return this.boxes.list(now);

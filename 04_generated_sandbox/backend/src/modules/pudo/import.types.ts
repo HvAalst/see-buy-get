@@ -223,6 +223,17 @@ export class ContainerBoxView {
   @ApiPropertyOptional({ enum: BOX_ENDINGS }) ending?: string;
   @ApiPropertyOptional() endedBy?: string;
   @ApiPropertyOptional() endedWhere?: string;
+  /**
+   * Y2 — THE LEG HOME, on the same board as any other load.
+   *
+   * Its DELIVERY is what records the return, exactly as the laden leg's pickup is what records the
+   * out-gate: the box is back when the leg that took it back arrived, and nobody has to remember a date.
+   */
+  @ApiPropertyOptional() returnLegCode?: string;
+  @ApiPropertyOptional({ enum: ['posted', 'moving', 'arrived'] }) returnLegState?: string;
+  @ApiPropertyOptional() returnDepot?: string;
+  /** True where there is nothing in it. Said out loud: an empty run is real work with no cargo to bill. */
+  @ApiPropertyOptional() returnEmpty?: boolean;
   @ApiProperty({ type: [FreeDaysClaimView] }) freeDays: FreeDaysClaimView[];
   @ApiProperty({ type: BoxClockView }) clock: BoxClockView;
 }

@@ -477,6 +477,9 @@ export const enDriver = {
   'driver.board.body': 'Wants {body}',
   'driver.board.bodyGuessed': 'Wants {body} (guessed from weight — nobody measured it)',
   'driver.board.negotiate': 'Name your price',
+  /* Y2 — an empty container going back to its depot. Real work with no cargo in it, said before the
+     driver arrives rather than discovered at the quay. The weight is the box's own tare. */
+  'driver.board.emptyRun': 'Empty box going back',
   'driver.board.canTake': 'You can take this',
   'driver.board.scheduled': 'Picks up {when}',
   'driver.board.unlockTitle': 'What would open up more work',

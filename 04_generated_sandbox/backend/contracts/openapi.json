@@ -5317,6 +5317,45 @@
         }
       }
     },
+    "/v1/sbg/imports/{importId}/box/return-leg": {
+      "post": {
+        "operationId": "Sbg.mintReturnLeg",
+        "summary": "",
+        "description": "Y2 — POST THE LEG HOME, laden or empty, to the same board as any other load.\n\nThe leg a laden run inland always implies and that nothing modelled: no driver was ever offered it,\nthe agent arranged it by telephone, and the board whose whole subject is repositioning could not see\nit. It is very often NOT empty — a box is a dry lockable body, so cargo goes portward inside it — and\nwhen it is empty it says so, because a driver who learns at the quay that there was nothing to carry\nis a driver who stops taking container work.\n\nThe weight is the box's own tare on an empty run, and it is asked for rather than invented: an empty\ncontainer is not a light one, and the figure is painted on the door.",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoxReturnLegDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/boxes": {
       "get": {
         "operationId": "Sbg.boxesOut",
@@ -20233,6 +20272,25 @@
           "endedWhere": {
             "type": "string"
           },
+          "returnLegCode": {
+            "type": "string",
+            "description": "Y2 — THE LEG HOME, on the same board as any other load.\n\nIts DELIVERY is what records the return, exactly as the laden leg's pickup is what records the\nout-gate: the box is back when the leg that took it back arrived, and nobody has to remember a date."
+          },
+          "returnLegState": {
+            "type": "string",
+            "enum": [
+              "posted",
+              "moving",
+              "arrived"
+            ]
+          },
+          "returnDepot": {
+            "type": "string"
+          },
+          "returnEmpty": {
+            "type": "boolean",
+            "description": "True where there is nothing in it. Said out loud: an empty run is real work with no cargo to bill."
+          },
           "freeDays": {
             "type": "array",
             "items": {
@@ -21052,6 +21110,45 @@
         },
         "required": [
           "kind"
+        ]
+      },
+      "BoxReturnLegDto": {
+        "type": "object",
+        "properties": {
+          "depotLabel": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "depotLocation": {
+            "$ref": "#/components/schemas/GeoDto"
+          },
+          "fromLabel": {
+            "type": "string",
+            "description": "Taken from the laden leg's destination when we have one; asked for only when we do not.",
+            "maxLength": 120
+          },
+          "fromLocation": {
+            "$ref": "#/components/schemas/GeoDto"
+          },
+          "weightKg": {
+            "type": "number",
+            "description": "NO @Min HERE, deliberately — the service owns this rule and answers it in a sentence.\n\nThe drive found the reason: a decorator refusing with \"weightKg must not be less than 1\" shadowed the\nonly useful thing anybody could say, which is that an empty container is not a light one and its tare\nis painted on its door. One rule, in the place that can explain it."
+          },
+          "cargo": {
+            "type": "string",
+            "description": "What is in it, if anything. Absent is an EMPTY run, published as one.",
+            "maxLength": 200
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "depotLabel",
+          "weightKg"
         ]
       },
       "ClearanceOfferDto": {
@@ -25795,6 +25892,14 @@
           "externalOrderId": {
             "type": "string"
           },
+          "containerNo": {
+            "type": "string",
+            "description": "Y2 — THE BOX THIS LEG IS CARRYING, where the load is a container rather than goods in one.\n\nKept on the leg as well as on the box because the board reads it: a haulier deciding whether to take\na run wants to know it is a box going home, and a driver wants to know before they arrive."
+          },
+          "emptyRun": {
+            "type": "boolean",
+            "description": "TRUE WHERE THERE IS NOTHING IN IT — an empty container being repositioned.\n\nSaid out loud rather than inferred from a small weight, and never dressed up as freight: an empty run\nis real work with no cargo to bill, and a board that quietly published it as a load would be lying to\nthe driver who takes it. The weight is the box's own tare, which is painted on its door."
+          },
           "claimedAt": {
             "type": "string"
           },
@@ -27089,6 +27194,14 @@
           "deliveryWindow": {
             "type": "string",
             "description": "FP7 — the sender's delivery window, the one instruction a dispatcher decides against. Never the contact."
+          },
+          "containerNo": {
+            "type": "string",
+            "description": "Y2 — the container this leg carries, where the load IS a box."
+          },
+          "emptyRun": {
+            "type": "boolean",
+            "description": "Y2 — an empty box going home. Real work, no cargo, and it says so on the board rather than reading\n like freight with a suspiciously small weight."
           }
         },
         "required": [

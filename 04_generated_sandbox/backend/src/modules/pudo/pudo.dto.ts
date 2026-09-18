@@ -432,6 +432,33 @@ export class BoxFreeDaysDto {
  * `returned` is the one a first draft assumes is the only one. `bought` is the ordinary market: containers
  * are traded goods, sold and never returned, and a box that was bought must never read as overdue.
  */
+/**
+ * Y2 — the leg home, laden or empty.
+ *
+ * A `cargo` present means there is something in it, which is the ordinary case: a box travelling portward is
+ * a dry lockable body and freight goes inside it. Absent means empty, and the leg says so on the board.
+ * The weight is what the truck will carry — the box's own tare when there is nothing in it.
+ */
+export class BoxReturnLegDto {
+  @IsString() @MaxLength(120) depotLabel!: string;
+  @IsOptional() @ValidateNested() @Type(() => GeoDto) depotLocation?: GeoDto;
+  /** Taken from the laden leg's destination when we have one; asked for only when we do not. */
+  @IsOptional() @IsString() @MaxLength(120) fromLabel?: string;
+  @IsOptional() @ValidateNested() @Type(() => GeoDto) fromLocation?: GeoDto;
+  /**
+   * NO @Min HERE, deliberately — the service owns this rule and answers it in a sentence.
+   *
+   * The drive found the reason: a decorator refusing with "weightKg must not be less than 1" shadowed the
+   * only useful thing anybody could say, which is that an empty container is not a light one and its tare
+   * is painted on its door. One rule, in the place that can explain it.
+   */
+  @IsNumber() weightKg!: number;
+  /** What is in it, if anything. Absent is an EMPTY run, published as one. */
+  @IsOptional() @IsString() @MaxLength(200) cargo?: string;
+  @IsOptional() @IsString() entityId?: string;
+  @IsOptional() @IsString() by?: string;
+}
+
 export class BoxEndingDto {
   @IsIn(BOX_ENDINGS) @ApiProperty({ enum: BOX_ENDINGS }) kind!: string;
   @IsOptional() @IsString() at?: string;

@@ -81,6 +81,8 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
    * one describes the goods and the other describes somebody else's asset.
    */
   const [boxForm, setBoxForm] = useState({ arrivedAt: '', freeDayKind: 'detention', freeDays: '', where: '' });
+  /** Y2 — the leg home. Its own form, because it is a LOAD being posted rather than a date being recorded. */
+  const [homeForm, setHomeForm] = useState({ depotLabel: '', weightKg: '', cargo: '' });
   const [boxes, setBoxes] = useState<Array<{ code: string; label: string; openTop: boolean; kind: string }>>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1205,6 +1207,63 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                     is not being ignored: it starts counting when that clock starts. */}
                 {detail.box.freeDays.length > 0 && detail.box.clock.freeDays == null && detail.box.clock.kind !== 'stopped' ? (
                   <p class="cons__lede">{t('tower.imports.clockClaimIdle')}</p>
+                ) : null}
+
+                {/* ---- Y2: the leg home, laden or empty ----
+                    The leg a laden run inland always implies, and which nothing modelled: no driver was
+                    ever offered it, so the agent arranged it by telephone and the board could not see it. */}
+                {detail.box.returnLegCode ? (
+                  <p class="cons__lede">
+                    {t(`tower.imports.homeLeg.${detail.box.returnLegState ?? 'posted'}` as never, {
+                      code: detail.box.returnLegCode,
+                      depot: detail.box.returnDepot ?? '—',
+                    })}
+                    {detail.box.returnEmpty ? ` ${t('tower.imports.homeEmpty')}` : ` ${t('tower.imports.homeLaden')}`}
+                  </p>
+                ) : !detail.box.ending ? (
+                  <>
+                    <p class="cons__lede">{t('tower.imports.homeHint')}</p>
+                    <div class="twr-knobs">
+                      <label class="twr-knob">
+                        <span>{t('tower.imports.f.depot')}</span>
+                        <input value={homeForm.depotLabel} onChange={(e) => setHomeForm({ ...homeForm, depotLabel: (e.target as HTMLInputElement).value })} placeholder={t('tower.imports.f.depotPh')} />
+                      </label>
+                      {/* THE TARE, and it is asked for rather than invented: an empty container is not a
+                          light one, and the figure is painted on the door of the thing they are next to. */}
+                      <label class="twr-knob">
+                        <span>{t('tower.imports.f.homeWeight')}</span>
+                        <input type="number" min={1} step={50} value={homeForm.weightKg} onChange={(e) => setHomeForm({ ...homeForm, weightKg: (e.target as HTMLInputElement).value })} placeholder="2200" />
+                      </label>
+                      {/* Empty is the DEFAULT here only because it is the simpler form to leave blank —
+                          the laden case is the commoner one, and saying what is in it is one field. */}
+                      <label class="twr-knob">
+                        <span>{t('tower.imports.f.homeCargo')}</span>
+                        <input value={homeForm.cargo} onChange={(e) => setHomeForm({ ...homeForm, cargo: (e.target as HTMLInputElement).value })} placeholder={t('tower.imports.f.homeCargoPh')} />
+                      </label>
+                    </div>
+                    <div class="twr-panelend">
+                      <button
+                        type="button"
+                        class="cbtn"
+                        disabled={busy === 'homeLeg' || !homeForm.depotLabel.trim() || !homeForm.weightKg.trim()}
+                        onClick={() =>
+                          run(
+                            'homeLeg',
+                            () =>
+                              client!.api.mintReturnLeg(detail.importId, {
+                                depotLabel: homeForm.depotLabel.trim(),
+                                weightKg: Number(homeForm.weightKg),
+                                ...(homeForm.cargo.trim() ? { cargo: homeForm.cargo.trim() } : {}),
+                                ...(who ? { by: who } : {}),
+                              }),
+                            homeForm.cargo.trim() ? t('tower.imports.homeSavedLaden') : t('tower.imports.homeSavedEmpty'),
+                          )
+                        }
+                      >
+                        {t('tower.imports.homeSave')}
+                      </button>
+                    </div>
+                  </>
                 ) : null}
 
                 {!detail.box.ending ? (

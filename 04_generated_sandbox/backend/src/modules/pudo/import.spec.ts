@@ -41,6 +41,8 @@ describe('an import consignment, its papers, and the agent who clears them', () 
    * watches the clock follow it.
    */
   let pickups: Record<string, string>;
+  /** And when each was DELIVERED, which is how the leg home records the return. */
+  let deliveries: Record<string, string>;
 
   /**
    * Every upload gets distinct bytes. Not a convenience: the register refuses a file whose fingerprint
@@ -60,6 +62,7 @@ describe('an import consignment, its papers, and the agent who clears them', () 
   beforeEach(async () => {
     minted = [];
     pickups = {};
+    deliveries = {};
     const moduleRef = await Test.createTestingModule({
       // Hand-listed, which is the very shape that once let 856 green tests sit over an app that could not
       // boot — so `app.boot.spec.ts` is what actually proves this service resolves in the real module, and
@@ -85,8 +88,23 @@ describe('an import consignment, its papers, and the agent who clears them', () 
               minted.push(input);
               return { freightId: `frt_${minted.length}`, code: `FRT-${minted.length}` };
             },
-            // The out-gate is DERIVED from the leg's pickup, so the stub has to be able to answer for one.
-            requireFreightPublic: (freightId: string) => ({ freightId, pickedUpAt: pickups[freightId] }),
+            /*
+             * The out-gate is DERIVED from the leg's pickup and the RETURN from the leg's delivery, so the
+             * stub has to answer for a leg — and the test moves those two dates to move the clock.
+             */
+            requireFreightPublic: (freightId: string) => {
+              const at = Number(freightId.replace('frt_', '')) - 1;
+              if (!minted[at]) throw new Error(`no such freight ${freightId}`);
+              return {
+                freightId,
+                code: `FRT-${at + 1}`,
+                emptyRun: Boolean(minted[at].emptyRun),
+                destLabel: minted[at].destLabel,
+                destLocation: minted[at].destLocation,
+                pickedUpAt: pickups[freightId],
+                deliveredAt: deliveries[freightId],
+              };
+            },
           },
         },
       ],
@@ -941,6 +959,117 @@ describe('an import consignment, its papers, and the agent who clears them', () 
       // cargo — no new gap, no refusal — or the parcel trunk's rule is broken at container scale.
       expect(detail.cargoGaps).toEqual([]);
       expect(detail.roadFreightCode).toBe('FRT-1');
+    });
+
+    /**
+     * Y2 — THE LEG HOME, on the same board as any other load.
+     *
+     * The slice with the most commercial value, and the user's correction is what makes it a freight slice:
+     * a box going back toward the port is a dry lockable body, so freight goes inside it. What these tests
+     * defend is that an EMPTY leg says it is empty, that the box's facts reach the return leg exactly as
+     * they reach the laden one, and that the leg's DELIVERY is what records the return.
+     */
+    describe('the leg home, laden or empty', () => {
+      const NO = 'CSQU3054383';
+      const out = () => {
+        const one = register({ containerNo: NO });
+        imports.mintRoadLeg(one.importId, importerId, { pickupLocation: { lat: 11.6, lng: 43.14 }, destLabel: 'Addis Ababa yard', destLocation: { lat: 9.03, lng: 38.74 }, weightKg: 12000 }, 'Hans');
+        pickups['frt_1'] = new Date(Date.now() - 5 * 86_400_000).toISOString();
+        return one;
+      };
+
+      it('posts an empty box home, and says it is empty', () => {
+        const one = out();
+        const detail = imports.mintReturnLeg(one.importId, importerId, { depotLabel: 'Modjo depot', weightKg: 2200 }, 'Hans');
+        expect(minted).toHaveLength(2);
+        expect(minted[1]).toMatchObject({
+          containerNo: NO,
+          // Never inferred from a small weight: an empty run is real work with no cargo to bill, and a
+          // board that published it as freight would be lying to the driver who takes it.
+          emptyRun: true,
+          destLabel: 'Modjo depot',
+          // Where it starts from is DERIVED from the laden leg's destination — the box goes home from
+          // wherever it was stripped, and a re-typed place is a place the two records can disagree about.
+          pickupLabel: 'Addis Ababa yard',
+          pickupLocation: { lat: 9.03, lng: 38.74 },
+          weightKg: 2200,
+        });
+        expect(String(minted[1].description)).toContain('empty box back to Modjo depot');
+        expect(detail.box).toMatchObject({ returnLegCode: 'FRT-2', returnLegState: 'posted', returnDepot: 'Modjo depot', returnEmpty: true });
+        // And the clock is still running: posting the leg is not the box being back.
+        expect(detail.box!.clock.kind).toBe('detention');
+      });
+
+      it('posts a laden one portward, and does not call it empty', () => {
+        const one = out();
+        const detail = imports.mintReturnLeg(one.importId, importerId, { depotLabel: 'Mombasa quay', weightKg: 9000, cargo: 'Coffee in bags' }, 'Hans');
+        expect(minted[1].emptyRun).toBeUndefined();
+        expect(String(minted[1].description)).toContain('Coffee in bags, portward to Mombasa quay');
+        expect(detail.box!.returnEmpty).toBeUndefined();
+      });
+
+      it('hands the box’s facts to the leg home too, because a box is a box either way', () => {
+        const one = out();
+        imports.declareCargo(one.importId, importerId, { containerType: '22U1' }, 'Hans');
+        imports.mintReturnLeg(one.importId, importerId, { depotLabel: 'Modjo depot', weightKg: 2200 }, 'Hans');
+        // The same gear lifts it, the same bodies carry it, and it is the same height under the same
+        // bridge whether or not there is anything inside.
+        expect(minted[1]).toMatchObject({ indivisible: true, originEquipment: minted[0].originEquipment ?? expect.anything() });
+        expect(minted[1].destEquipment).toEqual(minted[1].originEquipment);
+        expect(minted[1].bodyHint).toBeDefined();
+      });
+
+      it('asks for the tare rather than inventing it', () => {
+        const one = out();
+        expect(() => imports.mintReturnLeg(one.importId, importerId, { depotLabel: 'Modjo depot', weightKg: 0 }, 'Hans')).toThrow(/2,200 kg of steel/);
+        expect(() => imports.mintReturnLeg(one.importId, importerId, { depotLabel: '  ', weightKg: 2200 }, 'Hans')).toThrow(/which depot/);
+      });
+
+      it('refuses a second leg home, and one on a box that is no longer coming back', () => {
+        const one = out();
+        imports.mintReturnLeg(one.importId, importerId, { depotLabel: 'Modjo depot', weightKg: 2200 }, 'Hans');
+        expect(() => imports.mintReturnLeg(one.importId, importerId, { depotLabel: 'Modjo depot', weightKg: 2200 }, 'Hans')).toThrow(/already has a leg home/);
+
+        const sold = register({ containerNo: 'MSCU1234566' });
+        imports.endBox(sold.importId, importerId, 'bought', {}, 'Hans');
+        expect(() => imports.mintReturnLeg(sold.importId, importerId, { depotLabel: 'Modjo depot', weightKg: 2200, fromLocation: { lat: 9, lng: 38 } }, 'Hans')).toThrow(/has no leg home to post/);
+      });
+
+      /**
+       * THE SYMMETRY THAT MAKES THIS WORTH BUILDING: the laden leg's PICKUP is the out-gate, and the leg
+       * home's DELIVERY is the return. Neither is a date anybody types, so neither can be forgotten.
+       */
+      it('records the return from the leg’s delivery, with nobody typing a date', () => {
+        const one = out();
+        imports.claimBoxFreeDays(one.importId, importerId, 'detention', 7, 'Hans');
+        imports.mintReturnLeg(one.importId, importerId, { depotLabel: 'Modjo depot', weightKg: 2200 }, 'Hans');
+        expect(imports.detail(one.importId, importerId).box!.clock.kind).toBe('detention');
+
+        pickups['frt_2'] = new Date(Date.now() - 2 * 86_400_000).toISOString();
+        expect(imports.detail(one.importId, importerId).box!.returnLegState).toBe('moving');
+
+        deliveries['frt_2'] = new Date(Date.now() - 1 * 86_400_000).toISOString();
+        const box = imports.detail(one.importId, importerId).box!;
+        expect(box.returnLegState).toBe('arrived');
+        expect(box).toMatchObject({ ending: 'returned', returnedAt: deliveries['frt_2'] });
+        expect(box.clock).toMatchObject({ kind: 'stopped', overdue: false });
+        // The sentence says the leg did it, because nobody stood there and said so.
+        expect(box.clock.basis).toContain('FRT-2, the leg that took it back');
+        expect(box.clock.basis).toContain('Modjo depot');
+      });
+
+      it('lets a person’s own account of the return beat the leg’s', () => {
+        const one = out();
+        imports.appoint(one.importId, agentId, importerId, 'Hans');
+        imports.mintReturnLeg(one.importId, importerId, { depotLabel: 'Modjo depot', weightKg: 2200 }, 'Hans');
+        // A box can go back without its leg being ours at all, and somebody who was standing there beats
+        // a machine that was not — so a recorded ending is not overwritten by a later delivery.
+        imports.endBox(one.importId, agentId, 'returned', { where: 'Kaliti depot' }, 'Selam');
+        deliveries['frt_2'] = new Date().toISOString();
+        const box = imports.detail(one.importId, importerId).box!;
+        expect(box.endedBy).toBe('Selam');
+        expect(box.clock.basis).toContain('Kaliti depot');
+      });
     });
   });
 });

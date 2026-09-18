@@ -79,6 +79,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   BoxArrivedDto,
   BoxFreeDaysDto,
   BoxEndingDto,
+  BoxReturnLegDto,
   MintRoadLegDto,
   PresenceDto,
   PresenceDecisionDto,
@@ -990,6 +991,39 @@ export class SbgController {
         this.actingCompany(actor, dto.entityId),
         dto.kind as never,
         { at: dto.at, where: dto.where, note: dto.note },
+        this.namedActor(actor, dto.by),
+      ),
+    );
+  }
+
+
+  /**
+   * Y2 — POST THE LEG HOME, laden or empty, to the same board as any other load.
+   *
+   * The leg a laden run inland always implies and that nothing modelled: no driver was ever offered it,
+   * the agent arranged it by telephone, and the board whose whole subject is repositioning could not see
+   * it. It is very often NOT empty — a box is a dry lockable body, so cargo goes portward inside it — and
+   * when it is empty it says so, because a driver who learns at the quay that there was nothing to carry
+   * is a driver who stops taking container work.
+   *
+   * The weight is the box's own tare on an empty run, and it is asked for rather than invented: an empty
+   * container is not a light one, and the figure is painted on the door.
+   */
+  @Roles('operator', 'entity_admin')
+  @Post('imports/:importId/box/return-leg')
+  mintReturnLeg(@Param('importId') importId: string, @Body() dto: BoxReturnLegDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    return this.withHandles(
+      this.imports.mintReturnLeg(
+        importId,
+        this.actingCompany(actor, dto.entityId),
+        {
+          depotLabel: dto.depotLabel,
+          depotLocation: dto.depotLocation as never,
+          fromLabel: dto.fromLabel,
+          fromLocation: dto.fromLocation as never,
+          weightKg: dto.weightKg,
+          cargo: dto.cargo,
+        },
         this.namedActor(actor, dto.by),
       ),
     );

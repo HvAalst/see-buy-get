@@ -350,6 +350,18 @@ export function createOperatorApi(sbg: SbgClient) {
     endBox: (importId: string, body: { kind: 'returned' | 'bought'; at?: string; where?: string; note?: string; entityId?: string; by?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/box/ending', { params: { path: { importId } }, body: body as never })),
 
+    /**
+     * Y2 — POST THE LEG HOME, laden or empty, to the same board as any other load.
+     *
+     * A laden leg inland implies a leg back, and nothing modelled it — so no driver was ever offered it.
+     * It is usually NOT empty: a box is a dry lockable body and freight goes portward inside it. The
+     * weight is what the truck will carry, which for an empty box is its own tare, painted on the door.
+     */
+    mintReturnLeg: (
+      importId: string,
+      body: { depotLabel: string; depotLocation?: { lat: number; lng: number }; fromLabel?: string; fromLocation?: { lat: number; lng: number }; weightKg: number; cargo?: string; entityId?: string; by?: string },
+    ) => sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/box/return-leg', { params: { path: { importId } }, body: body as never })),
+
     /** Every box out, with its clock. Operator-only: it spans companies by construction. */
     boxesOut: () => sbg.request((c) => c.GET('/v1/sbg/boxes', {})),
 

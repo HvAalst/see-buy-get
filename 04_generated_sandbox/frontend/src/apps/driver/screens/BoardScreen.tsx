@@ -267,6 +267,9 @@ function BoardCard({ row, onPropose, onAsk }: { row: BoardRow; onPropose: () => 
           {row.code}
         </Pill>
         {row.commitMode === 'negotiate' ? <Pill tone="info">{t('driver.board.negotiate')}</Pill> : null}
+        {/* AN EMPTY BOX GOING HOME IS REAL WORK WITH NO CARGO, and the driver learns it here rather than
+            at the quay. The weight is the container's own tare, which is why it still needs a real truck. */}
+        {row.emptyRun ? <Pill tone="idle">{t('driver.board.emptyRun')}</Pill> : null}
         {row.scheduledPickupAt ? <Pill tone="idle">{t('driver.board.scheduled', { when: formatDate(row.scheduledPickupAt) })}</Pill> : null}
       </div>
 
