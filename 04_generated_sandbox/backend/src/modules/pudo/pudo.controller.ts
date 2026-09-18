@@ -15,9 +15,10 @@ import { HandleService } from '../../foundation/handle/handle.service';
 import { HandleDirectory } from './handle-directory.service';
 import { ProfileView, presenceSays, profileDoes } from './profile.types';
 import { MOBILISATION_MEASURED, mobilisationOf } from './mobilisation';
+import { AGENT_MEASURED } from './agent-record';
 import { MoversView } from './movers.types';
 import { ImportService } from './import.service';
-import { ImportDetail, ImportRow, KnownPaper } from './import.types';
+import { ClearanceRecordResponse, ImportDetail, ImportRow, KnownPaper } from './import.types';
 import { CompanyReadinessService } from '../../foundation/entity/company-readiness.service';
 import type { Entity } from '../../foundation/entity/entity.types';
 import { COUNTRY_CATALOGUE, catalogueEntry } from '../../foundation/countries/catalogue';
@@ -68,6 +69,9 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   QuoteClearanceFeeDto,
   AcceptClearanceFeeDto,
   ClearanceReceiptDto,
+  RecordCustomsHoldDto,
+  AnswerCustomsHoldDto,
+  ReleaseCustomsHoldDto,
   MintRoadLegDto,
   PresenceDto,
   PresenceDecisionDto,
@@ -691,12 +695,30 @@ export class SbgController {
     return this.imports.register({ ...dto, importerEntityId: this.actingCompany(actor, dto.importerEntityId) }, this.namedActor(actor, dto.by));
   }
 
+  /**
+   * A COMPANY'S PUBLIC ADDRESS, attached wherever the console names an agent.
+   *
+   * §6a's page closes the findability gap only if somebody can get to it, and an entity id is not an
+   * address. Resolved in the controller rather than inside ImportService on purpose: that service has no
+   * business knowing about handles, and giving it the dependency would mean every hand-listed provider
+   * spec in this module needs it too — the DI trap this project has already paid for once.
+   */
+  private handleOf(entityId?: string): string | undefined {
+    if (!entityId) return undefined;
+    return this.handles.list().find((h) => h.id === entityId)?.handle;
+  }
+
+  private withHandles<T extends { agentEntityId?: string }>(row: T): T & { agentHandle?: string } {
+    const agentHandle = this.handleOf(row.agentEntityId);
+    return agentHandle ? { ...row, agentHandle } : row;
+  }
+
   /** The consignments this company is a party to. Staff naming no company see the network's. */
   @Roles('operator', 'entity_admin')
   @Get('imports')
   listImports(@Actor() actor: IntrospectionResult, @Query('entityId') entityId?: string): { items: ImportRow[] } {
-    if (actor?.role === 'operator' && !entityId) return { items: this.imports.list('', { all: true }) };
-    return { items: this.imports.list(this.actingCompany(actor, entityId)) };
+    const rows = actor?.role === 'operator' && !entityId ? this.imports.list('', { all: true }) : this.imports.list(this.actingCompany(actor, entityId));
+    return { items: rows.map((r) => this.withHandles(r)) };
   }
 
   /**
@@ -718,8 +740,8 @@ export class SbgController {
   @Roles('operator', 'entity_admin')
   @Get('imports/:importId')
   importDetail(@Param('importId') importId: string, @Actor() actor: IntrospectionResult, @Query('entityId') entityId?: string): ImportDetail {
-    if (actor?.role === 'operator' && !entityId) return this.imports.detail(importId, '', { all: true });
-    return this.imports.detail(importId, this.actingCompany(actor, entityId));
+    const detail = actor?.role === 'operator' && !entityId ? this.imports.detail(importId, '', { all: true }) : this.imports.detail(importId, this.actingCompany(actor, entityId));
+    return this.withHandles(detail);
   }
 
   /** Appoint a clearing agent — the act that grants them the papers. The importer's decision alone. */
@@ -817,6 +839,60 @@ export class SbgController {
   @Post('imports/:importId/fee/receipt')
   recordClearanceReceipt(@Param('importId') importId: string, @Body() dto: ClearanceReceiptDto, @Actor() actor: IntrospectionResult): ImportDetail {
     return this.imports.recordFeeReceipt(importId, dto.reference, this.namedActor(actor, dto.by), dto.amount);
+  }
+
+  /* --------------------------------------- CL4 — what the state did, and the record -- */
+
+  /**
+   * Record that the state did something to this container: selected it, examined it, queried the papers.
+   *
+   * §6 divides a clearing agent's record in two, and this is the half that is NOT their doing. It is
+   * recorded, shown and labelled as such — and never blended, because blending is what makes bribery look
+   * like competence. Either party may record one; in practice the agent, who is the one standing there.
+   *
+   * That makes it self-serving by construction, so it is built like a road-hazard dispute: attributed,
+   * visible to the other party at once, answerable BESIDE rather than instead, and never erased.
+   */
+  @Roles('operator', 'entity_admin')
+  @Post('imports/:importId/customs-holds')
+  recordCustomsHold(@Param('importId') importId: string, @Body() dto: RecordCustomsHoldDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    return this.imports.recordCustomsHold(
+      importId,
+      this.actingCompany(actor, dto.entityId),
+      { kind: dto.kind as never, at: dto.at, note: dto.note },
+      this.namedActor(actor, dto.by),
+    );
+  }
+
+  /** The other party's account of the same hold. Never a deletion — see the service. */
+  @Roles('operator', 'entity_admin')
+  @Post('imports/:importId/customs-holds/:holdId/answer')
+  answerCustomsHold(@Param('importId') importId: string, @Param('holdId') holdId: string, @Body() dto: AnswerCustomsHoldDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    return this.imports.answerCustomsHold(importId, this.actingCompany(actor, dto.entityId), holdId, dto.stance as never, dto.note, this.namedActor(actor, dto.by));
+  }
+
+  /** It ended. Once: a release date that moves is not a record. */
+  @Roles('operator', 'entity_admin')
+  @Post('imports/:importId/customs-holds/:holdId/release')
+  releaseCustomsHold(@Param('importId') importId: string, @Param('holdId') holdId: string, @Body() dto: ReleaseCustomsHoldDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    return this.imports.releaseCustomsHold(importId, this.actingCompany(actor, dto.entityId), holdId, dto.at);
+  }
+
+  /**
+   * ONE CLEARING AGENT'S RECORD — theirs to read about themselves, and an operator's to read about them.
+   *
+   * The same object the public profile page carries, so an agent's own copy cannot differ from what a
+   * shipper reads: a record handed down is a verdict, one both parties hold is an account. The public page
+   * is the other route to this, and the drive compares the two payloads field for field.
+   */
+  @Roles('operator', 'entity_admin')
+  @Get('entities/:entityId/clearance-record')
+  clearanceRecord(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult): ClearanceRecordResponse {
+    const me = this.actingCompany(actor, entityId);
+    const handle = this.handleOf(me);
+    // Their own page's address travels with their own copy: "the same thing a shipper reads" is a claim
+    // somebody should be able to go and check.
+    return { record: this.imports.agentRecord(me), measured: AGENT_MEASURED, ...(handle ? { handle } : {}) };
   }
 
   /** CL2b — mint the road leg from the port. A person does this; we observe no arrival and invent none. */
@@ -2508,6 +2584,21 @@ export class SbgController {
     // trucks and gets no record rather than a row of honest zeroes, which would read as a bad one.
     const moves = fleet ? mobilisationOf(this.dispatch.listFreight(), this.drivers.list({ managerDid: fleet.did }).map((d) => d.did)) : undefined;
 
+    /*
+     * CL4 item 1 — THE CLEARING AGENT'S RECORD, and the agent exists here for the first time.
+     *
+     * A clearing agent was never a KIND of participant in this system: they were a field on somebody
+     * else's container. So being one is DERIVED, exactly as a country's `established` standing is derived
+     * from a company existing and as this handle is derived from the verified name — a company that has
+     * been appointed to clear a container is an agent, and the container is the evidence. CL2's first
+     * draft had an agent registry with licences that expire, and the user's two imports showed why that
+     * is the wrong shape: the job is foreknowledge, not a status we award.
+     *
+     * So no capability flag, no onboarding, and nothing to keep in step. A company with no appointments
+     * gets no section at all rather than a row of zeroes, which would read as a bad record.
+     */
+    const clears = company && this.imports.isAgent(company.entityId) ? this.imports.agentRecord(company.entityId) : undefined;
+
     // A verified paper is named, with its date, and an empty list is a real answer shown as one. Only a
     // COMPANY has a document register; the rest carry what their own record can honestly attest.
     const verified = company
@@ -2529,9 +2620,12 @@ export class SbgController {
       ...(hub ? { at: hub.location } : {}),
       since: shop?.createdAt ?? hub?.createdAt ?? fleet?.createdAt ?? company?.createdAt ?? new Date(0).toISOString(),
       ...(presence ? { presence: { level: presence.level, says: presenceSays(presence.level) } } : {}),
-      does: profileDoes(held.kind),
+      // What they do, and for a company that clears containers it says so — which is the whole answer to
+      // "how does an importer find an agent": the page can now state the work, not just the name.
+      does: clears ? profileDoes('clearing-agent') : profileDoes(held.kind),
       verified,
       ...(moves ? { moves, movesMeasured: MOBILISATION_MEASURED } : {}),
+      ...(clears ? { clears, clearsMeasured: AGENT_MEASURED } : {}),
     };
   }
 

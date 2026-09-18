@@ -79,6 +79,51 @@ export interface ImportDetailView extends ImportRow {
   /** CL2b — whether the money can run here at all. Shown at the START, never saved for a failure. */
   money: MoneyHere;
   roadFreightId?: string;
+  /** CL4 — what the state did to this container, with both parties' accounts. Shown to both of them. */
+  customsHolds: CustomsHoldView[];
+}
+
+/** The things the state does to a container. Not one of them is the agent's doing. */
+export const CUSTOMS_HOLD_KINDS = ['inspection_selected', 'physical_exam', 'documents_queried', 'queue', 'other'] as const;
+export type CustomsHoldKind = (typeof CUSTOMS_HOLD_KINDS)[number];
+
+export interface CustomsHoldView {
+  holdId: string;
+  kind: CustomsHoldKind;
+  at: string;
+  releasedAt?: string;
+  recordedBy: string;
+  recordedAt: string;
+  /** Every account given, oldest first. A dispute is ADDED here; nothing is ever replaced or removed. */
+  accounts: Array<{ by: string; at: string; stance: 'happened' | 'disputed'; note?: string }>;
+}
+
+/** Does the other party say this happened differently? Shown wherever the hold is, never separately. */
+export function holdDisputed(hold: CustomsHoldView): boolean {
+  return hold.accounts.some((a) => a.stance === 'disputed');
+}
+
+/**
+ * A CLEARING AGENT'S OWN RECORD, as the console reads it.
+ *
+ * The same shape the public page carries, deliberately: an agent's copy of their record and a shipper's
+ * view of it are one object, so neither can drift from the other.
+ */
+export interface ClearanceRecordView {
+  appointed: number;
+  listed: number;
+  quoted: number;
+  cleared: number;
+  inFlight: number;
+  listedLate: number;
+  latePapers: number;
+  listHours?: number | null;
+  checkHours?: number | null;
+  quoteHours?: number | null;
+  thin: boolean;
+  ratesNeed: number;
+  ports: Array<{ key: string; appointed: number; listed: number; cleared: number }>;
+  holds: { containers: number; recorded: number; disputed: number; kinds: Array<{ key: string; times: number }> };
 }
 
 export type FeeState = 'none' | 'quoted' | 'accepted' | 'paid';

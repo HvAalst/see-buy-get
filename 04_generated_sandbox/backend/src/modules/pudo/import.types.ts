@@ -99,6 +99,64 @@ export class RequiredPaper {
 }
 
 /**
+ * CL4 item 1 — WHAT THE STATE DID, which is the half of §6 that is not the agent's doing.
+ *
+ * Inspection selection, a physical examination, a queue. §6 says these are "recorded, shown, and labelled
+ * as not the agent's doing", and never blended into anything — because blending is exactly what makes
+ * bribery look like competence.
+ *
+ * WHO RECORDS IT: either party to the container, and in practice the agent, who is the one standing there.
+ * That is obviously self-serving — a free "it was not my fault" field — so it is built the way the road
+ * map's disputes are built and for the same reason: the account is ATTRIBUTED, the OTHER party can put
+ * their account beside it, and nothing is ever erased. A reader sees the disagreement rather than our
+ * adjudication of it. The disputed count travels with the record, so a page cannot show the excuse
+ * without showing that it is contested.
+ *
+ * AND IT NEVER TOUCHES THE AGENT'S OWN FIGURES. A system that quietly discounted an agent's response
+ * times by the holds they themselves reported would have built the excuse field this design refuses.
+ * Context a reader weighs; never arithmetic.
+ *
+ * NO PHOTOGRAPH, deliberately, and this is the one field somebody will want to add. A customs hold notice
+ * is a photograph of an official document, and whether we may hold those is the open legal question that
+ * blocks CL5 (§11). Words, a date and an attribution are available today; the photograph is not, and
+ * shipping it here would smuggle the blocked decision in through a side door.
+ */
+export const CUSTOMS_HOLD_KINDS = ['inspection_selected', 'physical_exam', 'documents_queried', 'queue', 'other'] as const;
+export type CustomsHoldKind = (typeof CUSTOMS_HOLD_KINDS)[number];
+
+/** Which side of the question somebody is on: it happened as described, or it did not. */
+export const HOLD_STANCES = ['happened', 'disputed'] as const;
+export type HoldStance = (typeof HOLD_STANCES)[number];
+
+/**
+ * ONE PARTY'S ACCOUNT of a hold — what they said, when, and which side they are on.
+ *
+ * DECLARED ABOVE its users: the swagger plugin evaluates an `@ApiProperty` class reference when the
+ * referring class is DEFINED, so a class declared after its user typechecks cleanly and then kills the
+ * contract emit with a temporal dead zone. That has cost this project a session twice.
+ */
+export class CustomsHoldAccount {
+  @ApiProperty() by: string;
+  @ApiProperty() at: string;
+  @ApiProperty({ enum: HOLD_STANCES }) stance: HoldStance;
+  @ApiPropertyOptional() note?: string;
+}
+
+/** One thing the state did to one container, and both parties' accounts of it. */
+export class CustomsHold {
+  @ApiProperty() holdId: string;
+  @ApiProperty({ enum: CUSTOMS_HOLD_KINDS }) kind: CustomsHoldKind;
+  /** When it happened, as the party recording it says. Their date, not ours: we were not there. */
+  @ApiProperty() at: string;
+  /** When it ended, once somebody records that it has. Absent while a container is still held. */
+  @ApiPropertyOptional() releasedAt?: string;
+  @ApiProperty() recordedBy: string;
+  @ApiProperty() recordedAt: string;
+  /** Every account given, oldest first, including the one that recorded it. */
+  @ApiProperty({ type: [CustomsHoldAccount] }) accounts: CustomsHoldAccount[];
+}
+
+/**
  * CL2b — WHAT THE AGENT CHARGES, and how far it has got.
  *
  * `none` nobody has quoted · `quoted` the agent named a price · `accepted` the importer agreed to it ·
@@ -210,6 +268,9 @@ export class ImportConsignment {
   @ApiPropertyOptional() roadMintedAt?: string;
   @ApiPropertyOptional() roadMintedBy?: string;
 
+  /** CL4 — what the state did to this container. Absent on every consignment recorded before the slice. */
+  @ApiPropertyOptional({ type: [CustomsHold] }) customsHolds?: CustomsHold[];
+
   @ApiProperty() createdAt: string;
   @ApiProperty() createdBy: string;
 }
@@ -267,6 +328,8 @@ export class ImportRow {
   @ApiPropertyOptional() importerName?: string;
   @ApiPropertyOptional() agentEntityId?: string;
   @ApiPropertyOptional() agentName?: string;
+  /** The agent's PUBLIC address — `seebuyget.com/@handle`. An entity id is not somewhere you can go. */
+  @ApiPropertyOptional() agentHandle?: string;
   /** Which side of this the reader is on. An operator reading over the network's shoulder is `onlooker`. */
   @ApiProperty({ enum: ['importer', 'agent', 'onlooker'] }) youAre: 'importer' | 'agent' | 'onlooker';
   /** Derived every read, never stored: how many of the agent's list are accepted, out of how many. */
@@ -293,6 +356,76 @@ export class ImportDetail extends ImportRow {
   /** CL2b — whether the money can run here at all, said before anybody starts assembling it. */
   @ApiProperty() money: MoneyHere;
   @ApiPropertyOptional() roadFreightId?: string;
+  /** CL4 — what the state did, with both parties' accounts. Shown to both, and to an operator. */
+  @ApiProperty({ type: [CustomsHold] }) customsHolds: CustomsHold[];
+}
+
+/* ---------------------- CL4 item 1: the clearing agent's record, as it crosses the wire -- */
+
+/*
+ * The classes below mirror `agent-record.ts`, which is pure and carries no decorators so that a figure
+ * somebody's livelihood is judged on stays reproducible from the containers it came from. Declared here,
+ * ONCE, and imported by the public profile page as well — the agent's own copy and the shipper's view are
+ * the same object by construction, because a record handed down is a verdict and one both parties hold is
+ * an account. Every one of them is declared ABOVE its user: the swagger plugin evaluates an
+ * `@ApiProperty` class reference when the referring class is defined.
+ */
+
+/** How often each kind of hold happened. A named class because an array of anonymous objects kills the emit. */
+export class ClearanceHoldKind {
+  @ApiProperty() key: string;
+  @ApiProperty() times: number;
+}
+
+/** WHAT THE STATE DID — counted apart, and never netted off anything the agent controls. */
+export class ClearanceHolds {
+  @ApiProperty() containers: number;
+  @ApiProperty() recorded: number;
+  /** Of those, how many the other party to that container disputes. Shown with the count, always. */
+  @ApiProperty() disputed: number;
+  @ApiProperty({ type: [ClearanceHoldKind] }) kinds: ClearanceHoldKind[];
+}
+
+/** One port — §6's per-lane rule, where the lane is a border. */
+export class ClearancePortSlice {
+  @ApiProperty() key: string;
+  @ApiProperty() appointed: number;
+  @ApiProperty() listed: number;
+  @ApiProperty() cleared: number;
+}
+
+/**
+ * WHAT AN AGENT DID WITH THE WORK IN FRONT OF THEM — and nothing about what happened at the counter.
+ *
+ * Scoring an agent on elapsed time at a border systematically advertises whoever pays bribes, and absence
+ * of a seizure is not evidence of compliance. So there is no border-time figure here and there must not
+ * be one; `holds` is the state's own share, recorded and labelled, never blended in.
+ */
+export class ClearanceRecord {
+  @ApiProperty() appointed: number;
+  @ApiProperty() listed: number;
+  @ApiProperty() quoted: number;
+  @ApiProperty() cleared: number;
+  @ApiProperty() inFlight: number;
+  /** Containers where the list GREW after the importer had begun supplying — the two-week story, counted. */
+  @ApiProperty() listedLate: number;
+  @ApiProperty() latePapers: number;
+  @ApiPropertyOptional() listHours?: number | null;
+  @ApiPropertyOptional() checkHours?: number | null;
+  @ApiPropertyOptional() quoteHours?: number | null;
+  @ApiProperty() thin: boolean;
+  @ApiProperty() ratesNeed: number;
+  @ApiProperty({ type: [ClearancePortSlice] }) ports: ClearancePortSlice[];
+  @ApiProperty({ type: ClearanceHolds }) holds: ClearanceHolds;
+}
+
+/** The record, and the sentence that has to travel with it. */
+export class ClearanceRecordResponse {
+  @ApiProperty({ type: ClearanceRecord }) record: ClearanceRecord;
+  /** What was measured and what was not. In the payload so no screen can render the figures without it. */
+  @ApiProperty() measured: string;
+  /** Their own public page, so "the same thing a shipper reads" is a claim they can go and check. */
+  @ApiPropertyOptional() handle?: string;
 }
 
 /** What agents have been asked for at one port, most asked first. Never stated as a requirement. */

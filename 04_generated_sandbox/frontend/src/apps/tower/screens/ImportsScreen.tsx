@@ -17,6 +17,10 @@ import {
   type FeeQuoteForm,
   type ReceiptForm,
   type RoadLegForm,
+  CUSTOMS_HOLD_KINDS,
+  holdDisputed,
+  type CustomsHoldKind,
+  type ClearanceRecordView,
   liveGrants,
   outstanding,
   outstandingCount,
@@ -61,6 +65,10 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
   const [feeForm, setFeeForm] = useState<FeeQuoteForm>({ ...EMPTY_FEE_FORM });
   const [receiptForm, setReceiptForm] = useState<ReceiptForm>({ ...EMPTY_RECEIPT_FORM });
   const [roadForm, setRoadForm] = useState<RoadLegForm>({ ...EMPTY_ROAD_FORM });
+  const [holdForm, setHoldForm] = useState<{ kind: CustomsHoldKind; note: string }>({ kind: 'inspection_selected', note: '' });
+  const [holdNote, setHoldNote] = useState<Record<string, string>>({});
+  /** This company's own clearance record — null until read, absent for one that clears nothing. */
+  const [mine, setMine] = useState<{ record: ClearanceRecordView; measured: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -73,7 +81,15 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
       return;
     }
     setRows(((r.data as unknown as { items?: ImportRow[] })?.items ?? []) as ImportRow[]);
-  }, [client]);
+
+    // Their own record, read here because this is where an agent works. A company that has never been
+    // appointed gets nothing rather than a panel of zeroes, which would read as a bad record.
+    const entityId = state.who?.entityId;
+    if (entityId) {
+      const mineR = await client.api.clearanceRecord(entityId);
+      setMine(mineR.error ? null : (mineR.data as unknown as { record: ClearanceRecordView; measured: string }));
+    }
+  }, [client, state.who?.entityId]);
 
   useEffect(() => {
     void load();
@@ -149,6 +165,44 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
       </p>
 
       {!isCompany ? <p class="cons__caveat">{t('tower.imports.staffOnly')}</p> : null}
+
+      {/* ---- CL4 item 1: this company's OWN clearance record, if they clear anything ---- */}
+      {mine && mine.record.appointed > 0 ? (
+        <section class="cons__panel">
+          <div class="cons__panelhead">
+            <span class="cons__panelt">{t('tower.imports.recordTitle')}</span>
+          </div>
+          {/* THE SAME OBJECT A SHIPPER READS at /@handle, field for field. Reciprocal visibility is the
+              condition that makes publishing a bad figure fair: a record handed down is a verdict, one
+              both parties hold is an account. So this is their copy, not a private version of it. */}
+          <p class="cons__lede">{t('tower.imports.recordMine')}</p>
+          <p class="cons__caveat">{mine.measured}</p>
+          <ul class="twr-checklist">
+            <li>{t('tower.imports.recordAppointed', { n: mine.record.appointed })}</li>
+            <li>{t('tower.imports.recordListed', { n: mine.record.listed })}</li>
+            <li>{t('tower.imports.recordCleared', { n: mine.record.cleared })}</li>
+            {mine.record.listedLate > 0 ? (
+              <li>
+                <span class="ctag ctag--warn">{t('tower.imports.recordLate', { n: mine.record.listedLate, papers: mine.record.latePapers })}</span>
+              </li>
+            ) : (
+              <li>{t('tower.imports.recordNoLate')}</li>
+            )}
+            {mine.record.thin ? (
+              <li class="ctbl__sub">{t('tower.imports.recordThin', { n: mine.record.ratesNeed })}</li>
+            ) : (
+              <>
+                {mine.record.listHours != null ? <li>{t('tower.imports.recordListHours', { h: mine.record.listHours })}</li> : null}
+                {mine.record.checkHours != null ? <li>{t('tower.imports.recordCheckHours', { h: mine.record.checkHours })}</li> : null}
+              </>
+            )}
+            {/* Counted, labelled, and not subtracted from anything above it. */}
+            {mine.record.holds.recorded > 0 ? (
+              <li class="ctbl__sub">{t('tower.imports.recordHolds', { holds: mine.record.holds.recorded, disputed: mine.record.holds.disputed })}</li>
+            ) : null}
+          </ul>
+        </section>
+      ) : null}
       {done ? (
         <p class="twr-done">
           <Icon name="check" size={16} />
@@ -719,6 +773,116 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
               )}
             </section>
           ) : null}
+
+          {/* ---- CL4 item 1: what the state did, and the two accounts of it ---- */}
+          <section class="cons__panel">
+            <div class="cons__panelhead">
+              <span class="cons__panelt">{t('tower.imports.holdsTitle')}</span>
+              {detail.customsHolds.length ? <span class="ctag ctag--quiet">{detail.customsHolds.length}</span> : null}
+            </div>
+            {/* Said before the form, because this field's whole risk is being read as an excuse box. It is
+                not counted against the agent anywhere, and it is not counted FOR them either. */}
+            <p class="cons__lede">{t('tower.imports.holdsHint')}</p>
+
+            {detail.customsHolds.length === 0 ? (
+              <p class="cons__empty">{t('tower.imports.holdsNone')}</p>
+            ) : (
+              <ul class="twr-checklist">
+                {detail.customsHolds.map((h) => (
+                  <li key={h.holdId}>
+                    <b>{t(`tower.imports.holdKind.${h.kind}` as never)}</b> · <span class="ctbl__sub">{new Date(h.at).toLocaleDateString()}</span>
+                    {h.releasedAt ? <span class="ctag ctag--ok">{t('tower.imports.holdReleased', { on: new Date(h.releasedAt).toLocaleDateString() })}</span> : null}
+                    {/* A disputed hold is still SHOWN, and marked. Nothing here is ever deleted: the two
+                        accounts stand side by side and a reader weighs them, which is not our job. */}
+                    {holdDisputed(h) ? <span class="ctag ctag--warn">{t('tower.imports.holdDisputed')}</span> : null}
+                    {h.accounts.map((a, i) => (
+                      <div key={`${h.holdId}-${i}`} class="ctbl__sub">
+                        {a.stance === 'disputed' ? t('tower.imports.holdSaysNot') : t('tower.imports.holdSays')}
+                        {a.note ? ` — “${a.note}”` : ''} · {a.by}
+                      </div>
+                    ))}
+                    {isCompany ? (
+                      <div class="twr-panelend">
+                        {/* Either party may answer, and the server refuses a dispute with no words: a bare
+                            contradiction is something nobody can weigh. */}
+                        <input
+                          class="cinput cinput--sm"
+                          placeholder={t('tower.imports.f.holdAnswer')}
+                          value={holdNote[h.holdId] ?? ''}
+                          onChange={(e) => setHoldNote({ ...holdNote, [h.holdId]: (e.target as HTMLInputElement).value })}
+                        />
+                        <button
+                          type="button"
+                          class="cbtn cbtn--ghost cbtn--sm"
+                          disabled={busy === `hold:${h.holdId}`}
+                          onClick={() =>
+                            run(
+                              `hold:${h.holdId}`,
+                              () =>
+                                client!.api.answerCustomsHold(detail.importId, h.holdId, {
+                                  stance: 'disputed',
+                                  ...(holdNote[h.holdId]?.trim() ? { note: holdNote[h.holdId].trim() } : {}),
+                                  ...(who ? { by: who } : {}),
+                                }),
+                              t('tower.imports.holdAnswered'),
+                              () => setHoldNote({ ...holdNote, [h.holdId]: '' }),
+                            )
+                          }
+                        >
+                          {t('tower.imports.holdDispute')}
+                        </button>
+                        {h.releasedAt ? null : (
+                          <button
+                            type="button"
+                            class="cbtn cbtn--ghost cbtn--sm"
+                            disabled={busy === `release:${h.holdId}`}
+                            onClick={() =>
+                              run(`release:${h.holdId}`, () => client!.api.releaseCustomsHold(detail.importId, h.holdId, { ...(who ? { by: who } : {}) }), t('tower.imports.holdReleasedOk'))
+                            }
+                          >
+                            {t('tower.imports.holdRelease')}
+                          </button>
+                        )}
+                      </div>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {isCompany ? (
+              <div class="twr-panelend">
+                <select class="cinput cinput--sm" value={holdForm.kind} onChange={(e) => setHoldForm({ ...holdForm, kind: (e.target as HTMLSelectElement).value as CustomsHoldKind })}>
+                  {CUSTOMS_HOLD_KINDS.map((k) => (
+                    <option key={k} value={k}>
+                      {t(`tower.imports.holdKind.${k}` as never)}
+                    </option>
+                  ))}
+                </select>
+                <input class="cinput cinput--sm" placeholder={t('tower.imports.f.holdNote')} value={holdForm.note} onChange={(e) => setHoldForm({ ...holdForm, note: (e.target as HTMLInputElement).value })} />
+                <button
+                  type="button"
+                  class="cbtn cbtn--ghost cbtn--sm"
+                  disabled={busy === 'hold'}
+                  onClick={() =>
+                    run(
+                      'hold',
+                      () =>
+                        client!.api.recordCustomsHold(detail.importId, {
+                          kind: holdForm.kind,
+                          ...(holdForm.note.trim() ? { note: holdForm.note.trim() } : {}),
+                          ...(who ? { by: who } : {}),
+                        }),
+                      t('tower.imports.holdRecorded'),
+                      () => setHoldForm({ kind: 'inspection_selected', note: '' }),
+                    )
+                  }
+                >
+                  {t('tower.imports.holdRecord')}
+                </button>
+              </div>
+            ) : null}
+          </section>
         </>
       ) : null}
     </>

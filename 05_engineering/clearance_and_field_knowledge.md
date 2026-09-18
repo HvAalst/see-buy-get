@@ -645,13 +645,72 @@ operator's view can disagree with the public one, the public one stops being wor
 because the check was `/driver/i`, which matches the prose "Runs vehicles and drivers". Assert the actual
 identity and the actual reason string, not a word that also appears in copy.
 
-**STILL OPEN after this half:**
-1. **The clearing agent's own record.** §6's agent-controlled list (documents complete on first submission,
-   entries accepted without amendment, time from papers to filing, responsiveness) is mostly unrecorded. Of
-   it, CL2a/CL2b already hold the appointment, the published required list and the quote→agree→receipt
-   cycle, so **responsiveness is the one honestly available today**. Anything more needs new observations,
-   and per §7 those must be first-hand or evidenced — which puts it next to CL5, not before it. **§6's
-   state-controlled split ships with this item.**
+**ITEM 1 SHIPPED 2026-09-18, driven — the clearing agent's own record, and §6's split with it.**
+
+**FIRST, WHAT THE CODE SAID BACK: a clearing agent did not exist.** They were a field on somebody else's
+container — `agentEntityId` — with no kind, no capability, no page of their own and no record. The user's
+question ("do they get a home? they are crucial to international freight") had a sharper answer in the
+code than in the design: they had no home because they were not a thing.
+
+**BEING AN AGENT IS NOW DERIVED, and nothing was registered.** A company that has been appointed on a
+container is a clearing agent, and the container is the evidence — the same construction as a country's
+`established` standing (derived from a company existing) and this epic's own handles (derived from the
+verified name). **CL2's first draft had an agent registry with licences that expire, and the two real
+imports are why that is the wrong shape: the job is foreknowledge, not a status we award.** So there is no
+capability flag to keep in step, no onboarding, and a company that clears nothing has no section rather
+than a row of zeroes. Their profile page now says what they DO — "clears containers through customs for
+importers, and says what papers each border will ask for" — which is what makes a page findable at all,
+and `agentHandle` travels on every consignment row, because an entity id is not somewhere you can go.
+
+**THE MEASURE IS FOREKNOWLEDGE**, because that is what the two imports turned on. `agent-record.ts`, pure
+functions over consignments in the market series' style:
+
+- **`listedLate` / `latePapers` — the two-week story, counted.** Containers where the required list GREW
+  after the importer had already begun supplying it. A paper remembered at the counter is a paper they
+  could not have had ready, however fast everybody then moved. Measured against the FIRST supply, not
+  each paper's own arrival, or an agent could add papers indefinitely and every one would look timely.
+  **Shown even on a thin record**, because it is a count of what happened rather than an average.
+- **`listHours`, `checkHours`, `quoteHours` — MEDIANS, never means.** One container that sat over a public
+  holiday must not define a record. A rejection counts as answering, or the measure pushes an agent
+  towards accepting a paper they should have queried.
+- **A thin record shows as thin**: under `AGENT_MIN_CONTAINERS` (5) counts only, no typical times. Its own
+  constant rather than a reuse of the loads figure — a container and a load are different units at wildly
+  different frequencies, and tying them together means changing one silently moves the other.
+- **Per port**, because the papers a border asks for are that border's rather than the country's.
+- **Nothing at the counter is scored, anywhere.** No figure for time at a border, arrival to release, or
+  anything the state's clock owns. The spec asserts the absence.
+
+**§6'S STATE-CONTROLLED SPLIT, as `CustomsHold` on the consignment.** Inspection selection, physical
+examination, papers queried, a queue. Either party records one; in practice the agent, who is the one
+standing there — which makes it a **self-serving field by construction**, so it is built exactly like the
+road map's disputes: attributed, visible to the other party the moment it is written, **answerable beside
+rather than instead**, never erased, and a dispute must carry words (a bare contradiction is something
+nobody can weigh). The disputed count travels with the record, so no page can show the excuse without
+showing that it is contested.
+
+**AND IT NEVER TOUCHES A FIGURE THE AGENT IS JUDGED ON.** The drive asserts this on live data: record a
+hold, re-read the record, and every field but `holds` is identical. A system that quietly discounted an
+agent's response times by the holds they reported themselves would have built the excuse field §6 warns
+about, with the arithmetic granting the excuse.
+
+**NO PHOTOGRAPH ON A HOLD, deliberately.** A customs hold notice is a photograph of an official document,
+and whether we may hold those is the open legal question blocking CL5 (§11). Shipping a `photoRef` here
+would smuggle the blocked decision in through a side door. Words, a date and an attribution are available
+today.
+
+**Surfaces:** the public page (`/@handle`) carries `clears` + `clearsMeasured`; the console's Imports
+screen carries the holds for both parties and an operator, and an agent's own copy of the record — read
+from `GET /entities/:id/clearance-record`, which returns the SAME object, so their copy cannot drift from
+what a shipper reads. The drive compares the two payloads field for field.
+
+**A DRIVE THAT WAS WRONG ABOUT THE WORLD, worth keeping:** three checks failed on "a company that clears
+nothing", because the company chosen for it — Blantyre Clearing — is a clearing company with real
+appointments from earlier work. The code was right and the drive's premise was not. The sharper party was
+the IMPORTER: a party to every container in the test and an agent on none of them.
+
+**WHAT IS STILL NOT MEASURED, and why:** §6's "entries accepted without amendment" and "time from papers
+to filing" need a customs entry, which this system does not model and should not — that is regulated
+territory next to the duty line §10 refuses. They stay unmeasured rather than approximated.
 
 ### CL4 — Mobilisation, measured
 
@@ -737,9 +796,14 @@ jurisdiction is not a product decision.
   identity is unsolved.
 - **Photographs of official documents** may themselves be controlled in some jurisdictions. Retention,
   and who may read them back, needs a lawyer's answer before the evidenced tier ships.
-- **A disputed observation has no adjudication.** The road map's refuter defect is still open — a refuter's
-  words are appended to the reporter's note, so the queue cannot tell a dispute from a report. The same shape
-  would repeat here, and here it matters more.
+- ~~**A disputed observation has no adjudication.**~~ **CLOSED by PRE and reused twice since.** A dispute is
+  now its own dated, attributed account beside the first — on a road hazard, and on a customs hold in CL4
+  item 1. The deliberate part is that nothing adjudicates it: both accounts stand and a reader weighs them.
+- **An agent's page is reachable only if you know the handle.** CL4 item 1 put `agentHandle` on every
+  consignment row and on an agent's own record, so an importer already working with one can reach their
+  page. Finding an agent they have never met is still out of band. §6a refuses a ranked directory and that
+  holds; a NEUTRAL finder ("who clears at Mombasa", unordered or alphabetical) is not refused by anything
+  written here, but it is a directory decision and belongs to the user, not to a slice.
 - **Language.** Observations will arrive in Swahili, Amharic and French. The real translation pass is still
   deferred, and a dated note nobody can read is not knowledge.
 

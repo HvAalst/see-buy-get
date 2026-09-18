@@ -253,6 +253,16 @@ export const QUIET_LANE_RATIO = 0.5;
 export const MOBILISATION_MIN_LOADS = 5;
 
 /**
+ * How many CONTAINERS a clearing agent's record needs before it states a typical time.
+ *
+ * Its own constant rather than a reuse of the loads figure above, deliberately: a container and a load are
+ * different units of work at wildly different frequencies, and tying them together means a change to one
+ * silently moves the other. The design note's own example is the floor here — "an agent with three
+ * containers shows three containers, and no average."
+ */
+export const AGENT_MIN_CONTAINERS = 5;
+
+/**
  * A load claimed after waiting THIS LONG was taken under scarcity — and the whole market said so.
  *
  * The honest local definition of "tight", and it needed care. The market series knows when the market as

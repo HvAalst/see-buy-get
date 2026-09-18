@@ -135,6 +135,78 @@ export function ProfileScreen({ state }: ProfileScreenProps) {
         </Card>
       ) : null}
 
+      {/* CL4 item 1 — THE CLEARANCE RECORD, for a company that has been appointed to clear a container.
+          Two halves, and the line between them is the whole design: what this agent did with the work in
+          front of them, and separately what the state did. Never one number, and never a border time. */}
+      {p.clears && p.clearsMeasured ? (
+        <Card>
+          <h2 class="h2">{t('home.profile.clearsTitle')}</h2>
+          <p class="card__note">{p.clearsMeasured}</p>
+
+          <ul class="list">
+            <li>{t('home.profile.clearsAppointed', { n: p.clears.appointed })}</li>
+            <li>{t('home.profile.clearsListed', { n: p.clears.listed })}</li>
+            <li>{t('home.profile.clearsCleared', { n: p.clears.cleared })}</li>
+            {p.clears.inFlight > 0 ? <li>{t('home.profile.clearsRunning', { n: p.clears.inFlight })}</li> : null}
+          </ul>
+
+          {/* THE FOREKNOWLEDGE FIGURE, and the one a shipper should read first. A list that grew after the
+              importer had started supplying is a paper they could not have had ready — the two-week story.
+              Shown even on a thin record, because it is a count of what happened, not an average. */}
+          {p.clears.listedLate > 0 ? (
+            <Note
+              tone="warn"
+              icon="warning"
+              title={t('home.profile.clearsLateTitle', { n: p.clears.listedLate })}
+              detail={t('home.profile.clearsLateBody', { papers: p.clears.latePapers })}
+            />
+          ) : p.clears.appointed > 0 ? (
+            <p>{t('home.profile.clearsNoLate')}</p>
+          ) : null}
+
+          {p.clears.thin ? (
+            <Note tone="info" icon="info" title={t('home.profile.clearsThinTitle')} detail={t('home.profile.clearsThinBody', { n: p.clears.ratesNeed })} />
+          ) : (
+            <ul class="list">
+              {p.clears.listHours != null ? <li>{t('home.profile.clearsListHours', { h: p.clears.listHours })}</li> : null}
+              {p.clears.checkHours != null ? <li>{t('home.profile.clearsCheckHours', { h: p.clears.checkHours })}</li> : null}
+              {p.clears.quoteHours != null ? <li>{t('home.profile.clearsQuoteHours', { h: p.clears.quoteHours })}</li> : null}
+            </ul>
+          )}
+
+          {/* Per port, because the papers a border asks for are that border's rather than the country's. */}
+          {p.clears.ports.length > 0 ? (
+            <>
+              <h3 class="h3">{t('home.profile.clearsPorts')}</h3>
+              <ul class="list">
+                {p.clears.ports.slice(0, 8).map((s) => (
+                  <li key={s.key}>{t('home.profile.clearsPort', { port: s.key, appointed: s.appointed, cleared: s.cleared })}</li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+
+          {/* WHAT THE STATE DID, under its own heading and never folded into anything above. An inspection
+              is not this agent's doing — and a hold the other party disputes is shown as disputed, because
+              a page that could render the excuse without the contest would be an excuse box we published. */}
+          {p.clears.holds.recorded > 0 ? (
+            <>
+              <h3 class="h3">{t('home.profile.holdsTitle')}</h3>
+              <p class="card__note">{t('home.profile.holdsNote')}</p>
+              <ul class="list">
+                <li>{t('home.profile.holdsCount', { holds: p.clears.holds.recorded, containers: p.clears.holds.containers })}</li>
+                {p.clears.holds.disputed > 0 ? <li>{t('home.profile.holdsDisputed', { n: p.clears.holds.disputed })}</li> : null}
+                {p.clears.holds.kinds.map((k) => (
+                  <li key={k.key}>
+                    {t(`home.profile.holdKind.${k.key}` as never)} · {k.times}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+        </Card>
+      ) : null}
+
       <Card>
         <h2 class="h2">{t('home.profile.checkedTitle')}</h2>
         {p.verified.length === 0 ? (

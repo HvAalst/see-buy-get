@@ -291,6 +291,34 @@ export function createOperatorApi(sbg: SbgClient) {
     /** Mint the road leg from the port of destination, on the freight machinery that already exists. */
     mintImportRoadLeg: (importId: string, body: { pickupLocation: { lat: number; lng: number }; pickupLabel?: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; entityId?: string; by?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/road-leg', { params: { path: { importId } }, body: body as never })),
+
+    /* ---- CL4 item 1: what the state did to a container, and the agent's own record ---- */
+
+    /**
+     * Record that the state did something: selected it, examined it, queried the papers, or a queue.
+     *
+     * NO PHOTOGRAPH, and the omission is deliberate: a hold notice is a photograph of an official
+     * document, and whether we may hold those is the open legal question blocking CL5.
+     */
+    recordCustomsHold: (importId: string, body: { kind: string; at?: string; note?: string; entityId?: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/customs-holds', { params: { path: { importId } }, body: body as never })),
+
+    /** The other party's account of the same hold. Added beside, never instead — nothing is erased. */
+    answerCustomsHold: (importId: string, holdId: string, body: { stance: 'happened' | 'disputed'; note?: string; entityId?: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/customs-holds/{holdId}/answer', { params: { path: { importId, holdId } }, body: body as never })),
+
+    releaseCustomsHold: (importId: string, holdId: string, body: { at?: string; entityId?: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/customs-holds/{holdId}/release', { params: { path: { importId, holdId } }, body: body as never })),
+
+    /**
+     * ONE CLEARING AGENT'S RECORD — the same object the public page carries.
+     *
+     * An agent reads their own copy here and a shipper reads it at `/@handle`; if the two could differ,
+     * the public one would stop being worth anything. A record handed down is a verdict; one both parties
+     * hold is an account.
+     */
+    clearanceRecord: (entityId: string) =>
+      sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/clearance-record', { params: { path: { entityId } } as never })),
     /* ---- CL3: scarcity, derived. The same public series both the console and a fleet office read. ---- */
 
     /**

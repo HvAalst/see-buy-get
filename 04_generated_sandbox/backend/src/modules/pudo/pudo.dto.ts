@@ -10,6 +10,7 @@ import { PACKAGING, type Packaging } from './packaging';
 import { MEDIA_KINDS, MediaKind } from './media.types';
 import { CONSTRAINT_KINDS, ConstraintKind } from './route-constraint.types';
 import { CARGO_LANES, CARGO_NATURES, CargoLane, CargoNature, EQUIPMENT, Equipment } from './cargo.types';
+import { CUSTOMS_HOLD_KINDS, HOLD_STANCES } from './import.types';
 
 /** F1 — a scheduled pickup instant must be a full datetime WITH a timezone offset (Z or ±HH:MM), so the
  *  moment is unambiguous — a date-only or offset-less string would resolve to a server-timezone-dependent
@@ -354,6 +355,34 @@ export class MintRoadLegDto {
   @IsString() @MaxLength(120) destLabel!: string;
   @IsOptional() @ValidateNested() @Type(() => GeoDto) destLocation?: GeoDto;
   @IsNumber() @Min(1) weightKg!: number;
+  @IsOptional() @IsString() entityId?: string;
+  @IsOptional() @IsString() by?: string;
+}
+
+/**
+ * CL4 — what the state did to a container. NO PHOTOGRAPH FIELD, and that is deliberate: a hold notice is
+ * a photograph of an official document, and whether we may hold those is the open legal question blocking
+ * CL5. Words, a date and an attribution are available today.
+ */
+export class RecordCustomsHoldDto {
+  @IsIn(CUSTOMS_HOLD_KINDS) @ApiProperty({ enum: CUSTOMS_HOLD_KINDS }) kind!: string;
+  /** When it happened, as the party recording it says. Defaults to now. */
+  @IsOptional() @IsString() at?: string;
+  @IsOptional() @IsString() @MaxLength(500) note?: string;
+  @IsOptional() @IsString() entityId?: string;
+  @IsOptional() @IsString() by?: string;
+}
+
+/** The other party's account of the same hold. A dispute must carry words — see the service. */
+export class AnswerCustomsHoldDto {
+  @IsIn(HOLD_STANCES) @ApiProperty({ enum: HOLD_STANCES }) stance!: string;
+  @IsOptional() @IsString() @MaxLength(500) note?: string;
+  @IsOptional() @IsString() entityId?: string;
+  @IsOptional() @IsString() by?: string;
+}
+
+export class ReleaseCustomsHoldDto {
+  @IsOptional() @IsString() at?: string;
   @IsOptional() @IsString() entityId?: string;
   @IsOptional() @IsString() by?: string;
 }

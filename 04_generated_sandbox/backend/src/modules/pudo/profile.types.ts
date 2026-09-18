@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { HANDLE_KINDS, type HandleKind } from '../../foundation/handle/handle.service';
+import { ClearanceRecord } from './import.types';
 import { GeoPoint } from './pudo.types';
 
 /**
@@ -31,6 +32,11 @@ export function profileDoes(kind: string): string {
       return 'Sorts parcels between routes.';
     case 'fleet':
       return 'Runs vehicles and drivers, and takes loads off the market.';
+    case 'clearing-agent':
+      // Not one of HANDLE_KINDS, and deliberately not: being a clearing agent is DERIVED from having been
+      // appointed on a container, never a kind somebody registers as. This is the sentence that makes an
+      // agent findable at all — a page that says only "a company on this network" closes nothing.
+      return 'Clears containers through customs for importers, and says what papers each border will ask for.';
     default:
       return 'A company on this network.';
   }
@@ -197,4 +203,23 @@ export class ProfileView {
    */
   @ApiPropertyOptional()
   movesMeasured?: string;
+
+  /**
+   * CL4 item 1 — THE CLEARANCE RECORD, for a company that has been appointed to clear a container.
+   *
+   * The same class the agent's own route returns, so their copy and a shipper's view cannot differ: a
+   * record handed down is a verdict, one both parties hold is an account.
+   *
+   * What is NOT in it is the point. There is no border-time figure anywhere, because scoring an agent on
+   * elapsed time at a counter systematically advertises whoever pays bribes, and absence of a seizure is
+   * not evidence of compliance. `holds` carries what the STATE did, counted apart, labelled, disputable
+   * by the other party to that container, and never netted off the agent's own figures.
+   *
+   * Absent for a company that has never been appointed, rather than present and zero.
+   */
+  @ApiPropertyOptional({ type: ClearanceRecord })
+  clears?: ClearanceRecord;
+
+  @ApiPropertyOptional()
+  clearsMeasured?: string;
 }

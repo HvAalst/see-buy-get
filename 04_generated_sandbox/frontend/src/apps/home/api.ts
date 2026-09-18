@@ -146,6 +146,32 @@ export interface ProfileView {
   };
   /** What we measured and what we did NOT — carried so no screen can show the figures without it. */
   movesMeasured?: string;
+  /**
+   * CL4 item 1 — the clearance record, for a company that has been appointed to clear a container.
+   *
+   * Two halves that must never be added together. Everything before `holds` is what this agent did with
+   * the work in front of them; `holds` is what the STATE did, counted apart and labelled, because
+   * scoring an agent on time at a border systematically advertises whoever pays bribes. There is
+   * deliberately no field here for a border time, and there must not be one.
+   */
+  clears?: {
+    appointed: number;
+    listed: number;
+    quoted: number;
+    cleared: number;
+    inFlight: number;
+    /** Containers whose list of papers GREW after the importer had started supplying. The two-week story. */
+    listedLate: number;
+    latePapers: number;
+    listHours?: number | null;
+    checkHours?: number | null;
+    quoteHours?: number | null;
+    thin: boolean;
+    ratesNeed: number;
+    ports: Array<{ key: string; appointed: number; listed: number; cleared: number }>;
+    holds: { containers: number; recorded: number; disputed: number; kinds: Array<{ key: string; times: number }> };
+  };
+  clearsMeasured?: string;
 }
 
 /**

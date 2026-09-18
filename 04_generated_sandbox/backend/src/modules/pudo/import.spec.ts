@@ -440,4 +440,95 @@ describe('an import consignment, its papers, and the agent who clears them', () 
       expect(imports.list('', { all: true })).toHaveLength(1);
     });
   });
+
+  /**
+   * CL4 — WHAT THE STATE DID, which is the half of an agent's record that is not their doing.
+   *
+   * The whole risk of this field is that it is a free excuse box, written by the party it excuses. So the
+   * guards worth having are about the OTHER party: that they see it at once, that they can answer beside
+   * it, that answering never deletes anything, and that a dispute has to carry words somebody can weigh.
+   */
+  describe('what the state did to a container', () => {
+    const appointed = () => {
+      const one = register();
+      imports.appoint(one.importId, agentId, importerId, 'Hans');
+      return one;
+    };
+
+    it('lets the agent record a hold, and the importer sees it immediately', () => {
+      const one = appointed();
+      const after = imports.recordCustomsHold(one.importId, agentId, { kind: 'physical_exam', note: 'Selected for scanning' }, 'Selam');
+      expect(after.customsHolds).toHaveLength(1);
+      expect(after.customsHolds[0]).toMatchObject({ kind: 'physical_exam', recordedBy: agentId });
+      // Not a private note: a claim made about a delay the importer is living through must be visible to them.
+      expect(imports.detail(one.importId, importerId).customsHolds[0].accounts[0]).toMatchObject({ stance: 'happened', note: 'Selected for scanning' });
+    });
+
+    it('lets the importer answer it, and the original account SURVIVES', () => {
+      const one = appointed();
+      const hold = imports.recordCustomsHold(one.importId, agentId, { kind: 'queue' }, 'Selam').customsHolds[0];
+      const after = imports.answerCustomsHold(one.importId, importerId, hold.holdId, 'disputed', 'They had not filed by then', 'Hans');
+
+      const accounts = after.customsHolds[0].accounts;
+      expect(accounts).toHaveLength(2);
+      expect(accounts[0].stance).toBe('happened'); // never erased, never edited
+      expect(accounts[1]).toMatchObject({ stance: 'disputed', note: 'They had not filed by then' });
+    });
+
+    it('refuses a dispute with no words — nobody can weigh a bare contradiction', () => {
+      const one = appointed();
+      const hold = imports.recordCustomsHold(one.importId, agentId, { kind: 'queue' }, 'Selam').customsHolds[0];
+      expect(() => imports.answerCustomsHold(one.importId, importerId, hold.holdId, 'disputed', '  ', 'Hans')).toThrow(/Say what you say happened/);
+    });
+
+    it('does not turn one party changing their mind into two witnesses', () => {
+      const one = appointed();
+      const hold = imports.recordCustomsHold(one.importId, agentId, { kind: 'queue' }, 'Selam').customsHolds[0];
+      imports.answerCustomsHold(one.importId, importerId, hold.holdId, 'disputed', 'Not what happened', 'Hans');
+      const after = imports.answerCustomsHold(one.importId, importerId, hold.holdId, 'happened', 'I was wrong, they were held', 'Hans');
+      expect(after.customsHolds[0].accounts).toHaveLength(2);
+      expect(after.customsHolds[0].accounts[1]).toMatchObject({ stance: 'happened', note: 'I was wrong, they were held' });
+    });
+
+    it('is a stranger’s business in no way at all', () => {
+      const one = appointed();
+      expect(() => imports.recordCustomsHold(one.importId, rivalId, { kind: 'queue' }, 'Rival')).toThrow(/No such consignment/);
+    });
+
+    it('records a release once, and never before the hold began', () => {
+      const one = appointed();
+      const hold = imports.recordCustomsHold(one.importId, agentId, { kind: 'physical_exam', at: '2026-09-10T08:00:00.000Z' }, 'Selam').customsHolds[0];
+      expect(() => imports.releaseCustomsHold(one.importId, agentId, hold.holdId, '2026-09-09T08:00:00.000Z')).toThrow(/cannot be released before/);
+      const after = imports.releaseCustomsHold(one.importId, agentId, hold.holdId, '2026-09-12T08:00:00.000Z');
+      expect(after.customsHolds[0].releasedAt).toBe('2026-09-12T08:00:00.000Z');
+      // A release date that moves is not a record of anything.
+      expect(() => imports.releaseCustomsHold(one.importId, agentId, hold.holdId, '2026-09-13T08:00:00.000Z')).toThrow(/already recorded as released/);
+    });
+
+    it('carries the holds into the agent’s record without touching one figure they control', () => {
+      const one = appointed();
+      imports.publishRequired(one.importId, agentId, [{ label: 'Invoice' }], 'Selam');
+      const invoice = paper(importerId, 'commercial_invoice', 'Invoice', { relatesTo: one.code });
+      imports.supply(one.importId, importerId, 'invoice', invoice.documentId, 'Hans');
+      imports.accept(one.importId, agentId, 'invoice', 'Selam');
+      const before = imports.agentRecord(agentId);
+
+      imports.recordCustomsHold(one.importId, agentId, { kind: 'inspection_selected' }, 'Selam');
+      const after = imports.agentRecord(agentId);
+
+      expect(after.holds).toEqual({ containers: 1, recorded: 1, disputed: 0, kinds: [{ key: 'inspection_selected', times: 1 }] });
+      // Everything the agent controls is untouched: a hold is context a reader weighs, never arithmetic.
+      expect({ ...after, holds: null }).toEqual({ ...before, holds: null });
+    });
+
+    it('makes the agent an agent, and leaves a company that clears nothing alone', () => {
+      const one = appointed();
+      expect(imports.isAgent(agentId)).toBe(true);
+      expect(imports.isAgent(rivalId)).toBe(false);
+      expect(imports.agentRecord(agentId).appointed).toBe(1);
+      expect(imports.agentRecord(rivalId).appointed).toBe(0);
+      expect(imports.agentRecord(agentId).ports).toEqual([{ key: 'Djibouti', appointed: 1, listed: 0, cleared: 0 }]);
+      expect(one.code).toMatch(/^IMP-/);
+    });
+  });
 });

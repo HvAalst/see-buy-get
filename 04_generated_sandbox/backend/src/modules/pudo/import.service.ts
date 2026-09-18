@@ -11,8 +11,13 @@ import { DispatchService } from './dispatch.service';
 import type { GeoPoint } from './pudo.types';
 import {
   BorderPaperObservation,
+  CUSTOMS_HOLD_KINDS,
+  CustomsHold,
+  CustomsHoldKind,
   DocumentGrant,
   FeeState,
+  HOLD_STANCES,
+  HoldStance,
   ImportConsignment,
   ImportDetail,
   ImportFee,
@@ -22,6 +27,7 @@ import {
   RequiredPaper,
   RequiredPaperView,
 } from './import.types';
+import { AgentRecord, agentRecordOf, isClearingAgent } from './agent-record';
 
 /**
  * CL2a — THE IMPORTER'S PAPERS, AND THE AGENT WHO CLEARS THEM.
@@ -386,7 +392,107 @@ export class ImportService {
       // Said at the START, on every read, rather than discovered when somebody tries to pay.
       money: this.moneyHereFor(consignment),
       ...(consignment.roadFreightId ? { roadFreightId: consignment.roadFreightId } : {}),
+      // Shown to BOTH parties, always. A hold recorded by the agent that the importer could not see would
+      // be a claim made about them behind their back, and the dispute it invites could never be made.
+      customsHolds: consignment.customsHolds ?? [],
     };
+  }
+
+  /* ------------------------------------------------------- what the state did -- */
+
+  /**
+   * CL4 — record that the state did something to this container.
+   *
+   * EITHER PARTY MAY RECORD ONE, and it will usually be the agent, who is the one standing at the counter.
+   * That makes it a self-serving field by construction — "it was not my fault" with nothing behind it —
+   * which is exactly why it is built like the road map's disputes: attributed, visible to the other party
+   * the moment it is written, answerable beside rather than instead, and never erased.
+   *
+   * It changes NO figure on the agent's record. §6 is explicit that what the state controls is recorded,
+   * shown and labelled as not the agent's doing, and never blended — a system that discounted an agent's
+   * own response times by the holds they reported would have built the excuse field this design refuses.
+   */
+  recordCustomsHold(
+    importId: string,
+    actorEntityId: string,
+    input: { kind: CustomsHoldKind; at?: string; note?: string },
+    by: string,
+    now = Date.now(),
+  ): ImportDetail {
+    const consignment = this.requireImport(importId);
+    const side = this.sideOf(consignment, actorEntityId);
+    if (side === 'onlooker') throw new GlosError('NOT_FOUND', 'No such consignment');
+    if (!CUSTOMS_HOLD_KINDS.includes(input.kind)) throw new GlosError('INVALID_INPUT', 'That is not one of the things the state does to a container');
+    const at = input.at?.trim() || new Date(now).toISOString();
+    if (!Number.isFinite(Date.parse(at))) throw new GlosError('INVALID_INPUT', 'Give the date it happened');
+    const hold: CustomsHold = {
+      holdId: `hld_${randomBytes(6).toString('hex')}`,
+      kind: input.kind,
+      at,
+      recordedBy: actorEntityId,
+      recordedAt: new Date(now).toISOString(),
+      accounts: [{ by, at: new Date(now).toISOString(), stance: 'happened', ...(input.note?.trim() ? { note: input.note.trim() } : {}) }],
+    };
+    consignment.customsHolds = [...(consignment.customsHolds ?? []), hold];
+    this.imports.set(consignment.importId, consignment);
+    return this.detail(consignment.importId, actorEntityId);
+  }
+
+  /**
+   * The other party's account of the same hold.
+   *
+   * NOT A DELETION, and that is the whole shape: the original account stays, this one is added, and the
+   * record carries a disagreement that a reader resolves rather than one the system resolved for them.
+   * One account per party per hold — somebody who says the same thing twice has not become two witnesses,
+   * and changing their mind replaces what they said rather than adding to it.
+   */
+  answerCustomsHold(importId: string, actorEntityId: string, holdId: string, stance: HoldStance, note: string | undefined, by: string, now = Date.now()): ImportDetail {
+    const consignment = this.requireImport(importId);
+    const side = this.sideOf(consignment, actorEntityId);
+    if (side === 'onlooker') throw new GlosError('NOT_FOUND', 'No such consignment');
+    const hold = (consignment.customsHolds ?? []).find((h) => h.holdId === holdId);
+    if (!hold) throw new GlosError('NOT_FOUND', 'No such hold on this consignment');
+    if (!HOLD_STANCES.includes(stance)) throw new GlosError('INVALID_INPUT', 'Either it happened as described, or it is disputed');
+    if (stance === 'disputed' && !note?.trim()) {
+      throw new GlosError('FIELD_REQUIRED', 'Say what you say happened instead — a dispute with no words cannot be weighed by anybody');
+    }
+    const entry = { by, at: new Date(now).toISOString(), stance, ...(note?.trim() ? { note: note.trim() } : {}) };
+    const existing = hold.accounts.findIndex((a) => a.by === by);
+    if (existing >= 0) hold.accounts[existing] = entry;
+    else hold.accounts.push(entry);
+    this.imports.set(consignment.importId, consignment);
+    return this.detail(consignment.importId, actorEntityId);
+  }
+
+  /** It ended. Recorded by either party, and only once: a release date that moves is not a record. */
+  releaseCustomsHold(importId: string, actorEntityId: string, holdId: string, at: string | undefined, now = Date.now()): ImportDetail {
+    const consignment = this.requireImport(importId);
+    if (this.sideOf(consignment, actorEntityId) === 'onlooker') throw new GlosError('NOT_FOUND', 'No such consignment');
+    const hold = (consignment.customsHolds ?? []).find((h) => h.holdId === holdId);
+    if (!hold) throw new GlosError('NOT_FOUND', 'No such hold on this consignment');
+    if (hold.releasedAt) throw new GlosError('INVALID_STATE', 'That hold is already recorded as released');
+    const when = at?.trim() || new Date(now).toISOString();
+    if (!Number.isFinite(Date.parse(when))) throw new GlosError('INVALID_INPUT', 'Give the date it was released');
+    if (Date.parse(when) < Date.parse(hold.at)) throw new GlosError('INVALID_INPUT', 'A hold cannot be released before it began');
+    hold.releasedAt = when;
+    this.imports.set(consignment.importId, consignment);
+    return this.detail(consignment.importId, actorEntityId);
+  }
+
+  /**
+   * ONE AGENT'S RECORD, over every container they were appointed on.
+   *
+   * Read straight off the consignments, so the figures can be reproduced from the containers in front of
+   * you. No store of its own, nothing cached: a record kept beside the facts is a record that can
+   * disagree with them.
+   */
+  agentRecord(entityId: string, now = Date.now()): AgentRecord {
+    return agentRecordOf([...this.imports.values()], entityId, now);
+  }
+
+  /** Has this company ever been appointed to clear a container? What makes them an agent at all. */
+  isAgent(entityId: string): boolean {
+    return isClearingAgent([...this.imports.values()], entityId);
   }
 
   /**

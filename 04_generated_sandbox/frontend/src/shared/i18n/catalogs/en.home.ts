@@ -38,6 +38,37 @@ export const enHome = {
   'home.profile.movesRates': 'They kept {kept}% of the loads they took, and delivered {delivered}% of the ones they kept.',
   'home.profile.movesLanes': 'By route',
   'home.profile.movesLane': '{lane} — taken {taken}, delivered {delivered}',
+  /* CL4 item 1 — the clearance record. Two halves under one heading, and the SPLIT is the design: what
+     this agent did with the work in front of them, and separately what the state did to the container.
+     There is no figure anywhere for time at the border, because scoring that advertises whoever pays
+     bribes. Counts read correctly at one; the catalogue has no plural machinery. */
+  'home.profile.clearsTitle': 'Containers they have cleared',
+  'home.profile.clearsAppointed': 'Containers they were appointed on: {n}',
+  'home.profile.clearsListed': 'Containers they published a list of needed papers for: {n}',
+  'home.profile.clearsCleared': 'Containers that got on the road: {n}',
+  'home.profile.clearsRunning': 'Still in hand: {n}',
+  'home.profile.clearsLateTitle': 'On {n} of them, the list of papers grew after documents had started arriving',
+  'home.profile.clearsLateBody':
+    '{papers} papers were added late. This is the one figure worth reading first: a paper remembered after you have started is a paper you could not have had ready, and that is how a container ends up sitting at a port. It says nothing about honesty or care — the difference between a good clearance and a bad one is usually knowing the list up front.',
+  'home.profile.clearsNoLate': 'On every container so far, the list of papers was complete before documents started arriving.',
+  'home.profile.clearsThinTitle': 'Too few containers to state a usual time',
+  'home.profile.clearsThinBody': 'The counts above are real. A usual time needs at least {n} containers; one worked out from fewer would flatter or damn them on almost no evidence.',
+  'home.profile.clearsListHours': 'Usually says what papers are needed within {h} hours of being appointed.',
+  'home.profile.clearsCheckHours': 'A paper you send usually waits {h} hours for them to accept or query it.',
+  'home.profile.clearsQuoteHours': 'Usually names their fee within {h} hours.',
+  'home.profile.clearsPorts': 'By port',
+  'home.profile.clearsPort': '{port} — appointed {appointed}, on the road {cleared}',
+  /* What the STATE did. Its own heading, and a sentence that says it is not theirs. */
+  'home.profile.holdsTitle': 'What customs did',
+  'home.profile.holdsNote':
+    'Not this agent’s doing, and not counted against them anywhere above. Recorded by one of the two parties to the container; where the other party says it happened differently, that is shown too. We were not there, and we do not adjudicate it.',
+  'home.profile.holdsCount': '{holds} recorded, across {containers} containers',
+  'home.profile.holdsDisputed': 'The other party disputes {n} of them',
+  'home.profile.holdKind.inspection_selected': 'Selected for inspection',
+  'home.profile.holdKind.physical_exam': 'Physically examined',
+  'home.profile.holdKind.documents_queried': 'Papers queried at the counter',
+  'home.profile.holdKind.queue': 'Waiting in the queue',
+  'home.profile.holdKind.other': 'Something else',
   'home.store.underAnHour': 'Under an hour',
   'home.store.hours': 'About {n} hours',
   'home.store.days': 'About {n} days',

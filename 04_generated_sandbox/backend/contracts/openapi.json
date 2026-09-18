@@ -5003,6 +5003,166 @@
         }
       }
     },
+    "/v1/sbg/imports/{importId}/customs-holds": {
+      "post": {
+        "operationId": "Sbg.recordCustomsHold",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordCustomsHoldDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/imports/{importId}/customs-holds/{holdId}/answer": {
+      "post": {
+        "operationId": "Sbg.answerCustomsHold",
+        "summary": "",
+        "description": "The other party's account of the same hold. Never a deletion — see the service.",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "holdId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerCustomsHoldDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/imports/{importId}/customs-holds/{holdId}/release": {
+      "post": {
+        "operationId": "Sbg.releaseCustomsHold",
+        "summary": "",
+        "description": "It ended. Once: a release date that moves is not a record.",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "holdId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseCustomsHoldDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/entities/{entityId}/clearance-record": {
+      "get": {
+        "operationId": "Sbg.clearanceRecord",
+        "summary": "",
+        "description": "ONE CLEARING AGENT'S RECORD — theirs to read about themselves, and an operator's to read about them.\n\nThe same object the public profile page carries, so an agent's own copy cannot differ from what a\nshipper reads: a record handed down is a verdict, one both parties hold is an account. The public page\nis the other route to this, and the drive compares the two payloads field for field.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClearanceRecordResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/imports/{importId}/road-leg": {
       "post": {
         "operationId": "Sbg.mintImportRoadLeg",
@@ -19121,6 +19281,79 @@
           "quotedAt"
         ]
       },
+      "CustomsHoldAccount": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "stance": {
+            "type": "string",
+            "enum": [
+              "happened",
+              "disputed"
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "by",
+          "at",
+          "stance"
+        ]
+      },
+      "CustomsHold": {
+        "type": "object",
+        "properties": {
+          "holdId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "inspection_selected",
+              "physical_exam",
+              "documents_queried",
+              "queue",
+              "other"
+            ]
+          },
+          "at": {
+            "type": "string",
+            "description": "When it happened, as the party recording it says. Their date, not ours: we were not there."
+          },
+          "releasedAt": {
+            "type": "string",
+            "description": "When it ended, once somebody records that it has. Absent while a container is still held."
+          },
+          "recordedBy": {
+            "type": "string"
+          },
+          "recordedAt": {
+            "type": "string"
+          },
+          "accounts": {
+            "description": "Every account given, oldest first, including the one that recorded it.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustomsHoldAccount"
+            }
+          }
+        },
+        "required": [
+          "holdId",
+          "kind",
+          "at",
+          "recordedBy",
+          "recordedAt",
+          "accounts"
+        ]
+      },
       "ImportConsignment": {
         "type": "object",
         "properties": {
@@ -19204,6 +19437,13 @@
           },
           "roadMintedBy": {
             "type": "string"
+          },
+          "customsHolds": {
+            "description": "CL4 — what the state did to this container. Absent on every consignment recorded before the slice.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustomsHold"
+            }
           },
           "createdAt": {
             "type": "string"
@@ -19433,6 +19673,10 @@
           "agentName": {
             "type": "string"
           },
+          "agentHandle": {
+            "type": "string",
+            "description": "The agent's PUBLIC address — `seebuyget.com/@handle`. An entity id is not somewhere you can go."
+          },
           "youAre": {
             "type": "string",
             "description": "Which side of this the reader is on. An operator reading over the network's shoulder is `onlooker`.",
@@ -19508,6 +19752,13 @@
           },
           "roadFreightId": {
             "type": "string"
+          },
+          "customsHolds": {
+            "description": "CL4 — what the state did, with both parties' accounts. Shown to both, and to an operator.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustomsHold"
+            }
           }
         },
         "required": [
@@ -19528,7 +19779,8 @@
           "required",
           "documents",
           "grants",
-          "money"
+          "money",
+          "customsHolds"
         ]
       },
       "AppointAgentDto": {
@@ -19694,6 +19946,229 @@
         },
         "required": [
           "reference"
+        ]
+      },
+      "RecordCustomsHoldDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "inspection_selected",
+              "physical_exam",
+              "documents_queried",
+              "queue",
+              "other"
+            ]
+          },
+          "at": {
+            "type": "string",
+            "description": "When it happened, as the party recording it says. Defaults to now."
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "AnswerCustomsHoldDto": {
+        "type": "object",
+        "properties": {
+          "stance": {
+            "type": "string",
+            "enum": [
+              "happened",
+              "disputed"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "stance"
+        ]
+      },
+      "ReleaseCustomsHoldDto": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        }
+      },
+      "ClearancePortSlice": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "appointed": {
+            "type": "number"
+          },
+          "listed": {
+            "type": "number"
+          },
+          "cleared": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "key",
+          "appointed",
+          "listed",
+          "cleared"
+        ]
+      },
+      "ClearanceHoldKind": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "times": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "key",
+          "times"
+        ]
+      },
+      "ClearanceHolds": {
+        "type": "object",
+        "properties": {
+          "containers": {
+            "type": "number"
+          },
+          "recorded": {
+            "type": "number"
+          },
+          "disputed": {
+            "type": "number",
+            "description": "Of those, how many the other party to that container disputes. Shown with the count, always."
+          },
+          "kinds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ClearanceHoldKind"
+            }
+          }
+        },
+        "required": [
+          "containers",
+          "recorded",
+          "disputed",
+          "kinds"
+        ]
+      },
+      "ClearanceRecord": {
+        "type": "object",
+        "properties": {
+          "appointed": {
+            "type": "number"
+          },
+          "listed": {
+            "type": "number"
+          },
+          "quoted": {
+            "type": "number"
+          },
+          "cleared": {
+            "type": "number"
+          },
+          "inFlight": {
+            "type": "number"
+          },
+          "listedLate": {
+            "type": "number",
+            "description": "Containers where the list GREW after the importer had begun supplying — the two-week story, counted."
+          },
+          "latePapers": {
+            "type": "number"
+          },
+          "listHours": {
+            "type": "number",
+            "nullable": true
+          },
+          "checkHours": {
+            "type": "number",
+            "nullable": true
+          },
+          "quoteHours": {
+            "type": "number",
+            "nullable": true
+          },
+          "thin": {
+            "type": "boolean"
+          },
+          "ratesNeed": {
+            "type": "number"
+          },
+          "ports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ClearancePortSlice"
+            }
+          },
+          "holds": {
+            "$ref": "#/components/schemas/ClearanceHolds"
+          }
+        },
+        "required": [
+          "appointed",
+          "listed",
+          "quoted",
+          "cleared",
+          "inFlight",
+          "listedLate",
+          "latePapers",
+          "thin",
+          "ratesNeed",
+          "ports",
+          "holds"
+        ]
+      },
+      "ClearanceRecordResponse": {
+        "type": "object",
+        "properties": {
+          "record": {
+            "$ref": "#/components/schemas/ClearanceRecord"
+          },
+          "measured": {
+            "type": "string",
+            "description": "What was measured and what was not. In the payload so no screen can render the figures without it."
+          },
+          "handle": {
+            "type": "string",
+            "description": "Their own public page, so \"the same thing a shipper reads\" is a claim they can go and check."
+          }
+        },
+        "required": [
+          "record",
+          "measured"
         ]
       },
       "MintRoadLegDto": {
@@ -23025,6 +23500,17 @@
           "movesMeasured": {
             "type": "string",
             "description": "What we measured, and what we did NOT — carried in the payload so no screen can render the figures\nwithout the sentence. This measure's failure mode is being read as a general endorsement."
+          },
+          "clears": {
+            "description": "CL4 item 1 — THE CLEARANCE RECORD, for a company that has been appointed to clear a container.\n\nThe same class the agent's own route returns, so their copy and a shipper's view cannot differ: a\nrecord handed down is a verdict, one both parties hold is an account.\n\nWhat is NOT in it is the point. There is no border-time figure anywhere, because scoring an agent on\nelapsed time at a counter systematically advertises whoever pays bribes, and absence of a seizure is\nnot evidence of compliance. `holds` carries what the STATE did, counted apart, labelled, disputable\nby the other party to that container, and never netted off the agent's own figures.\n\nAbsent for a company that has never been appointed, rather than present and zero.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ClearanceRecord"
+              }
+            ]
+          },
+          "clearsMeasured": {
+            "type": "string"
           },
           "handle": {
             "type": "string",

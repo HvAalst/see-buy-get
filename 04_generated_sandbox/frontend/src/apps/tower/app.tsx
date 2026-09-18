@@ -82,13 +82,16 @@ export function App() {
   const isOperator = state.who?.mode === 'operator';
   const manyCompanies = (state.entities?.length ?? 0) > 1;
   const available: Screen[] = [
-    ...(isOperator ? (['network', 'hazards', 'claims', 'disposal', 'approvals', 'papers', 'reports', 'support', 'corridors', 'presence', 'pictures', 'company', 'borders'] as Screen[]) : []),
+    // `movers` belongs in THIS list and not below it: the route behind it is operator-only, because it
+    // carries hand-back reasons and names drivers. Offered to a company administrator it was a section
+    // whose every read answers 403 — the same defect already tracked against the finance endpoint, and
+    // one I introduced in the slice that added the screen.
+    ...(isOperator ? (['network', 'hazards', 'claims', 'disposal', 'approvals', 'papers', 'reports', 'support', 'corridors', 'presence', 'pictures', 'company', 'borders', 'movers'] as Screen[]) : []),
     ...(manyCompanies ? (['companies'] as Screen[]) : []),
     'money',
     'rates',
     'imports',
     'market',
-    'movers',
   ];
   const groups = groupsFor(available);
 
