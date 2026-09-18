@@ -271,22 +271,29 @@ const run = async () => {
       'driver amos',
     );
   }
-  // Amos signs in the way every driver does: the phone the fleet registered, and a PIN. The phone is the one in
-  // his DID's controller (`pudo-driver:<mobile>`) — on a re-seed he already exists and nobody printed it.
+  /*
+   * Every driver signs in the way a driver does: the phone the fleet registered, and a PIN.
+   *
+   * Written once because there are three of them now, and because a seeded driver with no way to sign in
+   * is not a driver in this world — the uploads a haul needs are checked against the OWNER of the photo,
+   * so the fleet's token cannot stand in for the person who took it. The phone is the one in the DID's
+   * controller (`pudo-driver:<mobile>`): on a re-seed the driver already exists and nobody printed it.
+   */
   const DRIVER_PIN = '1357';
-  const amosPhone = (need(await req('GET', `/v1/did/${encodeURIComponent(amos.did)}`), 'amos did').controller ?? '').replace(/^pudo-driver:/, '');
-  let amosToken;
-  {
-    const signedIn = await req('POST', '/v1/sbg/drivers/session', { body: { phone: amosPhone, pin: DRIVER_PIN } });
-    if (!signedIn.ok) {
-      const r1 = await req('POST', '/v1/sbg/auth/phone/request', { body: { phone: amosPhone } });
-      need(await req('POST', '/v1/sbg/auth/phone/verify', { body: { phone: amosPhone, code: r1.data?.code } }), 'amos phone verify');
-      need(await req('POST', '/v1/sbg/identity/enroll', { body: { phone: amosPhone, pin: DRIVER_PIN } }), 'amos pin');
-      need(await req('POST', '/v1/sbg/drivers/session', { body: { phone: amosPhone, pin: DRIVER_PIN } }), 'amos sign-in');
+  const signInDriver = async (driver, label) => {
+    const phone = (need(await req('GET', `/v1/did/${encodeURIComponent(driver.did)}`), `${label} did`).controller ?? '').replace(/^pudo-driver:/, '');
+    let session = await req('POST', '/v1/sbg/drivers/session', { body: { phone, pin: DRIVER_PIN } });
+    if (!session.ok) {
+      const r1 = await req('POST', '/v1/sbg/auth/phone/request', { body: { phone } });
+      await req('POST', '/v1/sbg/auth/phone/verify', { body: { phone, code: r1.data?.code } });
+      await req('POST', '/v1/sbg/identity/enroll', { body: { phone, pin: DRIVER_PIN } });
+      session = await req('POST', '/v1/sbg/drivers/session', { body: { phone, pin: DRIVER_PIN } });
     }
-    amosToken = (signedIn.ok ? signedIn.data : (await req('POST', '/v1/sbg/drivers/session', { body: { phone: amosPhone, pin: DRIVER_PIN } })).data)?.token?.access_token;
-  }
-  say(`driver Amos K.   phone ${amosPhone} PIN ${DRIVER_PIN}`);
+    return { phone, token: session.data?.token?.access_token };
+  };
+  const amosIn = await signInDriver(amos, 'amos');
+  const amosToken = amosIn.token;
+  say(`driver Amos K.   phone ${amosIn.phone} PIN ${DRIVER_PIN}`);
 
   let grace = drivers.find((d) => d.displayName === 'Grace M.');
   if (!grace) {
@@ -353,23 +360,15 @@ const run = async () => {
    * IDEMPOTENT by position: a re-run finds the washout already standing and leaves it alone rather than
    * drawing a second one 40 m up the same road.
    */
+  // Named out here because the sign-in sheet prints it at the end: both drivers are credentials now.
+  const graceIn = await signInDriver(grace, 'grace');
+  say(`driver Grace M.  phone ${graceIn.phone} PIN ${DRIVER_PIN}`);
   {
-    const gracePhone = (need(await req('GET', `/v1/did/${encodeURIComponent(grace.did)}`), 'grace did').controller ?? '').replace(/^pudo-driver:/, '');
-    let graceToken;
-    const gIn = await req('POST', '/v1/sbg/drivers/session', { body: { phone: gracePhone, pin: DRIVER_PIN } });
-    if (gIn.ok) {
-      graceToken = gIn.data?.token?.access_token;
-    } else {
-      const r1 = await req('POST', '/v1/sbg/auth/phone/request', { body: { phone: gracePhone } });
-      await req('POST', '/v1/sbg/auth/phone/verify', { body: { phone: gracePhone, code: r1.data?.code } });
-      await req('POST', '/v1/sbg/identity/enroll', { body: { phone: gracePhone, pin: DRIVER_PIN } });
-      graceToken = (await req('POST', '/v1/sbg/drivers/session', { body: { phone: gracePhone, pin: DRIVER_PIN } })).data?.token?.access_token;
-    }
-    say(`driver Grace M.  phone ${gracePhone} PIN ${DRIVER_PIN}`);
+    const graceToken = graceIn.token;
 
     // On the straight line between Nairobi and Nakuru, so it is on the corridor the demo actually runs.
     const spot = { lat: -0.7935, lng: 36.4503 };
-    const standing = (await req('GET', `/v1/sbg/route-constraints?lat=${spot.lat}&lng=${spot.lng}&radiusKm=1`)).data?.items ?? [];
+    const standing = (await req('GET', `/v1/sbg/route-constraints?lat=${spot.lat}&lng=${spot.lng}&radiusKm=1`, { token: op })).data?.items ?? [];
     if (!standing.some((c) => c.kind === 'WASHOUT') && amosToken && graceToken) {
       const seen = await uploadRoad(amosToken, 'washout');
       const rep = await req('POST', '/v1/sbg/route-constraints', {
@@ -734,6 +733,161 @@ const run = async () => {
       `${(fleetNow.positions ?? []).length} reporting a position · ${fleetNow.cargo?.count ?? 0} parcels in motion`,
   );
 
+  /* ------------------------------- a damage claim somebody can actually decide --- */
+
+  /*
+   * A FREIGHT CLAIM WITH THE EVIDENCE ATTACHED, driven through the real flow rather than written down.
+   *
+   * The claims queue names its evidence as media ids, and the only honest way to produce ids with bytes
+   * behind them is to walk one load through the three gates a real one passes: a securement photo at
+   * pickup, a proof-of-delivery photo at the door, and the claimant's own photo of the damage. Each is
+   * uploaded by the party who would really have taken it — the driver twice, the shipper once — because
+   * the media store checks OWNERSHIP when it adopts a client-supplied reference, and a photo the wrong
+   * account uploaded is silently dropped rather than refused.
+   *
+   * NO TRADE TERM on this one, deliberately: standing then sits with the sender, which is the plain case,
+   * and the seeded CIF load already on the queue shows the other. It also keeps this block independent of
+   * which terms a country happens to have switched on.
+   */
+  {
+    const LOAD = 'A carton of school books';
+    const freightPath = (id, tail) => `/v1/sbg/dispatch/freight/${encodeURIComponent(id)}${tail}`;
+    const claimsNow = need(await req('GET', '/v1/sbg/freight-claims', { token: op }), 'claims queue').claims ?? [];
+
+    if (!claimsNow.some((c) => c.description === LOAD)) {
+      /*
+       * REPAIRED, NOT MULTIPLIED — the lesson from getting this wrong four times in a row.
+       *
+       * The first guard asked whether the CLAIM existed, which is the last thing this block creates. So
+       * every run that failed half way left a load posted and taken, the next run saw no claim and posted
+       * another, and by the fourth the driver's bike was full of cartons nobody would ever deliver and the
+       * dispatch gate refused the lot — correctly, and for a reason that had nothing to do with the bug.
+       * A seeder has to ask about what it makes FIRST, and clear up after its own failed attempt.
+       */
+      const all = need(await req('GET', '/v1/sbg/dispatch/freight', { token: op }), 'freight list');
+      const mineAlready = (all.items ?? all).filter((f) => f.description === LOAD && f.status !== 'cancelled');
+      const carried = mineAlready.find((f) => f.status === 'delivered');
+      for (const f of mineAlready) {
+        if (f.status === 'delivered') continue; // carrying it again is not possible, and its photos are real
+        await req('POST', freightPath(f.freightId, '/cancel'), { token: tokA1, body: { reason: 'Unfinished seeding attempt — never a real load.' } });
+      }
+
+      let frt = carried;
+      let picked = { ok: Boolean(carried) };
+
+      if (!frt) {
+        const posted = await req('POST', '/v1/sbg/dispatch/freight', {
+          token: tokA1,
+          body: {
+            description: LOAD,
+            pickupLocation: { lat: -1.2864, lng: 36.8172 },
+            pickupLabel: 'Mama Sarah Shop',
+            destLabel: 'Riverside Corner',
+            destLocation: { lat: -1.3021, lng: 36.8456 },
+            // Small, and not marked fragile, because the vehicle that will carry it is a bike: the seeder
+            // posts a load this fleet can actually take rather than one the dispatch gate has to refuse.
+            weightKg: 8,
+            packaging: 'piece',
+          },
+        });
+        if (!posted.ok) say(`  (could not post the claim demo load: ${posted.status} ${JSON.stringify(posted.data).slice(0, 160)})`);
+        frt = posted.ok ? posted.data : undefined;
+      }
+
+      if (frt && !carried) {
+        /*
+         * ITS OWN DRIVER, AND ITS OWN SHIFT, ENDED WHEN THE HAUL IS.
+         *
+         * Not Amos, and that is the seeder learning from the rules rather than working round them: his
+         * shift is left open so the demo world has somebody on the road, so by the next run he is
+         * nineteen hours on duty and the hours gate refuses him any new load. Correctly. A seeder that
+         * reached past that would be seeding a world its own rules say cannot exist.
+         *
+         * So this haul gets a driver of its own, coupled for the length of it and UNCOUPLED after. A
+         * shift of a few seconds owes no rest, so a re-seed can do it again; a shift left open could not.
+         */
+        const carrier =
+          need(await req('GET', '/v1/sbg/fleet/drivers', { token: fm }), 'fleet drivers').find((d) => d.displayName === 'Peter O.') ??
+          need(
+            await req('POST', '/v1/sbg/drivers/onboard', {
+              token: fm,
+              body: {
+                displayName: 'Peter O.',
+                fullName: 'Peter Otieno',
+                nationalId: 'NID-PETER',
+                mobile: `+2547${Math.floor(10000000 + Math.random() * 89999999)}`,
+                licenceClasses: ['bike'],
+                managerDid: mgr.did,
+              },
+            }),
+            'driver peter',
+          );
+        const carrierIn = await signInDriver(carrier, 'peter');
+        const spare = await ensureVehicle('KLM 003B', 'bike', 0.5);
+        await req('POST', `/v1/sbg/fleet/drivers/${encodeURIComponent(carrier.did)}/couple`, {
+          token: fm,
+          body: { vehicleId: spare.vehicleId, corridorId: corridorZAB.corridorId },
+        });
+
+        const assigned = await req('POST', `/v1/sbg/fleet/managers/${encodeURIComponent(mgr.did)}/dispatch`, {
+          token: fm,
+          body: { freightId: frt.freightId, driverDid: carrier.did },
+        });
+        if (!assigned.ok) {
+          say(`  (could not dispatch ${frt.code}: ${assigned.status} ${JSON.stringify(assigned.data).slice(0, 160)})`);
+        } else {
+          /*
+           * THE CHECKLIST IS READ FROM THE LOAD, never written down here.
+           *
+           * The backend re-derives the required keys from the cargo, so a list copied into a seeder goes
+           * quietly stale the day a cargo class gains an item. It lives on the DRIVER'S view of the loads
+           * they hold — not on the dispatch board, which is the shape an office sees and carries no
+           * checklist at all. That cost two runs.
+           */
+          const held = await req('GET', `/v1/sbg/fleet/drivers/${encodeURIComponent(carrier.did)}/claims`, { token: carrierIn.token });
+          const mine = (held.data?.claims ?? []).find((c) => c.freightId === frt.freightId || c.ref === frt.freightId || c.code === frt.code);
+          const loadKeys = (mine?.loadChecklist ?? []).map((i) => i.key);
+          const unloadKeys = (mine?.unloadChecklist ?? []).map((i) => i.key);
+          if (!loadKeys.length) say(`  (no load checklist came back for ${frt.code} — the pickup gate will refuse it)`);
+
+          const securement = await uploadDoc(carrierIn.token, 'securement', 'securement', 3);
+          picked = await req('POST', freightPath(frt.freightId, '/pickup'), {
+            token: carrierIn.token,
+            body: { driverDid: carrier.did, confirmed: loadKeys, securementPhotoId: securement, reservations: 'Carton already scuffed on one corner when handed over' },
+          });
+          if (!picked.ok) say(`  (could not pick up ${frt.code}: ${picked.status} ${JSON.stringify(picked.data).slice(0, 160)})`);
+
+          if (picked.ok) {
+            const pod = await uploadDoc(carrierIn.token, 'pod', 'pod', 6);
+            const delivered = await req('POST', freightPath(frt.freightId, '/deliver'), {
+              token: carrierIn.token,
+              body: { driverDid: carrier.did, confirmed: unloadKeys, receiverName: 'Joseph Mwangi', podPhotoId: pod, remarks: 'The carton was wet through by the time it came off the bike' },
+            });
+            picked = delivered;
+            if (!delivered.ok) say(`  (could not deliver ${frt.code}: ${delivered.status} ${JSON.stringify(delivered.data).slice(0, 160)})`);
+          }
+        }
+        // The shift ENDS with the haul, always — including after a failure, or the next run finds this
+        // driver coupled, cannot couple them again, and seeds nothing while saying nothing.
+        await req('POST', `/v1/sbg/fleet/drivers/${encodeURIComponent(carrier.did)}/uncouple`, { token: fm });
+      }
+
+      if (frt && picked.ok) {
+        // And the shipper's own photograph of the damage — the third thing the queue counts.
+        const damage = await uploadDoc(tokA1, 'dispute', 'damage', 9);
+        const claimed = await req('POST', freightPath(frt.freightId, '/claim'), {
+          token: tokA1,
+          body: { kind: 'damaged', description: 'Rain got into the carton — about a third of the books are pulped', photoRef: damage },
+        });
+        say(
+          claimed.ok
+            ? `claim      ${frt.code} damaged — 3 photographs an operator can open`
+            : `  (could not raise the claim on ${frt.code}: ${claimed.status} ${JSON.stringify(claimed.data).slice(0, 160)})`,
+        );
+      }
+    }
+  }
+
   /* ------------------------------------------------ who administers a company --- */
 
   // A login for each company, so the operator console can be opened as the people it is FOR: the group,
@@ -760,7 +914,10 @@ const run = async () => {
   out.push('                        agent3@sbg.test / seebuyget   (Downtown Kiosk)');
   out.push('  Hub app     /mdp/     hub@sbg.test    / seebuyget   (Central Sort)');
   out.push(`  Fleet app   /fleet/   company ${fleetCode} · then ${mgr.contactPhone} PIN ${MGR_PIN}`);
-  out.push(`  Driver app  /driver/  phone ${amosPhone} PIN ${DRIVER_PIN}   (Amos K.)`);
+  // BOTH drivers, because one account proves nothing about what a second may see — the road photographs
+  // are read back by the next driver down that road, and checking that needs two sign-ins.
+  out.push(`  Driver app  /driver/  phone ${amosIn.phone} PIN ${DRIVER_PIN}   (Amos K., on shift)`);
+  out.push(`                        phone ${graceIn.phone} PIN ${DRIVER_PIN}   (Grace M., papers with GLOS)`);
   out.push('  Send app    /send/    no sign-in needed');
   out.push('  Operator    /tower/   ops1@sbg.test / seebuyget-staff (Amina Otieno) · ops2@sbg.test (Brian Kamau), same password');
   out.push('              /tower/   or the setup key: your name + any key (no GLOS_CLIENT_SECRET set in a sandbox)');

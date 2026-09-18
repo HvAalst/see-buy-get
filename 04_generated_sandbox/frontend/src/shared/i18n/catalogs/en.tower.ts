@@ -855,6 +855,12 @@ export const enTowerQueues = {
   'tower.claims.evidenceOpen': 'Open the full photograph in a new tab',
   'tower.claims.evidenceAlt': 'Claim evidence photograph {n}',
   'tower.claims.evidenceNone': 'No photographs were attached to this claim. That is not a reason to refuse it on its own — but it is a reason to say in your note what you decided on instead.',
+  /* A reference is a claim about a photograph, not the photograph. When one cannot be produced, say so
+     beside the count rather than showing a grey square under "3 attached": an adjudicator has to be able
+     to tell a slow connection from evidence that was never there. */
+  'tower.claims.evidenceMissing': '{n} of the {of} attached cannot be opened — the reference is on the record but the photograph is not. Say so in your note if you decide without it.',
+  'tower.claims.evidenceGone': 'Not available',
+  'tower.claims.evidenceGoneTitle': 'This photograph cannot be opened — the claim cites it, but the file is not there',
   'tower.claims.slow': 'Waiting a while',
   'tower.claims.decide': 'Decide',
   'tower.claims.decided': 'Decided — {parcel}. The claimant is shown your reason.',

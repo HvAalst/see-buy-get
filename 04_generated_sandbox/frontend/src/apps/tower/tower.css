@@ -220,7 +220,10 @@
    keyboard and announce itself as something that does one thing. */
 .twr-evidence__shot {
   width: 112px;
-  height: 112px;
+  /* Not a fixed square any more: a tile whose photograph is missing carries a line saying so, and a
+     caption that overflows its own button is how "not available" becomes invisible again. */
+  height: auto;
+  min-height: 112px;
   padding: 0;
   border: 1px solid var(--bd);
   border-radius: var(--r-ctl);
@@ -240,8 +243,35 @@
 
 .twr-evidence__img {
   width: 100%;
-  height: 100%;
+  height: 110px;
   border-radius: 0;
+}
+
+/* A reference on the record with no photograph behind it. Said in words next to the count, because a grey
+   square under "3 attached" is indistinguishable from a slow connection — and the difference is whether
+   an adjudicator waits or decides without the evidence. */
+.twr-evidence__gap {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-size: var(--c-fs-sm);
+  color: var(--warn);
+}
+
+.twr-evidence__shot:disabled .twr-evidence__img,
+.twr-evidence__shot:disabled .authimg--failed {
+  opacity: 0.8;
+}
+
+.twr-evidence__goneline {
+  display: block;
+  padding: 2px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--warn);
 }
 
 /* CL3 — a two-line day chart with no charting library: one shared scale, so a day nothing moved

@@ -8,6 +8,14 @@ export interface AuthImageProps {
   load: (mediaId: string) => Promise<{ data: Blob | null; error: unknown }>;
   alt: string;
   class?: string;
+  /**
+   * Told when these bytes could not be fetched, so a CALLER can say so in words.
+   *
+   * Without this the failure is a grey tile with a camera in it, under a heading that counts the
+   * photographs as if they were all there — which is the "2 photos, none shown" defect a layer up: the
+   * count is a claim about evidence, and only the thing that fetched it knows whether the claim holds.
+   */
+  onFailed?: (mediaId: string) => void;
 }
 
 /**
@@ -16,11 +24,15 @@ export interface AuthImageProps {
  * unmount/change so blobs never leak. `load` is held in a ref so an inline loader prop does not retrigger
  * the fetch every render — only a new mediaId does.
  */
-export function AuthImage({ mediaId, load, alt, class: cls = '' }: AuthImageProps) {
+export function AuthImage({ mediaId, load, alt, class: cls = '', onFailed }: AuthImageProps) {
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const loadRef = useRef(load);
   loadRef.current = load;
+  // Held in a ref for the same reason `load` is: an inline arrow would otherwise re-run the fetch on
+  // every render of the parent.
+  const failedRef = useRef(onFailed);
+  failedRef.current = onFailed;
 
   useEffect(() => {
     let objectUrl: string | null = null;
@@ -31,6 +43,7 @@ export function AuthImage({ mediaId, load, alt, class: cls = '' }: AuthImageProp
       if (cancelled) return;
       if (r.error || !r.data) {
         setFailed(true);
+        failedRef.current?.(mediaId);
         return;
       }
       objectUrl = URL.createObjectURL(r.data);

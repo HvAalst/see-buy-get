@@ -1,3 +1,4 @@
+import { useCallback, useState } from 'preact/hooks';
 import { AuthImage, Icon } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import type { TowerActions, TowerState } from '../useTowerApp';
@@ -33,6 +34,20 @@ export function DocumentStrip({
 }) {
   const t = useT();
   const client = actions.client();
+  /*
+   * WHICH OF THEM ARE ACTUALLY THERE.
+   *
+   * The heading counted references, and a reference is a claim about a photograph rather than the
+   * photograph — so a row could say "2 attached" and produce neither, which is the same defect as the
+   * count that started this component, one layer deeper. An adjudicator reading "2 attached" and seeing
+   * two grey squares cannot tell a slow connection from evidence that was never uploaded, and the
+   * difference decides whether they wait or decide without it.
+   *
+   * So the strip now reports the gap, in words, and a missing photograph is itself information: somebody
+   * cited evidence that cannot be produced.
+   */
+  const [missing, setMissing] = useState<string[]>([]);
+  const noteMissing = useCallback((id: string) => setMissing((m) => (m.includes(id) ? m : [...m, id])), []);
 
   if (!refs.length) {
     return (
@@ -46,34 +61,49 @@ export function DocumentStrip({
   return (
     <div class="twr-evidence">
       <div class="twr-evidence__head">{t(titleKey, { n: refs.length })}</div>
+      {/* Said next to the count it contradicts, never instead of it: the record claims this many, and
+          this many of them cannot be produced. Both facts matter to the decision. */}
+      {missing.length ? (
+        <p class="twr-evidence__gap">
+          <Icon name="warning" size={16} />
+          <span>{t('tower.claims.evidenceMissing', { n: missing.length, of: refs.length })}</span>
+        </p>
+      ) : null}
       <div class="twr-evidence__strip">
-        {refs.map((mediaId, i) => (
-          <button
-            key={mediaId}
-            type="button"
-            class="twr-evidence__shot"
-            title={t('tower.claims.evidenceOpen')}
-            disabled={!client || state.busyId != null}
-            onClick={async () => {
-              if (!client) return;
-              const r = await client.api.mediaBlob(mediaId);
-              const blob = r.error ? null : (r.data as unknown as Blob | null);
-              // Opened, never downloaded: this is somebody's document, and the retention clock owns the copy.
-              if (blob) window.open(URL.createObjectURL(blob), '_blank', 'noopener');
-            }}
-          >
-            {/* No client, no loader: AuthImage fetches on mount, so rendering it before sign-in would
-                call through a null client rather than simply showing nothing. */}
-            {client ? (
-              <AuthImage
-                mediaId={mediaId}
-                load={(id) => client.api.mediaBlob(id, 'thumb') as Promise<{ data: Blob | null; error: unknown }>}
-                alt={t('tower.claims.evidenceAlt', { n: i + 1 })}
-                class="twr-evidence__img"
-              />
-            ) : null}
-          </button>
-        ))}
+        {refs.map((mediaId, i) => {
+          const gone = missing.includes(mediaId);
+          return (
+            <button
+              key={mediaId}
+              type="button"
+              class="twr-evidence__shot"
+              title={gone ? t('tower.claims.evidenceGoneTitle') : t('tower.claims.evidenceOpen')}
+              // A tile with nothing behind it is not a control: pressing it used to do nothing at all,
+              // silently, which reads as a broken console rather than as missing evidence.
+              disabled={!client || gone || state.busyId != null}
+              onClick={async () => {
+                if (!client) return;
+                const r = await client.api.mediaBlob(mediaId);
+                const blob = r.error ? null : (r.data as unknown as Blob | null);
+                // Opened, never downloaded: this is somebody's document, and the retention clock owns the copy.
+                if (blob) window.open(URL.createObjectURL(blob), '_blank', 'noopener');
+              }}
+            >
+              {/* No client, no loader: AuthImage fetches on mount, so rendering it before sign-in would
+                  call through a null client rather than simply showing nothing. */}
+              {client ? (
+                <AuthImage
+                  mediaId={mediaId}
+                  load={(id) => client.api.mediaBlob(id, 'thumb') as Promise<{ data: Blob | null; error: unknown }>}
+                  alt={t('tower.claims.evidenceAlt', { n: i + 1 })}
+                  class="twr-evidence__img"
+                  onFailed={noteMissing}
+                />
+              ) : null}
+              {gone ? <span class="twr-evidence__goneline">{t('tower.claims.evidenceGone')}</span> : null}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
