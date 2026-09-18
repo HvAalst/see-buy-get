@@ -44,6 +44,62 @@ describe('MediaService (S26) — upload, gating, retention', () => {
     expect(media.viewableBy(ref, 'did:ops', true)).toBe(true); // an operator
   });
 
+  /**
+   * THE ONE WIDENING. A posted road-hazard photo is readable by any authenticated peer, because a warning
+   * that says "2 photos" and then refuses them is a warning nobody can check. Everything around it stays
+   * shut: another kind, or a hazard nobody has posted yet, is still the owner's alone.
+   */
+  describe('a posted road-hazard photo, and only that', () => {
+    it('lets a peer read one that is attached to a constraint', () => {
+      const { mediaId } = media.upload({ ownerDid: 'did:driver:a', kind: 'hazard', dataUrl: PNG_1x1 });
+      media.link(mediaId, { type: 'constraint', id: 'RC-1' }, 'hazard');
+      expect(media.viewableBy(media.get(mediaId)!, 'did:driver:b', false)).toBe(true);
+    });
+
+    it('refuses an UNPOSTED hazard upload — an abandoned capture is nobody else’s', () => {
+      const { mediaId } = media.upload({ ownerDid: 'did:driver:a', kind: 'hazard', dataUrl: PNG_1x1 });
+      expect(media.viewableBy(media.get(mediaId)!, 'did:driver:b', false)).toBe(false);
+      expect(media.viewableBy(media.get(mediaId)!, 'did:driver:a', false)).toBe(true); // still theirs
+    });
+
+    it('does not widen any other kind, however it is linked', () => {
+      const { mediaId } = media.upload({ ownerDid: 'did:owner', kind: 'kyc_id', dataUrl: PNG_1x1 });
+      // Linked to a constraint by an imagined bug: the KIND is what is decided on, so this stays shut.
+      media.link(mediaId, { type: 'constraint', id: 'RC-1' });
+      expect(media.viewableBy(media.get(mediaId)!, 'did:driver:b', false)).toBe(false);
+    });
+
+    /**
+     * THE GATE THE WIDENING PAID FOR. `adopt` is what a CLIENT-supplied ref goes through, and it answers
+     * whether the media is now ours to serve — so a caller recording a citation knows whether the
+     * photograph behind it exists.
+     */
+    it('refuses to adopt media the caller does not own, so it can never be relabelled as a hazard', () => {
+      const { mediaId } = media.upload({ ownerDid: 'did:driver:a', kind: 'kyc_licence', dataUrl: PNG_1x1 });
+      expect(media.adopt(mediaId, 'did:driver:b', { type: 'constraint', id: 'RC-1' }, 'hazard')).toBe(false);
+      // Untouched: still a licence, still in the account-doc bin, still nobody else's.
+      expect(media.get(mediaId)!.kind).toBe('kyc_licence');
+      expect(media.get(mediaId)!.link).toBeUndefined();
+      expect(media.viewableBy(media.get(mediaId)!, 'did:driver:b', false)).toBe(false);
+    });
+
+    it('adopts the caller’s own fresh upload, and says so', () => {
+      const { mediaId } = media.upload({ ownerDid: 'did:driver:a', kind: 'hazard', dataUrl: PNG_1x1 });
+      expect(media.adopt(mediaId, 'did:driver:a', { type: 'constraint', id: 'RC-1' }, 'hazard')).toBe(true);
+      expect(media.viewableBy(media.get(mediaId)!, 'did:driver:b', false)).toBe(true);
+    });
+
+    it('still answers MEDIA_EXPIRED, not a refusal, once the bytes are gone', () => {
+      const { mediaId } = media.upload({ ownerDid: 'did:driver:a', kind: 'hazard', dataUrl: PNG_1x1 });
+      media.link(mediaId, { type: 'constraint', id: 'RC-1' }, 'hazard');
+      media.anchorConstraintCleared('RC-1', new Date(Date.now() - 181 * 24 * 60 * 60 * 1000));
+      expect(media.sweep()).toBe(1);
+      // The gate still opens — a peer gets the true answer ("kept 180 days, then deleted"), never a lie.
+      expect(media.viewableBy(media.get(mediaId)!, 'did:driver:b', false)).toBe(true);
+      expect(() => media.blob(mediaId)).toThrow(/retention/);
+    });
+  });
+
   it('starts the retention clock only at the lifecycle anchor, then the sweep removes the bytes', () => {
     const { mediaId } = media.upload({ ownerDid: 'did:agent', kind: 'dropoff', dataUrl: PNG_1x1 });
     media.link(mediaId, { type: 'parcel', id: 'P-1' }, 'dropoff');

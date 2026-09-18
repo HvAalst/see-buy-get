@@ -572,13 +572,24 @@ export const enDriver = {
   'driver.road.detailTitle': '{kind} — what did you see?',
   'driver.road.photoLabel': 'A photo of it (if you can)',
   'driver.road.photoAria': 'Photograph the hazard',
-  'driver.road.photoHint': 'Only if you can stop safely. Your report warns everybody either way — the picture is what lets an operator decide later whether it is still there.',
+  /* Said BEFORE the shutter, not in a policy nobody opens. The photo now goes to every driver heading
+     this way, which is the point of taking it — and the one thing they must know while deciding what to
+     put in the frame. */
+  'driver.road.photoHint': 'Only if you can stop safely. Your report warns everybody either way — the picture is what the next driver, and later an operator, actually looks at. Other drivers on this road will see it. Your name never goes with it.',
+  /* Reading them back. The strip loads nothing until it is asked for: this is a metered connection. */
+  'driver.road.photosShow': 'See the photos ({count})',
+  'driver.road.photosHide': 'Hide the photos',
+  'driver.road.photoThere': 'Said it is there',
+  'driver.road.photoGone': 'Said it is gone',
+  'driver.road.photoAlt': 'A driver’s photo of this road',
+  'driver.road.photoTapFull': 'Tap a photo to open it full size',
   /* Saying it is gone, which is the direction that has to prove itself. */
   'driver.road.goneTitle': 'Say it is gone',
   'driver.road.goneWarnTitle': 'This does not take it off the map',
   'driver.road.goneWarnBody': 'It stays and keeps warning, and goes to an operator to decide. Being wrong about a bridge that is still standing is what this rule exists to prevent.',
   'driver.road.gonePhotoLabel': 'A photo of the road (if you can)',
   'driver.road.gonePhotoAria': 'Photograph the clear road',
+  'driver.road.gonePhotoHint': 'Other drivers on this road will see it, and so will the operator deciding. Your name never goes with it.',
   'driver.road.goneNoteLabel': 'What did you see?',
   'driver.road.goneNotePh': 'Road is open, barrier removed',
   'driver.road.goneSend': 'Send it to an operator',

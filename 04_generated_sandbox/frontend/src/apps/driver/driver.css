@@ -568,6 +568,90 @@
   margin-top: 10px;
 }
 
+/* ------------------------------------------------ what the other driver saw -- */
+
+/* The photographs on a hazard, readable by the drivers heading for it. A warning that says a photograph
+   exists and then refuses to show it is a warning nobody can check.
+
+   NOTHING LOADS UNTIL IT IS ASKED FOR. This runs on a connection a driver pays for by the megabyte and is
+   read at a junction, so the strip is shut by default, opens to THUMBNAILS, and only a deliberate tap on
+   one pulls the full frame — which is the tap that matters, because a driver needs to read the number on
+   the sign, not recognise that there is one.
+
+   `.authimg` is restated here on purpose: AuthImage's own rules live in shared/ui/ui.css, which this app
+   does NOT load (tokens, screens and this file). A shared component styled in a stylesheet the app never
+   imports renders unstyled and fails silently. */
+.road__shots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.road__shot {
+  margin: 0;
+  max-width: 132px;
+}
+
+.road__shotbtn {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.road__shotcap {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--tx3);
+}
+
+/* The side of the argument this photograph is on, said in words. A picture of an open road under a "low
+   bridge" heading is the one thing here that could be read exactly backwards. */
+.road__shotcap--gone {
+  color: var(--warn);
+}
+
+.road__img {
+  width: 132px;
+  height: 88px;
+}
+
+/* Tapped open. It leaves the strip's grid and takes the row's width, because the point of the tap is to
+   read a height off a sign. */
+.road__img--full {
+  width: 100%;
+  height: auto;
+  max-height: 60vh;
+  object-fit: contain;
+}
+
+.road__shot:has(.road__img--full) {
+  max-width: 100%;
+  flex-basis: 100%;
+}
+
+.authimg {
+  display: block;
+  max-width: 100%;
+  border-radius: var(--r-ctl);
+  object-fit: cover;
+  background: var(--panel);
+}
+
+.authimg--loading,
+.authimg--failed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 64px;
+  background: var(--panel);
+  color: var(--tx3);
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-ctl);
+}
+
 /* Shown in every state, the empty one included — that is the state where a driver is likeliest to read
    silence as a clear road, so it is the state where the sentence earns its place. */
 .road__caveat {

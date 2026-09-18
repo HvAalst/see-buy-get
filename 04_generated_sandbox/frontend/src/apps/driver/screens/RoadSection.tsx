@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, Icon, Note, PhotoField, Pill, Sheet, type IconName } from '../../../shared/ui';
+import { AuthImage, Button, Card, Icon, Note, PhotoField, Pill, Sheet, type IconName } from '../../../shared/ui';
 import { useT, type Translate } from '../../../shared/i18n';
 import { haversineKm } from '../../../shared/geo';
 import { ROAD_KINDS, roadBlocks, roadMeasure, roadSummary, roadTone, roadValueLabel, type RoadKind } from '../logic';
 import type { DriverActions, DriverState } from '../useDriverApp';
-import type { RoadConstraint } from '../types';
+import type { RoadAccount, RoadConstraint } from '../types';
 
 /**
  * THE ROAD — the crowd-sourced constraint map, on the screen where a driver names the road they run.
@@ -134,6 +134,7 @@ function RoadRow({
             <Icon name="warning" size={16} /> {t('driver.road.disputed')}
           </p>
         ) : null}
+        <RoadPhotos accounts={c.accounts ?? []} actions={actions} t={t} />
         <div class="road__acts">
           <Button variant="outline" full={false} busy={busy === mine} onClick={() => void actions.answerRoad(c.constraintId, true)}>
             {t('driver.road.stillThere')}
@@ -148,6 +149,64 @@ function RoadRow({
       </div>
       <GoneSheet open={gone} onClose={() => setGone(false)} constraintId={c.constraintId} busy={busy === mine} actions={actions} />
     </li>
+  );
+}
+
+/**
+ * WHAT THE OTHER DRIVER SAW.
+ *
+ * The photographs were being taken, stored, attached to the right account and shown to an operator — and
+ * the drivers heading for the bridge, the people the warning is FOR, got a sentence saying a picture
+ * existed. Peer reporting that cannot be read back is not peer sharing, and it failed silently: nothing
+ * errored, the row simply showed a count where there was a photograph.
+ *
+ * SHUT UNTIL ASKED, and then thumbnails. This runs on a connection a driver pays for by the megabyte and
+ * is read at a junction. One tap opens the strip; a second, on one photo, pulls the full frame — which is
+ * the tap that earns its bytes, because what a driver needs off a low-bridge photo is the number on the
+ * sign.
+ *
+ * EACH ONE SAYS WHICH SIDE IT IS ON. A photograph of an open road sitting under a "low bridge" heading is
+ * the single thing on this screen that could be read exactly backwards, so the caption is not decoration.
+ */
+function RoadPhotos({ accounts, actions, t }: { accounts: RoadAccount[]; actions: DriverActions; t: Translate }) {
+  const [open, setOpen] = useState(false);
+  const [full, setFull] = useState<string | null>(null);
+  const shots = accounts.filter((a): a is RoadAccount & { photoRef: string } => Boolean(a.photoRef));
+  if (shots.length === 0) return null;
+
+  return (
+    <>
+      <Button variant="link" full={false} onClick={() => setOpen(!open)}>
+        {open ? t('driver.road.photosHide') : t('driver.road.photosShow', { count: shots.length })}
+      </Button>
+      {open ? (
+        <div class="road__shots">
+          {shots.map((a) => {
+            const big = full === a.photoRef;
+            return (
+              <figure key={a.photoRef} class="road__shot">
+                <button type="button" class="road__shotbtn" onClick={() => setFull(big ? null : a.photoRef)}>
+                  {/* The key carries the variant so a tap actually REFETCHES: AuthImage holds its loader in
+                      a ref and re-runs only when the media id changes, so without this the full frame
+                      would never be asked for. */}
+                  <AuthImage
+                    key={`${a.photoRef}-${big ? 'full' : 'thumb'}`}
+                    mediaId={a.photoRef}
+                    load={(id) => actions.loadRoadPhoto(id, big ? 'full' : 'thumb')}
+                    alt={t('driver.road.photoAlt')}
+                    class={big ? 'road__img road__img--full' : 'road__img'}
+                  />
+                </button>
+                <figcaption class={`road__shotcap${a.stance === 'gone' ? ' road__shotcap--gone' : ''}`}>
+                  {a.stance === 'gone' ? t('driver.road.photoGone') : t('driver.road.photoThere')} · {new Date(a.at).toLocaleDateString()}
+                </figcaption>
+              </figure>
+            );
+          })}
+          <p class="road__meta">{t('driver.road.photoTapFull')}</p>
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -193,6 +252,9 @@ function GoneSheet({
       <div class="field" style="margin-top:16px">
         <span class="field__label">{t('driver.road.gonePhotoLabel')}</span>
         <PhotoField id={`gone-${constraintId}`} value={photo} upload={(f) => actions.uploadPhoto('hazard', f)} onCapture={setPhoto} label={t('driver.road.gonePhotoAria')} disabled={busy} />
+        {/* Said before the shutter, not in a policy nobody opens: this photograph goes to every driver
+            heading this way, which is the point of taking it. Their name does not. */}
+        <p class="card__note">{t('driver.road.gonePhotoHint')}</p>
       </div>
 
       <div class="field" style="margin-top:16px">

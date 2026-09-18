@@ -28,9 +28,17 @@ export function createMediaApi(sbg: SbgClient) {
     uploadMedia: (kind: MediaKind, dataUrl: string, thumbDataUrl?: string) =>
       sbg.request((c) => c.POST('/v1/sbg/media', { body: { kind, dataUrl, ...(thumbDataUrl ? { thumbDataUrl } : {}) } })),
 
-    /** The bytes for one media as a Blob (authenticated) — feed to URL.createObjectURL for an <img>. */
-    mediaBlob: (mediaId: string) =>
-      sbg.request((c) => c.GET('/v1/sbg/media/{id}', { params: { path: { id: mediaId } }, parseAs: 'blob' })),
+    /**
+     * The bytes for one media as a Blob (authenticated) — feed to URL.createObjectURL for an <img>.
+     *
+     * `variant: 'thumb'` asks for the stored thumbnail instead of the full image, and it is not a nicety:
+     * a driver reading hazard photos is on a connection they pay for by the megabyte, so anything shown
+     * in a list asks for the small one and only a deliberate tap pulls the full frame.
+     */
+    mediaBlob: (mediaId: string, variant?: 'full' | 'thumb') =>
+      sbg.request((c) =>
+        c.GET('/v1/sbg/media/{id}', { params: { path: { id: mediaId }, query: variant ? { variant } : {} }, parseAs: 'blob' } as never),
+      ),
 
     /** The caller's own media — the media-library source. PII-free views. */
     myMedia: () => sbg.request((c) => c.GET('/v1/sbg/media', {})),

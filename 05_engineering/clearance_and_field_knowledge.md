@@ -337,6 +337,32 @@ recorded, and the reviewer shown both sides beside each other rather than a merg
 CL5 blocker — a lawyer's answer on holding photographs of official documents — is untouched and is not
 ours to resolve.
 
+#### PRE-b — the photograph reaches the next driver — SHIPPED 2026-09-18, driven
+PRE gave every account its own photograph and showed it to an OPERATOR. The people the warning is for — the
+drivers about to meet the bridge — still got a sentence saying a picture existed and a media route that
+refused it. Peer reporting that cannot be read back is not peer sharing, and it failed silently, which is
+this codebase's recurring defect class: nothing errors, the row simply shows a count where there is a
+photograph.
+
+- **One widening of the media gate, decided on the REF ALONE** (`MediaService.peerViewable`): kind
+  `hazard`, and a `link` to a constraint. Both conditions matter — an abandoned capture on the way to a
+  form is nobody else's yet, so POSTING is the act that makes it readable. A list of one kind, and it
+  stays a list of one. Deciding on the ref alone keeps MediaService a leaf: the moment this gate asks
+  another service what a caller may see, it acquires the dependency the whole design avoided.
+- **Still authenticated.** Peers, not the internet. An anonymous caller gets nothing.
+- **THE PAIRING THAT MADE IT SAFE:** client-supplied photo refs are now **adopted, not linked**. `link()`
+  is ownership-blind, which was harmless under an owner-only gate and would have been a disclosure hole
+  under this one — anybody could have relabelled another actor's KYC document as their hazard photo and
+  read it straight back. A widening and the check that pays for it belong in the same commit.
+- **And an account never cites a photograph the store refused**, or the record carries "2 photos, none
+  shown" in writing rather than on a screen. What the person SAID still stands either way.
+- **The driver's strip is shut until asked for, then thumbnails**, with one tap for the full frame: a
+  metered connection, read at a junction. Each photo says which side of the argument it is on, because a
+  picture of an open road under a "low bridge" heading is the one thing here that reads exactly backwards.
+- **Seeded**, so it can be judged: one disputed washout on the Nakuru line with a real photograph on each
+  side, and Grace M. now has a PIN — signing in as the second driver is how anybody checks that the first
+  driver's photograph is visible.
+
 ### CL1 — The term, and who may claim — SHIPPED 2026-09-16, commit `fa1a407`
 The largest slice, and the one that closed a live defect. Driven end to end; the two guards a service spec
 cannot reach were proven in the browser. Two further holes surfaced while building and were closed with it:

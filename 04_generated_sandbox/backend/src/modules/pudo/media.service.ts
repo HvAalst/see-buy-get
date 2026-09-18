@@ -26,10 +26,14 @@ const DATA_URL_RE = /^data:([a-z]+\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/i;
 /**
  * MediaService (S26) — real image upload + retention. Bytes go to a BlobStore; the core keeps a MediaRef
  * per image and a retention BIN per kind, so nothing is hoarded. Access is deliberately narrow: the
- * generic media endpoints serve the OWNER (or an operator) only; a counterparty who is allowed to see an
+ * generic media endpoints serve the OWNER (or an operator); a counterparty who is allowed to see an
  * image (e.g. the receiver's own PoD) uploaded it themselves, so the owner check already covers them —
  * this keeps MediaService a leaf with no dependency on ParcelService/VehicleService (no DI cycle), while
  * the free-text/PII discipline from S25 holds (the list projection never leaks owner/sha256).
+ *
+ * The ONE exception is a posted road-hazard photo, readable by any authenticated peer — see peerViewable,
+ * which carries the argument. It is decided on the REF ALONE for the reason above: the moment this gate
+ * has to ask another service what a caller may see, MediaService stops being a leaf.
  */
 @Injectable()
 export class MediaService implements OnApplicationBootstrap, OnModuleDestroy {
@@ -83,9 +87,43 @@ export class MediaService implements OnApplicationBootstrap, OnModuleDestroy {
     return this.refs.get(mediaId);
   }
 
-  /** May this caller fetch these bytes? Owner-or-operator only — the generic media endpoint's gate. */
+  /**
+   * A PHOTOGRAPH OF A ROAD, which every driver about to run it may see. The one widening of the gate.
+   *
+   * The rest of this store is owner-or-operator because every counterparty allowed to see an image
+   * uploaded it themselves. A crowd-sourced hazard map is the case that breaks the rule: the whole point
+   * of the photograph is that the NEXT driver sees the bridge before they meet it, and a warning that
+   * says "2 photos" and then refuses them is a warning nobody can check. Peer reporting that cannot be
+   * read back is not peer sharing.
+   *
+   * TWO CONDITIONS, and both matter.
+   *
+   * `kind === 'hazard'` — never a KYC id, never a delivery photo, never a load. This is a list of one,
+   * and it stays a list of one until somebody argues a second kind through on its own merits.
+   *
+   * `link.type === 'constraint'` — the ref must actually be ATTACHED to a report. An upload sitting in a
+   * driver's camera roll on the way to a form is nobody else's yet, and the abandoned-capture case (a
+   * driver who photographed the wrong thing and backed out) must not become readable because the bytes
+   * happened to be tagged 'hazard' at upload. Posting it is the act that makes it public, and the link is
+   * what records that act.
+   *
+   * WHAT THIS BUYS AN ATTACKER, stated plainly: an authenticated participant who knows a media id can now
+   * read it if it is a posted hazard photo. Ids are 24 random hex, so knowing one means being told one,
+   * and what they learn is a picture of a public road that is already described to them in words on the
+   * same screen. In exchange, the route-constraint service now ADOPTS client-supplied photo refs instead
+   * of blind-linking them — a caller can no longer relabel someone else's media as a hazard, which under
+   * the old owner-only gate leaked nothing and under this one would have leaked everything.
+   *
+   * NOT status-gated on purpose. An expired ref falls through to `blob()`, which answers MEDIA_EXPIRED —
+   * "this was kept for 180 days and then deleted" is a true answer, and 403 in its place would be a lie.
+   */
+  static peerViewable(ref: MediaRef): boolean {
+    return ref.kind === 'hazard' && ref.link?.type === 'constraint';
+  }
+
+  /** May this caller fetch these bytes? Owner-or-operator, plus a posted hazard photo for any peer. */
   viewableBy(ref: MediaRef, callerDid: string, isOperator: boolean): boolean {
-    return isOperator || ref.ownerDid === callerDid;
+    return isOperator || ref.ownerDid === callerDid || MediaService.peerViewable(ref);
   }
 
   /** The bytes for a media (or its thumbnail). Throws GONE once the retention sweep has removed them. */
@@ -146,16 +184,20 @@ export class MediaService implements OnApplicationBootstrap, OnModuleDestroy {
    * Silently no-ops (never throws) when it cannot safely adopt — an unknown/legacy id, a ref that isn't the
    * caller's, or one linked elsewhere — so a fresh own upload links and anything dubious is simply left alone.
    */
-  adopt(mediaId: string | undefined, ownerDid: string, link: MediaLink, kind: MediaKind): void {
-    if (!mediaId || !ownerDid) return;
+  adopt(mediaId: string | undefined, ownerDid: string, link: MediaLink, kind: MediaKind): boolean {
+    if (!mediaId || !ownerDid) return false;
     const ref = this.refs.get(mediaId);
-    if (!ref || ref.status !== 'active') return;
-    if (ref.ownerDid !== ownerDid) return; // not the caller's — never launder another actor's media
-    if (ref.link && (ref.link.type !== link.type || ref.link.id !== link.id)) return; // already attached elsewhere
+    if (!ref || ref.status !== 'active') return false;
+    if (ref.ownerDid !== ownerDid) return false; // not the caller's — never launder another actor's media
+    if (ref.link && (ref.link.type !== link.type || ref.link.id !== link.id)) return false; // attached elsewhere
     ref.link = link;
     ref.kind = kind;
     ref.retentionClass = KIND_RETENTION[kind];
     this.refs.set(mediaId, ref);
+    // TRUE means this media is now ours to serve. A caller that RECORDS a photo reference — a hazard
+    // account, say — needs to know, or it writes down a citation to a photograph nobody can produce,
+    // which is the same defect as a screen that says "2 photos" and shows none.
+    return true;
   }
 
   /** Parcel reached a terminal state → start the 90-day clock on its shipment-proof media. Idempotent. */

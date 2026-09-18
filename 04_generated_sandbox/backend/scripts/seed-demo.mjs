@@ -11,7 +11,7 @@
  * Sandbox-only by construction: it uses the public phone-OTP echo and the ungated
  * operator mint, both of which die the moment GLOS_CLIENT_SECRET is configured.
  */
-import { documentDataUrl } from './seed-image.mjs';
+import { documentDataUrl, roadDataUrl } from './seed-image.mjs';
 
 const API = process.env.SBG_API ?? 'http://localhost:3000';
 const PASSWORD = 'seebuyget';
@@ -51,6 +51,13 @@ async function req(method, path, { token, body } = {}) {
  */
 async function uploadDoc(token, kind, sort, seed) {
   const r = await req('POST', '/v1/sbg/media', { token, body: { kind, dataUrl: documentDataUrl(sort, seed) } });
+  if (!r.ok || !r.data?.mediaId) return undefined;
+  return r.data.mediaId;
+}
+
+/** The same, for a picture of a ROAD — 'washout' (broken) or 'clear' (whole). Owned by whoever uploads it. */
+async function uploadRoad(token, sort) {
+  const r = await req('POST', '/v1/sbg/media', { token, body: { kind: 'hazard', dataUrl: roadDataUrl(sort) } });
   if (!r.ok || !r.data?.mediaId) return undefined;
   return r.data.mediaId;
 }
@@ -268,6 +275,7 @@ const run = async () => {
   // his DID's controller (`pudo-driver:<mobile>`) — on a re-seed he already exists and nobody printed it.
   const DRIVER_PIN = '1357';
   const amosPhone = (need(await req('GET', `/v1/did/${encodeURIComponent(amos.did)}`), 'amos did').controller ?? '').replace(/^pudo-driver:/, '');
+  let amosToken;
   {
     const signedIn = await req('POST', '/v1/sbg/drivers/session', { body: { phone: amosPhone, pin: DRIVER_PIN } });
     if (!signedIn.ok) {
@@ -276,6 +284,7 @@ const run = async () => {
       need(await req('POST', '/v1/sbg/identity/enroll', { body: { phone: amosPhone, pin: DRIVER_PIN } }), 'amos pin');
       need(await req('POST', '/v1/sbg/drivers/session', { body: { phone: amosPhone, pin: DRIVER_PIN } }), 'amos sign-in');
     }
+    amosToken = (signedIn.ok ? signedIn.data : (await req('POST', '/v1/sbg/drivers/session', { body: { phone: amosPhone, pin: DRIVER_PIN } })).data)?.token?.access_token;
   }
   say(`driver Amos K.   phone ${amosPhone} PIN ${DRIVER_PIN}`);
 
@@ -332,6 +341,54 @@ const run = async () => {
     }
   }
   say(`drivers Amos K. (badge ${amos.badgeId ?? '—'}) · Grace M. (papers with GLOS)`);
+
+  /*
+   * THE ROAD, AS TWO DRIVERS REPORT IT — with a photograph on each side of the argument.
+   *
+   * Seeded because this is the one feature that cannot be judged from a single account: a hazard photo
+   * is read by the NEXT driver down that road, so the demo needs two people who have never met
+   * disagreeing about one culvert, each with a picture. Grace gets a PIN here for the same reason —
+   * signing in as the second driver is how anybody checks that the first driver's photograph is visible.
+   *
+   * IDEMPOTENT by position: a re-run finds the washout already standing and leaves it alone rather than
+   * drawing a second one 40 m up the same road.
+   */
+  {
+    const gracePhone = (need(await req('GET', `/v1/did/${encodeURIComponent(grace.did)}`), 'grace did').controller ?? '').replace(/^pudo-driver:/, '');
+    let graceToken;
+    const gIn = await req('POST', '/v1/sbg/drivers/session', { body: { phone: gracePhone, pin: DRIVER_PIN } });
+    if (gIn.ok) {
+      graceToken = gIn.data?.token?.access_token;
+    } else {
+      const r1 = await req('POST', '/v1/sbg/auth/phone/request', { body: { phone: gracePhone } });
+      await req('POST', '/v1/sbg/auth/phone/verify', { body: { phone: gracePhone, code: r1.data?.code } });
+      await req('POST', '/v1/sbg/identity/enroll', { body: { phone: gracePhone, pin: DRIVER_PIN } });
+      graceToken = (await req('POST', '/v1/sbg/drivers/session', { body: { phone: gracePhone, pin: DRIVER_PIN } })).data?.token?.access_token;
+    }
+    say(`driver Grace M.  phone ${gracePhone} PIN ${DRIVER_PIN}`);
+
+    // On the straight line between Nairobi and Nakuru, so it is on the corridor the demo actually runs.
+    const spot = { lat: -0.7935, lng: 36.4503 };
+    const standing = (await req('GET', `/v1/sbg/route-constraints?lat=${spot.lat}&lng=${spot.lng}&radiusKm=1`)).data?.items ?? [];
+    if (!standing.some((c) => c.kind === 'WASHOUT') && amosToken && graceToken) {
+      const seen = await uploadRoad(amosToken, 'washout');
+      const rep = await req('POST', '/v1/sbg/route-constraints', {
+        token: amosToken,
+        body: { kind: 'WASHOUT', at: spot, note: 'Culvert went in the night rain — the whole lane is out', ...(seen ? { photoRef: seen } : {}) },
+      });
+      const id = rep.data?.constraintId;
+      // And the answer to it, which is what makes this worth looking at: a second driver, a second photo,
+      // and a hazard that goes on warning anyway until an operator decides.
+      const answer = await uploadRoad(graceToken, 'clear');
+      if (id) {
+        await req('POST', `/v1/sbg/route-constraints/${id}/refute`, {
+          token: graceToken,
+          body: { note: 'Graded yesterday — I came through at six this morning', ...(answer ? { photoRef: answer } : {}) },
+        });
+      }
+      say('road       one disputed washout on the Nakuru line, a photo on each side');
+    }
+  }
 
   // Handover resolves the badge only for a COUPLED driver on a corridor — put Amos on shift.
   const corridorZAB = need(await req('GET', '/v1/sbg/corridors', { token: op }), 'corridors').find(

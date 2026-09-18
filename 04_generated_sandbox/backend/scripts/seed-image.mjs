@@ -102,3 +102,34 @@ export function documentPng(sort = 'licence', seed = 1, width = 320, height = 20
 export function documentDataUrl(sort, seed) {
   return `data:image/png;base64,${documentPng(sort, seed).toString('base64')}`;
 }
+
+/**
+ * A ROAD, not a document — because a hazard photo is now read by the next driver down that road, and a
+ * seeded picture of an identity card under "road washed out" teaches exactly the wrong thing about what
+ * this strip is for.
+ *
+ * Crude on purpose: ground, a carriageway running to a vanishing point, and — for 'washout' — a dark
+ * gash across it. What it has to carry at thumbnail size is one bit, which is whether the road is broken
+ * or whole, because that is the argument the two accounts on a disputed hazard are having.
+ */
+export function roadPng(sort = 'washout', width = 320, height = 200) {
+  const horizon = 70;
+  return png(width, height, (x, y) => {
+    if (y < horizon) return [150, 162, 172]; // an overcast sky, which is the weather that does this
+    // The carriageway: narrow at the horizon, full width at the driver's feet.
+    const t = (y - horizon) / (height - horizon);
+    const half = 18 + t * 110;
+    const off = Math.abs(x - width / 2);
+    if (off > half) return [122, 104, 78]; // the verge
+    if (sort === 'washout' && y > horizon + 58 && y < horizon + 92) return [58, 44, 34]; // the gash
+    // The centre line, dashed, and gone where the road is.
+    if (off < 3 + t * 4 && Math.floor(y / 14) % 2 === 0 && !(sort === 'washout' && y > horizon + 58 && y < horizon + 92)) {
+      return [226, 214, 160];
+    }
+    return [86, 86, 90];
+  });
+}
+
+export function roadDataUrl(sort) {
+  return `data:image/png;base64,${roadPng(sort).toString('base64')}`;
+}

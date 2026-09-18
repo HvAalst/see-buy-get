@@ -33,12 +33,15 @@ const ELSEWHERE = { lat: -1.5, lng: 37.9 };
  * tests can assert them without dragging a BlobStore into every case.
  */
 const mediaFake = () => {
-  const linked: Array<{ mediaId: string; type: string; id: string; kind: string }> = [];
+  const linked: Array<{ mediaId: string; owner: string; type: string; id: string; kind: string }> = [];
   const anchored: string[] = [];
   return {
     calls: { linked, anchored },
     service: {
-      link: (mediaId: string, link: { type: string; id: string }, kind: string) => linked.push({ mediaId, type: link.type, id: link.id, kind }),
+      // ADOPT, not link. The service must hand the media store an OWNER to check against, because a
+      // posted hazard photo is now readable by every peer — see the adoption test below.
+      adopt: (mediaId: string, owner: string, link: { type: string; id: string }, kind: string) =>
+        linked.push({ mediaId, owner, type: link.type, id: link.id, kind }),
       anchorConstraintCleared: (constraintId: string) => anchored.push(constraintId),
     },
   };
@@ -197,22 +200,42 @@ describe('route constraints — the road as its drivers report it', () => {
       for (const a of after.accounts) expect(a).not.toHaveProperty('by');
     });
 
-    it('LINKS each photo to the constraint, so the retention sweep cannot reclaim it', () => {
+    it('ADOPTS each photo as the account-giver’s own, so the sweep cannot reclaim it and nobody can launder', () => {
+      // Two things at once, and the second is why this is adopt() and not link().
+      //
       // An unlinked upload is purged as an abandoned capture, which would leave an account citing a
-      // photograph that no longer exists — a footnote pointing at nothing.
+      // photograph that no longer exists — a footnote pointing at nothing. That is what the link was for.
+      //
+      // But the media store now serves a POSTED hazard photo to every authenticated peer, and `link()` is
+      // ownership-blind. Blind-linking a client-supplied ref would let anybody name somebody else's KYC
+      // id as their hazard photo and read it straight back. So the OWNER goes with the ref, every time,
+      // and it is the DID of whoever gave that account — never the reporter's for a refuter's photo.
       const m = mediaFake();
       const s = svc(m.service);
       const c = s.report({ kind: 'WASHOUT', at: ON_THE_ROAD, photoRef: 'med_washout', by: 'did:driver:a' });
       s.refute(c.constraintId, 'did:driver:b', undefined, 'med_clear');
 
       expect(m.calls.linked).toEqual([
-        { mediaId: 'med_washout', type: 'constraint', id: c.constraintId, kind: 'hazard' },
-        { mediaId: 'med_clear', type: 'constraint', id: c.constraintId, kind: 'hazard' },
+        { mediaId: 'med_washout', owner: 'did:driver:a', type: 'constraint', id: c.constraintId, kind: 'hazard' },
+        { mediaId: 'med_clear', owner: 'did:driver:b', type: 'constraint', id: c.constraintId, kind: 'hazard' },
       ]);
       // No retention clock yet: a bridge does not come down because a window elapsed.
       expect(m.calls.anchored).toEqual([]);
       s.clear(c.constraintId, 'ops', 'Confirmed rebuilt by the county');
       expect(m.calls.anchored).toEqual([c.constraintId]);
+    });
+
+    it('does not CITE a photograph the media store refused to adopt', () => {
+      // Somebody names a media id that is not theirs — another driver's licence copy, say. The store
+      // refuses it, and the account must not go on record citing a photograph no reader can produce:
+      // that is "2 photos, none shown" written into the record instead of onto a screen.
+      const refusing = { adopt: () => false, anchorConstraintCleared: () => undefined };
+      const s = new RouteConstraintService(refusing as never);
+      const c = s.report({ kind: 'WASHOUT', at: ON_THE_ROAD, note: 'Whole lane went', photoRef: 'med_not_mine', by: 'did:driver:a' });
+
+      expect(c.accounts[0].note).toBe('Whole lane went'); // what they SAID still stands
+      expect(c.accounts[0].photoRef).toBeUndefined(); // the citation does not
+      expect(c.status).toBe('active'); // and the road still warns: the photo was never the warning
     });
 
     it('does not turn one driver saying the same thing twice into two witnesses', () => {

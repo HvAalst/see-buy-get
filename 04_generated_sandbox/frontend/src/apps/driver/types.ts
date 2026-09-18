@@ -389,4 +389,21 @@ export interface RoadConstraint {
   reportedAt: string;
   confirmations: number;
   refutations: number;
+  /**
+   * What each side actually said, in order, with no identities — and what they photographed.
+   *
+   * The counts above say how many; this says what. It was already on the wire and the driver's app simply
+   * did not declare it, which is the quiet half of this defect class: nothing errors, the screen just
+   * shows a number where there is a photograph of the bridge.
+   */
+  accounts?: RoadAccount[];
+}
+
+/** One driver's account of a hazard. No author, ever: see the server's ConstraintAccountView. */
+export interface RoadAccount {
+  at: string;
+  stance: 'there' | 'gone';
+  note?: string;
+  /** A media id. Fetchable by any signed-in driver now that the photo has been posted to the map. */
+  photoRef?: string;
 }

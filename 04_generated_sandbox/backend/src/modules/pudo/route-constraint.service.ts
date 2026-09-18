@@ -118,13 +118,22 @@ export class RouteConstraintService {
   private account(c: RouteConstraint, by: string, stance: ConstraintStance, note?: string, photoRef?: string): void {
     if (!c.accounts) c.accounts = [];
     const said = note?.trim();
-    const entry: ConstraintAccount = { by, at: new Date().toISOString(), stance, ...(said ? { note: said } : {}), ...(photoRef ? { photoRef } : {}) };
+    // ADOPTED BEFORE IT IS CITED, and both halves of that matter.
+    //
+    // Adopted, not linked: `link()` is ownership-blind, which is correct for refs this module makes
+    // itself and wrong for one a client hands us. A posted hazard photo is now readable by every peer
+    // (MediaService.peerViewable), so a blind link would let anybody name ANOTHER actor's media — a KYC
+    // id, a delivery photo — as their hazard photo and read it straight back through the widened gate.
+    //
+    // And cited only if adopted: an account that names a photograph the store will not serve is a
+    // footnote pointing at nothing, which is exactly the "2 photos, none shown" defect written into the
+    // record instead of onto a screen. Adoption is also what stops the retention sweep reclaiming a real
+    // photo as an abandoned upload. No expiry is set here — that waits for an operator to clear it.
+    const kept = photoRef ? this.media.adopt(photoRef, by, { type: 'constraint', id: c.constraintId }, 'hazard') : false;
+    const entry: ConstraintAccount = { by, at: new Date().toISOString(), stance, ...(said ? { note: said } : {}), ...(kept ? { photoRef } : {}) };
     const mine = c.accounts.findIndex((a) => a.by === by);
     if (mine >= 0) c.accounts[mine] = entry;
     else c.accounts.push(entry);
-    // LINKED, or the retention sweep reclaims it as an abandoned upload and the account is left citing a
-    // photograph that no longer exists. No expiry is set here: that waits for an operator to clear it.
-    if (photoRef) this.media.link(photoRef, { type: 'constraint', id: c.constraintId }, 'hazard');
   }
 
   /** A later passer-by agrees. One vote each; the original reporter's is already counted. */

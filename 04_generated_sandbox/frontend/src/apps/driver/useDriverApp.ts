@@ -1198,6 +1198,19 @@ const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehic
     [client, pushToast],
   );
 
+  /**
+   * Authenticated byte loader for another driver's ROAD photo — a media endpoint needs the bearer, so no
+   * plain <img src> can reach one.
+   *
+   * Thumbnails by default, and that is deliberate: this runs on a connection the driver pays for by the
+   * megabyte, and the road list is read at a junction. Nothing here loads until a photo is asked for.
+   */
+  const loadRoadPhoto = useCallback(
+    (mediaId: string, variant: 'full' | 'thumb' = 'thumb') =>
+      client ? client.api.mediaBlob(mediaId, variant) : Promise.resolve({ data: null, error: {} as unknown }),
+    [client],
+  );
+
   /** S32b/S33 — pick up a claimed dedicated-freight job (claimed → in_transit), through the load-safety gate:
    *  the confirmed checklist keys + the securement photo mediaId. */
   const pickupFreight = useCallback(
@@ -1402,6 +1415,7 @@ const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehic
       answerOffer,
       loadBag,
       uploadPhoto,
+      loadRoadPhoto,
       pickupFreight,
       deliverFreight,
       failDelivery,
