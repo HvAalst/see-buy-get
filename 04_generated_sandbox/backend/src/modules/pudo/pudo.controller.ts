@@ -16,6 +16,7 @@ import { HandleDirectory } from './handle-directory.service';
 import { ProfileView, presenceSays, profileDoes } from './profile.types';
 import { MOBILISATION_MEASURED, mobilisationOf } from './mobilisation';
 import { AGENT_MEASURED, RECORD_SAYS } from './agent-record';
+import { CONTAINER_TYPES, type ContainerTypeSpec } from './container-type';
 import { MoversView } from './movers.types';
 import { ImportService } from './import.service';
 import { AgentFinderResponse, ClearanceOffer, ClearanceRecordResponse, ImportDetail, ImportRow, KnownPaper } from './import.types';
@@ -74,6 +75,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   ReleaseCustomsHoldDto,
   ClearanceOfferDto,
   FindAgentsQueryDto,
+  DeclareCargoDto,
   MintRoadLegDto,
   PresenceDto,
   PresenceDecisionDto,
@@ -896,6 +898,48 @@ export class SbgController {
     // somebody should be able to go and check.
     const offer = this.imports.offerOf(me);
     return { record: this.imports.agentRecord(me), measured: AGENT_MEASURED, ...(handle ? { handle } : {}), ...(offer ? { offer } : {}) };
+  }
+
+  /**
+   * CL7 — SAY WHAT KIND OF BOX IT IS, AND WHAT IS IN IT.
+   *
+   * The question this answers: an open top and a 40ft high-cube used to book identically, as did a
+   * food-grade tank and a crude-oil tank. Everything about the BOX is now derived from its ISO code —
+   * height, roof, the bodies that can carry it, the gear that lifts it — and everything about the GOODS
+   * is DECLARED, because no code distinguishes edible oil from gas oil and reading it out of a
+   * description would be us classifying goods. Same line as duty: regulated, and not ours to draw.
+   *
+   * The importer's, because the goods are theirs.
+   */
+  @Roles('operator', 'entity_admin')
+  @Post('imports/:importId/cargo')
+  declareImportCargo(@Param('importId') importId: string, @Body() dto: DeclareCargoDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    return this.withHandles(
+      this.imports.declareCargo(
+        importId,
+        this.actingCompany(actor, dto.entityId),
+        {
+          containerType: dto.containerType,
+          natureCode: dto.natureCode,
+          cargoHeightM: dto.cargoHeightM,
+          tank: dto.tank,
+          dangerous: dto.dangerous,
+        },
+        this.namedActor(actor, dto.by),
+      ),
+    );
+  }
+
+  /**
+   * The boxes this network books, with their real measurements. @Public — it is a catalogue, not data.
+   *
+   * Sent rather than mirrored into every client for the reason every derived table here is sent: two
+   * copies of one table drift, and the copy on the screen drifts silently.
+   */
+  @Public()
+  @Get('container-types')
+  containerTypes(): { items: ContainerTypeSpec[] } {
+    return { items: CONTAINER_TYPES };
   }
 
   /* ------------------------------ CL6 — what an agent says they clear, and finding one -- */

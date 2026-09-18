@@ -545,6 +545,125 @@ describe('an import consignment, its papers, and the agent who clears them', () 
   });
 
   /**
+   * CL7 — AN OPEN TOP IS NOT A HIGH-CUBE, AND A FOOD TANK IS NOT A FUEL TANK.
+   *
+   * The question these exist for: all four used to produce the same record and then mint the same generic
+   * road leg, to be offered to whatever truck was nearest. What is guarded is that the facts now REACH
+   * the load, and that the two combinations nobody can honestly offer a truck are refused with a sentence
+   * saying which fact is missing.
+   */
+  describe('what kind of box, and what is in it', () => {
+    // What the fake dispatch was actually handed. The point of every test below: before this slice it
+    // received a description and a weight, and derived everything else from nothing.
+    const mintedLoads = () => minted as Array<Record<string, unknown>>;
+
+    it('derives the box’s facts from its code, and never asks anybody to type them', () => {
+      const one = register();
+      const after = imports.declareCargo(one.importId, importerId, { containerType: '45g1' }, 'Hans');
+      expect(after.containerFacts).toMatchObject({ code: '45G1', lengthFt: 40, openTop: false, kind: 'dry' });
+      expect(after.containerFacts!.heightM).toBeCloseTo(2.896, 3);
+      expect(after.containerFacts!.bodies).toContain('skeletal');
+    });
+
+    it('refuses a code we do not hold, because a code with no measurements is a height nobody can check', () => {
+      const one = register();
+      expect(() => imports.declareCargo(one.importId, importerId, { containerType: '99Z9' }, 'Hans')).toThrow(/do not hold a container type/);
+    });
+
+    it('HANDS THE BOX’S FACTS TO THE ROAD LEG, which used to get a description and a weight', () => {
+      const one = register();
+      imports.declareCargo(one.importId, importerId, { containerType: '45G1', natureCode: 'GEN' }, 'Hans');
+      imports.mintRoadLeg(one.importId, importerId, { pickupLocation: { lat: 11.6, lng: 43.1 }, destLabel: 'Addis', weightKg: 21000 }, 'Hans');
+
+      const handed = mintedLoads()[0] as Record<string, unknown> & { heightM?: number; indivisible?: boolean; originEquipment?: string[]; destEquipment?: string[]; bodyHint?: string };
+      // The height the bridge map has been waiting for since it was built.
+      expect(handed.heightM).toBeCloseTo(2.896, 3);
+      // A box cannot be split, which is what makes it a permit conversation and not two trips.
+      expect(handed.indivisible).toBe(true);
+      // And what has to lift it at each end, which was silent before.
+      expect(handed.originEquipment).toContain('TLT');
+      expect(handed.destEquipment).toContain('TLT');
+      expect(handed.bodyHint).toBe('skeletal');
+    });
+
+    it('sends an OPEN TOP’s declared cargo height, not the box’s own', () => {
+      const one = register();
+      imports.declareCargo(one.importId, importerId, { containerType: '42U1', natureCode: 'GEN', cargoHeightM: 3.4 }, 'Hans');
+      imports.mintRoadLeg(one.importId, importerId, { pickupLocation: { lat: 11.6, lng: 43.1 }, destLabel: 'Addis', weightKg: 18000 }, 'Hans');
+      // 3.4 m of cargo on an open box, not the 2.59 m of the box it stands in.
+      expect(mintedLoads()[0].heightM).toBeCloseTo(3.4, 2);
+      expect(imports.detail(one.importId, importerId).containerFacts!.outOfGauge).toBe(true);
+    });
+
+    it('will NOT mint an open box whose cargo height nobody has stated', () => {
+      const one = register();
+      imports.declareCargo(one.importId, importerId, { containerType: '22U1', natureCode: 'GEN' }, 'Hans');
+      expect(imports.detail(one.importId, importerId).cargoGaps.join(' ')).toMatch(/no roof/);
+      expect(() => imports.mintRoadLeg(one.importId, importerId, { pickupLocation: { lat: 11.6, lng: 43.1 }, destLabel: 'Addis', weightKg: 9000 }, 'Hans')).toThrow(/no roof/);
+    });
+
+    /**
+     * THE HALF OF THE QUESTION A CODE CANNOT ANSWER. 22T1 and 22T1: the same box, two movements.
+     */
+    describe('a food tank and a fuel tank', () => {
+      it('refuses a FOOD tank whose last cargo nobody has stated', () => {
+        const one = register({ goodsDescription: 'Edible oil, bulk' });
+        imports.declareCargo(one.importId, importerId, { containerType: '22T1', natureCode: 'FOD' }, 'Hans');
+        expect(imports.detail(one.importId, importerId).cargoGaps.join(' ')).toMatch(/last held/);
+        expect(() => imports.mintRoadLeg(one.importId, importerId, { pickupLocation: { lat: 11.6, lng: 43.1 }, destLabel: 'Addis', weightKg: 20000 }, 'Hans')).toThrow(/carried fuel can never carry food/);
+      });
+
+      it('lets it go once the tank’s history is declared, and keeps the certificate on the register', () => {
+        const one = register({ goodsDescription: 'Edible oil, bulk' });
+        imports.declareCargo(one.importId, importerId, { containerType: '22T1', natureCode: 'FOD' }, 'Hans');
+        const cert = paper(importerId, 'other', 'Tank cleaning certificate', { relatesTo: one.code });
+        const after = imports.declareCargo(
+          one.importId,
+          importerId,
+          { tank: { lastCargoes: ['Sunflower oil', 'Sunflower oil'], cleanedAt: '2026-09-10', certificateDocumentId: cert.documentId } },
+          'Hans',
+        );
+        expect(after.cargoGaps).toEqual([]);
+        expect(after.customsHolds).toEqual([]); // unrelated, and still empty
+        expect(imports.mintRoadLeg(one.importId, importerId, { pickupLocation: { lat: 11.6, lng: 43.1 }, destLabel: 'Addis', weightKg: 20000 }, 'Hans').roadFreightCode).toBeTruthy();
+      });
+
+      it('refuses a certificate that is not one of the importer’s own documents', () => {
+        const one = register();
+        expect(() =>
+          imports.declareCargo(one.importId, importerId, { tank: { lastCargoes: ['Crude'], certificateDocumentId: 'doc_nope' } }, 'Hans'),
+        ).toThrow(/not one of your own documents/);
+      });
+
+      it('refuses HAZARDOUS goods with no UN number, because the truck needs it for its placards', () => {
+        const one = register({ goodsDescription: 'Gas oil, bulk' });
+        imports.declareCargo(one.importId, importerId, { containerType: '22T1', natureCode: 'HAZ-FLAM' }, 'Hans');
+        expect(imports.detail(one.importId, importerId).cargoGaps.join(' ')).toMatch(/UN number/);
+        expect(() => imports.mintRoadLeg(one.importId, importerId, { pickupLocation: { lat: 11.6, lng: 43.1 }, destLabel: 'Addis', weightKg: 24000 }, 'Hans')).toThrow(/placards/);
+      });
+
+      it('checks the SHAPE of a UN number and never the choice, then hands the nature to the load', () => {
+        const one = register({ goodsDescription: 'Gas oil, bulk' });
+        imports.declareCargo(one.importId, importerId, { containerType: '22T1', natureCode: 'HAZ-FLAM' }, 'Hans');
+        expect(() => imports.declareCargo(one.importId, importerId, { dangerous: { unNumber: 'diesel', imdgClass: '3' } }, 'Hans')).toThrow(/looks like UN1202/);
+        const after = imports.declareCargo(one.importId, importerId, { dangerous: { unNumber: 'un 1202', imdgClass: '3', properShippingName: 'GAS OIL' } }, 'Hans');
+        expect(after.cargoGaps).toEqual([]);
+
+        imports.mintRoadLeg(one.importId, importerId, { pickupLocation: { lat: 11.6, lng: 43.1 }, destLabel: 'Addis', weightKg: 24000 }, 'Hans');
+        // The nature is what makes the freight machinery demand a hazmat-certified vehicle, and what the
+        // hazard map reads to close a NO_HAZMAT road to it. It was never passed before.
+        expect(mintedLoads()[0].natureCode).toBe('HAZ-FLAM');
+      });
+
+      it('leaves a tank carrying neither food nor hazmat alone — the gate is about the pairing', () => {
+        const one = register({ goodsDescription: 'Glycerine, technical' });
+        imports.declareCargo(one.importId, importerId, { containerType: '22T1', natureCode: 'GEN' }, 'Hans');
+        expect(imports.detail(one.importId, importerId).cargoGaps).toEqual([]);
+      });
+    });
+  });
+
+  /**
    * CL6 — WHAT AN AGENT SAYS THEY CLEAR, AND FINDING ONE.
    *
    * The user's correction is the whole reason this exists: *"Agents do not just clear containers... Some

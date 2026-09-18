@@ -5163,6 +5163,58 @@
         }
       }
     },
+    "/v1/sbg/imports/{importId}/cargo": {
+      "post": {
+        "operationId": "Sbg.declareImportCargo",
+        "summary": "",
+        "description": "CL7 — SAY WHAT KIND OF BOX IT IS, AND WHAT IS IN IT.\n\nThe question this answers: an open top and a 40ft high-cube used to book identically, as did a\nfood-grade tank and a crude-oil tank. Everything about the BOX is now derived from its ISO code —\nheight, roof, the bodies that can carry it, the gear that lifts it — and everything about the GOODS\nis DECLARED, because no code distinguishes edible oil from gas oil and reading it out of a\ndescription would be us classifying goods. Same line as duty: regulated, and not ours to draw.\n\nThe importer's, because the goods are theirs.",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeclareCargoDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/container-types": {
+      "get": {
+        "operationId": "Sbg.containerTypes",
+        "summary": "",
+        "description": "The boxes this network books, with their real measurements.  — it is a catalogue, not data.\n\nSent rather than mirrored into every client for the reason every derived table here is sent: two\ncopies of one table drift, and the copy on the screen drifts silently.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/entities/{entityId}/clearance-offer": {
       "post": {
         "operationId": "Sbg.setClearanceOffer",
@@ -19282,6 +19334,64 @@
           "destPort"
         ]
       },
+      "TankDeclaration": {
+        "type": "object",
+        "properties": {
+          "lastCargoes": {
+            "description": "What it last held, most recent first. The trade usually wants three. Their words.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "cleanedAt": {
+            "type": "string"
+          },
+          "certificateDocumentId": {
+            "type": "string",
+            "description": "One of the importer's own documents — the cleaning certificate. Never a file uploaded into here."
+          },
+          "declaredBy": {
+            "type": "string"
+          },
+          "declaredAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "lastCargoes",
+          "declaredBy",
+          "declaredAt"
+        ]
+      },
+      "DangerousGoodsDeclaration": {
+        "type": "object",
+        "properties": {
+          "unNumber": {
+            "type": "string",
+            "description": "'UN1202'. Carried as the importer wrote it; we validate the shape and never the choice."
+          },
+          "imdgClass": {
+            "type": "string",
+            "description": "The IMDG/ADR class as declared — '3', '8', '5.1'."
+          },
+          "properShippingName": {
+            "type": "string"
+          },
+          "declaredBy": {
+            "type": "string"
+          },
+          "declaredAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "unNumber",
+          "imdgClass",
+          "declaredBy",
+          "declaredAt"
+        ]
+      },
       "RequiredPaper": {
         "type": "object",
         "properties": {
@@ -19509,6 +19619,33 @@
               "air",
               "road",
               "rail"
+            ]
+          },
+          "containerType": {
+            "type": "string"
+          },
+          "natureCode": {
+            "type": "string",
+            "description": "WHAT THE GOODS ARE, in the vocabulary the freight side already uses. The importer's choice.\n\nThe distance between a food tank and a fuel tank, and nothing about the container says it. Absent\nmeans nobody has said, which is why the road leg refuses to carry certain combinations blind."
+          },
+          "cargoHeightM": {
+            "type": "number",
+            "description": "How tall the CARGO stands, in metres, where the box has no roof.\n\nOnly meaningful for an open top or a flat rack, and it is the difference between the height of the\nfloor the cargo sits on and the height of the movement. Absent on an open box leaves the road height\nunknown rather than guessed at the box's own figure — see standsOn()."
+          },
+          "tank": {
+            "description": "A tank's last cargoes and its cleaning certificate. The only thing that makes one food-grade.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TankDeclaration"
+              }
+            ]
+          },
+          "dangerous": {
+            "description": "The importer's dangerous-goods declaration. Never derived from the goods description.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DangerousGoodsDeclaration"
+              }
             ]
           },
           "carrierRef": {
@@ -19746,6 +19883,62 @@
           "canPayOut"
         ]
       },
+      "ContainerFacts": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "lengthFt": {
+            "type": "number"
+          },
+          "heightM": {
+            "type": "number",
+            "description": "External height in metres. 2.59 standard, 2.90 high-cube — the 30 cm that decides a bridge."
+          },
+          "kind": {
+            "type": "string"
+          },
+          "openTop": {
+            "type": "boolean",
+            "description": "No fixed roof: craned from above, not weatherproof, and the cargo may stand proud of the box."
+          },
+          "needsPower": {
+            "type": "boolean"
+          },
+          "bodies": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "equipment": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "outOfGauge": {
+            "type": "boolean",
+            "description": "How tall the movement stands, where the cargo was declared taller than an open box."
+          }
+        },
+        "required": [
+          "code",
+          "label",
+          "lengthFt",
+          "heightM",
+          "kind",
+          "openTop",
+          "needsPower",
+          "bodies",
+          "equipment",
+          "outOfGauge"
+        ]
+      },
       "ImportDetail": {
         "type": "object",
         "properties": {
@@ -19878,6 +20071,21 @@
             "items": {
               "$ref": "#/components/schemas/CustomsHold"
             }
+          },
+          "cargoGaps": {
+            "description": "WHAT IS STILL MISSING BEFORE THIS CAN GO ON A TRUCK, in sentences. Derived on every read.\n\nA food tank whose last cargo nobody has stated; hazardous goods with no UN number; an open box with\nno cargo height. Each is a fact no code, description or weight can supply, and each makes the road\nleg refuse — so it is said on the screen from the moment the container is recorded, rather than\ndiscovered by whoever finally tries to mint one.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "containerFacts": {
+            "description": "The container type's own facts, resolved from the catalogue so no screen re-derives them.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ContainerFacts"
+              }
+            ]
           }
         },
         "required": [
@@ -19899,7 +20107,8 @@
           "documents",
           "grants",
           "money",
-          "customsHolds"
+          "customsHolds",
+          "cargoGaps"
         ]
       },
       "AppointAgentDto": {
@@ -20353,6 +20562,104 @@
           "record",
           "measured"
         ]
+      },
+      "TankDeclarationDto": {
+        "type": "object",
+        "properties": {
+          "lastCargoes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "cleanedAt": {
+            "type": "string"
+          },
+          "certificateDocumentId": {
+            "type": "string",
+            "description": "One of the importer's OWN documents. A file uploaded into here would be a register nobody verifies."
+          }
+        },
+        "required": [
+          "lastCargoes"
+        ]
+      },
+      "DangerousGoodsDto": {
+        "type": "object",
+        "properties": {
+          "unNumber": {
+            "type": "string",
+            "maxLength": 10
+          },
+          "imdgClass": {
+            "type": "string",
+            "maxLength": 8
+          },
+          "properShippingName": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "unNumber",
+          "imdgClass"
+        ]
+      },
+      "DeclareCargoDto": {
+        "type": "object",
+        "properties": {
+          "containerType": {
+            "type": "string",
+            "enum": [
+              "22G1",
+              "42G1",
+              "45G1",
+              "L5G1",
+              "22U1",
+              "42U1",
+              "22P1",
+              "42P1",
+              "22R1",
+              "45R1",
+              "22T1",
+              "22T6",
+              "22B1"
+            ]
+          },
+          "natureCode": {
+            "type": "string",
+            "enum": [
+              "GEN",
+              "FOD",
+              "FOP",
+              "HAZ-CHEM",
+              "HAZ-DUST",
+              "HAZ-BIO",
+              "HAZ-FLAM",
+              "FRG",
+              "ODR",
+              "HUM"
+            ]
+          },
+          "cargoHeightM": {
+            "type": "number",
+            "description": "How tall the CARGO stands, for an open box whose own height is only the floor it sits on.",
+            "minimum": 0.1,
+            "maximum": 10
+          },
+          "tank": {
+            "$ref": "#/components/schemas/TankDeclarationDto"
+          },
+          "dangerous": {
+            "$ref": "#/components/schemas/DangerousGoodsDto"
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        }
       },
       "ClearanceOfferDto": {
         "type": "object",
@@ -23274,8 +23581,12 @@
           "capacityKg": {
             "type": "number"
           },
-          "toteCapacity": {
+          "deckM": {
             "type": "number"
+          },
+          "toteCapacity": {
+            "type": "number",
+            "description": "How many BAGS the hold takes — the constraint kilos cannot express (a tote of letters weighs nothing, so\nby weight a bus fits a hundred while its boot holds a dozen). Absent on vehicles registered before this\nexisted: read it through DispatchService.toteCapacityOf, never off the field."
           },
           "pricePerKm": {
             "type": "number"
@@ -24664,6 +24975,10 @@
               "type": "number"
             }
           },
+          "heightM": {
+            "type": "number",
+            "description": "HOW TALL THE LOAD STANDS ON A DECK, in metres — the half the bridge map never had.\n\n`dimensionsCm` cannot answer this: it is orientation-free by design, so nothing can tell which of the\nthree numbers is the height. Dispatch has carried a comment since the hazard map shipped explaining\nwhy it passed NO height at all — \"a 4.0 m load is 5.2 m on a flatbed and 4.4 m on a lowboy\" — and\nthis is one of the two numbers that comment was waiting for. The other is the vehicle's deck.\n\nAbsent means unknown, and unknown stays HEIGHT_UNKNOWN against a low bridge rather than becoming a\npass. A 40ft high-cube sets it from the container catalogue; an open top sets it from the declared\ncargo height, because the box's own figure is the floor the cargo sits on."
+          },
           "bodyHint": {
             "type": "string",
             "description": "The minter's own body pick. ADVISORY — shown, compared and counted, NEVER used to filter (user, 2026-08-30).\n A shop clerk booking a walk-up cannot reliably tell a skeletal from a flatbed, and a binding wrong pick\n would invisibly exclude the one operator who could have taken the load. Where it disagrees with the\n derived body, that disagreement is itself a market signal worth reporting.",
@@ -25357,6 +25672,12 @@
           "capacityKg": {
             "type": "number",
             "minimum": 1
+          },
+          "deckM": {
+            "type": "number",
+            "description": "How high the loading deck stands, in metres — the other half of a bridge check.\n\nDeclared, because only the fleet can measure it and a class average would clear a load under a bridge\non arithmetic about somebody else's truck. Absent leaves the hazard map answering HEIGHT_UNKNOWN,\nwhich is the truth.",
+            "minimum": 0.1,
+            "maximum": 3
           },
           "ownerType": {
             "type": "string",

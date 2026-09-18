@@ -158,6 +158,20 @@ export class Freight {
   // documents the length the type already enforces.
   @ApiPropertyOptional({ type: [Number], minItems: 3, maxItems: 3, description: 'Length, width, height in cm (orientation-free)' })
   dimensionsCm?: [number, number, number];
+  /**
+   * HOW TALL THE LOAD STANDS ON A DECK, in metres — the half the bridge map never had.
+   *
+   * `dimensionsCm` cannot answer this: it is orientation-free by design, so nothing can tell which of the
+   * three numbers is the height. Dispatch has carried a comment since the hazard map shipped explaining
+   * why it passed NO height at all — "a 4.0 m load is 5.2 m on a flatbed and 4.4 m on a lowboy" — and
+   * this is one of the two numbers that comment was waiting for. The other is the vehicle's deck.
+   *
+   * Absent means unknown, and unknown stays HEIGHT_UNKNOWN against a low bridge rather than becoming a
+   * pass. A 40ft high-cube sets it from the container catalogue; an open top sets it from the declared
+   * cargo height, because the box's own figure is the floor the cargo sits on.
+   */
+  @ApiPropertyOptional()
+  heightM?: number;
   /** Can the load be split into two smaller ones? The single most decision-changing fact about anything
    *  oversize: a divisible 30 t is two ordinary trips, an indivisible 30 t is a low-loader and a permit. */
   indivisible?: boolean;

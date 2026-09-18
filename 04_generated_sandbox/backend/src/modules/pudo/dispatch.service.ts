@@ -395,7 +395,7 @@ export class DispatchService {
     return { code: t.code, status: t.status };
   }
 
-  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string }, now: number = Date.now()): Freight {
+  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string }, now: number = Date.now()): Freight {
     this.freightSeq += 1;
     // A future pickup date parks the load for later; a past/absent date ships now. A supplied-but-unparseable
     // date is a CALLER ERROR — fail closed (never silently ship-now what was meant to be scheduled). Store the
@@ -448,6 +448,9 @@ export class DispatchService {
       // FB0b — KEEP the measurements. They were already being taken (cargo.classify above reads them); they
       // were simply never stored, so every downstream question about what body the load needs had to guess.
       dimensionsCm: input.dimensionsCm,
+      // How tall it stands on a deck. Stored only when somebody actually knows — see the field's comment:
+      // absent stays HEIGHT_UNKNOWN against a low bridge, which is the truth and not a pass.
+      ...(input.heightM != null && input.heightM > 0 ? { heightM: Math.round(input.heightM * 100) / 100 } : {}),
       indivisible: input.indivisible,
       // ADVISORY only — never consulted by matching. Stored so the board can show what the shipper expects and
       // the analytics can report where shippers ask for a different body than the cargo actually needs.
@@ -1209,14 +1212,20 @@ export class DispatchService {
           indicativeCharge: price ? this.shipperBill(price.total, f).gross : undefined,
           // The road, as drivers reported it.
           //
-          // NO HEIGHT IS PASSED, deliberately. What matters at a bridge is the load PLUS the deck it is
-          // standing on — a 4.0 m load is 5.2 m on a flatbed and 4.4 m on a lowboy — and vehicles carry
-          // no deck height in this system yet. So the map answers HEIGHT_UNKNOWN against any height
-          // limit on the road, which is the truth. Passing the load height alone would clear a load that
-          // does not fit, which is the precise silent pass this whole feature exists to refuse.
+          // A HEIGHT IS PASSED AT LAST, and only when BOTH halves are known. What matters at a bridge is
+          // the load PLUS the deck it stands on — a 4.0 m load is 5.2 m on a flatbed and 4.4 m on a
+          // lowboy — and for years neither number existed, so this passed nothing and the map answered
+          // HEIGHT_UNKNOWN against every height limit. That was the truth, and it was also the reason a
+          // 40ft high-cube booked exactly like a standard box.
+          //
+          // Now a vehicle may declare its DECK and a load its HEIGHT, and the sum goes to the map. Either
+          // one missing still yields undefined, which still answers HEIGHT_UNKNOWN: half of a sum is not
+          // a smaller answer, it is no answer, and passing the load height alone would clear a load that
+          // does not fit — the precise silent pass this whole feature exists to refuse.
           routeBlockers: this.constraints.checkRoute({
             from: f.pickupLocation,
             to: f.destLocation,
+            totalHeightM: vehicle?.deckM != null && f.heightM != null ? Math.round((vehicle.deckM + f.heightM) * 100) / 100 : undefined,
             grossWeightKg: f.weightKg,
             hazmat: (f.requiredCapabilities ?? []).includes('hazmat'),
           }).concat(

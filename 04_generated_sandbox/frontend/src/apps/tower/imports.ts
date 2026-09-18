@@ -81,7 +81,32 @@ export interface ImportDetailView extends ImportRow {
   roadFreightId?: string;
   /** CL4 — what the state did to this container, with both parties' accounts. Shown to both of them. */
   customsHolds: CustomsHoldView[];
+  /**
+   * CL7 — what is still missing before this can go on a truck, in sentences. Derived by the server.
+   *
+   * A food tank whose last cargo nobody has stated; hazardous goods with no UN number; an open box with
+   * no cargo height. Shown from the moment the container is recorded, because the alternative is
+   * discovering it at the moment somebody tries to mint a leg.
+   */
+  cargoGaps: string[];
+  /** The box's own facts, resolved by the server from the catalogue so no screen re-derives them. */
+  containerFacts?: {
+    code: string;
+    label: string;
+    lengthFt: number;
+    heightM: number;
+    kind: string;
+    openTop: boolean;
+    needsPower: boolean;
+    bodies: string[];
+    equipment: string[];
+    outOfGauge: boolean;
+  };
 }
+
+/** What the goods ARE — the importer's declaration, from the vocabulary the freight side already uses. */
+export const CARGO_NATURES = ['GEN', 'FOD', 'FOP', 'HAZ-CHEM', 'HAZ-DUST', 'HAZ-BIO', 'HAZ-FLAM', 'FRG', 'ODR', 'HUM'] as const;
+export type CargoNatureCode = (typeof CARGO_NATURES)[number];
 
 /** The things the state does to a container. Not one of them is the agent's doing. */
 export const CUSTOMS_HOLD_KINDS = ['inspection_selected', 'physical_exam', 'documents_queried', 'queue', 'other'] as const;

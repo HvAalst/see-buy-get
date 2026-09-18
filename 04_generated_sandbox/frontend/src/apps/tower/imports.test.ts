@@ -115,6 +115,7 @@ describe('a container, its papers, and the agent who clears them', () => {
       grants: [],
       money: { canBill: true, canPayOut: true },
       customsHolds: [],
+      cargoGaps: [],
     } as ImportDetailView;
     expect(outstanding(detail).map((p) => p.key)).toEqual(['b', 'c']);
     expect(readinessOf(detail)).toEqual({ accepted: 2, asked: 3, done: false });

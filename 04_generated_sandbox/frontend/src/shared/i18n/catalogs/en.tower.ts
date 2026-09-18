@@ -458,6 +458,47 @@ export const enTower = {
   'tower.imports.recordListHours': 'You usually say what is needed within {h} hours of being appointed.',
   'tower.imports.recordCheckHours': 'A supplied paper usually waits {h} hours for you to accept or query it.',
   'tower.imports.recordHolds': 'Customs holds recorded on your containers: {holds} ({disputed} disputed by the importer). Not counted against you anywhere above.',
+  /* CL7 — what kind of box, and what is in it. The box's facts are DERIVED from its code; the goods are
+     DECLARED, because no code distinguishes a tank of edible oil from a tank of gas oil and reading it out
+     of a description would be us classifying goods — the line this epic keeps around duty. */
+  'tower.imports.boxTitle': 'The box, and what is in it',
+  'tower.imports.boxNone': 'Nobody has said what kind of box this is. An open top, a high-cube and a tank are three different movements, and until one is picked they all look the same to us — and to whatever truck gets offered the leg.',
+  'tower.imports.boxFacts': '{ft}ft · stands {h} m · carried on {bodies} · lifted with {gear}. All of that comes from the code, so nobody has to type it.',
+  'tower.imports.boxPick': 'Pick the box…',
+  'tower.imports.f.box': 'Container type (as printed on the box)',
+  'tower.imports.f.nature': 'What the goods are',
+  'tower.imports.naturePick': 'Say what the goods are…',
+  'tower.imports.f.cargoHeight': 'How tall the cargo stands (m)',
+  'tower.imports.boxSave': 'Save the box and the goods',
+  'tower.imports.boxSaved': 'Saved. The height, the bodies and the lifting gear come from the code.',
+  'tower.imports.outOfGauge': 'Out of gauge',
+  'tower.imports.nature.GEN': 'General dry goods',
+  'tower.imports.nature.FOD': 'Food — dry, packaged',
+  'tower.imports.nature.FOP': 'Food — perishable, needs cold',
+  'tower.imports.nature.HAZ-CHEM': 'Hazardous — chemical',
+  'tower.imports.nature.HAZ-DUST': 'Hazardous — dust or powder',
+  'tower.imports.nature.HAZ-BIO': 'Hazardous — biological',
+  'tower.imports.nature.HAZ-FLAM': 'Hazardous — flammable',
+  'tower.imports.nature.FRG': 'Fragile',
+  'tower.imports.nature.ODR': 'Odorous',
+  'tower.imports.nature.HUM': 'Medicines or aid',
+  /* A tank's history. The only thing that makes one food-grade, and not a thing we could ever compute. */
+  'tower.imports.tankHint':
+    'A tank that carried fuel can never carry food, and nothing about the box says which it is — only its last cargoes and a cleaning certificate do. We record what you declare and we do not certify the tank: the certificate is one of your own documents, so it carries a fingerprint and an expiry like every other paper.',
+  'tower.imports.f.lastCargoes': 'What it last carried (comma separated, most recent first)',
+  'tower.imports.f.cleanedAt': 'Cleaned on',
+  'tower.imports.f.cleanCert': 'Cleaning certificate',
+  'tower.imports.certNone': 'None attached',
+  'tower.imports.tankSave': 'Declare the tank',
+  'tower.imports.tankSaved': 'Declared. The food gate is satisfied for this container.',
+  /* Dangerous goods. Carried, never inferred: the number decides placards, certificates and roads. */
+  'tower.imports.dgHint':
+    'The UN number and class decide the placards on the truck, the certificate the driver must hold, and which roads are closed to the load. We check that a UN number looks like one and never which one it is — classifying goods is regulated advice and the penalty lands on you, so it is yours to declare.',
+  'tower.imports.f.unNumber': 'UN number',
+  'tower.imports.f.imdgClass': 'Class',
+  'tower.imports.f.shippingName': 'Proper shipping name (optional)',
+  'tower.imports.dgSave': 'Declare the goods',
+  'tower.imports.dgSaved': 'Declared. The load will ask for a hazmat-certified vehicle.',
   /* CL6 — the agent's own advertisement. The one asserted thing in the whole agent design, so the hint
      says so before the form: everything else about them is derived from the record. */
   'tower.imports.offerTitle': 'What you clear — your entry in the directory',

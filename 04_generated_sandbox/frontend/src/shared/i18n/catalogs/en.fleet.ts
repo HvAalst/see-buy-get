@@ -348,6 +348,12 @@ export const enFleet = {
   'fleet.vehicles.ownerName': 'Owner name',
   'fleet.vehicles.capacity': 'Capacity kg (optional)',
   'fleet.vehicles.capacityPh': 'computed if blank',
+  /* The deck. Asked for because the bridge map cannot answer without it, and left blank rather than
+     guessed: a class average would clear a load under a bridge on arithmetic about another truck. */
+  'fleet.vehicles.deck': 'Deck height, in metres',
+  'fleet.vehicles.deckPh': 'e.g. 1.30',
+  'fleet.vehicles.deckHint':
+    'How high the loading deck stands off the road, empty. We need it to answer low bridges: what matters under one is the load plus the deck it sits on, so a 2.90 m high-cube on a 1.30 m chassis is 4.20 m of vehicle. Leave it blank if you have not measured it — we will say we do not know rather than guess, and a guess is what puts a roof through a bridge.',
   'fleet.vehicles.pricePerKm': 'Price per km (public)',
   'fleet.vehicles.pricePh': 'default if blank',
   'fleet.vehicles.factory': 'Factory / VIN (verifies)',

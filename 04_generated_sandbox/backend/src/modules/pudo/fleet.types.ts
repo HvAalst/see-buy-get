@@ -88,6 +88,19 @@ export class Vehicle {
   truckSubtype?: TruckSubtype; // only for class 'truck'
   capacityKg: number; // system-computed (light) or operator-declared within class bounds (heavy)
   /**
+   * HOW HIGH THE LOADING DECK STANDS, in metres — the other half of a bridge check.
+   *
+   * Declared by the fleet, because only they can measure it, and absent on every vehicle registered
+   * before this existed. Dispatch has carried a comment since the crowd-sourced hazard map shipped
+   * explaining why it passed no height to the map at all: "a 4.0 m load is 5.2 m on a flatbed and 4.4 m
+   * on a lowboy", and no vehicle knew its deck. This is that number.
+   *
+   * ABSENT MEANS UNKNOWN AND STAYS UNKNOWN. A missing deck does not fall back to a class average: the
+   * whole hazard map exists to refuse a plausible guess where a real answer is needed, and averaging a
+   * deck would clear a load under a bridge on the strength of arithmetic about other people's trucks.
+   */
+  deckM?: number;
+  /**
    * How many BAGS the hold takes — the constraint kilos cannot express (a tote of letters weighs nothing, so
    * by weight a bus fits a hundred while its boot holds a dozen). Absent on vehicles registered before this
    * existed: read it through DispatchService.toteCapacityOf, never off the field.

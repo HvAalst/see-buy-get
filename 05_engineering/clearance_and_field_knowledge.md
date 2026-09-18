@@ -828,6 +828,70 @@ DTO, and validation whitelists — so the field was stripped in silence and an a
 as sea. Nothing errored, on either side. **Habit: a field added to a service is not added to the API
 until its DTO declares it, and the failure is silent by construction.**
 
+### CL7 — A container is not just a container — SHIPPED 2026-09-18, driven
+**The user's question, and the answer was "they don't differ at all":**
+
+> *"How does booking an open top container differ from an extra high 40ft container in our system? Or a
+> food grade 20ft liquid tank from a crude oil product tank container?"*
+
+All four produced the same record — a free-text goods description and a free-text container number — and
+then minted the same generic road leg, offered to whatever truck was nearest. The freight side already
+had the vocabulary to tell them apart (`HAZ-FLAM`, `FOD`/`FOP`, `TLT`/`CRN`, `skeletal`,
+`container_selfloader`, `food_tanker`, `fuel_tanker`, a `hazmat` capability) and **the import slice handed
+it none of it.**
+
+**THE TYPE CODE IS THE FACT THAT UNLOCKS THE REST, and it is a CATALOGUE — selected, never invented**, as
+countries and Incoterms are. `container-type.ts` holds the boxes this network books with their real
+measurements. **Deliberately NOT an ISO 6346 parser:** a parser answers confidently about codes nobody
+here has booked and is wrong in the corners. Adding one is an edit by somebody who has seen the box.
+
+**DERIVED from the code:** external height, whether it has a roof, whether it is a tank, which bodies can
+carry it, what has to lift it, whether it needs power. A shop clerk guessing "skeletal or flatbed" is the
+input FB0b refused to build a market series on.
+
+**DECLARED by the importer, because no code can answer it:** what the goods ARE (`natureCode`, from the
+freight side's own vocabulary). A tank of edible oil and a tank of gas oil are the same box, and reading
+the difference out of the words "edible oil" would be **us classifying goods** — the same regulated line
+§10 draws around duty, wearing a different hat.
+
+**THE FOUR CASES, and what now differs:**
+- **40ft high-cube vs standard:** 2.896 m against 2.591 m. That 30 cm is the whole difference, and it was
+  invisible. On a 1.3 m chassis a high-cube stands at **4.20 m**.
+- **Open top:** craned rather than top-lifted (no roof to grip), not weatherproof, and **its own height is
+  the FLOOR its cargo sits on** — so `standsOn()` returns undefined for an open box until somebody
+  declares the cargo height, and the leg is refused rather than minted against the box's figure. Above
+  the box it is `outOfGauge`.
+- **Food tank vs crude tank:** identical `22T1`. The difference is `TankDeclaration` — **last cargoes and
+  a cleaning certificate**, since a tank that carried fuel can never carry food. The certificate is one of
+  the importer's OWN documents, so it carries a fingerprint and an expiry like every other paper; we do
+  not certify a tank.
+- **Dangerous goods:** `DangerousGoodsDeclaration` — a UN number and class, the importer's. **We check
+  the SHAPE of a UN number and never the choice.**
+
+**TWO COMBINATIONS ARE REFUSED AT MINTING, with the sentence saying which fact is missing** (`cargoGaps`,
+derived on every read so a screen says it from the moment the container is recorded rather than
+discovering it when somebody tries to mint): a **tank carrying food** with no tank declaration, and
+**hazardous goods** with no UN number. Refused at minting and not at declaration, because a container is
+recorded the day it is booked, long before anybody knows what will be in it — the moment it needs a truck
+is the moment the facts have to exist.
+
+**AND THE BRIDGE CHECK FINALLY RUNS.** `checkRoute` has always taken a `totalHeightM` and always answered
+`HEIGHT_UNKNOWN`, because dispatch passed none — with a comment explaining why: *"a 4.0 m load is 5.2 m on
+a flatbed and 4.4 m on a lowboy, and vehicles carry no deck height in this system yet."* Both halves now
+exist: `Vehicle.deckM`, declared by the fleet, and `Freight.heightM`, set from the container catalogue (or
+from the declared cargo height on an open box). **Either half missing still answers HEIGHT_UNKNOWN** —
+half of a sum is not a smaller answer, it is no answer — and **there is no class-average deck**, because a
+guessed deck would clear a load under a bridge on arithmetic about somebody else's truck. This closes
+[[next-work-route-constraints]] item 2's height half; axle load and spacing remain open.
+
+**Surfaces:** the console's Containers screen gains the box, the goods, the tank declaration (shown only
+for a tank — asking everybody for a cleaning certificate is how a form gets ignored), the DG declaration,
+and the gaps stated first and loudly; the fleet app asks for a deck height, with blank left blank.
+
+**THE LINE, unchanged:** we do not classify goods, we do not certify a tank fit for food, and we do not
+decide a DG class. We carry declarations, derive what the box implies for the ROAD, and let the agent's
+required-papers list ask for certificates — which is the shape CL2a already established.
+
 ### CL5 — Field knowledge, first-hand only
 Last, and blocked twice over.
 

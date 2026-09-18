@@ -10,6 +10,7 @@ import { PACKAGING, type Packaging } from './packaging';
 import { MEDIA_KINDS, MediaKind } from './media.types';
 import { CONSTRAINT_KINDS, ConstraintKind } from './route-constraint.types';
 import { CARGO_LANES, CARGO_NATURES, CargoLane, CargoNature, EQUIPMENT, Equipment } from './cargo.types';
+import { CONTAINER_TYPE_CODES } from './container-type';
 import { CLEARANCE_SPECIALISMS, CONSIGNMENT_MODES, CUSTOMS_HOLD_KINDS, HOLD_STANCES } from './import.types';
 
 /** F1 — a scheduled pickup instant must be a full datetime WITH a timezone offset (Z or ±HH:MM), so the
@@ -419,6 +420,39 @@ export class FindAgentsQueryDto {
   /** A port, airport or border post, matched loosely against what they say AND where we have seen them. */
   @IsOptional() @IsString() @MaxLength(120) place?: string;
   @IsOptional() @IsString() @MaxLength(2) country?: string;
+}
+
+/** A tank's last cargoes and its cleaning certificate — the only thing that makes one food-grade. */
+export class TankDeclarationDto {
+  @IsArray() @ArrayMinSize(1) @IsString({ each: true }) lastCargoes!: string[];
+  @IsOptional() @IsString() cleanedAt?: string;
+  /** One of the importer's OWN documents. A file uploaded into here would be a register nobody verifies. */
+  @IsOptional() @IsString() certificateDocumentId?: string;
+}
+
+/** The importer's dangerous-goods declaration. We check the SHAPE of a UN number and never the choice. */
+export class DangerousGoodsDto {
+  @IsString() @MaxLength(10) unNumber!: string;
+  @IsString() @MaxLength(8) imdgClass!: string;
+  @IsOptional() @IsString() @MaxLength(200) properShippingName?: string;
+}
+
+/**
+ * CL7 — what kind of box, and what is in it.
+ *
+ * The box is SELECTED from the container catalogue, so its height and handling are derived. The goods are
+ * DECLARED, because no code distinguishes a tank of edible oil from a tank of gas oil, and deciding it
+ * from a description would be us classifying goods.
+ */
+export class DeclareCargoDto {
+  @IsOptional() @IsIn(CONTAINER_TYPE_CODES) @ApiPropertyOptional({ enum: CONTAINER_TYPE_CODES }) containerType?: string;
+  @IsOptional() @IsIn(CARGO_NATURES as unknown as string[]) @ApiPropertyOptional({ enum: CARGO_NATURES }) natureCode?: string;
+  /** How tall the CARGO stands, for an open box whose own height is only the floor it sits on. */
+  @IsOptional() @IsNumber() @Min(0.1) @Max(10) cargoHeightM?: number;
+  @IsOptional() @ValidateNested() @Type(() => TankDeclarationDto) tank?: TankDeclarationDto;
+  @IsOptional() @ValidateNested() @Type(() => DangerousGoodsDto) dangerous?: DangerousGoodsDto;
+  @IsOptional() @IsString() entityId?: string;
+  @IsOptional() @IsString() by?: string;
 }
 
 /** CA6 — the rule for crossing from one country into another. Absent a rule, a foreign vehicle may not carry inside. */
@@ -1192,6 +1226,14 @@ export class RegisterVehicleDto {
   @IsIn(VEHICLE_CLASSES) vehicleClass!: VClass;
   @IsOptional() @IsIn(TRUCK_SUBTYPES) truckSubtype?: string;
   @IsOptional() @IsNumber() @Min(1) capacityKg?: number;
+  /**
+   * How high the loading deck stands, in metres — the other half of a bridge check.
+   *
+   * Declared, because only the fleet can measure it and a class average would clear a load under a bridge
+   * on arithmetic about somebody else's truck. Absent leaves the hazard map answering HEIGHT_UNKNOWN,
+   * which is the truth.
+   */
+  @IsOptional() @IsNumber() @Min(0.1) @Max(3) deckM?: number;
   @IsOptional() @IsIn(['driver_owned', 'fleet_owned', 'third_party']) ownerType?: string;
   @IsString() ownerName!: string;
   @IsOptional() @ValidateNested() @Type(() => VehicleDocumentsDto) documents?: VehicleDocumentsDto;

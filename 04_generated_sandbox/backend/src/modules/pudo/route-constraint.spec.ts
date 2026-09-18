@@ -410,6 +410,30 @@ describe('route constraints — the road as its drivers report it', () => {
       expect(codesOf(s.checkRoute({ from: NAIROBI, to: NAKURU }))).toContain('HEIGHT_UNKNOWN');
     });
 
+    it('BLOCKS a high-cube on a chassis, which is the case the map could never answer', () => {
+      /*
+       * The question that produced this: a 40ft high-cube used to book exactly like a standard box.
+       *
+       * The map has always been able to answer — it takes a total height and says OVER_HEIGHT — and
+       * nothing ever supplied one, because a height needs BOTH the load and the deck it stands on and
+       * neither existed. 2.896 m of box on a 1.3 m chassis is 4.20 m, and a 4.2 m bridge is not a
+       * theoretical problem on these corridors.
+       */
+      const s = svc();
+      s.report({ kind: 'LOW_BRIDGE', at: ON_THE_ROAD, value: 4.2, by: 'did:driver:a' });
+
+      // A standard box on the same chassis: 2.591 + 1.3 = 3.89 m. Under it, and nothing is raised.
+      expect(codesOf(s.checkRoute({ from: NAIROBI, to: NAKURU, totalHeightM: 3.89 }))).not.toContain('OVER_HEIGHT');
+      // The high-cube on the same chassis. Same footprint, same weight, same everything but 30 cm.
+      const over = s.checkRoute({ from: NAIROBI, to: NAKURU, totalHeightM: 4.2 });
+      expect(codesOf(over)).not.toContain('OVER_HEIGHT'); // exactly at the limit is not over it
+      expect(codesOf(s.checkRoute({ from: NAIROBI, to: NAKURU, totalHeightM: 4.21 }))).toContain('OVER_HEIGHT');
+      // And the message names both numbers, because "blocked" tells a driver nothing they can act on.
+      const [b] = s.checkRoute({ from: NAIROBI, to: NAKURU, totalHeightM: 4.5 }).filter((x) => x.code === 'OVER_HEIGHT');
+      expect(b.message).toMatch(/4\.2 m limit/);
+      expect(b.message).toMatch(/4\.5 m on your deck/);
+    });
+
     it('will not clear a weight it was never told either', () => {
       const s = svc();
       s.report({ kind: 'WEIGHT_LIMIT', at: ON_THE_ROAD, value: 18_000, by: 'did:driver:a' });

@@ -33,6 +33,8 @@ import {
   RequiredPaperView,
 } from './import.types';
 import { AgentRecord, agentRecordOf, isClearingAgent } from './agent-record';
+import { containerType, standsOn, outOfGauge } from './container-type';
+import { CARGO_NATURES, type CargoNature } from './cargo.types';
 
 /**
  * CL2a — THE IMPORTER'S PAPERS, AND THE AGENT WHO CLEARS THEM.
@@ -385,6 +387,7 @@ export class ImportService {
     }
     const visible = this.visibleDocuments(consignment, readerEntityId, opts);
     const byId = new Map(visible.map((d) => [d.documentId, d]));
+    const spec = containerType(consignment.containerType);
     return {
       ...this.rowOf(consignment, readerEntityId),
       required: consignment.required.map((line) => {
@@ -406,6 +409,24 @@ export class ImportService {
       // Shown to BOTH parties, always. A hold recorded by the agent that the importer could not see would
       // be a claim made about them behind their back, and the dispute it invites could never be made.
       customsHolds: consignment.customsHolds ?? [],
+      // Said from the moment the container is recorded, not discovered by whoever tries to mint a leg.
+      cargoGaps: this.cargoGaps(consignment),
+      ...(spec
+        ? {
+            containerFacts: {
+              code: spec.code,
+              label: spec.label,
+              lengthFt: spec.lengthFt,
+              heightM: spec.heightM,
+              kind: spec.kind,
+              openTop: spec.openTop,
+              needsPower: spec.needsPower,
+              bodies: spec.bodies,
+              equipment: spec.equipment,
+              outOfGauge: outOfGauge(spec, consignment.cargoHeightM),
+            },
+          }
+        : {}),
     };
   }
 
@@ -504,6 +525,120 @@ export class ImportService {
   /** Has this company ever been appointed to clear a container? What makes them an agent at all. */
   isAgent(entityId: string): boolean {
     return isClearingAgent([...this.imports.values()], entityId);
+  }
+
+  /* ------------------------------------- what kind of box, and what is in it -- */
+
+  /**
+   * SAY WHAT THE BOX IS AND WHAT IS IN IT. The importer's, because the goods are theirs.
+   *
+   * Everything about the BOX is derived from the code (height, roof, bodies, lifting gear), and everything
+   * about the GOODS is declared, because no code distinguishes a tank of edible oil from a tank of gas
+   * oil and reading it out of a description would be us classifying goods — the regulated advice this
+   * epic refuses to give about duty, wearing a different hat.
+   *
+   * A tank declaration and a dangerous-goods declaration are separate acts on purpose. One says what the
+   * box last held and that it was cleaned; the other says what it is about to hold and how it is
+   * regulated. A food movement needs the first and a fuel movement the second, and a system that folded
+   * them into one field would ask everybody for both.
+   */
+  declareCargo(
+    importId: string,
+    actorEntityId: string,
+    input: {
+      containerType?: string;
+      natureCode?: string;
+      cargoHeightM?: number;
+      tank?: { lastCargoes: string[]; cleanedAt?: string; certificateDocumentId?: string };
+      dangerous?: { unNumber: string; imdgClass: string; properShippingName?: string };
+    },
+    by: string,
+    now = Date.now(),
+  ): ImportDetail {
+    const consignment = this.requireImport(importId);
+    this.requireImporter(consignment, actorEntityId);
+
+    if (input.containerType !== undefined) {
+      const spec = containerType(input.containerType);
+      if (!spec) {
+        throw new GlosError('INVALID_INPUT', `We do not hold a container type called ${input.containerType}. Pick one from the list — the measurements come with it, so a code we do not know would mean a height nobody can check.`);
+      }
+      consignment.containerType = spec.code;
+    }
+    if (input.natureCode !== undefined) {
+      if (!(CARGO_NATURES as readonly string[]).includes(input.natureCode)) throw new GlosError('INVALID_INPUT', 'Pick what the goods are from the list');
+      consignment.natureCode = input.natureCode;
+    }
+    if (input.cargoHeightM !== undefined) {
+      if (!(input.cargoHeightM > 0) || input.cargoHeightM > 10) throw new GlosError('INVALID_INPUT', 'Give how tall the cargo stands, in metres');
+      consignment.cargoHeightM = Math.round(input.cargoHeightM * 100) / 100;
+    }
+    if (input.tank) {
+      const lastCargoes = input.tank.lastCargoes.map((c) => c.trim()).filter(Boolean);
+      if (!lastCargoes.length) {
+        throw new GlosError('FIELD_REQUIRED', 'Say what the tank last carried — that, and the cleaning certificate, is the only thing that makes a tank fit for food');
+      }
+      // The certificate is one of the importer's OWN documents, exactly as a required paper is. A file
+      // uploaded into this declaration would be a second document register nobody verifies.
+      if (input.tank.certificateDocumentId && !this.documents.list(consignment.importerEntityId).some((d) => d.documentId === input.tank!.certificateDocumentId)) {
+        throw new GlosError('NOT_FOUND', 'That certificate is not one of your own documents — put it on your register first, so it carries a fingerprint and an expiry like every other paper');
+      }
+      consignment.tank = {
+        lastCargoes,
+        ...(input.tank.cleanedAt?.trim() ? { cleanedAt: input.tank.cleanedAt.trim() } : {}),
+        ...(input.tank.certificateDocumentId ? { certificateDocumentId: input.tank.certificateDocumentId } : {}),
+        declaredBy: by,
+        declaredAt: new Date(now).toISOString(),
+      };
+    }
+    if (input.dangerous) {
+      const unNumber = input.dangerous.unNumber?.trim().toUpperCase().replace(/^UN\s*/, 'UN');
+      if (!/^UN\d{4}$/.test(unNumber ?? '')) throw new GlosError('INVALID_INPUT', 'A UN number looks like UN1202 — four digits. We check the shape and never the choice: what it is, is yours to declare.');
+      const imdgClass = input.dangerous.imdgClass?.trim();
+      if (!imdgClass) throw new GlosError('FIELD_REQUIRED', 'Say the class — it decides the placards, the driver’s certificate and which roads are closed to it');
+      consignment.dangerous = {
+        unNumber,
+        imdgClass,
+        ...(input.dangerous.properShippingName?.trim() ? { properShippingName: input.dangerous.properShippingName.trim() } : {}),
+        declaredBy: by,
+        declaredAt: new Date(now).toISOString(),
+      };
+    }
+    this.imports.set(consignment.importId, consignment);
+    return this.detail(consignment.importId, actorEntityId);
+  }
+
+  /**
+   * WHAT IS STILL MISSING BEFORE THIS CAN GO ON A TRUCK — derived, every read, never stored.
+   *
+   * Two combinations must not be minted blind, and both are the question that produced this slice:
+   *
+   *  - A TANK carrying FOOD with no tank declaration. A tank that last held crude can never carry food,
+   *    and the difference is not visible in the code, the description or the weight. Minting it anyway
+   *    puts a food load on a box nobody has said anything about.
+   *  - HAZARDOUS goods with no UN number. The number decides the placards on the truck, the certificate
+   *    the driver must hold and which roads are closed — so a load offered without one would be offered
+   *    to vehicles that cannot lawfully take it, and the driver would find out at a checkpoint.
+   *
+   * Returned as a LIST OF SENTENCES rather than a boolean, because a refusal that cannot say what is
+   * missing is a refusal somebody has to guess their way out of.
+   */
+  cargoGaps(consignment: ImportConsignment): string[] {
+    const spec = containerType(consignment.containerType);
+    const nature = consignment.natureCode;
+    const gaps: string[] = [];
+
+    if (spec?.kind === 'tank' && (nature === 'FOD' || nature === 'FOP') && !consignment.tank) {
+      gaps.push('This is a tank carrying food, and nobody has said what it last held. A tank that carried fuel can never carry food — record the last cargoes and the cleaning certificate.');
+    }
+    if (nature?.startsWith('HAZ') && !consignment.dangerous) {
+      gaps.push('These goods are declared hazardous and there is no UN number. The number decides the placards, the driver’s certificate and which roads are closed to the load — it cannot go on a truck without one.');
+    }
+    // An open box tells you the height of the floor the cargo sits on, not the height of the movement.
+    if (spec?.openTop && consignment.cargoHeightM == null) {
+      gaps.push('This box has no roof, so its own height says nothing about how tall the load stands. Say how tall the cargo is, or no bridge on the route can be checked against it.');
+    }
+    return gaps;
   }
 
   /* --------------------------------------- what an agent says they clear -- */
@@ -776,16 +911,53 @@ export class ImportService {
     }
     if (!(input.weightKg > 0)) throw new GlosError('VALIDATION_FAILED', 'Say what the load weighs');
     if (!input.destLabel?.trim()) throw new GlosError('FIELD_REQUIRED', 'Say where the container is going');
+
+    /*
+     * WHAT MUST BE KNOWN BEFORE A TRUCK IS OFFERED THIS — the gate the question exposed.
+     *
+     * Until now every container minted the same generic load: an open top, a 40ft high-cube, a food tank
+     * and a crude tank produced identical legs, and whatever truck was nearest got offered all four. Two
+     * of those combinations cannot be offered to anybody honestly, so they are refused HERE, with the
+     * sentence saying which fact is missing rather than a validation code somebody has to interpret.
+     *
+     * Refused at minting rather than at declaration, deliberately: a container can be recorded the day it
+     * is booked, long before anybody knows what will be in it. The moment it needs a truck is the moment
+     * the facts have to exist.
+     */
+    const gaps = this.cargoGaps(consignment);
+    if (gaps.length) throw new GlosError('INVALID_STATE', gaps.join(' '));
+
     const importer = this.entities.get(consignment.importerEntityId);
+    const spec = containerType(consignment.containerType);
 
     const freight = this.dispatch.registerFreight(
       {
-        description: `${consignment.code} — ${consignment.goodsDescription}`,
+        description: `${consignment.code} — ${consignment.goodsDescription}${spec ? ` (${spec.label})` : ''}`,
         pickupLocation: input.pickupLocation,
         pickupLabel: input.pickupLabel?.trim() || consignment.destPort,
         destLabel: input.destLabel.trim(),
         destLocation: input.destLocation,
         weightKg: input.weightKg,
+        /*
+         * THE FACTS THE BOX AND THE DECLARATION CARRY, handed over instead of dropped.
+         *
+         * Before this the freight machinery was given a description and a weight, so it derived a body
+         * from nothing, asked for no equipment, required no capability, and told the bridge map nothing.
+         * Every one of these already existed on the freight side and simply was never passed.
+         *
+         * `natureCode` is the importer's declaration, so a fuel tank asks for a hazmat-certified vehicle
+         * and a reefer for cold chain. `bodyHint` is advisory by design, which is exactly right for a
+         * container: the code says which bodies CAN carry it, and the board still derives its own answer.
+         * `heightM` is the one the hazard map has been waiting for since it was built.
+         */
+        ...(consignment.natureCode ? { natureCode: consignment.natureCode as CargoNature } : {}),
+        ...(spec ? { bodyHint: spec.bodies[0], packaging: 'piece' as const } : {}),
+        ...(spec ? { originEquipment: spec.equipment, destEquipment: spec.equipment } : {}),
+        // How tall the box itself stands. An open top's is the FLOOR its cargo sits on, so the declared
+        // cargo height wins there — and `cargoGaps` has already refused an open box with neither.
+        ...(spec ? { heightM: spec.openTop ? consignment.cargoHeightM : spec.heightM } : {}),
+        // A box that cannot be split, which is what makes it a permit conversation rather than two trips.
+        ...(spec ? { indivisible: true } : {}),
         // Both ends are inside the destination country: this is the leg from the quay inland, and the sea
         // leg that got it there is not ours and is not modelled.
         pickupCountry: consignment.destCountry,

@@ -53,6 +53,74 @@ export function modeOf(c: { mode?: ConsignmentMode }): ConsignmentMode {
 }
 
 /**
+ * WHAT IS ACTUALLY IN THE BOX — declared by the importer, never read out of a description by us.
+ *
+ * The question that forced this: two identical 20ft tanks, one carrying edible oil and one carrying gas
+ * oil, are entirely different movements. No container code distinguishes them, and we must not decide it
+ * from the words "edible oil" either — classifying goods is regulated territory and the penalty lands on
+ * the importer, which is the same line §10 draws around duty. So the importer PICKS the nature, from the
+ * vocabulary the freight side already uses, and we carry what they said.
+ */
+
+/**
+ * A TANK'S HISTORY, which is the only thing that makes it food-grade.
+ *
+ * Not geometry and not a code: a tank that has carried crude can never carry food, and the way that is
+ * established in the trade is the last cargoes plus a cleaning certificate. Recorded as the importer's
+ * declaration with the certificate attachable as one of their own documents — we do not certify a tank
+ * fit for food, and nothing here should ever read as though we had.
+ */
+export class TankDeclaration {
+  /** What it last held, most recent first. The trade usually wants three. Their words. */
+  @ApiProperty({ type: [String] }) lastCargoes: string[];
+  @ApiPropertyOptional() cleanedAt?: string;
+  /** One of the importer's own documents — the cleaning certificate. Never a file uploaded into here. */
+  @ApiPropertyOptional() certificateDocumentId?: string;
+  @ApiProperty() declaredBy: string;
+  @ApiProperty() declaredAt: string;
+}
+
+/**
+ * THE DANGEROUS-GOODS DECLARATION — the importer's, and never inferred.
+ *
+ * A UN number and class decide the placards on the truck, the certification the driver must hold, and
+ * which roads the load may not use at all (the hazard map's NO_HAZMAT). We do not derive any of it: a
+ * description reading "solvent" is not a classification, and guessing one would be the same regulated
+ * advice this epic refuses to give about duty.
+ */
+export class DangerousGoodsDeclaration {
+  /** 'UN1202'. Carried as the importer wrote it; we validate the shape and never the choice. */
+  @ApiProperty() unNumber: string;
+  /** The IMDG/ADR class as declared — '3', '8', '5.1'. */
+  @ApiProperty() imdgClass: string;
+  @ApiPropertyOptional() properShippingName?: string;
+  @ApiProperty() declaredBy: string;
+  @ApiProperty() declaredAt: string;
+}
+
+/**
+ * THE BOX'S OWN FACTS, resolved from the catalogue for whoever is reading.
+ *
+ * Sent rather than left for a screen to look up, for the reason every derived figure in this codebase is
+ * sent: two implementations of the same table drift, and the one on the screen drifts silently.
+ */
+export class ContainerFacts {
+  @ApiProperty() code: string;
+  @ApiProperty() label: string;
+  @ApiProperty() lengthFt: number;
+  /** External height in metres. 2.59 standard, 2.90 high-cube — the 30 cm that decides a bridge. */
+  @ApiProperty() heightM: number;
+  @ApiProperty() kind: string;
+  /** No fixed roof: craned from above, not weatherproof, and the cargo may stand proud of the box. */
+  @ApiProperty() openTop: boolean;
+  @ApiProperty() needsPower: boolean;
+  @ApiProperty({ type: [String] }) bodies: string[];
+  @ApiProperty({ type: [String] }) equipment: string[];
+  /** How tall the movement stands, where the cargo was declared taller than an open box. */
+  @ApiProperty() outOfGauge: boolean;
+}
+
+/**
  * The two kinds of grant, because the papers are of two kinds.
  *
  * `company` — the standing papers: an investment licence, a tax number. They are the importer's own and are
@@ -269,6 +337,35 @@ export class ImportConsignment {
   /** How the goods arrived. Absent on anything recorded before the field existed — see modeOf(). */
   @ApiPropertyOptional({ enum: CONSIGNMENT_MODES }) mode?: ConsignmentMode;
 
+  /* ---- what kind of box, and what is in it. See container-type.ts for what each buys ---- */
+
+  /**
+   * The ISO 6346 size/type code as printed on the box — 45G1, 22U1, 22T1.
+   *
+   * SELECTED from a catalogue, never invented, so the height, the roof, the bodies that can carry it and
+   * the equipment that lifts it are all DERIVED rather than typed by whoever filled the form.
+   */
+  @ApiPropertyOptional() containerType?: string;
+  /**
+   * WHAT THE GOODS ARE, in the vocabulary the freight side already uses. The importer's choice.
+   *
+   * The distance between a food tank and a fuel tank, and nothing about the container says it. Absent
+   * means nobody has said, which is why the road leg refuses to carry certain combinations blind.
+   */
+  @ApiPropertyOptional() natureCode?: string;
+  /**
+   * How tall the CARGO stands, in metres, where the box has no roof.
+   *
+   * Only meaningful for an open top or a flat rack, and it is the difference between the height of the
+   * floor the cargo sits on and the height of the movement. Absent on an open box leaves the road height
+   * unknown rather than guessed at the box's own figure — see standsOn().
+   */
+  @ApiPropertyOptional() cargoHeightM?: number;
+  /** A tank's last cargoes and its cleaning certificate. The only thing that makes one food-grade. */
+  @ApiPropertyOptional({ type: TankDeclaration }) tank?: TankDeclaration;
+  /** The importer's dangerous-goods declaration. Never derived from the goods description. */
+  @ApiPropertyOptional({ type: DangerousGoodsDeclaration }) dangerous?: DangerousGoodsDeclaration;
+
   /* ---- the seam, deliberately NOT WIRED (see the note on the service) ---- */
 
   /** The carrier's booking or bill-of-lading reference, if the importer typed one. Nothing reads it yet. */
@@ -384,6 +481,17 @@ export class ImportDetail extends ImportRow {
   @ApiPropertyOptional() roadFreightId?: string;
   /** CL4 — what the state did, with both parties' accounts. Shown to both, and to an operator. */
   @ApiProperty({ type: [CustomsHold] }) customsHolds: CustomsHold[];
+  /**
+   * WHAT IS STILL MISSING BEFORE THIS CAN GO ON A TRUCK, in sentences. Derived on every read.
+   *
+   * A food tank whose last cargo nobody has stated; hazardous goods with no UN number; an open box with
+   * no cargo height. Each is a fact no code, description or weight can supply, and each makes the road
+   * leg refuse — so it is said on the screen from the moment the container is recorded, rather than
+   * discovered by whoever finally tries to mint one.
+   */
+  @ApiProperty({ type: [String] }) cargoGaps: string[];
+  /** The container type's own facts, resolved from the catalogue so no screen re-derives them. */
+  @ApiPropertyOptional({ type: ContainerFacts }) containerFacts?: ContainerFacts;
 }
 
 /* ------------------------- CL6: what a clearing agent says they clear, in their own words -- */

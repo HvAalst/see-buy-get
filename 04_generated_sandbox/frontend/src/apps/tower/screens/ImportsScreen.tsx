@@ -22,6 +22,7 @@ import {
   type CustomsHoldKind,
   type ClearanceRecordView,
   CLEARANCE_SPECIALISMS,
+  CARGO_NATURES,
   liveGrants,
   outstanding,
   outstandingCount,
@@ -72,6 +73,10 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
   const [mine, setMine] = useState<{ record: ClearanceRecordView; measured: string; handle?: string; offer?: { specialisms: string[]; places: string[]; words?: string } } | null>(null);
   /** Their own advertisement, loaded from their page so the form starts where their claim already is. */
   const [offerForm, setOfferForm] = useState<{ specialisms: string[]; places: string; words: string }>({ specialisms: [], places: '', words: '' });
+  /** What kind of box, and what is in it. One form for three acts, because they are one conversation. */
+  const [cargoForm, setCargoForm] = useState({ containerType: '', natureCode: '', cargoHeightM: '', lastCargoes: '', cleanedAt: '', certificateDocumentId: '', unNumber: '', imdgClass: '', shippingName: '' });
+  /** The container catalogue, read from the server — two copies of one table drift, and ours would drift silently. */
+  const [boxes, setBoxes] = useState<Array<{ code: string; label: string; openTop: boolean; kind: string }>>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -103,6 +108,14 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
   useEffect(() => {
     void load();
   }, [load]);
+
+  // The catalogue, once. It is a catalogue and not data: it changes when somebody adds a box we book.
+  useEffect(() => {
+    if (!client) return;
+    void client.api.containerTypes().then((r) => {
+      if (!r.error) setBoxes((r.data as unknown as { items: Array<{ code: string; label: string; openTop: boolean; kind: string }> }).items ?? []);
+    });
+  }, [client]);
 
   /** Every write goes through here: one busy flag, the refusal in the server's own words, then a re-read. */
   const run = async (key: string, write: () => Promise<{ error?: { detail?: string; title?: string } | null }>, message: string, after?: () => void) => {
@@ -140,6 +153,12 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
     // place the answer is useful. A port with nothing recorded says so rather than showing an empty table.
     const k = await client.api.knownImportPapers(view.destCountry, view.destPort);
     setKnown(k.error ? [] : (((k.data as unknown as { items?: KnownPaper[] })?.items ?? []) as KnownPaper[]));
+    // Start the cargo form where the record already is, so a screen cannot show something the server
+    // does not hold.
+    setCargoForm((c) => ({
+      ...c,
+      containerType: view.containerFacts?.code ?? c.containerType,
+    }));
     if (view.youAre === 'agent') {
       setLines(view.required.length ? view.required.map((r2) => ({ label: r2.label, copies: r2.copies ? String(r2.copies) : '', note: r2.note ?? '' })) : [{ label: '', copies: '', note: '' }]);
     }
@@ -854,6 +873,204 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
               )}
             </section>
           ) : null}
+
+          {/* ---- CL7: what kind of box, and what is in it ---- */}
+          <section class="cons__panel">
+            <div class="cons__panelhead">
+              <span class="cons__panelt">{t('tower.imports.boxTitle')}</span>
+              {detail.containerFacts ? <span class="ctag ctag--quiet">{detail.containerFacts.label}</span> : null}
+              {detail.containerFacts?.outOfGauge ? <span class="ctag ctag--warn">{t('tower.imports.outOfGauge')}</span> : null}
+            </div>
+
+            {/* WHAT IS MISSING, FIRST AND LOUDLY. Each of these is a fact no code, description or weight
+                can supply, and each makes the road leg refuse — so it is said from the moment the
+                container is recorded rather than discovered by whoever finally tries to mint one. */}
+            {detail.cargoGaps.length > 0 ? (
+              <div class="cons__caveat">
+                <Icon name="warning" size={16} />
+                <span>
+                  {detail.cargoGaps.map((g, i) => (
+                    <div key={i}>{g}</div>
+                  ))}
+                </span>
+              </div>
+            ) : null}
+
+            {/* THE BOX'S FACTS, sent by the server from the catalogue rather than worked out here: two
+                copies of one table drift, and the copy on the screen drifts silently. */}
+            {detail.containerFacts ? (
+              <p class="cons__lede">
+                {t('tower.imports.boxFacts', {
+                  ft: detail.containerFacts.lengthFt,
+                  h: detail.containerFacts.heightM.toFixed(2),
+                  bodies: detail.containerFacts.bodies.join(', '),
+                  gear: detail.containerFacts.equipment.join(', '),
+                })}
+              </p>
+            ) : (
+              <p class="cons__lede">{t('tower.imports.boxNone')}</p>
+            )}
+
+            {detail.youAre === 'importer' ? (
+              <>
+                <div class="twr-knobs">
+                  <label class="twr-knob">
+                    <span>{t('tower.imports.f.box')}</span>
+                    <select value={cargoForm.containerType} onChange={(e) => setCargoForm({ ...cargoForm, containerType: (e.target as HTMLSelectElement).value })}>
+                      <option value="">{t('tower.imports.boxPick')}</option>
+                      {boxes.map((b) => (
+                        <option key={b.code} value={b.code}>
+                          {b.code} — {b.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {/* WHAT THE GOODS ARE — the importer's, because we must not read it out of a description.
+                      This is the whole distance between a food tank and a fuel tank. */}
+                  <label class="twr-knob">
+                    <span>{t('tower.imports.f.nature')}</span>
+                    <select value={cargoForm.natureCode} onChange={(e) => setCargoForm({ ...cargoForm, natureCode: (e.target as HTMLSelectElement).value })}>
+                      <option value="">{t('tower.imports.naturePick')}</option>
+                      {CARGO_NATURES.map((n) => (
+                        <option key={n} value={n}>
+                          {t(`tower.imports.nature.${n}` as never)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {/* Only for a box with no roof: its own height is the floor the cargo sits on. */}
+                  {detail.containerFacts?.openTop || boxes.find((b) => b.code === cargoForm.containerType)?.openTop ? (
+                    <label class="twr-knob">
+                      <span>{t('tower.imports.f.cargoHeight')}</span>
+                      <input type="number" min={0.1} max={10} step={0.05} value={cargoForm.cargoHeightM} onChange={(e) => setCargoForm({ ...cargoForm, cargoHeightM: (e.target as HTMLInputElement).value })} />
+                    </label>
+                  ) : null}
+                </div>
+
+                <div class="twr-panelend">
+                  <button
+                    type="button"
+                    class="cbtn"
+                    disabled={busy === 'cargo'}
+                    onClick={() =>
+                      run(
+                        'cargo',
+                        () =>
+                          client!.api.declareImportCargo(detail.importId, {
+                            ...(cargoForm.containerType ? { containerType: cargoForm.containerType } : {}),
+                            ...(cargoForm.natureCode ? { natureCode: cargoForm.natureCode } : {}),
+                            ...(cargoForm.cargoHeightM.trim() ? { cargoHeightM: Number(cargoForm.cargoHeightM) } : {}),
+                            ...(who ? { by: who } : {}),
+                          }),
+                        t('tower.imports.boxSaved'),
+                      )
+                    }
+                  >
+                    {t('tower.imports.boxSave')}
+                  </button>
+                </div>
+
+                {/* A TANK'S HISTORY, which is the only thing that makes one food-grade. Shown only for a
+                    tank: asking everybody for a cleaning certificate is how a form gets ignored. */}
+                {detail.containerFacts?.kind === 'tank' ? (
+                  <>
+                    <p class="cons__lede">{t('tower.imports.tankHint')}</p>
+                    <div class="twr-knobs">
+                      <label class="twr-knob">
+                        <span>{t('tower.imports.f.lastCargoes')}</span>
+                        <input value={cargoForm.lastCargoes} onChange={(e) => setCargoForm({ ...cargoForm, lastCargoes: (e.target as HTMLInputElement).value })} />
+                      </label>
+                      <label class="twr-knob">
+                        <span>{t('tower.imports.f.cleanedAt')}</span>
+                        <input type="date" value={cargoForm.cleanedAt} onChange={(e) => setCargoForm({ ...cargoForm, cleanedAt: (e.target as HTMLInputElement).value })} />
+                      </label>
+                      <label class="twr-knob">
+                        <span>{t('tower.imports.f.cleanCert')}</span>
+                        <select value={cargoForm.certificateDocumentId} onChange={(e) => setCargoForm({ ...cargoForm, certificateDocumentId: (e.target as HTMLSelectElement).value })}>
+                          <option value="">{t('tower.imports.certNone')}</option>
+                          {detail.documents.filter((d) => d.status !== 'superseded').map((d) => (
+                            <option key={d.documentId} value={d.documentId}>
+                              {d.title}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    <div class="twr-panelend">
+                      <button
+                        type="button"
+                        class="cbtn cbtn--ghost cbtn--sm"
+                        disabled={!cargoForm.lastCargoes.trim() || busy === 'tank'}
+                        onClick={() =>
+                          run(
+                            'tank',
+                            () =>
+                              client!.api.declareImportCargo(detail.importId, {
+                                tank: {
+                                  lastCargoes: cargoForm.lastCargoes.split(',').map((x) => x.trim()).filter(Boolean),
+                                  ...(cargoForm.cleanedAt ? { cleanedAt: cargoForm.cleanedAt } : {}),
+                                  ...(cargoForm.certificateDocumentId ? { certificateDocumentId: cargoForm.certificateDocumentId } : {}),
+                                },
+                                ...(who ? { by: who } : {}),
+                              }),
+                            t('tower.imports.tankSaved'),
+                          )
+                        }
+                      >
+                        {t('tower.imports.tankSave')}
+                      </button>
+                    </div>
+                  </>
+                ) : null}
+
+                {/* THE DANGEROUS-GOODS DECLARATION. Ours to carry, never to infer: the number decides the
+                    placards, the driver's certificate and which roads are closed to the load. */}
+                {cargoForm.natureCode.startsWith('HAZ') || (detail.cargoGaps.join(' ').includes('UN number')) ? (
+                  <>
+                    <p class="cons__lede">{t('tower.imports.dgHint')}</p>
+                    <div class="twr-knobs">
+                      <label class="twr-knob">
+                        <span>{t('tower.imports.f.unNumber')}</span>
+                        <input placeholder="UN1202" value={cargoForm.unNumber} onChange={(e) => setCargoForm({ ...cargoForm, unNumber: (e.target as HTMLInputElement).value })} />
+                      </label>
+                      <label class="twr-knob">
+                        <span>{t('tower.imports.f.imdgClass')}</span>
+                        <input placeholder="3" value={cargoForm.imdgClass} onChange={(e) => setCargoForm({ ...cargoForm, imdgClass: (e.target as HTMLInputElement).value })} />
+                      </label>
+                      <label class="twr-knob">
+                        <span>{t('tower.imports.f.shippingName')}</span>
+                        <input value={cargoForm.shippingName} onChange={(e) => setCargoForm({ ...cargoForm, shippingName: (e.target as HTMLInputElement).value })} />
+                      </label>
+                    </div>
+                    <div class="twr-panelend">
+                      <button
+                        type="button"
+                        class="cbtn cbtn--ghost cbtn--sm"
+                        disabled={!cargoForm.unNumber.trim() || !cargoForm.imdgClass.trim() || busy === 'dg'}
+                        onClick={() =>
+                          run(
+                            'dg',
+                            () =>
+                              client!.api.declareImportCargo(detail.importId, {
+                                dangerous: {
+                                  unNumber: cargoForm.unNumber.trim(),
+                                  imdgClass: cargoForm.imdgClass.trim(),
+                                  ...(cargoForm.shippingName.trim() ? { properShippingName: cargoForm.shippingName.trim() } : {}),
+                                },
+                                ...(who ? { by: who } : {}),
+                              }),
+                            t('tower.imports.dgSaved'),
+                          )
+                        }
+                      >
+                        {t('tower.imports.dgSave')}
+                      </button>
+                    </div>
+                  </>
+                ) : null}
+              </>
+            ) : null}
+          </section>
 
           {/* ---- CL4 item 1: what the state did, and the two accounts of it ---- */}
           <section class="cons__panel">

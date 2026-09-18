@@ -292,6 +292,29 @@ export function createOperatorApi(sbg: SbgClient) {
     mintImportRoadLeg: (importId: string, body: { pickupLocation: { lat: number; lng: number }; pickupLabel?: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; entityId?: string; by?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/road-leg', { params: { path: { importId } }, body: body as never })),
 
+    /**
+     * CL7 — SAY WHAT KIND OF BOX IT IS, AND WHAT IS IN IT.
+     *
+     * The box is SELECTED from the container catalogue, so its height, roof, bodies and lifting gear are
+     * derived rather than typed. The goods are DECLARED, because no code distinguishes a tank of edible
+     * oil from a tank of gas oil and deciding it from a description would be us classifying goods.
+     */
+    declareImportCargo: (
+      importId: string,
+      body: {
+        containerType?: string;
+        natureCode?: string;
+        cargoHeightM?: number;
+        tank?: { lastCargoes: string[]; cleanedAt?: string; certificateDocumentId?: string };
+        dangerous?: { unNumber: string; imdgClass: string; properShippingName?: string };
+        entityId?: string;
+        by?: string;
+      },
+    ) => sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/cargo', { params: { path: { importId } }, body: body as never })),
+
+    /** The boxes this network books, with their real measurements. A catalogue, sent rather than mirrored. */
+    containerTypes: () => sbg.request((c) => c.GET('/v1/sbg/container-types', {})),
+
     /* ---- CL4 item 1: what the state did to a container, and the agent's own record ---- */
 
     /**

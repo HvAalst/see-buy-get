@@ -198,6 +198,18 @@ export function VehiclesScreen({ state, actions }: VehiclesScreenProps) {
             </label>
             <input id="v-cap" class="input" type="number" inputMode="numeric" min="1" placeholder={t('fleet.vehicles.capacityPh')} value={f.capacityKg} onInput={(e) => actions.setVForm({ capacityKg: e.currentTarget.value })} />
           </div>
+          {/* THE DECK. Asked for because the crowd-sourced bridge map cannot answer without it: what
+              matters under a low bridge is the load PLUS the deck it stands on, and until a vehicle knows
+              its own deck the map has to answer "we do not know how tall this is on your deck" — which is
+              the truth, and is also why a 40ft high-cube used to book like any other box. Blank stays
+              blank: a class average would clear a load on arithmetic about somebody else's truck. */}
+          <div class="field">
+            <label class="field__label" for="v-deck">
+              {t('fleet.vehicles.deck')}
+            </label>
+            <input id="v-deck" class="input" type="number" inputMode="decimal" min="0.1" max="3" step="0.05" placeholder={t('fleet.vehicles.deckPh')} value={f.deckM} onInput={(e) => actions.setVForm({ deckM: e.currentTarget.value })} />
+            <p class="card__note">{t('fleet.vehicles.deckHint')}</p>
+          </div>
         </div>
         <div class="grid2" style="margin-top:12px">
           <div class="field">

@@ -36,6 +36,10 @@ export interface VehicleForm {
   ownerType: string;
   ownerName: string;
   capacityKg: string;
+  /** How high the loading DECK stands, in metres — the other half of a bridge check. Blank = unknown,
+   *  and unknown stays unknown: a guessed deck would clear a load under a bridge on somebody else's
+   *  arithmetic. */
+  deckM: string;
   pricePerKm: string;
   // S34 — the dynamic-pricing profile. All optional: left blank, each falls back to a sensible class default.
   // baseFee is the flag-down/loading fee; the two multipliers are the corridor the market may flex the rate in.
@@ -86,6 +90,7 @@ export const EMPTY_VEHICLE: VehicleForm = {
   ownerType: 'driver_owned',
   ownerName: '',
   capacityKg: '',
+  deckM: '',
   pricePerKm: '',
   baseFee: '',
   minMultiplier: '',
