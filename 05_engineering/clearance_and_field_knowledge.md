@@ -920,6 +920,13 @@ and the gaps stated first and loudly; the fleet app asks for a deck height, with
 decide a DG class. We carry declarations, derive what the box implies for the ROAD, and let the agent's
 required-papers list ask for certificates — which is the shape CL2a already established.
 
+**WHAT CL7 FORCES NEXT, and the user said so immediately:** modelling the box introduces an asset we do
+not own and have never tracked. A container is a line's property on loan with a clock running, and the
+leg we mint is what starts it — so the empty return leg, the detention clock, the interchange record and
+"where are the empties" all follow. Designed in `container_yard_and_empties.md`, **nothing built**, and
+its first line is what is NOT ours: yard slots, stacking and gate queues belong to a terminal operating
+system, and demurrage tariffs are the duty line again.
+
 ### CL5 — Field knowledge, first-hand only
 Last, and blocked twice over.
 
