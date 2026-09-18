@@ -9747,6 +9747,26 @@
         }
       }
     },
+    "/v1/sbg/fleet/movers": {
+      "get": {
+        "operationId": "Sbg.movers",
+        "summary": "",
+        "description": "CL4 — every fleet's mobilisation record, with the half a shipper does not see.\n\nOperator-only, and what it adds is CONTEXT rather than a second set of numbers: `moves` is the exact\nobject the public page carries. The moment an operator's view can disagree with the public one, the\npublic one stops being worth anything and reciprocal visibility becomes a slogan.\n\nWhat it adds is the two things a person handling a complaint needs and a shipper must not have: the\nREASON each load was handed back (a rest-hours hand-back is the safety rule working, and publishing it\nwould punish the honest use of a rule we wrote), and WHICH DRIVER — the public page names nobody,\nbecause a driver identifiable as the one who gave a load back is a driver who stops taking hard ones.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoversView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/dashboard": {
       "get": {
         "operationId": "Sbg.dashboard",
@@ -23030,6 +23050,122 @@
           "name",
           "since",
           "does"
+        ]
+      },
+      "MoverHandBack": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "The load, by its code — an operator can look it up."
+          },
+          "driver": {
+            "type": "string",
+            "description": "The driver's shop-floor label, never their legal name. Operators are trusted, not omniscient."
+          },
+          "reason": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "driver",
+          "reason",
+          "at"
+        ]
+      },
+      "MoverDriver": {
+        "type": "object",
+        "properties": {
+          "driver": {
+            "type": "string"
+          },
+          "claimed": {
+            "type": "number"
+          },
+          "handedBack": {
+            "type": "number"
+          },
+          "kept": {
+            "type": "number"
+          },
+          "delivered": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "driver",
+          "claimed",
+          "handedBack",
+          "kept",
+          "delivered"
+        ]
+      },
+      "MoverRow": {
+        "type": "object",
+        "properties": {
+          "handle": {
+            "type": "string",
+            "description": "Their public page, so an operator can read exactly what a shipper reads."
+          },
+          "jurisdiction": {
+            "type": "string"
+          },
+          "moves": {
+            "$ref": "#/components/schemas/ProfileMobilisation"
+          },
+          "handBacks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MoverHandBack"
+            }
+          },
+          "perDriver": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MoverDriver"
+            }
+          },
+          "did": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "drivers": {
+            "type": "number",
+            "description": "How many drivers they field — the denominator behind everything below."
+          }
+        },
+        "required": [
+          "moves",
+          "handBacks",
+          "perDriver",
+          "did",
+          "name",
+          "drivers"
+        ]
+      },
+      "MoversView": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MoverRow"
+            }
+          },
+          "measured": {
+            "type": "string",
+            "description": "What the figures do and do not cover — the same sentence the public page carries, verbatim."
+          }
+        },
+        "required": [
+          "items",
+          "measured"
         ]
       },
       "ResolveDisputeDto": {

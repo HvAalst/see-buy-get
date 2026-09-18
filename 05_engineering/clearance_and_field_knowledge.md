@@ -595,17 +595,37 @@ byte.
 - **No individual driver is named on a fleet's page.** The record is the fleet's; a driver identifiable as
   the one who handed a load back is a driver who stops taking the difficult ones.
 
+**ITEMS 2 AND 3 SHIPPED 2026-09-18, driven — the console's fuller view.** `GET fleet/movers`,
+operator-only, and the Movers screen under Overview. What it adds is CONTEXT, never arithmetic: `moves` is
+byte-for-byte the object the public page carries, and the drive asserts that on a live fleet. The moment an
+operator's view can disagree with the public one, the public one stops being worth anything.
+
+- **Hand-back reasons (item 3), operator-only.** The COUNT stays public; the REASON is here. A driver whose
+  rest was due has done the right thing by handing a load back, and publishing that on a page a shipper
+  reads would punish the honest use of a rule we wrote — the predictable answer being drivers who stop
+  handing back and drive tired instead. The drive checks the reason text appears nowhere public.
+- **Per-driver split, named here and nowhere public.** An operator handling a complaint needs the name; a
+  driver identifiable as the one who gave a load back is a driver who stops taking the difficult ones. The
+  drive checks each driver's name is absent from the public payload and that the per-driver claims account
+  for every load the fleet took.
+- **Ordered by BUSY, never by good.** A work list, not a ranking — ordering people by performance
+  manufactures a loser out of relative position, which is what the page-per-party shape exists to avoid.
+- **§6'S STATE-CONTROLLED SPLIT IS NOT HERE, and that is the honest answer rather than a gap.** That split
+  — inspection selection, physical exam, queue position — is a CUSTOMS concept belonging to a clearing
+  agent's record. A fleet's delays are its own: there is no state actor between a fleet and a delivered
+  load whose share we would separate out. It ships with item 1, where it means something.
+
+**A DRIVE CHECK THAT LIED, worth remembering:** the first run failed "no driver named on the public page"
+because the check was `/driver/i`, which matches the prose "Runs vehicles and drivers". Assert the actual
+identity and the actual reason string, not a word that also appears in copy.
+
 **STILL OPEN after this half:**
 1. **The clearing agent's own record.** §6's agent-controlled list (documents complete on first submission,
    entries accepted without amendment, time from papers to filing, responsiveness) is mostly unrecorded. Of
    it, CL2a/CL2b already hold the appointment, the published required list and the quote→agree→receipt
    cycle, so **responsiveness is the one honestly available today**. Anything more needs new observations,
-   and per §7 those must be first-hand or evidenced — which puts it next to CL5, not before it.
-2. **The console's fuller operator view**, including the state-controlled portion of §6. Nothing is hidden
-   from operators today because the page is public, but the state-controlled split does not exist yet.
-3. **Hand-back REASONS are not published** — only the count. The reason is context that can be legitimate
-   (a rest-hours hand-back is FP8 working), and publishing it publicly would punish the honest use of a
-   safety rule. An operator should see them; that rides with item 2.
+   and per §7 those must be first-hand or evidenced — which puts it next to CL5, not before it. **§6's
+   state-controlled split ships with this item.**
 
 ### CL4 — Mobilisation, measured
 

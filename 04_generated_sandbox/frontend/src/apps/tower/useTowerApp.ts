@@ -1,4 +1,5 @@
 import type { PapersNetworkView } from './papers';
+import type { MoversView } from './movers';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { narrow, type SbgError } from '../../lib/sbg';
 import { downscaleImage } from '../../shared/media';
@@ -17,7 +18,7 @@ import type { HelpOption } from './pictures';
 import { resolveBaseUrl } from '../../lib/sbg';
 
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
-export type Screen = 'network' | 'hazards' | 'claims' | 'disposal' | 'approvals' | 'papers' | 'imports' | 'market' | 'reports' | 'support' | 'pictures' | 'money' | 'rates' | 'companies' | 'company' | 'corridors' | 'borders' | 'presence';
+export type Screen = 'network' | 'hazards' | 'claims' | 'disposal' | 'approvals' | 'papers' | 'imports' | 'market' | 'movers' | 'reports' | 'support' | 'pictures' | 'money' | 'rates' | 'companies' | 'company' | 'corridors' | 'borders' | 'presence';
 
 export interface TowerState {
   phase: Phase;
@@ -76,6 +77,8 @@ export interface TowerState {
   driverApplications: DriverApplication[] | null;
   /** A refusal the SCREEN made before the server had to — a missing reason, an award over the cover. */
   queueError: string | null;
+  /** CL4 — who moves loads, with the operator-only half. Null while unread. */
+  movers: MoversView | null;
   /** FP4 — the papers only network staff can put right, and when the check last ran. Null while unread. */
   papers: PapersNetworkView | null;
 
@@ -314,6 +317,7 @@ const INITIAL: TowerState = {
   hubs: null,
   totes: null,
   coverage: null,
+  movers: null,
   papers: null,
 };
 
@@ -351,6 +355,17 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
   }, []);
 
   /** FP4 — read fresh every time: a licence that lapsed since sign-in is exactly the row this screen is for. */
+  /** CL4 — who moves loads, with the reasons and driver names the public page does not carry. */
+  const loadMovers = useCallback(async (client: TowerClient) => {
+    const { data, error } = await client.api.movers();
+    if (error) {
+      if (error.code === 'CLIENT_OUTDATED') setState((s) => ({ ...s, phase: 'outdated' }));
+      else setState((s) => ({ ...s, error }));
+      return;
+    }
+    setState((s) => ({ ...s, error: null, movers: narrow<MoversView>(data), readAt: Date.now() }));
+  }, []);
+
   const loadPapers = useCallback(async (client: TowerClient) => {
     const { data, error } = await client.api.papersReport();
     if (error) {
@@ -776,6 +791,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     else if (state.screen === 'presence') await loadPresence(client);
     else if (state.screen === 'companies') await loadEntities(client);
     else if (state.screen === 'papers') await loadPapers(client);
+    else if (state.screen === 'movers') await loadMovers(client);
     else if (state.screen === 'support') {
       // Refreshing the support screen means re-reading the parcel somebody is on the phone about, not
       // reloading a list — there is no list here.
@@ -865,6 +881,8 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         // CA5 — the lapsing list is only worth reading fresh: a policy that lapsed since sign-in must show.
         if (screen === 'companies' && client) void loadEntities(client);
         if (screen === 'papers' && client) void loadPapers(client);
+        // Read fresh every time: a hand-back that happened this morning is the reason somebody opened it.
+        if (screen === 'movers' && client) void loadMovers(client);
       },
       refresh,
       open,

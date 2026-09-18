@@ -434,6 +434,9 @@ export function createOperatorApi(sbg: SbgClient) {
      * FP4 — the papers only network staff can put right: couriers without a fleet, vehicles without an
      * owner, what the fleets are handling themselves, and when the six-hourly check last ran.
      */
+    /** CL4 — every fleet's record, with the reasons and driver names the public page does not carry. */
+    movers: () => sbg.request((c) => c.GET('/v1/sbg/fleet/movers', {})),
+
     papersReport: () => sbg.request((c) => c.GET('/v1/sbg/fleet/papers', {})),
     /** Run the papers check now rather than waiting for the clock. */
     papersSweep: () => sbg.request((c) => c.POST('/v1/sbg/fleet/papers/sweep', {})),

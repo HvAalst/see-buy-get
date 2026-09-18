@@ -20,6 +20,7 @@ import { NetworkScreen } from './screens/NetworkScreen';
 import { RatesScreen } from './screens/RatesScreen';
 import { ImportsScreen } from './screens/ImportsScreen';
 import { MarketScreen } from './screens/MarketScreen';
+import { MoversScreen } from './screens/MoversScreen';
 import { SignInScreen } from './screens/SignInScreen';
 import { ConsolePhoneNav, ConsoleRail } from './ConsoleNav';
 import { groupsFor } from './nav';
@@ -87,6 +88,7 @@ export function App() {
     'rates',
     'imports',
     'market',
+    'movers',
   ];
   const groups = groupsFor(available);
 
@@ -178,6 +180,8 @@ export function App() {
             <CompanyRecordScreen state={state} actions={actions} />
           ) : state.screen === 'companies' ? (
             <CompaniesScreen state={state} actions={actions} />
+          ) : state.screen === 'movers' ? (
+            <MoversScreen state={state} actions={actions} />
           ) : state.screen === 'market' ? (
             <MarketScreen actions={actions} />
           ) : state.screen === 'imports' ? (

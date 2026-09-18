@@ -15,6 +15,7 @@ import { HandleService } from '../../foundation/handle/handle.service';
 import { HandleDirectory } from './handle-directory.service';
 import { ProfileView, presenceSays, profileDoes } from './profile.types';
 import { MOBILISATION_MEASURED, mobilisationOf } from './mobilisation';
+import { MoversView } from './movers.types';
 import { ImportService } from './import.service';
 import { ImportDetail, ImportRow, KnownPaper } from './import.types';
 import { CompanyReadinessService } from '../../foundation/entity/company-readiness.service';
@@ -2532,6 +2533,58 @@ export class SbgController {
       verified,
       ...(moves ? { moves, movesMeasured: MOBILISATION_MEASURED } : {}),
     };
+  }
+
+  /**
+   * CL4 — every fleet's mobilisation record, with the half a shipper does not see.
+   *
+   * Operator-only, and what it adds is CONTEXT rather than a second set of numbers: `moves` is the exact
+   * object the public page carries. The moment an operator's view can disagree with the public one, the
+   * public one stops being worth anything and reciprocal visibility becomes a slogan.
+   *
+   * What it adds is the two things a person handling a complaint needs and a shipper must not have: the
+   * REASON each load was handed back (a rest-hours hand-back is the safety rule working, and publishing it
+   * would punish the honest use of a rule we wrote), and WHICH DRIVER — the public page names nobody,
+   * because a driver identifiable as the one who gave a load back is a driver who stops taking hard ones.
+   */
+  @Roles('operator')
+  @Get('fleet/movers')
+  movers(): MoversView {
+    this.handleDirectory.ensure();
+    const freights = this.dispatch.listFreight();
+    const items = this.managers
+      .list()
+      .map((fleet) => {
+        const drivers = this.drivers.list({ managerDid: fleet.did });
+        const nameOf = (did: string) => drivers.find((d) => d.did === did)?.displayName ?? did;
+        const mine = new Set(drivers.map((d) => d.did));
+        return {
+          did: fleet.did,
+          name: fleet.companyName,
+          ...(this.handles.forId(fleet.did) ? { handle: this.handles.forId(fleet.did)!.handle } : {}),
+          ...(fleet.jurisdiction ? { jurisdiction: fleet.jurisdiction } : {}),
+          drivers: drivers.length,
+          moves: mobilisationOf(freights, [...mine]),
+          // Newest first: a complaint is almost always about the most recent one.
+          handBacks: freights
+            .flatMap((f) => (f.handBacks ?? []).filter((h) => mine.has(h.driverDid)).map((h) => ({ code: f.code, driver: nameOf(h.driverDid), reason: h.reason, at: h.at })))
+            .sort((a, b) => b.at.localeCompare(a.at)),
+          perDriver: drivers
+            .map((d) => {
+              const m = mobilisationOf(freights, [d.did]);
+              return { driver: d.displayName, claimed: m.claimed, handedBack: m.handedBack, kept: m.kept, delivered: m.delivered };
+            })
+            // A driver who has taken nothing is not a row worth reading, and listing them all turns a
+            // fleet of forty into a wall nobody scans.
+            .filter((d) => d.claimed > 0)
+            .sort((a, b) => b.claimed - a.claimed || a.driver.localeCompare(b.driver)),
+        };
+      })
+      // Busiest first. NOT ranked by performance — this is a work list, and ordering people by how well
+      // they did is the league table §6 refuses.
+      .sort((a, b) => b.moves.claimed - a.moves.claimed || a.name.localeCompare(b.name));
+
+    return { items, measured: MOBILISATION_MEASURED };
   }
 
   // --- operator control tower (↔ M7/SSE light) — operator only ---

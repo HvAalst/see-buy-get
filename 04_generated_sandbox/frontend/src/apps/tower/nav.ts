@@ -32,7 +32,7 @@ export interface NavGroup {
  * waiting, what is owed, and only then what is configured.
  */
 export const NAV_GROUPS: NavGroup[] = [
-  { key: 'overview', labelKey: 'tower.group.overview', icon: 'home', screens: ['network', 'market'] },
+  { key: 'overview', labelKey: 'tower.group.overview', icon: 'home', screens: ['network', 'market', 'movers'] },
   {
     key: 'waiting',
     labelKey: 'tower.group.waiting',
@@ -61,6 +61,7 @@ export const SCREEN_META: Record<Screen, { labelKey: MessageKey; icon: IconName 
   papers: { labelKey: 'tower.nav.papers', icon: 'truck' },
   imports: { labelKey: 'tower.nav.imports', icon: 'box' },
   market: { labelKey: 'tower.nav.market', icon: 'scale' },
+  movers: { labelKey: 'tower.nav.movers', icon: 'truck' },
   reports: { labelKey: 'tower.nav.reports', icon: 'send' },
   support: { labelKey: 'tower.nav.support', icon: 'search' },
   money: { labelKey: 'tower.nav.money', icon: 'wallet' },
