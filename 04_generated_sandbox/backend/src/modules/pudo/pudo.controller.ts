@@ -15,10 +15,10 @@ import { HandleService } from '../../foundation/handle/handle.service';
 import { HandleDirectory } from './handle-directory.service';
 import { ProfileView, presenceSays, profileDoes } from './profile.types';
 import { MOBILISATION_MEASURED, mobilisationOf } from './mobilisation';
-import { AGENT_MEASURED } from './agent-record';
+import { AGENT_MEASURED, RECORD_SAYS } from './agent-record';
 import { MoversView } from './movers.types';
 import { ImportService } from './import.service';
-import { ClearanceRecordResponse, ImportDetail, ImportRow, KnownPaper } from './import.types';
+import { AgentFinderResponse, ClearanceOffer, ClearanceRecordResponse, ImportDetail, ImportRow, KnownPaper } from './import.types';
 import { CompanyReadinessService } from '../../foundation/entity/company-readiness.service';
 import type { Entity } from '../../foundation/entity/entity.types';
 import { COUNTRY_CATALOGUE, catalogueEntry } from '../../foundation/countries/catalogue';
@@ -72,6 +72,8 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   RecordCustomsHoldDto,
   AnswerCustomsHoldDto,
   ReleaseCustomsHoldDto,
+  ClearanceOfferDto,
+  FindAgentsQueryDto,
   MintRoadLegDto,
   PresenceDto,
   PresenceDecisionDto,
@@ -892,7 +894,56 @@ export class SbgController {
     const handle = this.handleOf(me);
     // Their own page's address travels with their own copy: "the same thing a shipper reads" is a claim
     // somebody should be able to go and check.
-    return { record: this.imports.agentRecord(me), measured: AGENT_MEASURED, ...(handle ? { handle } : {}) };
+    const offer = this.imports.offerOf(me);
+    return { record: this.imports.agentRecord(me), measured: AGENT_MEASURED, ...(handle ? { handle } : {}), ...(offer ? { offer } : {}) };
+  }
+
+  /* ------------------------------ CL6 — what an agent says they clear, and finding one -- */
+
+  /**
+   * AN AGENT'S OWN ADVERTISEMENT. Theirs to write, theirs to change, and never checked by us.
+   *
+   * The one asserted thing in the agent design. Identity and record stay derived — that is what stops
+   * squatting and stops a record that can only flatter — but what somebody OFFERS cannot be derived at
+   * all: nobody but the agent knows they clear livestock at Mombasa, and waiting to observe it would list
+   * every agent as doing nothing until they had already been hired for it.
+   *
+   * Written by the company itself. An operator may write one on their behalf (they carry every company's
+   * reach already), and the name on it says who did.
+   */
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/clearance-offer')
+  setClearanceOffer(@Param('entityId') entityId: string, @Body() dto: ClearanceOfferDto, @Actor() actor: IntrospectionResult): ClearanceOffer {
+    return this.imports.setOffer(
+      this.actingCompany(actor, entityId),
+      { specialisms: dto.specialisms, places: dto.places, words: dto.words },
+      this.namedActor(actor, dto.by),
+    );
+  }
+
+  /**
+   * FINDING AN AGENT — @Public, because this is market dynamics and a directory nobody can read is not one.
+   *
+   * §6a refused a RANKED directory and that refusal holds in full. This answers with a list of PAGES,
+   * ordered alphabetically and saying so in `basis`, so that advertising more cannot move anybody up it.
+   * There is no relevance score, because a relevance score is the league table wearing a name that hides
+   * it — and while this network is the party an importer appoints an agent through, publishing an ordering
+   * of them is self-dealing.
+   *
+   * WHAT STOPS IT BEING GAMED is not a gate on the claim: we do not check claims, and an agent who claims
+   * everything appears in every list. It is that every result carries the claim NEXT TO the record, so a
+   * claim with nothing behind it and a claim with forty consignments behind it are visibly different.
+   * Claiming more gets you seen; it does not get you credited.
+   */
+  @Public()
+  @Get('agents/find')
+  findAgents(@Query() q: FindAgentsQueryDto): AgentFinderResponse {
+    const rows = this.imports.findAgents({ specialism: q.specialism, place: q.place, country: q.country });
+    return {
+      items: rows.map((r) => ({ ...r, ...(this.handleOf(r.entityId) ? { handle: this.handleOf(r.entityId) } : {}) })),
+      total: rows.length,
+      basis: 'alphabetical-never-ranked',
+    };
   }
 
   /** CL2b — mint the road leg from the port. A person does this; we observe no arrival and invent none. */
@@ -2598,6 +2649,10 @@ export class SbgController {
      * gets no section at all rather than a row of zeroes, which would read as a bad record.
      */
     const clears = company && this.imports.isAgent(company.entityId) ? this.imports.agentRecord(company.entityId) : undefined;
+    // WHAT THEY SAY THEY CLEAR, which is theirs and not ours. Shown even when the record is empty: an
+    // agent who advertises air freight and has never been appointed through us is exactly the case the
+    // finder exists for, and a page that hid the claim would leave them undiscoverable.
+    const offer = company ? this.imports.offerOf(company.entityId) : undefined;
 
     // A verified paper is named, with its date, and an empty list is a real answer shown as one. Only a
     // COMPANY has a document register; the rest carry what their own record can honestly attest.
@@ -2622,10 +2677,14 @@ export class SbgController {
       ...(presence ? { presence: { level: presence.level, says: presenceSays(presence.level) } } : {}),
       // What they do, and for a company that clears containers it says so — which is the whole answer to
       // "how does an importer find an agent": the page can now state the work, not just the name.
-      does: clears ? profileDoes('clearing-agent') : profileDoes(held.kind),
+      // An advertisement is enough to say what they do: waiting for an appointment before the page will
+      // describe the business is the chicken-and-egg the directory exists to end.
+      does: clears || offer ? profileDoes('clearing-agent') : profileDoes(held.kind),
       verified,
       ...(moves ? { moves, movesMeasured: MOBILISATION_MEASURED } : {}),
       ...(clears ? { clears, clearsMeasured: AGENT_MEASURED } : {}),
+      ...(offer ? { offer } : {}),
+      ...(clears || offer ? { recordSays: RECORD_SAYS } : {}),
     };
   }
 

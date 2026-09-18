@@ -2,6 +2,7 @@ import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { Icon, TopBar } from '../../shared/ui';
 import { useT } from '../../shared/i18n';
 import { JoinScreen } from './screens/JoinScreen';
+import { AgentsScreen } from './screens/AgentsScreen';
 import { MarketScreen } from './screens/MarketScreen';
 import { RolesScreen } from './screens/RolesScreen';
 import { StoreScreen } from './screens/StoreScreen';
@@ -69,6 +70,7 @@ export function App() {
         {state.screen === 'market' ? <MarketScreen state={state} actions={actions} /> : null}
         {state.screen === 'store' ? <StoreScreen state={state} actions={actions} /> : null}
         {state.screen === 'profile' ? <ProfileScreen state={state} actions={actions} /> : null}
+        {state.screen === 'agents' ? <AgentsScreen state={state} actions={actions} /> : null}
         {state.screen === 'roles' ? <RolesScreen actions={actions} /> : null}
         {state.screen === 'join' ? <JoinScreen state={state} actions={actions} /> : null}
         {state.screen === 'signin' ? <SignInScreen actions={actions} /> : null}

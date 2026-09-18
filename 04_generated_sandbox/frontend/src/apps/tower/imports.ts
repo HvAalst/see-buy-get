@@ -98,6 +98,28 @@ export interface CustomsHoldView {
   accounts: Array<{ by: string; at: string; stance: 'happened' | 'disputed'; note?: string }>;
 }
 
+/**
+ * CL6 — what a clearing agent can SAY they clear. A vocabulary, so a finder can match it honestly.
+ *
+ * Mirrors the backend list. Drawn from what actually CHANGES the clearance job — a vehicle, a live animal
+ * and a drum of solvent are three different jobs at the same counter — never from commodity categories,
+ * which would multiply forever without telling a shipper anything.
+ */
+export const CLEARANCE_SPECIALISMS = [
+  'sea_container',
+  'air_freight',
+  'vehicles',
+  'bulk_breakbulk',
+  'project_heavy_lift',
+  'perishables',
+  'livestock',
+  'pharma_cold_chain',
+  'dangerous_goods',
+  'personal_effects',
+  'courier_express',
+  'bonded_transit',
+] as const;
+
 /** Does the other party say this happened differently? Shown wherever the hold is, never separately. */
 export function holdDisputed(hold: CustomsHoldView): boolean {
   return hold.accounts.some((a) => a.stance === 'disputed');
@@ -123,6 +145,8 @@ export interface ClearanceRecordView {
   thin: boolean;
   ratesNeed: number;
   ports: Array<{ key: string; appointed: number; listed: number; cleared: number }>;
+  /** What they have been SEEN clearing, by mode — beside what they say they clear. */
+  modes: Array<{ key: string; appointed: number; listed: number; cleared: number }>;
   holds: { containers: number; recorded: number; disputed: number; kinds: Array<{ key: string; times: number }> };
 }
 

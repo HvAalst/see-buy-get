@@ -106,7 +106,7 @@ describe('an import consignment, its papers, and the agent who clears them', () 
     });
 
     it('refuses what an agent could not act on, in words that say what is missing', () => {
-      expect(() => register({ goodsDescription: '  ' })).toThrow(/what is in the container/);
+      expect(() => register({ goodsDescription: '  ' })).toThrow(/what is in it/);
       expect(() => register({ destPort: '' })).toThrow(/where it is cleared/);
       expect(() => register({ destCountry: 'Ethiopia' })).toThrow(/two-letter country code/);
       expect(() => register({ etaAt: 'soon' })).toThrow(/YYYY-MM-DD/);
@@ -521,6 +521,18 @@ describe('an import consignment, its papers, and the agent who clears them', () 
       expect({ ...after, holds: null }).toEqual({ ...before, holds: null });
     });
 
+    it('carries the mode, so an agent who clears air freight is not recorded as clearing containers', () => {
+      const air = imports.register({ importerEntityId: importerId, goodsDescription: 'Spares, urgent', originCountry: 'DE', destCountry: 'ET', destPort: 'Bole', mode: 'air' } as never, 'Hans');
+      imports.appoint(air.importId, agentId, importerId, 'Hans');
+      const modes = imports.agentRecord(agentId).modes;
+      expect(modes.find((m) => m.key === 'air')?.appointed).toBe(1);
+      // And everything recorded before the field existed is sea BY CONSTRUCTION — the register took
+      // nothing else — rather than by a guess about data nobody can check.
+      const sea = register();
+      imports.appoint(sea.importId, agentId, importerId, 'Hans');
+      expect(imports.agentRecord(agentId).modes.find((m) => m.key === 'sea')?.appointed).toBe(1);
+    });
+
     it('makes the agent an agent, and leaves a company that clears nothing alone', () => {
       const one = appointed();
       expect(imports.isAgent(agentId)).toBe(true);
@@ -529,6 +541,93 @@ describe('an import consignment, its papers, and the agent who clears them', () 
       expect(imports.agentRecord(rivalId).appointed).toBe(0);
       expect(imports.agentRecord(agentId).ports).toEqual([{ key: 'Djibouti', appointed: 1, listed: 0, cleared: 0 }]);
       expect(one.code).toMatch(/^IMP-/);
+    });
+  });
+
+  /**
+   * CL6 — WHAT AN AGENT SAYS THEY CLEAR, AND FINDING ONE.
+   *
+   * The user's correction is the whole reason this exists: *"Agents do not just clear containers... Some
+   * clear air freight, some vehicles, as their specialisation"* — and finding one is market dynamics, so
+   * a directory nobody can search is not a directory.
+   *
+   * The guards worth having are about the SHAPE of the answer: that it never ranks anybody, that an
+   * unchecked claim is never dressed as a finding, and that claiming more cannot buy position.
+   */
+  describe('what an agent says they clear, and finding one', () => {
+    it('is the agent’s own claim, dated and attributed', () => {
+      const offer = imports.setOffer(agentId, { specialisms: ['air_freight', 'vehicles'], places: [' Bole ', 'Djibouti', 'Bole'], words: 'Perishables out of Addis' }, 'Selam');
+      expect(offer.specialisms).toEqual(['air_freight', 'vehicles']);
+      // Labels, trimmed and de-duplicated. We run no ports, so there is nothing to validate against.
+      expect(offer.places).toEqual(['Bole', 'Djibouti']);
+      expect(offer.saidBy).toBe('Selam');
+      expect(offer.saidAt).toBeTruthy();
+    });
+
+    it('refuses an entry that names nothing, and drops a specialism nobody offers', () => {
+      expect(() => imports.setOffer(agentId, { specialisms: [] }, 'Selam')).toThrow(/at least one thing you clear/);
+      expect(() => imports.setOffer(agentId, { specialisms: ['teleportation'] }, 'Selam')).toThrow(/at least one thing you clear/);
+    });
+
+    it('finds by what they SAY, because our record cannot answer what the goods were', () => {
+      imports.setOffer(agentId, { specialisms: ['livestock'], places: ['Mombasa'] }, 'Selam');
+      imports.setOffer(rivalId, { specialisms: ['air_freight'] }, 'Rival');
+
+      expect(imports.findAgents({ specialism: 'livestock' }).map((a) => a.entityId)).toEqual([agentId]);
+      expect(imports.findAgents({ specialism: 'air_freight' }).map((a) => a.entityId)).toEqual([rivalId]);
+      expect(imports.findAgents({ specialism: 'bonded_transit' })).toEqual([]);
+    });
+
+    it('finds by a place they SAY they work, or one we have SEEN them work', () => {
+      // Said, and never seen: the agent advertises Mombasa and has cleared nothing there.
+      imports.setOffer(agentId, { specialisms: ['sea_container'], places: ['Mombasa'] }, 'Selam');
+      expect(imports.findAgents({ place: 'mombasa' }).map((a) => a.entityId)).toEqual([agentId]);
+
+      // Seen, and never said: the rival advertises no place at all but has a real appointment at Djibouti.
+      const one = register();
+      imports.appoint(one.importId, rivalId, importerId, 'Hans');
+      expect(imports.findAgents({ place: 'djibouti' }).map((a) => a.entityId)).toEqual([rivalId]);
+    });
+
+    it('carries the claim NEXT TO the record, which is what stops the claim being worth gaming', () => {
+      imports.setOffer(agentId, { specialisms: ['sea_container', 'air_freight', 'livestock', 'vehicles'] }, 'Selam');
+      const [found] = imports.findAgents({ specialism: 'livestock' });
+      // Claiming everything gets you seen. It does not get you credited: the record beside it is empty.
+      expect(found.offer?.specialisms).toHaveLength(4);
+      expect(found.appointed).toBe(0);
+      expect(found.cleared).toBe(0);
+      expect(found.thin).toBe(true);
+    });
+
+    it('lists an agent we have SEEN even when they have never filled in a form', () => {
+      const one = register();
+      imports.appoint(one.importId, agentId, importerId, 'Hans');
+      const found = imports.findAgents({});
+      expect(found.map((a) => a.entityId)).toContain(agentId);
+      expect(found.find((a) => a.entityId === agentId)?.offer).toBeUndefined();
+    });
+
+    it('is ALPHABETICAL and never ranked — advertising more must not move anybody up', () => {
+      // The one with the record is deliberately later in the alphabet than the one with none.
+      imports.setOffer(rivalId, { specialisms: ['sea_container'] }, 'Rival');
+      imports.setOffer(agentId, { specialisms: ['sea_container'] }, 'Selam');
+      const one = register();
+      imports.appoint(one.importId, rivalId, importerId, 'Hans');
+
+      const found = imports.findAgents({ specialism: 'sea_container' });
+      // 'Addis Clearing' has no record; 'Other Clearing' has the appointment. Alphabetically Addis is
+      // first, so a list that ranked by work behind it would reverse exactly these two rows.
+      expect(found.map((a) => a.name)).toEqual(['Addis Clearing', 'Other Clearing']);
+      expect(found[0].appointed).toBe(0);
+      expect(found[1].appointed).toBe(1);
+    });
+
+    it('keeps a country filter to that country', () => {
+      imports.setOffer(agentId, { specialisms: ['sea_container'] }, 'Selam');
+      const ke = imports.findAgents({ country: 'KE' });
+      const et = imports.findAgents({ country: 'ET' });
+      expect(ke.every((a) => a.country === 'KE')).toBe(true);
+      expect(et.every((a) => a.country === 'ET')).toBe(true);
     });
   });
 });

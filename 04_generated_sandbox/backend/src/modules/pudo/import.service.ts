@@ -11,7 +11,12 @@ import { DispatchService } from './dispatch.service';
 import type { GeoPoint } from './pudo.types';
 import {
   BorderPaperObservation,
+  CLEARANCE_SPECIALISMS,
+  CONSIGNMENT_MODES,
   CUSTOMS_HOLD_KINDS,
+  ClearanceOffer,
+  ClearanceSpecialism,
+  ConsignmentMode,
   CustomsHold,
   CustomsHoldKind,
   DocumentGrant,
@@ -72,6 +77,8 @@ export class ImportService {
   private readonly grants = new PersistentMap<string, DocumentGrant>('document-grants');
   /** What agents have actually been asked for, per border. First-hand by construction. */
   private readonly observations = new PersistentMap<string, BorderPaperObservation>('border-paper-observations');
+  /** CL6 — what each agent SAYS they clear, keyed by company. Their claim, never our finding. */
+  private readonly offers = new PersistentMap<string, ClearanceOffer>('clearance-offers');
 
   constructor(
     private readonly entities: EntityService,
@@ -101,13 +108,16 @@ export class ImportService {
       containerNo?: string;
       carrierRef?: string;
       etaAt?: string;
+      /** How the goods arrived. A LABEL — see CONSIGNMENT_MODES. Omitted means sea, which is what every
+       *  consignment recorded before this field existed was. */
+      mode?: string;
     },
     by: string,
     now = Date.now(),
   ): ImportConsignment {
     const importer = this.entities.get(input.importerEntityId);
     const goodsDescription = input.goodsDescription?.trim();
-    if (!goodsDescription) throw new GlosError('FIELD_REQUIRED', 'Say what is in the container — an agent cannot tell you which papers you need without it');
+    if (!goodsDescription) throw new GlosError('FIELD_REQUIRED', 'Say what is in it — an agent cannot tell you which papers you need without knowing what the goods are');
     const destPort = input.destPort?.trim();
     if (!destPort) throw new GlosError('FIELD_REQUIRED', 'Say where it is cleared — the papers a border asks for are that border’s, not the country’s');
     const originCountry = country(input.originCountry, 'where it is coming from');
@@ -125,6 +135,7 @@ export class ImportService {
       destCountry,
       destPort,
       ...(input.carrierRef?.trim() ? { carrierRef: input.carrierRef.trim() } : {}),
+      ...(input.mode && (CONSIGNMENT_MODES as readonly string[]).includes(input.mode) ? { mode: input.mode as ConsignmentMode } : {}),
       // `manual` is the only source anything writes. See the class comment on the carrier seam.
       ...(etaAt ? { etaAt, etaSource: 'manual' as const } : {}),
       required: [],
@@ -493,6 +504,107 @@ export class ImportService {
   /** Has this company ever been appointed to clear a container? What makes them an agent at all. */
   isAgent(entityId: string): boolean {
     return isClearingAgent([...this.imports.values()], entityId);
+  }
+
+  /* --------------------------------------- what an agent says they clear -- */
+
+  /**
+   * CL6 — AN AGENT'S OWN ADVERTISEMENT. The one asserted thing in this design, and deliberately so.
+   *
+   * Identity and record stay derived, because that is what stops squatting and stops a record that can
+   * only flatter. What somebody OFFERS cannot be derived at all: nobody but the agent knows they clear
+   * livestock at Mombasa, and waiting to observe it would list every agent as doing nothing until they
+   * had already been hired for it — the chicken-and-egg the directory exists to end.
+   *
+   * Theirs to write and theirs to change. We keep the date, because a claim made two years ago and never
+   * revisited is weaker than one made last week, and a reader is entitled to tell them apart.
+   */
+  setOffer(entityId: string, input: { specialisms: string[]; places?: string[]; words?: string }, by: string, now = Date.now()): ClearanceOffer {
+    this.entities.get(entityId); // a company that does not exist cannot advertise
+    const specialisms = [...new Set(input.specialisms ?? [])].filter((s): s is ClearanceSpecialism => (CLEARANCE_SPECIALISMS as readonly string[]).includes(s));
+    if (!specialisms.length) {
+      throw new GlosError('FIELD_REQUIRED', 'Say at least one thing you clear — an entry in the directory that names nothing helps nobody find you');
+    }
+    // Labels, trimmed and de-duplicated. We run no ports, so there is nothing to validate them against.
+    const places = [...new Set((input.places ?? []).map((p) => p.trim()).filter(Boolean))].slice(0, 20);
+    const offer: ClearanceOffer = {
+      specialisms,
+      places,
+      ...(input.words?.trim() ? { words: input.words.trim().slice(0, 600) } : {}),
+      saidAt: new Date(now).toISOString(),
+      saidBy: by,
+    };
+    this.offers.set(entityId, offer);
+    return offer;
+  }
+
+  offerOf(entityId: string): ClearanceOffer | undefined {
+    return this.offers.get(entityId);
+  }
+
+  /**
+   * THE FINDER — and finding an agent is market dynamics, which is why it exists at all.
+   *
+   * §6a refused a ranked DIRECTORY and that refusal holds in full: this answers with a list of PAGES and
+   * imposes no ordering that could be read as a judgement. Alphabetical, said out loud in `basis`, so
+   * that advertising more cannot move anybody up the list.
+   *
+   * WHAT STOPS IT BEING GAMED is not a gate on the claim — we do not check claims, and an agent who
+   * claims everything will appear in every list. It is that every result carries the claim NEXT TO the
+   * record, so a claim with nothing behind it and a claim with forty consignments behind it are visibly
+   * different things. Claiming more gets you seen; it does not get you credited.
+   *
+   * A company with no advertisement at all still appears when the record answers the question — somebody
+   * who has been appointed on eleven consignments at Djibouti is an agent at Djibouti whether or not they
+   * have got round to filling in a form.
+   */
+  findAgents(q: { specialism?: string; place?: string; country?: string } = {}): Array<{ entityId: string; name: string; country?: string; offer?: ClearanceOffer; appointed: number; cleared: number; thin: boolean }> {
+    const all = [...this.imports.values()];
+    const wanted = q.specialism?.trim();
+    const place = q.place?.trim().toLowerCase();
+    const country = q.country?.trim().toUpperCase();
+
+    // Every company that either advertises clearance work, or has actually been appointed on a consignment.
+    const candidates = new Set<string>([...this.offers.keys(), ...all.filter((c) => c.agentEntityId && c.appointedAt).map((c) => c.agentEntityId!)]);
+
+    const rows = [...candidates].flatMap((entityId) => {
+      let entity;
+      try {
+        entity = this.entities.get(entityId);
+      } catch {
+        return []; // a company that has since been removed is not a result
+      }
+      if (country && (entity.jurisdiction ?? '').toUpperCase() !== country) return [];
+
+      const offer = this.offers.get(entityId);
+      const record = agentRecordOf(all, entityId);
+
+      // A specialism matches what they SAY. The record cannot answer it: our modes are how goods
+      // arrived, not what the goods were, and 'sea' tells nobody whether they handle livestock.
+      if (wanted && !(offer?.specialisms ?? []).includes(wanted as ClearanceSpecialism)) return [];
+      // A place matches EITHER what they say OR where we have seen them work, because an agent who has
+      // cleared eleven consignments at a port plainly works there whatever their form says.
+      if (place) {
+        const said = (offer?.places ?? []).some((p) => p.toLowerCase().includes(place));
+        const seen = record.ports.some((p) => p.key.toLowerCase().includes(place));
+        if (!said && !seen) return [];
+      }
+      return [
+        {
+          entityId,
+          name: entity.name,
+          ...(entity.jurisdiction ? { country: entity.jurisdiction } : {}),
+          ...(offer ? { offer } : {}),
+          appointed: record.appointed,
+          cleared: record.cleared,
+          thin: record.thin,
+        },
+      ];
+    });
+
+    // ALPHABETICAL, and nothing else. Ordering by appointments would be the league table §6 refuses,
+    // and ordering by "relevance" would be the same table with a name that hides it.
+    return rows.sort((a, b) => a.name.localeCompare(b.name));
   }
 
   /**

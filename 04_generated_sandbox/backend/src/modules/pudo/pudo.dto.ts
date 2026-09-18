@@ -10,7 +10,7 @@ import { PACKAGING, type Packaging } from './packaging';
 import { MEDIA_KINDS, MediaKind } from './media.types';
 import { CONSTRAINT_KINDS, ConstraintKind } from './route-constraint.types';
 import { CARGO_LANES, CARGO_NATURES, CargoLane, CargoNature, EQUIPMENT, Equipment } from './cargo.types';
-import { CUSTOMS_HOLD_KINDS, HOLD_STANCES } from './import.types';
+import { CLEARANCE_SPECIALISMS, CONSIGNMENT_MODES, CUSTOMS_HOLD_KINDS, HOLD_STANCES } from './import.types';
 
 /** F1 — a scheduled pickup instant must be a full datetime WITH a timezone offset (Z or ±HH:MM), so the
  *  moment is unambiguous — a date-only or offset-less string would resolve to a server-timezone-dependent
@@ -272,6 +272,14 @@ export class RegisterImportDto {
   /** The carrier's own reference. Recorded, and read by nothing yet — the carrier seam is not wired. */
   @IsOptional() @IsString() @MaxLength(60) carrierRef?: string;
   @IsOptional() @IsString() etaAt?: string;
+  /**
+   * How the goods arrived — sea, air, road, rail. A LABEL: no airline, no waybill, no schedule.
+   *
+   * It has to be on the DTO and not only on the service, which is what the drive caught: validation
+   * whitelists, so a field the DTO does not declare is stripped in silence and an air consignment was
+   * recorded as sea. The service accepted it and nothing errored anywhere.
+   */
+  @IsOptional() @IsIn(CONSIGNMENT_MODES as unknown as string[]) @ApiPropertyOptional({ enum: CONSIGNMENT_MODES }) mode?: string;
   @IsOptional() @IsString() by?: string;
 }
 
@@ -385,6 +393,32 @@ export class ReleaseCustomsHoldDto {
   @IsOptional() @IsString() at?: string;
   @IsOptional() @IsString() entityId?: string;
   @IsOptional() @IsString() by?: string;
+}
+
+/**
+ * CL6 — what an agent says they clear. A CLAIM, and the only asserted thing in the agent design.
+ *
+ * A fixed vocabulary because a finder cannot honestly match free text, plus `words` for what a vocabulary
+ * cannot hold. Nothing here is verified and no screen may present it as if it were.
+ */
+export class ClearanceOfferDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsIn(CLEARANCE_SPECIALISMS as unknown as string[], { each: true })
+  @ApiProperty({ enum: CLEARANCE_SPECIALISMS, isArray: true })
+  specialisms!: string[];
+  /** Ports, airports and border posts they work — labels. We run no ports and validate none. */
+  @IsOptional() @IsArray() @IsString({ each: true }) places?: string[];
+  @IsOptional() @IsString() @MaxLength(600) words?: string;
+  @IsOptional() @IsString() by?: string;
+}
+
+/** What an importer is looking for. Every field optional: no filter at all is a real question. */
+export class FindAgentsQueryDto {
+  @IsOptional() @IsIn(CLEARANCE_SPECIALISMS as unknown as string[]) @ApiPropertyOptional({ enum: CLEARANCE_SPECIALISMS }) specialism?: string;
+  /** A port, airport or border post, matched loosely against what they say AND where we have seen them. */
+  @IsOptional() @IsString() @MaxLength(120) place?: string;
+  @IsOptional() @IsString() @MaxLength(2) country?: string;
 }
 
 /** CA6 — the rule for crossing from one country into another. Absent a rule, a foreign vehicle may not carry inside. */

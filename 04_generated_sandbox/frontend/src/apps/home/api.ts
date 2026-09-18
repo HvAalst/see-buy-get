@@ -169,9 +169,74 @@ export interface ProfileView {
     thin: boolean;
     ratesNeed: number;
     ports: Array<{ key: string; appointed: number; listed: number; cleared: number }>;
+    /** What they have been SEEN clearing, by mode — beside what they say they clear. */
+    modes: Array<{ key: string; appointed: number; listed: number; cleared: number }>;
     holds: { containers: number; recorded: number; disputed: number; kinds: Array<{ key: string; times: number }> };
   };
   clearsMeasured?: string;
+  /**
+   * What they SAY they clear — their own advertisement, and the only asserted thing on the page.
+   *
+   * Everything else is derived from the record, which is what makes a page worth reading; this is not,
+   * and the screen has to show it as what it is. It exists because nobody else could know it: an agent
+   * whose speciality is air freight or vehicles cannot be discovered by observation until somebody has
+   * already hired them for it.
+   */
+  offer?: ClearanceOffer;
+  /** Why an empty record is not a bad record — we only count what came through this network. */
+  recordSays?: string;
+}
+
+/** The things a clearing agent can say they clear. A vocabulary, so a finder can match it. */
+export const CLEARANCE_SPECIALISMS = [
+  'sea_container',
+  'air_freight',
+  'vehicles',
+  'bulk_breakbulk',
+  'project_heavy_lift',
+  'perishables',
+  'livestock',
+  'pharma_cold_chain',
+  'dangerous_goods',
+  'personal_effects',
+  'courier_express',
+  'bonded_transit',
+] as const;
+export type ClearanceSpecialism = (typeof CLEARANCE_SPECIALISMS)[number];
+
+export interface ClearanceOffer {
+  specialisms: ClearanceSpecialism[];
+  places: string[];
+  words?: string;
+  saidAt: string;
+  saidBy: string;
+}
+
+/** One agent as the finder lists them: what they say, beside what we have seen. Never a rank. */
+export interface AgentCard {
+  entityId: string;
+  handle?: string;
+  name: string;
+  country?: string;
+  offer?: ClearanceOffer;
+  appointed: number;
+  cleared: number;
+  thin: boolean;
+}
+
+/**
+ * FINDING AN AGENT — public, because this is market dynamics and a directory nobody can read is not one.
+ *
+ * `basis` says the ordering out loud. It is alphabetical so that advertising more cannot move anybody up,
+ * and there is no relevance score, because a relevance score is a league table under a name that hides it.
+ */
+export function findAgents(q: { specialism?: string; place?: string; country?: string }): Promise<Result<{ items: AgentCard[]; total: number; basis: string }>> {
+  const search = new URLSearchParams();
+  if (q.specialism) search.set('specialism', q.specialism);
+  if (q.place?.trim()) search.set('place', q.place.trim());
+  if (q.country?.trim()) search.set('country', q.country.trim().toUpperCase());
+  const qs = search.toString();
+  return publicRequest(homeConfig(), `/v1/sbg/agents/find${qs ? `?${qs}` : ''}`);
 }
 
 /**

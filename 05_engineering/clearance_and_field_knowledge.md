@@ -764,6 +764,70 @@ only flatter is not a record.
 - **Before it reaches shippers:** confirm the network earns nothing from an appointment (§5, CL2). If it ever
   does, the view discloses it or it does not ship.
 
+### CL6 — Finding an agent, and letting them say what they clear — SHIPPED 2026-09-18, driven
+**Two corrections from the user, and the second one changed the design.**
+
+> *"Finding an agent is necessary. It's part of market dynamics. Agents do not just clear containers so we
+> must be careful with the wording to suggest that is what they do. Some clear air freight some vehicles
+> etc as their specialization. That should be clear from the directory so they should be able to advertise
+> themselves."*
+
+**THE WORDING WAS OUR MODEL DESCRIBING SOMEBODY ELSE'S BUSINESS.** The page said "clears containers",
+because an `ImportConsignment` is a container — the only consignment this system had ever recorded. That
+turned our own limitation into a stranger's job description. It now says "clears goods", and the record
+counts by **mode** (`sea` / `air` / `road` / `rail`), a LABEL in exactly the sense `destPort` is one: no
+airline, no waybill, no schedule, no rate. Everything recorded before the field existed is `sea` by
+construction, and `modeOf()` says so rather than leaving a silent `?? 'sea'` to be mistaken for a guess.
+
+**WHAT AN AGENT OFFERS IS THE ONE ASSERTED THING IN THE WHOLE AGENT DESIGN, and the split is deliberate:**
+- **Identity and record stay derived and unclaimable.** A handle falls out of the verified name; being an
+  agent falls out of having been appointed; every figure falls out of timestamps. That is what stops
+  squatting and stops a record that can only flatter.
+- **What somebody OFFERS cannot be derived at all.** Nobody but the agent knows they clear livestock at
+  Mombasa, and waiting to observe it would list every agent as doing nothing until they had already been
+  hired for it — the chicken-and-egg the directory exists to end.
+
+The precedent is already this shape: the agent PUBLISHES the papers a border will need and we never
+assert them; a minter's body pick is ADVISORY; a shipper's excluded bodies are "a stated preference, not a
+physical constraint, and the board presents it as one". A claim is carried, attributed, **dated** — and
+never dressed as something we checked. `saidAt` is on the record because a claim made two years ago and
+never revisited is weaker than one made last week.
+
+**A FIXED VOCABULARY of twelve** (`sea_container`, `air_freight`, `vehicles`, `bulk_breakbulk`,
+`project_heavy_lift`, `perishables`, `livestock`, `pharma_cold_chain`, `dangerous_goods`,
+`personal_effects`, `courier_express`, `bonded_transit`) plus `words` for what a vocabulary cannot hold.
+Drawn from what CHANGES the clearance job — a vehicle, a live animal and a drum of solvent are three
+different jobs at the same counter — never from commodity categories, which multiply forever and tell a
+shipper nothing.
+
+**THE FINDER (`GET /v1/sbg/agents/find`, @Public), and §6a's refusal still holds in full.** It answers
+with a list of PAGES, **alphabetical, saying so in `basis`**, so advertising more cannot move anybody up
+it. No relevance score, because a relevance score is the league table under a name that hides it — and
+while this network is the party an importer appoints through, publishing an ordering is self-dealing.
+
+**WHAT STOPS IT BEING GAMED is not a gate on the claim.** We check nothing, and an agent who claims
+everything appears in every list. It is that **every row carries the claim NEXT TO the record**, so a
+claim with nothing behind it and one with forty consignments behind it are visibly different. Claiming
+more gets you seen; it does not get you credited.
+
+- **A place matches what they SAY or where we have SEEN them** — an agent who has cleared eleven
+  consignments at a port plainly works there whatever their form says.
+- **A company that advertises and has never been appointed is still listed and still gets a page**, with
+  the record shown as thin rather than as bad.
+- **`RECORD_SAYS` travels with every record:** we count only what came through this network, so an agent
+  may have cleared thousands elsewhere and show nothing here. Letting silence read as incompetence would
+  be advertising our own coverage as somebody else's quality.
+
+**Surfaces:** the finder at the front door of the home app (no sign-in — an importer with a container on
+the water has no account here yet, and that is exactly when they need this); the claim on `/@handle`
+above the record; the editor in the console beside an agent's own record, loaded from the SAME object a
+shipper reads so a form cannot silently disagree with the page.
+
+**A DEFECT THE DRIVE CAUGHT AND NOTHING ELSE COULD:** `mode: 'air'` was on the service and not on the
+DTO, and validation whitelists — so the field was stripped in silence and an air consignment was recorded
+as sea. Nothing errored, on either side. **Habit: a field added to a service is not added to the API
+until its DTO declares it, and the failure is silent by construction.**
+
 ### CL5 — Field knowledge, first-hand only
 Last, and blocked twice over.
 
@@ -799,11 +863,7 @@ jurisdiction is not a product decision.
 - ~~**A disputed observation has no adjudication.**~~ **CLOSED by PRE and reused twice since.** A dispute is
   now its own dated, attributed account beside the first — on a road hazard, and on a customs hold in CL4
   item 1. The deliberate part is that nothing adjudicates it: both accounts stand and a reader weighs them.
-- **An agent's page is reachable only if you know the handle.** CL4 item 1 put `agentHandle` on every
-  consignment row and on an agent's own record, so an importer already working with one can reach their
-  page. Finding an agent they have never met is still out of band. §6a refuses a ranked directory and that
-  holds; a NEUTRAL finder ("who clears at Mombasa", unordered or alphabetical) is not refused by anything
-  written here, but it is a directory decision and belongs to the user, not to a slice.
+- ~~**An agent's page is reachable only if you know the handle.**~~ **CLOSED by CL6 — see below.**
 - **Language.** Observations will arrive in Swahili, Amharic and French. The real translation pass is still
   deferred, and a dated note nobody can read is not knowledge.
 

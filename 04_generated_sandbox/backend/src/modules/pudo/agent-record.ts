@@ -1,4 +1,4 @@
-import { ImportConsignment } from './import.types';
+import { ImportConsignment, modeOf } from './import.types';
 import { AGENT_MIN_CONTAINERS } from './pudo.config';
 
 /**
@@ -101,6 +101,16 @@ export interface AgentRecord {
   /** How many containers a typical time would need, so a screen can say so without the config. */
   ratesNeed: number;
   ports: AgentPortSlice[];
+  /**
+   * WHAT THEY HAVE BEEN SEEN CLEARING, by mode — sea, air, road, rail.
+   *
+   * Here because the first version of this record could only describe containers, which is what this
+   * system happens to record rather than what agents do. An agent whose speciality is air freight was
+   * invisible in their own record. The two halves of the page now read together: what they SAY they
+   * clear, and what we have seen — and they are allowed to disagree, because an empty record may only
+   * mean that work never came through us. See RECORD_SAYS.
+   */
+  modes: AgentPortSlice[];
   /** §6's other half: what the state controlled. Never folded into the figures above. */
   holds: AgentHolds;
 }
@@ -112,11 +122,27 @@ export interface AgentRecord {
  * which is the one thing it deliberately says nothing about.
  */
 export const AGENT_MEASURED =
-  'Measured: how quickly this agent said what papers a container would need, whether that list grew ' +
+  'Measured: how quickly this agent said what papers a consignment would need, whether that list grew ' +
   'afterwards, and how long supplied papers waited on them. Not measured: filing accuracy, duty, or ' +
   'anything that happened at the counter — scoring an agent on time at a border would advertise whoever ' +
   'pays bribes, and a clean customs record is not evidence of compliance. Holds are what the state did, ' +
   'shown apart and never subtracted from the figures above.';
+
+/**
+ * WHY AN EMPTY RECORD IS NOT A BAD RECORD — and this sentence is not politeness.
+ *
+ * We can only count the consignments that came through this network, and an agent's business is mostly
+ * not ours: somebody who has cleared air freight at Nairobi for twenty years has a record here of nothing
+ * at all until an importer on this platform appoints them. A finder that let silence read as incompetence
+ * would be advertising our own coverage as somebody else's quality.
+ *
+ * Carried in the payload beside the figures, like every other caveat in this epic, so no screen can show
+ * the counts without it.
+ */
+export const RECORD_SAYS =
+  'This counts only the consignments handled through this network. An agent may have cleared thousands ' +
+  'elsewhere and show nothing here — an empty record means we have not seen their work, not that there ' +
+  'is none. What they say they clear is their own claim, and we do not check it.';
 
 const HOUR_MS = 3_600_000;
 
@@ -160,6 +186,7 @@ const byAppointed = (a: AgentPortSlice, b: AgentPortSlice) => b.appointed - a.ap
 export function agentRecordOf(consignments: ImportConsignment[], entityId: string, now: number = Date.now()): AgentRecord {
   const mine = consignments.filter((c) => c.agentEntityId === entityId && c.appointedAt);
   const ports = new Map<string, AgentPortSlice>();
+  const modes = new Map<string, AgentPortSlice>();
 
   let listed = 0;
   let quoted = 0;
@@ -186,6 +213,7 @@ export function agentRecordOf(consignments: ImportConsignment[], entityId: strin
     if (didClear) cleared += 1;
     else inFlight += 1;
     slice(ports, c.destPort || 'unknown', { listed: didList, cleared: didClear });
+    slice(modes, modeOf(c), { listed: didList, cleared: didClear });
 
     // How long until they said what they would need. The first paper is the one that matters: an importer
     // can start work on a list of one, and cannot start at all on a list of none.
@@ -245,6 +273,7 @@ export function agentRecordOf(consignments: ImportConsignment[], entityId: strin
     thin,
     ratesNeed: AGENT_MIN_CONTAINERS,
     ports: [...ports.values()].sort(byAppointed),
+    modes: [...modes.values()].sort(byAppointed),
     holds: {
       containers: holdContainers,
       recorded: holdsRecorded,

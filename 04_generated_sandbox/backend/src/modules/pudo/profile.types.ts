@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { HANDLE_KINDS, type HandleKind } from '../../foundation/handle/handle.service';
-import { ClearanceRecord } from './import.types';
+import { ClearanceOffer, ClearanceRecord } from './import.types';
 import { GeoPoint } from './pudo.types';
 
 /**
@@ -33,10 +33,18 @@ export function profileDoes(kind: string): string {
     case 'fleet':
       return 'Runs vehicles and drivers, and takes loads off the market.';
     case 'clearing-agent':
-      // Not one of HANDLE_KINDS, and deliberately not: being a clearing agent is DERIVED from having been
-      // appointed on a container, never a kind somebody registers as. This is the sentence that makes an
-      // agent findable at all — a page that says only "a company on this network" closes nothing.
-      return 'Clears containers through customs for importers, and says what papers each border will ask for.';
+      /*
+       * Not one of HANDLE_KINDS, and deliberately not: being a clearing agent is DERIVED from having been
+       * appointed, never a kind somebody registers as. This is the sentence that makes an agent findable
+       * at all — a page saying only "a company on this network" closes nothing.
+       *
+       * AND IT DOES NOT SAY "CONTAINERS", which the first version did. The user's correction: agents do
+       * not all clear containers — some clear air freight, some vehicles, as their speciality. A
+       * container is simply the only consignment this system happens to record, and writing it into a
+       * sentence about somebody's business made our limitation look like their job description. What
+       * they actually clear is THEIR claim, carried in `offer` and shown as theirs.
+       */
+      return 'Clears goods through customs for importers, and says what papers each border will ask for.';
     default:
       return 'A company on this network.';
   }
@@ -222,4 +230,25 @@ export class ProfileView {
 
   @ApiPropertyOptional()
   clearsMeasured?: string;
+
+  /**
+   * WHAT THEY SAY THEY CLEAR — their own advertisement, and the only asserted thing on this page.
+   *
+   * Everything else here is derived from the record, which is what makes the page trustworthy. This is
+   * not, and it must be shown as what it is: a dated claim by the company itself, unchecked. It exists
+   * because nobody else could know it — an agent who specialises in air freight or vehicles cannot be
+   * discovered by observation until somebody has already hired them for it.
+   */
+  @ApiPropertyOptional({ type: ClearanceOffer })
+  offer?: ClearanceOffer;
+
+  /**
+   * WHY AN EMPTY RECORD IS NOT A BAD RECORD.
+   *
+   * We count only the consignments that came through this network, and most of an agent's business never
+   * will. Carried in the payload beside the counts, because a reader who takes silence for incompetence
+   * has been misled by us about our own coverage.
+   */
+  @ApiPropertyOptional()
+  recordSays?: string;
 }

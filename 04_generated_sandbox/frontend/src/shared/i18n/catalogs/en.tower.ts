@@ -458,6 +458,16 @@ export const enTower = {
   'tower.imports.recordListHours': 'You usually say what is needed within {h} hours of being appointed.',
   'tower.imports.recordCheckHours': 'A supplied paper usually waits {h} hours for you to accept or query it.',
   'tower.imports.recordHolds': 'Customs holds recorded on your containers: {holds} ({disputed} disputed by the importer). Not counted against you anywhere above.',
+  /* CL6 — the agent's own advertisement. The one asserted thing in the whole agent design, so the hint
+     says so before the form: everything else about them is derived from the record. */
+  'tower.imports.offerTitle': 'What you clear — your entry in the directory',
+  'tower.imports.offerHint':
+    'Your own words. Importers search this to find you, and it is the one thing on your public page we do not work out for ourselves — so nobody else can put it there. We do not check it, and the page says so: what we have seen is shown beside it, and the two are allowed to differ. Pick everything you genuinely handle; claiming more gets you seen but never credited.',
+  'tower.imports.f.offerPlaces': 'Ports, airports, border posts (comma separated)',
+  'tower.imports.f.offerWords': 'Anything the list above cannot say',
+  'tower.imports.offerNeedOne': 'Pick at least one — an entry that names nothing helps nobody find you.',
+  'tower.imports.offerSave': 'Save my entry',
+  'tower.imports.offerSaved': 'Saved. Importers searching for that will find your page.',
   /* CL4 item 1 — what the STATE did to this container. The risk here is the field being read as a free
      excuse box, so the hint says out loud what it does and does not do, before the form. */
   'tower.imports.holdsTitle': 'What customs did',

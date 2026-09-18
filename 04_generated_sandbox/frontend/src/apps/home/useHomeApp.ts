@@ -8,6 +8,8 @@ import {
   fetchMarketSeries,
   fetchPoints,
   fetchProfile,
+  findAgents,
+  type AgentCard,
   fetchStoreReputation,
   geocode,
   handOff,
@@ -26,7 +28,7 @@ import {
 } from './api';
 import { EMPTY_JOIN, nextStep, normalizePhone, prevStep, roleById, signupBody, stepBlocker, type JoinForm, type JoinStep, type RoleSpec } from './logic';
 
-export type Screen = 'welcome' | 'roles' | 'join' | 'signin' | 'market' | 'store' | 'profile';
+export type Screen = 'welcome' | 'roles' | 'join' | 'signin' | 'market' | 'store' | 'profile' | 'agents';
 
 /** FB3b — how far the visitor cares to look. `null` IS a choice: the whole market. */
 export type MarketReach = number | null;
@@ -50,6 +52,12 @@ export interface HomeState {
   /** A store's public reputation, reached by ?store=<id> from the widget or a link. */
   /** The public profile at /@handle. Null until one is asked for. */
   profile: ProfileView | null;
+  /** CL6 — the agent finder. `basis` travels with the rows: this list is alphabetical, never ranked. */
+  agents: AgentCard[] | null;
+  agentsBasis: string | null;
+  agentsState: 'idle' | 'loading' | 'ready' | 'error';
+  agentsError: string | null;
+  agentQuery: { specialism: string; place: string; country: string };
   profileState: 'idle' | 'loading' | 'ready' | 'error';
   profileError: string | null;
   reputation: StoreReputation | null;
@@ -78,6 +86,11 @@ export interface HomeState {
 
 const INITIAL: HomeState = {
   screen: 'welcome',
+  agents: null,
+  agentsBasis: null,
+  agentsState: 'idle',
+  agentsError: null,
+  agentQuery: { specialism: '', place: '', country: '' },
   role: null,
   step: 'phone',
   form: { ...EMPTY_JOIN },
@@ -176,6 +189,33 @@ export function useHomeApp() {
       return;
     }
     setState((s) => ({ ...s, reputation: r.data, reputationState: 'ready', reputationError: null }));
+  }, []);
+
+  /**
+   * FINDING AN AGENT — the market dynamic §6a's page-per-participant could not supply on its own.
+   *
+   * A page closes the findability gap only for somebody who already has the handle. An importer looking
+   * for an agent who clears vehicles at Mombasa has nowhere to start, and "ask around" is precisely the
+   * out-of-band chasing this whole slice exists to end.
+   *
+   * It is still not a ranked directory: the answer is a list of PAGES, alphabetical, with every row
+   * carrying what the agent SAYS beside what we have actually seen — so a claim with nothing behind it
+   * and a claim with forty consignments behind it are visibly different things.
+   */
+  const findAgentsBy = useCallback(async (q: { specialism?: string; place?: string; country?: string }) => {
+    setState((s) => ({
+      ...s,
+      screen: 'agents',
+      agentsState: 'loading',
+      agentsError: null,
+      agentQuery: { specialism: q.specialism ?? '', place: q.place ?? '', country: q.country ?? '' },
+    }));
+    const r = await findAgents(q);
+    if (r.error) {
+      setState((s) => ({ ...s, agentsState: 'error', agentsError: r.error.detail || r.error.title }));
+      return;
+    }
+    setState((s) => ({ ...s, agents: r.data.items, agentsBasis: r.data.basis, agentsState: 'ready', agentsError: null }));
   }, []);
 
   /**
@@ -442,7 +482,7 @@ export function useHomeApp() {
 
   return {
     state,
-    actions: { go, openStore, startJoin, setForm, back, sendCode, confirmCode, advance, submit, restart, loadPoints, setMarketQuery, lookUpMarket, setMarketReach, setMarketView, loadSeries },
+    actions: { go, openStore, openProfile, findAgentsBy, startJoin, setForm, back, sendCode, confirmCode, advance, submit, restart, loadPoints, setMarketQuery, lookUpMarket, setMarketReach, setMarketView, loadSeries },
   };
 }
 

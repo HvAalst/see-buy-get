@@ -5163,6 +5163,105 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/clearance-offer": {
+      "post": {
+        "operationId": "Sbg.setClearanceOffer",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClearanceOfferDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClearanceOffer"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/agents/find": {
+      "get": {
+        "operationId": "Sbg.findAgents",
+        "summary": "",
+        "description": "FINDING AN AGENT — @Public, because this is market dynamics and a directory nobody can read is not one.\n\n§6a refused a RANKED directory and that refusal holds in full. This answers with a list of PAGES,\nordered alphabetically and saying so in `basis`, so that advertising more cannot move anybody up it.\nThere is no relevance score, because a relevance score is the league table wearing a name that hides\nit — and while this network is the party an importer appoints an agent through, publishing an ordering\nof them is self-dealing.\n\nWHAT STOPS IT BEING GAMED is not a gate on the claim: we do not check claims, and an agent who claims\neverything appears in every list. It is that every result carries the claim NEXT TO the record, so a\nclaim with nothing behind it and a claim with forty consignments behind it are visibly different.\nClaiming more gets you seen; it does not get you credited.",
+        "parameters": [
+          {
+            "name": "specialism",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "sea_container",
+                "air_freight",
+                "vehicles",
+                "bulk_breakbulk",
+                "project_heavy_lift",
+                "perishables",
+                "livestock",
+                "pharma_cold_chain",
+                "dangerous_goods",
+                "personal_effects",
+                "courier_express",
+                "bonded_transit"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "place",
+            "required": false,
+            "in": "query",
+            "description": "A port, airport or border post, matched loosely against what they say AND where we have seen them.",
+            "schema": {
+              "maxLength": 120,
+              "type": "string"
+            }
+          },
+          {
+            "name": "country",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 2,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentFinderResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/imports/{importId}/road-leg": {
       "post": {
         "operationId": "Sbg.mintImportRoadLeg",
@@ -19130,6 +19229,16 @@
       "RegisterImportDto": {
         "type": "object",
         "properties": {
+          "mode": {
+            "type": "string",
+            "description": "How the goods arrived — sea, air, road, rail. A LABEL: no airline, no waybill, no schedule.\n\nIt has to be on the DTO and not only on the service, which is what the drive caught: validation\nwhitelists, so a field the DTO does not declare is stripped in silence and an air consignment was\nrecorded as sea. The service accepted it and nothing errored anywhere.",
+            "enum": [
+              "sea",
+              "air",
+              "road",
+              "rail"
+            ]
+          },
           "importerEntityId": {
             "type": "string",
             "description": "Whose goods. A company administrator may only name their own; staff must name one."
@@ -19390,7 +19499,17 @@
           },
           "destPort": {
             "type": "string",
-            "description": "Where it is cleared — \"Djibouti\", \"Mombasa\". A label, not a modelled port: we do not run ports."
+            "description": "Where it is cleared — \"Djibouti\", \"Mombasa\", or an airport. A label, not a modelled place."
+          },
+          "mode": {
+            "type": "string",
+            "description": "How the goods arrived. Absent on anything recorded before the field existed — see modeOf().",
+            "enum": [
+              "sea",
+              "air",
+              "road",
+              "rail"
+            ]
           },
           "carrierRef": {
             "type": "string"
@@ -20133,6 +20252,13 @@
               "$ref": "#/components/schemas/ClearancePortSlice"
             }
           },
+          "modes": {
+            "description": "WHAT THEY HAVE ACTUALLY BEEN SEEN CLEARING, by mode — beside what they SAY they clear.\n\nThe two are shown together on purpose and they are allowed to disagree: an agent may advertise air\nfreight and have no air consignment on our record, which is information rather than a contradiction.\nSee `recordSays` for the sentence that has to travel with an empty one.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ClearancePortSlice"
+            }
+          },
           "holds": {
             "$ref": "#/components/schemas/ClearanceHolds"
           }
@@ -20148,7 +20274,56 @@
           "thin",
           "ratesNeed",
           "ports",
+          "modes",
           "holds"
+        ]
+      },
+      "ClearanceOffer": {
+        "type": "object",
+        "properties": {
+          "specialisms": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "sea_container",
+                "air_freight",
+                "vehicles",
+                "bulk_breakbulk",
+                "project_heavy_lift",
+                "perishables",
+                "livestock",
+                "pharma_cold_chain",
+                "dangerous_goods",
+                "personal_effects",
+                "courier_express",
+                "bonded_transit"
+              ]
+            }
+          },
+          "places": {
+            "description": "Ports, airports and border posts they work — labels, exactly as `destPort` is. We run no ports.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "words": {
+            "type": "string",
+            "description": "What the vocabulary cannot hold. Their own words, shown as theirs."
+          },
+          "saidAt": {
+            "type": "string"
+          },
+          "saidBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "specialisms",
+          "places",
+          "saidAt",
+          "saidBy"
         ]
       },
       "ClearanceRecordResponse": {
@@ -20164,11 +20339,127 @@
           "handle": {
             "type": "string",
             "description": "Their own public page, so \"the same thing a shipper reads\" is a claim they can go and check."
+          },
+          "offer": {
+            "description": "THEIR OWN ADVERTISEMENT, returned with their record so the two are one read.\n\nThe screen that edits a claim and the screen that shows the record are the same screen, and a form\nloaded from a different source than the page a shipper reads is a form that can silently disagree\nwith it.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ClearanceOffer"
+              }
+            ]
           }
         },
         "required": [
           "record",
           "measured"
+        ]
+      },
+      "ClearanceOfferDto": {
+        "type": "object",
+        "properties": {
+          "specialisms": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "sea_container",
+                "air_freight",
+                "vehicles",
+                "bulk_breakbulk",
+                "project_heavy_lift",
+                "perishables",
+                "livestock",
+                "pharma_cold_chain",
+                "dangerous_goods",
+                "personal_effects",
+                "courier_express",
+                "bonded_transit"
+              ]
+            }
+          },
+          "places": {
+            "description": "Ports, airports and border posts they work — labels. We run no ports and validate none.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "words": {
+            "type": "string",
+            "maxLength": 600
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "specialisms"
+        ]
+      },
+      "AgentCard": {
+        "type": "object",
+        "properties": {
+          "entityId": {
+            "type": "string"
+          },
+          "handle": {
+            "type": "string",
+            "description": "Their public page. The whole point of a result: somewhere to go and read the rest."
+          },
+          "name": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          },
+          "offer": {
+            "description": "What they say they clear, in their own words. Never verified — see ClearanceOffer.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ClearanceOffer"
+              }
+            ]
+          },
+          "appointed": {
+            "type": "number",
+            "description": "What we have actually seen: appointments and cleared consignments. NEVER a score or a rank."
+          },
+          "cleared": {
+            "type": "number"
+          },
+          "thin": {
+            "type": "boolean",
+            "description": "True when the record is too thin to state a usual time. Said, because a newcomer is not a bad agent."
+          }
+        },
+        "required": [
+          "entityId",
+          "name",
+          "appointed",
+          "cleared",
+          "thin"
+        ]
+      },
+      "AgentFinderResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentCard"
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "basis": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "basis"
         ]
       },
       "MintRoadLegDto": {
@@ -23511,6 +23802,18 @@
           },
           "clearsMeasured": {
             "type": "string"
+          },
+          "offer": {
+            "description": "WHAT THEY SAY THEY CLEAR — their own advertisement, and the only asserted thing on this page.\n\nEverything else here is derived from the record, which is what makes the page trustworthy. This is\nnot, and it must be shown as what it is: a dated claim by the company itself, unchecked. It exists\nbecause nobody else could know it — an agent who specialises in air freight or vehicles cannot be\ndiscovered by observation until somebody has already hired them for it.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ClearanceOffer"
+              }
+            ]
+          },
+          "recordSays": {
+            "type": "string",
+            "description": "WHY AN EMPTY RECORD IS NOT A BAD RECORD.\n\nWe count only the consignments that came through this network, and most of an agent's business never\nwill. Carried in the payload beside the counts, because a reader who takes silence for incompetence\nhas been misled by us about our own coverage."
           },
           "handle": {
             "type": "string",

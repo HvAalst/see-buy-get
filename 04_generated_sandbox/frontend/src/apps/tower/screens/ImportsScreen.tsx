@@ -21,6 +21,7 @@ import {
   holdDisputed,
   type CustomsHoldKind,
   type ClearanceRecordView,
+  CLEARANCE_SPECIALISMS,
   liveGrants,
   outstanding,
   outstandingCount,
@@ -68,7 +69,9 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
   const [holdForm, setHoldForm] = useState<{ kind: CustomsHoldKind; note: string }>({ kind: 'inspection_selected', note: '' });
   const [holdNote, setHoldNote] = useState<Record<string, string>>({});
   /** This company's own clearance record — null until read, absent for one that clears nothing. */
-  const [mine, setMine] = useState<{ record: ClearanceRecordView; measured: string } | null>(null);
+  const [mine, setMine] = useState<{ record: ClearanceRecordView; measured: string; handle?: string; offer?: { specialisms: string[]; places: string[]; words?: string } } | null>(null);
+  /** Their own advertisement, loaded from their page so the form starts where their claim already is. */
+  const [offerForm, setOfferForm] = useState<{ specialisms: string[]; places: string; words: string }>({ specialisms: [], places: '', words: '' });
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -87,7 +90,13 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
     const entityId = state.who?.entityId;
     if (entityId) {
       const mineR = await client.api.clearanceRecord(entityId);
-      setMine(mineR.error ? null : (mineR.data as unknown as { record: ClearanceRecordView; measured: string }));
+      const got = mineR.error
+        ? null
+        : (mineR.data as unknown as { record: ClearanceRecordView; measured: string; handle?: string; offer?: { specialisms: string[]; places: string[]; words?: string } });
+      setMine(got);
+      // Their advertisement comes back WITH their record — one read, one source. A form loaded from
+      // somewhere other than the object a shipper reads is a form that can silently disagree with it.
+      if (got?.offer) setOfferForm({ specialisms: got.offer.specialisms, places: got.offer.places.join(', '), words: got.offer.words ?? '' });
     }
   }, [client, state.who?.entityId]);
 
@@ -201,6 +210,78 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
               <li class="ctbl__sub">{t('tower.imports.recordHolds', { holds: mine.record.holds.recorded, disputed: mine.record.holds.disputed })}</li>
             ) : null}
           </ul>
+        </section>
+      ) : null}
+
+      {/* ---- CL6: what this company SAYS it clears. Their advertisement, and their words ---- */}
+      {isCompany ? (
+        <section class="cons__panel">
+          <div class="cons__panelhead">
+            <span class="cons__panelt">{t('tower.imports.offerTitle')}</span>
+            {mine?.handle ? <span class="ctag ctag--quiet">@{mine.handle}</span> : null}
+          </div>
+          {/* The one asserted thing in this design, and the hint says so: everything else about them is
+              derived from the record, and a claim shown as a finding would undo the page's whole worth. */}
+          <p class="cons__lede">{t('tower.imports.offerHint')}</p>
+
+          <div class="twr-pick__list" style="max-height:none">
+            {CLEARANCE_SPECIALISMS.map((sp) => {
+              const on = offerForm.specialisms.includes(sp);
+              return (
+                <button
+                  key={sp}
+                  type="button"
+                  class={`twr-pick__one${on ? ' twr-pick__one--on' : ''}`}
+                  onClick={() =>
+                    setOfferForm({
+                      ...offerForm,
+                      specialisms: on ? offerForm.specialisms.filter((x) => x !== sp) : [...offerForm.specialisms, sp],
+                    })
+                  }
+                >
+                  <span class="twr-pick__n">{t(`home.agents.spec.${sp}` as never)}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div class="twr-knobs">
+            <label class="twr-knob">
+              <span>{t('tower.imports.f.offerPlaces')}</span>
+              <input value={offerForm.places} onChange={(e) => setOfferForm({ ...offerForm, places: (e.target as HTMLInputElement).value })} />
+            </label>
+            <label class="twr-knob">
+              <span>{t('tower.imports.f.offerWords')}</span>
+              <input value={offerForm.words} onChange={(e) => setOfferForm({ ...offerForm, words: (e.target as HTMLInputElement).value })} />
+            </label>
+          </div>
+
+          <div class="twr-panelend">
+            {offerForm.specialisms.length === 0 ? <span class="ctbl__sub">{t('tower.imports.offerNeedOne')}</span> : null}
+            <button
+              type="button"
+              class="cbtn"
+              disabled={offerForm.specialisms.length === 0 || busy === 'offer'}
+              onClick={() =>
+                run(
+                  'offer',
+                  () =>
+                    client!.api.setClearanceOffer(state.who!.entityId!, {
+                      specialisms: offerForm.specialisms,
+                      places: offerForm.places
+                        .split(',')
+                        .map((x) => x.trim())
+                        .filter(Boolean),
+                      ...(offerForm.words.trim() ? { words: offerForm.words.trim() } : {}),
+                      ...(who ? { by: who } : {}),
+                    }),
+                  t('tower.imports.offerSaved'),
+                )
+              }
+            >
+              {t('tower.imports.offerSave')}
+            </button>
+          </div>
         </section>
       ) : null}
       {done ? (

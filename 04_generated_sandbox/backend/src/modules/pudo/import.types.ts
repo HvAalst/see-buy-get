@@ -29,6 +29,30 @@ export const IMPORT_STATUSES = ['open', 'appointed'] as const;
 export type ImportStatus = (typeof IMPORT_STATUSES)[number];
 
 /**
+ * HOW THE GOODS ARRIVED — a label, and nothing more than a label.
+ *
+ * Added because the agent page said "clears containers" and the user corrected it: agents clear air
+ * freight, vehicles, whatever they specialise in, and a container is simply the only consignment this
+ * system had ever recorded. That was our model describing somebody's business.
+ *
+ * This does NOT model air or rail carriage any more than `destPort` models a port. There is no airline,
+ * no air waybill, no schedule and no rate — those stay out for the same reason ocean carriage does. What
+ * it buys is an honest record: an agent whose work is air freight can now have that counted as air
+ * freight instead of being invisible or mislabelled.
+ *
+ * Absent on every consignment recorded before this field existed, and those were sea containers by
+ * construction — the register accepted nothing else. `modeOf` below states that rather than leaving a
+ * silent `?? 'sea'` for somebody to mistake for a guess about new data.
+ */
+export const CONSIGNMENT_MODES = ['sea', 'air', 'road', 'rail'] as const;
+export type ConsignmentMode = (typeof CONSIGNMENT_MODES)[number];
+
+/** The mode of a consignment, including the ones recorded before the field existed. */
+export function modeOf(c: { mode?: ConsignmentMode }): ConsignmentMode {
+  return c.mode ?? 'sea';
+}
+
+/**
  * The two kinds of grant, because the papers are of two kinds.
  *
  * `company` — the standing papers: an investment licence, a tax number. They are the importer's own and are
@@ -240,8 +264,10 @@ export class ImportConsignment {
   @ApiPropertyOptional() containerNo?: string;
   @ApiProperty() originCountry: string;
   @ApiProperty() destCountry: string;
-  /** Where it is cleared — "Djibouti", "Mombasa". A label, not a modelled port: we do not run ports. */
+  /** Where it is cleared — "Djibouti", "Mombasa", or an airport. A label, not a modelled place. */
   @ApiProperty() destPort: string;
+  /** How the goods arrived. Absent on anything recorded before the field existed — see modeOf(). */
+  @ApiPropertyOptional({ enum: CONSIGNMENT_MODES }) mode?: ConsignmentMode;
 
   /* ---- the seam, deliberately NOT WIRED (see the note on the service) ---- */
 
@@ -360,6 +386,70 @@ export class ImportDetail extends ImportRow {
   @ApiProperty({ type: [CustomsHold] }) customsHolds: CustomsHold[];
 }
 
+/* ------------------------- CL6: what a clearing agent says they clear, in their own words -- */
+
+/**
+ * WHAT AN AGENT CLEARS — and this list is THEIRS TO SAY, not ours to derive.
+ *
+ * The correction that produced it, from the user: *"Agents do not just clear containers... Some clear air
+ * freight, some vehicles, as their specialisation."* The first version of the agent page said "clears
+ * containers", which was our model talking rather than the trade: a container is the only consignment this
+ * system happens to record, and writing that into a sentence about somebody's business made our
+ * limitation look like their job description.
+ *
+ * SO THIS IS THE ONE PLACE IN THE AGENT DESIGN THAT IS ASSERTED RATHER THAN DERIVED, and the split is
+ * deliberate rather than a lapse:
+ *
+ *   - IDENTITY and RECORD are derived and never claimed. A handle falls out of the verified name; being an
+ *     agent falls out of having been appointed; every figure falls out of timestamps. That is what stops
+ *     squatting and stops a record that can only flatter.
+ *   - WHAT SOMEBODY OFFERS cannot be derived at all. Nobody but the agent knows they clear livestock at
+ *     Mombasa, and a network that waited to observe it would list every agent as doing nothing until they
+ *     had already been hired for it — which is the same chicken-and-egg the whole directory exists to end.
+ *
+ * The precedent is already in this codebase and it is exactly this shape: the agent PUBLISHES the papers a
+ * border will need and we never assert them; a minter's body pick is ADVISORY; a shipper's excluded bodies
+ * are "a stated preference, not a physical constraint, and the board presents it as one". A claim is
+ * carried, attributed, dated — and never dressed up as something we checked.
+ *
+ * A FIXED VOCABULARY, because a finder cannot honestly match free text, plus `words` for what a
+ * vocabulary cannot hold. The list is drawn from what actually CHANGES the clearance job — a vehicle, a
+ * live animal and a drum of solvent are three different jobs at the same counter — and never from
+ * commodity categories, which would multiply forever without telling a shipper anything.
+ */
+export const CLEARANCE_SPECIALISMS = [
+  'sea_container',
+  'air_freight',
+  'vehicles',
+  'bulk_breakbulk',
+  'project_heavy_lift',
+  'perishables',
+  'livestock',
+  'pharma_cold_chain',
+  'dangerous_goods',
+  'personal_effects',
+  'courier_express',
+  'bonded_transit',
+] as const;
+export type ClearanceSpecialism = (typeof CLEARANCE_SPECIALISMS)[number];
+
+/**
+ * An agent's own advertisement: what they clear, where, and anything a list cannot say.
+ *
+ * Every field is the agent's claim about themselves. `saidAt` is on the record because a claim made two
+ * years ago and never revisited is weaker than one made last week, and a reader is entitled to tell the
+ * difference. Nothing here is verified, and no screen may present it as if it were.
+ */
+export class ClearanceOffer {
+  @ApiProperty({ enum: CLEARANCE_SPECIALISMS, isArray: true }) specialisms: ClearanceSpecialism[];
+  /** Ports, airports and border posts they work — labels, exactly as `destPort` is. We run no ports. */
+  @ApiProperty({ type: [String] }) places: string[];
+  /** What the vocabulary cannot hold. Their own words, shown as theirs. */
+  @ApiPropertyOptional() words?: string;
+  @ApiProperty() saidAt: string;
+  @ApiProperty() saidBy: string;
+}
+
 /* ---------------------- CL4 item 1: the clearing agent's record, as it crosses the wire -- */
 
 /*
@@ -386,7 +476,7 @@ export class ClearanceHolds {
   @ApiProperty({ type: [ClearanceHoldKind] }) kinds: ClearanceHoldKind[];
 }
 
-/** One port — §6's per-lane rule, where the lane is a border. */
+/** One port, or one mode — §6's per-lane rule, where the lane is a border. */
 export class ClearancePortSlice {
   @ApiProperty() key: string;
   @ApiProperty() appointed: number;
@@ -416,7 +506,51 @@ export class ClearanceRecord {
   @ApiProperty() thin: boolean;
   @ApiProperty() ratesNeed: number;
   @ApiProperty({ type: [ClearancePortSlice] }) ports: ClearancePortSlice[];
+  /**
+   * WHAT THEY HAVE ACTUALLY BEEN SEEN CLEARING, by mode — beside what they SAY they clear.
+   *
+   * The two are shown together on purpose and they are allowed to disagree: an agent may advertise air
+   * freight and have no air consignment on our record, which is information rather than a contradiction.
+   * See `recordSays` for the sentence that has to travel with an empty one.
+   */
+  @ApiProperty({ type: [ClearancePortSlice] }) modes: ClearancePortSlice[];
   @ApiProperty({ type: ClearanceHolds }) holds: ClearanceHolds;
+}
+
+/**
+ * ONE AGENT, AS THE FINDER LISTS THEM — what they say, and what we have seen, side by side.
+ *
+ * §6a refused a ranked directory and that still holds: this is a list of PAGES, ordered by nothing that
+ * could be read as a judgement. What it adds to a name is the pair — their claim next to their record —
+ * because a claim with nothing behind it and a claim with forty containers behind it look identical on a
+ * name alone, and the shipper is the one who should weigh the difference.
+ */
+export class AgentCard {
+  @ApiProperty() entityId: string;
+  /** Their public page. The whole point of a result: somewhere to go and read the rest. */
+  @ApiPropertyOptional() handle?: string;
+  @ApiProperty() name: string;
+  @ApiPropertyOptional() country?: string;
+  /** What they say they clear, in their own words. Never verified — see ClearanceOffer. */
+  @ApiPropertyOptional({ type: ClearanceOffer }) offer?: ClearanceOffer;
+  /** What we have actually seen: appointments and cleared consignments. NEVER a score or a rank. */
+  @ApiProperty() appointed: number;
+  @ApiProperty() cleared: number;
+  /** True when the record is too thin to state a usual time. Said, because a newcomer is not a bad agent. */
+  @ApiProperty() thin: boolean;
+}
+
+/**
+ * WHAT THE FINDER ANSWERS, and what the answer is NOT.
+ *
+ * `basis` is not decoration, in the manner of the road board's `basis`: a list of people is read as a
+ * ranking unless it says otherwise, and this one is alphabetical precisely so that advertising more
+ * cannot move anybody up it.
+ */
+export class AgentFinderResponse {
+  @ApiProperty({ type: [AgentCard] }) items: AgentCard[];
+  @ApiProperty() total: number;
+  @ApiProperty() basis: string;
 }
 
 /** The record, and the sentence that has to travel with it. */
@@ -426,6 +560,14 @@ export class ClearanceRecordResponse {
   @ApiProperty() measured: string;
   /** Their own public page, so "the same thing a shipper reads" is a claim they can go and check. */
   @ApiPropertyOptional() handle?: string;
+  /**
+   * THEIR OWN ADVERTISEMENT, returned with their record so the two are one read.
+   *
+   * The screen that edits a claim and the screen that shows the record are the same screen, and a form
+   * loaded from a different source than the page a shipper reads is a form that can silently disagree
+   * with it.
+   */
+  @ApiPropertyOptional({ type: ClearanceOffer }) offer?: ClearanceOffer;
 }
 
 /** What agents have been asked for at one port, most asked first. Never stated as a requirement. */

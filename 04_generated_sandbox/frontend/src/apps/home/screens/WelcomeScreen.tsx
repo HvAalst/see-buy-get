@@ -68,6 +68,21 @@ export function WelcomeScreen({ actions }: WelcomeScreenProps) {
             <Icon name="chevronRight" size={22} />
           </span>
         </button>
+        {/* CL6 — finding an agent is market dynamics, so it sits at the front door beside the market
+            rather than behind a sign-in. An importer with a container on the water has no account here
+            yet, and that is exactly the moment they need to know who can clear it. */}
+        <button type="button" class="row" onClick={() => actions.go('agents')}>
+          <span class="row__ic">
+            <Icon name="badge" size={24} />
+          </span>
+          <span class="row__body">
+            <span class="row__t">{t('home.welcome.agentsTitle')}</span>
+            <span class="row__s">{t('home.welcome.agentsSub')}</span>
+          </span>
+          <span class="row__end">
+            <Icon name="chevronRight" size={22} />
+          </span>
+        </button>
         <button type="button" class="row" onClick={() => actions.go('signin')}>
           <span class="row__ic">
             <Icon name="key" size={24} />

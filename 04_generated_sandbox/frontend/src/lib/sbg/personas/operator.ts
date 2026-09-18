@@ -319,6 +319,17 @@ export function createOperatorApi(sbg: SbgClient) {
      */
     clearanceRecord: (entityId: string) =>
       sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/clearance-record', { params: { path: { entityId } } as never })),
+
+    /**
+     * CL6 — WHAT AN AGENT SAYS THEY CLEAR. Theirs to write, and the one asserted thing in this design.
+     *
+     * Identity and record stay derived, which is what stops squatting and stops a record that can only
+     * flatter. What somebody OFFERS cannot be derived at all: nobody but the agent knows they clear
+     * livestock at Mombasa, and waiting to observe it would leave them undiscoverable until after they
+     * had already been hired for it.
+     */
+    setClearanceOffer: (entityId: string, body: { specialisms: string[]; places?: string[]; words?: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/clearance-offer', { params: { path: { entityId } }, body: body as never })),
     /* ---- CL3: scarcity, derived. The same public series both the console and a fleet office read. ---- */
 
     /**

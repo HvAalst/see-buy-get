@@ -135,6 +135,41 @@ export function ProfileScreen({ state }: ProfileScreenProps) {
         </Card>
       ) : null}
 
+      {/* CL6 — WHAT THEY SAY THEY CLEAR. The one asserted thing on this page, and it comes FIRST: it is
+          the answer to "can you handle my vehicles", which is what a shipper opened the page to ask, and
+          the record below can only say what happened to come through us. Marked as their claim every
+          time, because everything else here is derived and a reader must not mistake this for a finding. */}
+      {p.offer ? (
+        <Card>
+          <h2 class="h2">{t('home.profile.offerTitle')}</h2>
+          <p class="card__note">{t('home.profile.offerNote')}</p>
+          <ul class="list">
+            {p.offer.specialisms.map((s) => (
+              <li key={s}>{t(`home.agents.spec.${s}` as never)}</li>
+            ))}
+          </ul>
+          {p.offer.places.length ? <p>{t('home.profile.offerPlaces', { places: p.offer.places.join(', ') })}</p> : null}
+          {p.offer.words ? <p>“{p.offer.words}”</p> : null}
+          <p class="card__note">{t('home.profile.offerSaid', { on: new Date(p.offer.saidAt).toLocaleDateString(), who: p.offer.saidBy })}</p>
+
+          {/* WHAT WE HAVE SEEN, beside the claim, and the two are allowed to disagree: an agent may
+              advertise air freight and have no air consignment on our record. That is information. */}
+          {p.clears && p.clears.modes.length > 0 ? (
+            <>
+              <h3 class="h3">{t('home.profile.offerModes')}</h3>
+              <ul class="list">
+                {p.clears.modes.map((m) => (
+                  <li key={m.key}>
+                    {t('home.profile.offerMode', { mode: t(`home.profile.mode.${m.key}` as never), appointed: m.appointed, cleared: m.cleared })}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+          {p.recordSays ? <p class="card__note">{p.recordSays}</p> : null}
+        </Card>
+      ) : null}
+
       {/* CL4 item 1 — THE CLEARANCE RECORD, for a company that has been appointed to clear a container.
           Two halves, and the line between them is the whole design: what this agent did with the work in
           front of them, and separately what the state did. Never one number, and never a border time. */}
