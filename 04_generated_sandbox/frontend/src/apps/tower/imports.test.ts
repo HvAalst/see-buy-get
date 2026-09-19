@@ -6,6 +6,10 @@ import {
   EMPTY_ROAD_FORM,
   companyPapers,
   consignmentPapers,
+  fileSize,
+  paperFileName,
+  paperKindShort,
+  readersOf,
   feeQuoteBlocker,
   feeTone,
   knownNotAsked,
@@ -163,5 +167,45 @@ describe('a container, its papers, and the agent who clears them', () => {
       { grantId: 'g2', scope: 'consignment' as const, ownerEntityId: 'importer', readerEntityId: 'old', grantedBy: 'Hans', grantedAt: '2026-08-01', revokedAt: '2026-09-01', revokedBy: 'Hans' },
     ];
     expect(liveGrants(grants).map((g) => g.grantId)).toEqual(['g1']);
+  });
+
+  it('names a downloaded paper from the SERVER content type, never from the title', () => {
+    // A paper called "invoice.pdf" that is actually a photograph is the case worth getting right.
+    expect(paperFileName({ title: 'invoice.pdf', contentType: 'image/jpeg', documentId: 'doc_1' })).toBe('invoice.pdf.jpg');
+    expect(paperFileName({ title: 'Bill of lading', contentType: 'application/pdf', documentId: 'doc_2' })).toBe('Bill of lading.pdf');
+  });
+
+  it('takes the slashes out of a typed title, and falls back to the id when nothing is left', () => {
+    expect(paperFileName({ title: 'C/O 2026: Kenya', contentType: 'application/pdf', documentId: 'doc_3' })).toBe('C O 2026 Kenya.pdf');
+    expect(paperFileName({ title: '///', contentType: 'application/pdf', documentId: 'doc_4' })).toBe('doc_4.pdf');
+  });
+
+  it('says a size a person can judge', () => {
+    expect(fileSize(400)).toBe('400 B');
+    expect(fileSize(2048)).toBe('2.0 KB');
+    expect(fileSize(5 * 1024 * 1024)).toBe('5 MB');
+    expect(fileSize(Number.NaN)).toBe('—');
+  });
+
+  it('puts the extension on the tile, in letters, because this product uses no emoji', () => {
+    expect(paperKindShort('application/pdf')).toBe('PDF');
+    expect(paperKindShort('image/jpeg')).toBe('JPG');
+    expect(paperKindShort('application/vnd.oasis.opendocument.text')).toBe('VND.');
+  });
+
+  it('works out who can read ONE paper from the grants, and a consignment grant never reaches a company paper', () => {
+    const grants = [
+      { grantId: 'g1', scope: 'consignment' as const, ownerEntityId: 'imp', readerEntityId: 'agent-a', grantedBy: 'Hans', grantedAt: '2026-09-16' },
+      { grantId: 'g2', scope: 'company' as const, ownerEntityId: 'imp', readerEntityId: 'agent-b', grantedBy: 'Hans', grantedAt: '2026-09-16' },
+      { grantId: 'g3', scope: 'company' as const, ownerEntityId: 'imp', readerEntityId: 'gone', grantedBy: 'Hans', grantedAt: '2026-08-01', revokedAt: '2026-09-01', revokedBy: 'Hans' },
+    ];
+    // A company paper: only the company-scoped grant reaches it, and a revoked one reaches nothing.
+    expect(readersOf({}, 'IMP-097', grants)).toEqual(['agent-b']);
+    // THE TWO SCOPES DO NOT NEST, which is the thing worth asserting: a company grant is a grant over the
+    // company's OWN papers, and it does not reach into a container's. The server says the same
+    // (`visibleDocuments`), so the screen must not promise a wider audience than the server allows.
+    expect(readersOf({ relatesTo: 'IMP-097' }, 'IMP-097', grants)).toEqual(['agent-a']);
+    // And another container's paper is not on this container at all.
+    expect(readersOf({ relatesTo: 'IMP-014' }, 'IMP-097', grants)).toEqual([]);
   });
 });

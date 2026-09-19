@@ -803,6 +803,86 @@
   color: var(--navy);
 }
 
+/*
+ * A FILE, AS A ROW YOU CAN ACT ON — the shape of BondBridge's document list, at console density.
+ *
+ * A tile, a name, one line of detail, and the actions on the right. The tile carries three LETTERS
+ * rather than a glyph, because no emoji is ever a UI icon here (Icon.tsx says why) and "PDF" reads
+ * faster than a picture of a page anyway.
+ *
+ * Bordered once around the group and divided between the rows, like .cons__facts: a run of files with
+ * a box drawn round each one is a list that looks like five unrelated things.
+ */
+.cdocs {
+  display: grid;
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-ctl);
+  overflow: hidden;
+}
+
+.cdoc {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 6px 0;
+}
+
+.cdocs .cdoc {
+  padding: 10px 14px;
+}
+
+.cdocs .cdoc + .cdoc {
+  border-top: 1px solid var(--bd-soft);
+}
+
+.cdocs .cdoc:hover {
+  background: var(--blue-soft);
+}
+
+.cdoc__tile {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--bd-soft);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--tx3);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+/* The one part that gives way when the row runs out of room: a name can be any length, and the
+   actions cannot be read at half width. */
+.cdoc__body {
+  flex: 1 1 200px;
+  min-width: 0;
+  display: grid;
+}
+
+.cdoc__name {
+  font-weight: 600;
+  color: var(--navy);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cdoc__meta {
+  font-size: var(--c-fs-sm);
+  color: var(--tx3);
+}
+
+.cdoc__acts {
+  flex: none;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 .chint {
   /* Block, so a hint under a field and a second line under a fact both sit on their own line rather
      than running into whatever follows them. */

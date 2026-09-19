@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { AuthImage, Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
+import { ConsoleDetail } from '../ConsoleDetail';
+import { PaperFile, PaperFiles } from './PaperFile';
 import { ConsoleSelect } from '../ConsoleSelect';
 import { DOCUMENT_KINDS, DOCUMENT_LABEL, shortFingerprint, type CompanyDocument } from '../company';
 import {
@@ -27,6 +29,7 @@ import {
   liveGrants,
   outstanding,
   outstandingCount,
+  readersOf,
   paperTone,
   publishBlocker,
   readinessOf,
@@ -486,17 +489,17 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                     <div class="chint">{row.goodsDescription}</div>
                     {row.containerNo ? <div class="chint">{row.containerNo}</div> : null}
                   </td>
-                  <td class="chint">
+                  <td class="ctbl__sub">
                     <div>
                       {row.originCountry} → {row.destCountry} · {row.destPort}
                     </div>
                     {row.etaAt ? <div>{t('tower.imports.eta', { date: row.etaAt })}</div> : null}
                   </td>
-                  <td class="chint">
+                  <td class="ctbl__sub">
                     <div>{row.agentName ?? t('tower.imports.status.open')}</div>
                     <span class="ctag ctag--quiet">{t(`tower.imports.youAre.${row.youAre}` as never)}</span>
                   </td>
-                  <td class="chint">
+                  <td class="ctbl__sub">
                     {row.asked ? t('tower.imports.progress', { accepted: row.accepted, asked: row.asked }) : t('tower.imports.noneAsked')}
                     {row.waitingOnYou ? <div class="ctag ctag--warn">{t('tower.imports.waitingOnYou', { n: row.waitingOnYou })}</div> : null}
                   </td>
@@ -526,7 +529,7 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
       </section>
 
       {detail ? (
-        <>
+        <ConsoleDetail openKey={detail.importId} title={detail.code} onClose={() => setDetail(null)}>
           {/* CL2b — said the moment the container is opened, never saved up for the moment somebody pays. */}
           {detail.money.why ? (
             <p class="cons__caveat">
@@ -606,6 +609,45 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                     ))}
                   </ul>
                 )}
+              </section>
+
+              {/*
+                * THE REGISTER, and until now it was not on the screen at all — these documents existed
+                * only as <option> elements inside the attach control on each required line. Somebody
+                * who had uploaded ten papers could not see that they had, could not open one to check
+                * it was the right scan, and could not tell which of them an agent could already read.
+                */}
+              <section class="cons__panel">
+                <div class="cons__panelhead">
+                  <span class="cons__panelt">{t('tower.imports.registerTitle')}</span>
+                  <span class="chint">{t('tower.imports.registerCount', { n: companyPapers(detail.documents).length + consignmentPapers(detail.documents, detail.code).length })}</span>
+                </div>
+                <p class="cfield__label">{t('tower.imports.registerFor', { code: detail.code })}</p>
+                <PaperFiles empty={t('tower.imports.registerNone')}>
+                  {consignmentPapers(detail.documents, detail.code).map((d) => (
+                    <PaperFile
+                      key={d.documentId}
+                      doc={d}
+                      importId={detail.importId}
+                      api={client?.api as never}
+                      readers={readersOf(d, detail.code, detail.grants)}
+                      onError={setError}
+                    />
+                  ))}
+                </PaperFiles>
+                <p class="cfield__label">{t('tower.imports.registerCompany')}</p>
+                <PaperFiles empty={t('tower.imports.registerNone')}>
+                  {companyPapers(detail.documents).map((d) => (
+                    <PaperFile
+                      key={d.documentId}
+                      doc={d}
+                      importId={detail.importId}
+                      api={client?.api as never}
+                      readers={readersOf(d, detail.code, detail.grants)}
+                      onError={setError}
+                    />
+                  ))}
+                </PaperFiles>
               </section>
 
               <section class="cons__panel">
@@ -778,6 +820,8 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                       detail={detail}
                       t={t}
                       busy={busy}
+                      api={client?.api as never}
+                      onError={setError}
                       pick={pick[paper.key] ?? ''}
                       onPick={(v) => setPick({ ...pick, [paper.key]: v })}
                       onSupply={() =>
@@ -1704,7 +1748,7 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
               </div>
             ) : null}
           </section>
-        </>
+        </ConsoleDetail>
       ) : null}
     </>
   );
@@ -1716,6 +1760,8 @@ function PaperRow({
   detail,
   t,
   busy,
+  api,
+  onError,
   pick,
   onPick,
   onSupply,
@@ -1726,6 +1772,8 @@ function PaperRow({
   detail: ImportDetailView;
   t: ReturnType<typeof useT>;
   busy: string | null;
+  api: Parameters<typeof PaperFile>[0]['api'];
+  onError: (message: string) => void;
   pick: string;
   onPick: (v: string) => void;
   onSupply: () => void;
@@ -1747,10 +1795,13 @@ function PaperRow({
       </td>
       <td>
         <span class={`ctag ${tone === 'ok' ? 'ctag--ok' : tone === 'bad' ? 'ctag--danger' : tone === 'warn' ? 'ctag--warn' : 'ctag--quiet'}`}>{t(`tower.imports.state.${paper.state}` as never)}</span>
+        {/* THE PAPER ITSELF, where the judgement is made. An agent was being asked to accept or reject
+            a document on the strength of its title and eight characters of fingerprint. */}
         {paper.document ? (
-          <div class="chint">
-            {paper.document.title} · {shortFingerprint(paper.document.fingerprint)}
-          </div>
+          <>
+            <div class="chint">{shortFingerprint(paper.document.fingerprint)}</div>
+            <PaperFile doc={paper.document} importId={detail.importId} api={api} onError={onError} />
+          </>
         ) : null}
         {/* Said before it is relied on — never discovered at the counter. */}
         {paper.expired ? <div class="chint">{t('tower.imports.expired', { date: paper.document?.expiresAt ?? '' })}</div> : null}

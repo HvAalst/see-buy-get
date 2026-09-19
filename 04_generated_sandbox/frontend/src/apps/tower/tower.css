@@ -804,3 +804,9 @@
 .twr-checklist li.is-missing {
   color: var(--warn-ink, #9a4a00);
 }
+
+/* What "Open" scrolls to at a desk. The masthead is sticky, so without this the top of the detail
+   arrives underneath it — scrolled to, and not visible, which is the same as not scrolled to. */
+.twr-detail {
+  scroll-margin-top: calc(var(--c-mast-h) + 12px);
+}

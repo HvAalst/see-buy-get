@@ -584,7 +584,27 @@ export const enTower = {
   'tower.imports.dgSaved': 'Declared. The load will ask for a hazmat-certified vehicle.',
   /* CL6 — the agent's own advertisement. The one asserted thing in the whole agent design, so the hint
      says so before the form: everything else about them is derived from the record. */
-  'tower.imports.offerTitle': 'What you clear',
+  /* CL2a — the papers as FILES. Until now this register showed titles, and an agent was asked to accept
+     a bill of lading they had no way of looking at. */
+  'tower.imports.paper.open': 'Open',
+  'tower.imports.paper.save': 'Save',
+  'tower.imports.paper.added': 'added {when} by {who}',
+  'tower.imports.paper.expires': 'expires {date}',
+  'tower.imports.paper.unreadable': '“{title}” did not open. It may have been replaced, or it may no longer be shared with you.',
+  'tower.imports.paper.shareNone': 'Nobody reads it',
+  'tower.imports.paper.shareN': '{n} can read it',
+  'tower.imports.paper.scopeCompany': 'A company paper. Whoever you give company access reads it.',
+  'tower.imports.paper.scopeConsignment': 'Filed under {code}. Only access to this container reaches it.',
+  'tower.imports.paper.readersNone': 'Only you.',
+  'tower.imports.paper.shareWhere': 'Access is given per container or per company, on the panel above — never per paper.',
+  'tower.imports.paper.sendOut': 'Send a copy',
+  'tower.imports.paper.sendOutHint': 'Leaves the network. On a phone this is your own share sheet; elsewhere it saves the file.',
+  'tower.imports.registerTitle': 'Your papers',
+  'tower.imports.registerNone': 'Nothing here yet. Add one below.',
+  'tower.imports.registerCount': '{n} held',
+  'tower.imports.registerFor': 'For {code}',
+  'tower.imports.registerCompany': 'Company papers',
+    'tower.imports.offerTitle': 'What you clear',
   'tower.imports.offerHint': 'Your own words, unchecked. What we have seen is shown beside them, and the two may differ.',
   'tower.imports.f.offerSpecialisms': 'What you handle',
   'tower.imports.offerPick': 'Choose what you handle',

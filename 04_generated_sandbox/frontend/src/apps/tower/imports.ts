@@ -493,6 +493,68 @@ export function feeTone(state: FeeState): 'ok' | 'warn' | 'quiet' {
   return state === 'paid' ? 'ok' : state === 'none' ? 'quiet' : 'warn';
 }
 
+/* -------------------------------------------- CL2a: the papers as FILES you can handle -- */
+
+/**
+ * What to call the file when somebody saves it.
+ *
+ * The title is what a person typed, so it can hold a slash, a colon or nothing at all, and the browser
+ * will either refuse the download or silently drop it into a folder nobody meant. The extension comes
+ * from the content type the SERVER recorded and never from the title, because a paper called
+ * "invoice.pdf" that is actually a photograph is the interesting case, not the unlikely one.
+ */
+export function paperFileName(doc: { title: string; contentType: string; documentId: string }): string {
+  const ext = EXTENSION[doc.contentType] ?? 'bin';
+  const safe = doc.title
+    .replace(/[^\p{L}\p{N} ._-]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80);
+  return `${safe || doc.documentId}.${ext}`;
+}
+
+const EXTENSION: Record<string, string> = {
+  'application/pdf': 'pdf',
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/heic': 'heic',
+};
+
+/** The three letters on the tile. No emoji anywhere in this product, and a word beats a picture here. */
+export function paperKindShort(contentType: string): string {
+  return (EXTENSION[contentType] ?? contentType.split('/').pop() ?? '?').slice(0, 4).toUpperCase();
+}
+
+/** A size somebody can judge. Bytes below a kilobyte, one decimal above it, none above a megabyte. */
+export function fileSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return '—';
+  if (bytes < 1024) return `${Math.round(bytes)} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${Math.round(bytes / (1024 * 1024))} MB`;
+}
+
+/**
+ * WHO CAN READ THIS PAPER — derived from the grants, never stored against the document.
+ *
+ * There is no per-document sharing in this design and there should not be: a grant is over a SCOPE (all
+ * of a company's papers, or everything filed under one container), which is the unit an importer
+ * actually decides about. So the answer for a single paper is worked out from which scope it is in, and
+ * the screen can say it without anybody maintaining a second list that would drift.
+ */
+export function readersOf(doc: { relatesTo?: string }, code: string, grants: DocumentGrant[]): string[] {
+  // The same sentence the server enforces in `visibleDocuments`, and it has to STAY the same sentence: a
+  // screen that promises a wider audience than the server allows is a screen lying about who saw a paper.
+  // A container's own paper needs a CONSIGNMENT grant naming that container; a company paper needs a
+  // COMPANY grant. Neither scope reaches into the other.
+  const need = doc.relatesTo ? 'consignment' : 'company';
+  if (doc.relatesTo && doc.relatesTo.toUpperCase() !== code.toUpperCase()) return [];
+  const readers = liveGrants(grants)
+    .filter((g) => g.scope === need)
+    .map((g) => g.readerEntityId);
+  return [...new Set(readers)];
+}
+
 function numeric(value: string): boolean {
   return value.trim() !== '' && Number.isFinite(Number(value));
 }
