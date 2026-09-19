@@ -53,6 +53,7 @@ import { ConstraintView, ConstraintsResponse, RouteConstraintsResponse } from '.
 import { FreightBoardResponse, FreightProposalsResponse, MarketResponse, MarketSeries, PostedFreightResponse, FreightCancelledResponse, FreightClaimResponse, FreightClaimQueueRow } from './dispatch.types';
 import { MarketPulseService } from './market-pulse.service';
 import { CargoService } from './cargo.service';
+import { MediaService } from './media.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
@@ -80,6 +81,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   BoxFreeDaysDto,
   BoxEndingDto,
   BoxReturnLegDto,
+  BoxInterchangeDto,
   MintRoadLegDto,
   PresenceDto,
   PresenceDecisionDto,
@@ -194,6 +196,9 @@ export class SbgController {
     private readonly persons: PersonService,
     private readonly cargo: CargoService,
     private readonly market: MarketPulseService,
+    // Y3 — the box's gate photographs are served from here, under the IMPORT's own party rule rather than
+    // the media module's owner-or-operator one: the driver took them, and the two parties are who need them.
+    private readonly media: MediaService,
     @Inject(GEOCODER) private readonly geocoder: Geocoder,
     @Optional() private readonly mail?: MailService,
     @Optional() private readonly papers?: PapersWatchService,
@@ -1027,6 +1032,58 @@ export class SbgController {
         this.namedActor(actor, dto.by),
       ),
     );
+  }
+
+
+  /**
+   * Y3 — SAY WHAT THE BOX LOOKED LIKE AT A GATE, beside whatever is already recorded there.
+   *
+   * The driver's half needs nobody: a securement photograph at pickup and a delivery photograph at the
+   * depot are already demanded by the freight flow, and on a container leg what the driver took over IS
+   * the box. This is the other half — the importer who says the hole was there before it was loaded, the
+   * agent who says it was not — added BESIDE, never over, with nothing adjudicating the two.
+   */
+  @Roles('operator', 'entity_admin')
+  @Post('imports/:importId/box/interchange')
+  recordInterchange(@Param('importId') importId: string, @Body() dto: BoxInterchangeDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    return this.withHandles(
+      this.imports.recordInterchange(
+        importId,
+        this.actingCompany(actor, dto.entityId),
+        actor?.did ?? '',
+        { side: dto.side as never, stance: dto.stance as never, note: dto.note, photoIds: dto.photoIds },
+        this.namedActor(actor, dto.by),
+      ),
+    );
+  }
+
+  /**
+   * ONE PHOTOGRAPH OF THIS BOX AT A GATE — and this route exists because of who took it.
+   *
+   * The driver owns those bytes, and the media module serves them to their owner and to an operator. That
+   * is exactly useless here: the whole point of photographing a container at a gate is that the OTHER
+   * party can look at it when the argument starts. So the read is widened, and no wider than the record
+   * itself — this box, this spell, and the two parties to it, with the citation as the permission.
+   *
+   * A photograph the caller may not read answers NOT FOUND rather than FORBIDDEN, for the same reason the
+   * document route does: the alternative confirms to somebody probing that it exists.
+   */
+  @Roles('operator', 'entity_admin')
+  @Get('imports/:importId/box/photos/:mediaId')
+  @Header('Cache-Control', 'private, no-store')
+  @Header('X-Content-Type-Options', 'nosniff')
+  boxPhoto(
+    @Param('importId') importId: string,
+    @Param('mediaId') mediaId: string,
+    @Actor() actor: IntrospectionResult,
+    @Query('entityId') entityId?: string,
+    @Query('variant') variant?: string,
+  ): StreamableFile {
+    const operator = actor?.role === 'operator' && !entityId;
+    const reader = operator ? '' : this.actingCompany(actor, entityId);
+    const id = this.imports.readableBoxPhoto(importId, reader, mediaId, { all: operator });
+    const { bytes, contentType } = this.media.blob(id, variant === 'thumb' ? 'thumb' : 'full');
+    return new StreamableFile(bytes, { type: contentType });
   }
 
   /**

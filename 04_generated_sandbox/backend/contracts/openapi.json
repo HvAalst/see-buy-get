@@ -5356,6 +5356,91 @@
         }
       }
     },
+    "/v1/sbg/imports/{importId}/box/interchange": {
+      "post": {
+        "operationId": "Sbg.recordInterchange",
+        "summary": "",
+        "description": "Y3 — SAY WHAT THE BOX LOOKED LIKE AT A GATE, beside whatever is already recorded there.\n\nThe driver's half needs nobody: a securement photograph at pickup and a delivery photograph at the\ndepot are already demanded by the freight flow, and on a container leg what the driver took over IS\nthe box. This is the other half — the importer who says the hole was there before it was loaded, the\nagent who says it was not — added BESIDE, never over, with nothing adjudicating the two.",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoxInterchangeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/imports/{importId}/box/photos/{mediaId}": {
+      "get": {
+        "operationId": "Sbg.boxPhoto",
+        "summary": "",
+        "description": "ONE PHOTOGRAPH OF THIS BOX AT A GATE — and this route exists because of who took it.\n\nThe driver owns those bytes, and the media module serves them to their owner and to an operator. That\nis exactly useless here: the whole point of photographing a container at a gate is that the OTHER\nparty can look at it when the argument starts. So the read is widened, and no wider than the record\nitself — this box, this spell, and the two parties to it, with the citation as the permission.\n\nA photograph the caller may not read answers NOT FOUND rather than FORBIDDEN, for the same reason the\ndocument route does: the alternative confirms to somebody probing that it exists.",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mediaId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "variant",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/boxes": {
       "get": {
         "operationId": "Sbg.boxesOut",
@@ -20126,6 +20211,93 @@
           "heightUnstated"
         ]
       },
+      "InterchangeAccountView": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string",
+            "description": "A person's name — or, on the DERIVED account, the leg whose photograph it is."
+          },
+          "byEntityId": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "stance": {
+            "type": "string",
+            "enum": [
+              "sound",
+              "damaged"
+            ]
+          },
+          "note": {
+            "type": "string"
+          },
+          "photoRefs": {
+            "description": "Media ids, readable only through this consignment's own photograph route.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "derived": {
+            "type": "boolean",
+            "description": "TRUE where this account was read off the leg rather than typed by anybody.\n\nThe driver's securement photograph was taken to prove a load was strapped down, and it is being read\nas evidence of a container's condition. That is a fair reading, and it is not the same as somebody\nstanding at the gate and saying so — which is why a reader is told which one they are looking at."
+          }
+        },
+        "required": [
+          "by",
+          "at",
+          "stance",
+          "photoRefs"
+        ]
+      },
+      "InterchangeGateView": {
+        "type": "object",
+        "properties": {
+          "side": {
+            "type": "string",
+            "enum": [
+              "out",
+              "in"
+            ]
+          },
+          "gate": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "accounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InterchangeAccountView"
+            }
+          },
+          "photoRefs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "stated": {
+            "type": "boolean",
+            "description": "FALSE means nobody has said anything about this gate at all.\n\nSent as a fact rather than left as an empty list, because a gate with no record is where an argument\ngets settled by whoever sounds more certain — and that is the thing this slice exists to prevent."
+          },
+          "disputed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "side",
+          "gate",
+          "accounts",
+          "photoRefs",
+          "stated",
+          "disputed"
+        ]
+      },
       "FreeDaysClaimView": {
         "type": "object",
         "properties": {
@@ -20291,6 +20463,13 @@
             "type": "boolean",
             "description": "True where there is nothing in it. Said out loud: an empty run is real work with no cargo to bill."
           },
+          "interchange": {
+            "description": "Y3 — BOTH GATES, ALWAYS, so the one nobody recorded is visible as the one nobody recorded.\n\nA box handed over with a hole in it and no photograph is a dispute the importer loses by default.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InterchangeGateView"
+            }
+          },
           "freeDays": {
             "type": "array",
             "items": {
@@ -20305,6 +20484,7 @@
           "containerNo",
           "firstSeenAt",
           "timesUsed",
+          "interchange",
           "freeDays",
           "clock"
         ]
@@ -21149,6 +21329,45 @@
         "required": [
           "depotLabel",
           "weightKg"
+        ]
+      },
+      "BoxInterchangeDto": {
+        "type": "object",
+        "properties": {
+          "side": {
+            "type": "string",
+            "enum": [
+              "out",
+              "in"
+            ]
+          },
+          "stance": {
+            "type": "string",
+            "enum": [
+              "sound",
+              "damaged"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "photoIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "side",
+          "stance"
         ]
       },
       "ClearanceOfferDto": {
@@ -29014,7 +29233,8 @@
               "shop",
               "avatar",
               "securement",
-              "hazard"
+              "hazard",
+              "interchange"
             ]
           },
           "dataUrl": {

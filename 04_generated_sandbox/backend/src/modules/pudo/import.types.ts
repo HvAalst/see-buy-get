@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import type { CompanyDocument } from '../../foundation/entity/company-documents.service';
-import { BOX_ENDINGS, FREE_DAY_KINDS } from './container-box';
+import { BOX_ENDINGS, CONDITION_STANCES, FREE_DAY_KINDS, INTERCHANGE_SIDES } from './container-box';
 
 /**
  * CL2a — AN IMPORT CONSIGNMENT: one container, its papers, and the agent appointed to clear it.
@@ -183,6 +183,50 @@ export class BoxClockView {
   @ApiProperty() basis: string;
 }
 
+
+/**
+ * Y3 — ONE ACCOUNT OF THE BOX'S CONDITION AT A GATE. Attributed, dated, and never erased.
+ *
+ * The same shape as a road hazard's account and a customs hold's, for the same reason: two parties are
+ * going to disagree about who put the hole in it, and the honest structure is both accounts standing side
+ * by side with nothing adjudicating them.
+ */
+export class InterchangeAccountView {
+  /** A person's name — or, on the DERIVED account, the leg whose photograph it is. */
+  @ApiProperty() by: string;
+  @ApiPropertyOptional() byEntityId?: string;
+  @ApiProperty() at: string;
+  @ApiProperty({ enum: CONDITION_STANCES }) stance: string;
+  @ApiPropertyOptional() note?: string;
+  /** Media ids, readable only through this consignment's own photograph route. */
+  @ApiProperty({ type: [String] }) photoRefs: string[];
+  /**
+   * TRUE where this account was read off the leg rather than typed by anybody.
+   *
+   * The driver's securement photograph was taken to prove a load was strapped down, and it is being read
+   * as evidence of a container's condition. That is a fair reading, and it is not the same as somebody
+   * standing at the gate and saying so — which is why a reader is told which one they are looking at.
+   */
+  @ApiPropertyOptional() derived?: boolean;
+}
+
+/** One of the two gates, with everything anybody has said about it. */
+export class InterchangeGateView {
+  @ApiProperty({ enum: INTERCHANGE_SIDES }) side: string;
+  @ApiProperty() gate: string;
+  @ApiPropertyOptional() at?: string;
+  @ApiProperty({ type: [InterchangeAccountView] }) accounts: InterchangeAccountView[];
+  @ApiProperty({ type: [String] }) photoRefs: string[];
+  /**
+   * FALSE means nobody has said anything about this gate at all.
+   *
+   * Sent as a fact rather than left as an empty list, because a gate with no record is where an argument
+   * gets settled by whoever sounds more certain — and that is the thing this slice exists to prevent.
+   */
+  @ApiProperty() stated: boolean;
+  @ApiProperty() disputed: boolean;
+}
+
 /**
  * THE BOX, DERIVED FROM ITS NUMBER and never registered — Y0.
  *
@@ -234,6 +278,12 @@ export class ContainerBoxView {
   @ApiPropertyOptional() returnDepot?: string;
   /** True where there is nothing in it. Said out loud: an empty run is real work with no cargo to bill. */
   @ApiPropertyOptional() returnEmpty?: boolean;
+  /**
+   * Y3 — BOTH GATES, ALWAYS, so the one nobody recorded is visible as the one nobody recorded.
+   *
+   * A box handed over with a hole in it and no photograph is a dispute the importer loses by default.
+   */
+  @ApiProperty({ type: [InterchangeGateView] }) interchange: InterchangeGateView[];
   @ApiProperty({ type: [FreeDaysClaimView] }) freeDays: FreeDaysClaimView[];
   @ApiProperty({ type: BoxClockView }) clock: BoxClockView;
 }

@@ -9,7 +9,8 @@ import { BooksService } from '../../foundation/books/books.service';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
 import { DispatchService } from './dispatch.service';
 import { ContainerBoxService } from './container-box.service';
-import { BoxEnding, FreeDayKind } from './container-box';
+import { MediaService } from './media.service';
+import { BoxEnding, ConditionStance, FreeDayKind, InterchangeSide } from './container-box';
 import type { BoxView } from './container-box.service';
 import type { GeoPoint } from './pudo.types';
 import {
@@ -92,6 +93,7 @@ export class ImportService {
     private readonly books: BooksService,
     private readonly dispatch: DispatchService,
     private readonly boxes: ContainerBoxService,
+    private readonly media: MediaService,
   ) {}
 
   /* ------------------------------------------------------------ the container -- */
@@ -641,6 +643,61 @@ export class ImportService {
 
     this.boxes.see(containerNo, { importId, returnFreightId: freight.freightId, returnDepot: depotLabel }, now);
     return this.detail(consignment.importId, actorEntityId);
+  }
+
+  /**
+   * Y3 — RECORD WHAT THE BOX LOOKED LIKE AT A GATE, beside whatever is already recorded there.
+   *
+   * The driver's half is derived from the leg and needs nobody: a securement photograph at pickup, a
+   * delivery photograph at the depot, and their own reservations and remarks. This is the other half —
+   * the importer who says the hole was there before it was loaded, the agent who says it was not — and it
+   * is added BESIDE, never over. Nothing adjudicates them, exactly as nothing adjudicates a disputed road
+   * hazard: both accounts stand and a reader weighs them.
+   *
+   * PHOTOGRAPHS ARE ADOPTED, NOT LINKED. `adopt` refuses a media the caller does not own or that is
+   * already attached elsewhere, and returns false — so a ref that cannot be adopted is DROPPED rather
+   * than cited. The alternative is a record that names evidence nobody can produce, which is the same
+   * defect as a screen that says "2 photos" and shows none.
+   */
+  recordInterchange(
+    importId: string,
+    actorEntityId: string,
+    byDid: string,
+    input: { side: InterchangeSide; stance: ConditionStance; note?: string; photoIds?: string[] },
+    by: string,
+    now = Date.now(),
+  ): ImportDetail {
+    const consignment = this.requireImport(importId);
+    this.requireBoxParty(consignment, actorEntityId);
+    const containerNo = this.requireBox(consignment);
+    const photoRefs = (input.photoIds ?? [])
+      .slice(0, 6)
+      .filter((id) => this.media.adopt(id, byDid, { type: 'box', id: containerNo }, 'interchange'));
+    this.boxes.recordInterchange(containerNo, input.side, { by, byEntityId: actorEntityId, stance: input.stance, note: input.note, photoRefs }, { importId }, now);
+    return this.detail(consignment.importId, actorEntityId);
+  }
+
+  /**
+   * MAY THIS CALLER SEE THIS PHOTOGRAPH OF THIS BOX? — the read gate, and it is membership rather than a list.
+   *
+   * A photograph is readable because an interchange record on a box they are a party to CITES it. There is
+   * no second list of permissions to drift out of step with what is on the screen, which is the same
+   * reasoning as a document grant: the record is the permission.
+   *
+   * THIS IS A REAL WIDENING AND IT IS PAID FOR HERE. The driver owns those bytes and the media module
+   * would serve them to nobody but them and an operator — which is useless, because the whole point of
+   * photographing a box at a gate is that the OTHER party can see it. So the widening is exactly as wide
+   * as the record: this box, this spell, these two parties. Anything else answers NOT FOUND rather than
+   * FORBIDDEN, which would confirm the media exists to somebody who should not know.
+   */
+  readableBoxPhoto(importId: string, readerEntityId: string, mediaId: string, opts: { all?: boolean } = {}): string {
+    const consignment = this.requireImport(importId);
+    const side = this.sideOf(consignment, readerEntityId);
+    if (side === 'onlooker' && !opts.all) throw new GlosError('NOT_FOUND', 'No such consignment');
+    if (!consignment.containerNo) throw new GlosError('NOT_FOUND', 'No such photograph');
+    const cited = this.boxes.photosOn(consignment.containerNo, { importId });
+    if (!cited.includes(mediaId)) throw new GlosError('NOT_FOUND', 'No such photograph');
+    return mediaId;
   }
 
   /** Every box, with its clock. Operator-only at the route: it spans companies by construction. */

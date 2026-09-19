@@ -362,6 +362,36 @@ export function createOperatorApi(sbg: SbgClient) {
       body: { depotLabel: string; depotLocation?: { lat: number; lng: number }; fromLabel?: string; fromLocation?: { lat: number; lng: number }; weightKg: number; cargo?: string; entityId?: string; by?: string },
     ) => sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/box/return-leg', { params: { path: { importId } }, body: body as never })),
 
+
+    /**
+     * Y3 — SAY WHAT THE BOX LOOKED LIKE AT A GATE, beside whatever is already recorded there.
+     *
+     * The driver's half is derived from their own photographs at pickup and delivery. This is the other
+     * half: the importer who says the hole was there before, the agent who says it was not. Added beside,
+     * never over, with nothing adjudicating the two.
+     */
+    recordInterchange: (importId: string, body: { side: 'out' | 'in'; stance: 'sound' | 'damaged'; note?: string; photoIds?: string[]; entityId?: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/box/interchange', { params: { path: { importId } }, body: body as never })),
+
+    /**
+     * One gate photograph of THIS box, as bytes.
+     *
+     * Not the media route: the driver owns those bytes and that route serves them to their owner and an
+     * operator, which is useless when the point is for the other party to look. This one is gated by the
+     * record that cites it — this box, this spell, these two parties.
+     */
+    boxPhoto: (importId: string, mediaId: string, variant?: 'full' | 'thumb', entityId?: string) =>
+      sbg.request((c) =>
+        c.GET('/v1/sbg/imports/{importId}/box/photos/{mediaId}', {
+          params: { path: { importId, mediaId }, query: { ...(variant ? { variant } : {}), ...(entityId ? { entityId } : {}) } },
+          parseAs: 'blob',
+        } as never),
+      ),
+
+    /** Upload one prepared image (+ optional thumbnail). Returns { mediaId }. */
+    uploadMedia: (kind: string, dataUrl: string, thumbDataUrl?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/media', { body: { kind, dataUrl, ...(thumbDataUrl ? { thumbDataUrl } : {}) } as never })),
+
     /** Every box out, with its clock. Operator-only: it spans companies by construction. */
     boxesOut: () => sbg.request((c) => c.GET('/v1/sbg/boxes', {})),
 

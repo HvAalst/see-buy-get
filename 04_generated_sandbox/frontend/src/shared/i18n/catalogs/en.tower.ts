@@ -561,6 +561,29 @@ export const enTower = {
   'tower.imports.clockBoughtSaved': 'Recorded. A box that was sold owes nobody a return, so nothing about it will read as overdue.',
   'tower.imports.clockHint':
     'Only the importer can state the free days, because they are in the importer’s own contract with the line — we carry the figure, attribute it and count the days. What being late costs stays between those two: we will not compute somebody else’s charge. And a container that was bought is not late, which is why there are two ways to end this and not one.',
+  /* Y3 — what the box looked like at each gate. "You damaged my box" against "it was like that when we
+     took it" is an argument with no evidence, and the importer loses it by default. Both gates are always
+     shown, because a gate nobody recorded is exactly where that argument happens. */
+  'tower.imports.gate.out': 'Out of the terminal',
+  'tower.imports.gate.in': 'Back in at the depot',
+  'tower.imports.gateNothing':
+    'Nobody has recorded anything about the box at this gate. That is worth knowing on its own: a handover with no photograph and no words is an argument that gets settled by whoever sounds more certain.',
+  'tower.imports.gateDerived': 'read off the leg, not typed by anybody',
+  'tower.imports.gateDisputed': 'The accounts disagree',
+  'tower.imports.gateOpen': 'Open the full photograph',
+  'tower.imports.gatePhotoAlt': 'The container at the gate',
+  'tower.imports.gateDead': 'One of the photographs named here cannot be opened. The record still says it exists, which is why this is said in words rather than left as an empty frame.',
+  'tower.imports.gateSay': 'Say what you saw',
+  'tower.imports.gateSaysave': 'Record my account',
+  'tower.imports.gateSaid': 'Recorded beside the others. Nothing was replaced, and nothing decides between them.',
+  'tower.imports.gateFormHint':
+    'Your account goes BESIDE what is already there, never over it — the driver’s photograph stays, the other party’s words stay, and nothing here adjudicates between them. A photograph is worth more than a sentence: it is the one thing anybody can produce later, and the other party can open it too.',
+  'tower.imports.stance.sound': 'Sound',
+  'tower.imports.stance.damaged': 'Damaged',
+  'tower.imports.f.stance': 'The box was',
+  'tower.imports.f.gateNote': 'What you saw',
+  'tower.imports.f.gateNotePh': 'Dent in the left panel, door seal torn',
+  'tower.imports.f.gatePhoto': 'A photograph of it',
   /* Y2 — the leg home. A laden leg inland implies a leg back, and until this slice nothing modelled it:
      no driver was ever offered it, so it was arranged by telephone and the board that exists to match
      repositioning could not see it. It is usually NOT empty — a box is a dry, lockable, weatherproof body

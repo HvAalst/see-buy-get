@@ -1,6 +1,6 @@
 # The box as an asset: interchange, the clock, and the return leg
 
-> Status: **Y0, Y1 AND Y2 ARE BUILT AND DRIVEN. Y3–Y5 are design only.** Written 2026-09-18, straight after CL7 (`2d54ae1`, `ba9a11e`)
+> Status: **Y0 TO Y3 ARE BUILT AND DRIVEN. Y4 and Y5 are design only.** Written 2026-09-18, straight after CL7 (`2d54ae1`, `ba9a11e`)
 > put real container types into the model, because the user's response was that this forces the question:
 > *"this means we must elaborate about container yard management."*
 >
@@ -250,14 +250,20 @@ the detention bill this was built to prevent.
   one. **And the symmetry closes the clock: the laden leg's PICKUP out-gates the box, the leg home's
   DELIVERY records the return.** Neither is a date anybody types. A person's own account still wins,
   because a box can go back without its leg being ours.
-- **Y3 — the interchange record with photographs**, and the dispute shape when the two sides disagree.
+- **Y3 — SHIPPED 2026-09-19, driven.** And the evidence turned out to exist already: the freight flow
+  demands a securement photograph at pickup and a delivery photograph at the depot, and on a container leg
+  what the driver takes over IS the box — so both gates are DERIVED from photographs somebody already
+  took, marked as derived, with the driver's reservations quoted. A party adds their account beside,
+  never over, and nothing adjudicates two that disagree. **The half that matters is who may look:** the
+  driver owns those bytes, so the read is widened by exactly the width of the record — this box, this
+  spell, these two parties, with the citation itself as the permission.
 - **Y4 — the empties register a yard opts into**, with the yard's claim and our derivation kept apart.
 - **Y5 — the water leg.** Independent of Y0–Y4 and the largest of the six: a leg whose carrier is a
   vessel, whose stops are quays, and whose height check is the road one over again.
 - **Never — yard slots, stacking plans, gate queues** (§3), and never a demurrage tariff.
 
-Y0, Y1 and Y2 are done. What is left is **Y3** (the interchange record), **Y4** (the yard register) and
-**Y5** (the water leg) — and Y5 is independent of all of it.
+Y0 to Y3 are done. What is left is **Y4** (the yard register a yard opts into) and **Y5** (the water leg),
+and Y5 is independent of all of it.
 
 ## 7. Decided by the user, 2026-09-18
 

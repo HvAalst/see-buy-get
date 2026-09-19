@@ -18,6 +18,14 @@ export const MEDIA_KINDS = [
   'avatar', // a person's profile picture (S29)
   'securement', // S33 — a driver's photo of a secured dedicated-freight load at pickup
   'hazard', // a driver's photo of a road constraint — the bridge, the washout, or the road now clear
+  /**
+   * Y3 — the condition of a CONTAINER at a gate, photographed by a party to it.
+   *
+   * The driver's own evidence at the two gates is already taken: a securement photo at pickup and a
+   * delivery photo at the depot, both demanded by the freight flow. This kind is for the accounts a PARTY
+   * adds beside them — the importer who says the hole was there before, the agent who says it was not.
+   */
+  'interchange',
 ] as const;
 
 export type MediaKind = (typeof MEDIA_KINDS)[number];
@@ -27,7 +35,7 @@ export type MediaStatus = 'active' | 'expired';
 
 /** What a media item is attached to — drives who may see it and when its retention clock starts. */
 export interface MediaLink {
-  type: 'parcel' | 'vehicle' | 'agent' | 'driver' | 'person' | 'freight' | 'constraint';
+  type: 'parcel' | 'vehicle' | 'agent' | 'driver' | 'person' | 'freight' | 'constraint' | 'box';
   id: string;
 }
 
@@ -88,6 +96,9 @@ export const KIND_RETENTION: Record<MediaKind, RetentionClass> = {
   avatar: 'account-doc', // kept while the account is active (linked to the person → never orphan-reaped)
   hazard: 'road-report',
   securement: 'shipment-proof', // S33 — proof of a secured load, kept 90d after the freight is delivered
+  // An argument about who put the hole in somebody else's container is a dispute about money, and its
+  // evidence is kept on the dispute clock rather than the shipment one.
+  interchange: 'dispute-evidence',
 };
 
 /** Only real raster image types — no SVG (it can carry script), no arbitrary bytes. */

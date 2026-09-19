@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
-import { Icon } from '../../../shared/ui';
+import { AuthImage, Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { DOCUMENT_KINDS, DOCUMENT_LABEL, shortFingerprint, type CompanyDocument } from '../company';
 import {
@@ -83,6 +83,12 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
   const [boxForm, setBoxForm] = useState({ arrivedAt: '', freeDayKind: 'detention', freeDays: '', where: '' });
   /** Y2 — the leg home. Its own form, because it is a LOAD being posted rather than a date being recorded. */
   const [homeForm, setHomeForm] = useState({ depotLabel: '', weightKg: '', cargo: '' });
+  /** Y3 — which gate a party is speaking about, and what they are saying. Empty side = the form is shut. */
+  const [gateForm, setGateForm] = useState({ side: '', stance: 'damaged', note: '', dataUrl: '' });
+  /** One photo open at a time: a thumbnail strip, and a deliberate tap for the full frame. */
+  const [bigShot, setBigShot] = useState<string | null>(null);
+  /** Refs whose bytes could not be fetched — said in words rather than shown as a grey tile. */
+  const [deadShots, setDeadShots] = useState<string[]>([]);
   const [boxes, setBoxes] = useState<Array<{ code: string; label: string; openTop: boolean; kind: string }>>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -178,6 +184,20 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
   const waiting = outstandingCount(rows);
   // Derived on every read, never stored — an empty list is not a cleared container, so `done` needs `asked`.
   const ready = detail ? readinessOf(detail) : null;
+
+  /**
+   * Y3 — a party's own photograph of the box at a gate.
+   *
+   * Read straight to a data URL and uploaded as their own media; the server adopts it onto the box, and a
+   * ref it cannot adopt is dropped rather than cited.
+   */
+  const readShot = (file: File | null) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onerror = () => setError(t('tower.imports.notAFile'));
+    reader.onload = () => setGateForm((g) => ({ ...g, dataUrl: String(reader.result ?? '') }));
+    reader.readAsDataURL(file);
+  };
 
   const readFile = (file: File | null) => {
     if (!file) return;
@@ -1209,6 +1229,131 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                   <p class="cons__lede">{t('tower.imports.clockClaimIdle')}</p>
                 ) : null}
 
+
+                {/* ---- Y3: what the box looked like at each gate ----
+                    "You damaged my box" against "it was like that when we took it" is an argument with no
+                    evidence, and the importer loses it by default. Both gates are always listed, because a
+                    gate nobody recorded is the one where that argument will happen. */}
+                <div class="cons__gates">
+                  {detail.box.interchange.map((g) => (
+                    <div key={g.side} class="cons__gate">
+                      <div class="cons__gatehead">
+                        <span class="cons__gatet">{t(`tower.imports.gate.${g.side}` as never)}</span>
+                        {g.at ? <span class="ctbl__sub">{g.at.slice(0, 10)}</span> : null}
+                        {/* Nothing adjudicates two accounts that disagree. The screen says they disagree. */}
+                        {g.disputed ? <span class="ctag ctag--warn">{t('tower.imports.gateDisputed')}</span> : null}
+                      </div>
+
+                      {!g.stated ? (
+                        <p class="cons__lede">{t('tower.imports.gateNothing')}</p>
+                      ) : (
+                        g.accounts.map((a, i) => (
+                          <div key={`${a.by}-${a.at}-${i}`} class="cons__account">
+                            <p class="cons__lede">
+                              <b>{t(`tower.imports.stance.${a.stance}` as never)}</b>
+                              {' — '}
+                              {a.by}
+                              {/* The derived account is the driver's photograph being READ as condition
+                                  evidence. Fair, and not the same as somebody saying it, so it says so. */}
+                              {a.derived ? ` · ${t('tower.imports.gateDerived')}` : ''}
+                              {a.note ? ` · “${a.note}”` : ''}
+                            </p>
+                            {a.photoRefs.length ? (
+                              <div class="cons__shots">
+                                {a.photoRefs.map((ref) => (
+                                  <button
+                                    key={`${ref}-${bigShot === ref ? 'full' : 'thumb'}`}
+                                    type="button"
+                                    class={`cons__shot${bigShot === ref ? ' cons__shot--big' : ''}`}
+                                    onClick={() => setBigShot(bigShot === ref ? null : ref)}
+                                    title={t('tower.imports.gateOpen')}
+                                  >
+                                    {/* Thumbnails until somebody asks for the full frame — the same rule the
+                                        driver's hazard photos follow, and for the same reason. */}
+                                    <AuthImage
+                                      key={`${ref}-${bigShot === ref ? 'full' : 'thumb'}`}
+                                      mediaId={ref}
+                                      alt={t('tower.imports.gatePhotoAlt')}
+                                      load={(id) => client!.api.boxPhoto(detail.importId, id, bigShot === ref ? 'full' : 'thumb') as never}
+                                      onFailed={() => setDeadShots((d) => (d.includes(ref) ? d : [...d, ref]))}
+                                    />
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        ))
+                      )}
+                      {/* A photograph the record cites and nobody can open is the "2 photos, none shown"
+                          defect. Said in words rather than left as a grey tile. */}
+                      {g.photoRefs.some((r) => deadShots.includes(r)) ? <p class="cons__lede">{t('tower.imports.gateDead')}</p> : null}
+
+                      {!detail.box!.ending || g.side === 'in' ? (
+                        <div class="twr-panelend">
+                          <button type="button" class="cbtn cbtn--ghost" disabled={busy === `gate-${g.side}`} onClick={() => setGateForm({ side: g.side, stance: 'damaged', note: '', dataUrl: '' })}>
+                            {t('tower.imports.gateSay')}
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+
+                {gateForm.side ? (
+                  <>
+                    <p class="cons__lede">{t('tower.imports.gateFormHint')}</p>
+                    <div class="twr-knobs">
+                      <label class="twr-knob">
+                        <span>{t('tower.imports.f.stance')}</span>
+                        <select value={gateForm.stance} onChange={(e) => setGateForm({ ...gateForm, stance: (e.target as HTMLSelectElement).value })}>
+                          <option value="damaged">{t('tower.imports.stance.damaged')}</option>
+                          <option value="sound">{t('tower.imports.stance.sound')}</option>
+                        </select>
+                      </label>
+                      <label class="twr-knob">
+                        <span>{t('tower.imports.f.gateNote')}</span>
+                        <input value={gateForm.note} onChange={(e) => setGateForm({ ...gateForm, note: (e.target as HTMLInputElement).value })} placeholder={t('tower.imports.f.gateNotePh')} />
+                      </label>
+                      <label class="twr-knob">
+                        <span>{t('tower.imports.f.gatePhoto')}</span>
+                        <input type="file" accept="image/*" onChange={(e) => readShot((e.target as HTMLInputElement).files?.[0] ?? null)} />
+                      </label>
+                    </div>
+                    <div class="twr-panelend">
+                      <button
+                        type="button"
+                        class="cbtn"
+                        disabled={busy === `gate-${gateForm.side}`}
+                        onClick={() =>
+                          run(
+                            `gate-${gateForm.side}`,
+                            async () => {
+                              // The photograph is uploaded as the caller's OWN media first; the server then
+                              // adopts it. A ref it cannot adopt is dropped rather than cited.
+                              let photoIds: string[] = [];
+                              if (gateForm.dataUrl) {
+                                const up = await client!.api.uploadMedia('interchange', gateForm.dataUrl);
+                                const id = (up.data as { mediaId?: string } | null)?.mediaId;
+                                if (id) photoIds = [id];
+                              }
+                              return client!.api.recordInterchange(detail.importId, {
+                                side: gateForm.side as 'out' | 'in',
+                                stance: gateForm.stance as 'sound' | 'damaged',
+                                ...(gateForm.note.trim() ? { note: gateForm.note.trim() } : {}),
+                                ...(photoIds.length ? { photoIds } : {}),
+                                ...(who ? { by: who } : {}),
+                              });
+                            },
+                            t('tower.imports.gateSaid'),
+                            () => setGateForm({ side: '', stance: 'damaged', note: '', dataUrl: '' }),
+                          )
+                        }
+                      >
+                        {t('tower.imports.gateSaysave')}
+                      </button>
+                    </div>
+                  </>
+                ) : null}
                 {/* ---- Y2: the leg home, laden or empty ----
                     The leg a laden run inland always implies, and which nothing modelled: no driver was
                     ever offered it, so the agent arranged it by telephone and the board could not see it. */}

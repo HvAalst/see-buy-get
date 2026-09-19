@@ -8,6 +8,7 @@ import { BooksService } from '../../foundation/books/books.service';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
 import { DispatchService } from './dispatch.service';
 import { ContainerBoxService } from './container-box.service';
+import { MediaService } from './media.service';
 import { LedgerService } from '../../foundation/ledger/ledger.service';
 import { LEDGER_ADAPTER } from '../../foundation/ledger/ledger.types';
 import { InMemoryLedgerAdapter } from '../../foundation/ledger/in-memory-ledger.adapter';
@@ -43,6 +44,9 @@ describe('an import consignment, its papers, and the agent who clears them', () 
   let pickups: Record<string, string>;
   /** And when each was DELIVERED, which is how the leg home records the return. */
   let deliveries: Record<string, string>;
+  /** Y3 — the driver's own evidence at each gate, which the freight flow already demands of them. */
+  let safety: Record<string, { securementPhotoRef?: string; reservations?: string }>;
+  let pod: Record<string, { photoRef?: string; remarks?: string }>;
 
   /**
    * Every upload gets distinct bytes. Not a convenience: the register refuses a file whose fingerprint
@@ -63,6 +67,8 @@ describe('an import consignment, its papers, and the agent who clears them', () 
     minted = [];
     pickups = {};
     deliveries = {};
+    safety = {};
+    pod = {};
     const moduleRef = await Test.createTestingModule({
       // Hand-listed, which is the very shape that once let 856 green tests sit over an app that could not
       // boot — so `app.boot.spec.ts` is what actually proves this service resolves in the real module, and
@@ -70,6 +76,7 @@ describe('an import consignment, its papers, and the agent who clears them', () 
       providers: [
         ImportService,
         ContainerBoxService,
+        MediaService,
         EntityService,
         CompanyDocumentService,
         DidService,
@@ -103,6 +110,9 @@ describe('an import consignment, its papers, and the agent who clears them', () 
                 destLocation: minted[at].destLocation,
                 pickedUpAt: pickups[freightId],
                 deliveredAt: deliveries[freightId],
+                ...(safety[freightId]?.securementPhotoRef ? { loadSafety: { confirmed: [], securementPhotoRef: safety[freightId].securementPhotoRef, at: pickups[freightId] } } : {}),
+                ...(safety[freightId]?.reservations ? { reservations: { note: safety[freightId].reservations, at: pickups[freightId] } } : {}),
+                ...(pod[freightId] ? { proofOfDelivery: { receiverName: 'Depot gate', ...pod[freightId], at: deliveries[freightId] } } : {}),
               };
             },
           },
@@ -1069,6 +1079,113 @@ describe('an import consignment, its papers, and the agent who clears them', () 
         const box = imports.detail(one.importId, importerId).box!;
         expect(box.endedBy).toBe('Selam');
         expect(box.clock.basis).toContain('Kaliti depot');
+      });
+    });
+
+    /**
+     * Y3 — WHAT THE BOX LOOKED LIKE AT EACH GATE.
+     *
+     * "You damaged my box" against "it was like that when we took it" is an argument with no evidence,
+     * and the importer loses it by default. What these tests defend: that the driver's half is DERIVED
+     * from photographs the freight flow already demands, that a party's account is added BESIDE rather
+     * than over, that a gate nobody recorded says so, and — the one that matters — that the OTHER party
+     * can actually open the photograph.
+     */
+    describe('what the box looked like at the gate', () => {
+      const NO = 'CSQU3054383';
+      /** A leg out, picked up with a securement photo and the driver's reservations. */
+      const gatedOut = (reservations?: string) => {
+        const one = register({ containerNo: NO });
+        imports.appoint(one.importId, agentId, importerId, 'Hans');
+        imports.mintRoadLeg(one.importId, importerId, { pickupLocation: { lat: 11.6, lng: 43.14 }, destLabel: 'Addis Ababa yard', destLocation: { lat: 9.03, lng: 38.74 }, weightKg: 12000 }, 'Hans');
+        pickups['frt_1'] = new Date(Date.now() - 5 * 86_400_000).toISOString();
+        safety['frt_1'] = { securementPhotoRef: 'med_gate_out', ...(reservations ? { reservations } : {}) };
+        return one;
+      };
+
+      it('reads the driver’s own photograph at the gate, and says it was derived', () => {
+        const one = gatedOut();
+        const out = imports.detail(one.importId, importerId).box!.interchange.find((g) => g.side === 'out')!;
+        expect(out).toMatchObject({ stated: true, disputed: false, photoRefs: ['med_gate_out'] });
+        // The securement photo was taken to prove a load was strapped down; reading it as evidence of the
+        // box's condition is fair, and a reader is told that is what they are looking at.
+        expect(out.accounts[0]).toMatchObject({ stance: 'sound', derived: true, by: 'the driver on FRT-1' });
+        // And the other gate says plainly that nobody has recorded anything.
+        expect(imports.detail(one.importId, importerId).box!.interchange.find((g) => g.side === 'in')).toMatchObject({ stated: false, accounts: [] });
+      });
+
+      it('carries the driver’s reservations as their own words about what they took over', () => {
+        const one = gatedOut('Door seal broken and a dent in the left panel');
+        const out = imports.detail(one.importId, agentId).box!.interchange.find((g) => g.side === 'out')!;
+        // A reservation is BY DEFINITION a note that something was not right, and on a container leg what
+        // the driver took over IS the box. Their words are quoted rather than summarised.
+        expect(out.accounts[0]).toMatchObject({ stance: 'damaged', note: 'Door seal broken and a dent in the left panel' });
+      });
+
+      it('adds a party’s account BESIDE the driver’s, and never over it', () => {
+        const one = gatedOut();
+        const detail = imports.recordInterchange(one.importId, importerId, 'did:importer', { side: 'out', stance: 'damaged', note: 'The hole was there when it came off the ship' }, 'Hans');
+        const out = detail.box!.interchange.find((g) => g.side === 'out')!;
+        expect(out.accounts).toHaveLength(2);
+        expect(out.accounts[0].derived).toBe(true);
+        expect(out.accounts[1]).toMatchObject({ by: 'Hans', byEntityId: importerId, stance: 'damaged' });
+        // Two accounts that do not agree is the whole point: nothing adjudicates them, and the screen says
+        // they disagree rather than picking one.
+        expect(out.disputed).toBe(true);
+
+        // The agent's answer stands beside both. Still nothing is erased.
+        const both = imports.recordInterchange(one.importId, agentId, 'did:agent', { side: 'out', stance: 'sound' }, 'Selam');
+        expect(both.box!.interchange.find((g) => g.side === 'out')!.accounts).toHaveLength(3);
+      });
+
+      it('lets one person correct themselves without touching anybody else', () => {
+        const one = gatedOut();
+        imports.recordInterchange(one.importId, importerId, 'did:importer', { side: 'out', stance: 'sound' }, 'Hans');
+        imports.recordInterchange(one.importId, agentId, 'did:agent', { side: 'out', stance: 'sound' }, 'Selam');
+        const after = imports.recordInterchange(one.importId, importerId, 'did:importer', { side: 'out', stance: 'damaged', note: 'Looked again in daylight' }, 'Hans');
+        const out = after.box!.interchange.find((g) => g.side === 'out')!;
+        // Saying the same thing twice does not make somebody two witnesses — but it must not touch Selam.
+        expect(out.accounts.filter((a) => a.by === 'Hans')).toHaveLength(1);
+        expect(out.accounts.filter((a) => a.by === 'Selam')).toHaveLength(1);
+        expect(out.accounts.find((a) => a.by === 'Hans')!.stance).toBe('damaged');
+      });
+
+      it('only cites photographs it could adopt', () => {
+        const one = gatedOut();
+        const detail = imports.recordInterchange(one.importId, importerId, 'did:importer', { side: 'out', stance: 'damaged', photoIds: ['med_not_mine'] }, 'Hans');
+        const mine = detail.box!.interchange.find((g) => g.side === 'out')!.accounts.find((a) => a.by === 'Hans')!;
+        // `adopt` refuses a media the caller does not own, and a ref that cannot be adopted is DROPPED —
+        // a record that names evidence nobody can produce is the "2 photos, none shown" defect again.
+        expect(mine.photoRefs).toEqual([]);
+      });
+
+      /**
+       * THE ONE THAT MATTERS. The driver owns those bytes and the media module would serve them to nobody
+       * but the driver and an operator — which is useless, because the whole point of photographing a box
+       * at a gate is that the OTHER party can look at it when the argument starts.
+       */
+      it('lets both parties open the photograph, and nobody else', () => {
+        const one = gatedOut();
+        expect(imports.readableBoxPhoto(one.importId, importerId, 'med_gate_out')).toBe('med_gate_out');
+        expect(imports.readableBoxPhoto(one.importId, agentId, 'med_gate_out')).toBe('med_gate_out');
+        // A company with nothing to do with this container is told the consignment does not exist, not
+        // that it may not look — the second confirms what it is probing for.
+        expect(() => imports.readableBoxPhoto(one.importId, rivalId, 'med_gate_out')).toThrow(/No such consignment/);
+        // And the widening is no wider than the record: a media id this box's gates do not cite is not
+        // readable here just because the caller is a party.
+        expect(() => imports.readableBoxPhoto(one.importId, importerId, 'med_somebody_elses')).toThrow(/No such photograph/);
+      });
+
+      it('reads the depot handover off the leg home, photograph and remarks', () => {
+        const one = gatedOut();
+        imports.mintReturnLeg(one.importId, importerId, { depotLabel: 'Modjo depot', weightKg: 2200 }, 'Hans');
+        deliveries['frt_2'] = new Date().toISOString();
+        pod['frt_2'] = { photoRef: 'med_gate_in', remarks: 'Handed back with the dent still in it' };
+        const gates = imports.detail(one.importId, importerId).box!.interchange;
+        expect(gates.find((g) => g.side === 'in')).toMatchObject({ stated: true, photoRefs: ['med_gate_in'] });
+        expect(gates.find((g) => g.side === 'in')!.accounts[0]).toMatchObject({ stance: 'damaged', note: 'Handed back with the dent still in it', derived: true });
+        // Both gates' photographs are readable by the parties, because both are cited by the record.
+        expect(imports.readableBoxPhoto(one.importId, agentId, 'med_gate_in')).toBe('med_gate_in');
       });
     });
   });

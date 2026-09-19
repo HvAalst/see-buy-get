@@ -280,6 +280,43 @@ export function boxClock(times: BoxTimes, now: number): BoxClock {
   };
 }
 
+/* --------------------------------------------------- the interchange record -- */
+
+/** The two gates a box passes through with us: out of the terminal, and back in at a depot. */
+export const INTERCHANGE_SIDES = ['out', 'in'] as const;
+export type InterchangeSide = (typeof INTERCHANGE_SIDES)[number];
+
+/** What somebody says about the box's condition. Two words, because a third invites a paragraph. */
+export const CONDITION_STANCES = ['sound', 'damaged'] as const;
+export type ConditionStance = (typeof CONDITION_STANCES)[number];
+
+/**
+ * ONE ACCOUNT OF THE BOX'S CONDITION AT A GATE — attributed, dated, and never erased.
+ *
+ * The same shape as a road hazard's account and a customs hold's, and for the same reason: two parties
+ * are going to disagree about who put the hole in it, and the honest structure is both accounts standing
+ * beside each other rather than one overwriting the other. Nothing adjudicates them. A reader weighs them.
+ */
+export interface InterchangeAccount {
+  /** A person's name, or — for the account DERIVED from a leg — the leg that carries the photograph. */
+  by: string;
+  /** The company, where a party recorded it. Absent on the derived account: a leg is not a company. */
+  byEntityId?: string;
+  at: string;
+  stance: ConditionStance;
+  note?: string;
+  /** Media ids. Readable only by the parties to this box — see `readableBoxPhoto`. */
+  photoRefs: string[];
+  /**
+   * TRUE where this account was DERIVED from the leg's own photograph rather than typed by anybody.
+   *
+   * It matters to a reader: the driver's securement photo at the gate was taken to prove the load was
+   * secured, and it is being read as evidence of the box's condition. That is a fair reading and it is
+   * not the same as somebody standing there and saying "there is a hole in this".
+   */
+  derived?: boolean;
+}
+
 /**
  * When to warn, and it is deliberately not "when it is late".
  *

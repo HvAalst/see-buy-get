@@ -12,7 +12,7 @@ import { CONSTRAINT_KINDS, ConstraintKind } from './route-constraint.types';
 import { CARGO_LANES, CARGO_NATURES, CargoLane, CargoNature, EQUIPMENT, Equipment } from './cargo.types';
 
 import { CLEARANCE_SPECIALISMS, CONSIGNMENT_MODES, CUSTOMS_HOLD_KINDS, HOLD_STANCES } from './import.types';
-import { BOX_ENDINGS, FREE_DAY_KINDS } from './container-box';
+import { BOX_ENDINGS, CONDITION_STANCES, FREE_DAY_KINDS, INTERCHANGE_SIDES } from './container-box';
 
 /** F1 — a scheduled pickup instant must be a full datetime WITH a timezone offset (Z or ±HH:MM), so the
  *  moment is unambiguous — a date-only or offset-less string would resolve to a server-timezone-dependent
@@ -439,6 +439,22 @@ export class BoxFreeDaysDto {
  * a dry lockable body and freight goes inside it. Absent means empty, and the leg says so on the board.
  * The weight is what the truck will carry — the box's own tare when there is nothing in it.
  */
+/**
+ * Y3 — one party's account of the box's condition at a gate.
+ *
+ * Two stances and no third, because a third invites a paragraph where a word is wanted. Photographs are
+ * the caller's own uploads: the service ADOPTS them, so a ref that is not theirs is dropped rather than
+ * cited, and a record never names evidence nobody can produce.
+ */
+export class BoxInterchangeDto {
+  @IsIn(INTERCHANGE_SIDES) @ApiProperty({ enum: INTERCHANGE_SIDES }) side!: string;
+  @IsIn(CONDITION_STANCES) @ApiProperty({ enum: CONDITION_STANCES }) stance!: string;
+  @IsOptional() @IsString() @MaxLength(500) note?: string;
+  @IsOptional() @IsArray() @IsString({ each: true }) photoIds?: string[];
+  @IsOptional() @IsString() entityId?: string;
+  @IsOptional() @IsString() by?: string;
+}
+
 export class BoxReturnLegDto {
   @IsString() @MaxLength(120) depotLabel!: string;
   @IsOptional() @ValidateNested() @Type(() => GeoDto) depotLocation?: GeoDto;

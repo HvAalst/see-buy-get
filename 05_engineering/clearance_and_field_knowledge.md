@@ -923,7 +923,7 @@ required-papers list ask for certificates — which is the shape CL2a already es
 **WHAT CL7 FORCES NEXT, and the user said so immediately:** modelling the box introduces an asset we do
 not own and have never tracked. A container is a line's property on loan with a clock running, and the
 leg we mint is what starts it — so the return leg, the detention clock, the interchange record and
-"where are the empties" all follow. Designed in `container_yard_and_empties.md`, with **Y0, Y1 and Y2 built and driven 2026-09-18**, and
+"where are the empties" all follow. Designed in `container_yard_and_empties.md`, with **Y0 to Y3 built and driven**, and
 its first line is what is NOT ours: yard slots, stacking and gate queues belong to a terminal operating
 system, and demurrage tariffs are the duty line again.
 

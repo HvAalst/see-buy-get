@@ -252,6 +252,76 @@
 
 /* A caveat the screen cannot switch off. Not an error and not a toast — a standing statement about what
    the data underneath it is and is not. The road map's "absence of a report is not clearance" lives in
+
+/* Y3 — the two gates a container passes through, and every account of what it looked like there.
+   Both gates are always drawn, so the one nobody recorded reads as an absence rather than as nothing. */
+.cons__gates {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.cons__gate {
+  border: 1px solid var(--bd);
+  border-radius: var(--r-ctl);
+  padding: 12px 14px;
+}
+
+.cons__gatehead {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.cons__gatet {
+  font-weight: 600;
+  font-size: var(--c-fs);
+}
+
+.cons__account + .cons__account {
+  border-top: 1px dashed var(--bd);
+  padding-top: 8px;
+  margin-top: 8px;
+}
+
+/* A strip of thumbnails; one deliberate tap opens the full frame in place. The same rule the driver's
+   hazard photos follow — a metered connection does not fetch full images to decorate a list. */
+.cons__shots {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.cons__shot {
+  width: 84px;
+  height: 84px;
+  padding: 0;
+  border: 1px solid var(--bd);
+  border-radius: var(--r-ctl);
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.cons__shot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.cons__shot--big {
+  width: 100%;
+  max-width: 420px;
+  height: auto;
+}
+
+.cons__shot--big img {
+  height: auto;
+  object-fit: contain;
+}
    one of these, and so should anything else an operator must not forget while reading a table. */
 .cons__caveat {
   display: flex;

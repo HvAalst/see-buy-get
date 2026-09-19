@@ -6,8 +6,11 @@ import {
   BoxClock,
   BoxEnding,
   BoxTimes,
+  ConditionStance,
   FreeDayKind,
   FreeDaysClaim,
+  InterchangeAccount,
+  InterchangeSide,
   boxClock,
   normaliseContainerNo,
   parseContainerNo,
@@ -51,6 +54,14 @@ export interface BoxTerm extends BoxTimes {
   returnDepot?: string;
   /** Who recorded the arrival, because nothing tells us and somebody has to have said it. */
   arrivedBy?: string;
+  /**
+   * Y3 — WHAT THE PARTIES SAY ABOUT THE BOX'S CONDITION AT EACH GATE.
+   *
+   * Only the accounts somebody TYPED live here. The driver's own evidence at both gates is derived from
+   * the leg on every read (see `interchangeOf`), so it can never drift from the freight record, and a
+   * stored copy of it could.
+   */
+  interchange?: { out: InterchangeAccount[]; in: InterchangeAccount[] };
 }
 
 /**
@@ -80,6 +91,28 @@ export interface ContainerBox {
   terms: BoxTerm[];
 }
 
+/**
+ * ONE GATE, AND EVERY ACCOUNT OF WHAT THE BOX LOOKED LIKE THERE — Y3.
+ *
+ * `stated: false` is the point of the shape. A gate where nothing was recorded is a gate where the
+ * argument gets settled by whoever sounds more certain, so the ABSENCE is a fact worth putting on the
+ * screen rather than an empty list a reader's eye slides over.
+ */
+export interface InterchangeView {
+  side: InterchangeSide;
+  /** In words: out of the terminal, or back in at the depot. */
+  gate: string;
+  /** When the handover happened, where the leg tells us. */
+  at?: string;
+  accounts: InterchangeAccount[];
+  /** Every media id cited across the accounts — the photo strip, and the list this box may serve. */
+  photoRefs: string[];
+  /** Nobody has said anything about this gate at all. */
+  stated: boolean;
+  /** The accounts disagree about the condition. Nothing adjudicates it; both stand. */
+  disputed: boolean;
+}
+
 export interface BoxView {
   containerNo: string;
   ownerCode?: string;
@@ -103,6 +136,8 @@ export interface BoxView {
   returnDepot?: string;
   /** Y2 — true where the leg home has nothing in it. Said out loud, never inferred from a small weight. */
   returnEmpty?: boolean;
+  /** Y3 — both gates, always, so the one nobody recorded is visible as the one nobody recorded. */
+  interchange: InterchangeView[];
   freeDays: FreeDaysClaim[];
   clock: BoxClock;
 }
@@ -256,6 +291,55 @@ export class ContainerBoxService {
   }
 
   /**
+   * Y3 — ONE PARTY'S ACCOUNT OF THE BOX'S CONDITION AT A GATE, added BESIDE whatever is already there.
+   *
+   * Never an edit and never a deletion, which is the same shape as a road hazard's dispute and a customs
+   * hold's answer, for the same reason: two parties are going to disagree about who put the hole in it,
+   * and the honest structure is both accounts standing side by side with nothing adjudicating them.
+   *
+   * One account per person per gate: saying the same thing twice does not make somebody two witnesses,
+   * so a second account from the same name replaces their own earlier one and nobody else's.
+   */
+  recordInterchange(
+    rawNo: string,
+    side: InterchangeSide,
+    account: { by: string; byEntityId: string; stance: ConditionStance; note?: string; photoRefs?: string[] },
+    opts: { importId?: string } = {},
+    now = Date.now(),
+  ): BoxView {
+    const box = this.require(rawNo);
+    const term = this.termFor(box, opts.importId);
+    if (!term) throw new GlosError('NOT_FOUND', `No spell on ${box.containerNo} to record that against`);
+    term.interchange = term.interchange ?? { out: [], in: [] };
+    const mine: InterchangeAccount = {
+      by: account.by,
+      byEntityId: account.byEntityId,
+      at: new Date(now).toISOString(),
+      stance: account.stance,
+      ...(account.note?.trim() ? { note: account.note.trim().slice(0, 500) } : {}),
+      photoRefs: account.photoRefs ?? [],
+    };
+    term.interchange[side] = [...term.interchange[side].filter((a) => a.byEntityId !== account.byEntityId || a.by !== account.by), mine];
+    this.boxes.set(box.containerNo, box);
+    return this.viewOf(box.containerNo, now, opts)!;
+  }
+
+  /**
+   * Every photograph this box's gates cite — and it is the READ GATE, not a convenience.
+   *
+   * A caller may fetch a photograph because it is cited by an interchange record on a box they are party
+   * to. That is the same reasoning as a document grant: membership of the record is the permission, so
+   * there is no separate list of who may see what to drift out of step with what is being shown.
+   */
+  photosOn(rawNo: string, opts: { importId?: string } = {}): string[] {
+    const box = this.boxes.get(normaliseContainerNo(rawNo));
+    if (!box) return [];
+    const term = this.termFor(box, opts.importId);
+    if (!term) return [];
+    return this.interchangeOf(term).flatMap((g) => g.photoRefs);
+  }
+
+  /**
    * The box with its clock, derived on every read.
    *
    * THE OUT-GATE IS NOT A FIELD ANYBODY TYPES. It is the road leg's pickup — the event this system already
@@ -305,6 +389,7 @@ export class ContainerBoxService {
       ...(home ? { returnLegCode: home.code, returnLegState: home.state } : {}),
       ...(home?.empty ? { returnEmpty: true } : {}),
       ...(term?.returnDepot ? { returnDepot: term.returnDepot } : {}),
+      interchange: term ? this.interchangeOf(term) : [],
       freeDays: times.freeDays,
       clock: boxClock(times, now),
     };
@@ -342,6 +427,77 @@ export class ContainerBoxService {
     } catch {
       return undefined;
     }
+  }
+
+  /**
+   * Y3 — WHAT THE BOX LOOKED LIKE AT EACH GATE, and the driver's half of it is DERIVED.
+   *
+   * The evidence at both gates already exists and nobody has to be asked for anything new. At pickup the
+   * freight flow demands a photograph of the secured load — which on a container leg IS a photograph of
+   * the box — and it records the driver's RESERVATIONS, which is their own account of what they were
+   * handed. At delivery it demands a photograph of the goods as put down, and the driver's remarks.
+   *
+   * So the derived account reads those two moments, and says `derived: true` so a reader knows what they
+   * are looking at: a securement photo taken to prove a load was strapped down, being read as evidence of
+   * a container's condition. That is a fair reading. It is not the same as somebody standing at the gate
+   * and saying "there is a hole in this", which is what the typed accounts beside it are for.
+   *
+   * A RESERVATION IS BY DEFINITION A NOTE THAT SOMETHING WAS NOT RIGHT — a torn sack, a short count, a
+   * wet pallet — so on a container leg it reads as `damaged` with the driver's own words quoted beside
+   * it. Nothing else is inferred: no reservation means the driver said nothing, not that the box was
+   * sound, and the account says `sound` only because a photograph with no complaint against it is the
+   * ordinary meaning of a clean handover.
+   */
+  private interchangeOf(term: BoxTerm): InterchangeView[] {
+    const typed = term.interchange ?? { out: [], in: [] };
+    const derived: Record<InterchangeSide, InterchangeAccount | undefined> = { out: undefined, in: undefined };
+
+    const leg = (freightId?: string) => {
+      if (!freightId) return undefined;
+      try {
+        return this.dispatch.requireFreightPublic(freightId);
+      } catch {
+        return undefined;
+      }
+    };
+
+    const laden = leg(term.roadFreightId);
+    if (laden?.pickedUpAt && (laden.loadSafety?.securementPhotoRef || laden.reservations?.note)) {
+      derived.out = {
+        by: `the driver on ${laden.code}`,
+        at: laden.pickedUpAt,
+        stance: laden.reservations?.note ? 'damaged' : 'sound',
+        ...(laden.reservations?.note ? { note: laden.reservations.note } : {}),
+        photoRefs: laden.loadSafety?.securementPhotoRef ? [laden.loadSafety.securementPhotoRef] : [],
+        derived: true,
+      };
+    }
+
+    const home = leg(term.returnFreightId);
+    if (home?.deliveredAt && (home.proofOfDelivery?.photoRef || home.proofOfDelivery?.remarks)) {
+      derived.in = {
+        by: `the driver on ${home.code}`,
+        at: home.deliveredAt,
+        stance: home.proofOfDelivery?.remarks ? 'damaged' : 'sound',
+        ...(home.proofOfDelivery?.remarks ? { note: home.proofOfDelivery.remarks } : {}),
+        photoRefs: home.proofOfDelivery?.photoRef ? [home.proofOfDelivery.photoRef] : [],
+        derived: true,
+      };
+    }
+
+    return (['out', 'in'] as const).map((side) => {
+      const accounts = [...(derived[side] ? [derived[side]!] : []), ...typed[side]].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+      const stances = new Set(accounts.map((a) => a.stance));
+      return {
+        side,
+        gate: side === 'out' ? 'out of the terminal' : 'back in at the depot',
+        ...(side === 'out' ? (laden?.pickedUpAt ? { at: laden.pickedUpAt } : {}) : home?.deliveredAt ? { at: home.deliveredAt } : {}),
+        accounts,
+        photoRefs: accounts.flatMap((a) => a.photoRefs),
+        stated: accounts.length > 0,
+        disputed: stances.size > 1,
+      };
+    });
   }
 
   /** The out-gate, DERIVED: the road leg's pickup, or nothing. A missing leg is not an out-gate. */

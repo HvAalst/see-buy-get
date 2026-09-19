@@ -128,6 +128,34 @@ export type BoxClockKind = 'demurrage' | 'detention' | 'stopped' | 'unknown';
 export type BoxEnding = 'returned' | 'bought';
 export type FreeDayKind = 'demurrage' | 'detention';
 
+/**
+ * Y3 — one account of the box's condition at a gate.
+ *
+ * `derived` means it was read off the leg rather than typed: the driver's securement photograph at pickup
+ * and their delivery photograph at the depot, which the freight flow already demands of them. A reader is
+ * told which kind they are looking at, because they are not the same kind of evidence.
+ */
+export interface InterchangeAccountView {
+  by: string;
+  byEntityId?: string;
+  at: string;
+  stance: 'sound' | 'damaged';
+  note?: string;
+  photoRefs: string[];
+  derived?: boolean;
+}
+
+export interface InterchangeGateView {
+  side: 'out' | 'in';
+  gate: string;
+  at?: string;
+  accounts: InterchangeAccountView[];
+  photoRefs: string[];
+  /** FALSE means nobody said anything about this gate at all — shown as a fact, not as an empty list. */
+  stated: boolean;
+  disputed: boolean;
+}
+
 export interface FreeDaysClaimView {
   kind: FreeDayKind;
   days: number;
@@ -183,6 +211,8 @@ export interface ContainerBoxView {
   returnDepot?: string;
   /** Nothing in it. Said out loud rather than inferred from a small weight. */
   returnEmpty?: boolean;
+  /** Y3 — both gates, always, so the one nobody recorded shows as the one nobody recorded. */
+  interchange: InterchangeGateView[];
   freeDays: FreeDaysClaimView[];
   clock: BoxClockView;
 }
