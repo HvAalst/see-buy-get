@@ -224,7 +224,7 @@ export function MarketScreen({ actions }: { actions: TowerActions }) {
             {series.lanes.length === 0 ? (
               <p class="cons__empty">{t('tower.market.lanesNone')}</p>
             ) : (
-              <table class="ctbl">
+              <table class="ctbl ctbl--stack">
                 <thead>
                   <tr>
                     <th>{t('tower.market.col.lane')}</th>
@@ -237,10 +237,19 @@ export function MarketScreen({ actions }: { actions: TowerActions }) {
                 <tbody>
                   {topLanes(series.lanes).map((l) => (
                     <tr key={l.lane}>
-                      <td class="ctbl__strong">{l.lane}</td>
-                      <td>{l.postedLoads}</td>
-                      <td>{l.claimedLoads}</td>
-                      <td class="ctbl__sub">{l.priorPostedLoads}</td>
+                      <td class="ctbl__lead">{l.lane}</td>
+                      <td>
+                        <span class="ctbl__lbl">{t('tower.market.col.posted')}</span>
+                        {l.postedLoads}
+                      </td>
+                      <td>
+                        <span class="ctbl__lbl">{t('tower.market.col.claimed')}</span>
+                        {l.claimedLoads}
+                      </td>
+                      <td class="ctbl__sub">
+                        <span class="ctbl__lbl">{t('tower.market.col.before')}</span>
+                        {l.priorPostedLoads}
+                      </td>
                       <td class="ctbl__num">
                         {l.quiet ? <span class="ctag ctag--warn">{t('tower.market.quiet')}</span> : null}
                         {l.thin ? <span class="ctag ctag--quiet">{t('tower.market.thin')}</span> : null}

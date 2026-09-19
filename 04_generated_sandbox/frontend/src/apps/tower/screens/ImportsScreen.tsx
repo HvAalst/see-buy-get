@@ -29,6 +29,7 @@ import {
   liveGrants,
   outstanding,
   outstandingCount,
+  partiesDiffer,
   readersOf,
   paperTone,
   publishBlocker,
@@ -205,13 +206,24 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
   const PAGE = 20;
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(0);
-  const found = (rows ?? []).filter((r) => {
+  const [onlyWaiting, setOnlyWaiting] = useState(false);
+  const slice = onlyWaiting ? (rows ?? []).filter((r) => r.waitingOnYou > 0) : (rows ?? []);
+  const found = slice.filter((r) => {
     const q = query.trim().toLowerCase();
     if (!q) return true;
     return [r.code, r.containerNo, r.goodsDescription, r.destPort, r.agentName].filter(Boolean).some((f) => String(f).toLowerCase().includes(q));
   });
   const pages = Math.max(1, Math.ceil(found.length / PAGE));
   const shown = found.slice(page * PAGE, page * PAGE + PAGE);
+  /*
+   * WHETHER "WHICH SIDE ARE YOU ON" IS WORTH SAYING AT ALL.
+   *
+   * Derived from what is on the screen rather than from who is reading it, because a company can be the
+   * importer on one container and the agent clearing another. When every visible row gives the same
+   * answer the column is not telling anybody apart, and twenty identical pills are twenty things the eye
+   * has to step over on its way to the one that differs.
+   */
+  const mixedParties = partiesDiffer(shown);
 
   const registerFault = registerBlocker(form);
   const publishFault = publishBlocker(lines);
@@ -464,6 +476,36 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                 placeholder={t('tower.imports.searchPh')}
               />
             </label>
+            {/* WHICH SLICE, and only offered where there IS a slice: a filter for nought of them is a
+                control that empties the list and explains nothing. The question an importer asks all
+                day is which of these needs them, and the answer is usually four rows out of eighty-nine. */}
+            {waiting !== null && waiting > 0 ? (
+              <div class="twr-knob cfield">
+                <span class="cfield__label">{t('tower.imports.show')}</span>
+                <div class="twr-panelend">
+                  <button
+                    type="button"
+                    class={`cbtn cbtn--ghost cbtn--sm${onlyWaiting ? '' : ' cbtn--on'}`}
+                    onClick={() => {
+                      setOnlyWaiting(false);
+                      setPage(0);
+                    }}
+                  >
+                    {t('tower.imports.showAll', { n: rows.length })}
+                  </button>
+                  <button
+                    type="button"
+                    class={`cbtn cbtn--ghost cbtn--sm${onlyWaiting ? ' cbtn--on' : ''}`}
+                    onClick={() => {
+                      setOnlyWaiting(true);
+                      setPage(0);
+                    }}
+                  >
+                    {t('tower.imports.showWaiting', { n: waiting })}
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
         {rows === null ? (
@@ -471,7 +513,7 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
         ) : rows.length === 0 ? (
           <p class="cons__empty">{isCompany ? t('tower.imports.noneCompany') : t('tower.imports.none')}</p>
         ) : (
-          <table class="ctbl">
+          <table class="ctbl ctbl--zebra ctbl--stack">
             <thead>
               <tr>
                 <th>{t('tower.imports.col.code')}</th>
@@ -483,25 +525,46 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
             </thead>
             <tbody>
               {shown.map((row) => (
-                <tr key={row.importId}>
+                <tr key={row.importId} class={detail?.importId === row.importId ? 'is-open' : undefined}>
                   <td>
-                    <div class="ctbl__strong">{row.code}</div>
-                    <div class="chint">{row.goodsDescription}</div>
-                    {row.containerNo ? <div class="chint">{row.containerNo}</div> : null}
-                  </td>
-                  <td class="ctbl__sub">
-                    <div>
-                      {row.originCountry} → {row.destCountry} · {row.destPort}
+                    <div class="ctbl__lines">
+                      {/* ONE ANCHOR PER ROW, a size larger than everything around it. Twenty rows of
+                          13px text differing only in weight is a texture, not a hierarchy. */}
+                      <span class="ctbl__lead">{row.code}</span>
+                      <span>{row.goodsDescription}</span>
+                      {row.containerNo ? <span class="ctbl__mono">{row.containerNo}</span> : null}
                     </div>
-                    {row.etaAt ? <div>{t('tower.imports.eta', { date: row.etaAt })}</div> : null}
                   </td>
                   <td class="ctbl__sub">
-                    <div>{row.agentName ?? t('tower.imports.status.open')}</div>
-                    <span class="ctag ctag--quiet">{t(`tower.imports.youAre.${row.youAre}` as never)}</span>
+                    <span class="ctbl__lbl">{t('tower.imports.col.route')}</span>
+                    <div class="ctbl__lines">
+                      <span>
+                        {row.originCountry} → {row.destCountry} · {row.destPort}
+                      </span>
+                      {row.etaAt ? <span>{t('tower.imports.eta', { date: row.etaAt })}</span> : null}
+                    </div>
                   </td>
                   <td class="ctbl__sub">
-                    {row.asked ? t('tower.imports.progress', { accepted: row.accepted, asked: row.asked }) : t('tower.imports.noneAsked')}
-                    {row.waitingOnYou ? <div class="ctag ctag--warn">{t('tower.imports.waitingOnYou', { n: row.waitingOnYou })}</div> : null}
+                    <span class="ctbl__lbl">{t('tower.imports.col.agent')}</span>
+                    <div class="ctbl__lines">
+                      {row.agentName ? <span>{row.agentName}</span> : <span class="ctag ctag--quiet">{t('tower.imports.status.open')}</span>}
+                      {/* Said only where it DISTINGUISHES one row from another. A company administrator
+                          is the importer on every line they can see, so a tag reading "yours" on all
+                          eighty-nine of them is eighty-nine pills carrying no information. */}
+                      {mixedParties ? <span class="ctag ctag--quiet">{t(`tower.imports.youAre.${row.youAre}` as never)}</span> : null}
+                    </div>
+                  </td>
+                  <td class="ctbl__sub">
+                    <span class="ctbl__lbl">{t('tower.imports.col.papers')}</span>
+                    {/* A STATE, not a sentence. Four greys in a column are read one at a time; four
+                        pills of three colours are read at a glance, which is the whole job here. */}
+                    {row.waitingOnYou ? (
+                      <span class="ctag ctag--warn">{t('tower.imports.waitingOnYou', { n: row.waitingOnYou })}</span>
+                    ) : row.asked ? (
+                      <span class={`ctag ${row.accepted >= row.asked ? 'ctag--ok' : 'ctag--quiet'}`}>{t('tower.imports.progress', { accepted: row.accepted, asked: row.asked })}</span>
+                    ) : (
+                      <span>{t('tower.imports.noneAsked')}</span>
+                    )}
                   </td>
                   <td class="ctbl__num">
                     <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => (detail?.importId === row.importId ? setDetail(null) : void openOne(row.importId))}>

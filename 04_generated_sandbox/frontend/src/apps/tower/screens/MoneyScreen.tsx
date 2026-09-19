@@ -99,7 +99,7 @@ export function MoneyScreen({ state, actions }: { state: TowerState; actions: To
             <p>{t('tower.money.emptyBody')}</p>
           </div>
         ) : (
-          <table class="ctbl">
+          <table class="ctbl ctbl--stack">
             <thead>
               <tr>
                 <th>{t('tower.money.col.payee')}</th>
@@ -114,12 +114,22 @@ export function MoneyScreen({ state, actions }: { state: TowerState; actions: To
               {state.payouts.map((row) => (
                 <tr key={row.payoutId}>
                   <td class="ctbl__mono">{row.payeeDid?.slice(0, 22) ?? '—'}…</td>
-                  <td class="ctbl__num ctbl__strong">{amount(row.amount, row.currency ?? books?.coverage.currency)}</td>
-                  <td class="ctbl__sub">{row.day}</td>
+                  <td class="ctbl__num ctbl__strong">
+                    <span class="ctbl__lbl">{t('tower.money.col.amount')}</span>
+                    {amount(row.amount, row.currency ?? books?.coverage.currency)}
+                  </td>
+                  <td class="ctbl__sub">
+                    <span class="ctbl__lbl">{t('tower.money.col.day')}</span>
+                    {row.day}
+                  </td>
                   <td>
+                    <span class="ctbl__lbl">{t('tower.money.col.state')}</span>
                     <span class={`ctag ctag--${payoutTone(row.status)}`}>{t(`tower.money.state.${row.status}` as never)}</span>
                   </td>
-                  <td class="ctbl__mono">{row.providerRef || '—'}</td>
+                  <td class="ctbl__mono">
+                    <span class="ctbl__lbl">{t('tower.money.col.ref')}</span>
+                    {row.providerRef || '—'}
+                  </td>
                   <td class="ctbl__num">
                     {/* ONE action per state, because there is only ever one honest next step: a payout
                         that has been requested is submitted, a submitted one either settles or fails,
@@ -183,7 +193,7 @@ function NetworkLedger({ state }: { state: TowerState }) {
         </div>
       ) : (
         <>
-          <table class="ctbl">
+          <table class="ctbl ctbl--stack">
             <thead>
               <tr>
                 <th>{t('tower.money.col.type')}</th>
@@ -199,11 +209,18 @@ function NetworkLedger({ state }: { state: TowerState }) {
                     <span class={`ctag ctag--${e.sign === '+' ? 'ok' : 'quiet'}`}>{e.type.replace(/_/g, ' ')}</span>
                   </td>
                   <td class="ctbl__num ctbl__strong">
+                    <span class="ctbl__lbl">{t('tower.money.col.amount')}</span>
                     {e.sign}
                     {money(e.amount)} {e.currency ?? ''}
                   </td>
-                  <td class="ctbl__mono">{e.reference?.slice(0, 24) ?? '—'}</td>
-                  <td class="ctbl__sub">{new Date(e.at).toLocaleString()}</td>
+                  <td class="ctbl__mono">
+                    <span class="ctbl__lbl">{t('tower.money.col.ref')}</span>
+                    {e.reference?.slice(0, 24) ?? '—'}
+                  </td>
+                  <td class="ctbl__sub">
+                    <span class="ctbl__lbl">{t('tower.money.col.when')}</span>
+                    {new Date(e.at).toLocaleString()}
+                  </td>
                 </tr>
               ))}
             </tbody>

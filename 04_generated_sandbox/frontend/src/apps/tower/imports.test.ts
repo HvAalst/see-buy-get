@@ -7,6 +7,7 @@ import {
   companyPapers,
   consignmentPapers,
   fileSize,
+  partiesDiffer,
   paperFileName,
   paperKindShort,
   readersOf,
@@ -167,6 +168,16 @@ describe('a container, its papers, and the agent who clears them', () => {
       { grantId: 'g2', scope: 'consignment' as const, ownerEntityId: 'importer', readerEntityId: 'old', grantedBy: 'Hans', grantedAt: '2026-08-01', revokedAt: '2026-09-01', revokedBy: 'Hans' },
     ];
     expect(liveGrants(grants).map((g) => g.grantId)).toEqual(['g1']);
+  });
+
+  it('says which side you are on only where the rows on screen disagree about it', () => {
+    const mine = [{ youAre: 'importer' as const }, { youAre: 'importer' as const }];
+    const both = [{ youAre: 'importer' as const }, { youAre: 'agent' as const }];
+    expect(partiesDiffer(mine)).toBe(false);
+    expect(partiesDiffer(both)).toBe(true);
+    // An empty page disagrees about nothing, and a page of one has nothing to be told apart from.
+    expect(partiesDiffer([])).toBe(false);
+    expect(partiesDiffer([{ youAre: 'agent' as const }])).toBe(false);
   });
 
   it('names a downloaded paper from the SERVER content type, never from the title', () => {

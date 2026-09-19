@@ -493,6 +493,21 @@ export function feeTone(state: FeeState): 'ok' | 'warn' | 'quiet' {
   return state === 'paid' ? 'ok' : state === 'none' ? 'quiet' : 'warn';
 }
 
+/**
+ * Does "which side are you on" tell one row from another, or is it the same word on all of them?
+ *
+ * A COLUMN WHOSE EVERY CELL AGREES IS NOT A COLUMN. A company administrator is the importer on every
+ * container they can see, so tagging each row "yours" prints the same pill eighty-nine times and gives
+ * the eye eighty-nine things to step over on its way to the one row that differs. Staff reading the
+ * network's list, or a company that imports some containers and clears others, genuinely need it.
+ *
+ * Derived from what is ON THE SCREEN rather than from who is reading it, because the answer changes
+ * page by page and the reader's role does not describe it.
+ */
+export function partiesDiffer(rows: { youAre: ImportRow['youAre'] }[]): boolean {
+  return new Set(rows.map((r) => r.youAre)).size > 1;
+}
+
 /* -------------------------------------------- CL2a: the papers as FILES you can handle -- */
 
 /**

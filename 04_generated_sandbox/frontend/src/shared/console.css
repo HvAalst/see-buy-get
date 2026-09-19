@@ -483,10 +483,34 @@
   white-space: nowrap;
 }
 
+/*
+ * 12px, not 8. A row here is rarely one line — it is a code, what is in the box, and the box's own
+ * number — so eight pixels of air between two three-line rows is not a gap, it is a crease. The
+ * BondBridge rhythm this console took its spacing from puts 10/14 inside a divided group.
+ */
 .ctbl td {
-  padding: 8px 16px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--bd-soft);
   vertical-align: top;
+}
+
+/* The lines of ONE cell, held apart from each other by less than the rows are held apart. */
+.ctbl__lines {
+  display: grid;
+  gap: 3px;
+}
+
+/*
+ * THE ANCHOR OF A ROW — one thing per row at 14px that the eye can run down the column.
+ *
+ * `.ctbl__strong` is 13px and bold, which is the same size as everything around it and a different
+ * weight; over twenty multi-line rows that is not a hierarchy, it is a texture, and the honest report
+ * of reading it all day was "it makes me dizzy". A step in SIZE is what stops the eye sliding.
+ */
+.ctbl__lead {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--navy);
 }
 
 .ctbl tbody tr:last-child td {
@@ -507,6 +531,35 @@
    the quiet ground and keeps the orange row directly above it as the thing that says which row this is. */
 .ctbl tbody tr.is-open.ctbl__editor td {
   background: var(--panel);
+}
+
+/*
+ * ZEBRA, and only where a table is long enough to need it (put `ctbl--zebra` on the table).
+ *
+ * The ground is --appbg, the same near-white the page itself is on, so it reads as a band rather than
+ * as a highlight — nothing in this list is more important for being in an odd row. What it does is
+ * carry the eye ACROSS a multi-line row without dropping into the one below, which is the specific
+ * failure that makes a long table tiring.
+ *
+ * Hover and the open row are restated below it: they mean something, and a state must out-draw a
+ * stripe. Equal specificity means source order decides, so they have to come after.
+ */
+.ctbl--zebra tbody tr:nth-child(odd) td {
+  background: var(--appbg);
+}
+
+.ctbl--zebra tbody tr:hover td {
+  background: var(--blue-soft);
+}
+
+.ctbl--zebra tbody tr.is-open td {
+  background: var(--org-light);
+}
+
+/* The column heading, repeated inside the cell for the stacked layout below. Invisible while the
+   table is a table — a label under a heading that already says it is noise twice. */
+.ctbl__lbl {
+  display: none;
 }
 
 .ctbl__num {
@@ -587,6 +640,18 @@
   min-height: 26px;
   padding: 0 10px;
   font-size: var(--c-fs-sm);
+}
+
+/* ORANGE = THIS ONE IS ON, the rail's signal again: a filter you are looking THROUGH is a state, not
+   an action, and the difference matters most on a control that looks like every other button. */
+.cbtn--on {
+  background: var(--org-light);
+  border-color: var(--org);
+  color: var(--navy);
+}
+
+.cbtn--on:hover:not(:disabled) {
+  background: var(--org-light);
 }
 
 .cfield {
@@ -1065,5 +1130,101 @@
 
   .cons__panelt {
     font-size: 17px;
+  }
+}
+
+/* ---------------------------------------------------------------- stacked --- */
+
+/*
+ * A FIVE-COLUMN TABLE IS NOT A PHONE LAYOUT.
+ *
+ * Below the sidebar line the work area scrolls sideways to fit a wide table, which is better than
+ * cutting it off and is still wrong: a row somebody has to drag to finish reading is a row that gets
+ * half read. The same decision the navigation already made — CSS can move a menu but it cannot swap
+ * one, and a table squeezed into a phone is a desk layout with a scrollbar.
+ *
+ * So `ctbl--stack` turns each ROW into a card and each CELL into a labelled line of it. The labels are
+ * real spans rather than ::before content, because generated content is not reliably announced and a
+ * card whose lines are unlabelled is four values with no names.
+ *
+ * Opt-in per table, because a two-column table is perfectly readable at any width and does not want
+ * to become a stack of cards.
+ */
+@media (max-width: 1100px) {
+  .ctbl--stack,
+  .ctbl--stack tbody,
+  .ctbl--stack tr,
+  .ctbl--stack td {
+    display: block;
+    width: 100%;
+  }
+
+  .ctbl--stack {
+    padding: 0 16px 16px;
+  }
+
+  .ctbl--stack thead {
+    display: none;
+  }
+
+  .ctbl--stack tbody tr:last-child {
+    margin-bottom: 0;
+  }
+
+  .ctbl--stack tr {
+    background: var(--bg);
+    border: 1px solid var(--bd-soft);
+    border-radius: var(--r-ctl);
+    padding: 12px 14px;
+    margin-bottom: 10px;
+  }
+
+  /* The card carries the ground now, so the cells inside it must not — including the stripe, which
+     has nothing left to do once every row is its own box. */
+  .ctbl--stack tbody tr td,
+  .ctbl--stack tbody tr:hover td,
+  .ctbl--stack.ctbl--zebra tbody tr:nth-child(odd) td,
+  .ctbl--stack.ctbl--zebra tbody tr.is-open td {
+    background: transparent;
+  }
+
+  .ctbl--stack tbody tr:hover {
+    background: var(--blue-soft);
+  }
+
+  .ctbl--stack tbody tr.is-open {
+    background: var(--org-light);
+    border-color: var(--org);
+  }
+
+  .ctbl--stack td {
+    padding: 0;
+    border: 0;
+    text-align: left;
+  }
+
+  .ctbl--stack td + td {
+    margin-top: 10px;
+  }
+
+  .ctbl--stack .ctbl__num {
+    text-align: left;
+  }
+
+  .ctbl--stack .ctbl__lbl {
+    display: block;
+    margin-bottom: 3px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--tx3);
+  }
+}
+
+/* The narrow gutter again, after the stacked block so it is the one that wins at this width. */
+@media (max-width: 640px) {
+  .ctbl--stack {
+    padding: 0 12px 12px;
   }
 }
