@@ -392,6 +392,37 @@ export function createOperatorApi(sbg: SbgClient) {
     uploadMedia: (kind: string, dataUrl: string, thumbDataUrl?: string) =>
       sbg.request((c) => c.POST('/v1/sbg/media', { body: { kind, dataUrl, ...(thumbDataUrl ? { thumbDataUrl } : {}) } as never })),
 
+
+    /* ---- Y4: a yard that says it holds empties, and what is on its way to it ---- */
+
+    /**
+     * A yard opts in. A CLAIM, like an agent's advertisement — attributed, dated, never checked.
+     *
+     * No slot, row or tier anywhere in this shape: yard planning needs the yard's geometry and the rules
+     * that bind a slot to a box, which is a model of a site we have never seen. What we bring instead is
+     * what is arriving.
+     */
+    declareDepot: (body: { placeLabel: string; country: string; location?: { lat: number; lng: number }; note?: string; entityId?: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/depots', { body: body as never })),
+
+    closeDepot: (entityId: string, by?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/depots/{entityId}/close', { params: { path: { entityId } }, body: { ...(by ? { by } : {}) } as never })),
+
+    /** Which yards exist, alphabetical and never ranked. Counts travel; the numbers do not. */
+    findDepots: (country?: string, q?: string) =>
+      sbg.request((c) => c.GET('/v1/sbg/depots', { params: { query: { ...(country ? { country } : {}), ...(q ? { q } : {}) } } } as never)),
+
+    /** One yard's own register: what it says, what we derived, and what is on its way. */
+    depotRegister: (entityId: string) => sbg.request((c) => c.GET('/v1/sbg/depots/{entityId}/register', { params: { path: { entityId } } })),
+
+    /** The yard says a box is standing there — with the position in THEIR words, if they keep one. */
+    depotBoxHere: (entityId: string, body: { containerNo: string; position?: string; note?: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/depots/{entityId}/boxes', { params: { path: { entityId } }, body: body as never })),
+
+    /** It left. Removed from what the yard SAYS — never from what we derived, which is a movement record. */
+    depotBoxGone: (entityId: string, containerNo: string) =>
+      sbg.request((c) => c.DELETE('/v1/sbg/depots/{entityId}/boxes/{containerNo}', { params: { path: { entityId, containerNo } } })),
+
     /** Every box out, with its clock. Operator-only: it spans companies by construction. */
     boxesOut: () => sbg.request((c) => c.GET('/v1/sbg/boxes', {})),
 

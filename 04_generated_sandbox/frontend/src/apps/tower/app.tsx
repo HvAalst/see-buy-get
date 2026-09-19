@@ -20,6 +20,7 @@ import { NetworkScreen } from './screens/NetworkScreen';
 import { RatesScreen } from './screens/RatesScreen';
 import { ImportsScreen } from './screens/ImportsScreen';
 import { MarketScreen } from './screens/MarketScreen';
+import { DepotsScreen } from './screens/DepotsScreen';
 import { MoversScreen } from './screens/MoversScreen';
 import { SignInScreen } from './screens/SignInScreen';
 import { ConsolePhoneNav, ConsoleRail } from './ConsoleNav';
@@ -92,6 +93,9 @@ export function App() {
     'rates',
     'imports',
     'market',
+    // Y4 — offered to BOTH: a yard reads its own register here, and network staff read the directory.
+    // The routes behind it answer either way, which is what the movers defect taught.
+    'depots',
   ];
   const groups = groupsFor(available);
 
@@ -187,6 +191,8 @@ export function App() {
             <MoversScreen state={state} actions={actions} />
           ) : state.screen === 'market' ? (
             <MarketScreen actions={actions} />
+          ) : state.screen === 'depots' ? (
+            <DepotsScreen state={state} actions={actions} />
           ) : state.screen === 'imports' ? (
             <ImportsScreen state={state} actions={actions} />
           ) : state.screen === 'rates' ? (

@@ -32,7 +32,9 @@ export interface NavGroup {
  * waiting, what is owed, and only then what is configured.
  */
 export const NAV_GROUPS: NavGroup[] = [
-  { key: 'overview', labelKey: 'tower.group.overview', icon: 'home', screens: ['network', 'market', 'movers'] },
+  // Y4's yard register sits here rather than under setup: a yard's own list is read every morning, and an
+  // operator reading it is asking the market question — which yards exist and what do they say they hold.
+  { key: 'overview', labelKey: 'tower.group.overview', icon: 'home', screens: ['network', 'market', 'movers', 'depots'] },
   {
     key: 'waiting',
     labelKey: 'tower.group.waiting',
@@ -71,6 +73,7 @@ export const SCREEN_META: Record<Screen, { labelKey: MessageKey; icon: IconName 
   corridors: { labelKey: 'tower.nav.corridors', icon: 'route' },
   borders: { labelKey: 'tower.nav.borders', icon: 'pin' },
   presence: { labelKey: 'tower.nav.presence', icon: 'pin' },
+  depots: { labelKey: 'tower.nav.depots', icon: 'box' },
   pictures: { labelKey: 'tower.nav.pictures', icon: 'camera' },
 };
 

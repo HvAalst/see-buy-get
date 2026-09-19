@@ -52,6 +52,13 @@ export interface BoxTerm extends BoxTimes {
   returnFreightId?: string;
   /** The depot it is going back to — a label a person types, as a port is. */
   returnDepot?: string;
+  /**
+   * Y4 — the REGISTERED yard it is going back to, when the person posting the leg picked one.
+   *
+   * Only set where a depot was chosen from the register, never matched from the label: two yards can call
+   * themselves the same thing, and a guess here would put somebody else's box on somebody else's list.
+   */
+  returnDepotEntityId?: string;
   /** Who recorded the arrival, because nothing tells us and somebody has to have said it. */
   arrivedBy?: string;
   /**
@@ -192,6 +199,7 @@ export class ContainerBoxService {
       roadFreightId?: string;
       returnFreightId?: string;
       returnDepot?: string;
+      returnDepotEntityId?: string;
     } = {},
     now = Date.now(),
   ): ContainerBox {
@@ -227,6 +235,7 @@ export class ContainerBoxService {
     if (ctx.roadFreightId) term.roadFreightId = ctx.roadFreightId;
     if (ctx.returnFreightId) term.returnFreightId = ctx.returnFreightId;
     if (ctx.returnDepot) term.returnDepot = ctx.returnDepot;
+    if (ctx.returnDepotEntityId) term.returnDepotEntityId = ctx.returnDepotEntityId;
 
     this.boxes.set(containerNo, box);
     return box;
@@ -393,6 +402,27 @@ export class ContainerBoxService {
       freeDays: times.freeDays,
       clock: boxClock(times, now),
     };
+  }
+
+  /**
+   * Y4 — EVERY BOX WHOSE LEG HOME NAMES THIS YARD, and where that leg has got to.
+   *
+   * The arrived ones are what we DERIVED about what is standing there; the rest are what is on its way.
+   * That second list is the piece a gate man with a notebook cannot have and we already hold, because Y2
+   * put the leg home on the board — and it is the planning input a yard actually wants. Where the box
+   * then goes inside the yard is their business, and nothing here has an opinion about it.
+   */
+  atDepot(entityId: string): Array<{ containerNo: string; legCode: string; state: 'posted' | 'moving' | 'arrived'; at?: string; empty: boolean }> {
+    const out: Array<{ containerNo: string; legCode: string; state: 'posted' | 'moving' | 'arrived'; at?: string; empty: boolean }> = [];
+    for (const box of this.boxes.values()) {
+      for (const term of box.terms) {
+        if (term.returnDepotEntityId !== entityId) continue;
+        const home = this.returnOf(term);
+        if (!home) continue;
+        out.push({ containerNo: box.containerNo, legCode: home.code, state: home.state, ...(home.deliveredAt ? { at: home.deliveredAt } : {}), empty: home.empty });
+      }
+    }
+    return out.sort((a, b) => (a.containerNo < b.containerNo ? -1 : 1));
   }
 
   /** Every box we have ever been told about, newest first. For an operator, and for the sweep. */

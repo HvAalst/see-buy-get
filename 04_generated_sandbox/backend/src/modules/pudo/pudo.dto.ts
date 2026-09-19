@@ -446,6 +446,36 @@ export class BoxFreeDaysDto {
  * the caller's own uploads: the service ADOPTS them, so a ref that is not theirs is dropped rather than
  * cited, and a record never names evidence nobody can produce.
  */
+/**
+ * Y4 — a yard says it holds empties. A claim, like an agent's advertisement: attributed and never checked.
+ *
+ * No slots, rows or tiers here, and that is the design rather than an omission — see the service.
+ */
+export class DeclareDepotDto {
+  @IsString() @MaxLength(120) placeLabel!: string;
+  @IsString() @MaxLength(2) country!: string;
+  @IsOptional() @ValidateNested() @Type(() => GeoDto) location?: GeoDto;
+  @IsOptional() @IsString() @MaxLength(600) note?: string;
+  @IsOptional() @IsString() entityId?: string;
+  @IsOptional() @IsString() by?: string;
+}
+
+/** One box the yard says is standing there, with the position IN THEIR OWN WORDS if they keep one. */
+export class DepotBoxDto {
+  @IsString() @MaxLength(20) containerNo!: string;
+  /** "C-12, third row" — their handwriting. We record a position; we never assign one. */
+  @IsOptional() @IsString() @MaxLength(60) position?: string;
+  @IsOptional() @IsString() @MaxLength(300) note?: string;
+  @IsOptional() @IsString() entityId?: string;
+  @IsOptional() @IsString() by?: string;
+}
+
+/** Nothing but who is acting — for the acts that need no other word. */
+export class ByDto {
+  @IsOptional() @IsString() entityId?: string;
+  @IsOptional() @IsString() by?: string;
+}
+
 export class BoxInterchangeDto {
   @IsIn(INTERCHANGE_SIDES) @ApiProperty({ enum: INTERCHANGE_SIDES }) side!: string;
   @IsIn(CONDITION_STANCES) @ApiProperty({ enum: CONDITION_STANCES }) stance!: string;
@@ -461,6 +491,8 @@ export class BoxReturnLegDto {
   /** Taken from the laden leg's destination when we have one; asked for only when we do not. */
   @IsOptional() @IsString() @MaxLength(120) fromLabel?: string;
   @IsOptional() @ValidateNested() @Type(() => GeoDto) fromLocation?: GeoDto;
+  /** Y4 — a yard picked from the register, so the box lands on ITS list. Never matched from the label. */
+  @IsOptional() @IsString() depotEntityId?: string;
   /**
    * NO @Min HERE, deliberately — the service owns this rule and answers it in a sentence.
    *

@@ -565,7 +565,7 @@ export class ImportService {
   mintReturnLeg(
     importId: string,
     actorEntityId: string,
-    input: { depotLabel: string; depotLocation?: GeoPoint; fromLabel?: string; fromLocation?: GeoPoint; weightKg: number; cargo?: string },
+    input: { depotLabel: string; depotLocation?: GeoPoint; fromLabel?: string; fromLocation?: GeoPoint; weightKg: number; cargo?: string; depotEntityId?: string },
     by: string,
     now = Date.now(),
   ): ImportDetail {
@@ -641,7 +641,14 @@ export class ImportService {
       now,
     );
 
-    this.boxes.see(containerNo, { importId, returnFreightId: freight.freightId, returnDepot: depotLabel }, now);
+    /*
+     * Y4 — and the depot is NAMED rather than matched. Where the person posting the leg picked a yard
+     * from the register, the box lands on that yard's own list; where they typed a label, it does not.
+     * Matching two yards that call themselves the same thing would put somebody else's box on somebody
+     * else's register, which is worse than a shorter list.
+     */
+    const depotEntityId = input.depotEntityId ? this.entities.get(input.depotEntityId).entityId : undefined;
+    this.boxes.see(containerNo, { importId, returnFreightId: freight.freightId, returnDepot: depotLabel, ...(depotEntityId ? { returnDepotEntityId: depotEntityId } : {}) }, now);
     return this.detail(consignment.importId, actorEntityId);
   }
 

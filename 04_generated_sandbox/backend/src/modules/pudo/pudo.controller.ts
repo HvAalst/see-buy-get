@@ -54,6 +54,8 @@ import { FreightBoardResponse, FreightProposalsResponse, MarketResponse, MarketS
 import { MarketPulseService } from './market-pulse.service';
 import { CargoService } from './cargo.service';
 import { MediaService } from './media.service';
+import { EmptyDepot, EmptyDepotService } from './empty-depot.service';
+import { DepotListResponse, DepotRegisterView } from './depot.types';
 import { FleetManagerService } from './fleet-manager.service';
 import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
@@ -82,6 +84,9 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   BoxEndingDto,
   BoxReturnLegDto,
   BoxInterchangeDto,
+  DeclareDepotDto,
+  DepotBoxDto,
+  ByDto,
   MintRoadLegDto,
   PresenceDto,
   PresenceDecisionDto,
@@ -199,6 +204,8 @@ export class SbgController {
     // Y3 — the box's gate photographs are served from here, under the IMPORT's own party rule rather than
     // the media module's owner-or-operator one: the driver took them, and the two parties are who need them.
     private readonly media: MediaService,
+    // Y4 — a yard that says it holds empties, and what is on its way to it.
+    private readonly depots: EmptyDepotService,
     @Inject(GEOCODER) private readonly geocoder: Geocoder,
     @Optional() private readonly mail?: MailService,
     @Optional() private readonly papers?: PapersWatchService,
@@ -1028,6 +1035,7 @@ export class SbgController {
           fromLocation: dto.fromLocation as never,
           weightKg: dto.weightKg,
           cargo: dto.cargo,
+          depotEntityId: dto.depotEntityId,
         },
         this.namedActor(actor, dto.by),
       ),
@@ -1109,6 +1117,94 @@ export class SbgController {
   @Get('container-types')
   containerTypes(): { items: ContainerTypeSpec[] } {
     return { items: CONTAINER_TYPES };
+  }
+
+
+  /* ------------------------------ Y4 — a yard that wants to be findable, and what is coming to it -- */
+
+  /**
+   * A YARD OPTS IN. A claim, exactly as a clearing agent's advertisement is one: attributed, dated, and
+   * never checked, because we run no yards and have nothing to check it against.
+   *
+   * WHAT THIS IS NOT is the more interesting half. Yard management is mainly smart planning — where to put
+   * a box so it is not moved twice — and that needs the yard's geometry, the rules that bind a slot to a
+   * box (a powered row for a reefer, segregation distances for dangerous goods, tier weights, ground
+   * bearing) and the departure order. The first two are a model of a site we have never seen, and getting
+   * a segregation distance wrong is the kind of advice that hurts somebody. So the layout stays theirs.
+   * The departure side is ours already, because the leg home is on the board.
+   */
+  @Roles('operator', 'entity_admin')
+  @Post('depots')
+  declareDepot(@Body() dto: DeclareDepotDto, @Actor() actor: IntrospectionResult): EmptyDepot {
+    return this.depots.declare(
+      this.actingCompany(actor, dto.entityId),
+      { placeLabel: dto.placeLabel, country: dto.country, location: dto.location as never, note: dto.note },
+      this.namedActor(actor, dto.by),
+    );
+  }
+
+  /** It stopped holding empties. Marked, never deleted — it held them last month. */
+  @Roles('operator', 'entity_admin')
+  @Post('depots/:entityId/close')
+  closeDepot(@Param('entityId') entityId: string, @Body() dto: ByDto, @Actor() actor: IntrospectionResult): EmptyDepot {
+    return this.depots.close(this.requireDepotKeeper(actor, entityId), this.namedActor(actor, dto.by));
+  }
+
+  /**
+   * THE FINDER — alphabetical, never ranked, for the same reason the agent directory refused a league
+   * table: an ordering is a judgement, and a yard that learns how to climb a list will climb it.
+   *
+   * Counts travel and the numbers do not. Which boxes are standing in a yard is a map of somebody else's
+   * assets, and it serves nobody who is deciding where to drive — what they need is which yards exist,
+   * near where, and whether there is anything in them. The next step is a telephone call.
+   */
+  @Roles('operator', 'entity_admin')
+  @Get('depots')
+  findDepots(@Query('country') country?: string, @Query('q') q?: string): DepotListResponse {
+    return {
+      items: this.depots.list({ country, text: q }) as never,
+      basis: 'Alphabetical by name, never ranked. Each yard’s counts are its own claim and our own derivation, kept apart.',
+    };
+  }
+
+  /**
+   * ONE YARD'S REGISTER: what it says is there, what we derived, and what is on its way.
+   *
+   * The yard's own, and an operator's. Not a participant's: the box-level list is an inventory of another
+   * company's assets, and the finder above already answers the question a haulier actually has.
+   */
+  @Roles('operator', 'entity_admin')
+  @Get('depots/:entityId/register')
+  depotRegister(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult): DepotRegisterView {
+    return this.depots.registerOf(this.requireDepotKeeper(actor, entityId)) as never;
+  }
+
+  /**
+   * The yard says a box is standing there — with the position IN THEIR OWN WORDS, if they keep one.
+   *
+   * "C-12, third row" is their handwriting, kept so a haulier can be told where to drive and a gate man
+   * can find the box. Recording a position and assigning one are different jobs and only the first is
+   * honestly ours, which is the whole of the layout argument in one field.
+   */
+  @Roles('operator', 'entity_admin')
+  @Post('depots/:entityId/boxes')
+  depotSays(@Param('entityId') entityId: string, @Body() dto: DepotBoxDto, @Actor() actor: IntrospectionResult): DepotRegisterView {
+    return this.depots.say(this.requireDepotKeeper(actor, entityId), dto.containerNo, { position: dto.position, note: dto.note }, this.namedActor(actor, dto.by)) as never;
+  }
+
+  /** It left. Removed from what the yard SAYS — never from what we derived, which is a movement record. */
+  @Roles('operator', 'entity_admin')
+  @Delete('depots/:entityId/boxes/:containerNo')
+  depotGone(@Param('entityId') entityId: string, @Param('containerNo') containerNo: string, @Actor() actor: IntrospectionResult): DepotRegisterView {
+    return this.depots.gone(this.requireDepotKeeper(actor, entityId), containerNo) as never;
+  }
+
+  /** A yard's own register is the yard's, and network staff may act on it by naming which yard. */
+  private requireDepotKeeper(actor: IntrospectionResult, entityId: string): string {
+    if (actor?.role === 'operator') return this.entities.get(entityId).entityId;
+    const own = this.actingCompany(actor, entityId);
+    if (own !== entityId) throw new GlosError('FORBIDDEN', 'A yard’s register is its own');
+    return own;
   }
 
   /* ------------------------------ CL6 — what an agent says they clear, and finding one -- */

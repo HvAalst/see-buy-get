@@ -5467,6 +5467,213 @@
         }
       }
     },
+    "/v1/sbg/depots": {
+      "post": {
+        "operationId": "Sbg.declareDepot",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeclareDepotDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "Sbg.findDepots",
+        "summary": "",
+        "description": "THE FINDER — alphabetical, never ranked, for the same reason the agent directory refused a league\ntable: an ordering is a judgement, and a yard that learns how to climb a list will climb it.\n\nCounts travel and the numbers do not. Which boxes are standing in a yard is a map of somebody else's\nassets, and it serves nobody who is deciding where to drive — what they need is which yards exist,\nnear where, and whether there is anything in them. The next step is a telephone call.",
+        "parameters": [
+          {
+            "name": "country",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepotListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/depots/{entityId}/close": {
+      "post": {
+        "operationId": "Sbg.closeDepot",
+        "summary": "",
+        "description": "It stopped holding empties. Marked, never deleted — it held them last month.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ByDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/depots/{entityId}/register": {
+      "get": {
+        "operationId": "Sbg.depotRegister",
+        "summary": "",
+        "description": "ONE YARD'S REGISTER: what it says is there, what we derived, and what is on its way.\n\nThe yard's own, and an operator's. Not a participant's: the box-level list is an inventory of another\ncompany's assets, and the finder above already answers the question a haulier actually has.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepotRegisterView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/depots/{entityId}/boxes": {
+      "post": {
+        "operationId": "Sbg.depotSays",
+        "summary": "",
+        "description": "The yard says a box is standing there — with the position IN THEIR OWN WORDS, if they keep one.\n\n\"C-12, third row\" is their handwriting, kept so a haulier can be told where to drive and a gate man\ncan find the box. Recording a position and assigning one are different jobs and only the first is\nhonestly ours, which is the whole of the layout argument in one field.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DepotBoxDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepotRegisterView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/depots/{entityId}/boxes/{containerNo}": {
+      "delete": {
+        "operationId": "Sbg.depotGone",
+        "summary": "",
+        "description": "It left. Removed from what the yard SAYS — never from what we derived, which is a movement record.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "containerNo",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepotRegisterView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/entities/{entityId}/clearance-offer": {
       "post": {
         "operationId": "Sbg.setClearanceOffer",
@@ -21310,6 +21517,10 @@
           "fromLocation": {
             "$ref": "#/components/schemas/GeoDto"
           },
+          "depotEntityId": {
+            "type": "string",
+            "description": "Y4 — a yard picked from the register, so the box lands on ITS list. Never matched from the label."
+          },
           "weightKg": {
             "type": "number",
             "description": "NO @Min HERE, deliberately — the service owns this rule and answers it in a sentence.\n\nThe drive found the reason: a decorator refusing with \"weightKg must not be less than 1\" shadowed the\nonly useful thing anybody could say, which is that an empty container is not a light one and its tare\nis painted on its door. One rule, in the place that can explain it."
@@ -21368,6 +21579,259 @@
         "required": [
           "side",
           "stance"
+        ]
+      },
+      "DeclareDepotDto": {
+        "type": "object",
+        "properties": {
+          "placeLabel": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "country": {
+            "type": "string",
+            "maxLength": 2
+          },
+          "location": {
+            "$ref": "#/components/schemas/GeoDto"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 600
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "placeLabel",
+          "country"
+        ]
+      },
+      "ByDto": {
+        "type": "object",
+        "properties": {
+          "entityId": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        }
+      },
+      "DepotRow": {
+        "type": "object",
+        "properties": {
+          "entityId": {
+            "type": "string"
+          },
+          "placeLabel": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "location": {
+            "type": "object"
+          },
+          "saidAt": {
+            "type": "string"
+          },
+          "saidBy": {
+            "type": "string"
+          },
+          "saidCount": {
+            "type": "number"
+          },
+          "derivedCount": {
+            "type": "number"
+          },
+          "inboundCount": {
+            "type": "number"
+          },
+          "basis": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "entityId",
+          "placeLabel",
+          "country",
+          "saidAt",
+          "saidBy",
+          "saidCount",
+          "derivedCount",
+          "inboundCount",
+          "basis"
+        ]
+      },
+      "DepotListResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DepotRow"
+            }
+          },
+          "basis": {
+            "type": "string",
+            "description": "ALPHABETICAL, and said out loud — an ordering is a judgement, and this list makes none."
+          }
+        },
+        "required": [
+          "items",
+          "basis"
+        ]
+      },
+      "DepotBoxSaidView": {
+        "type": "object",
+        "properties": {
+          "containerNo": {
+            "type": "string"
+          },
+          "position": {
+            "type": "string",
+            "description": "THE YARD'S OWN WORDS for where it is: \"C-12, third row\". A label so a haulier can be told where to\ndrive, not a coordinate in a model we pretend to hold."
+          },
+          "note": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "containerNo",
+          "at",
+          "by"
+        ]
+      },
+      "DepotLegView": {
+        "type": "object",
+        "properties": {
+          "containerNo": {
+            "type": "string"
+          },
+          "legCode": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "posted",
+              "moving",
+              "arrived"
+            ]
+          },
+          "at": {
+            "type": "string"
+          },
+          "empty": {
+            "type": "boolean",
+            "description": "Nothing in it. A yard plans differently for an empty than for a box that has to be stripped."
+          }
+        },
+        "required": [
+          "containerNo",
+          "legCode",
+          "state",
+          "empty"
+        ]
+      },
+      "DepotRegisterView": {
+        "type": "object",
+        "properties": {
+          "entityId": {
+            "type": "string"
+          },
+          "placeLabel": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "closed": {
+            "type": "boolean"
+          },
+          "said": {
+            "description": "What the yard SAYS is standing there.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DepotBoxSaidView"
+            }
+          },
+          "derived": {
+            "description": "What we DERIVED — legs that ended here. Incomplete by construction: it knows only our own legs.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DepotLegView"
+            }
+          },
+          "inbound": {
+            "description": "What is ON ITS WAY here. The one thing a gate man with a notebook cannot know.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DepotLegView"
+            }
+          },
+          "inBoth": {
+            "type": "number",
+            "description": "How many appear in both lists. A fact about two sources, never a merge of them."
+          },
+          "basis": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "entityId",
+          "placeLabel",
+          "country",
+          "closed",
+          "said",
+          "derived",
+          "inbound",
+          "inBoth",
+          "basis"
+        ]
+      },
+      "DepotBoxDto": {
+        "type": "object",
+        "properties": {
+          "containerNo": {
+            "type": "string",
+            "maxLength": 20
+          },
+          "position": {
+            "type": "string",
+            "description": "\"C-12, third row\" — their handwriting. We record a position; we never assign one.",
+            "maxLength": 60
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "containerNo"
         ]
       },
       "ClearanceOfferDto": {

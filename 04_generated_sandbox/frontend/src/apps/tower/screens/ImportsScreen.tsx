@@ -82,7 +82,15 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
    */
   const [boxForm, setBoxForm] = useState({ arrivedAt: '', freeDayKind: 'detention', freeDays: '', where: '' });
   /** Y2 — the leg home. Its own form, because it is a LOAD being posted rather than a date being recorded. */
-  const [homeForm, setHomeForm] = useState({ depotLabel: '', weightKg: '', cargo: '' });
+  const [homeForm, setHomeForm] = useState({ depotLabel: '', weightKg: '', cargo: '', depotEntityId: '' });
+  /**
+   * Y4 — the registered yards, so the leg home can NAME one.
+   *
+   * Picking a yard is what puts the box on that yard's own register when it arrives. A typed label does
+   * not: two yards can call themselves the same thing, and matching on words would put somebody else's
+   * box on somebody else's list.
+   */
+  const [depotOptions, setDepotOptions] = useState<Array<{ entityId: string; placeLabel: string; country: string }>>([]);
   /** Y3 — which gate a party is speaking about, and what they are saying. Empty side = the form is shut. */
   const [gateForm, setGateForm] = useState({ side: '', stance: 'damaged', note: '', dataUrl: '' });
   /** One photo open at a time: a thumbnail strip, and a deliberate tap for the full frame. */
@@ -162,6 +170,9 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
     }
     const view = r.data as unknown as ImportDetailView;
     setDetail(view);
+    // Y4 — the registered yards, so the leg home can name one rather than type a label at it.
+    const yards = await client.api.findDepots();
+    setDepotOptions(yards.error ? [] : (((yards.data as unknown as { items?: Array<{ entityId: string; placeLabel: string; country: string }> })?.items ?? []) as Array<{ entityId: string; placeLabel: string; country: string }>));
     // What others have been asked for at THIS port — read beside the container, because that is the only
     // place the answer is useful. A port with nothing recorded says so rather than showing an empty table.
     const k = await client.api.knownImportPapers(view.destCountry, view.destPort);
@@ -1369,6 +1380,29 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                   <>
                     <p class="cons__lede">{t('tower.imports.homeHint')}</p>
                     <div class="twr-knobs">
+                      {/* Y4 — PICK a registered yard where there is one: that is what puts the box on
+                          that yard's own list when it arrives. A typed label does not, and matching two
+                          yards that call themselves the same thing would be worse than not trying. */}
+                      {depotOptions.length ? (
+                        <label class="twr-knob">
+                          <span>{t('tower.imports.f.depotPick')}</span>
+                          <select
+                            value={homeForm.depotEntityId}
+                            onChange={(e) => {
+                              const id = (e.target as HTMLSelectElement).value;
+                              const yard = depotOptions.find((d) => d.entityId === id);
+                              setHomeForm({ ...homeForm, depotEntityId: id, depotLabel: yard ? yard.placeLabel : homeForm.depotLabel });
+                            }}
+                          >
+                            <option value="">{t('tower.imports.depotPickNone')}</option>
+                            {depotOptions.map((d) => (
+                              <option key={d.entityId} value={d.entityId}>
+                                {d.placeLabel} · {d.country}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : null}
                       <label class="twr-knob">
                         <span>{t('tower.imports.f.depot')}</span>
                         <input value={homeForm.depotLabel} onChange={(e) => setHomeForm({ ...homeForm, depotLabel: (e.target as HTMLInputElement).value })} placeholder={t('tower.imports.f.depotPh')} />
@@ -1397,6 +1431,7 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                             () =>
                               client!.api.mintReturnLeg(detail.importId, {
                                 depotLabel: homeForm.depotLabel.trim(),
+                                ...(homeForm.depotEntityId ? { depotEntityId: homeForm.depotEntityId } : {}),
                                 weightKg: Number(homeForm.weightKg),
                                 ...(homeForm.cargo.trim() ? { cargo: homeForm.cargo.trim() } : {}),
                                 ...(who ? { by: who } : {}),

@@ -1,6 +1,6 @@
 # The box as an asset: interchange, the clock, and the return leg
 
-> Status: **Y0 TO Y3 ARE BUILT AND DRIVEN. Y4 and Y5 are design only.** Written 2026-09-18, straight after CL7 (`2d54ae1`, `ba9a11e`)
+> Status: **Y0 TO Y4 ARE BUILT AND DRIVEN. Y5 (the water leg) is design only.** Written 2026-09-18, straight after CL7 (`2d54ae1`, `ba9a11e`)
 > put real container types into the model, because the user's response was that this forces the question:
 > *"this means we must elaborate about container yard management."*
 >
@@ -175,7 +175,56 @@ been handed a false inventory. `basis`, as on the agent record, already says thi
 words. The presence ladder's shape then applies unchanged: a yard is **observed** before it is
 **registered**, and registered long before anything settles with it.
 
-Still never: a yard map, a stacking plan, a slot.
+### e1) "Yard management is mainly about smart planning" — the user, 2026-09-19, and they are right
+
+That is exactly what a terminal operating system is for, and it is exactly why the layout is not ours.
+Worth setting out properly, because "we don't do that" is not an argument.
+
+**WHAT PLANNING IS ACTUALLY MADE OF.** One question, asked forty times a day: *where do I put this box so
+that I do not have to move it twice?* A box buried under three others when its truck arrives costs two
+lifts, a machine and twenty minutes at the gate. Answering it well needs three things:
+
+1. **The yard's geometry** — blocks, rows, tiers, the aisles a machine can turn in, and which ground will
+   take a four-high stack.
+2. **The rules that bind a slot to a box** — a reefer needs a powered row, dangerous goods need
+   segregation distances that differ by class and by jurisdiction, tier weights and ground bearing limit
+   what may sit on what, and the equipment on site decides how high anything can go at all.
+3. **The departure order** — which box leaves next, and to whom.
+
+**(1) AND (2) ARE A MODEL OF SOMEBODY ELSE'S PHYSICAL SITE, AND WE CANNOT HOLD THEM HONESTLY.** We have
+never seen the yard. We do not know what machine is on it this week, what the ground is, or which class of
+dangerous goods the local rule separates by how many metres. And the failure mode is not an inconvenience:
+a segregation distance we got wrong, or a tier over its weight, is the kind of advice that hurts somebody.
+This is the same line CL7 drew when it refused to certify a tank fit for food — we carry the papers, we do
+not issue the verdict — and the same one §3 draws around demurrage tariffs.
+
+**(3) IS THE ONE PIECE A YARD CANNOT GET FOR ITSELF, AND WE ALREADY HOLD IT.** Y2 put the leg home on the
+board, so we know which boxes are on their way to a depot, whether a driver has claimed them, and whether
+there is anything inside. A gate man with a notebook cannot know what is coming today. We can tell them —
+and that is the planning input, not the plan.
+
+So the seam is drawn where it is honest rather than where it is convenient:
+
+| | theirs | ours |
+|---|---|---|
+| geometry, rows, tiers, stacking | ✔ | |
+| which slot this box goes in | ✔ | |
+| what is standing here now | they say it; we record it in **their own words** | |
+| what is on its way here, and when | | ✔ derived from the legs |
+| which boxes are due back to a line | | ✔ the clock |
+
+**WE RECORD A POSITION; WE NEVER ASSIGN ONE.** "C-12, third row" is the yard's own handwriting, kept so a
+haulier can be told where to drive and a gate man can find the box. It is a label, not a coordinate in a
+model we pretend to hold — and the distance between recording and assigning is the whole of the argument
+above.
+
+**AND THE YARDS IN THIS NETWORK'S MARKETS ARE NOT TERMINALS.** Mombasa has a terminal operating system and
+wants nothing from us. An inland empty depot outside Nairobi has a fence, a gate man and a notebook, and
+what it wants from a network is to be findable and to know what is arriving before it arrives. Building a
+worse copy of Navis for that yard would help nobody; telling them three boxes are coming today, two of them
+empty, is worth something on the morning it happens.
+
+Still never: a yard map, a stacking plan, a slot allocation.
 
 ### f) The water leg — a binnenvaartschip is not a truck
 
@@ -257,13 +306,16 @@ the detention bill this was built to prevent.
   never over, and nothing adjudicates two that disagree. **The half that matters is who may look:** the
   driver owns those bytes, so the read is widened by exactly the width of the record — this box, this
   spell, these two parties, with the citation itself as the permission.
-- **Y4 — the empties register a yard opts into**, with the yard's claim and our derivation kept apart.
+- **Y4 — SHIPPED 2026-09-19, driven.** A yard opts in the way an agent advertises; its register keeps the
+  yard's claim and our derivation apart and never totals them; the position is recorded in the yard's own
+  words and never assigned (see e1); the finder is alphabetical and carries counts rather than container
+  numbers; and a box lands on the yard's list BY ITSELF when a leg home that named that yard is
+  delivered. **Inbound is the planning input** — what is coming, and whether it is empty.
 - **Y5 — the water leg.** Independent of Y0–Y4 and the largest of the six: a leg whose carrier is a
   vessel, whose stops are quays, and whose height check is the road one over again.
 - **Never — yard slots, stacking plans, gate queues** (§3), and never a demurrage tariff.
 
-Y0 to Y3 are done. What is left is **Y4** (the yard register a yard opts into) and **Y5** (the water leg),
-and Y5 is independent of all of it.
+Y0 to Y4 are done. What is left is **Y5** (the water leg), independent of all of it.
 
 ## 7. Decided by the user, 2026-09-18
 
@@ -284,10 +336,12 @@ rather than confirming it.
 
 ## 8. Still open
 
-- **What a yard is, in the entity model.** A depot that registers empties is not a shop, a hub or a store,
-  and Y4 should not invent a fifth participant type casually. Likely: a site with a capability, the way a
-  border post and a dock already are.
+- ~~**What a yard is, in the entity model.**~~ **ANSWERED BY Y4:** a depot is a COMPANY that says it holds
+  empties. No fifth participant type — the same shape as a clearing agent, who is a company that has been
+  appointed rather than one that applied.
 - **Who may correct a register entry** a yard got wrong — the yard alone, or a haulier who drove there and
-  found nothing? The road map's answer (both, attributed, nothing adjudicated) probably transfers.
+  found nothing? Y4 shipped with the yard alone, which is the narrow answer and leaves this open: the road
+  map's shape (both, attributed, nothing adjudicated) probably transfers, and would need the haulier's
+  account to sit beside the yard's rather than over it.
 - **Whether a barge leg needs a schedule concept** at all for a first version, or whether a sailing is
   simply a load with a fixed departure that the market cannot bid on.
