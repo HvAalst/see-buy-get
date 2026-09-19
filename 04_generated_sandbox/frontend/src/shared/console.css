@@ -49,6 +49,11 @@
 
   min-height: 100dvh;
   display: grid;
+  /* ONE COLUMN THAT CANNOT GROW PAST THE WINDOW. An auto track is floored by the minimum size of what is
+     in it, so a single nowrap name in the masthead is enough to make the whole document wider than the
+     viewport and cut every panel off at the right edge — on a surface where nothing is meant to scroll
+     sideways except a table. minmax(0, …) is what says "shrink instead". */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: var(--c-mast-h) 1fr;
   background: var(--appbg);
   color: var(--tx);
@@ -78,6 +83,7 @@
   padding: 0 20px;
   background: var(--bg);
   border-bottom: 1px solid var(--bd-soft);
+  min-width: 0;
 }
 
 .cons__brand {
@@ -94,6 +100,8 @@
   letter-spacing: -0.01em;
   color: var(--navy);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* The one live line in the masthead — the same rule the phone apps' TopBar follows: this slot carries
@@ -106,13 +114,22 @@
   text-overflow: ellipsis;
 }
 
+/* At EVERY width, not only below the sidebar line: whoever is signed in is the part of a masthead that
+   can be any length, so it is the part that gives way. The buttons beside it never shrink — a control
+   you cannot read is worse than a name you cannot finish. */
 .cons__who {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
   font-size: var(--c-fs-sm);
   color: var(--tx2);
   white-space: nowrap;
+}
+
+.cons__who > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .cons__whoname {
@@ -240,14 +257,26 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--c-gap);
-  padding: 12px 16px;
+  flex-wrap: wrap;
+  gap: 8px var(--c-gap);
+  padding: 14px 16px;
   border-bottom: 1px solid var(--bd-soft);
 }
 
+/*
+ * 18px, and the reason it needed saying is that it was 13 — the same size as the body text beneath it,
+ * told apart from it by nothing but a heavier weight. A page of panels then had no shape at all: the
+ * eye could not find where one block ended and the next began without reading them. The scale is 22 for
+ * the page, 18 for a panel within it, 13 for everything the panel says.
+ */
 .cons__panelt {
+  font-family: var(--font-display);
+  font-size: 18px;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
   font-weight: 700;
   color: var(--navy);
+  min-width: 0;
 }
 
 
@@ -291,11 +320,6 @@
 .cons__panel > *:not(.cons__panelhead) + *:not(.cons__panelhead) {
   margin-top: 12px;
 }
-/* A caveat the screen cannot switch off. Not an error and not a toast — a standing statement about what
-   the data underneath it is and is not. The road map's "absence of a report is not clearance" lives in
-
-/* Y3 — the two gates a container passes through, and every account of what it looked like there.
-
 /* A block of FACTS about one thing — a label and its value, one per line.
    Not a table: a table is for a list of records, and these are the fields of a single record. The pattern
    was missing, so three screens invented class names that matched no rule at all and rendered as a run of
@@ -337,6 +361,7 @@
     gap: 2px;
   }
 }
+/* Y3 — the two gates a container passes through, and every account of what it looked like there.
    Both gates are always drawn, so the one nobody recorded reads as an absence rather than as nothing. */
 .cons__gates {
   display: grid;
@@ -405,6 +430,8 @@
   height: auto;
   object-fit: contain;
 }
+/* A caveat the screen cannot switch off. Not an error and not a toast — a standing statement about what
+   the data underneath it is and is not. The road map's "absence of a report is not clearance" lives in
    one of these, and so should anything else an operator must not forget while reading a table. */
 .cons__caveat {
   display: flex;
@@ -608,6 +635,174 @@
   font-size: var(--c-fs-sm);
 }
 
+/*
+ * A CHOICE AMONG MANY, CLOSED UNTIL SOMEBODY WANTS TO CHANGE IT.
+ *
+ * Twelve options drawn as twelve chips made the control the tallest thing on the screen and left the
+ * page no shape, and on a narrow window the wrap turned it into a wall of words. Closed, it states the
+ * answer in one line; open, it is a list with ticks.
+ *
+ * Built here and not taken from the phone kit, because the two surfaces disagree about this control on
+ * purpose: OptionPicker gives a thumb one large target per option, and this gives a mouse a short list
+ * it can scan. A native multiple-select is not it either — it cannot carry this palette, it shows no
+ * ticks, and it asks somebody to hold a modifier key to keep what they already chose.
+ */
+.cselect {
+  position: relative;
+}
+
+/* The control keeps to the width of the fields around it, so the form has one left-hand column and
+   one right-hand edge. The chips below it are free to use the whole panel: they are a sentence about
+   what this company handles, not a form field. */
+.cselect__btn,
+.cselect__pop {
+  max-width: 46ch;
+}
+
+.cselect__btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: var(--c-ctl-h);
+  padding: 6px 10px;
+  border: 1px solid var(--bd);
+  border-radius: var(--r-ctl);
+  background: var(--bg);
+  color: var(--tx);
+  font-size: var(--c-fs);
+  text-align: left;
+}
+
+.cselect__btn:hover {
+  border-color: var(--tx3);
+}
+
+.cselect--open .cselect__btn {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px var(--blue-light);
+}
+
+.cselect__val {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+/* Nothing chosen reads as a prompt, not as an answer. */
+.cselect__val--none {
+  font-weight: 400;
+  color: var(--tx3);
+}
+
+.cselect__caret {
+  flex: none;
+  color: var(--tx3);
+  transform: rotate(90deg);
+}
+
+.cselect--open .cselect__caret {
+  transform: rotate(-90deg);
+}
+
+/* The list floats over the panel instead of pushing it down: a form that grows as you open a control
+   moves the button you were about to press. */
+.cselect__pop {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--bg);
+  border: 1px solid var(--bd);
+  border-radius: var(--r-ctl);
+  box-shadow: var(--sh-lg);
+}
+
+.cselect__opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 8px;
+  border-radius: var(--r-ctl);
+  color: var(--tx);
+  font-size: var(--c-fs);
+  text-align: left;
+}
+
+.cselect__opt:hover {
+  background: var(--panel);
+}
+
+.cselect__opt--on {
+  color: var(--navy);
+  font-weight: 600;
+}
+
+/* Drawn rather than a native checkbox, so the tick can be ORANGE — the one colour on this surface that
+   means "this one is on", and the same signal the rail and the open table row already carry. */
+.cselect__tick {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--bd);
+  border-radius: 5px;
+  background: var(--bg);
+  color: transparent;
+}
+
+.cselect__opt--on .cselect__tick {
+  background: var(--org-light);
+  border-color: var(--org);
+  color: var(--org);
+}
+
+/* What was chosen, spelled out under the closed control: a summary reading "3 chosen" and nothing else
+   sends somebody back into the list to find out which three. */
+.cselect__chosen {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.cselect__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 10px;
+  border: 1px solid var(--org);
+  border-radius: 999px;
+  background: var(--org-light);
+  color: var(--navy);
+  font-size: var(--c-fs-sm);
+  font-weight: 600;
+}
+
+.cselect__chipx {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  color: var(--tx2);
+}
+
+.cselect__chipx:hover {
+  background: var(--bg);
+  color: var(--navy);
+}
+
 .chint {
   /* Block, so a hint under a field and a second line under a fact both sit on their own line rather
      than running into whatever follows them. */
@@ -762,13 +957,33 @@
     padding: 0 12px;
   }
 
-  .cons__who {
-    min-width: 0;
+}
+
+/* ------------------------------------------------------------------ 640 --- */
+
+/* A console in a small window is still a console — the tables and the density stay. What changes is the
+   air around them, because at this width a 16px gutter is the difference between a panel and the edge
+   of the screen, and a 22px title is a heading that takes two lines to say one thing. */
+@media (max-width: 640px) {
+  .cons__main {
+    padding-left: 12px;
+    padding-right: 12px;
   }
 
-  .cons__who > span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .cons__panel > *:not(.cons__panelhead):not(table) {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .cons__panelhead {
+    padding: 12px;
+  }
+
+  .cons__title {
+    font-size: 19px;
+  }
+
+  .cons__panelt {
+    font-size: 17px;
   }
 }

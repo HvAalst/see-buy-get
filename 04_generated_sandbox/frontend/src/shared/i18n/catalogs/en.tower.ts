@@ -367,13 +367,10 @@ export const enTower = {
 
   /* ---- CL2a: a container, its papers, and the agent appointed to clear it ---- */
   'tower.imports.title': 'Containers and clearing',
-  'tower.imports.lede':
-    'A container on its way, the papers it needs, and the agent appointed to clear it. The journey starts when the container is onboarded and the shipping documents exist — which is the point, because the papers can be assembled while the ship is still moving.',
-  'tower.imports.caveatT': 'The agent publishes what they need. We never assert it.',
-  'tower.imports.caveat':
-    'What a border asks for is the agent’s knowledge, not ours, and it changes. This screen carries lists of papers and who may read them — never a tariff classification and never a duty figure, because the penalty for getting those wrong lands on the importer.',
-  'tower.imports.seam':
-    'Ocean carriage is not ours: no vessel, no schedule, no port of loading. An arrival date is typed by a person — nothing fills it automatically yet.',
+  'tower.imports.lede': 'A container on its way, the papers it needs, and the agent appointed to clear it.',
+  'tower.imports.caveatT': 'What a border asks for is the agent’s knowledge, not ours.',
+  'tower.imports.caveat': 'No tariff classification and no duty figure here — getting those wrong lands on you.',
+  'tower.imports.seam': 'Arrival dates are typed by hand.',
   'tower.imports.loading': 'Reading…',
 
   'tower.imports.need.goods': 'Say what is in the container.',
@@ -587,12 +584,15 @@ export const enTower = {
   'tower.imports.dgSaved': 'Declared. The load will ask for a hazmat-certified vehicle.',
   /* CL6 — the agent's own advertisement. The one asserted thing in the whole agent design, so the hint
      says so before the form: everything else about them is derived from the record. */
-  'tower.imports.offerTitle': 'What you clear — your entry in the directory',
-  'tower.imports.offerHint':
-    'Your own words. Importers search this to find you, and it is the one thing on your public page we do not work out for ourselves — so nobody else can put it there. We do not check it, and the page says so: what we have seen is shown beside it, and the two are allowed to differ. Pick everything you genuinely handle; claiming more gets you seen but never credited.',
+  'tower.imports.offerTitle': 'What you clear',
+  'tower.imports.offerHint': 'Your own words, unchecked. What we have seen is shown beside them, and the two may differ.',
+  'tower.imports.f.offerSpecialisms': 'What you handle',
+  'tower.imports.offerPick': 'Choose what you handle',
+  'tower.imports.offerChosen': '{n} of {all} chosen',
+  'tower.imports.offerRemove': 'Remove {what}',
   'tower.imports.f.offerPlaces': 'Ports, airports, border posts (comma separated)',
-  'tower.imports.f.offerWords': 'Anything the list above cannot say',
-  'tower.imports.offerNeedOne': 'Pick at least one — an entry that names nothing helps nobody find you.',
+  'tower.imports.f.offerWords': 'Anything the list cannot say',
+  'tower.imports.offerNeedOne': 'Choose at least one.',
   'tower.imports.offerSave': 'Save my entry',
   'tower.imports.offerSaved': 'Saved. Importers searching for that will find your page.',
   /* CL4 item 1 — what the STATE did to this container. The risk here is the field being read as a free

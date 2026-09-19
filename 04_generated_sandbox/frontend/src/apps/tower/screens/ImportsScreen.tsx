@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { AuthImage, Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
+import { ConsoleSelect } from '../ConsoleSelect';
 import { DOCUMENT_KINDS, DOCUMENT_LABEL, shortFingerprint, type CompanyDocument } from '../company';
 import {
   EMPTY_FEE_FORM,
@@ -302,25 +303,19 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
               derived from the record, and a claim shown as a finding would undo the page's whole worth. */}
           <p class="cons__lede">{t('tower.imports.offerHint')}</p>
 
-          <div class="twr-pick__list" style="max-height:none">
-            {CLEARANCE_SPECIALISMS.map((sp) => {
-              const on = offerForm.specialisms.includes(sp);
-              return (
-                <button
-                  key={sp}
-                  type="button"
-                  class={`twr-pick__one${on ? ' twr-pick__one--on' : ''}`}
-                  onClick={() =>
-                    setOfferForm({
-                      ...offerForm,
-                      specialisms: on ? offerForm.specialisms.filter((x) => x !== sp) : [...offerForm.specialisms, sp],
-                    })
-                  }
-                >
-                  <span class="twr-pick__n">{t(`home.agents.spec.${sp}` as never)}</span>
-                </button>
-              );
-            })}
+          {/* Not a <label>: the control is a button, and a label wrapping a button either does nothing
+              or fires it twice depending on the browser. */}
+          <div class="cfield">
+            <span class="cfield__label">{t('tower.imports.f.offerSpecialisms')}</span>
+            <ConsoleSelect
+              label={t('tower.imports.f.offerSpecialisms')}
+              options={CLEARANCE_SPECIALISMS.map((sp) => ({ value: sp, label: t(`home.agents.spec.${sp}` as never) }))}
+              chosen={offerForm.specialisms}
+              onChange={(specialisms) => setOfferForm({ ...offerForm, specialisms })}
+              placeholder={t('tower.imports.offerPick')}
+              summary={t('tower.imports.offerChosen', { n: offerForm.specialisms.length, all: CLEARANCE_SPECIALISMS.length })}
+              removeLabel={(what) => t('tower.imports.offerRemove', { what })}
+            />
           </div>
 
           <div class="twr-knobs__row">

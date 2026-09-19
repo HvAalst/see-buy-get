@@ -141,7 +141,7 @@
    than squeezing two columns of photographs into a phone. */
 .twr-accounts {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
   gap: 16px;
   margin-bottom: 16px;
 }
@@ -373,9 +373,17 @@
   padding: 8px 0 12px;
 }
 
+/*
+ * `min(240px, 100%)` AND NOT `240px`, here and in every other grid on this surface.
+ *
+ * A plain floor of 240px reads as "as many 240px columns as fit, one at least" — and that last column
+ * is 240px whether or not there is 240px to put it in. In a panel narrower than the floor the grid is
+ * wider than its parent, and the page scrolls sideways for the rest of its life. The min() says the
+ * same thing and then gives way: 240px, or all the room there is, whichever is less.
+ */
 .twr-knobs__row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
   gap: 20px;
   margin-top: 12px;
 }
@@ -445,7 +453,7 @@
 
 .twr-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr));
   gap: 18px;
   align-items: start;
 }
@@ -460,7 +468,7 @@
 
 .twr-card__books {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
   gap: 10px 18px;
   padding: 14px 16px 4px;
   border-top: 1px solid var(--bd-soft);
@@ -523,7 +531,7 @@
 
 .twr-kpis {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
   gap: 12px;
   margin-bottom: 18px;
 }
@@ -639,7 +647,7 @@
 
 .twr-pics {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(190px, 100%), 1fr));
   gap: 14px;
   padding: 14px 16px;
 }
@@ -704,7 +712,7 @@
 
 .twr-corridorform {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
   gap: 0 14px;
   padding: 14px 16px 0;
 }
@@ -737,9 +745,18 @@
 
 .twr-presedit {
   display: grid;
-  grid-template-columns: minmax(180px, 240px) minmax(220px, 1fr);
+  /* Two floors that add up to 400px, in a panel that can be narrower than that — so below the
+     sidebar line it stacks, which is what the second column wanted anyway. */
+  grid-template-columns: minmax(180px, 240px) minmax(min(220px, 100%), 1fr);
   gap: 0 16px;
   padding: 14px 16px 16px;
+}
+
+@media (max-width: 700px) {
+  .twr-presedit {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
 }
 
 .twr-presedit__note {
