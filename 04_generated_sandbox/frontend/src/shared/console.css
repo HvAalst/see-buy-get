@@ -250,6 +250,47 @@
   color: var(--navy);
 }
 
+
+/*
+ * THE RHYTHM, taken from the BondBridge settings page the user pointed at.
+ *
+ * Panels were stacking flush against each other with a hairline between, and their contents sat against
+ * the border because a panel has no padding of its own — every screen that put a table inside one got
+ * away with it, and every screen that put prose or a form inside one did not.
+ *
+ * Four numbers, and they are the ones that page uses: 20px between blocks, 16px inside one, a heading
+ * with 2px under it and its one description line with 12px under that, and rows of 10/14 inside a
+ * bordered group. Space between blocks is what makes a page readable at a glance; a hairline alone is
+ * not separation.
+ */
+.cons__panel + .cons__panel {
+  margin-top: 20px;
+}
+
+/*
+ * A PANEL PADS ITS OWN CONTENTS, rather than every screen remembering to.
+ *
+ * A table is excluded because its cells carry their own padding — which is exactly why this defect hid
+ * for so long: every screen that put a table in a panel looked right, and every screen that put prose or
+ * a form in one had it sitting against the border.
+ */
+.cons__panel > *:not(.cons__panelhead):not(table) {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+.cons__panel > .cons__panelhead + *:not(table) {
+  padding-top: 14px;
+}
+
+.cons__panel > *:last-child:not(table) {
+  padding-bottom: 16px;
+}
+
+/* And air between the things inside it. */
+.cons__panel > *:not(.cons__panelhead) + *:not(.cons__panelhead) {
+  margin-top: 12px;
+}
 /* A caveat the screen cannot switch off. Not an error and not a toast — a standing statement about what
    the data underneath it is and is not. The road map's "absence of a report is not clearance" lives in
 
@@ -261,16 +302,17 @@
    unstyled inline spans. Found by looking at the page rather than at the code. */
 .cons__facts {
   display: grid;
-  gap: 2px;
-  margin: 10px 0 4px;
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-ctl);
+  overflow: hidden;
 }
 
 .cons__fact {
   display: grid;
-  grid-template-columns: minmax(120px, 30%) 1fr auto;
+  grid-template-columns: minmax(120px, 28%) 1fr auto;
   gap: 12px;
   align-items: baseline;
-  padding: 8px 0;
+  padding: 10px 14px;
   border-top: 1px solid var(--bd-soft);
 }
 

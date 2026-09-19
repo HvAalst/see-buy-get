@@ -62,7 +62,13 @@ export function DepotsScreen({ state, actions }: { state: TowerState; actions: T
 
   const [rows, setRows] = useState<DepotRow[] | null>(null);
   const [register, setRegister] = useState<DepotRegister | null>(null);
-  const [form, setForm] = useState({ placeLabel: '', country: '', note: '' });
+  /*
+   * NO FREE-TEXT "anything a haulier should know" HERE, and the user's reason is the right one: it is a
+   * leading question. A box that suggests "gate open 6am to 6pm, reach stacker on site" is us deciding
+   * what matters and then pretending the yard said it. If we need the hours, we ask for the hours — and
+   * we do, as their own fields on the entry below.
+   */
+  const [form, setForm] = useState({ placeLabel: '', country: '' });
   const [boxForm, setBoxForm] = useState({ containerNo: '', position: '', note: '' });
   const [find, setFind] = useState({ country: '', q: '' });
   /**
@@ -145,10 +151,6 @@ export function DepotsScreen({ state, actions }: { state: TowerState; actions: T
               <span class="cfield__label">{t('tower.depots.f.country')}</span>
               <input class="cinput" maxLength={2} value={form.country} onChange={(e) => setForm({ ...form, country: (e.target as HTMLInputElement).value.toUpperCase() })} placeholder="KE" />
             </label>
-            <label class="twr-knob cfield">
-              <span class="cfield__label">{t('tower.depots.f.note')}</span>
-              <input class="cinput" value={form.note} onChange={(e) => setForm({ ...form, note: (e.target as HTMLInputElement).value })} placeholder={t('tower.depots.f.notePh')} />
-            </label>
           </div>
           <div class="twr-panelend">
             <button
@@ -158,7 +160,7 @@ export function DepotsScreen({ state, actions }: { state: TowerState; actions: T
               onClick={() =>
                 run(
                   'declare',
-                  () => client!.api.declareDepot({ placeLabel: form.placeLabel.trim(), country: form.country, ...(form.note.trim() ? { note: form.note.trim() } : {}), ...(who ? { by: who } : {}) }),
+                  () => client!.api.declareDepot({ placeLabel: form.placeLabel.trim(), country: form.country, ...(who ? { by: who } : {}) }),
                   t('tower.depots.declared'),
                 )
               }

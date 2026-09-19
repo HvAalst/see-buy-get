@@ -87,10 +87,19 @@ export function App() {
     // carries hand-back reasons and names drivers. Offered to a company administrator it was a section
     // whose every read answers 403 — the same defect already tracked against the finance endpoint, and
     // one I introduced in the slice that added the screen.
-    ...(isOperator ? (['network', 'hazards', 'claims', 'disposal', 'approvals', 'papers', 'reports', 'support', 'corridors', 'presence', 'pictures', 'company', 'borders', 'movers'] as Screen[]) : []),
+    /*
+     * WHAT IS STAFF'S AND WHAT IS THEIRS — the user, looking at a company's console: "Setup and money also
+     * contain a lot of info that belongs to operators and not to them."
+     *
+     * RATES moved in here, because what a sister charges is an operator's knob and was the first thing a
+     * company administrator saw on signing in. COMPANY moved out, because their own record is theirs to
+     * keep — an operator picks a company from a list, an administrator IS one.
+     */
+    ...(isOperator ? (['network', 'hazards', 'claims', 'disposal', 'approvals', 'papers', 'reports', 'support', 'corridors', 'presence', 'pictures', 'borders', 'movers', 'rates'] as Screen[]) : []),
     ...(manyCompanies ? (['companies'] as Screen[]) : []),
+    // Their own books and what they are owed — never the network's ledger, which is not theirs to read.
     'money',
-    'rates',
+    'company',
     'imports',
     'market',
     // Y4 — offered to BOTH: a yard reads its own register here, and network staff read the directory.

@@ -443,7 +443,20 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
    * rather than per selection.
    */
   const loadMoney = useCallback(async (client: TowerClient, entityId: string) => {
-    const [books, payouts, finance] = await Promise.all([client.api.books(entityId), client.api.payouts(entityId), client.api.finance()]);
+    const staff = stateRef.current.who?.mode === 'operator';
+    /*
+     * THE NETWORK LEDGER IS ASKED FOR ONLY BY NETWORK STAFF.
+     *
+     * This used to be read on every load by everybody, so a company administrator's first act on opening
+     * the console was a 403 the screen then swallowed. It was tracked as a known gap for weeks, which is
+     * its own lesson: a refusal a screen handles quietly is still a screen asking for something it knows
+     * it may not have.
+     */
+    const [books, payouts, finance] = await Promise.all([
+      client.api.books(entityId),
+      client.api.payouts(entityId),
+      staff ? client.api.finance() : Promise.resolve({ error: null, data: null } as never),
+    ]);
     setState((s) => ({
       ...s,
       books: books.error ? null : narrow<BooksView>(books.data),
@@ -653,7 +666,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         setState((s) => ({ ...s, phase: 'signin', signInError: error?.detail ?? null }));
         return;
       }
-      setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'company', name: data.name, entityId: data.entityId }, screen: 'rates' }));
+      setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'company', name: data.name, entityId: data.entityId }, companyId: data.entityId ?? null, screen: 'imports' }));
       void loadEntities(client);
     });
   }, [loadHazards, loadQueues, loadNetwork, loadEntities, loadPapers]);
@@ -706,9 +719,15 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         phase: 'ready',
         creds,
         who: { mode: 'company', name: data.name, entityId: data.entityId },
-        // A company administrator is not network staff: the hazard queue is not theirs to work, and the
-        // rail must not offer a section whose every row would answer 403.
-        screen: 'rates',
+        // Their own record is the one they may edit, so the company screen opens on it rather than on
+        // nothing — an operator picks a company from a list; an administrator IS one.
+        companyId: data.entityId ?? null,
+        /*
+         * A company administrator is not network staff: the hazard queue is not theirs to work, and the
+         * rail must not offer a section whose every row would answer 403. It used to open on RATES, which
+         * is what a sister charges and is an operator's knob — they land on their own containers now.
+         */
+        screen: 'imports',
         signInError: null,
         loading: false,
       }));

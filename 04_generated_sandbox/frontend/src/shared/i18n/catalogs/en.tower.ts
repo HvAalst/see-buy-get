@@ -397,6 +397,12 @@ export const enTower = {
 
   // There is no plural machinery in this i18n, so every counted string is phrased to read correctly at one.
   // The drive showed the alternative: "1 containers".
+  'tower.imports.search': 'Search',
+  'tower.imports.searchPh': 'Code, container number, goods, port, agent…',
+  'tower.imports.found': '{n} match',
+  'tower.imports.prev': 'Back',
+  'tower.imports.next': 'Next',
+  'tower.imports.page': 'Page {page} of {pages} · showing {shown} of {total}',
   'tower.imports.count': '{n} on the way',
   'tower.imports.none': 'No containers recorded yet.',
   'tower.imports.noneCompany': 'Nothing here yet. Record a container the moment it is onboarded — not when it arrives.',

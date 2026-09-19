@@ -190,6 +190,25 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
     }
   };
 
+  /**
+   * A LIST NOBODY CAN GET TO THE BOTTOM OF IS NOT A LIST — the user, at eighty-nine containers.
+   *
+   * Searched and paged here rather than on the server, because the route already answers with all of them
+   * and a screenful is twenty. WHEN IT SHOULD MOVE: the day a company has enough containers that sending
+   * them all is the cost — the registers work already has the server-side shape to copy, `{ items, total }`
+   * with the search and the page as query parameters, and this is the note that says so out loud.
+   */
+  const PAGE = 20;
+  const [query, setQuery] = useState('');
+  const [page, setPage] = useState(0);
+  const found = (rows ?? []).filter((r) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    return [r.code, r.containerNo, r.goodsDescription, r.destPort, r.agentName].filter(Boolean).some((f) => String(f).toLowerCase().includes(q));
+  });
+  const pages = Math.max(1, Math.ceil(found.length / PAGE));
+  const shown = found.slice(page * PAGE, page * PAGE + PAGE);
+
   const registerFault = registerBlocker(form);
   const publishFault = publishBlocker(lines);
   const waiting = outstandingCount(rows);
@@ -425,10 +444,30 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
       <section class="cons__panel">
         <div class="cons__panelhead">
           <span class="cons__panelt">{rows === null ? t('tower.imports.loading') : t('tower.imports.count', { n: rows.length })}</span>
+          {rows !== null && found.length !== rows.length ? <span class="ctag ctag--quiet">{t('tower.imports.found', { n: found.length })}</span> : null}
           {/* Said here rather than on the navigation badge: a number beside a group reads as a demand, and
               this one is only meaningful once the list has actually been read. */}
           {waiting ? <span class="ctag ctag--warn">{t('tower.imports.waitingOnYou', { n: waiting })}</span> : null}
         </div>
+        {/* SEARCH FIRST, because with eighty-nine of them the list is not the answer — the one you want is.
+            It reads the code, the container number, the goods, the port and the agent, which is every way
+            somebody actually remembers a container. */}
+        {rows !== null && rows.length > PAGE ? (
+          <div class="twr-knobs__row">
+            <label class="twr-knob cfield">
+              <span class="cfield__label">{t('tower.imports.search')}</span>
+              <input
+                class="cinput"
+                value={query}
+                onInput={(e) => {
+                  setQuery((e.target as HTMLInputElement).value);
+                  setPage(0);
+                }}
+                placeholder={t('tower.imports.searchPh')}
+              />
+            </label>
+          </div>
+        ) : null}
         {rows === null ? (
           <p class="cons__empty">{t('tower.imports.loading')}</p>
         ) : rows.length === 0 ? (
@@ -445,7 +484,7 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
+              {shown.map((row) => (
                 <tr key={row.importId}>
                   <td>
                     <div class="ctbl__strong">{row.code}</div>
@@ -476,6 +515,19 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
             </tbody>
           </table>
         )}
+        {/* THE PAGER, and it says where you are rather than only offering a direction. A list that can
+            only go forwards is one you cannot get back out of. */}
+        {rows !== null && pages > 1 ? (
+          <div class="twr-panelend">
+            <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={page === 0} onClick={() => setPage(page - 1)}>
+              {t('tower.imports.prev')}
+            </button>
+            <span class="chint">{t('tower.imports.page', { page: page + 1, pages, shown: shown.length, total: found.length })}</span>
+            <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={page >= pages - 1} onClick={() => setPage(page + 1)}>
+              {t('tower.imports.next')}
+            </button>
+          </div>
+        ) : null}
       </section>
 
       {detail ? (
