@@ -257,7 +257,7 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
               <li>{t('tower.imports.recordNoLate')}</li>
             )}
             {mine.record.thin ? (
-              <li class="ctbl__sub">{t('tower.imports.recordThin', { n: mine.record.ratesNeed })}</li>
+              <li class="chint">{t('tower.imports.recordThin', { n: mine.record.ratesNeed })}</li>
             ) : (
               <>
                 {mine.record.listHours != null ? <li>{t('tower.imports.recordListHours', { h: mine.record.listHours })}</li> : null}
@@ -266,7 +266,7 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
             )}
             {/* Counted, labelled, and not subtracted from anything above it. */}
             {mine.record.holds.recorded > 0 ? (
-              <li class="ctbl__sub">{t('tower.imports.recordHolds', { holds: mine.record.holds.recorded, disputed: mine.record.holds.disputed })}</li>
+              <li class="chint">{t('tower.imports.recordHolds', { holds: mine.record.holds.recorded, disputed: mine.record.holds.disputed })}</li>
             ) : null}
           </ul>
         </section>
@@ -304,22 +304,22 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
             })}
           </div>
 
-          <div class="twr-knobs">
-            <label class="twr-knob">
-              <span>{t('tower.imports.f.offerPlaces')}</span>
-              <input value={offerForm.places} onChange={(e) => setOfferForm({ ...offerForm, places: (e.target as HTMLInputElement).value })} />
+          <div class="twr-knobs__row">
+            <label class="twr-knob cfield">
+              <span class="cfield__label">{t('tower.imports.f.offerPlaces')}</span>
+              <input class="cinput" value={offerForm.places} onChange={(e) => setOfferForm({ ...offerForm, places: (e.target as HTMLInputElement).value })} />
             </label>
-            <label class="twr-knob">
-              <span>{t('tower.imports.f.offerWords')}</span>
-              <input value={offerForm.words} onChange={(e) => setOfferForm({ ...offerForm, words: (e.target as HTMLInputElement).value })} />
+            <label class="twr-knob cfield">
+              <span class="cfield__label">{t('tower.imports.f.offerWords')}</span>
+              <input class="cinput" value={offerForm.words} onChange={(e) => setOfferForm({ ...offerForm, words: (e.target as HTMLInputElement).value })} />
             </label>
           </div>
 
           <div class="twr-panelend">
-            {offerForm.specialisms.length === 0 ? <span class="ctbl__sub">{t('tower.imports.offerNeedOne')}</span> : null}
+            {offerForm.specialisms.length === 0 ? <span class="chint">{t('tower.imports.offerNeedOne')}</span> : null}
             <button
               type="button"
-              class="cbtn"
+              class="cbtn cbtn--primary"
               disabled={offerForm.specialisms.length === 0 || busy === 'offer'}
               onClick={() =>
                 run(
@@ -357,41 +357,41 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
           <div class="cons__panelhead">
             <span class="cons__panelt">{t('tower.imports.newTitle')}</span>
           </div>
-          <div class="twr-knobs">
-            <label class="twr-knob">
-              <span>{t('tower.imports.f.goods')}</span>
-              <input value={form.goodsDescription} onChange={(e) => setForm({ ...form, goodsDescription: (e.target as HTMLInputElement).value })} />
+          <div class="twr-knobs__row">
+            <label class="twr-knob cfield">
+              <span class="cfield__label">{t('tower.imports.f.goods')}</span>
+              <input class="cinput" value={form.goodsDescription} onChange={(e) => setForm({ ...form, goodsDescription: (e.target as HTMLInputElement).value })} />
             </label>
-            <label class="twr-knob">
-              <span>{t('tower.imports.f.origin')}</span>
-              <input maxLength={2} value={form.originCountry} onChange={(e) => setForm({ ...form, originCountry: (e.target as HTMLInputElement).value })} />
+            <label class="twr-knob cfield">
+              <span class="cfield__label">{t('tower.imports.f.origin')}</span>
+              <input class="cinput" maxLength={2} value={form.originCountry} onChange={(e) => setForm({ ...form, originCountry: (e.target as HTMLInputElement).value })} />
             </label>
-            <label class="twr-knob">
-              <span>{t('tower.imports.f.dest')}</span>
-              <input maxLength={2} value={form.destCountry} onChange={(e) => setForm({ ...form, destCountry: (e.target as HTMLInputElement).value })} />
+            <label class="twr-knob cfield">
+              <span class="cfield__label">{t('tower.imports.f.dest')}</span>
+              <input class="cinput" maxLength={2} value={form.destCountry} onChange={(e) => setForm({ ...form, destCountry: (e.target as HTMLInputElement).value })} />
             </label>
-            <label class="twr-knob">
-              <span>{t('tower.imports.f.port')}</span>
-              <input value={form.destPort} onChange={(e) => setForm({ ...form, destPort: (e.target as HTMLInputElement).value })} />
+            <label class="twr-knob cfield">
+              <span class="cfield__label">{t('tower.imports.f.port')}</span>
+              <input class="cinput" value={form.destPort} onChange={(e) => setForm({ ...form, destPort: (e.target as HTMLInputElement).value })} />
             </label>
-            <label class="twr-knob">
-              <span>{t('tower.imports.f.container')}</span>
-              <input value={form.containerNo} onChange={(e) => setForm({ ...form, containerNo: (e.target as HTMLInputElement).value })} />
+            <label class="twr-knob cfield">
+              <span class="cfield__label">{t('tower.imports.f.container')}</span>
+              <input class="cinput" value={form.containerNo} onChange={(e) => setForm({ ...form, containerNo: (e.target as HTMLInputElement).value })} />
             </label>
-            <label class="twr-knob">
-              <span>{t('tower.imports.f.carrier')}</span>
-              <input value={form.carrierRef} onChange={(e) => setForm({ ...form, carrierRef: (e.target as HTMLInputElement).value })} />
+            <label class="twr-knob cfield">
+              <span class="cfield__label">{t('tower.imports.f.carrier')}</span>
+              <input class="cinput" value={form.carrierRef} onChange={(e) => setForm({ ...form, carrierRef: (e.target as HTMLInputElement).value })} />
             </label>
-            <label class="twr-knob">
-              <span>{t('tower.imports.f.eta')}</span>
-              <input type="date" value={form.etaAt} onChange={(e) => setForm({ ...form, etaAt: (e.target as HTMLInputElement).value })} />
+            <label class="twr-knob cfield">
+              <span class="cfield__label">{t('tower.imports.f.eta')}</span>
+              <input class="cinput" type="date" value={form.etaAt} onChange={(e) => setForm({ ...form, etaAt: (e.target as HTMLInputElement).value })} />
             </label>
           </div>
           <div class="twr-panelend">
-            {registerFault ? <span class="ctbl__sub">{t(registerFault)}</span> : null}
+            {registerFault ? <span class="chint">{t(registerFault)}</span> : null}
             <button
               type="button"
-              class="cbtn"
+              class="cbtn cbtn--primary"
               disabled={Boolean(registerFault) || busy === 'register'}
               onClick={() =>
                 run(
@@ -449,20 +449,20 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                 <tr key={row.importId}>
                   <td>
                     <div class="ctbl__strong">{row.code}</div>
-                    <div class="ctbl__sub">{row.goodsDescription}</div>
-                    {row.containerNo ? <div class="ctbl__sub">{row.containerNo}</div> : null}
+                    <div class="chint">{row.goodsDescription}</div>
+                    {row.containerNo ? <div class="chint">{row.containerNo}</div> : null}
                   </td>
-                  <td class="ctbl__sub">
+                  <td class="chint">
                     <div>
                       {row.originCountry} → {row.destCountry} · {row.destPort}
                     </div>
                     {row.etaAt ? <div>{t('tower.imports.eta', { date: row.etaAt })}</div> : null}
                   </td>
-                  <td class="ctbl__sub">
+                  <td class="chint">
                     <div>{row.agentName ?? t('tower.imports.status.open')}</div>
                     <span class="ctag ctag--quiet">{t(`tower.imports.youAre.${row.youAre}` as never)}</span>
                   </td>
-                  <td class="ctbl__sub">
+                  <td class="chint">
                     {row.asked ? t('tower.imports.progress', { accepted: row.accepted, asked: row.asked }) : t('tower.imports.noneAsked')}
                     {row.waitingOnYou ? <div class="ctag ctag--warn">{t('tower.imports.waitingOnYou', { n: row.waitingOnYou })}</div> : null}
                   </td>
@@ -497,10 +497,10 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                 </div>
                 <p class="cons__lede">{t('tower.imports.appointHint')}</p>
                 {detail.agentEntityId ? (
-                  <div class="twr-knobs">
-                    <label class="twr-knob">
-                      <span>{t('tower.imports.f.reason')}</span>
-                      <input value={reason} onChange={(e) => setReason((e.target as HTMLInputElement).value)} />
+                  <div class="twr-knobs__row">
+                    <label class="twr-knob cfield">
+                      <span class="cfield__label">{t('tower.imports.f.reason')}</span>
+                      <input class="cinput" value={reason} onChange={(e) => setReason((e.target as HTMLInputElement).value)} />
                     </label>
                     <div class="twr-panelend">
                       <button
@@ -518,15 +518,15 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                     </div>
                   </div>
                 ) : (
-                  <div class="twr-knobs">
-                    <label class="twr-knob">
-                      <span>{t('tower.imports.f.agent')}</span>
-                      <input value={agentId} onChange={(e) => setAgentId((e.target as HTMLInputElement).value)} />
+                  <div class="twr-knobs__row">
+                    <label class="twr-knob cfield">
+                      <span class="cfield__label">{t('tower.imports.f.agent')}</span>
+                      <input class="cinput" value={agentId} onChange={(e) => setAgentId((e.target as HTMLInputElement).value)} />
                     </label>
                     <div class="twr-panelend">
                       <button
                         type="button"
-                        class="cbtn"
+                        class="cbtn cbtn--primary"
                         disabled={!agentId.trim() || busy === 'appoint'}
                         onClick={() =>
                           run('appoint', () => client!.api.appointClearingAgent(detail.importId, { agentEntityId: agentId.trim(), ...(who ? { by: who } : {}) }), t('tower.imports.appointed', { name: agentId.trim() }), () =>
@@ -554,7 +554,7 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                         {/* The count makes a grant concrete: this is how many papers they can actually read. */}
                         <b>{t(`tower.imports.grant.${g.scope}` as never)}</b> ({g.scope === 'company' ? companyPapers(detail.documents).length : consignmentPapers(detail.documents, detail.code).length}) →{' '}
                         {g.readerEntityId}
-                        <div class="ctbl__sub">{t('tower.imports.grant.since', { when: g.grantedAt.slice(0, 10), who: g.grantedBy })}</div>
+                        <div class="chint">{t('tower.imports.grant.since', { when: g.grantedAt.slice(0, 10), who: g.grantedBy })}</div>
                       </li>
                     ))}
                   </ul>
@@ -566,10 +566,10 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                   <span class="cons__panelt">{t('tower.imports.uploadTitle')}</span>
                 </div>
                 <p class="cons__lede">{t('tower.imports.uploadHint')}</p>
-                <div class="twr-knobs">
-                  <label class="twr-knob">
-                    <span>{t('tower.imports.f.kind')}</span>
-                    <select value={upload.kind} onChange={(e) => setUpload({ ...upload, kind: (e.target as HTMLSelectElement).value })}>
+                <div class="twr-knobs__row">
+                  <label class="twr-knob cfield">
+                    <span class="cfield__label">{t('tower.imports.f.kind')}</span>
+                    <select class="cinput" value={upload.kind} onChange={(e) => setUpload({ ...upload, kind: (e.target as HTMLSelectElement).value })}>
                       {DOCUMENT_KINDS.map((k) => (
                         <option key={k} value={k}>
                           {t(DOCUMENT_LABEL[k])}
@@ -577,30 +577,30 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                       ))}
                     </select>
                   </label>
-                  <label class="twr-knob">
-                    <span>{t('tower.imports.f.belongs')}</span>
-                    <select value={upload.belongs} onChange={(e) => setUpload({ ...upload, belongs: (e.target as HTMLSelectElement).value })}>
+                  <label class="twr-knob cfield">
+                    <span class="cfield__label">{t('tower.imports.f.belongs')}</span>
+                    <select class="cinput" value={upload.belongs} onChange={(e) => setUpload({ ...upload, belongs: (e.target as HTMLSelectElement).value })}>
                       <option value="company">{t('tower.imports.belongs.company')}</option>
                       <option value="consignment">{t('tower.imports.belongs.consignment')}</option>
                     </select>
                   </label>
-                  <label class="twr-knob">
-                    <span>{t('tower.imports.f.title')}</span>
-                    <input value={upload.title} onChange={(e) => setUpload({ ...upload, title: (e.target as HTMLInputElement).value })} />
+                  <label class="twr-knob cfield">
+                    <span class="cfield__label">{t('tower.imports.f.title')}</span>
+                    <input class="cinput" value={upload.title} onChange={(e) => setUpload({ ...upload, title: (e.target as HTMLInputElement).value })} />
                   </label>
-                  <label class="twr-knob">
-                    <span>{t('tower.imports.f.expires')}</span>
-                    <input type="date" value={upload.expiresAt} onChange={(e) => setUpload({ ...upload, expiresAt: (e.target as HTMLInputElement).value })} />
+                  <label class="twr-knob cfield">
+                    <span class="cfield__label">{t('tower.imports.f.expires')}</span>
+                    <input class="cinput" type="date" value={upload.expiresAt} onChange={(e) => setUpload({ ...upload, expiresAt: (e.target as HTMLInputElement).value })} />
                   </label>
-                  <label class="twr-knob">
-                    <span>{t('tower.imports.f.file')}</span>
-                    <input type="file" accept="application/pdf,image/png,image/jpeg" onChange={(e) => readFile((e.target as HTMLInputElement).files?.[0] ?? null)} />
+                  <label class="twr-knob cfield">
+                    <span class="cfield__label">{t('tower.imports.f.file')}</span>
+                    <input class="cinput" type="file" accept="application/pdf,image/png,image/jpeg" onChange={(e) => readFile((e.target as HTMLInputElement).files?.[0] ?? null)} />
                   </label>
                 </div>
                 <div class="twr-panelend">
                   <button
                     type="button"
-                    class="cbtn"
+                    class="cbtn cbtn--primary"
                     disabled={!upload.dataUrl || !upload.title.trim() || busy === 'upload'}
                     onClick={() =>
                       run(
@@ -637,18 +637,18 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                 </div>
                 <p class="cons__lede">{t('tower.imports.publishHint')}</p>
                 {lines.map((line, i) => (
-                  <div class="twr-knobs" key={`line-${i}`}>
-                    <label class="twr-knob">
-                      <span>{t('tower.imports.f.label')}</span>
-                      <input value={line.label} onChange={(e) => setLines(lines.map((l, j) => (j === i ? { ...l, label: (e.target as HTMLInputElement).value } : l)))} />
+                  <div class="twr-knobs__row" key={`line-${i}`}>
+                    <label class="twr-knob cfield">
+                      <span class="cfield__label">{t('tower.imports.f.label')}</span>
+                      <input class="cinput" value={line.label} onChange={(e) => setLines(lines.map((l, j) => (j === i ? { ...l, label: (e.target as HTMLInputElement).value } : l)))} />
                     </label>
-                    <label class="twr-knob">
-                      <span>{t('tower.imports.f.copies')}</span>
-                      <input type="number" min={1} max={50} value={line.copies} onChange={(e) => setLines(lines.map((l, j) => (j === i ? { ...l, copies: (e.target as HTMLInputElement).value } : l)))} />
+                    <label class="twr-knob cfield">
+                      <span class="cfield__label">{t('tower.imports.f.copies')}</span>
+                      <input class="cinput" type="number" min={1} max={50} value={line.copies} onChange={(e) => setLines(lines.map((l, j) => (j === i ? { ...l, copies: (e.target as HTMLInputElement).value } : l)))} />
                     </label>
-                    <label class="twr-knob">
-                      <span>{t('tower.imports.f.note')}</span>
-                      <input value={line.note} onChange={(e) => setLines(lines.map((l, j) => (j === i ? { ...l, note: (e.target as HTMLInputElement).value } : l)))} />
+                    <label class="twr-knob cfield">
+                      <span class="cfield__label">{t('tower.imports.f.note')}</span>
+                      <input class="cinput" value={line.note} onChange={(e) => setLines(lines.map((l, j) => (j === i ? { ...l, note: (e.target as HTMLInputElement).value } : l)))} />
                     </label>
                   </div>
                 ))}
@@ -656,10 +656,10 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                   <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setLines([...lines, { label: '', copies: '', note: '' }])}>
                     {t('tower.imports.addLine')}
                   </button>
-                  {publishFault ? <span class="ctbl__sub">{t(publishFault)}</span> : null}
+                  {publishFault ? <span class="chint">{t(publishFault)}</span> : null}
                   <button
                     type="button"
-                    class="cbtn"
+                    class="cbtn cbtn--primary"
                     disabled={Boolean(publishFault) || busy === 'publish'}
                     onClick={() =>
                       run(
@@ -695,7 +695,7 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                     ).map((k) => (
                       <li key={k.key}>
                         <b>{k.label}</b>
-                        <div class="ctbl__sub">{t('tower.imports.knownRow', { agents: k.agents, times: k.times, when: k.lastAskedAt.slice(0, 10) })}</div>
+                        <div class="chint">{t('tower.imports.knownRow', { agents: k.agents, times: k.times, when: k.lastAskedAt.slice(0, 10) })}</div>
                         <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setLines([...lines.filter((l) => l.label.trim()), { label: k.label, copies: '', note: '' }])}>
                           {t('tower.imports.knownAdd')}
                         </button>
@@ -716,7 +716,7 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
               {ready?.done ? (
                 <span class="ctag ctag--ok">{t('tower.imports.progress', { accepted: ready.accepted, asked: ready.asked })}</span>
               ) : (
-                <span class="ctbl__sub">{ready?.asked ? t('tower.imports.progress', { accepted: ready.accepted, asked: ready.asked }) : t('tower.imports.noneAsked')}</span>
+                <span class="chint">{ready?.asked ? t('tower.imports.progress', { accepted: ready.accepted, asked: ready.asked }) : t('tower.imports.noneAsked')}</span>
               )}
             </div>
             {detail.required.length === 0 ? (
@@ -761,32 +761,32 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                   <b>
                     {detail.fee.amount.toLocaleString()} {detail.fee.currency}
                   </b>
-                  {detail.fee.note ? <div class="ctbl__sub">{detail.fee.note}</div> : null}
-                  <div class="ctbl__sub">{t('tower.imports.feeBy', { who: detail.fee.quotedBy })}</div>
-                  {detail.fee.paidAt ? <div class="ctbl__sub">{t('tower.imports.feePaid', { when: detail.fee.paidAt.slice(0, 10), reference: detail.fee.reference ?? '' })}</div> : null}
+                  {detail.fee.note ? <div class="chint">{detail.fee.note}</div> : null}
+                  <div class="chint">{t('tower.imports.feeBy', { who: detail.fee.quotedBy })}</div>
+                  {detail.fee.paidAt ? <div class="chint">{t('tower.imports.feePaid', { when: detail.fee.paidAt.slice(0, 10), reference: detail.fee.reference ?? '' })}</div> : null}
                   {/* Owed, and not yet sent — the books say so and this screen must not imply otherwise. */}
-                  {detail.fee.paidAt && detail.agentName ? <div class="ctbl__sub">{t('tower.imports.feeOwed', { name: detail.agentName })}</div> : null}
+                  {detail.fee.paidAt && detail.agentName ? <div class="chint">{t('tower.imports.feeOwed', { name: detail.agentName })}</div> : null}
                 </li>
               </ul>
             ) : null}
 
             {detail.youAre === 'agent' && detail.feeState !== 'paid' ? (
               <>
-                <div class="twr-knobs">
-                  <label class="twr-knob">
-                    <span>{t('tower.imports.f.amount')}</span>
-                    <input type="number" min={1} value={feeForm.amount} onChange={(e) => setFeeForm({ ...feeForm, amount: (e.target as HTMLInputElement).value })} />
+                <div class="twr-knobs__row">
+                  <label class="twr-knob cfield">
+                    <span class="cfield__label">{t('tower.imports.f.amount')}</span>
+                    <input class="cinput" type="number" min={1} value={feeForm.amount} onChange={(e) => setFeeForm({ ...feeForm, amount: (e.target as HTMLInputElement).value })} />
                   </label>
-                  <label class="twr-knob">
-                    <span>{t('tower.imports.f.feeNote')}</span>
-                    <input value={feeForm.note} onChange={(e) => setFeeForm({ ...feeForm, note: (e.target as HTMLInputElement).value })} />
+                  <label class="twr-knob cfield">
+                    <span class="cfield__label">{t('tower.imports.f.feeNote')}</span>
+                    <input class="cinput" value={feeForm.note} onChange={(e) => setFeeForm({ ...feeForm, note: (e.target as HTMLInputElement).value })} />
                   </label>
                 </div>
                 <div class="twr-panelend">
-                  {feeQuoteBlocker(feeForm) ? <span class="ctbl__sub">{t(feeQuoteBlocker(feeForm)!)}</span> : null}
+                  {feeQuoteBlocker(feeForm) ? <span class="chint">{t(feeQuoteBlocker(feeForm)!)}</span> : null}
                   <button
                     type="button"
-                    class="cbtn"
+                    class="cbtn cbtn--primary"
                     disabled={Boolean(feeQuoteBlocker(feeForm)) || busy === 'fee'}
                     onClick={() =>
                       run(
@@ -807,7 +807,7 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
               <div class="twr-panelend">
                 <button
                   type="button"
-                  class="cbtn"
+                  class="cbtn cbtn--primary"
                   disabled={busy === 'feeAccept'}
                   onClick={() => run('feeAccept', () => client!.api.acceptClearanceFee(detail.importId, { ...(who ? { by: who } : {}) }), t('tower.imports.feeAccepted'))}
                 >
@@ -820,21 +820,21 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
             {!isCompany && detail.feeState === 'accepted' ? (
               <>
                 <p class="cons__lede">{t('tower.imports.receiptHint')}</p>
-                <div class="twr-knobs">
-                  <label class="twr-knob">
-                    <span>{t('tower.imports.f.reference')}</span>
-                    <input value={receiptForm.reference} onChange={(e) => setReceiptForm({ ...receiptForm, reference: (e.target as HTMLInputElement).value })} />
+                <div class="twr-knobs__row">
+                  <label class="twr-knob cfield">
+                    <span class="cfield__label">{t('tower.imports.f.reference')}</span>
+                    <input class="cinput" value={receiptForm.reference} onChange={(e) => setReceiptForm({ ...receiptForm, reference: (e.target as HTMLInputElement).value })} />
                   </label>
-                  <label class="twr-knob">
-                    <span>{t('tower.imports.f.amount')}</span>
-                    <input type="number" min={1} value={receiptForm.amount} onChange={(e) => setReceiptForm({ ...receiptForm, amount: (e.target as HTMLInputElement).value })} />
+                  <label class="twr-knob cfield">
+                    <span class="cfield__label">{t('tower.imports.f.amount')}</span>
+                    <input class="cinput" type="number" min={1} value={receiptForm.amount} onChange={(e) => setReceiptForm({ ...receiptForm, amount: (e.target as HTMLInputElement).value })} />
                   </label>
                 </div>
                 <div class="twr-panelend">
-                  {receiptBlocker(receiptForm) ? <span class="ctbl__sub">{t(receiptBlocker(receiptForm)!)}</span> : null}
+                  {receiptBlocker(receiptForm) ? <span class="chint">{t(receiptBlocker(receiptForm)!)}</span> : null}
                   <button
                     type="button"
-                    class="cbtn"
+                    class="cbtn cbtn--primary"
                     disabled={Boolean(receiptBlocker(receiptForm)) || busy === 'receipt'}
                     onClick={() =>
                       run(
@@ -867,29 +867,29 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
               <p class="cons__lede">{t('tower.imports.roadHint')}</p>
               {detail.roadFreightCode ? null : (
                 <>
-                  <div class="twr-knobs">
-                    <label class="twr-knob">
-                      <span>{t('tower.imports.f.portLat')}</span>
-                      <input value={roadForm.lat} onChange={(e) => setRoadForm({ ...roadForm, lat: (e.target as HTMLInputElement).value })} />
+                  <div class="twr-knobs__row">
+                    <label class="twr-knob cfield">
+                      <span class="cfield__label">{t('tower.imports.f.portLat')}</span>
+                      <input class="cinput" value={roadForm.lat} onChange={(e) => setRoadForm({ ...roadForm, lat: (e.target as HTMLInputElement).value })} />
                     </label>
-                    <label class="twr-knob">
-                      <span>{t('tower.imports.f.portLng')}</span>
-                      <input value={roadForm.lng} onChange={(e) => setRoadForm({ ...roadForm, lng: (e.target as HTMLInputElement).value })} />
+                    <label class="twr-knob cfield">
+                      <span class="cfield__label">{t('tower.imports.f.portLng')}</span>
+                      <input class="cinput" value={roadForm.lng} onChange={(e) => setRoadForm({ ...roadForm, lng: (e.target as HTMLInputElement).value })} />
                     </label>
-                    <label class="twr-knob">
-                      <span>{t('tower.imports.f.roadDest')}</span>
-                      <input value={roadForm.destLabel} onChange={(e) => setRoadForm({ ...roadForm, destLabel: (e.target as HTMLInputElement).value })} />
+                    <label class="twr-knob cfield">
+                      <span class="cfield__label">{t('tower.imports.f.roadDest')}</span>
+                      <input class="cinput" value={roadForm.destLabel} onChange={(e) => setRoadForm({ ...roadForm, destLabel: (e.target as HTMLInputElement).value })} />
                     </label>
-                    <label class="twr-knob">
-                      <span>{t('tower.imports.f.weight')}</span>
-                      <input type="number" min={1} value={roadForm.weightKg} onChange={(e) => setRoadForm({ ...roadForm, weightKg: (e.target as HTMLInputElement).value })} />
+                    <label class="twr-knob cfield">
+                      <span class="cfield__label">{t('tower.imports.f.weight')}</span>
+                      <input class="cinput" type="number" min={1} value={roadForm.weightKg} onChange={(e) => setRoadForm({ ...roadForm, weightKg: (e.target as HTMLInputElement).value })} />
                     </label>
                   </div>
                   <div class="twr-panelend">
-                    {roadBlocker(roadForm) ? <span class="ctbl__sub">{t(roadBlocker(roadForm)!)}</span> : null}
+                    {roadBlocker(roadForm) ? <span class="chint">{t(roadBlocker(roadForm)!)}</span> : null}
                     <button
                       type="button"
-                      class="cbtn"
+                      class="cbtn cbtn--primary"
                       disabled={Boolean(roadBlocker(roadForm)) || busy === 'road'}
                       onClick={() =>
                         run(
@@ -955,7 +955,7 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
 
             {detail.youAre === 'importer' ? (
               <>
-                <div class="twr-knobs">
+                <div class="twr-knobs__row">
                   {/* A SUGGESTION LIST AND FREE ENTRY, because the two are different things. The server
                       accepts any code ISO 6346 can build — thousands of combinations, and an unusable
                       dropdown — so the list offers what is common and the field takes whatever is printed
@@ -965,24 +965,24 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                       recorded the day it is booked and the bill of lading names it weeks afterwards. The
                       server runs the ISO 6346 check digit over it and refuses one that cannot be right —
                       a wrong number is a box nobody can trace and a clock nobody can stop. */}
-                  <label class="twr-knob">
-                    <span>{t('tower.imports.f.containerNo')}</span>
+                  <label class="twr-knob cfield">
+                    <span class="cfield__label">{t('tower.imports.f.containerNo')}</span>
                     <input
                       maxLength={13}
                       placeholder="MSCU1234566"
                       value={cargoForm.containerNo}
                       onChange={(e) => setCargoForm({ ...cargoForm, containerNo: (e.target as HTMLInputElement).value.toUpperCase() })}
                     />
-                    <span class="ctbl__sub">{t('tower.imports.containerNoSub')}</span>
+                    <span class="chint">{t('tower.imports.containerNoSub')}</span>
                   </label>
                   {/* The CSC safety-approval plate date. Carried because a haulier at a gate needs it, and
                       NOTHING is said about it: whether the box is fit is a surveyor's verdict, not ours. */}
-                  <label class="twr-knob">
-                    <span>{t('tower.imports.f.cscPlateDate')}</span>
-                    <input type="date" value={cargoForm.cscPlateDate} onChange={(e) => setCargoForm({ ...cargoForm, cscPlateDate: (e.target as HTMLInputElement).value })} />
+                  <label class="twr-knob cfield">
+                    <span class="cfield__label">{t('tower.imports.f.cscPlateDate')}</span>
+                    <input class="cinput" type="date" value={cargoForm.cscPlateDate} onChange={(e) => setCargoForm({ ...cargoForm, cscPlateDate: (e.target as HTMLInputElement).value })} />
                   </label>
-                  <label class="twr-knob">
-                    <span>{t('tower.imports.f.box')}</span>
+                  <label class="twr-knob cfield">
+                    <span class="cfield__label">{t('tower.imports.f.box')}</span>
                     <input
                       list="box-codes"
                       maxLength={4}
@@ -997,13 +997,13 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                         </option>
                       ))}
                     </datalist>
-                    <span class="ctbl__sub">{t('tower.imports.boxAny')}</span>
+                    <span class="chint">{t('tower.imports.boxAny')}</span>
                   </label>
                   {/* WHAT THE GOODS ARE — the importer's, because we must not read it out of a description.
                       This is the whole distance between a food tank and a fuel tank. */}
-                  <label class="twr-knob">
-                    <span>{t('tower.imports.f.nature')}</span>
-                    <select value={cargoForm.natureCode} onChange={(e) => setCargoForm({ ...cargoForm, natureCode: (e.target as HTMLSelectElement).value })}>
+                  <label class="twr-knob cfield">
+                    <span class="cfield__label">{t('tower.imports.f.nature')}</span>
+                    <select class="cinput" value={cargoForm.natureCode} onChange={(e) => setCargoForm({ ...cargoForm, natureCode: (e.target as HTMLSelectElement).value })}>
                       <option value="">{t('tower.imports.naturePick')}</option>
                       {CARGO_NATURES.map((n) => (
                         <option key={n} value={n}>
@@ -1014,9 +1014,9 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                   </label>
                   {/* Only for a box with no roof: its own height is the floor the cargo sits on. */}
                   {detail.containerFacts?.openTop || detail.containerFacts?.heightUnstated || boxes.find((b) => b.code === cargoForm.containerType)?.openTop ? (
-                    <label class="twr-knob">
-                      <span>{t('tower.imports.f.cargoHeight')}</span>
-                      <input type="number" min={0.1} max={10} step={0.05} value={cargoForm.cargoHeightM} onChange={(e) => setCargoForm({ ...cargoForm, cargoHeightM: (e.target as HTMLInputElement).value })} />
+                    <label class="twr-knob cfield">
+                      <span class="cfield__label">{t('tower.imports.f.cargoHeight')}</span>
+                      <input class="cinput" type="number" min={0.1} max={10} step={0.05} value={cargoForm.cargoHeightM} onChange={(e) => setCargoForm({ ...cargoForm, cargoHeightM: (e.target as HTMLInputElement).value })} />
                     </label>
                   ) : null}
                 </div>
@@ -1024,7 +1024,7 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                 <div class="twr-panelend">
                   <button
                     type="button"
-                    class="cbtn"
+                    class="cbtn cbtn--primary"
                     disabled={busy === 'cargo'}
                     onClick={() =>
                       run(
@@ -1051,18 +1051,18 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                 {detail.containerFacts?.kind === 'tank' ? (
                   <>
                     <p class="cons__lede">{t('tower.imports.tankHint')}</p>
-                    <div class="twr-knobs">
-                      <label class="twr-knob">
-                        <span>{t('tower.imports.f.lastCargoes')}</span>
-                        <input value={cargoForm.lastCargoes} onChange={(e) => setCargoForm({ ...cargoForm, lastCargoes: (e.target as HTMLInputElement).value })} />
+                    <div class="twr-knobs__row">
+                      <label class="twr-knob cfield">
+                        <span class="cfield__label">{t('tower.imports.f.lastCargoes')}</span>
+                        <input class="cinput" value={cargoForm.lastCargoes} onChange={(e) => setCargoForm({ ...cargoForm, lastCargoes: (e.target as HTMLInputElement).value })} />
                       </label>
-                      <label class="twr-knob">
-                        <span>{t('tower.imports.f.cleanedAt')}</span>
-                        <input type="date" value={cargoForm.cleanedAt} onChange={(e) => setCargoForm({ ...cargoForm, cleanedAt: (e.target as HTMLInputElement).value })} />
+                      <label class="twr-knob cfield">
+                        <span class="cfield__label">{t('tower.imports.f.cleanedAt')}</span>
+                        <input class="cinput" type="date" value={cargoForm.cleanedAt} onChange={(e) => setCargoForm({ ...cargoForm, cleanedAt: (e.target as HTMLInputElement).value })} />
                       </label>
-                      <label class="twr-knob">
-                        <span>{t('tower.imports.f.cleanCert')}</span>
-                        <select value={cargoForm.certificateDocumentId} onChange={(e) => setCargoForm({ ...cargoForm, certificateDocumentId: (e.target as HTMLSelectElement).value })}>
+                      <label class="twr-knob cfield">
+                        <span class="cfield__label">{t('tower.imports.f.cleanCert')}</span>
+                        <select class="cinput" value={cargoForm.certificateDocumentId} onChange={(e) => setCargoForm({ ...cargoForm, certificateDocumentId: (e.target as HTMLSelectElement).value })}>
                           <option value="">{t('tower.imports.certNone')}</option>
                           {detail.documents.filter((d) => d.status !== 'superseded').map((d) => (
                             <option key={d.documentId} value={d.documentId}>
@@ -1104,18 +1104,18 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                 {cargoForm.natureCode.startsWith('HAZ') || (detail.cargoGaps.join(' ').includes('UN number')) ? (
                   <>
                     <p class="cons__lede">{t('tower.imports.dgHint')}</p>
-                    <div class="twr-knobs">
-                      <label class="twr-knob">
-                        <span>{t('tower.imports.f.unNumber')}</span>
-                        <input placeholder="UN1202" value={cargoForm.unNumber} onChange={(e) => setCargoForm({ ...cargoForm, unNumber: (e.target as HTMLInputElement).value })} />
+                    <div class="twr-knobs__row">
+                      <label class="twr-knob cfield">
+                        <span class="cfield__label">{t('tower.imports.f.unNumber')}</span>
+                        <input class="cinput" placeholder="UN1202" value={cargoForm.unNumber} onChange={(e) => setCargoForm({ ...cargoForm, unNumber: (e.target as HTMLInputElement).value })} />
                       </label>
-                      <label class="twr-knob">
-                        <span>{t('tower.imports.f.imdgClass')}</span>
-                        <input placeholder="3" value={cargoForm.imdgClass} onChange={(e) => setCargoForm({ ...cargoForm, imdgClass: (e.target as HTMLInputElement).value })} />
+                      <label class="twr-knob cfield">
+                        <span class="cfield__label">{t('tower.imports.f.imdgClass')}</span>
+                        <input class="cinput" placeholder="3" value={cargoForm.imdgClass} onChange={(e) => setCargoForm({ ...cargoForm, imdgClass: (e.target as HTMLInputElement).value })} />
                       </label>
-                      <label class="twr-knob">
-                        <span>{t('tower.imports.f.shippingName')}</span>
-                        <input value={cargoForm.shippingName} onChange={(e) => setCargoForm({ ...cargoForm, shippingName: (e.target as HTMLInputElement).value })} />
+                      <label class="twr-knob cfield">
+                        <span class="cfield__label">{t('tower.imports.f.shippingName')}</span>
+                        <input class="cinput" value={cargoForm.shippingName} onChange={(e) => setCargoForm({ ...cargoForm, shippingName: (e.target as HTMLInputElement).value })} />
                       </label>
                     </div>
                     <div class="twr-panelend">
@@ -1169,31 +1169,30 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
             ) : (
               <>
                 {/* THE SENTENCE THE SERVER WROTE, shown verbatim. It names what is being counted and whose
-                    numbers produced it — a countdown with nobody's name on it gets read as ours, and the
-                    free days come from a contract between the importer and the line. */}
+                    numbers produced it — a countdown with nobody's name on it gets read as ours. */}
                 <p class="cons__lede">{detail.box.clock.basis}</p>
 
-                <div class="ctbl">
-                  <div class="ctbl__row">
-                    <span class="ctbl__k">{t('tower.imports.clockOwner')}</span>
-                    <span class="ctbl__v">
+                <div class="cons__facts">
+                  <div class="cons__fact">
+                    <span class="cons__factk">{t('tower.imports.clockOwner')}</span>
+                    <span class="cons__factv">
                       {detail.box.ownerCode ?? '—'}
-                      {detail.box.category ? <span class="ctbl__sub">{detail.box.category}</span> : null}
+                      {detail.box.category ? <span class="chint">{detail.box.category}</span> : null}
                     </span>
                   </div>
-                  <div class="ctbl__row">
-                    <span class="ctbl__k">{t('tower.imports.clockOwed')}</span>
+                  <div class="cons__fact">
+                    <span class="cons__factk">{t('tower.imports.clockOwed')}</span>
                     {/* DERIVED from the appointment. Before anybody is appointed it is nobody, and saying
                         so is better than leaving the row blank for a reader to fill in themselves. */}
-                    <span class="ctbl__v">{detail.box.owedByName ?? t('tower.imports.clockOwedNobody')}</span>
+                    <span class="cons__factv">{detail.box.owedByName ?? t('tower.imports.clockOwedNobody')}</span>
                   </div>
-                  <div class="ctbl__row">
-                    <span class="ctbl__k">{t('tower.imports.clockDates')}</span>
-                    <span class="ctbl__v">
+                  <div class="cons__fact">
+                    <span class="cons__factk">{t('tower.imports.clockDates')}</span>
+                    <span class="cons__factv">
                       {detail.box.arrivedAt ? t('tower.imports.clockArrived', { d: detail.box.arrivedAt.slice(0, 10) }) : t('tower.imports.clockNoArrival')}
                       {/* The out-gate is the road leg's PICKUP, not the minting of it: a container whose
                           truck has not turned up has not left the terminal, whatever the paperwork says. */}
-                      <span class="ctbl__sub">
+                      <span class="chint">
                         {detail.box.outGatedAt
                           ? t('tower.imports.clockGated', { d: detail.box.outGatedAt.slice(0, 10) })
                           : detail.roadFreightCode
@@ -1203,20 +1202,20 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                     </span>
                   </div>
                   {detail.box.cscPlateDate ? (
-                    <div class="ctbl__row">
-                      <span class="ctbl__k">{t('tower.imports.clockCsc')}</span>
+                    <div class="cons__fact">
+                      <span class="cons__factk">{t('tower.imports.clockCsc')}</span>
                       {/* Carried, with nothing stated about it: whether a box is FIT is a surveyor's verdict. */}
-                      <span class="ctbl__v">
+                      <span class="cons__factv">
                         {detail.box.cscPlateDate.slice(0, 10)}
-                        <span class="ctbl__sub">{t('tower.imports.clockCscSub')}</span>
+                        <span class="chint">{t('tower.imports.clockCscSub')}</span>
                       </span>
                     </div>
                   ) : null}
                   {detail.box.timesUsed > 1 ? (
-                    <div class="ctbl__row">
-                      <span class="ctbl__k">{t('tower.imports.clockTimes')}</span>
+                    <div class="cons__fact">
+                      <span class="cons__factk">{t('tower.imports.clockTimes')}</span>
                       {/* The box is not owned by this consignment, and this row is why that matters. */}
-                      <span class="ctbl__v">{t('tower.imports.clockTimesV', { n: detail.box.timesUsed })}</span>
+                      <span class="cons__factv">{t('tower.imports.clockTimesV', { n: detail.box.timesUsed })}</span>
                     </div>
                   ) : null}
                 </div>
@@ -1237,7 +1236,7 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                 {/* A figure recorded against the clock that is NOT running. It is not doing nothing, and it
                     is not being ignored: it starts counting when that clock starts. */}
                 {detail.box.freeDays.length > 0 && detail.box.clock.freeDays == null && detail.box.clock.kind !== 'stopped' ? (
-                  <p class="cons__lede">{t('tower.imports.clockClaimIdle')}</p>
+                  <p class="chint">{t('tower.imports.clockClaimIdle')}</p>
                 ) : null}
 
 
@@ -1250,13 +1249,13 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                     <div key={g.side} class="cons__gate">
                       <div class="cons__gatehead">
                         <span class="cons__gatet">{t(`tower.imports.gate.${g.side}` as never)}</span>
-                        {g.at ? <span class="ctbl__sub">{g.at.slice(0, 10)}</span> : null}
+                        {g.at ? <span class="chint">{g.at.slice(0, 10)}</span> : null}
                         {/* Nothing adjudicates two accounts that disagree. The screen says they disagree. */}
                         {g.disputed ? <span class="ctag ctag--warn">{t('tower.imports.gateDisputed')}</span> : null}
                       </div>
 
                       {!g.stated ? (
-                        <p class="cons__lede">{t('tower.imports.gateNothing')}</p>
+                        <p class="chint">{t('tower.imports.gateNothing')}</p>
                       ) : (
                         g.accounts.map((a, i) => (
                           <div key={`${a.by}-${a.at}-${i}`} class="cons__account">
@@ -1297,7 +1296,7 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                       )}
                       {/* A photograph the record cites and nobody can open is the "2 photos, none shown"
                           defect. Said in words rather than left as a grey tile. */}
-                      {g.photoRefs.some((r) => deadShots.includes(r)) ? <p class="cons__lede">{t('tower.imports.gateDead')}</p> : null}
+                      {g.photoRefs.some((r) => deadShots.includes(r)) ? <p class="chint">{t('tower.imports.gateDead')}</p> : null}
 
                       {!detail.box!.ending || g.side === 'in' ? (
                         <div class="twr-panelend">
@@ -1312,28 +1311,28 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
 
                 {gateForm.side ? (
                   <>
-                    <p class="cons__lede">{t('tower.imports.gateFormHint')}</p>
-                    <div class="twr-knobs">
-                      <label class="twr-knob">
-                        <span>{t('tower.imports.f.stance')}</span>
-                        <select value={gateForm.stance} onChange={(e) => setGateForm({ ...gateForm, stance: (e.target as HTMLSelectElement).value })}>
+                    <p class="chint">{t('tower.imports.gateFormHint')}</p>
+                    <div class="twr-knobs__row">
+                      <label class="twr-knob cfield">
+                        <span class="cfield__label">{t('tower.imports.f.stance')}</span>
+                        <select class="cinput" value={gateForm.stance} onChange={(e) => setGateForm({ ...gateForm, stance: (e.target as HTMLSelectElement).value })}>
                           <option value="damaged">{t('tower.imports.stance.damaged')}</option>
                           <option value="sound">{t('tower.imports.stance.sound')}</option>
                         </select>
                       </label>
-                      <label class="twr-knob">
-                        <span>{t('tower.imports.f.gateNote')}</span>
-                        <input value={gateForm.note} onChange={(e) => setGateForm({ ...gateForm, note: (e.target as HTMLInputElement).value })} placeholder={t('tower.imports.f.gateNotePh')} />
+                      <label class="twr-knob cfield">
+                        <span class="cfield__label">{t('tower.imports.f.gateNote')}</span>
+                        <input class="cinput" value={gateForm.note} onChange={(e) => setGateForm({ ...gateForm, note: (e.target as HTMLInputElement).value })} placeholder={t('tower.imports.f.gateNotePh')} />
                       </label>
-                      <label class="twr-knob">
-                        <span>{t('tower.imports.f.gatePhoto')}</span>
-                        <input type="file" accept="image/*" onChange={(e) => readShot((e.target as HTMLInputElement).files?.[0] ?? null)} />
+                      <label class="twr-knob cfield">
+                        <span class="cfield__label">{t('tower.imports.f.gatePhoto')}</span>
+                        <input class="cinput" type="file" accept="image/*" onChange={(e) => readShot((e.target as HTMLInputElement).files?.[0] ?? null)} />
                       </label>
                     </div>
                     <div class="twr-panelend">
                       <button
                         type="button"
-                        class="cbtn"
+                        class="cbtn cbtn--primary"
                         disabled={busy === `gate-${gateForm.side}`}
                         onClick={() =>
                           run(
@@ -1378,14 +1377,14 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                   </p>
                 ) : !detail.box.ending ? (
                   <>
-                    <p class="cons__lede">{t('tower.imports.homeHint')}</p>
-                    <div class="twr-knobs">
+                    <p class="chint">{t('tower.imports.homeHint')}</p>
+                    <div class="twr-knobs__row">
                       {/* Y4 — PICK a registered yard where there is one: that is what puts the box on
                           that yard's own list when it arrives. A typed label does not, and matching two
                           yards that call themselves the same thing would be worse than not trying. */}
                       {depotOptions.length ? (
-                        <label class="twr-knob">
-                          <span>{t('tower.imports.f.depotPick')}</span>
+                        <label class="twr-knob cfield">
+                          <span class="cfield__label">{t('tower.imports.f.depotPick')}</span>
                           <select
                             value={homeForm.depotEntityId}
                             onChange={(e) => {
@@ -1403,27 +1402,27 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                           </select>
                         </label>
                       ) : null}
-                      <label class="twr-knob">
-                        <span>{t('tower.imports.f.depot')}</span>
-                        <input value={homeForm.depotLabel} onChange={(e) => setHomeForm({ ...homeForm, depotLabel: (e.target as HTMLInputElement).value })} placeholder={t('tower.imports.f.depotPh')} />
+                      <label class="twr-knob cfield">
+                        <span class="cfield__label">{t('tower.imports.f.depot')}</span>
+                        <input class="cinput" value={homeForm.depotLabel} onChange={(e) => setHomeForm({ ...homeForm, depotLabel: (e.target as HTMLInputElement).value })} placeholder={t('tower.imports.f.depotPh')} />
                       </label>
                       {/* THE TARE, and it is asked for rather than invented: an empty container is not a
                           light one, and the figure is painted on the door of the thing they are next to. */}
-                      <label class="twr-knob">
-                        <span>{t('tower.imports.f.homeWeight')}</span>
-                        <input type="number" min={1} step={50} value={homeForm.weightKg} onChange={(e) => setHomeForm({ ...homeForm, weightKg: (e.target as HTMLInputElement).value })} placeholder="2200" />
+                      <label class="twr-knob cfield">
+                        <span class="cfield__label">{t('tower.imports.f.homeWeight')}</span>
+                        <input class="cinput" type="number" min={1} step={50} value={homeForm.weightKg} onChange={(e) => setHomeForm({ ...homeForm, weightKg: (e.target as HTMLInputElement).value })} placeholder="2200" />
                       </label>
                       {/* Empty is the DEFAULT here only because it is the simpler form to leave blank —
                           the laden case is the commoner one, and saying what is in it is one field. */}
-                      <label class="twr-knob">
-                        <span>{t('tower.imports.f.homeCargo')}</span>
-                        <input value={homeForm.cargo} onChange={(e) => setHomeForm({ ...homeForm, cargo: (e.target as HTMLInputElement).value })} placeholder={t('tower.imports.f.homeCargoPh')} />
+                      <label class="twr-knob cfield">
+                        <span class="cfield__label">{t('tower.imports.f.homeCargo')}</span>
+                        <input class="cinput" value={homeForm.cargo} onChange={(e) => setHomeForm({ ...homeForm, cargo: (e.target as HTMLInputElement).value })} placeholder={t('tower.imports.f.homeCargoPh')} />
                       </label>
                     </div>
                     <div class="twr-panelend">
                       <button
                         type="button"
-                        class="cbtn"
+                        class="cbtn cbtn--primary"
                         disabled={busy === 'homeLeg' || !homeForm.depotLabel.trim() || !homeForm.weightKg.trim()}
                         onClick={() =>
                           run(
@@ -1448,38 +1447,38 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
 
                 {!detail.box.ending ? (
                   <>
-                    <div class="twr-knobs">
-                      <label class="twr-knob">
-                        <span>{t('tower.imports.f.arrivedAt')}</span>
-                        <input type="date" value={boxForm.arrivedAt} onChange={(e) => setBoxForm({ ...boxForm, arrivedAt: (e.target as HTMLInputElement).value })} />
+                    <div class="twr-knobs__row">
+                      <label class="twr-knob cfield">
+                        <span class="cfield__label">{t('tower.imports.f.arrivedAt')}</span>
+                        <input class="cinput" type="date" value={boxForm.arrivedAt} onChange={(e) => setBoxForm({ ...boxForm, arrivedAt: (e.target as HTMLInputElement).value })} />
                       </label>
                       {/* THE IMPORTER'S ALONE, and not as an access rule: the free days are in their own
                           contract with the line, so nobody else is in a position to state the figure. */}
                       {detail.youAre === 'importer' ? (
                         <>
-                          <label class="twr-knob">
-                            <span>{t('tower.imports.f.freeDayKind')}</span>
-                            <select value={boxForm.freeDayKind} onChange={(e) => setBoxForm({ ...boxForm, freeDayKind: (e.target as HTMLSelectElement).value })}>
+                          <label class="twr-knob cfield">
+                            <span class="cfield__label">{t('tower.imports.f.freeDayKind')}</span>
+                            <select class="cinput" value={boxForm.freeDayKind} onChange={(e) => setBoxForm({ ...boxForm, freeDayKind: (e.target as HTMLSelectElement).value })}>
                               <option value="detention">{t('tower.imports.freeDays.detention')}</option>
                               <option value="demurrage">{t('tower.imports.freeDays.demurrage')}</option>
                             </select>
                           </label>
-                          <label class="twr-knob">
-                            <span>{t('tower.imports.f.freeDays')}</span>
-                            <input type="number" min={0} max={365} step={1} value={boxForm.freeDays} onChange={(e) => setBoxForm({ ...boxForm, freeDays: (e.target as HTMLInputElement).value })} />
+                          <label class="twr-knob cfield">
+                            <span class="cfield__label">{t('tower.imports.f.freeDays')}</span>
+                            <input class="cinput" type="number" min={0} max={365} step={1} value={boxForm.freeDays} onChange={(e) => setBoxForm({ ...boxForm, freeDays: (e.target as HTMLInputElement).value })} />
                           </label>
                         </>
                       ) : null}
-                      <label class="twr-knob">
-                        <span>{t('tower.imports.f.endedWhere')}</span>
-                        <input value={boxForm.where} onChange={(e) => setBoxForm({ ...boxForm, where: (e.target as HTMLInputElement).value })} placeholder={t('tower.imports.f.endedWherePh')} />
+                      <label class="twr-knob cfield">
+                        <span class="cfield__label">{t('tower.imports.f.endedWhere')}</span>
+                        <input class="cinput" value={boxForm.where} onChange={(e) => setBoxForm({ ...boxForm, where: (e.target as HTMLInputElement).value })} placeholder={t('tower.imports.f.endedWherePh')} />
                       </label>
                     </div>
 
                     <div class="twr-panelend">
                       <button
                         type="button"
-                        class="cbtn"
+                        class="cbtn cbtn--primary"
                         disabled={busy === 'boxArrived' || !boxForm.arrivedAt}
                         onClick={() =>
                           run('boxArrived', () => client!.api.recordBoxArrival(detail.importId, { at: boxForm.arrivedAt, ...(who ? { by: who } : {}) }), t('tower.imports.clockArrivedSaved'))
@@ -1490,7 +1489,7 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                       {detail.youAre === 'importer' ? (
                         <button
                           type="button"
-                          class="cbtn"
+                          class="cbtn cbtn--primary"
                           disabled={busy === 'boxFreeDays' || !boxForm.freeDays.trim()}
                           onClick={() =>
                             run(
@@ -1510,7 +1509,7 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                       ) : null}
                       <button
                         type="button"
-                        class="cbtn"
+                        class="cbtn cbtn--primary"
                         disabled={busy === 'boxReturned'}
                         onClick={() =>
                           run(
@@ -1540,10 +1539,10 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                         {t('tower.imports.clockBoughtSave')}
                       </button>
                     </div>
-                    <p class="cons__lede">{t('tower.imports.clockHint')}</p>
+                    <p class="chint">{t('tower.imports.clockHint')}</p>
                   </>
                 ) : (
-                  <p class="cons__lede">{t('tower.imports.clockEndedHint')}</p>
+                  <p class="chint">{t('tower.imports.clockEndedHint')}</p>
                 )}
               </>
             )}
@@ -1565,13 +1564,13 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
               <ul class="twr-checklist">
                 {detail.customsHolds.map((h) => (
                   <li key={h.holdId}>
-                    <b>{t(`tower.imports.holdKind.${h.kind}` as never)}</b> · <span class="ctbl__sub">{new Date(h.at).toLocaleDateString()}</span>
+                    <b>{t(`tower.imports.holdKind.${h.kind}` as never)}</b> · <span class="chint">{new Date(h.at).toLocaleDateString()}</span>
                     {h.releasedAt ? <span class="ctag ctag--ok">{t('tower.imports.holdReleased', { on: new Date(h.releasedAt).toLocaleDateString() })}</span> : null}
                     {/* A disputed hold is still SHOWN, and marked. Nothing here is ever deleted: the two
                         accounts stand side by side and a reader weighs them, which is not our job. */}
                     {holdDisputed(h) ? <span class="ctag ctag--warn">{t('tower.imports.holdDisputed')}</span> : null}
                     {h.accounts.map((a, i) => (
-                      <div key={`${h.holdId}-${i}`} class="ctbl__sub">
+                      <div key={`${h.holdId}-${i}`} class="chint">
                         {a.stance === 'disputed' ? t('tower.imports.holdSaysNot') : t('tower.imports.holdSays')}
                         {a.note ? ` — “${a.note}”` : ''} · {a.by}
                       </div>
@@ -1695,26 +1694,26 @@ function PaperRow({
     <tr>
       <td>
         <div class="ctbl__strong">{paper.label}</div>
-        {paper.copies ? <div class="ctbl__sub">{t('tower.imports.copies', { n: paper.copies })}</div> : null}
-        {paper.note ? <div class="ctbl__sub">{paper.note}</div> : null}
-        <div class="ctbl__sub">{t('tower.imports.by', { who: paper.addedBy })}</div>
+        {paper.copies ? <div class="chint">{t('tower.imports.copies', { n: paper.copies })}</div> : null}
+        {paper.note ? <div class="chint">{paper.note}</div> : null}
+        <div class="chint">{t('tower.imports.by', { who: paper.addedBy })}</div>
       </td>
       <td>
         <span class={`ctag ${tone === 'ok' ? 'ctag--ok' : tone === 'bad' ? 'ctag--danger' : tone === 'warn' ? 'ctag--warn' : 'ctag--quiet'}`}>{t(`tower.imports.state.${paper.state}` as never)}</span>
         {paper.document ? (
-          <div class="ctbl__sub">
+          <div class="chint">
             {paper.document.title} · {shortFingerprint(paper.document.fingerprint)}
           </div>
         ) : null}
         {/* Said before it is relied on — never discovered at the counter. */}
-        {paper.expired ? <div class="ctbl__sub">{t('tower.imports.expired', { date: paper.document?.expiresAt ?? '' })}</div> : null}
-        {paper.stale ? <div class="ctbl__sub">{t('tower.imports.stale')}</div> : null}
-        {paper.rejectionReason ? <div class="ctbl__sub">{paper.rejectionReason}</div> : null}
+        {paper.expired ? <div class="chint">{t('tower.imports.expired', { date: paper.document?.expiresAt ?? '' })}</div> : null}
+        {paper.stale ? <div class="chint">{t('tower.imports.stale')}</div> : null}
+        {paper.rejectionReason ? <div class="chint">{paper.rejectionReason}</div> : null}
       </td>
       <td class="ctbl__num">
         {detail.youAre === 'importer' ? (
           <>
-            <select value={pick} onChange={(e) => onPick((e.target as HTMLSelectElement).value)}>
+            <select class="cinput" value={pick} onChange={(e) => onPick((e.target as HTMLSelectElement).value)}>
               <option value="">{t('tower.imports.pick')}</option>
               {choices.map((d) => (
                 <option key={d.documentId} value={d.documentId}>
@@ -1731,7 +1730,7 @@ function PaperRow({
             <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy === 'accept:' + paper.key} onClick={onAccept}>
               {t('tower.imports.accept')}
             </button>
-            <input placeholder={t('tower.imports.rejectDone')} value={why} onChange={(e) => setWhy((e.target as HTMLInputElement).value)} />
+            <input class="cinput" placeholder={t('tower.imports.rejectDone')} value={why} onChange={(e) => setWhy((e.target as HTMLInputElement).value)} />
             <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={!why.trim() || busy === 'reject:' + paper.key} onClick={() => onReject(why.trim())}>
               {t('tower.imports.reject')}
             </button>

@@ -254,6 +254,47 @@
    the data underneath it is and is not. The road map's "absence of a report is not clearance" lives in
 
 /* Y3 — the two gates a container passes through, and every account of what it looked like there.
+
+/* A block of FACTS about one thing — a label and its value, one per line.
+   Not a table: a table is for a list of records, and these are the fields of a single record. The pattern
+   was missing, so three screens invented class names that matched no rule at all and rendered as a run of
+   unstyled inline spans. Found by looking at the page rather than at the code. */
+.cons__facts {
+  display: grid;
+  gap: 2px;
+  margin: 10px 0 4px;
+}
+
+.cons__fact {
+  display: grid;
+  grid-template-columns: minmax(120px, 30%) 1fr auto;
+  gap: 12px;
+  align-items: baseline;
+  padding: 8px 0;
+  border-top: 1px solid var(--bd-soft);
+}
+
+.cons__facts > .cons__fact:first-child {
+  border-top: 0;
+}
+
+.cons__factk {
+  color: var(--tx3);
+  font-size: var(--c-fs-sm);
+}
+
+.cons__factv {
+  color: var(--tx);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .cons__fact {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
    Both gates are always drawn, so the one nobody recorded reads as an absence rather than as nothing. */
 .cons__gates {
   display: grid;
@@ -517,7 +558,18 @@
   box-shadow: 0 0 0 3px var(--blue-light);
 }
 
+/* A compact control for a row of them — three places already asked for this class and no rule
+   answered, which is the same defect as a class nobody styled: it simply did nothing. */
+.cinput--sm {
+  min-height: 32px;
+  padding: 4px 8px;
+  font-size: var(--c-fs-sm);
+}
+
 .chint {
+  /* Block, so a hint under a field and a second line under a fact both sit on their own line rather
+     than running into whatever follows them. */
+  display: block;
   margin-top: 4px;
   font-size: var(--c-fs-sm);
   color: var(--tx3);

@@ -65,6 +65,14 @@ export function DepotsScreen({ state, actions }: { state: TowerState; actions: T
   const [form, setForm] = useState({ placeLabel: '', country: '', note: '' });
   const [boxForm, setBoxForm] = useState({ containerNo: '', position: '', note: '' });
   const [find, setFind] = useState({ country: '', q: '' });
+  /**
+   * The declare form is SHUT until somebody asks for it.
+   *
+   * Every company administrator opening this screen was being invited to say they hold empties, which is
+   * noise in the account of an importer who came here to find a yard. A screen that asks everybody the
+   * question only one reader has is how a console fills up with text nobody needs.
+   */
+  const [declaring, setDeclaring] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -114,30 +122,38 @@ export function DepotsScreen({ state, actions }: { state: TowerState; actions: T
       {done ? <p class="cons__lede">{done}</p> : null}
 
       {/* ---- The yard's own register, when the caller is a yard ---- */}
-      {mine && !register ? (
+      {mine && !register && !declaring ? (
+        <div class="twr-panelend">
+          <button type="button" class="cbtn cbtn--ghost" onClick={() => setDeclaring(true)}>
+            {t('tower.depots.declareTitle')}
+          </button>
+        </div>
+      ) : null}
+
+      {mine && !register && declaring ? (
         <section class="cons__panel">
           <div class="cons__panelhead">
             <span class="cons__panelt">{t('tower.depots.declareTitle')}</span>
           </div>
-          <p class="cons__lede">{t('tower.depots.declareHint')}</p>
-          <div class="twr-knobs">
-            <label class="twr-knob">
-              <span>{t('tower.depots.f.place')}</span>
-              <input value={form.placeLabel} onChange={(e) => setForm({ ...form, placeLabel: (e.target as HTMLInputElement).value })} placeholder={t('tower.depots.f.placePh')} />
+          <p class="chint">{t('tower.depots.declareHint')}</p>
+          <div class="twr-knobs__row">
+            <label class="twr-knob cfield">
+              <span class="cfield__label">{t('tower.depots.f.place')}</span>
+              <input class="cinput" value={form.placeLabel} onChange={(e) => setForm({ ...form, placeLabel: (e.target as HTMLInputElement).value })} placeholder={t('tower.depots.f.placePh')} />
             </label>
-            <label class="twr-knob">
-              <span>{t('tower.depots.f.country')}</span>
-              <input maxLength={2} value={form.country} onChange={(e) => setForm({ ...form, country: (e.target as HTMLInputElement).value.toUpperCase() })} placeholder="KE" />
+            <label class="twr-knob cfield">
+              <span class="cfield__label">{t('tower.depots.f.country')}</span>
+              <input class="cinput" maxLength={2} value={form.country} onChange={(e) => setForm({ ...form, country: (e.target as HTMLInputElement).value.toUpperCase() })} placeholder="KE" />
             </label>
-            <label class="twr-knob">
-              <span>{t('tower.depots.f.note')}</span>
-              <input value={form.note} onChange={(e) => setForm({ ...form, note: (e.target as HTMLInputElement).value })} placeholder={t('tower.depots.f.notePh')} />
+            <label class="twr-knob cfield">
+              <span class="cfield__label">{t('tower.depots.f.note')}</span>
+              <input class="cinput" value={form.note} onChange={(e) => setForm({ ...form, note: (e.target as HTMLInputElement).value })} placeholder={t('tower.depots.f.notePh')} />
             </label>
           </div>
           <div class="twr-panelend">
             <button
               type="button"
-              class="cbtn"
+              class="cbtn cbtn--primary"
               disabled={busy === 'declare' || !form.placeLabel.trim() || form.country.length !== 2}
               onClick={() =>
                 run(
@@ -163,10 +179,9 @@ export function DepotsScreen({ state, actions }: { state: TowerState; actions: T
 
           {/* THE THREE NUMBERS, AND NEVER A TOTAL. The yard's claim can be stale and our derivation is
               incomplete by construction, so adding them would produce a false inventory. */}
-          <p class="cons__lede">
-            {t('tower.depots.counts', { said: register.said.length, derived: register.derived.length, both: register.inBoth })}
-          </p>
-          <p class="cons__lede">{register.basis}</p>
+          <p class="cons__lede">{t('tower.depots.counts', { said: register.said.length, derived: register.derived.length, both: register.inBoth })}</p>
+          {/* The basis sits UNDER the numbers as a hint rather than as a second paragraph of argument. */}
+          <p class="chint">{register.basis}</p>
 
           {/* WHAT IS ON ITS WAY — the half a notebook cannot have, and the only planning help we offer. */}
           <div class="cons__gate">
@@ -175,15 +190,15 @@ export function DepotsScreen({ state, actions }: { state: TowerState; actions: T
               {register.inbound.length ? <span class="ctag ctag--quiet">{register.inbound.length}</span> : null}
             </div>
             {register.inbound.length === 0 ? (
-              <p class="cons__lede">{t('tower.depots.inboundNone')}</p>
+              <p class="chint">{t('tower.depots.inboundNone')}</p>
             ) : (
-              <div class="ctbl">
+              <div class="cons__facts">
                 {register.inbound.map((l) => (
-                  <div key={l.containerNo} class="ctbl__row">
-                    <span class="ctbl__k">{l.containerNo}</span>
-                    <span class="ctbl__v">
+                  <div key={l.containerNo} class="cons__fact">
+                    <span class="cons__factk">{l.containerNo}</span>
+                    <span class="cons__factv">
                       {t(`tower.depots.leg.${l.state}` as never, { code: l.legCode })}
-                      <span class="ctbl__sub">{l.empty ? t('tower.depots.legEmpty') : t('tower.depots.legLaden')}</span>
+                      <span class="chint">{l.empty ? t('tower.depots.legEmpty') : t('tower.depots.legLaden')}</span>
                     </span>
                   </div>
                 ))}
@@ -197,15 +212,15 @@ export function DepotsScreen({ state, actions }: { state: TowerState; actions: T
               <span class="cons__gatet">{t('tower.depots.said')}</span>
             </div>
             {register.said.length === 0 ? (
-              <p class="cons__lede">{t('tower.depots.saidNone')}</p>
+              <p class="chint">{t('tower.depots.saidNone')}</p>
             ) : (
-              <div class="ctbl">
+              <div class="cons__facts">
                 {register.said.map((s) => (
-                  <div key={s.containerNo} class="ctbl__row">
-                    <span class="ctbl__k">{s.containerNo}</span>
-                    <span class="ctbl__v">
+                  <div key={s.containerNo} class="cons__fact">
+                    <span class="cons__factk">{s.containerNo}</span>
+                    <span class="cons__factv">
                       {s.position || t('tower.depots.noPosition')}
-                      <span class="ctbl__sub">
+                      <span class="chint">
                         {t('tower.depots.saidBy', { by: s.by, d: s.at.slice(0, 10) })}
                         {s.note ? ` · ${s.note}` : ''}
                       </span>
@@ -218,21 +233,21 @@ export function DepotsScreen({ state, actions }: { state: TowerState; actions: T
               </div>
             )}
 
-            <div class="twr-knobs">
-              <label class="twr-knob">
-                <span>{t('tower.depots.f.containerNo')}</span>
-                <input maxLength={13} value={boxForm.containerNo} onChange={(e) => setBoxForm({ ...boxForm, containerNo: (e.target as HTMLInputElement).value.toUpperCase() })} placeholder="MSCU1234566" />
+            <div class="twr-knobs__row">
+              <label class="twr-knob cfield">
+                <span class="cfield__label">{t('tower.depots.f.containerNo')}</span>
+                <input class="cinput" maxLength={13} value={boxForm.containerNo} onChange={(e) => setBoxForm({ ...boxForm, containerNo: (e.target as HTMLInputElement).value.toUpperCase() })} placeholder="MSCU1234566" />
               </label>
               {/* THEIR words. We record a position; we never assign one — see the screen's own comment. */}
-              <label class="twr-knob">
-                <span>{t('tower.depots.f.position')}</span>
-                <input maxLength={60} value={boxForm.position} onChange={(e) => setBoxForm({ ...boxForm, position: (e.target as HTMLInputElement).value })} placeholder={t('tower.depots.f.positionPh')} />
+              <label class="twr-knob cfield">
+                <span class="cfield__label">{t('tower.depots.f.position')}</span>
+                <input class="cinput" maxLength={60} value={boxForm.position} onChange={(e) => setBoxForm({ ...boxForm, position: (e.target as HTMLInputElement).value })} placeholder={t('tower.depots.f.positionPh')} />
               </label>
             </div>
             <div class="twr-panelend">
               <button
                 type="button"
-                class="cbtn"
+                class="cbtn cbtn--primary"
                 disabled={busy === 'say' || boxForm.containerNo.trim().length < 11}
                 onClick={() =>
                   run(
@@ -250,7 +265,7 @@ export function DepotsScreen({ state, actions }: { state: TowerState; actions: T
                 {t('tower.depots.say')}
               </button>
             </div>
-            <p class="cons__lede">{t('tower.depots.positionHint')}</p>
+            <p class="chint">{t('tower.depots.positionHint')}</p>
           </div>
 
           {/* WHAT WE DERIVED — legs that ended here. Incomplete by construction, and it says so. */}
@@ -259,15 +274,15 @@ export function DepotsScreen({ state, actions }: { state: TowerState; actions: T
               <span class="cons__gatet">{t('tower.depots.derived')}</span>
             </div>
             {register.derived.length === 0 ? (
-              <p class="cons__lede">{t('tower.depots.derivedNone')}</p>
+              <p class="chint">{t('tower.depots.derivedNone')}</p>
             ) : (
-              <div class="ctbl">
+              <div class="cons__facts">
                 {register.derived.map((l) => (
-                  <div key={l.containerNo} class="ctbl__row">
-                    <span class="ctbl__k">{l.containerNo}</span>
-                    <span class="ctbl__v">
+                  <div key={l.containerNo} class="cons__fact">
+                    <span class="cons__factk">{l.containerNo}</span>
+                    <span class="cons__factv">
                       {t('tower.depots.arrivedOn', { code: l.legCode, d: (l.at ?? '').slice(0, 10) })}
-                      <span class="ctbl__sub">{l.empty ? t('tower.depots.legEmpty') : t('tower.depots.legLaden')}</span>
+                      <span class="chint">{l.empty ? t('tower.depots.legEmpty') : t('tower.depots.legLaden')}</span>
                     </span>
                   </div>
                 ))}
@@ -295,45 +310,61 @@ export function DepotsScreen({ state, actions }: { state: TowerState; actions: T
           <span class="cons__panelt">{t('tower.depots.findTitle')}</span>
           {rows ? <span class="ctag ctag--quiet">{rows.length}</span> : null}
         </div>
-        <p class="cons__lede">{t('tower.depots.findHint')}</p>
-        <div class="twr-knobs">
-          <label class="twr-knob">
-            <span>{t('tower.depots.f.country')}</span>
-            <input maxLength={2} value={find.country} onChange={(e) => setFind({ ...find, country: (e.target as HTMLInputElement).value.toUpperCase() })} placeholder="KE" />
+        <p class="chint">{t('tower.depots.findHint')}</p>
+        <div class="twr-knobs__row">
+          <label class="twr-knob cfield">
+            <span class="cfield__label">{t('tower.depots.f.country')}</span>
+            <input class="cinput" maxLength={2} value={find.country} onChange={(e) => setFind({ ...find, country: (e.target as HTMLInputElement).value.toUpperCase() })} placeholder="KE" />
           </label>
-          <label class="twr-knob">
-            <span>{t('tower.depots.f.search')}</span>
-            <input value={find.q} onChange={(e) => setFind({ ...find, q: (e.target as HTMLInputElement).value })} placeholder={t('tower.depots.f.searchPh')} />
+          <label class="twr-knob cfield">
+            <span class="cfield__label">{t('tower.depots.f.search')}</span>
+            <input class="cinput" value={find.q} onChange={(e) => setFind({ ...find, q: (e.target as HTMLInputElement).value })} placeholder={t('tower.depots.f.searchPh')} />
           </label>
         </div>
 
-        {rows && rows.length === 0 ? <p class="cons__lede">{t('tower.depots.findNone')}</p> : null}
-        {rows?.map((d) => (
-          <div key={d.entityId} class="ctbl">
-            <div class="ctbl__row">
-              <span class="ctbl__k">{d.placeLabel}</span>
-              <span class="ctbl__v">
-                {t('tower.depots.rowCounts', { said: d.saidCount, inbound: d.inboundCount })}
-                <span class="ctbl__sub">
-                  {d.country}
-                  {d.note ? ` · ${d.note}` : ''}
-                  {` · ${t('tower.depots.rowSaidBy', { by: d.saidBy, d: d.saidAt.slice(0, 10) })}`}
-                </span>
-                {/* HOW TO REACH THEM. The finder's whole purpose is that the next step is a telephone
-                    call, and it first shipped without a telephone number. A yard with no entry says so,
-                    rather than looking like a yard nobody can be bothered to ring. */}
-                {d.contact ? (
-                  <span class="ctbl__sub">
-                    {[d.contact.contactName, d.contact.phone, d.contact.phoneAlt, d.contact.email, d.contact.hours].filter(Boolean).join(' · ')}
-                    {d.contact.address ? ` — ${d.contact.address}` : ''}
-                  </span>
-                ) : (
-                  <span class="ctbl__sub">{t('tower.depots.noContact')}</span>
-                )}
-              </span>
-            </div>
-          </div>
-        ))}
+        {rows && rows.length === 0 ? <p class="cons__empty">{t('tower.depots.findNone')}</p> : null}
+        {rows && rows.length > 0 ? (
+          <table class="ctbl">
+            <thead>
+              <tr>
+                <th>{t('tower.depots.col.yard')}</th>
+                <th>{t('tower.depots.col.holding')}</th>
+                <th>{t('tower.depots.col.reach')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((d) => (
+                <tr key={d.entityId}>
+                  <td>
+                    <span class="ctbl__strong">{d.placeLabel}</span>
+                    <span class="chint">
+                      {d.country}
+                      {d.note ? ` · ${d.note}` : ''}
+                    </span>
+                  </td>
+                  <td>
+                    {t('tower.depots.rowCounts', { said: d.saidCount, inbound: d.inboundCount })}
+                    <span class="chint">{t('tower.depots.rowSaidBy', { by: d.saidBy, d: d.saidAt.slice(0, 10) })}</span>
+                  </td>
+                  {/* HOW TO REACH THEM — the finder's whole purpose, and the column it first shipped
+                      without. A yard with no entry says so rather than looking like one nobody rings. */}
+                  <td>
+                    {d.contact ? (
+                      <>
+                        {d.contact.phone ?? d.contact.email ?? d.contact.website ?? '—'}
+                        <span class="chint">
+                          {[d.contact.contactName, d.contact.phoneAlt, d.contact.hours, d.contact.address].filter(Boolean).join(' · ')}
+                        </span>
+                      </>
+                    ) : (
+                      <span class="chint">{t('tower.depots.noContact')}</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : null}
       </section>
     </>
   );

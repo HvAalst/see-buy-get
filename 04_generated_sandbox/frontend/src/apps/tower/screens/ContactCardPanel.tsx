@@ -96,39 +96,39 @@ export function ContactCardPanel({
       {error ? <p class="cons__caveat">{error}</p> : null}
       {done ? <p class="cons__lede">{done}</p> : null}
 
-      <div class="twr-knobs">
-        <label class="twr-knob">
-          <span>{t('tower.contact.f.person')}</span>
-          <input value={form.contactName} onChange={(e) => setForm({ ...form, contactName: (e.target as HTMLInputElement).value })} placeholder={t('tower.contact.f.personPh')} />
+      <div class="twr-knobs__row">
+        <label class="twr-knob cfield">
+          <span class="cfield__label">{t('tower.contact.f.person')}</span>
+          <input class="cinput" value={form.contactName} onChange={(e) => setForm({ ...form, contactName: (e.target as HTMLInputElement).value })} placeholder={t('tower.contact.f.personPh')} />
         </label>
-        <label class="twr-knob">
-          <span>{t('tower.contact.f.phone')}</span>
-          <input value={form.phone} onChange={(e) => setForm({ ...form, phone: (e.target as HTMLInputElement).value })} placeholder="+254 712 345 678" />
+        <label class="twr-knob cfield">
+          <span class="cfield__label">{t('tower.contact.f.phone')}</span>
+          <input class="cinput" value={form.phone} onChange={(e) => setForm({ ...form, phone: (e.target as HTMLInputElement).value })} placeholder="+254 712 345 678" />
         </label>
-        <label class="twr-knob">
-          <span>{t('tower.contact.f.phoneAlt')}</span>
-          <input value={form.phoneAlt} onChange={(e) => setForm({ ...form, phoneAlt: (e.target as HTMLInputElement).value })} placeholder={t('tower.contact.f.phoneAltPh')} />
+        <label class="twr-knob cfield">
+          <span class="cfield__label">{t('tower.contact.f.phoneAlt')}</span>
+          <input class="cinput" value={form.phoneAlt} onChange={(e) => setForm({ ...form, phoneAlt: (e.target as HTMLInputElement).value })} placeholder={t('tower.contact.f.phoneAltPh')} />
         </label>
-        <label class="twr-knob">
-          <span>{t('tower.contact.f.email')}</span>
-          <input value={form.email} onChange={(e) => setForm({ ...form, email: (e.target as HTMLInputElement).value })} placeholder="gate@example.com" />
+        <label class="twr-knob cfield">
+          <span class="cfield__label">{t('tower.contact.f.email')}</span>
+          <input class="cinput" value={form.email} onChange={(e) => setForm({ ...form, email: (e.target as HTMLInputElement).value })} placeholder="gate@example.com" />
         </label>
-        <label class="twr-knob">
-          <span>{t('tower.contact.f.website')}</span>
-          <input value={form.website} onChange={(e) => setForm({ ...form, website: (e.target as HTMLInputElement).value })} placeholder="https://example.com" />
+        <label class="twr-knob cfield">
+          <span class="cfield__label">{t('tower.contact.f.website')}</span>
+          <input class="cinput" value={form.website} onChange={(e) => setForm({ ...form, website: (e.target as HTMLInputElement).value })} placeholder="https://example.com" />
         </label>
-        <label class="twr-knob">
-          <span>{t('tower.contact.f.address')}</span>
-          <input value={form.address} onChange={(e) => setForm({ ...form, address: (e.target as HTMLInputElement).value })} placeholder={t('tower.contact.f.addressPh')} />
+        <label class="twr-knob cfield">
+          <span class="cfield__label">{t('tower.contact.f.address')}</span>
+          <input class="cinput" value={form.address} onChange={(e) => setForm({ ...form, address: (e.target as HTMLInputElement).value })} placeholder={t('tower.contact.f.addressPh')} />
         </label>
-        <label class="twr-knob">
-          <span>{t('tower.contact.f.hours')}</span>
-          <input value={form.hours} onChange={(e) => setForm({ ...form, hours: (e.target as HTMLInputElement).value })} placeholder={t('tower.contact.f.hoursPh')} />
+        <label class="twr-knob cfield">
+          <span class="cfield__label">{t('tower.contact.f.hours')}</span>
+          <input class="cinput" value={form.hours} onChange={(e) => setForm({ ...form, hours: (e.target as HTMLInputElement).value })} placeholder={t('tower.contact.f.hoursPh')} />
         </label>
       </div>
 
       <div class="twr-panelend">
-        <button type="button" class="cbtn" disabled={busy} onClick={() => void save()}>
+        <button type="button" class="cbtn cbtn--primary" disabled={busy} onClick={() => void save()}>
           {t('tower.contact.save')}
         </button>
       </div>
