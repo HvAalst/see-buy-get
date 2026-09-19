@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import type { CompanyDocument } from '../../foundation/entity/company-documents.service';
 import { BOX_ENDINGS, CONDITION_STANCES, FREE_DAY_KINDS, INTERCHANGE_SIDES } from './container-box';
+import { ContactCardView } from './depot.types';
 
 /**
  * CL2a — AN IMPORT CONSIGNMENT: one container, its papers, and the agent appointed to clear it.
@@ -823,6 +824,13 @@ export class AgentCard {
   @ApiProperty() cleared: number;
   /** True when the record is too thin to state a usual time. Said, because a newcomer is not a bad agent. */
   @ApiProperty() thin: boolean;
+  /**
+   * HOW TO REACH THEM — their own entry, published by them and never verified by us.
+   *
+   * The finder's whole purpose is that the next step is a telephone call, and it first shipped without a
+   * telephone number. The same card the yard finder and the public page show: one per company.
+   */
+  @ApiPropertyOptional({ type: ContactCardView }) contact?: ContactCardView;
 }
 
 /**

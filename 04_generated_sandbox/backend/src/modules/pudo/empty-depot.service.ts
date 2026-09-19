@@ -3,6 +3,7 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
 import { GlosError } from '../../foundation/http/glos-error';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { ContainerBoxService } from './container-box.service';
+import { CONTACT_BASIS, ContactCard, ContactCardService } from './contact-card.service';
 import { normaliseContainerNo, parseContainerNo } from './container-box';
 import type { GeoPoint } from './pudo.types';
 
@@ -80,6 +81,8 @@ export interface DepotRegister {
   inbound: Array<{ containerNo: string; legCode: string; state: string; empty: boolean }>;
   /** In BOTH lists — a fact, not a merge. The two sources are never added into one number. */
   inBoth: number;
+  /** How to reach them, written by them. The finder's whole purpose, and it first shipped without it. */
+  contact?: ContactCard & { basis: string };
   /** One sentence saying where each number came from. Screens print it verbatim. */
   basis: string;
 }
@@ -97,6 +100,8 @@ export class EmptyDepotService {
   constructor(
     private readonly entities: EntityService,
     private readonly boxes: ContainerBoxService,
+    // The yard's own entry — how to reach them, written by them. One card per company, never a second copy.
+    private readonly contacts: ContactCardService,
   ) {}
 
   /**
@@ -143,7 +148,7 @@ export class EmptyDepotService {
    * The counts travel, the numbers do not: which boxes are standing in a yard is a map of somebody
    * else's assets, and publishing it to every participant serves nobody who is deciding where to drive.
    */
-  list(q: { country?: string; text?: string } = {}, now = Date.now()): Array<EmptyDepot & { saidCount: number; derivedCount: number; inboundCount: number; basis: string }> {
+  list(q: { country?: string; text?: string } = {}, now = Date.now()): Array<EmptyDepot & { saidCount: number; derivedCount: number; inboundCount: number; contact?: ContactCard & { basis: string }; basis: string }> {
     const country = q.country?.trim().toUpperCase();
     const text = q.text?.trim().toLowerCase();
     return [...this.depots.values()]
@@ -152,7 +157,16 @@ export class EmptyDepotService {
       .filter((d) => (text ? `${d.placeLabel} ${d.note ?? ''}`.toLowerCase().includes(text) : true))
       .map((d) => {
         const register = this.registerOf(d.entityId, now);
-        return { ...d, saidCount: register.said.length, derivedCount: register.derived.length, inboundCount: register.inbound.length, basis: DEPOT_BASIS };
+        const card = this.contacts.of(d.entityId);
+        return {
+          ...d,
+          saidCount: register.said.length,
+          derivedCount: register.derived.length,
+          inboundCount: register.inbound.length,
+          // A finder that says "ring them" and prints no number is the defect this closes.
+          ...(card ? { contact: { ...card, basis: CONTACT_BASIS } } : {}),
+          basis: DEPOT_BASIS,
+        };
       })
       .sort((a, b) => a.placeLabel.localeCompare(b.placeLabel));
   }
@@ -210,6 +224,7 @@ export class EmptyDepotService {
       derived,
       inbound,
       inBoth: derived.filter((d) => saidNos.has(d.containerNo)).length,
+      ...(this.contacts.of(entityId) ? { contact: { ...this.contacts.of(entityId)!, basis: CONTACT_BASIS } } : {}),
       basis: DEPOT_BASIS,
     };
   }

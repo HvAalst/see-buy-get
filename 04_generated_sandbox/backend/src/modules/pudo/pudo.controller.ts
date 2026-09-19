@@ -55,7 +55,8 @@ import { MarketPulseService } from './market-pulse.service';
 import { CargoService } from './cargo.service';
 import { MediaService } from './media.service';
 import { EmptyDepot, EmptyDepotService } from './empty-depot.service';
-import { DepotListResponse, DepotRegisterView } from './depot.types';
+import { CONTACT_BASIS, ContactCardService } from './contact-card.service';
+import { ContactCardView, DepotListResponse, DepotRegisterView } from './depot.types';
 import { FleetManagerService } from './fleet-manager.service';
 import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
@@ -87,6 +88,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   DeclareDepotDto,
   DepotBoxDto,
   ByDto,
+  ContactCardDto,
   MintRoadLegDto,
   PresenceDto,
   PresenceDecisionDto,
@@ -206,6 +208,8 @@ export class SbgController {
     private readonly media: MediaService,
     // Y4 — a yard that says it holds empties, and what is on its way to it.
     private readonly depots: EmptyDepotService,
+    // A company's own entry: how to reach them. One card, read by every directory.
+    private readonly contacts: ContactCardService,
     @Inject(GEOCODER) private readonly geocoder: Geocoder,
     @Optional() private readonly mail?: MailService,
     @Optional() private readonly papers?: PapersWatchService,
@@ -1120,6 +1124,42 @@ export class SbgController {
   }
 
 
+
+  /**
+   * A COMPANY'S OWN ENTRY: how to reach them, written by them and changed by them whenever they like.
+   *
+   * The gap this closes was one the yard finder made: it said the next step was a telephone call and then
+   * printed no telephone number. The clearing-agent directory had the same hole. So there is ONE card per
+   * company — carried by the yard finder, the agent directory and the public page — because a telephone
+   * number kept in three places drifts in two of them.
+   *
+   * A MERGE, so correcting a number does not drop the website; an empty string clears a field. Shapes are
+   * checked and choices never are: we do not ring it, write to it, or open the site. And it is PUBLISHED,
+   * which is the point of writing one — so it wants the gate's number rather than somebody's private one.
+   */
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/contact')
+  setContactCard(@Param('entityId') entityId: string, @Body() dto: ContactCardDto, @Actor() actor: IntrospectionResult): ContactCardView {
+    const own = actor?.role === 'operator' ? this.entities.get(entityId).entityId : this.actingCompany(actor, entityId);
+    if (own !== entityId) throw new GlosError('FORBIDDEN', 'A company’s own entry is its own');
+    const card = this.contacts.set(
+      own,
+      { contactName: dto.contactName, phone: dto.phone, phoneAlt: dto.phoneAlt, email: dto.email, website: dto.website, address: dto.address, hours: dto.hours },
+      this.namedActor(actor, dto.by),
+    );
+    return { ...card, basis: CONTACT_BASIS } as never;
+  }
+
+  /** Their card as it stands, for the screen that edits it. The same object every directory shows. */
+  @Roles('operator', 'entity_admin')
+  @Get('entities/:entityId/contact')
+  contactCard(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult): ContactCardView {
+    const own = actor?.role === 'operator' ? this.entities.get(entityId).entityId : this.actingCompany(actor, entityId);
+    const card = this.contacts.of(own);
+    if (!card) throw new GlosError('NOT_FOUND', 'That company has written no entry yet');
+    return { ...card, basis: CONTACT_BASIS } as never;
+  }
+
   /* ------------------------------ Y4 — a yard that wants to be findable, and what is coming to it -- */
 
   /**
@@ -1249,7 +1289,13 @@ export class SbgController {
   findAgents(@Query() q: FindAgentsQueryDto): AgentFinderResponse {
     const rows = this.imports.findAgents({ specialism: q.specialism, place: q.place, country: q.country });
     return {
-      items: rows.map((r) => ({ ...r, ...(this.handleOf(r.entityId) ? { handle: this.handleOf(r.entityId) } : {}) })),
+      // A directory that says "go and ring them" and prints no number is half a directory. The card is the
+      // agent's own entry, written and published by them, and it is the SAME card the yard finder shows.
+      items: rows.map((r) => ({
+        ...r,
+        ...(this.handleOf(r.entityId) ? { handle: this.handleOf(r.entityId) } : {}),
+        ...(this.contacts.of(r.entityId) ? { contact: { ...this.contacts.of(r.entityId)!, basis: CONTACT_BASIS } } : {}),
+      })),
       total: rows.length,
       basis: 'alphabetical-never-ranked',
     };
@@ -2962,6 +3008,14 @@ export class SbgController {
     // agent who advertises air freight and has never been appointed through us is exactly the case the
     // finder exists for, and a page that hid the claim would leave them undiscoverable.
     const offer = company ? this.imports.offerOf(company.entityId) : undefined;
+    /*
+     * HOW TO REACH THEM, where the company wrote an entry — and only for a COMPANY.
+     *
+     * A shop's page carries a coarse pin and never a street address, which is a consumer-safety choice,
+     * and this must not undo it from the side. A yard or a clearing agent publishing its own gate number
+     * is a different act: a business asking to be telephoned, which is what a directory is for.
+     */
+    const contact = company ? this.contacts.of(company.entityId) : undefined;
 
     // A verified paper is named, with its date, and an empty list is a real answer shown as one. Only a
     // COMPANY has a document register; the rest carry what their own record can honestly attest.
@@ -2993,6 +3047,7 @@ export class SbgController {
       ...(moves ? { moves, movesMeasured: MOBILISATION_MEASURED } : {}),
       ...(clears ? { clears, clearsMeasured: AGENT_MEASURED } : {}),
       ...(offer ? { offer } : {}),
+      ...(contact ? { contact: { ...contact, basis: CONTACT_BASIS } } : {}),
       ...(clears || offer ? { recordSays: RECORD_SAYS } : {}),
     };
   }

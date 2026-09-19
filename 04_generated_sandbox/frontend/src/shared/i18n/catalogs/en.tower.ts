@@ -187,6 +187,27 @@ export const enTower = {
   'tower.nav.corridors': 'Corridors',
   'tower.nav.presence': 'Where we operate',
   'tower.nav.depots': 'Empty yards',
+  /* A company's own entry — how to reach them. One card, edited in two places (a yard beside its
+     register, a clearing agent beside its advertisement) because it is one entry. Published on the public
+     page and in both directories, and verified by nobody. */
+  'tower.contact.title': 'How to reach you',
+  'tower.contact.hint':
+    'Your own entry, and the only reason a directory is worth anything: somebody who finds you has to be able to ring you. It is PUBLISHED — on your public page and beside your name in the yard and clearing directories — so put the gate’s number and the office address here, never somebody’s private line. Change it whenever you like; correcting one field leaves the rest alone, and emptying a field removes it. We check the shape of a number, an address and a web address, and nothing else: we never ring it, write to it, or open it.',
+  'tower.contact.saidBy': 'written by {by} on {d}',
+  'tower.contact.save': 'Save my entry',
+  'tower.contact.saved': 'Saved. It is on your public page and in the directories now.',
+  'tower.contact.f.person': 'Who to ask for',
+  'tower.contact.f.personPh': 'Ask for Grace at the gate',
+  'tower.contact.f.phone': 'Telephone',
+  'tower.contact.f.phoneAlt': 'A second number',
+  'tower.contact.f.phoneAltPh': 'The gate, if the office is a different line',
+  'tower.contact.f.email': 'Email',
+  'tower.contact.f.website': 'Website',
+  'tower.contact.f.address': 'Where the gate is',
+  'tower.contact.f.addressPh': 'Off Mombasa Road, past the weighbridge',
+  'tower.contact.f.hours': 'When somebody is there',
+  'tower.contact.f.hoursPh': '6am–6pm, closed Sunday',
+  'tower.depots.noContact': 'No way to reach them recorded — the yard has not written an entry yet.',
   /* Y4 — a yard that wants to be findable, and what is on its way to it. What is deliberately NOT here is
      the layout: planning needs the yard's geometry and the rules binding a slot to a box (a powered row
      for a reefer, segregation for dangerous goods, tier weights, ground bearing), which is a model of a

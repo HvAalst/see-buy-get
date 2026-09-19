@@ -1,6 +1,31 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 /**
+ * HOW TO REACH A COMPANY — written by them, published by them, never verified by us.
+ *
+ * One card per company rather than a field set copied into each directory: a telephone number kept twice
+ * drifts, and the copy on the screen drifts silently. It rides on the public profile page, in the yard
+ * finder and beside an agent in the clearance directory.
+ */
+export class ContactCardView {
+  /** Who to ask for. A role or a name, whichever the company prefers. */
+  @ApiPropertyOptional() contactName?: string;
+  @ApiPropertyOptional() phone?: string;
+  /** The gate and the office are usually different telephones. */
+  @ApiPropertyOptional() phoneAlt?: string;
+  @ApiPropertyOptional() email?: string;
+  @ApiPropertyOptional() website?: string;
+  /** Where the gate is, in the words a driver needs — not the registered address, which is a legal fact. */
+  @ApiPropertyOptional() address?: string;
+  /** When somebody is there. The second question a haulier asks, after where. */
+  @ApiPropertyOptional() hours?: string;
+  @ApiProperty() saidAt: string;
+  @ApiProperty() saidBy: string;
+  /** Said out loud on every screen that shows it: this is their claim and nobody checked it. */
+  @ApiProperty() basis: string;
+}
+
+/**
  * Y4 — A YARD THAT WANTS TO BE FINDABLE, and what it says is standing in it.
  *
  * What is deliberately absent from every class here is a slot, a row, a tier and a stacking plan. Yard
@@ -49,6 +74,8 @@ export class DepotRegisterView {
   @ApiProperty({ type: [DepotLegView] }) inbound: DepotLegView[];
   /** How many appear in both lists. A fact about two sources, never a merge of them. */
   @ApiProperty() inBoth: number;
+  /** How to reach the yard, written by the yard. Their own entry, on their own screen. */
+  @ApiPropertyOptional({ type: ContactCardView }) contact?: ContactCardView;
   @ApiProperty() basis: string;
 }
 
@@ -64,6 +91,8 @@ export class DepotRow {
   @ApiProperty() saidCount: number;
   @ApiProperty() derivedCount: number;
   @ApiProperty() inboundCount: number;
+  /** HOW TO REACH THEM — the whole point of a finder, and the thing this one first shipped without. */
+  @ApiPropertyOptional({ type: ContactCardView }) contact?: ContactCardView;
   @ApiProperty() basis: string;
 }
 

@@ -226,6 +226,12 @@ empty, is worth something on the morning it happens.
 
 Still never: a yard map, a stacking plan, a slot allocation.
 
+**AND THE ENTRY IS THEIRS.** A finder whose own words are "ring them" and which prints no number is half a
+finder, which is what Y4 shipped at first. Every company now writes its own card — who to ask for, the
+numbers, the email, the site, where the gate is and when somebody is there — and there is ONE card per
+company, read by the yard finder, the clearance directory and the public page. Shapes are checked and
+choices are not: we never ring it, write to it or open it, and the sentence saying so travels with it.
+
 ### f) The water leg — a binnenvaartschip is not a truck
 
 The user's second answer carries a second thing with it, and it is a leg type this system does not have:

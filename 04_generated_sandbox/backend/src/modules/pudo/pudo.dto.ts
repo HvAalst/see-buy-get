@@ -476,6 +476,25 @@ export class ByDto {
   @IsOptional() @IsString() by?: string;
 }
 
+/**
+ * A company's own entry — how to reach them. Every field optional, because a yard with a telephone number
+ * and nothing else is a yard a haulier can reach.
+ *
+ * A MERGE: what is absent stays as it was, and an EMPTY STRING clears. Shapes are checked and choices are
+ * not — we never ring the number, write to the address or open the site.
+ */
+export class ContactCardDto {
+  @IsOptional() @IsString() @MaxLength(80) contactName?: string;
+  @IsOptional() @IsString() @MaxLength(24) phone?: string;
+  @IsOptional() @IsString() @MaxLength(24) phoneAlt?: string;
+  @IsOptional() @IsString() @MaxLength(120) email?: string;
+  @IsOptional() @IsString() @MaxLength(160) website?: string;
+  @IsOptional() @IsString() @MaxLength(300) address?: string;
+  @IsOptional() @IsString() @MaxLength(120) hours?: string;
+  @IsOptional() @IsString() entityId?: string;
+  @IsOptional() @IsString() by?: string;
+}
+
 export class BoxInterchangeDto {
   @IsIn(INTERCHANGE_SIDES) @ApiProperty({ enum: INTERCHANGE_SIDES }) side!: string;
   @IsIn(CONDITION_STANCES) @ApiProperty({ enum: CONDITION_STANCES }) stance!: string;

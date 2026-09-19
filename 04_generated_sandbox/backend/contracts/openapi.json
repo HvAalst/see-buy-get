@@ -5467,6 +5467,72 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/contact": {
+      "post": {
+        "operationId": "Sbg.setContactCard",
+        "summary": "",
+        "description": "A COMPANY'S OWN ENTRY: how to reach them, written by them and changed by them whenever they like.\n\nThe gap this closes was one the yard finder made: it said the next step was a telephone call and then\nprinted no telephone number. The clearing-agent directory had the same hole. So there is ONE card per\ncompany — carried by the yard finder, the agent directory and the public page — because a telephone\nnumber kept in three places drifts in two of them.\n\nA MERGE, so correcting a number does not drop the website; an empty string clears a field. Shapes are\nchecked and choices never are: we do not ring it, write to it, or open the site. And it is PUBLISHED,\nwhich is the point of writing one — so it wants the gate's number rather than somebody's private one.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContactCardDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContactCardView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "Sbg.contactCard",
+        "summary": "",
+        "description": "Their card as it stands, for the screen that edits it. The same object every directory shows.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContactCardView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/depots": {
       "post": {
         "operationId": "Sbg.declareDepot",
@@ -21581,6 +21647,90 @@
           "stance"
         ]
       },
+      "ContactCardDto": {
+        "type": "object",
+        "properties": {
+          "contactName": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 24
+          },
+          "phoneAlt": {
+            "type": "string",
+            "maxLength": 24
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "website": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "hours": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        }
+      },
+      "ContactCardView": {
+        "type": "object",
+        "properties": {
+          "contactName": {
+            "type": "string",
+            "description": "Who to ask for. A role or a name, whichever the company prefers."
+          },
+          "phone": {
+            "type": "string"
+          },
+          "phoneAlt": {
+            "type": "string",
+            "description": "The gate and the office are usually different telephones."
+          },
+          "email": {
+            "type": "string"
+          },
+          "website": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string",
+            "description": "Where the gate is, in the words a driver needs — not the registered address, which is a legal fact."
+          },
+          "hours": {
+            "type": "string",
+            "description": "When somebody is there. The second question a haulier asks, after where."
+          },
+          "saidAt": {
+            "type": "string"
+          },
+          "saidBy": {
+            "type": "string"
+          },
+          "basis": {
+            "type": "string",
+            "description": "Said out loud on every screen that shows it: this is their claim and nobody checked it."
+          }
+        },
+        "required": [
+          "saidAt",
+          "saidBy",
+          "basis"
+        ]
+      },
       "DeclareDepotDto": {
         "type": "object",
         "properties": {
@@ -21654,6 +21804,14 @@
           },
           "inboundCount": {
             "type": "number"
+          },
+          "contact": {
+            "description": "HOW TO REACH THEM — the whole point of a finder, and the thing this one first shipped without.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ContactCardView"
+              }
+            ]
           },
           "basis": {
             "type": "string"
@@ -21791,6 +21949,14 @@
             "type": "number",
             "description": "How many appear in both lists. A fact about two sources, never a merge of them."
           },
+          "contact": {
+            "description": "How to reach the yard, written by the yard. Their own entry, on their own screen.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ContactCardView"
+              }
+            ]
+          },
           "basis": {
             "type": "string"
           }
@@ -21910,6 +22076,14 @@
           "thin": {
             "type": "boolean",
             "description": "True when the record is too thin to state a usual time. Said, because a newcomer is not a bad agent."
+          },
+          "contact": {
+            "description": "HOW TO REACH THEM — their own entry, published by them and never verified by us.\n\nThe finder's whole purpose is that the next step is a telephone call, and it first shipped without a\ntelephone number. The same card the yard finder and the public page show: one per company.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ContactCardView"
+              }
+            ]
           }
         },
         "required": [
@@ -25298,6 +25472,14 @@
           "recordSays": {
             "type": "string",
             "description": "WHY AN EMPTY RECORD IS NOT A BAD RECORD.\n\nWe count only the consignments that came through this network, and most of an agent's business never\nwill. Carried in the payload beside the counts, because a reader who takes silence for incompetence\nhas been misled by us about our own coverage."
+          },
+          "contact": {
+            "description": "HOW TO REACH THEM — the company's own entry, written and published by them.\n\nOnly for a COMPANY, and deliberately not for a shop or a hub: those pages carry a coarse pin and\nnever a street address, which is a consumer-safety choice this must not undo from the side. A yard or\na clearing agent publishing its own gate number and opening hours is a different act — it is a\nbusiness asking to be telephoned, and the directory's whole point is that somebody can.\n\nNever verified. The `basis` sentence says so on the page.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ContactCardView"
+              }
+            ]
           },
           "handle": {
             "type": "string",

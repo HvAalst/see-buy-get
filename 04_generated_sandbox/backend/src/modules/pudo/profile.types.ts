@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { HANDLE_KINDS, type HandleKind } from '../../foundation/handle/handle.service';
 import { ClearanceOffer, ClearanceRecord } from './import.types';
+import { ContactCardView } from './depot.types';
 import { GeoPoint } from './pudo.types';
 
 /**
@@ -251,4 +252,17 @@ export class ProfileView {
    */
   @ApiPropertyOptional()
   recordSays?: string;
+
+  /**
+   * HOW TO REACH THEM — the company's own entry, written and published by them.
+   *
+   * Only for a COMPANY, and deliberately not for a shop or a hub: those pages carry a coarse pin and
+   * never a street address, which is a consumer-safety choice this must not undo from the side. A yard or
+   * a clearing agent publishing its own gate number and opening hours is a different act — it is a
+   * business asking to be telephoned, and the directory's whole point is that somebody can.
+   *
+   * Never verified. The `basis` sentence says so on the page.
+   */
+  @ApiPropertyOptional({ type: ContactCardView })
+  contact?: ContactCardView;
 }

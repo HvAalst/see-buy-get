@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
+import { ContactCardPanel, type ContactCardView } from './ContactCardPanel';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
 /** One yard as the finder lists it. Counts travel; the container numbers do not. */
@@ -14,6 +15,8 @@ export interface DepotRow {
   saidCount: number;
   derivedCount: number;
   inboundCount: number;
+  /** How to reach them — their own entry. A finder without it tells you to ring nobody. */
+  contact?: ContactCardView;
 }
 
 export interface DepotLeg {
@@ -34,6 +37,7 @@ export interface DepotRegister {
   derived: DepotLeg[];
   inbound: DepotLeg[];
   inBoth: number;
+  contact?: ContactCardView;
   basis: string;
 }
 
@@ -281,6 +285,10 @@ export function DepotsScreen({ state, actions }: { state: TowerState; actions: T
         </section>
       ) : null}
 
+      {/* THE YARD'S OWN ENTRY — how to reach them, beside the register they keep. One card per company:
+          the same panel a clearing agent edits, because it is the same entry. */}
+      {register ? <ContactCardPanel entityId={register.entityId} who={who} client={client as never} /> : null}
+
       {/* ---- The finder: which yards exist, and what each SAYS it holds ---- */}
       <section class="cons__panel">
         <div class="cons__panelhead">
@@ -311,6 +319,17 @@ export function DepotsScreen({ state, actions }: { state: TowerState; actions: T
                   {d.note ? ` · ${d.note}` : ''}
                   {` · ${t('tower.depots.rowSaidBy', { by: d.saidBy, d: d.saidAt.slice(0, 10) })}`}
                 </span>
+                {/* HOW TO REACH THEM. The finder's whole purpose is that the next step is a telephone
+                    call, and it first shipped without a telephone number. A yard with no entry says so,
+                    rather than looking like a yard nobody can be bothered to ring. */}
+                {d.contact ? (
+                  <span class="ctbl__sub">
+                    {[d.contact.contactName, d.contact.phone, d.contact.phoneAlt, d.contact.email, d.contact.hours].filter(Boolean).join(' · ')}
+                    {d.contact.address ? ` — ${d.contact.address}` : ''}
+                  </span>
+                ) : (
+                  <span class="ctbl__sub">{t('tower.depots.noContact')}</span>
+                )}
               </span>
             </div>
           </div>

@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { EmptyDepotService } from './empty-depot.service';
 import { ContainerBoxService } from './container-box.service';
+import { ContactCardService } from './contact-card.service';
 import { DispatchService } from './dispatch.service';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { DidService } from '../../foundation/did/did.service';
@@ -31,6 +32,7 @@ describe('a yard that says it holds empties', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         EmptyDepotService,
+        ContactCardService,
         ContainerBoxService,
         EntityService,
         DidService,

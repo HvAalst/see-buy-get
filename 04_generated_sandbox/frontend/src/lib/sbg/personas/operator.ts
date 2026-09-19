@@ -393,6 +393,19 @@ export function createOperatorApi(sbg: SbgClient) {
       sbg.request((c) => c.POST('/v1/sbg/media', { body: { kind, dataUrl, ...(thumbDataUrl ? { thumbDataUrl } : {}) } as never })),
 
 
+    /**
+     * A COMPANY'S OWN ENTRY — how to reach them, written by them.
+     *
+     * One card per company, read by the yard finder, the agent directory and the public page. A merge:
+     * what is absent stays, an empty string clears. Shapes are checked and choices never are.
+     */
+    setContactCard: (
+      entityId: string,
+      body: { contactName?: string; phone?: string; phoneAlt?: string; email?: string; website?: string; address?: string; hours?: string; by?: string },
+    ) => sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/contact', { params: { path: { entityId } }, body: body as never })),
+
+    contactCard: (entityId: string) => sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/contact', { params: { path: { entityId } } })),
+
     /* ---- Y4: a yard that says it holds empties, and what is on its way to it ---- */
 
     /**
