@@ -657,11 +657,14 @@
   margin-bottom: 12px;
 }
 
+/* NAVY, not grey. A field label is a small TITLE — it says what the box under it is for — and every
+   other title on this surface is navy: the panel heading, a table lead, a row name, the account menu.
+   At --tx2 they read as disabled text, which the user put plainly: they appear dark grey. */
 .cfield__label {
   display: block;
   font-size: var(--c-fs-sm);
   font-weight: 600;
-  color: var(--tx2);
+  color: var(--navy);
   margin-bottom: 4px;
 }
 

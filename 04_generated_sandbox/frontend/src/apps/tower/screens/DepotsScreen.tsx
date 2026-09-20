@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { ContactCardPanel, type ContactCardView } from './ContactCardPanel';
+import { ConsoleAction } from '../ConsoleAction';
+import { CountrySelect, useCountryAtlas } from './CountrySelect';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
 /** One yard as the finder lists it. Counts travel; the container numbers do not. */
@@ -68,17 +70,17 @@ export function DepotsScreen({ state, actions }: { state: TowerState; actions: T
    * what matters and then pretending the yard said it. If we need the hours, we ask for the hours — and
    * we do, as their own fields on the entry below.
    */
-  const [form, setForm] = useState({ placeLabel: '', country: '' });
+  /*
+   * THE CONTACT DETAILS ARE PART OF DECLARING, not a separate errand.
+   *
+   * A yard could say it holds empties and publish no way of being reached, and the finder's whole
+   * purpose is somewhere to ring — so the listing it produced was one nobody could use. The user, on
+   * the declare form: "has no input fields on how you can be reached. confusing." Asked here, once, at
+   * the moment somebody is putting themselves on a list.
+   */
+  const [form, setForm] = useState({ placeLabel: '', country: '', phone: '', email: '', hours: '' });
   const [boxForm, setBoxForm] = useState({ containerNo: '', position: '', note: '' });
   const [find, setFind] = useState({ country: '', q: '' });
-  /**
-   * The declare form is SHUT until somebody asks for it.
-   *
-   * Every company administrator opening this screen was being invited to say they hold empties, which is
-   * noise in the account of an importer who came here to find a yard. A screen that asks everybody the
-   * question only one reader has is how a console fills up with text nobody needs.
-   */
-  const [declaring, setDeclaring] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -99,7 +101,7 @@ export function DepotsScreen({ state, actions }: { state: TowerState; actions: T
     void load();
   }, [load]);
 
-  const run = async (key: string, write: () => Promise<{ error?: { detail?: string; title?: string } | null }>, message: string) => {
+  const run = async (key: string, write: () => Promise<{ error?: { detail?: string; title?: string } | null }>, message: string, after?: () => void) => {
     setBusy(key);
     setError(null);
     setDone(null);
@@ -110,8 +112,15 @@ export function DepotsScreen({ state, actions }: { state: TowerState; actions: T
       return;
     }
     setDone(message);
+    after?.();
     await load();
   };
+
+  const atlas = useCountryAtlas(client?.api as never);
+  /* The countries that actually have yards, out of the answer itself — never a menu of empty answers. */
+  const withYards = [...new Map((rows ?? []).map((d) => [d.country, { code: d.country, name: atlas.find((c) => c.code === d.country)?.name ?? d.country }])).values()].sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
 
   return (
     <>
@@ -128,45 +137,66 @@ export function DepotsScreen({ state, actions }: { state: TowerState; actions: T
       {done ? <p class="cons__lede">{done}</p> : null}
 
       {/* ---- The yard's own register, when the caller is a yard ---- */}
-      {mine && !register && !declaring ? (
-        <div class="twr-panelend">
-          <button type="button" class="cbtn cbtn--ghost" onClick={() => setDeclaring(true)}>
-            {t('tower.depots.declareTitle')}
-          </button>
-        </div>
-      ) : null}
-
-      {mine && !register && declaring ? (
+      {mine && !register ? (
         <section class="cons__panel">
-          <div class="cons__panelhead">
-            <span class="cons__panelt">{t('tower.depots.declareTitle')}</span>
-          </div>
-          <p class="chint">{t('tower.depots.declareHint')}</p>
-          <div class="twr-knobs__row">
-            <label class="twr-knob cfield">
-              <span class="cfield__label">{t('tower.depots.f.place')}</span>
-              <input class="cinput" value={form.placeLabel} onChange={(e) => setForm({ ...form, placeLabel: (e.target as HTMLInputElement).value })} placeholder={t('tower.depots.f.placePh')} />
-            </label>
-            <label class="twr-knob cfield">
-              <span class="cfield__label">{t('tower.depots.f.country')}</span>
-              <input class="cinput" maxLength={2} value={form.country} onChange={(e) => setForm({ ...form, country: (e.target as HTMLInputElement).value.toUpperCase() })} placeholder="KE" />
-            </label>
-          </div>
-          <div class="twr-panelend">
-            <button
-              type="button"
-              class="cbtn cbtn--primary"
-              disabled={busy === 'declare' || !form.placeLabel.trim() || form.country.length !== 2}
-              onClick={() =>
-                run(
-                  'declare',
-                  () => client!.api.declareDepot({ placeLabel: form.placeLabel.trim(), country: form.country, ...(who ? { by: who } : {}) }),
-                  t('tower.depots.declared'),
-                )
-              }
-            >
-              {t('tower.depots.declare')}
-            </button>
+          <div class="cdos">
+            <ConsoleAction title={t('tower.depots.declareTitle')} hint={t('tower.depots.declareHint')}>
+              {(close) => (
+                <>
+                  <label class="cfield">
+                    <span class="cfield__label">{t('tower.depots.f.place')}</span>
+                    <input class="cinput" value={form.placeLabel} onChange={(e) => setForm({ ...form, placeLabel: (e.target as HTMLInputElement).value })} placeholder={t('tower.depots.f.placePh')} />
+                  </label>
+                  {/* The ATLAS: a yard may stand anywhere, and refusing a real one because the network
+                      is not there yet would be absurd. */}
+                  <CountrySelect value={form.country} onChange={(country) => setForm({ ...form, country })} label={t('tower.depots.f.country')} options={atlas} />
+                  <label class="cfield">
+                    <span class="cfield__label">{t('tower.contact.f.phone')}</span>
+                    <input class="cinput" value={form.phone} onChange={(e) => setForm({ ...form, phone: (e.target as HTMLInputElement).value })} placeholder="+254 712 345 678" />
+                  </label>
+                  <label class="cfield">
+                    <span class="cfield__label">{t('tower.contact.f.email')}</span>
+                    <input class="cinput" value={form.email} onChange={(e) => setForm({ ...form, email: (e.target as HTMLInputElement).value })} placeholder="gate@example.com" />
+                  </label>
+                  <label class="cfield">
+                    <span class="cfield__label">{t('tower.contact.f.hours')}</span>
+                    <input class="cinput" value={form.hours} onChange={(e) => setForm({ ...form, hours: (e.target as HTMLInputElement).value })} placeholder={t('tower.contact.f.hoursPh')} />
+                  </label>
+                  <p class="chint">{t('tower.depots.reachHint')}</p>
+                  <div class="twr-panelend">
+                    <button
+                      type="button"
+                      class="cbtn cbtn--primary"
+                      disabled={busy === 'declare' || !form.placeLabel.trim() || form.country.length !== 2 || !form.phone.trim()}
+                      onClick={() =>
+                        run(
+                          'declare',
+                          async () => {
+                            const made = await client!.api.declareDepot({ placeLabel: form.placeLabel.trim(), country: form.country, ...(who ? { by: who } : {}) });
+                            if (made.error) return made;
+                            /*
+                             * ONE ACT, TWO WRITES. Being listed and being reachable are the same
+                             * decision, so the second call is not a step somebody can forget: a yard on
+                             * the finder with no number on it is a row that wastes a haulier's morning.
+                             */
+                            return (client!.api as never as { setContactCard: (id: string, body: Record<string, string>) => Promise<{ error?: { detail?: string; title?: string } | null }> }).setContactCard(mine, {
+                              phone: form.phone.trim(),
+                              email: form.email.trim(),
+                              hours: form.hours.trim(),
+                              ...(who ? { by: who } : {}),
+                            });
+                          },
+                          t('tower.depots.declared'),
+                          close,
+                        )
+                      }
+                    >
+                      {t('tower.depots.declare')}
+                    </button>
+                  </div>
+                </>
+              )}
+            </ConsoleAction>
           </div>
         </section>
       ) : null}
@@ -235,39 +265,49 @@ export function DepotsScreen({ state, actions }: { state: TowerState; actions: T
               </div>
             )}
 
-            <div class="twr-knobs__row">
-              <label class="twr-knob cfield">
-                <span class="cfield__label">{t('tower.depots.f.containerNo')}</span>
-                <input class="cinput" maxLength={13} value={boxForm.containerNo} onChange={(e) => setBoxForm({ ...boxForm, containerNo: (e.target as HTMLInputElement).value.toUpperCase() })} placeholder="MSCU1234566" />
-              </label>
-              {/* THEIR words. We record a position; we never assign one — see the screen's own comment. */}
-              <label class="twr-knob cfield">
-                <span class="cfield__label">{t('tower.depots.f.position')}</span>
-                <input class="cinput" maxLength={60} value={boxForm.position} onChange={(e) => setBoxForm({ ...boxForm, position: (e.target as HTMLInputElement).value })} placeholder={t('tower.depots.f.positionPh')} />
-              </label>
+            {/* A form behind a click opens in a sheet, like every other on this surface. */}
+            <div class="cdos">
+              <ConsoleAction title={t('tower.depots.say')} hint={t('tower.depots.positionHint')}>
+                {(close) => (
+                  <>
+                    <label class="cfield">
+                      <span class="cfield__label">{t('tower.depots.f.containerNo')}</span>
+                      <input class="cinput" maxLength={13} value={boxForm.containerNo} onChange={(e) => setBoxForm({ ...boxForm, containerNo: (e.target as HTMLInputElement).value.toUpperCase() })} placeholder="MSCU1234566" />
+                    </label>
+                    {/* THEIR words. We record a position; we never assign one — see the screen's own comment. */}
+                    <label class="cfield">
+                      <span class="cfield__label">{t('tower.depots.f.position')}</span>
+                      <input class="cinput" maxLength={60} value={boxForm.position} onChange={(e) => setBoxForm({ ...boxForm, position: (e.target as HTMLInputElement).value })} placeholder={t('tower.depots.f.positionPh')} />
+                    </label>
+                    <div class="twr-panelend">
+                      <button
+                        type="button"
+                        class="cbtn cbtn--primary"
+                        disabled={busy === 'say' || boxForm.containerNo.trim().length < 11}
+                        onClick={() =>
+                          run(
+                            'say',
+                            () =>
+                              client!.api.depotBoxHere(register.entityId, {
+                                containerNo: boxForm.containerNo.trim(),
+                                ...(boxForm.position.trim() ? { position: boxForm.position.trim() } : {}),
+                                ...(who ? { by: who } : {}),
+                              }),
+                            t('tower.depots.saidSaved'),
+                            () => {
+                              setBoxForm({ containerNo: '', position: '', note: '' });
+                              close();
+                            },
+                          )
+                        }
+                      >
+                        {t('tower.depots.say')}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </ConsoleAction>
             </div>
-            <div class="twr-panelend">
-              <button
-                type="button"
-                class="cbtn cbtn--primary"
-                disabled={busy === 'say' || boxForm.containerNo.trim().length < 11}
-                onClick={() =>
-                  run(
-                    'say',
-                    () =>
-                      client!.api.depotBoxHere(register.entityId, {
-                        containerNo: boxForm.containerNo.trim(),
-                        ...(boxForm.position.trim() ? { position: boxForm.position.trim() } : {}),
-                        ...(who ? { by: who } : {}),
-                      }),
-                    t('tower.depots.saidSaved'),
-                  )
-                }
-              >
-                {t('tower.depots.say')}
-              </button>
-            </div>
-            <p class="chint">{t('tower.depots.positionHint')}</p>
           </div>
 
           {/* WHAT WE DERIVED — legs that ended here. Incomplete by construction, and it says so. */}
@@ -312,60 +352,58 @@ export function DepotsScreen({ state, actions }: { state: TowerState; actions: T
           <span class="cons__panelt">{t('tower.depots.findTitle')}</span>
           {rows ? <span class="ctag ctag--quiet">{rows.length}</span> : null}
         </div>
-        <p class="chint">{t('tower.depots.findHint')}</p>
+        {/*
+          * ONE SEARCH AND A COUNTRY LIST — not two labelled boxes over a three-column table. The
+          * countries offered are the ones that ACTUALLY HAVE YARDS, derived from the answer: a filter
+          * that can empty its own list is a wall, and there is no sense offering Mongolia.
+          */}
         <div class="twr-knobs__row">
-          <label class="twr-knob cfield">
-            <span class="cfield__label">{t('tower.depots.f.country')}</span>
-            <input class="cinput" maxLength={2} value={find.country} onChange={(e) => setFind({ ...find, country: (e.target as HTMLInputElement).value.toUpperCase() })} placeholder="KE" />
-          </label>
           <label class="twr-knob cfield">
             <span class="cfield__label">{t('tower.depots.f.search')}</span>
             <input class="cinput" value={find.q} onChange={(e) => setFind({ ...find, q: (e.target as HTMLInputElement).value })} placeholder={t('tower.depots.f.searchPh')} />
           </label>
+          <div class="twr-knob">
+            <CountrySelect value={find.country} onChange={(country) => setFind({ ...find, country })} label={t('tower.depots.f.country')} options={withYards} anyLabel={t('tower.depots.anywhere')} />
+          </div>
         </div>
+        <p class="chint">{t('tower.depots.findHint')}</p>
 
         {rows && rows.length === 0 ? <p class="cons__empty">{t('tower.depots.findNone')}</p> : null}
         {rows && rows.length > 0 ? (
-          <table class="ctbl">
-            <thead>
-              <tr>
-                <th>{t('tower.depots.col.yard')}</th>
-                <th>{t('tower.depots.col.holding')}</th>
-                <th>{t('tower.depots.col.reach')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((d) => (
-                <tr key={d.entityId}>
-                  <td>
-                    <span class="ctbl__strong">{d.placeLabel}</span>
-                    <span class="chint">
-                      {d.country}
-                      {d.note ? ` · ${d.note}` : ''}
+          <div class="crows">
+            {rows.map((d) => {
+              /*
+               * THE ROW IS THE CALL. This finder exists so somebody can ring a yard, and a telephone
+               * number printed in a table cell is a number you copy out by hand — on the phone you are
+               * holding, which already knows how to dial. Everything but digits and a leading plus is
+               * stripped, because a tel: carrying spaces is one some dialers refuse.
+               */
+              const ring = d.contact?.phone ? `tel:${d.contact.phone.replace(/[^+\d]/g, '')}` : null;
+              const inside = (
+                <>
+                  <span class="crow__body">
+                    <span class="crow__top">
+                      <span class="crow__name">{d.placeLabel}</span>
+                      <span class="ctag ctag--quiet">{d.country}</span>
                     </span>
-                  </td>
-                  <td>
-                    {t('tower.depots.rowCounts', { said: d.saidCount, inbound: d.inboundCount })}
-                    <span class="chint">{t('tower.depots.rowSaidBy', { by: d.saidBy, d: d.saidAt.slice(0, 10) })}</span>
-                  </td>
-                  {/* HOW TO REACH THEM — the finder's whole purpose, and the column it first shipped
-                      without. A yard with no entry says so rather than looking like one nobody rings. */}
-                  <td>
-                    {d.contact ? (
-                      <>
-                        {d.contact.phone ?? d.contact.email ?? d.contact.website ?? '—'}
-                        <span class="chint">
-                          {[d.contact.contactName, d.contact.phoneAlt, d.contact.hours, d.contact.address].filter(Boolean).join(' · ')}
-                        </span>
-                      </>
-                    ) : (
-                      <span class="chint">{t('tower.depots.noContact')}</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    <span class="crow__sub">{t('tower.depots.rowCounts', { said: d.saidCount, inbound: d.inboundCount })}</span>
+                    {/* A yard with no entry says so rather than looking like one nobody rings. */}
+                    <span class="chint">{d.contact ? [d.contact.phone, d.contact.hours, d.contact.contactName].filter(Boolean).join(' · ') : t('tower.depots.noContact')}</span>
+                  </span>
+                  <span class="crow__tail">{ring ? <Icon name="keypad" size={16} /> : null}</span>
+                </>
+              );
+              return ring ? (
+                <a key={d.entityId} class="crow" href={ring}>
+                  {inside}
+                </a>
+              ) : (
+                <div key={d.entityId} class="crow">
+                  {inside}
+                </div>
+              );
+            })}
+          </div>
         ) : null}
       </section>
     </>
