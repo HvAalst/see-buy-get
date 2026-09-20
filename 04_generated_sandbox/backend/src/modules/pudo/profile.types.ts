@@ -33,6 +33,14 @@ export function profileDoes(kind: string): string {
       return 'Sorts parcels between routes.';
     case 'fleet':
       return 'Runs vehicles and drivers, and takes loads off the market.';
+    case 'driver':
+      /*
+       * AN OWNER-DRIVER, and the sentence says the two things a reader needs: they drive, and the vehicle
+       * is theirs. Not 'a driver on this network', which would read as somebody's employee and is the
+       * one thing this page is not — the network contracts them directly, exactly as it contracts a
+       * fleet, and that is why they have an address at all.
+       */
+      return 'Drives their own vehicle, and takes loads off the market.';
     case 'clearing-agent':
       /*
        * Not one of HANDLE_KINDS, and deliberately not: being a clearing agent is DERIVED from having been

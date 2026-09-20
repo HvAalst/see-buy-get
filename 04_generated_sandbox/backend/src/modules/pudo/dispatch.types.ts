@@ -653,18 +653,20 @@ export class LaneSeries {
 }
 
 /**
- * ONE CARRIER ON ONE LANE — a fleet, what it moved there, and where its public page is.
+ * ONE CARRIER ON ONE LANE — who took the load, what they moved there, and where their page is.
  *
- * A FLEET, NEVER A DRIVER. A driver is a person; naming the individuals who run a corridor would publish
- * a movement pattern about people. Handles in this network go to companies, shops, hubs and fleets, and
- * this list is exactly the set of things that already have a public page.
+ * A FLEET OR AN OWNER-DRIVER, because those are the two kinds of party the network contracts with and
+ * therefore the two kinds that hold a handle. A driver employed by a fleet is never named here: the load
+ * was taken from their fleet, and the fleet's page speaks for it.
  */
 export class LaneCarrier {
   name: string;
-  /** Their page at /@handle. Present for everything the directory has issued a handle to. */
+  @ApiProperty({ enum: ['fleet', 'driver'] })
+  kind: 'fleet' | 'driver';
+  /** Their page at /@handle. Absent only where the directory has not issued one yet. */
   @ApiPropertyOptional()
   handle?: string;
-  /** Loads on this lane claimed by this fleet inside the window. */
+  /** Loads on this lane claimed by them inside the window. */
   loads: number;
 }
 
@@ -678,12 +680,12 @@ export class LaneCarriers {
   @ApiProperty({ type: [LaneCarrier] })
   carriers: LaneCarrier[];
   /**
-   * Loads carried by somebody with no fleet behind them — an owner-driver.
+   * Loads whose claim stamped no carriage at all — no fleet and no driver.
    *
-   * Counted and never named: they are real work by real people, and the person is not a business with a
-   * public page. A screen that dropped this number would understate the lane and flatter the fleets.
+   * It should be zero. It is carried anyway so the rows above always add up to `claimedLoads`, which is
+   * how anybody would notice if it stopped being zero.
    */
-  independentLoads: number;
+  unattributedLoads: number;
   /** One sentence naming what was counted, shown verbatim. A list with no basis reads as a ranking. */
   basis: string;
 }

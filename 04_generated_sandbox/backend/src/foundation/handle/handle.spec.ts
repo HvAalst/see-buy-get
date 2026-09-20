@@ -1,4 +1,5 @@
-import { HandleService } from './handle.service';
+import { HANDLE_KINDS, HandleService } from './handle.service';
+import { ownerDrivers } from '../../modules/pudo/handle-directory.service';
 
 /**
  * Handles are an IMPERSONATION surface before they are a convenience, so these tests are written against
@@ -7,6 +8,7 @@ import { HandleService } from './handle.service';
  */
 describe('handles — the directory, as a page per participant', () => {
   const svc = () => new HandleService();
+  const mk = svc;
 
   describe('derived, never claimed', () => {
     it('falls out of the verified name', () => {
@@ -83,12 +85,41 @@ describe('handles — the directory, as a page per participant', () => {
   });
 
   describe('who gets one', () => {
-    it('has no kind for an individual driver', () => {
-      // Decided 2026-09-17: a driver's rating is already public by DID, but a searchable identity tied to
-      // their delivery and hazard record is employment-adjacent, and the constraint map depends on a driver
-      // not being identifiable as the one who slowed a corridor down.
-      const kinds: string[] = [...['shop', 'hub', 'fleet', 'company']];
-      expect(kinds).not.toContain('driver');
+    it('has a kind for an owner-driver', () => {
+      /*
+       * REVERSED 2026-09-20, by the user: "owner driver deserves a public page as well. we do exist for
+       * the underprivileged don't we?" The rule it replaces excluded every driver as employment-adjacent,
+       * which is true of a driver EMPLOYED by a fleet and false of one who is their own business — and
+       * giving the incorporated an address while the individual gets none is backwards on a network
+       * built for informal carriers. See the HandleService doc for what happened to the old reasons.
+       *
+       * And this reads HANDLE_KINDS. The test it replaces built its own array of four strings and
+       * asserted that array did not contain 'driver' — which was true of the literal on the line above
+       * it and said nothing whatever about the code.
+       */
+      expect([...HANDLE_KINDS]).toContain('driver');
+    });
+
+    it('issues to an owner-driver and never to one who drives for a fleet', () => {
+      // The line the MONEY already draws: the network contracts a fleet and pays it one invoice, and an
+      // independent courier is contracted directly. A handle follows the contract.
+      const drivers = [
+        { did: 'did:driver:amos', displayName: 'Amos', status: 'ACTIVE' },
+        { did: 'did:driver:employed', displayName: 'Driver J.', status: 'ACTIVE', managerDid: 'fleet-a' },
+        { did: 'did:driver:waiting', displayName: 'Waiting', status: 'KYC_PENDING' },
+        { did: 'did:driver:refused', displayName: 'Refused', status: 'DRAFT' },
+      ];
+      // Only the active owner-driver: an address for somebody still being vetted, or refused, would
+      // publish a decision that is nobody's business but ours and theirs.
+      expect(ownerDrivers(drivers).map((d) => d.did)).toEqual(['did:driver:amos']);
+    });
+
+    it('gives an owner-driver a handle from the non-PII display name, like any other participant', () => {
+      const svc = mk();
+      const issued = svc.issue({ kind: 'driver', id: 'did:driver:amos', name: 'Amos Transport', country: 'KE' });
+      expect(issued).toMatchObject({ handle: 'amos-transport', kind: 'driver' });
+      // Idempotent on the id, so the boot sweep can run for ever without minting a second one.
+      expect(svc.issue({ kind: 'driver', id: 'did:driver:amos', name: 'Amos Transport' }).handle).toBe('amos-transport');
     });
   });
 });

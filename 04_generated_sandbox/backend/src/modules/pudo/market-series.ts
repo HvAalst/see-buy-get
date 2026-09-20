@@ -319,36 +319,67 @@ export const UNKNOWN_PLACE = 'unknown';
  * and the fleet manager where there is one. This counts loads CLAIMED inside the window, because a claim
  * is the taking; a load posted in the window and taken after it belongs to the window it was taken in.
  *
- * WHAT IT DELIBERATELY DOES NOT RETURN IS A DRIVER. A driver is a person, and a list of the individuals
- * who run Mombasa to Nairobi is a movement pattern about people, not a fact about a market. Handles in
- * this network are issued to companies, shops, hubs and fleets — never to a person — and that boundary is
- * the one this function keeps: it groups by the FLEET, and every load claimed by somebody without one is
- * counted as independent and nobody is named.
+ * IT GROUPS BY THE PARTY THE NETWORK CONTRACTS, which is the same party that holds a handle: the FLEET
+ * where the vehicle belongs to one, and the DRIVER THEMSELVES where it does not. An owner-driver is not
+ * an anonymous residue of somebody else's market — they are the carrier, and `settlingEntityIdOf` has
+ * always said so on the money side. A driver employed by a fleet is never named here; their fleet is,
+ * because the fleet is who the load was taken from.
+ *
+ * IT READS `claimedBy`, NOT `carriage`, and the difference is a bug the drive caught. `carriage` — the
+ * vehicle, plate and fleet — is stamped at PICKUP and only when the driver had a vehicle coupled; on the
+ * busiest lane in the sandbox five of thirteen claims had none, either because the load had not been
+ * collected yet or because nobody was on shift when it was. Keyed off carriage, those five fell into a
+ * bucket the screen then labelled "carried by owner-drivers", which turned a gap in our own records into
+ * a claim about people. `claimedBy` is set whenever `claimedAt` is: taking a load IS the claim, which is
+ * exactly what "if we know it was taken, we know who took it" means.
+ *
+ * `fleetOf` resolves a driver to the fleet that fields them, or undefined for an owner-driver. It is a
+ * parameter because this file knows about freights and gazetteers and must not learn about registries.
+ *
+ * A claim with no claimer at all is counted and attributed to nobody. It should not happen; if it does,
+ * the rows still add up to the loads, which is how anyone would find out.
  */
+export interface LaneCarriage {
+  kind: 'fleet' | 'driver';
+  id: string;
+  loads: number;
+}
+
 export function carriersOn(
   freights: Freight[],
   from: string,
   to: string,
   window: { from: number; to: number },
-): { carriers: { managerDid: string; loads: number }[]; independentLoads: number; claimedLoads: number } {
-  const byFleet = new Map<string, number>();
-  let independentLoads = 0;
+  fleetOf: (driverDid: string) => string | undefined = () => undefined,
+): { carriers: LaneCarriage[]; unattributedLoads: number; claimedLoads: number } {
+  const byParty = new Map<string, LaneCarriage>();
+  let unattributedLoads = 0;
   let claimedLoads = 0;
 
   for (const f of freights) {
     if (!f.claimedAt || !inWindow(f.claimedAt, window.from, window.to)) continue;
     if (placeAt(f.pickupLocation).name !== from || placeAt(f.destLocation).name !== to) continue;
     claimedLoads += 1;
-    const fleet = f.carriage?.managerDid;
-    if (fleet) byFleet.set(fleet, (byFleet.get(fleet) ?? 0) + 1);
-    else independentLoads += 1;
+    const took = f.claimedBy;
+    if (!took) {
+      unattributedLoads += 1;
+      continue;
+    }
+    // The fleet is who the load was taken FROM where there is one; otherwise the driver is their own.
+    const fleet = fleetOf(took);
+    const kind = fleet ? 'fleet' : 'driver';
+    const id = fleet ?? took;
+    const key = kind + ':' + id;
+    const row = byParty.get(key) ?? { kind, id, loads: 0 };
+    row.loads += 1;
+    byParty.set(key, row);
   }
 
-  // Sorted by did only so the answer is stable; the reader sorts by NAME, which is the caller's to
-  // resolve. Never by volume — this network does not publish a ranking of the people in it.
+  // Stable only — the reader sorts by NAME, which is the caller's to resolve. Never by volume: this
+  // network does not publish a ranking of the people in it.
   return {
-    carriers: [...byFleet.entries()].map(([managerDid, loads]) => ({ managerDid, loads })).sort((a, b) => a.managerDid.localeCompare(b.managerDid)),
-    independentLoads,
+    carriers: [...byParty.values()].sort((a, b) => a.id.localeCompare(b.id)),
+    unattributedLoads,
     claimedLoads,
   };
 }

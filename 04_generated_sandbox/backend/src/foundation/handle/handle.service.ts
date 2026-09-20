@@ -2,8 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { GlosError } from '../http/glos-error';
 import { PersistentMap } from '../store/persistent-map';
 
-/** What kind of participant a handle points at. Drivers are deliberately absent — see the service doc. */
-export const HANDLE_KINDS = ['shop', 'hub', 'fleet', 'company'] as const;
+/** What kind of participant a handle points at. 'driver' means an OWNER-DRIVER — see the service doc. */
+export const HANDLE_KINDS = ['shop', 'hub', 'fleet', 'company', 'driver'] as const;
 export type HandleKind = (typeof HANDLE_KINDS)[number];
 
 export interface HandleRecord {
@@ -46,10 +46,33 @@ const SHY = new Set(['admin', 'api', 'app', 'agent', 'driver', 'mdp', 'vendor', 
  *  2. IMMUTABLE ONCE ISSUED. A handle that follows a rename is a rotted link and a way to inherit somebody
  *     else's reputation; `derivedFrom` keeps the name it came from so the two are visibly different things.
  *
- * NO DRIVERS. A driver's rating is already public by DID, but a searchable identity tied to their delivery
- * and hazard record is a different object: it is employment-adjacent, which this network does not model,
- * and the constraint map depends on a driver NOT being identifiable as the one who slowed a corridor down.
- * Revisit as an explicit opt-in if drivers ask for it.
+ * OWNER-DRIVERS HAVE ONE. THE EMPLOYED DO NOT, and the line is not a judgement about who deserves an
+ * address — it is the line the MONEY already draws. `DriverService.settlingEntityIdOf` says it: the
+ * network contracts a fleet and pays it one invoice, and what the fleet then pays its own drivers is the
+ * fleet's business; an independent courier is contracted by the network directly. A handle goes to
+ * whoever the network contracts with, so the fleet's page speaks for its drivers and an owner-driver
+ * speaks for themselves. Anything else gives the incorporated an address and the individual none, which
+ * on a network built for informal carriers is precisely backwards.
+ *
+ * User, 2026-09-20, overruling the first version of this paragraph: "owner driver deserves a public page
+ * as well. we do exist for the underprivileged don't we? In my opinion it is up to the individual to
+ * maintain a public page, we offer it regardless." That last clause is the design: the page is ISSUED to
+ * everybody on the same terms, and what it says beyond what we measured is theirs to write.
+ *
+ * WHAT THE OLD PARAGRAPH SAID, because two of its three reasons are still live and are now handled
+ * rather than avoided:
+ *
+ *  1. "Employment-adjacent, which this network does not model." True of a FLEET-ATTACHED driver, whose
+ *     page would be an employment record kept by somebody who is not their employer. They get no handle.
+ *  2. "The constraint map depends on a driver NOT being identifiable as the one who slowed a corridor
+ *     down." Still true, and the answer is what the page CARRIES: what they moved, never what they
+ *     reported. A road hazard has an author on the queue that adjudicates it and never on a public page.
+ *  3. "A driver's rating is already public by DID." Which is why the page adds an address rather than a
+ *     disclosure.
+ *
+ * And a page carries the DISPLAY NAME, which `FleetDriver` already defines as the non-PII shop-floor
+ * label. The Golden Record — legal name, national ID, mobile — is in the vault and does not come out for
+ * this or anything else.
  */
 @Injectable()
 export class HandleService {

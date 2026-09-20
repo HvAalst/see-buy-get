@@ -2977,10 +2977,14 @@ export class SbgController {
     const hub = held.kind === 'hub' ? this.mdps.list().find((m) => m.did === held.id) : undefined;
     const fleet = held.kind === 'fleet' ? this.managers.list().find((m) => m.did === held.id) : undefined;
     const company = held.kind === 'company' ? this.entities.list().find((e) => e.entityId === held.id) : undefined;
+    // An OWNER-DRIVER: a party the network contracts with directly, and the only kind of driver with a
+    // page. The name is their display name — FleetDriver keeps the Golden Record in the vault, and this
+    // is the non-PII label that exists so there is something to say in public.
+    const driver = held.kind === 'driver' ? this.drivers.list().find((d) => d.did === held.id) : undefined;
 
-    const name = shop?.shopName ?? hub?.name ?? fleet?.companyName ?? company?.name;
+    const name = shop?.shopName ?? hub?.name ?? fleet?.companyName ?? company?.name ?? driver?.displayName;
     if (!name) throw new GlosError('NOT_FOUND', 'No such profile');
-    const country = shop ? this.agents.countryOf(shop) : hub ? this.mdps.countryOf(hub) : (fleet?.jurisdiction ?? company?.jurisdiction);
+    const country = shop ? this.agents.countryOf(shop) : hub ? this.mdps.countryOf(hub) : (fleet?.jurisdiction ?? company?.jurisdiction ?? driver?.jurisdiction);
     // Only claim a standing where we know WHICH country to claim it in — resolve() answers 'observed' for
     // an unknown jurisdiction, which is right for the ladder and reads as a falsehood on a public page.
     const presence = country ? this.presence.resolve(country) : undefined;
@@ -2988,7 +2992,11 @@ export class SbgController {
     // CL4 — the mobilisation record, for the kinds that actually mobilise something. A FLEET moves loads
     // through the drivers it fields, so its record is the loads any of them took; a shop or a hub moves no
     // trucks and gets no record rather than a row of honest zeroes, which would read as a bad one.
-    const moves = fleet ? mobilisationOf(this.dispatch.listFreight(), this.drivers.list({ managerDid: fleet.did }).map((d) => d.did)) : undefined;
+    // An owner-driver mobilises exactly one vehicle, and the same record a fleet gets is the honest one
+    // to show: the counts are theirs, and the RATES stay null while the record is thin, which is the
+    // protection that matters most to somebody with few loads behind them.
+    const movers = fleet ? this.drivers.list({ managerDid: fleet.did }).map((d) => d.did) : driver ? [driver.did] : [];
+    const moves = movers.length ? mobilisationOf(this.dispatch.listFreight(), movers) : undefined;
 
     /*
      * CL4 item 1 — THE CLEARING AGENT'S RECORD, and the agent exists here for the first time.
@@ -3036,7 +3044,15 @@ export class SbgController {
       ...(country ? { country } : {}),
       ...(shop ? { at: shop.location, area: shop.zone } : {}),
       ...(hub ? { at: hub.location } : {}),
-      since: shop?.createdAt ?? hub?.createdAt ?? fleet?.createdAt ?? company?.createdAt ?? new Date(0).toISOString(),
+      /*
+       * NO PIN AND NO AREA FOR A DRIVER, deliberately, where every other kind gets one.
+       *
+       * A shop's pin is a place a customer walks to. A driver has no premises — the nearest thing on
+       * their record is a home zone, and publishing where somebody sleeps beside a list of the corridors
+       * they run is the movement-pattern harm the old no-drivers rule was right to worry about. The page
+       * says what they carried and never where they are.
+       */
+      since: shop?.createdAt ?? hub?.createdAt ?? fleet?.createdAt ?? company?.createdAt ?? driver?.createdAt ?? new Date(0).toISOString(),
       ...(presence ? { presence: { level: presence.level, says: presenceSays(presence.level) } } : {}),
       // What they do, and for a company that clears containers it says so — which is the whole answer to
       // "how does an importer find an agent": the page can now state the work, not just the name.
@@ -4113,10 +4129,11 @@ export class SbgController {
    * cannot ride on that justification and does not try to. It is for people signed into the market —
    * network staff and the companies trading in it.
    *
-   * It names FLEETS AND NEVER DRIVERS. A driver is a person, and the individuals who run a corridor are a
-   * movement pattern about people rather than a fact about a market. Handles are issued to companies,
-   * shops, hubs and fleets; the set this returns is exactly the set that already has a public page, and a
-   * load taken by an owner-driver is counted as independent with nobody named.
+   * It names WHOEVER THE NETWORK CONTRACTED WITH: the fleet that fielded the vehicle, or the owner-driver
+   * who is their own. Both hold a handle and both get named — the alternative gives the incorporated an
+   * address and the individual an anonymous residue, on a network built for informal carriers. A driver
+   * EMPLOYED by a fleet is never named here: the load was taken from their fleet, and publishing an
+   * employment record is the thing this network does not do.
    *
    * ALPHABETICAL, NEVER BY VOLUME. The same rule as the directory: this network states what it measured
    * and does not publish a ranking of the people in it. The counts are there because they are measured and
@@ -4134,9 +4151,14 @@ export class SbgController {
     const found = this.dispatch.laneCarriage({ from: q.from, to: q.to, since, until });
     const carriers = found.carriers
       .map((c) => {
-        const fleet = this.managers.list().find((m) => m.did === c.managerDid);
-        const handle = this.handles.forId(c.managerDid)?.handle;
-        return { name: fleet?.companyName ?? c.managerDid, ...(handle ? { handle } : {}), loads: c.loads };
+        // A fleet answers with its trading name; an owner-driver with their display name, which is the
+        // non-PII label FleetDriver keeps precisely so there is something to say in public.
+        const name =
+          c.kind === 'fleet'
+            ? (this.managers.list().find((m) => m.did === c.id)?.companyName ?? c.id)
+            : (this.drivers.list().find((d) => d.did === c.id)?.displayName ?? c.id);
+        const handle = this.handles.forId(c.id)?.handle;
+        return { name, kind: c.kind, ...(handle ? { handle } : {}), loads: c.loads };
       })
       .sort((a, b) => a.name.localeCompare(b.name));
     return {
@@ -4145,8 +4167,8 @@ export class SbgController {
       to: q.to,
       claimedLoads: found.claimedLoads,
       carriers,
-      independentLoads: found.independentLoads,
-      basis: 'Fleets whose vehicle claimed a load on this lane in this window, alphabetical. Loads taken by an owner-driver are counted and nobody is named. Nothing here is a recommendation.',
+      unattributedLoads: found.unattributedLoads,
+      basis: 'Whoever claimed a load on this lane in this window — the fleet that fielded the vehicle, or the owner-driver who is their own. Alphabetical, and nothing here is a recommendation.',
     };
   }
 

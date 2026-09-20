@@ -4,6 +4,7 @@ import { EntityService } from '../../foundation/entity/entity.service';
 import { AgentService } from './agent.service';
 import { MdpService } from './mdp.service';
 import { FleetManagerService } from './fleet-manager.service';
+import { DriverService } from './driver.service';
 
 /**
  * ISSUING THE HANDLES — every shop, hub, fleet and company gets its address.
@@ -21,8 +22,26 @@ import { FleetManagerService } from './fleet-manager.service';
  *
  * ORDER IS NOT INCIDENTAL. Companies are swept FIRST so that a sister or partner company holds the bare
  * form of a contested name, and a shop that happens to share it takes the discriminated one. The network's
- * own companies are the records we are surest of.
+ * own companies are the records we are surest of. Owner-drivers are swept LAST for the same reason read
+ * the other way round: where a person's display name collides with a trading name, the business keeps the
+ * bare form, because that is the name a customer is typing.
+ *
+ * WHICH DRIVERS. Independent ones, and only once they are ACTIVE. Independent because a handle goes to
+ * whoever the network contracts with and a fleet-attached driver is contracted through their fleet (see
+ * HandleService). Active because a page is an address a stranger may type, and an address for somebody
+ * still being vetted — or refused — publishes a decision that is nobody's business but ours and theirs.
  */
+/**
+ * WHICH DRIVERS HOLD AN ADDRESS: the ones the network contracts with, once we have actually said yes.
+ *
+ * Exported and pure so the boundary can be asserted without standing up the whole module — the rule is
+ * the interesting part of this file, and a rule only reachable through eight injected services is a rule
+ * nobody will write a test for.
+ */
+export function ownerDrivers<T extends { managerDid?: string; status: string }>(drivers: T[]): T[] {
+  return drivers.filter((d) => !d.managerDid && d.status === 'ACTIVE');
+}
+
 @Injectable()
 export class HandleDirectory implements OnApplicationBootstrap {
   private lastSweptCount = -1;
@@ -33,6 +52,7 @@ export class HandleDirectory implements OnApplicationBootstrap {
     private readonly agents: AgentService,
     private readonly mdps: MdpService,
     private readonly managers: FleetManagerService,
+    private readonly drivers: DriverService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -45,13 +65,17 @@ export class HandleDirectory implements OnApplicationBootstrap {
     const shops = this.agents.list();
     const hubs = this.mdps.list();
     const fleets = this.managers.list();
-    const total = companies.length + shops.length + hubs.length + fleets.length;
+    const owners = ownerDrivers(this.drivers.list());
+    const total = companies.length + shops.length + hubs.length + fleets.length + owners.length;
     if (total === this.lastSweptCount) return;
 
     for (const c of companies) this.handles.issue({ kind: 'company', id: c.entityId, name: c.name, country: c.jurisdiction });
     for (const s of shops) this.handles.issue({ kind: 'shop', id: s.did, name: s.shopName, country: this.agents.countryOf(s) });
     for (const h of hubs) this.handles.issue({ kind: 'hub', id: h.did, name: h.name, country: this.mdps.countryOf(h) });
     for (const f of fleets) this.handles.issue({ kind: 'fleet', id: f.did, name: f.companyName, country: f.jurisdiction });
+    // The DISPLAY NAME, never the vault. FleetDriver defines it as the non-PII shop-floor label precisely
+    // so there is a name to use in public, and the Golden Record stays where it is.
+    for (const d of owners) this.handles.issue({ kind: 'driver', id: d.did, name: d.displayName, country: d.jurisdiction });
 
     this.lastSweptCount = total;
   }

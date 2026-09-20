@@ -7,6 +7,7 @@ import type { LaneSeries } from '../../../shared/market';
 
 export interface LaneCarrierView {
   name: string;
+  kind: 'fleet' | 'driver';
   handle?: string;
   loads: number;
 }
@@ -15,7 +16,7 @@ export interface LaneCarriersView {
   lane: string;
   claimedLoads: number;
   carriers: LaneCarrierView[];
-  independentLoads: number;
+  unattributedLoads: number;
   basis: string;
 }
 
@@ -32,11 +33,10 @@ type Api = { laneCarriers: (q: { from: string; to: string; since?: string }) => 
  * ask — who runs it — with a way to reach them. Fetched when the sheet opens rather than with the series,
  * because it is one lane out of however many and nobody wants the carriers for four hundred of them.
  *
- * WHAT IT NAMES, AND WHAT IT WILL NOT. Fleets, alphabetically, each linked to the public page the
- * directory already issued it. Never a driver: a driver is a person, and the individuals who run a
- * corridor are a movement pattern about people rather than a fact about a market. A load taken by an
- * owner-driver is counted honestly and nobody is named — dropping it would understate the lane and
- * flatter the fleets.
+ * WHAT IT NAMES. Whoever the network contracted with — the fleet that fielded the vehicle, or the
+ * owner-driver who is their own — alphabetically, each linked to the public page the directory issued
+ * them. A driver EMPLOYED by a fleet is never named: the load was taken from their fleet, and an
+ * employment record kept by somebody who is not the employer is the thing this network does not do.
  */
 export function LaneSheet({ lane, since, api, onClose }: { lane: LaneSeries; since: string; api: Api | null; onClose: () => void }) {
   const t = useT();
@@ -104,14 +104,22 @@ export function LaneSheet({ lane, since, api, onClose }: { lane: LaneSeries; sin
       {state === 'ready' && who ? (
         <>
           {who.carriers.length === 0 ? (
-            <p class="cons__empty">{who.claimedLoads === 0 ? t('tower.market.whoNoneTaken') : t('tower.market.whoNoneNamed')}</p>
+            <p class="cons__empty">{t('tower.market.whoNoneTaken')}</p>
           ) : (
             <div class="cdocs">
               {who.carriers.map((c) => (
                 <div class="cdoc" key={c.name}>
+                  {/* The kind is on the row, because "Amos" and "Kilima Logistics" are different kinds
+                      of answer to "who carries this" and a reader is entitled to know which they are
+                      looking at before they ring one of them. */}
+                  <span class="cdoc__tile" aria-hidden="true">
+                    {t(c.kind === 'driver' ? 'tower.market.whoDriverShort' : 'tower.market.whoFleetShort')}
+                  </span>
                   <span class="cdoc__body">
                     <span class="cdoc__name">{c.name}</span>
-                    <span class="cdoc__meta">{t('tower.market.whoLoads', { n: c.loads })}</span>
+                    <span class="cdoc__meta">
+                      {t(c.kind === 'driver' ? 'tower.market.whoDriver' : 'tower.market.whoFleet')} · {t('tower.market.whoLoads', { n: c.loads })}
+                    </span>
                   </span>
                   <span class="cdoc__acts">
                     {/* The page the directory already issued them. A new tab, because the console is a
@@ -128,7 +136,9 @@ export function LaneSheet({ lane, since, api, onClose }: { lane: LaneSeries; sin
               ))}
             </div>
           )}
-          {who.independentLoads > 0 ? <p class="chint">{t('tower.market.whoIndependent', { n: who.independentLoads })}</p> : null}
+          {/* It should be nought. Shown when it is not, because the rows above are meant to add up to
+              the loads and a reader who can check that is a reader who can catch us out. */}
+          {who.unattributedLoads > 0 ? <p class="chint">{t('tower.market.whoUnattributed', { n: who.unattributedLoads })}</p> : null}
           {/* Verbatim. A list of companies with no basis under it reads as a recommendation. */}
           <p class="chint">{who.basis}</p>
         </>

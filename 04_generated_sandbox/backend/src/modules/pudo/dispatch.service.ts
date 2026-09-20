@@ -1367,7 +1367,16 @@ export class DispatchService {
    * stops a dispatch service growing two more dependencies for one read.
    */
   laneCarriage(input: { from: string; to: string; since: number; until: number }): ReturnType<typeof carriersOn> {
-    return carriersOn([...this.freights.values()], input.from, input.to, { from: input.since, to: input.until });
+    // The driver registry is here and not in market-series, so the resolver is passed in: a driver who
+    // drives for a fleet attributes to the fleet, and one who drives for themselves to themselves.
+    const fleetOf = (driverDid: string): string | undefined => {
+      try {
+        return this.drivers.get(driverDid).managerDid ?? undefined;
+      } catch {
+        return undefined;
+      }
+    };
+    return carriersOn([...this.freights.values()], input.from, input.to, { from: input.since, to: input.until }, fleetOf);
   }
 
   /* ------------------------------------------------- FB0c: negotiate before commit -- */

@@ -13622,7 +13622,7 @@
       "get": {
         "operationId": "Sbg.laneCarriers",
         "summary": "",
-        "description": "WHO CARRIED ON ONE LANE — the fleets, alphabetical, each with the public page it already has.\n\nNOT @Public, and the reason is the sentence directly above that makes the series public: \"nothing here\nidentifies a load, a shipper or a driver\". Naming the carriers on a lane identifies somebody, so it\ncannot ride on that justification and does not try to. It is for people signed into the market —\nnetwork staff and the companies trading in it.\n\nIt names FLEETS AND NEVER DRIVERS. A driver is a person, and the individuals who run a corridor are a\nmovement pattern about people rather than a fact about a market. Handles are issued to companies,\nshops, hubs and fleets; the set this returns is exactly the set that already has a public page, and a\nload taken by an owner-driver is counted as independent with nobody named.\n\nALPHABETICAL, NEVER BY VOLUME. The same rule as the directory: this network states what it measured\nand does not publish a ranking of the people in it. The counts are there because they are measured and\na reader can check them; the ORDER makes no claim.",
+        "description": "WHO CARRIED ON ONE LANE — the fleets, alphabetical, each with the public page it already has.\n\nNOT @Public, and the reason is the sentence directly above that makes the series public: \"nothing here\nidentifies a load, a shipper or a driver\". Naming the carriers on a lane identifies somebody, so it\ncannot ride on that justification and does not try to. It is for people signed into the market —\nnetwork staff and the companies trading in it.\n\nIt names WHOEVER THE NETWORK CONTRACTED WITH: the fleet that fielded the vehicle, or the owner-driver\nwho is their own. Both hold a handle and both get named — the alternative gives the incorporated an\naddress and the individual an anonymous residue, on a network built for informal carriers. A driver\nEMPLOYED by a fleet is never named here: the load was taken from their fleet, and publishing an\nemployment record is the thing this network does not do.\n\nALPHABETICAL, NEVER BY VOLUME. The same rule as the directory: this network states what it measured\nand does not publish a ranking of the people in it. The counts are there because they are measured and\na reader can check them; the ORDER makes no claim.",
         "parameters": [
           {
             "name": "from",
@@ -25455,7 +25455,8 @@
               "shop",
               "hub",
               "fleet",
-              "company"
+              "company",
+              "driver"
             ]
           },
           "formerly": {
@@ -28831,19 +28832,27 @@
       "LaneCarrier": {
         "type": "object",
         "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "fleet",
+              "driver"
+            ]
+          },
           "handle": {
             "type": "string",
-            "description": "Their page at /@handle. Present for everything the directory has issued a handle to."
+            "description": "Their page at /@handle. Absent only where the directory has not issued one yet."
           },
           "name": {
             "type": "string"
           },
           "loads": {
             "type": "number",
-            "description": "Loads on this lane claimed by this fleet inside the window."
+            "description": "Loads on this lane claimed by them inside the window."
           }
         },
         "required": [
+          "kind",
           "name",
           "loads"
         ]
@@ -28870,9 +28879,9 @@
             "type": "number",
             "description": "Every load on this lane that was CLAIMED in the window — the sum the rows below are drawn from."
           },
-          "independentLoads": {
+          "unattributedLoads": {
             "type": "number",
-            "description": "Loads carried by somebody with no fleet behind them — an owner-driver.\n\nCounted and never named: they are real work by real people, and the person is not a business with a\npublic page. A screen that dropped this number would understate the lane and flatter the fleets."
+            "description": "Loads whose claim stamped no carriage at all — no fleet and no driver.\n\nIt should be zero. It is carried anyway so the rows above always add up to `claimedLoads`, which is\nhow anybody would notice if it stopped being zero."
           },
           "basis": {
             "type": "string",
@@ -28885,7 +28894,7 @@
           "from",
           "to",
           "claimedLoads",
-          "independentLoads",
+          "unattributedLoads",
           "basis"
         ]
       },
