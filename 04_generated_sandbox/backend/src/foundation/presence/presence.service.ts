@@ -408,6 +408,9 @@ const REFUSAL: Record<PresenceCapability, string> = {
   claims: 'We cannot pay a claim in this country yet, so nothing here can be covered',
   tax: 'We do not collect tax in this country yet',
   payouts: 'We cannot pay out in this country yet',
+  // CL5 — said as a fact about the law, not as a fault of the person holding the camera. They can still
+  // record WHAT they were asked for; it is the photograph of the document we may not keep.
+  fieldEvidence: 'We are not permitted to keep photographs of official documents in this country — say what happened and leave the paper out of it',
 };
 
 /** How a standing reads inside a refusal, so the message names the state and not only the country. */

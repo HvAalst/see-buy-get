@@ -4678,6 +4678,125 @@
         }
       }
     },
+    "/v1/sbg/field-observations/notice": {
+      "get": {
+        "operationId": "Sbg.observationNotice",
+        "summary": "",
+        "description": "CL5 — MAY A PHOTOGRAPH BE KEPT HERE, AND WHAT MUST BE AGREED TO FIRST?\n\nAsked BEFORE the camera is offered, never after. Somebody who has already photographed a customs\ndocument and is then told we cannot hold it has been made to do something they cannot undo — the\npicture is on their phone either way, and we invited it.\n\nThe notice travels with the answer so no screen has to keep its own copy of the words, which is how\ntwo versions of a consent text start existing.",
+        "parameters": [
+          {
+            "name": "country",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/field-observations": {
+      "post": {
+        "operationId": "Sbg.recordFieldObservation",
+        "summary": "",
+        "description": "CL5 — record what you were asked for. First-hand or refused; positive by the shape of the form.\n\nOpen to the people who are actually at a counter — a driver, a shopkeeping agent, a fleet office, a\ncompany administrator — because a form that only staff can fill in collects what staff already know.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FieldObservationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "Sbg.listFieldObservations",
+        "summary": "",
+        "description": "CL5 — what has been observed at a place, newest first by the date it HAPPENED.",
+        "parameters": [
+          {
+            "name": "country",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "place",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/field-observations/{observationId}/remove-evidence": {
+      "post": {
+        "operationId": "Sbg.removeObservationEvidence",
+        "summary": "",
+        "description": "CL5 — take a photograph back off an observation, keeping the words.\n\nOperator-only, and it exists for the two days that will come: a country's answer changing, and\nsomebody photographing a number they meant to cover.",
+        "parameters": [
+          {
+            "name": "observationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveEvidenceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/imports/{importId}/released": {
       "post": {
         "operationId": "Sbg.recordImportRelease",
@@ -18891,7 +19010,8 @@
                 "claims",
                 "tax",
                 "payouts",
-                "takeIn"
+                "takeIn",
+                "fieldEvidence"
               ]
             }
           },
@@ -18906,7 +19026,8 @@
                 "claims",
                 "tax",
                 "payouts",
-                "takeIn"
+                "takeIn",
+                "fieldEvidence"
               ]
             }
           },
@@ -19031,7 +19152,8 @@
                 "claims",
                 "tax",
                 "payouts",
-                "takeIn"
+                "takeIn",
+                "fieldEvidence"
               ]
             }
           },
@@ -19105,6 +19227,10 @@
           "takeIn": {
             "type": "boolean",
             "description": "May a shop here take goods into custody at all — and under whose promise? See `TakeInPromise`."
+          },
+          "fieldEvidence": {
+            "type": "boolean",
+            "description": "CL5 — MAY WE HOLD A PHOTOGRAPH OF AN OFFICIAL DOCUMENT HERE?\n\nThe only capability NO level grants. Every other one arrives with the level that earns it; this one\narrives only when somebody switches it on for a named country, which under CA2 is a proposal by one\nperson and an approval by a different one.\n\nThe user settled the question this slice was blocked on: \"cl5 is by default off because it's correct\nthat we cant just hold photographs of official documents.\" Quite so. A photograph of a customs entry\nor an inspection notice may itself be a controlled record in the jurisdiction it came from, and being\nESTABLISHED in a country is no answer to that — it is a different question, asked of a lawyer, about\nthat country. So the default is off at established too, and nothing but a deliberate act turns it on.\n\nTHIS IS THE FIRST OF TWO GATES. The second belongs to the person holding the camera, and neither\nsubstitutes for the other — see FieldObservationService."
           }
         },
         "required": [
@@ -19114,7 +19240,8 @@
           "claims",
           "tax",
           "payouts",
-          "takeIn"
+          "takeIn",
+          "fieldEvidence"
         ]
       },
       "CapabilityLapse": {
@@ -19129,7 +19256,8 @@
               "claims",
               "tax",
               "payouts",
-              "takeIn"
+              "takeIn",
+              "fieldEvidence"
             ]
           },
           "entityId": {
@@ -19609,7 +19737,8 @@
                 "claims",
                 "tax",
                 "payouts",
-                "takeIn"
+                "takeIn",
+                "fieldEvidence"
               ]
             }
           }
@@ -19661,7 +19790,8 @@
                 "claims",
                 "tax",
                 "payouts",
-                "takeIn"
+                "takeIn",
+                "fieldEvidence"
               ]
             }
           }
@@ -21305,6 +21435,69 @@
             "type": "string"
           }
         }
+      },
+      "FieldObservationDto": {
+        "type": "object",
+        "properties": {
+          "country": {
+            "type": "string",
+            "pattern": "/^[A-Za-z]{2}$/"
+          },
+          "place": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "subject": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 600
+          },
+          "happenedOn": {
+            "type": "string",
+            "pattern": "/^\\d{4}-\\d{2}-\\d{2}$/"
+          },
+          "firstHand": {
+            "type": "boolean"
+          },
+          "evidenceMediaId": {
+            "type": "string",
+            "description": "A photograph already uploaded through the media rail. Both gates are checked in the service."
+          },
+          "consentAgreed": {
+            "type": "boolean"
+          },
+          "consentNoticeVersion": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "country",
+          "place",
+          "subject",
+          "happenedOn",
+          "firstHand"
+        ]
+      },
+      "RemoveEvidenceDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ]
       },
       "ReleaseDto": {
         "type": "object",

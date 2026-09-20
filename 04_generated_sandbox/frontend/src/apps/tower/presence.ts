@@ -13,7 +13,15 @@ import type { MessageKey } from '../../shared/i18n';
 export const PRESENCE_LEVELS = ['observed', 'matched', 'partnered', 'established'] as const;
 export type PresenceLevel = (typeof PRESENCE_LEVELS)[number];
 
-export const PRESENCE_CAPABILITIES = ['takeIn', 'merchantOfRecord', 'holdFloat', 'cashOnDelivery', 'claims', 'tax', 'payouts'] as const;
+/*
+ * A SECOND COPY, KEPT DELIBERATELY AND NOW POLICED.
+ *
+ * The order here is the CONSOLE's — most-consequential first — which the server has no opinion about, so
+ * this list cannot simply be the contract's. What it must not be is a different SET: adding a capability
+ * on the server and forgetting this line means the console silently never shows it, which is exactly what
+ * happened when fieldEvidence arrived. presence.test.ts now compares the two.
+ */
+export const PRESENCE_CAPABILITIES = ['takeIn', 'merchantOfRecord', 'holdFloat', 'cashOnDelivery', 'claims', 'tax', 'payouts', 'fieldEvidence'] as const;
 export type PresenceCapability = (typeof PRESENCE_CAPABILITIES)[number];
 
 export interface PresenceRow {
@@ -39,10 +47,11 @@ export interface PresenceRow {
 
 /** What each level grants before anyone overrides anything — the same table the server derives from. */
 export const LEVEL_DEFAULTS: Record<PresenceLevel, Record<PresenceCapability, boolean>> = {
-  observed: { takeIn: false, merchantOfRecord: false, holdFloat: false, cashOnDelivery: false, claims: false, tax: false, payouts: false },
-  matched: { takeIn: true, merchantOfRecord: false, holdFloat: false, cashOnDelivery: false, claims: false, tax: false, payouts: false },
-  partnered: { takeIn: true, merchantOfRecord: false, holdFloat: false, cashOnDelivery: false, claims: false, tax: false, payouts: false },
-  established: { takeIn: true, merchantOfRecord: true, holdFloat: true, cashOnDelivery: true, claims: true, tax: true, payouts: true },
+  observed: { takeIn: false, merchantOfRecord: false, holdFloat: false, cashOnDelivery: false, claims: false, tax: false, payouts: false, fieldEvidence: false },
+  matched: { takeIn: true, merchantOfRecord: false, holdFloat: false, cashOnDelivery: false, claims: false, tax: false, payouts: false, fieldEvidence: false },
+  partnered: { takeIn: true, merchantOfRecord: false, holdFloat: false, cashOnDelivery: false, claims: false, tax: false, payouts: false, fieldEvidence: false },
+  // CL5 — off HERE too. No level grants it; only a deliberate override for a named country does.
+  established: { takeIn: true, merchantOfRecord: true, holdFloat: true, cashOnDelivery: true, claims: true, tax: true, payouts: true, fieldEvidence: false },
 };
 
 export const LEVEL_LABEL: Record<PresenceLevel, MessageKey> = {
@@ -60,6 +69,7 @@ export const CAPABILITY_LABEL: Record<PresenceCapability, MessageKey> = {
   claims: 'tower.presence.cap.claims',
   tax: 'tower.presence.cap.tax',
   payouts: 'tower.presence.cap.payouts',
+  fieldEvidence: 'tower.presence.cap.fieldEvidence',
 };
 
 /**

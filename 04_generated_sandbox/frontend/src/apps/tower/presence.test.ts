@@ -1,6 +1,9 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
+  CAPABILITY_LABEL,
   LEVEL_DEFAULTS,
+  PRESENCE_CAPABILITIES,
   approvalBlocker,
   impactIsEmpty,
   capabilityStates,
@@ -35,6 +38,34 @@ const row = (over: Partial<PresenceRow> = {}): PresenceRow => ({
   hasEntity: false,
   recorded: true,
   ...over,
+});
+
+/**
+ * THE TWO LISTS MUST NAME THE SAME SET.
+ *
+ * This file keeps its own PRESENCE_CAPABILITIES because the console ORDERS them by consequence and the
+ * server has no opinion about that. A different order is fine; a different SET is a capability the
+ * console can never show. That is not hypothetical — fieldEvidence was added on the server and this
+ * line was not touched, so the one capability that most needs a deliberate operator would have been
+ * invisible to every operator.
+ */
+describe('the console-s own copy of the capability list', () => {
+  it('names exactly the capabilities the contract does', () => {
+    // Read off the generated contract rather than restated here: a test that writes out its own
+    // expectation would go stale in step with the thing it is guarding.
+    const contract = readFileSync('src/lib/sbg/schema.d.ts', 'utf8');
+    const line = contract.match(/lost: \([^)]*\)\[\]/)?.[0];
+    // Proves the guard read something: a regex that quietly matches nothing would pass every future
+    // change, which is the trap this project has already been caught by once.
+    expect(line).toContain('merchantOfRecord');
+    const fromContract = [...line!.matchAll(/"([a-zA-Z]+)"/g)].map((x) => x[1]);
+    expect(fromContract.length).toBeGreaterThan(5);
+    expect([...PRESENCE_CAPABILITIES].sort()).toEqual([...fromContract].sort());
+  });
+
+  it('has a label for every one of them — an unlabelled tag renders as nothing', () => {
+    for (const c of PRESENCE_CAPABILITIES) expect(CAPABILITY_LABEL[c]).toBeTruthy();
+  });
 });
 
 describe('the map', () => {

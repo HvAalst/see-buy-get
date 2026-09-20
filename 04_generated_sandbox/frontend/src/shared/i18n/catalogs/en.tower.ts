@@ -1472,6 +1472,8 @@ export const enTowerQueues = {
   'tower.presence.cap.claims': 'pay claims',
   'tower.presence.cap.tax': 'collect tax',
   'tower.presence.cap.payouts': 'pay suppliers',
+  // CL5 — the only one no level grants. Worded as what it permits, not as a feature name.
+  'tower.presence.cap.fieldEvidence': 'keep photographs of official documents',
   'tower.presence.promise.ours': 'ours to answer for',
   'tower.presence.promise.theirs': 'the carrier\u2019s to answer for',
   'tower.presence.promise.none': 'not accepted here',

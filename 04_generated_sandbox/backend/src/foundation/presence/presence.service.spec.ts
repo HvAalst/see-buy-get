@@ -1,5 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { PresenceService } from './presence.service';
+import { LEVEL_DEFAULTS, PRESENCE_CAPABILITIES, PRESENCE_LEVELS } from './presence.types';
 import { EntityService } from '../entity/entity.service';
 import { DidService } from '../did/did.service';
 import { LedgerService } from '../ledger/ledger.service';
@@ -212,6 +213,35 @@ describe('presence', () => {
 
     it('still refuses to establish a country no company transacts in, even with two people', () => {
       expect(() => presence.propose({ jurisdiction: 'ZM', level: 'established', by: 'Amina' })).toThrow(/cannot be established/);
+    });
+  });
+
+  /**
+   * CL5 — the first of the two gates on holding a photograph of an official document.
+   *
+   * The whole point of it is the DEFAULT, so that is what is asserted: not one level opens it, including
+   * the one that opens everything else. Being established in a country answers whether we may transact
+   * in it; whether its law lets us keep a photograph of one of its documents is a different question,
+   * asked of a lawyer, about that country.
+   */
+  describe('holding a photograph of an official document', () => {
+    it('is off at EVERY level, including established', () => {
+      for (const level of PRESENCE_LEVELS) {
+        expect(LEVEL_DEFAULTS[level].fieldEvidence).toBe(false);
+      }
+      // And it is a real capability, not a field somebody forgot to add to the list.
+      expect([...PRESENCE_CAPABILITIES]).toContain('fieldEvidence');
+    });
+
+    it('opens only by a deliberate override, and says why when it is shut', () => {
+      // KE is established in this fixture and still may not hold one.
+      expect(presence.can('KE', 'fieldEvidence')).toBe(false);
+      expect(() => presence.require('KE', 'fieldEvidence')).toThrow(/photographs of official documents/);
+
+      presence.set({ jurisdiction: 'KE', level: 'established', overrides: { fieldEvidence: true }, by: 'Amina', note: 'Counsel confirmed 2026-09-20' });
+      expect(presence.can('KE', 'fieldEvidence')).toBe(true);
+      // One country's answer is not another's.
+      expect(presence.can('ET', 'fieldEvidence')).toBe(false);
     });
   });
 });

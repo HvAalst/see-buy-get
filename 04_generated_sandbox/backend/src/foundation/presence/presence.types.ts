@@ -30,7 +30,7 @@ export type PresenceLevel = (typeof PRESENCE_LEVELS)[number];
  * before it collects tax, and collect tax long before anybody will underwrite a claim there. A single
  * flag would force the slowest of them to hold back the rest.
  */
-export const PRESENCE_CAPABILITIES = ['merchantOfRecord', 'holdFloat', 'cashOnDelivery', 'claims', 'tax', 'payouts', 'takeIn'] as const;
+export const PRESENCE_CAPABILITIES = ['merchantOfRecord', 'holdFloat', 'cashOnDelivery', 'claims', 'tax', 'payouts', 'takeIn', 'fieldEvidence'] as const;
 export type PresenceCapability = (typeof PRESENCE_CAPABILITIES)[number];
 
 export class PresenceCapabilities {
@@ -49,6 +49,23 @@ export class PresenceCapabilities {
   @ApiProperty() payouts: boolean;
   /** May a shop here take goods into custody at all — and under whose promise? See `TakeInPromise`. */
   @ApiProperty() takeIn: boolean;
+  /**
+   * CL5 — MAY WE HOLD A PHOTOGRAPH OF AN OFFICIAL DOCUMENT HERE?
+   *
+   * The only capability NO level grants. Every other one arrives with the level that earns it; this one
+   * arrives only when somebody switches it on for a named country, which under CA2 is a proposal by one
+   * person and an approval by a different one.
+   *
+   * The user settled the question this slice was blocked on: "cl5 is by default off because it's correct
+   * that we cant just hold photographs of official documents." Quite so. A photograph of a customs entry
+   * or an inspection notice may itself be a controlled record in the jurisdiction it came from, and being
+   * ESTABLISHED in a country is no answer to that — it is a different question, asked of a lawyer, about
+   * that country. So the default is off at established too, and nothing but a deliberate act turns it on.
+   *
+   * THIS IS THE FIRST OF TWO GATES. The second belongs to the person holding the camera, and neither
+   * substitutes for the other — see FieldObservationService.
+   */
+  @ApiProperty() fieldEvidence: boolean;
 }
 
 /**
@@ -180,10 +197,12 @@ export class ResolvedPresence {
  * involved. What the take-in is PROMISED under is a separate question, answered per shipment.
  */
 export const LEVEL_DEFAULTS: Record<PresenceLevel, PresenceCapabilities> = {
-  observed: { merchantOfRecord: false, holdFloat: false, cashOnDelivery: false, claims: false, tax: false, payouts: false, takeIn: false },
-  matched: { merchantOfRecord: false, holdFloat: false, cashOnDelivery: false, claims: false, tax: false, payouts: false, takeIn: true },
+  observed: { merchantOfRecord: false, holdFloat: false, cashOnDelivery: false, claims: false, tax: false, payouts: false, takeIn: false, fieldEvidence: false },
+  matched: { merchantOfRecord: false, holdFloat: false, cashOnDelivery: false, claims: false, tax: false, payouts: false, takeIn: true, fieldEvidence: false },
   // A partner contracts and pays; we still hold nothing ourselves, and a payout here is the partner's
   // to make. What changes from `matched` is that somebody local IS answerable.
-  partnered: { merchantOfRecord: false, holdFloat: false, cashOnDelivery: false, claims: false, tax: false, payouts: false, takeIn: true },
-  established: { merchantOfRecord: true, holdFloat: true, cashOnDelivery: true, claims: true, tax: true, payouts: true, takeIn: true },
+  partnered: { merchantOfRecord: false, holdFloat: false, cashOnDelivery: false, claims: false, tax: false, payouts: false, takeIn: true, fieldEvidence: false },
+  // NOT even here. Being established in a country answers whether we may transact in it. It does not
+  // answer whether that country's law lets us keep a photograph of one of its documents.
+  established: { merchantOfRecord: true, holdFloat: true, cashOnDelivery: true, claims: true, tax: true, payouts: true, takeIn: true, fieldEvidence: false },
 };

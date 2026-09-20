@@ -3,6 +3,7 @@ import { PapersWatchService } from './papers-watch.service';
 import { ConsignmentNoteService } from './consignment-note.service';
 import { SiteService, SITE_BASIS, type Site } from './site.service';
 import { TransitAuthorityService, TRANSIT_BASIS } from './transit-authority.service';
+import { FieldObservationService, OBSERVATION_BASIS } from './field-observation.service';
 import { MailService } from '../../foundation/mail/mail.service';
 import { isSandbox } from '../../foundation/runtime/sandbox';
 import { Body, Controller, Delete, Get, Header, Inject, Param, Patch, Post, Query, Res, StreamableFile, Optional } from '@nestjs/common';
@@ -71,6 +72,8 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   RevokeAgentDto,
   PublishRequiredDto,
   ReleaseDto,
+  FieldObservationDto,
+  RemoveEvidenceDto,
   TransitAuthorityDto,
   WithdrawTransitDto,
   SupplyPaperDto,
@@ -179,6 +182,7 @@ export class SbgController {
     private readonly imports: ImportService,
     private readonly sites: SiteService,
     private readonly transit: TransitAuthorityService,
+    private readonly observations: FieldObservationService,
     private readonly readiness: CompanyReadinessService,
     private readonly borderRules: BorderRuleService,
     private readonly entityAdmins: EntityAdminService,
@@ -807,6 +811,68 @@ export class SbgController {
   @Post('imports/:importId/revoke')
   revokeClearingAgent(@Param('importId') importId: string, @Body() dto: RevokeAgentDto, @Actor() actor: IntrospectionResult): ImportDetail {
     return this.imports.revoke(importId, this.actingCompany(actor, dto.entityId), this.namedActor(actor, dto.by), dto.reason);
+  }
+
+  /**
+   * CL5 — MAY A PHOTOGRAPH BE KEPT HERE, AND WHAT MUST BE AGREED TO FIRST?
+   *
+   * Asked BEFORE the camera is offered, never after. Somebody who has already photographed a customs
+   * document and is then told we cannot hold it has been made to do something they cannot undo — the
+   * picture is on their phone either way, and we invited it.
+   *
+   * The notice travels with the answer so no screen has to keep its own copy of the words, which is how
+   * two versions of a consent text start existing.
+   */
+  @Roles('operator', 'entity_admin', 'agent', 'driver', 'fleet_manager')
+  @Get('field-observations/notice')
+  observationNotice(@Query('country') country?: string) {
+    return { country: country?.toUpperCase(), mayHoldEvidence: this.observations.mayHoldEvidence(country), ...this.observations.notice() };
+  }
+
+  /**
+   * CL5 — record what you were asked for. First-hand or refused; positive by the shape of the form.
+   *
+   * Open to the people who are actually at a counter — a driver, a shopkeeping agent, a fleet office, a
+   * company administrator — because a form that only staff can fill in collects what staff already know.
+   */
+  @Roles('operator', 'entity_admin', 'agent', 'driver', 'fleet_manager')
+  @Post('field-observations')
+  recordFieldObservation(@Body() dto: FieldObservationDto, @Actor() actor: IntrospectionResult) {
+    return this.observations.record(
+      {
+        country: dto.country,
+        place: dto.place,
+        subject: dto.subject,
+        note: dto.note,
+        happenedOn: dto.happenedOn,
+        firstHand: dto.firstHand,
+        evidenceMediaId: dto.evidenceMediaId,
+        ...(dto.consentAgreed !== undefined || dto.consentNoticeVersion
+          ? { consent: { agreed: Boolean(dto.consentAgreed), noticeVersion: dto.consentNoticeVersion ?? '' } }
+          : {}),
+      },
+      { did: actor?.did ?? actor?.sub ?? 'unknown', name: this.namedActor(actor, dto.by) },
+    );
+  }
+
+  /** CL5 — what has been observed at a place, newest first by the date it HAPPENED. */
+  @Roles('operator', 'entity_admin', 'agent', 'driver', 'fleet_manager')
+  @Get('field-observations')
+  listFieldObservations(@Query('country') country?: string, @Query('place') place?: string) {
+    const items = country ? this.observations.at(country, place) : this.observations.list();
+    return { items, basis: OBSERVATION_BASIS };
+  }
+
+  /**
+   * CL5 — take a photograph back off an observation, keeping the words.
+   *
+   * Operator-only, and it exists for the two days that will come: a country's answer changing, and
+   * somebody photographing a number they meant to cover.
+   */
+  @Roles('operator')
+  @Post('field-observations/:observationId/remove-evidence')
+  removeObservationEvidence(@Param('observationId') observationId: string, @Body() dto: RemoveEvidenceDto, @Actor() actor: IntrospectionResult) {
+    return this.observations.removeEvidence(observationId, this.namedActor(actor, dto.by), dto.reason);
   }
 
   /**

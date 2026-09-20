@@ -328,6 +328,31 @@ export class SupplyPaperDto {
   @IsOptional() @IsString() by?: string;
 }
 
+/**
+ * CL5 — what somebody was asked for, by somebody who was standing there.
+ *
+ * `firstHand` is a required BOOLEAN rather than an assumed true: a form that does not ask the question
+ * cannot refuse the wrong answer, and refusing a rumour at intake is the whole rule.
+ */
+export class FieldObservationDto {
+  @IsString() @Matches(/^[A-Za-z]{2}$/, { message: 'Say which country this was, as its two-letter code' }) country!: string;
+  @IsString() @MaxLength(120) place!: string;
+  @IsString() @MaxLength(160) subject!: string;
+  @IsOptional() @IsString() @MaxLength(600) note?: string;
+  @IsString() @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'Say when it happened, written YYYY-MM-DD' }) happenedOn!: string;
+  @IsBoolean() firstHand!: boolean;
+  /** A photograph already uploaded through the media rail. Both gates are checked in the service. */
+  @IsOptional() @IsString() evidenceMediaId?: string;
+  @IsOptional() @IsBoolean() consentAgreed?: boolean;
+  @IsOptional() @IsString() consentNoticeVersion?: string;
+  @IsOptional() @IsString() by?: string;
+}
+
+export class RemoveEvidenceDto {
+  @IsString() @MaxLength(200) reason!: string;
+  @IsOptional() @IsString() by?: string;
+}
+
 /** BL1 — the agent records that customs let the container go. Nothing to say but who. */
 export class ReleaseDto {
   @IsOptional() @IsString() entityId?: string;
