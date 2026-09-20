@@ -450,7 +450,6 @@ export const enTower = {
   'tower.imports.appointTitle': 'Appoint a clearing agent',
   'tower.imports.appointHint':
     'Appointing shares two things: your company papers, and this container’s own. Nothing else, and never your sign-in. Ask the agent for their company id — there is no directory of agents yet.',
-  'tower.imports.f.agent': 'Agent’s company id',
   'tower.imports.appoint': 'Appoint',
   'tower.imports.appointed': 'Appointed — {name} can now read the papers this container needs.',
   'tower.imports.revokeTitle': 'End the appointment',
@@ -632,6 +631,19 @@ export const enTower = {
   'tower.imports.registerFor': 'For {code}',
   'tower.imports.registerCompany': 'Company papers',
     /* The places a company keeps. A port is chosen, not typed as two coordinates. */
+  /* Picking a participant out of the directory, instead of typing their id. */
+  'tower.pick.byName': 'Search by name',
+  'tower.pick.reading': 'Reading the directory…',
+  'tower.pick.noMatch': 'Nobody of that name.',
+  'tower.pick.empty': 'Nobody listed here yet.',
+  'tower.pick.agents': 'Clearing agents',
+  'tower.pick.agentsBasis': '{n} listed, alphabetically. Not a ranking — advertising more moves nobody up. This container clears in {country}; each one says where it is registered, which is not the same as where it works.',
+  'tower.pick.drivers': 'Drivers',
+  'tower.pick.fleets': 'Fleets',
+  'tower.pick.shops': 'Shops',
+  'tower.imports.chooseAgent': 'Choose a clearing agent',
+  'tower.imports.agentSeen': 'We have seen {appointed} appointments and {cleared} cleared.',
+  'tower.imports.agentNew': 'New here — nothing to show yet, which is not the same as a bad record.',
   'tower.sites.choose': 'Choose…',
   'tower.sites.addPort': '＋ New port',
   'tower.sites.addDelivery': '＋ New place',

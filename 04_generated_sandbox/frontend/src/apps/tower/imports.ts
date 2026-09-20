@@ -514,6 +514,26 @@ export function partiesDiffer(rows: { youAre: ImportRow['youAre'] }[]): boolean 
   return new Set(rows.map((r) => r.youAre)).size > 1;
 }
 
+/**
+ * ONE AGENT AS THE PUBLIC DIRECTORY LISTS THEM — their claim beside their record.
+ *
+ * The pair is the point: a claim with nothing behind it and a claim with forty containers behind it look
+ * identical on a name alone, and the importer is the one who should weigh the difference. There is no
+ * score and no ordering here, because this network is the party they are appointed through.
+ */
+export interface AgentCardView {
+  entityId: string;
+  name: string;
+  handle?: string;
+  country?: string;
+  offer?: { specialisms: string[]; places?: string[]; words?: string };
+  appointed: number;
+  cleared: number;
+  /** The record is too thin to say anything with. A newcomer is not a bad agent, and the screen says so. */
+  thin: boolean;
+  contact?: { phone?: string };
+}
+
 /* -------------------------------------------- CL2a: the papers as FILES you can handle -- */
 
 /**

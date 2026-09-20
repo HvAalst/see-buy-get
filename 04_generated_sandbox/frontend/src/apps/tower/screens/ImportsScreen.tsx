@@ -6,6 +6,7 @@ import { ConsoleAction } from '../ConsoleAction';
 import { ConsoleDetail } from '../ConsoleDetail';
 import { PaperFile, PaperFiles } from './PaperFile';
 import { ConsignmentNoteCard } from './ConsignmentNoteCard';
+import { ParticipantPicker } from './ParticipantPicker';
 import { SitePicker } from './SitePicker';
 import { ConsoleSelect } from '../ConsoleSelect';
 import { DOCUMENT_KINDS, DOCUMENT_LABEL, shortFingerprint, type CompanyDocument } from '../company';
@@ -29,6 +30,7 @@ import {
   type CustomsHoldKind,
   type ClearanceRecordView,
   CLEARANCE_SPECIALISMS,
+  type AgentCardView,
   CARGO_NATURES,
   liveGrants,
   outstanding,
@@ -68,7 +70,7 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
   const [detail, setDetail] = useState<ImportDetailView | null>(null);
   const [known, setKnown] = useState<KnownPaper[]>([]);
   const [form, setForm] = useState<RegisterImportForm>({ ...EMPTY_IMPORT_FORM });
-  const [agentId, setAgentId] = useState('');
+  const [picking, setPicking] = useState(false);
   const [reason, setReason] = useState('');
   const [lines, setLines] = useState<Array<{ label: string; copies: string; note: string }>>([{ label: '', copies: '', note: '' }]);
   const [pick, setPick] = useState<Record<string, string>>({});
@@ -661,26 +663,73 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                     </div>
                   </div>
                 ) : (
-                  <div class="twr-knobs__row">
-                    <label class="twr-knob cfield">
-                      <span class="cfield__label">{t('tower.imports.f.agent')}</span>
-                      <input class="cinput" value={agentId} onChange={(e) => setAgentId((e.target as HTMLInputElement).value)} />
-                    </label>
+                  <>
+                    {/*
+                      * CHOSEN FROM THE DIRECTORY, not typed. This asked for the agent's COMPANY ID —
+                      * a primary key nobody knows, obtainable only if the agent sent it to you out of
+                      * band, which is the exact gap the public finder was built to close.
+                      */}
                     <div class="twr-panelend">
-                      <button
-                        type="button"
-                        class="cbtn cbtn--primary"
-                        disabled={!agentId.trim() || busy === 'appoint'}
-                        onClick={() =>
-                          run('appoint', () => client!.api.appointClearingAgent(detail.importId, { agentEntityId: agentId.trim(), ...(who ? { by: who } : {}) }), t('tower.imports.appointed', { name: agentId.trim() }), () =>
-                            setAgentId(''),
-                          )
-                        }
-                      >
-                        {t('tower.imports.appoint')}
+                      <button type="button" class="cbtn cbtn--primary" onClick={() => setPicking(true)}>
+                        {t('tower.imports.chooseAgent')}
                       </button>
                     </div>
-                  </div>
+                    <ParticipantPicker
+                      open={picking}
+                      title={t('tower.imports.chooseAgent')}
+                      actionLabel={t('tower.imports.appoint')}
+                      onClose={() => setPicking(false)}
+                      kinds={[
+                        {
+                          key: 'agents',
+                          labelKey: 'tower.pick.agents',
+                          /*
+                           * ONE KIND, so the picker draws no tab bar. Appointing a clearing agent
+                           * accepts a company that clears and nothing else; offering drivers and shops
+                           * beside it would present four wrong answers and one right one.
+                           *
+                           * AND NO COUNTRY FILTER, which the drive argued me out of. Filtering to the
+                           * container's destination is logically right — an agent clears at the border
+                           * the goods arrive at — and it answered with NOTHING for every container in
+                           * the sandbox, because the agents are registered next door. An empty list
+                           * from a filter nobody chose is the wall again. Every row carries its own
+                           * country instead, so an importer can see who is where and decide; a
+                           * registered address is not the same thing as where somebody works.
+                           */
+                          load: async () => {
+                            const r = await (client!.api as never as { findAgents: (q: { country?: string }) => Promise<{ data?: unknown }> }).findAgents({});
+                            const got = (r.data ?? { items: [], basis: '' }) as { items: AgentCardView[]; basis: string };
+                            return {
+                              /*
+                               * THE SENTENCE, NOT THE TOKEN. This route answers `basis:
+                               * "alphabetical-never-ranked"`, which is a machine word — the public
+                               * finder screen quietly ignores it and renders its own sentence. Printing
+                               * it verbatim would put a slug in front of a reader, so this does the
+                               * same as that screen. Worth saying that it is the odd one out: every
+                               * other basis in this product (the contact card, the yard register, the
+                               * saved places, the clearance record) is a sentence the server sends so
+                               * no screen can show the figures without it.
+                               */
+                              basis: t('tower.pick.agentsBasis', { n: got.items.length, country: detail.destCountry }),
+                              rows: got.items.map((a) => ({
+                                id: a.entityId,
+                                name: a.name,
+                                ...(a.handle ? { handle: a.handle } : {}),
+                                ...(a.country ? { country: a.country } : {}),
+                                ...(a.offer?.specialisms?.length ? { says: a.offer.specialisms.map((s: string) => t(`home.agents.spec.${s}` as never)).join(', ') } : {}),
+                                seen: a.thin ? t('tower.imports.agentNew') : t('tower.imports.agentSeen', { appointed: a.appointed, cleared: a.cleared }),
+                                ...(a.contact?.phone ? { phone: a.contact.phone } : {}),
+                              })),
+                            };
+                          },
+                        },
+                      ]}
+                      onPick={(row) => {
+                        setPicking(false);
+                        void run('appoint', () => client!.api.appointClearingAgent(detail.importId, { agentEntityId: row.id, ...(who ? { by: who } : {}) }), t('tower.imports.appointed', { name: row.name }));
+                      }}
+                    />
+                  </>
                 )}
               </section>
 

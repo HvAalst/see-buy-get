@@ -276,6 +276,21 @@ export function createOperatorApi(sbg: SbgClient) {
      */
     freightNote: (freightId: string) => sbg.request((c) => c.GET('/v1/sbg/dispatch/freight/{id}/consignment-note', { params: { path: { id: freightId } } })),
 
+    /**
+     * THE AGENT DIRECTORY — public, alphabetical, and what this console should have been reading all
+     * along instead of asking an importer to type a company id.
+     *
+     * Every row carries the pair the finder exists to put side by side: what the agent CLAIMS to clear,
+     * and what we have actually seen them clear. Never a score, never an ordering — this network is the
+     * party an importer appoints through.
+     */
+    findAgents: (q: { specialism?: string; place?: string; country?: string } = {}) =>
+      sbg.request((c) =>
+        c.GET('/v1/sbg/agents/find', {
+          params: { query: { ...(q.specialism ? { specialism: q.specialism } : {}), ...(q.place ? { place: q.place } : {}), ...(q.country ? { country: q.country } : {}) } },
+        } as never),
+      ),
+
     /* ---- the places a company keeps: the ports it collects from, the addresses it delivers to ---- */
 
     /** This company-s own saved places. Nobody else-s list is reachable through this. */
