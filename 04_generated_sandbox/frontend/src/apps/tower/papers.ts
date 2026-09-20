@@ -43,12 +43,49 @@ export interface SweepRun {
   mails: number;
 }
 
+/**
+ * BL1 — one carrier's permission to move goods that have not been cleared.
+ *
+ * `state` is the same vocabulary as every other paper here, plus `withdrawn` — which is not a date
+ * running out but somebody taking it away, and is kept rather than deleted because a leg already carried
+ * under it is still a fact.
+ */
+export interface TransitAuthorityRow {
+  authorityId: string;
+  carrierDid: string;
+  carrierName?: string;
+  country: string;
+  reference: string;
+  expiresAt: string;
+  state: 'ok' | 'due' | 'lapsed' | 'withdrawn';
+  daysLeft: number;
+  recordedBy: string;
+  recordedAt: string;
+  withdrawnAt?: string;
+  withdrawnBy?: string;
+  withdrawnReason?: string;
+}
+
+export interface CarrierOption {
+  did: string;
+  name: string;
+  kind: 'fleet' | 'owner_driver';
+}
+
 export interface PapersNetworkView {
   couriers: CourierPaperRow[];
   vehicles: LooseVehicleRow[];
   fleets: { count: number; withLapsed: number; lapsed: number; due: number };
   sweep: SweepRun | null;
   sweepEveryHours: number;
+  /** BL1 — absent from a server that predates the slice; a screen must read it as empty, not as broken. */
+  transit?: TransitAuthorityRow[];
+  carriers?: CarrierOption[];
+}
+
+/** The ones that need somebody: lapsed first, then running out. Withdrawn is a decision, not a job. */
+export function transitNeedingAttention(rows: TransitAuthorityRow[] | undefined): TransitAuthorityRow[] {
+  return (rows ?? []).filter((r) => r.state === 'lapsed' || r.state === 'due');
 }
 
 export function isStuck(row: { offRoad: string[] }): boolean {

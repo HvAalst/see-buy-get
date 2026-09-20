@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy, Optional } from '@nestjs/common';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { MailService } from '../../foundation/mail/mail.service';
+import { TransitAuthorityService, type TransitAuthorityRow, type CarrierOption } from './transit-authority.service';
 import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { FleetService } from './fleet.service';
@@ -90,6 +91,17 @@ export interface PapersNetworkReport {
   fleets: { count: number; withLapsed: number; lapsed: number; due: number };
   sweep: SweepRun | null;
   sweepEveryHours: number;
+  /**
+   * BL1 — permission to move goods that have not been cleared.
+   *
+   * It lives in THIS report rather than one of its own because it is exactly what this screen is for:
+   * a paper only network staff can put right. A fleet records its own renewals in the fleet app; nobody
+   * records a customs transit licence but us, and a lapsed one silently stops a carrier being offered
+   * bonded work — which is the quietest way for a container to sit on a quay.
+   */
+  transit: TransitAuthorityRow[];
+  /** Who one can be recorded against, by NAME. Fleets, and drivers who are their own carrier. */
+  carriers: CarrierOption[];
 }
 
 const RANK: Record<PaperStatus['state'], number> = { lapsed: 0, due: 1, none: 2, ok: 3 };
@@ -120,6 +132,9 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
     private readonly fleet: FleetService,
     @Optional() private readonly notifications?: NotificationService,
     @Optional() private readonly mail?: MailService,
+    // BL1 — optional for the same reason as the two above: the specs that build this by hand keep
+    // working, and app.boot.spec is what catches it missing from the module.
+    @Optional() private readonly transit?: TransitAuthorityService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -211,7 +226,28 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
       fleets.lapsed += r.lapsed.length;
       fleets.due += r.due.length;
     }
-    return { couriers, vehicles, fleets, sweep: this.lastRun, sweepEveryHours: SWEEP_MS / 3_600_000 };
+    /*
+     * BL1 — the carriers, by name, and what each is licensed to move.
+     *
+     * A carrier is whoever CONTRACTS to carry: an active fleet, or a driver with no manager, who is their
+     * own. The same line the handle rule draws, and the only list on which a transit authority can be
+     * recorded without somebody typing a DID.
+     */
+    const carriers: CarrierOption[] = [
+      ...this.managers
+        .list()
+        .filter((m) => m.status === 'ACTIVE')
+        .map((m) => ({ did: m.did, name: m.tradingName || m.companyName, kind: 'fleet' as const })),
+      ...this.drivers
+        .list()
+        .filter((d) => !d.managerDid && d.status === 'ACTIVE')
+        .map((d) => ({ did: d.did, name: d.displayName, kind: 'owner_driver' as const })),
+    ].sort((a, b) => a.name.localeCompare(b.name));
+
+    const byDid = new Map(carriers.map((c) => [c.did, c.name]));
+    const transit = this.transit?.register((did) => byDid.get(did), now) ?? [];
+
+    return { couriers, vehicles, fleets, transit, carriers, sweep: this.lastRun, sweepEveryHours: SWEEP_MS / 3_600_000 };
   }
 
   /** Returns what the pass did. */

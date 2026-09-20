@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { DocumentStrip } from './DocumentStrip';
+import { TransitPanel } from './TransitPanel';
 import { paperLine, papersToShow, paperTone, renewalBlocker } from '../../../shared/papers';
 import { isStuck, type CourierPaperRow, type LooseVehicleRow } from '../papers';
 import type { TowerActions, TowerState } from '../useTowerApp';
@@ -43,6 +44,17 @@ export function PapersScreen({ state, actions }: { state: TowerState; actions: T
           <b>{t('tower.papers.failedTitle')}</b> — {state.error.detail || state.error.title}
         </p>
       ) : null}
+
+      {/* BL1 — who may carry uncleared goods. First, because it is the only paper here that fails in
+          complete silence: a lapsed one does not ground a truck, it just stops the offers arriving. */}
+      <TransitPanel
+        transit={r?.transit ?? []}
+        carriers={r?.carriers ?? []}
+        busyId={state.busyId ?? null}
+        atlasApi={actions.client()?.api as never}
+        onRecord={(carrier, body) => actions.recordTransitAuthority(carrier.did, body, carrier.name)}
+        onWithdraw={(carrierDid, authorityId, reason) => actions.withdrawTransitAuthority(carrierDid, authorityId, reason)}
+      />
 
       {/* The check itself — when it last looked, and a way to make it look now. */}
       <section class="cons__panel">

@@ -82,6 +82,37 @@ export function transitRefusal(
   };
 }
 
+/**
+ * One row of the register, as an operator reads it.
+ *
+ * `state` uses the SAME three words as every other paper here — ok, due within thirty days, lapsed — so
+ * a screen showing a lapsed transit licence beside a lapsed driving licence colours them identically.
+ * Derived at read time and never stored, for the reason all of them are: a date does not change, and
+ * what it MEANS changes every midnight.
+ */
+export interface TransitAuthorityRow extends TransitAuthority {
+  /** Who holds it, by name. An id on a screen is a bug — see the grants panel that printed a slug. */
+  carrierName?: string;
+  state: 'ok' | 'due' | 'lapsed' | 'withdrawn';
+  daysLeft: number;
+}
+
+/** A carrier an authority can be recorded against: a fleet, or a driver who is their own. */
+export interface CarrierOption {
+  did: string;
+  name: string;
+  kind: 'fleet' | 'owner_driver';
+}
+
+const DUE_DAYS = 30;
+
+export function transitState(a: TransitAuthority, now = Date.now()): { state: TransitAuthorityRow['state']; daysLeft: number } {
+  const daysLeft = Math.floor((dayEnd(a.expiresAt) - now) / 86_400_000);
+  if (a.withdrawnAt) return { state: 'withdrawn', daysLeft };
+  if (dayEnd(a.expiresAt) <= now) return { state: 'lapsed', daysLeft };
+  return { state: daysLeft <= DUE_DAYS ? 'due' : 'ok', daysLeft };
+}
+
 @Injectable()
 export class TransitAuthorityService {
   private readonly rows = new PersistentMap<string, TransitAuthority>('transit-authorities');
@@ -144,6 +175,20 @@ export class TransitAuthorityService {
     return [...this.rows.values()]
       .filter((a) => a.carrierDid === carrierDid)
       .sort((a, b) => b.recordedAt.localeCompare(a.recordedAt));
+  }
+
+  /**
+   * THE WHOLE REGISTER, worst first — because the reason to open this screen is that something needs
+   * putting right, and a list sorted by name buries the one lapsed licence among forty good ones.
+   *
+   * Withdrawn rows sink to the bottom rather than disappearing: somebody asking "why can this carrier no
+   * longer take bonded work" is owed the answer, and a deleted row answers nothing.
+   */
+  register(nameOf?: (carrierDid: string) => string | undefined, now = Date.now()): TransitAuthorityRow[] {
+    const RANK = { lapsed: 0, due: 1, ok: 2, withdrawn: 3 } as const;
+    return [...this.rows.values()]
+      .map((a) => ({ ...a, ...transitState(a, now), carrierName: nameOf?.(a.carrierDid) }))
+      .sort((a, b) => RANK[a.state] - RANK[b.state] || a.expiresAt.localeCompare(b.expiresAt) || (a.carrierName ?? '').localeCompare(b.carrierName ?? ''));
   }
 
   /** The one that stands today for this country, or nothing. This is the question the board asks. */

@@ -203,6 +203,8 @@ export interface TowerActions {
   recordCourierLicence(did: string, body: { number?: string; expiresAt: string }, name: string): Promise<void>;
   recordVehiclePapers(vehicleId: string, documents: { insuranceRef?: string; insuranceExpiresAt?: string; inspectionRef?: string; inspectionExpiresAt?: string }, plate: string): Promise<void>;
   runPapersSweep(): Promise<void>;
+  recordTransitAuthority(carrierDid: string, body: { country: string; reference: string; expiresAt: string }, name: string): Promise<void>;
+  withdrawTransitAuthority(carrierDid: string, authorityId: string, reason: string): Promise<void>;
   signInAsCompany(email: string, password: string): Promise<void>;
   /** A member of network staff, with an account of their own. */
   signInAsStaff(email: string, password: string): Promise<void>;
@@ -1318,6 +1320,38 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
           return;
         }
         setState((s) => ({ ...s, busyId: null, openId: null, done: t('tower.papers.vehicleDone', { plate }) }));
+        await loadPapers(client);
+      },
+      /**
+       * BL1 — record a carrier's permission to move uncleared goods.
+       *
+       * Ours to record because nobody else can: a fleet keeps its own driving licences in the fleet app,
+       * and a customs transit licence has no office but this one. A lapsed one stops a carrier being
+       * offered bonded work silently, which is the quietest way for a container to sit on a quay.
+       */
+      recordTransitAuthority: async (carrierDid: string, body: { country: string; reference: string; expiresAt: string }, name: string) => {
+        const client = clientRef.current;
+        if (!client) return;
+        setState((s) => ({ ...s, busyId: carrierDid, queueError: null, done: null }));
+        const { error } = await client.api.declareTransitAuthority(carrierDid, body);
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, openId: null, done: t('tower.papers.transitDone', { name }) }));
+        await loadPapers(client);
+      },
+      /** BL1 — take one away, always with a reason. The row stays; a carried leg is still a fact. */
+      withdrawTransitAuthority: async (carrierDid: string, authorityId: string, reason: string) => {
+        const client = clientRef.current;
+        if (!client) return;
+        setState((s) => ({ ...s, busyId: authorityId, queueError: null, done: null }));
+        const { error } = await client.api.withdrawTransitAuthority(carrierDid, authorityId, { reason });
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, openId: null, done: t('tower.papers.transitWithdrawn') }));
         await loadPapers(client);
       },
       /** FP4 — run the six-hourly check now. What it did is said, even when that is nothing. */
