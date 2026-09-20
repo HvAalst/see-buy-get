@@ -328,6 +328,32 @@ export class SupplyPaperDto {
   @IsOptional() @IsString() by?: string;
 }
 
+/** BL1 — the agent records that customs let the container go. Nothing to say but who. */
+export class ReleaseDto {
+  @IsOptional() @IsString() entityId?: string;
+  @IsOptional() @IsString() by?: string;
+}
+
+/**
+ * BL1 — a carrier's permission to move goods that have not been cleared.
+ *
+ * The country is validated for SHAPE only: two letters. Which countries exist is the catalogue's business
+ * and which are switched on is the presence ladder's, and a validator restating either would be a third
+ * copy going stale — the trap this project has now hit three times with enums.
+ */
+export class TransitAuthorityDto {
+  @IsString() carrierDid!: string;
+  @IsString() @Matches(/^[A-Za-z]{2}$/, { message: 'A transit authority runs in ONE country — give its two-letter code' }) country!: string;
+  @IsString() @MaxLength(80) reference!: string;
+  @IsString() @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'Say when it runs out, written YYYY-MM-DD' }) expiresAt!: string;
+  @IsOptional() @IsString() by?: string;
+}
+
+export class WithdrawTransitDto {
+  @IsString() @MaxLength(200) reason!: string;
+  @IsOptional() @IsString() by?: string;
+}
+
 /** CL2a — the agent ticks a paper off, or sends it back with a reason. */
 export class PaperDecisionDto {
   @IsOptional() @IsString() @MaxLength(300) reason?: string;

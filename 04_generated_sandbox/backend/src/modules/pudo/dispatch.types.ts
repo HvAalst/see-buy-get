@@ -275,6 +275,18 @@ export class Freight {
    * the driver who takes it. The weight is the box's own tare, which is painted on its door.
    */
   emptyRun?: boolean;
+  /**
+   * UNDER BOND — the goods are in the country and have not entered it.
+   *
+   * A container discharged at a coastal port and cleared inland travels the first leg before any customs
+   * entry is made: no duty has been paid, and the movement runs under a transporter's transit licence
+   * with a bond standing behind what would be owed if the box never arrived. It is a different job from
+   * the delivery that follows release, and only a carrier licensed for it may take it.
+   *
+   * `bondCountry` is where that licence has to be held, which is the country the leg runs inside.
+   */
+  bonded?: boolean;
+  bondCountry?: string;
   claimedAt?: string;
   pickedUpAt?: string;
   deliveredAt?: string;
@@ -444,6 +456,10 @@ export class BoardRow {
   /** Y2 — an empty box going home. Real work, no cargo, and it says so on the board rather than reading
    *  like freight with a suspiciously small weight. */
   emptyRun?: boolean;
+  /** BL1 — uncleared goods, carried under a transit licence. Said on the board, because a driver who
+   *  cannot take it is entitled to know that before tapping it, and one who can should see the job. */
+  bonded?: boolean;
+  bondCountry?: string;
 }
 
 /**
@@ -933,6 +949,9 @@ export class Claimable {
   /** CA6 — the country at each end of a freight, where it is known. */
   pickupCountry?: string;
   destCountry?: string;
+  /** BL1 — uncleared goods, and the country whose transit licence carrying them needs. */
+  bonded?: boolean;
+  bondCountry?: string;
   /**
    * BAGS ONLY — how many parcels are inside, and how full it is against a bag's capacity.
    *

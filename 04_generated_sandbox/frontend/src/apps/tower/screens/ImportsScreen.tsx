@@ -1026,6 +1026,37 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
             ) : null}
           </ConsoleFold>
 
+          {/*
+            * BL1 — THE RELEASE, and it is the AGENT's act because they are the one at the counter.
+            *
+            * Shown only where the chain is split, because that is the only journey with a second leg
+            * waiting on it. On a box cleared where it lands there is nothing between the quay and the
+            * door, and a button asking somebody to record a release that unlocks nothing is furniture.
+            */}
+          {detail.youAre === 'agent' && detail.dischargePort ? (
+            <ConsoleFold
+              title={t('tower.imports.releaseTitle')}
+              hint={detail.releasedAt ? t('tower.imports.releaseOn', { when: new Date(detail.releasedAt).toLocaleDateString(), who: detail.releasedBy ?? '' }) : t('tower.imports.releaseNot')}
+              defaultOpen={!detail.releasedAt}
+            >
+              <p class="cons__lede">{t('tower.imports.releaseWhy')}</p>
+              {detail.releasedAt ? (
+                <p class="chint">{t('tower.imports.releaseOn', { when: new Date(detail.releasedAt).toLocaleDateString(), who: detail.releasedBy ?? '' })}</p>
+              ) : (
+                <div class="twr-panelend">
+                  <button
+                    type="button"
+                    class="cbtn cbtn--primary"
+                    disabled={busy === 'release'}
+                    onClick={() => run('release', () => client!.api.recordImportRelease(detail.importId, { ...(who ? { by: who } : {}) }), t('tower.imports.releaseDone'))}
+                  >
+                    {t('tower.imports.releaseDo')}
+                  </button>
+                </div>
+              )}
+            </ConsoleFold>
+          ) : null}
+
           {/* ---- CL2b: the road leg, minted by a person from the port ---- */}
           {detail.youAre === 'importer' ? (
             <ConsoleFold
@@ -1034,20 +1065,48 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
             >
               <p class="cons__lede">{t('tower.imports.roadHint')}</p>
               {/*
-                * THE JOURNEY, SAID BEFORE THE LEG IS MINTED.
+                * THE JOURNEY, AND NOW BOTH OF ITS LEGS.
                 *
                 * A landlocked container is discharged at a coastal port and cleared inland: Djibouti and
                 * Modjo, not one place twice. That is TWO road legs — the bonded run to the customs
-                * station, then the delivery after release — and this screen can mint one. Saying so is
-                * the honest half-measure: the alternative is a screen that quietly mints one leg for a
-                * journey with two in it and lets somebody discover the other at a gate.
+                * station, then the delivery after release. This screen said so for three commits while
+                * being able to mint one of them, which made the sentence a promise the system could not
+                * keep. It mints both now, in order, and the second waits on the release.
                 */}
               <p class="chint">
                 {detail.dischargePort
                   ? t('tower.imports.chainSplit', { quay: detail.dischargePort, counter: detail.destPort })
                   : t('tower.imports.chainSame', { place: detail.destPort })}
               </p>
-              {detail.dischargePort && !detail.roadFreightCode ? <p class="cons__caveat">{t('tower.imports.chainOneLeg')}</p> : null}
+              {/*
+                * WHERE THE CONTAINER IS IN ITS OWN JOURNEY. Three states on a split chain and each is a
+                * different thing to do: mint the bonded run, wait for the counter, mint the delivery.
+                */}
+              {detail.dischargePort ? (
+                <div class="crows">
+                  <div class="crow">
+                    <span class="crow__body">
+                      <span class="crow__top">
+                        <span class="crow__name">{detail.bondedFreightCode ? t('tower.imports.bondedLeg', { code: detail.bondedFreightCode }) : t('tower.imports.bondedNone')}</span>
+                        {detail.bondedFreightCode ? <span class="ctag ctag--ok">{detail.dischargePort}</span> : null}
+                      </span>
+                      <span class="crow__sub">{t('tower.imports.bondedWhat')}</span>
+                    </span>
+                  </div>
+                  <div class="crow">
+                    <span class="crow__body">
+                      <span class="crow__top">
+                        <span class="crow__name">{detail.roadFreightCode ? t('tower.imports.deliveryLeg', { code: detail.roadFreightCode }) : t('tower.imports.bondedNone')}</span>
+                        {detail.releasedAt ? <span class="ctag ctag--ok">{t('tower.imports.releaseTitle')}</span> : <span class="ctag ctag--warn">{t('tower.imports.releaseNot')}</span>}
+                      </span>
+                      <span class="crow__sub">{t('tower.imports.deliveryAfter', { counter: detail.destPort })}</span>
+                    </span>
+                  </div>
+                </div>
+              ) : null}
+              {/* The importer cannot record a release and must not be left guessing why the form is not
+                  there — absence is information only when somebody says whose absence it is. */}
+              {detail.dischargePort && detail.bondedFreightCode && !detail.releasedAt ? <p class="cons__caveat">{t('tower.imports.releaseWaiting')}</p> : null}
               {detail.roadFreightCode ? null : (
                 <>
                   {/*
@@ -1104,7 +1163,7 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                         )
                       }
                     >
-                      {t('tower.imports.mintRoad')}
+                      {detail.dischargePort && !detail.bondedFreightCode ? t('tower.imports.bondedMint') : t('tower.imports.mintRoad')}
                     </button>
                   </div>
                 </>

@@ -4678,6 +4678,139 @@
         }
       }
     },
+    "/v1/sbg/imports/{importId}/released": {
+      "post": {
+        "operationId": "Sbg.recordImportRelease",
+        "summary": "",
+        "description": "BL1 — the appointed agent records that customs released the container.\n\nThe agent's, because they are the party at the counter and the only one who knows. It is what lets a\nsplit chain mint its delivery leg: before it, the box is still the state's business.",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/carriers/{carrierDid}/transit-authorities": {
+      "post": {
+        "operationId": "Sbg.declareTransitAuthority",
+        "summary": "",
+        "description": "BL1 — a carrier's permission to move uncleared goods, and the register of them.\n\nOperator-recorded. A carrier stating their own transit licence would be the only paper on this\nnetwork nobody else ever looks at, and this one decides whether somebody's uncleared cargo may be\nput on their truck — so it goes through the same desk that already records a lapsed driving licence.",
+        "parameters": [
+          {
+            "name": "carrierDid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransitAuthorityDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "Sbg.listTransitAuthorities",
+        "parameters": [
+          {
+            "name": "carrierDid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/carriers/{carrierDid}/transit-authorities/{authorityId}/withdraw": {
+      "post": {
+        "operationId": "Sbg.withdrawTransitAuthority",
+        "parameters": [
+          {
+            "name": "authorityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WithdrawTransitDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/imports/{importId}/required": {
       "post": {
         "operationId": "Sbg.publishRequiredPapers",
@@ -20368,6 +20501,26 @@
           "roadMintedBy": {
             "type": "string"
           },
+          "bondedFreightId": {
+            "type": "string",
+            "description": "BL1 — THE BONDED LEG: the quay to the counter, run before any customs entry is made.\n\nOnly a split chain has one. Where a box is discharged and cleared in the same place there is nothing\nto move under bond, and the single leg above is the delivery."
+          },
+          "bondedFreightCode": {
+            "type": "string"
+          },
+          "bondedMintedAt": {
+            "type": "string"
+          },
+          "bondedMintedBy": {
+            "type": "string"
+          },
+          "releasedAt": {
+            "type": "string",
+            "description": "BL1 — WHEN CUSTOMS LET IT GO, recorded by the agent who cleared it.\n\nNOT derived from the papers being accepted. An agent accepting a bill of lading is our record of our\nown process; a release is a state's decision about the goods, and the two can be days apart. The\ndelivery leg of a split chain waits on this, because a truck sent to a counter that has not released\nthe box is a truck sent to wait."
+          },
+          "releasedBy": {
+            "type": "string"
+          },
           "customsHolds": {
             "description": "CL4 — what the state did to this container. Absent on every consignment recorded before the slice.",
             "type": "array",
@@ -21053,6 +21206,20 @@
           "roadFreightId": {
             "type": "string"
           },
+          "bondedFreightId": {
+            "type": "string",
+            "description": "BL1 — the bonded run from the quay, where the chain is split."
+          },
+          "bondedFreightCode": {
+            "type": "string"
+          },
+          "releasedAt": {
+            "type": "string",
+            "description": "BL1 — when customs released it. Until then a split chain cannot mint its delivery leg."
+          },
+          "releasedBy": {
+            "type": "string"
+          },
           "customsHolds": {
             "description": "CL4 — what the state did, with both parties' accounts. Shown to both, and to an operator.",
             "type": "array",
@@ -21138,6 +21305,61 @@
             "type": "string"
           }
         }
+      },
+      "ReleaseDto": {
+        "type": "object",
+        "properties": {
+          "entityId": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        }
+      },
+      "TransitAuthorityDto": {
+        "type": "object",
+        "properties": {
+          "carrierDid": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string",
+            "pattern": "/^[A-Za-z]{2}$/"
+          },
+          "reference": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "expiresAt": {
+            "type": "string",
+            "pattern": "/^\\d{4}-\\d{2}-\\d{2}$/"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "carrierDid",
+          "country",
+          "reference",
+          "expiresAt"
+        ]
+      },
+      "WithdrawTransitDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ]
       },
       "RequiredPaperItemDto": {
         "type": "object",
@@ -26976,6 +27198,13 @@
             "type": "boolean",
             "description": "TRUE WHERE THERE IS NOTHING IN IT — an empty container being repositioned.\n\nSaid out loud rather than inferred from a small weight, and never dressed up as freight: an empty run\nis real work with no cargo to bill, and a board that quietly published it as a load would be lying to\nthe driver who takes it. The weight is the box's own tare, which is painted on its door."
           },
+          "bonded": {
+            "type": "boolean",
+            "description": "UNDER BOND — the goods are in the country and have not entered it.\n\nA container discharged at a coastal port and cleared inland travels the first leg before any customs\nentry is made: no duty has been paid, and the movement runs under a transporter's transit licence\nwith a bond standing behind what would be owed if the box never arrived. It is a different job from\nthe delivery that follows release, and only a carrier licensed for it may take it.\n\n`bondCountry` is where that licence has to be held, which is the country the leg runs inside."
+          },
+          "bondCountry": {
+            "type": "string"
+          },
           "claimedAt": {
             "type": "string"
           },
@@ -28278,6 +28507,13 @@
           "emptyRun": {
             "type": "boolean",
             "description": "Y2 — an empty box going home. Real work, no cargo, and it says so on the board rather than reading\n like freight with a suspiciously small weight."
+          },
+          "bonded": {
+            "type": "boolean",
+            "description": "BL1 — uncleared goods, carried under a transit licence. Said on the board, because a driver who\n cannot take it is entitled to know that before tapping it, and one who can should see the job."
+          },
+          "bondCountry": {
+            "type": "string"
           }
         },
         "required": [

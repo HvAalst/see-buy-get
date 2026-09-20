@@ -581,6 +581,28 @@ export class ImportConsignment {
   @ApiPropertyOptional() roadMintedAt?: string;
   @ApiPropertyOptional() roadMintedBy?: string;
 
+  /**
+   * BL1 — THE BONDED LEG: the quay to the counter, run before any customs entry is made.
+   *
+   * Only a split chain has one. Where a box is discharged and cleared in the same place there is nothing
+   * to move under bond, and the single leg above is the delivery.
+   */
+  @ApiPropertyOptional() bondedFreightId?: string;
+  @ApiPropertyOptional() bondedFreightCode?: string;
+  @ApiPropertyOptional() bondedMintedAt?: string;
+  @ApiPropertyOptional() bondedMintedBy?: string;
+
+  /**
+   * BL1 — WHEN CUSTOMS LET IT GO, recorded by the agent who cleared it.
+   *
+   * NOT derived from the papers being accepted. An agent accepting a bill of lading is our record of our
+   * own process; a release is a state's decision about the goods, and the two can be days apart. The
+   * delivery leg of a split chain waits on this, because a truck sent to a counter that has not released
+   * the box is a truck sent to wait.
+   */
+  @ApiPropertyOptional() releasedAt?: string;
+  @ApiPropertyOptional() releasedBy?: string;
+
   /** CL4 — what the state did to this container. Absent on every consignment recorded before the slice. */
   @ApiPropertyOptional({ type: [CustomsHold] }) customsHolds?: CustomsHold[];
 
@@ -675,6 +697,12 @@ export class ImportDetail extends ImportRow {
   /** CL2b — whether the money can run here at all, said before anybody starts assembling it. */
   @ApiProperty() money: MoneyHere;
   @ApiPropertyOptional() roadFreightId?: string;
+  /** BL1 — the bonded run from the quay, where the chain is split. */
+  @ApiPropertyOptional() bondedFreightId?: string;
+  @ApiPropertyOptional() bondedFreightCode?: string;
+  /** BL1 — when customs released it. Until then a split chain cannot mint its delivery leg. */
+  @ApiPropertyOptional() releasedAt?: string;
+  @ApiPropertyOptional() releasedBy?: string;
   /** CL4 — what the state did, with both parties' accounts. Shown to both, and to an operator. */
   @ApiProperty({ type: [CustomsHold] }) customsHolds: CustomsHold[];
   /**

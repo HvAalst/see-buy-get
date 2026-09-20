@@ -108,6 +108,13 @@ export function blockersFor(
   // Judged first and alone: with no vehicle there is nothing to judge the rest against, and inventing
   // capability failures for a vehicle that does not exist would be noise, not information.
   if (!vehicle) {
+    /*
+     * BL1 — EXCEPT WHAT IS TRUE WITHOUT A LORRY. A carrier-s transit authority is not a property of a
+     * vehicle: it is held by whoever contracts to carry, and it is just as absent standing in a yard
+     * with nothing coupled. Sending somebody to couple a truck so they can discover they needed a
+     * licence is a wasted trip, which is the opposite of what this board is for.
+     */
+    out.push(...(ctx.routeBlockers ?? []).filter((b) => b.code === 'NO_TRANSIT_AUTHORITY'));
     out.push({ kind: 'resolvable', code: 'NO_VEHICLE', message: 'Couple to a vehicle to see whether you can take this' });
     return out;
   }

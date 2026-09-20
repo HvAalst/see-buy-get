@@ -55,7 +55,13 @@ export class BorderAdvice {
   @ApiPropertyOptional() note?: string;
 }
 
-export type BorderRefusalCode = 'CABOTAGE_NOT_PERMITTED' | 'OVER_BORDER_WEIGHT_LIMIT';
+/**
+ * BL1 adds NO_TRANSIT_AUTHORITY. It sits in this union because it is the same KIND of thing — something
+ * the law forbids this carrier, asked again at every take point — but it is emphatically not cabotage:
+ * cabotage is about whose plates may work inside a country, and this is about whether goods that have
+ * not been cleared may move at all.
+ */
+export type BorderRefusalCode = 'CABOTAGE_NOT_PERMITTED' | 'OVER_BORDER_WEIGHT_LIMIT' | 'NO_TRANSIT_AUTHORITY';
 
 export interface BorderRefusal {
   code: BorderRefusalCode;

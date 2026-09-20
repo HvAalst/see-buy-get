@@ -86,6 +86,12 @@ export interface ImportDetailView extends ImportRow {
   /** CL2b — whether the money can run here at all. Shown at the START, never saved for a failure. */
   money: MoneyHere;
   roadFreightId?: string;
+  /** BL1 — the bonded run from the quay, on a split chain. Absent where the box clears where it lands. */
+  bondedFreightId?: string;
+  bondedFreightCode?: string;
+  /** BL1 — when customs let it go. The delivery leg of a split chain waits on this. */
+  releasedAt?: string;
+  releasedBy?: string;
   /** CL4 — what the state did to this container, with both parties' accounts. Shown to both of them. */
   customsHolds: CustomsHoldView[];
   /**

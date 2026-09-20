@@ -1,4 +1,5 @@
 ﻿import { Inject, Injectable, Optional } from '@nestjs/common';
+import { TransitAuthorityService, transitRefusal } from './transit-authority.service';
 import { BorderRuleService } from './border-rules.service';
 import type { BorderAdvice, BorderRefusal } from './border-rules.types';
 import { GlosError } from '../../foundation/http/glos-error';
@@ -333,6 +334,9 @@ export class DispatchService {
     // CA6 — the rules of crossing a border. Optional so the many specs that build dispatch by hand keep working;
     // the app always provides it, and app.boot.spec is what would catch it missing.
     @Optional() private readonly borders?: BorderRuleService,
+    // BL1 — who may move uncleared goods. Optional for the same reason as borders above: the specs that
+    // build dispatch by hand keep working, and app.boot.spec is what catches it missing from the module.
+    @Optional() private readonly transit?: TransitAuthorityService,
   ) {
     this.freightSeq = [...this.freights.values()].length; // continue the human FRT-NNN sequence after a restart
   }
@@ -395,7 +399,7 @@ export class DispatchService {
     return { code: t.code, status: t.status };
   }
 
-  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean }, now: number = Date.now()): Freight {
+  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string }, now: number = Date.now()): Freight {
     this.freightSeq += 1;
     // A future pickup date parks the load for later; a past/absent date ships now. A supplied-but-unparseable
     // date is a CALLER ERROR — fail closed (never silently ship-now what was meant to be scheduled). Store the
@@ -491,6 +495,9 @@ export class DispatchService {
       // Y2 — a box going home is a load whose subject is the CONTAINER, and an empty one says so.
       ...(input.containerNo ? { containerNo: input.containerNo } : {}),
       ...(input.emptyRun ? { emptyRun: true } : {}),
+      // BL1 — uncleared goods. The country defaults to the leg's own, because a bond is held where the
+      // wheels turn; it is stated separately only so a caller cannot quietly mean a different one.
+      ...(input.bonded ? { bonded: true, bondCountry: (input.bondCountry ?? input.pickupCountry ?? '').toUpperCase() } : {}),
       // FP7 — box 13 at posting, when the poster said anything.
       ...(instructionsOf({ text: input.instructions, contactName: input.contactName, contactPhone: input.contactPhone, deliveryWindow: input.deliveryWindow }, input.postedByDid, now) ?? {}),
       // S34c — a positive, finite cap only; a zero/negative/NaN budget is treated as "no cap" (never a load
@@ -634,7 +641,7 @@ export class DispatchService {
     const matches = this.availableLoads()
       .filter((load) => !(freightBarred && load.kind === 'freight'))
       .map((load) => ({ load, detour: this.router.detourKm(route.from, load.pickupLocation, route.to), minutesAway: this.minutes(route.from, load.pickupLocation) }))
-      .filter(({ load, detour, minutesAway }) => detour <= DISPATCH_MAX_DETOUR_KM && minutesAway <= DISPATCH_MAX_PICKUP_MIN && this.vehicleCanCarry(vehicle, load, remaining, remainingTotes) && this.borderRefusals(vehicle, driverDid, load).length === 0)
+      .filter(({ load, detour, minutesAway }) => detour <= DISPATCH_MAX_DETOUR_KM && minutesAway <= DISPATCH_MAX_PICKUP_MIN && this.vehicleCanCarry(vehicle, load, remaining, remainingTotes) && this.borderRefusals(vehicle, driverDid, load).length === 0 && !this.bondRefusal(driverDid, load))
       .sort((a, b) => a.detour - b.detour || a.minutesAway - b.minutesAway);
 
     const out: Offer[] = [];
@@ -1232,8 +1239,17 @@ export class DispatchService {
             grossWeightKg: f.weightKg,
             hazmat: (f.requiredCapabilities ?? []).includes('hazmat'),
           }).concat(
-            // CA6 — what the law says about this vehicle carrying this load, marked like any other reason it cannot.
-            vehicle && input.driverDid ? this.borderRefusals(vehicle, input.driverDid, this.wrapFreight(f)).map((r) => ({ kind: 'physical' as const, code: r.code, message: r.message })) : [],
+            // CA6 — what the law says about this vehicle carrying this load, marked like any other reason it
+            // cannot. The BORDER half needs the vehicle (cabotage is about the plates, a limit about the
+            // axles); the BOND half is about the carrier and is asked whether or not anything is coupled.
+            (input.driverDid
+              ? [...(vehicle ? this.borderRefusals(vehicle, input.driverDid, this.wrapFreight(f)) : []), ...(this.bondRefusal(input.driverDid, this.wrapFreight(f)) ? [this.bondRefusal(input.driverDid, this.wrapFreight(f))!] : [])]
+              : []
+            ).map((r) => ({
+                  kind: 'physical' as const,
+                  code: r.code,
+                  message: r.message,
+                })),
           ),
         },
       );
@@ -1266,6 +1282,9 @@ export class DispatchService {
         // both: an empty box is real work with no cargo, and the tare is why a bike cannot take it.
         ...(f.containerNo ? { containerNo: f.containerNo } : {}),
         ...(f.emptyRun ? { emptyRun: true } : {}),
+        // BL1 — said on the board, because a driver who cannot take it is entitled to know why before
+        // tapping it, and one who has just been licensed should see the work that licence is for.
+        ...(f.bonded ? { bonded: true, bondCountry: f.bondCountry } : {}),
       });
     }
 
@@ -2346,7 +2365,7 @@ export class DispatchService {
   private wrapFreight(f: Freight): Claimable {
     // S32: freight now carries its cargo model, so it matches vehicles on capability AND equipment like a tote.
     // S32b: status lets the driver app drive the claimed → picked-up → delivered flow in-app.
-    return { kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}) };
+    return { kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}) };
   }
 
   /** CA6 — why the law does not let this vehicle carry this load (cabotage, a crossing's weight limit). Empty = it may. */
@@ -2355,10 +2374,51 @@ export class DispatchService {
     return this.borders.refusalsFor(load, this.drivers.homeCountryOf(driverDid, vehicle.managerDid));
   }
 
+  /**
+   * BL1 — WHO IS THE CARRIER? The fleet where there is one, the driver themselves where there is not.
+   *
+   * The same line the handle rule draws and the same line `settlingEntityIdOf` draws when deciding who
+   * gets paid: the network contracts with the fleet, or with the owner-driver. A transit licence is held
+   * by whoever contracts to carry, so it is asked of the same party.
+   */
+  private carrierDidOf(driverDid: string): string {
+    try {
+      return this.drivers.get(driverDid).managerDid ?? driverDid;
+    } catch {
+      return driverDid;
+    }
+  }
+
+  /**
+   * BL1 — why this carrier may not move uncleared goods. Undefined = they may, or it is not bonded.
+   *
+   * Shaped as a BorderRefusal on purpose: it belongs to the same family as cabotage and a crossing's
+   * weight limit — something the LAW forbids, asked again at every take point, and said in a sentence
+   * rather than as a code somebody has to interpret. The user's line was "not closing an eye and wait
+   * for trouble", and the trouble here is a truck turning up at a bonded gate without a licence.
+   */
+  private bondRefusal(driverDid: string, load: Claimable): BorderRefusal | undefined {
+    if (load.kind !== 'freight') return undefined;
+    /*
+     * READ OFF THE RECORD, NEVER OFF THE WRAPPER. `Claimable` is built field by field by `wrapFreight`,
+     * and the first version of this asked it for `bonded` — a field that copy did not carry, so the gate
+     * was dead and every test still passed. The freight itself cannot forget to copy something to itself.
+     */
+    const freight = this.freights.get(load.ref);
+    if (!freight) return undefined;
+    const carrier = this.carrierDidOf(driverDid);
+    return transitRefusal(freight, (country) => this.transit?.permits(carrier, country) ?? false);
+  }
+
   /** CA6 — asked again at every point a load is taken, because coupling (and so the vehicle's country) can change. */
   private requireBorderAllows(vehicle: Vehicle, driverDid: string, kind: ClaimableKind, ref: string): void {
     if (kind !== 'freight') return;
-    const refusal = this.borderRefusals(vehicle, driverDid, this.wrapFreight(this.requireFreight(ref)))[0];
+    const load = this.wrapFreight(this.requireFreight(ref));
+    // BL1 first: it is the more specific refusal, and hearing "you need a transit authority" is more use
+    // than hearing about cabotage on a leg that never leaves the country.
+    const bond = this.bondRefusal(driverDid, load);
+    if (bond) throw new GlosError('FORBIDDEN', bond.message);
+    const refusal = this.borderRefusals(vehicle, driverDid, load)[0];
     if (refusal) throw new GlosError('FORBIDDEN', refusal.message);
   }
 

@@ -526,6 +526,23 @@ export const enTower = {
   'tower.imports.fold.holdsNone': 'None',
   'tower.imports.fold.holdsClear': 'All released',
 
+  // BL1 — the two legs of a split chain, and the release between them.
+  'tower.imports.bondedLeg': 'The bonded run: {code}',
+  'tower.imports.bondedNone': 'Not minted yet',
+  'tower.imports.bondedWhat':
+    'From the quay to the customs station, before any entry is made. The goods are in the country and have not entered it, so only a carrier holding a transit authority here is offered this load.',
+  'tower.imports.bondedMint': 'Mint the bonded run',
+  'tower.imports.deliveryLeg': 'The delivery: {code}',
+  'tower.imports.deliveryAfter': 'After customs release it, from {counter} to where it is going.',
+  'tower.imports.releaseTitle': 'Customs released it',
+  'tower.imports.releaseOn': 'Released {when}, recorded by {who}.',
+  'tower.imports.releaseNot': 'Not released yet. The delivery leg waits on this.',
+  'tower.imports.releaseDo': 'Record the release',
+  'tower.imports.releaseWhy':
+    'Yours to record, because you are the party at the counter. It is not taken from the papers being accepted — that is our process finishing, and a release is the state letting the box go.',
+  'tower.imports.releaseDone': 'Recorded. The delivery leg can be minted now.',
+  'tower.imports.releaseWaiting': 'Waiting on the agent to record that customs released it.',
+
   'tower.imports.requiredTitle': 'What this container needs',
   'tower.imports.requiredNone': 'The agent has not published a list yet.',
   'tower.imports.requiredNoAgent': 'Appoint an agent and they will publish what they need.',

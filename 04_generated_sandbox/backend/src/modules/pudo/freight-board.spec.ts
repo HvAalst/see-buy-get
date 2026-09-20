@@ -8,6 +8,16 @@ const ok = { remainingKg: 10_000, ratingBelowFloor: false };
 const codes = (bs: { code: string }[]) => bs.map((b) => b.code);
 
 describe('blockersFor (FB1)', () => {
+  it('with no vehicle says so — and still says what a lorry would not have fixed', () => {
+    // A carrier's transit authority is not a property of a vehicle. Sending somebody to couple a truck
+    // so they can then discover they needed a licence is a wasted trip.
+    const licence = { kind: 'legal' as const, code: 'NO_TRANSIT_AUTHORITY', message: 'needs a transit authority for ET' };
+    const bs = blockersFor(load(), null, { ...ok, routeBlockers: [licence] });
+    expect(codes(bs)).toEqual(['NO_TRANSIT_AUTHORITY', 'NO_VEHICLE']);
+    // Everything else still waits for something to judge it against.
+    expect(codes(blockersFor(load({ weightKg: 99999 }), null, ok))).toEqual(['NO_VEHICLE']);
+  });
+
   it('says nothing when the driver can simply take it', () => {
     expect(blockersFor(load(), truck(), ok)).toEqual([]);
     expect(takeable([])).toBe(true);

@@ -275,6 +275,24 @@ export function createOperatorApi(sbg: SbgClient) {
     supplyRequiredPaper: (importId: string, body: { key: string; documentId: string; entityId?: string; by?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/supply', { params: { path: { importId } }, body: body as never })),
 
+    /**
+     * BL1 — the appointed agent records that customs released the container.
+     *
+     * Theirs because they are the party at the counter. It is what lets a split chain mint its delivery
+     * leg: before it, the box is still the state's business and a truck sent for it is a truck waiting.
+     */
+    recordImportRelease: (importId: string, body: { entityId?: string; by?: string } = {}) =>
+      sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/released', { params: { path: { importId } }, body: body as never })),
+
+    /** BL1 — a carrier's permission to move uncleared goods, and the register of them. */
+    transitAuthorities: (carrierDid: string) => sbg.request((c) => c.GET('/v1/sbg/carriers/{carrierDid}/transit-authorities', { params: { path: { carrierDid } } })),
+
+    declareTransitAuthority: (carrierDid: string, body: { country: string; reference: string; expiresAt: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/carriers/{carrierDid}/transit-authorities', { params: { path: { carrierDid } }, body: { carrierDid, ...body } as never })),
+
+    withdrawTransitAuthority: (carrierDid: string, authorityId: string, body: { reason: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/carriers/{carrierDid}/transit-authorities/{authorityId}/withdraw', { params: { path: { carrierDid, authorityId } }, body: body as never })),
+
     /** The agent ticks one off. An expired paper is refused here, not at the counter. */
     acceptRequiredPaper: (importId: string, key: string, body: { entityId?: string; by?: string } = {}) =>
       sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/required/{key}/accept', { params: { path: { importId, key } }, body: body as never })),

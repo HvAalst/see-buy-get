@@ -1279,8 +1279,33 @@ export class ImportService {
   ): ImportDetail {
     const consignment = this.requireImport(importId);
     this.requireImporter(consignment, actorEntityId);
-    if (consignment.roadFreightId) {
+    /*
+     * BL1 — WHICH LEG IS THIS? The chain decides, not the caller.
+     *
+     * A box discharged and cleared in the same place makes one journey: the port to the door, after it
+     * has been cleared. A box discharged at Djibouti and cleared at Modjo makes TWO, and the first of
+     * them runs before any customs entry exists — inside the country, not yet entered, no duty paid.
+     * That is a different job with a different permission, so it is a different leg and it says so.
+     *
+     * The screen has been telling people this since the chain was split. Until now it could only mint
+     * one leg, which made the sentence a promise the system could not keep.
+     */
+    const split = Boolean(consignment.dischargePort?.trim());
+    const bondedNow = split && !consignment.bondedFreightId;
+
+    if (bondedNow && consignment.roadFreightId) {
+      throw new GlosError('INVALID_STATE', `${consignment.code} already has its delivery leg — the bonded run comes first, not after`);
+    }
+    if (!bondedNow && consignment.roadFreightId) {
       throw new GlosError('CONFLICT', `${consignment.code} already has a road leg (${consignment.roadFreightCode}) — a second one would send two trucks for one container`);
+    }
+    if (!bondedNow && split && !consignment.releasedAt) {
+      // A truck sent to a counter that has not released the box is a truck sent to wait, and somebody
+      // pays for that waiting. The agent says when it was let go; until then there is nothing to collect.
+      throw new GlosError(
+        'INVALID_STATE',
+        `${consignment.code} has not been released at ${consignment.destPort} yet. The agent records the release, and then the delivery leg can be minted.`,
+      );
     }
     if (!(input.weightKg > 0)) throw new GlosError('VALIDATION_FAILED', 'Say what the load weighs');
     if (!input.destLabel?.trim()) throw new GlosError('FIELD_REQUIRED', 'Say where the container is going');
@@ -1344,18 +1369,21 @@ export class ImportService {
         // leg that got it there is not ours and is not modelled.
         pickupCountry: consignment.destCountry,
         destCountry: consignment.destCountry,
+        // BL1 — and on the first leg of a split chain, the goods have not been cleared. The board asks
+        // for a transit authority in this country before it offers the load to anybody.
+        ...(bondedNow ? { bonded: true, bondCountry: consignment.destCountry } : {}),
         postedByDid: importer.did,
         // No shipperDid, deliberately — see the note above.
         externalOrderId: consignment.code,
       },
       now,
     );
-    Object.assign(consignment, {
-      roadFreightId: freight.freightId,
-      roadFreightCode: freight.code,
-      roadMintedAt: new Date(now).toISOString(),
-      roadMintedBy: by,
-    });
+    Object.assign(
+      consignment,
+      bondedNow
+        ? { bondedFreightId: freight.freightId, bondedFreightCode: freight.code, bondedMintedAt: new Date(now).toISOString(), bondedMintedBy: by }
+        : { roadFreightId: freight.freightId, roadFreightCode: freight.code, roadMintedAt: new Date(now).toISOString(), roadMintedBy: by },
+    );
     this.imports.set(consignment.importId, consignment);
     /*
      * Y1 — THE LEG WE MINT IS WHAT STARTS THE CLOCK, and now that is true in code rather than in prose.
@@ -1365,8 +1393,36 @@ export class ImportService {
      * long ago the paperwork was done, and a typed gate date would have been wrong in exactly the cases
      * that matter.
      */
-    if (consignment.containerNo) {
+    /*
+     * Y1 — the leg that takes it off the QUAY is the one the clock keys to, and on a split chain that is
+     * the bonded run. The delivery leg minted weeks later must not restart a clock that has been running
+     * since the box left the terminal.
+     */
+    if (consignment.containerNo && (bondedNow || !consignment.bondedFreightId)) {
       this.boxes.see(consignment.containerNo, { importId: consignment.importId, roadFreightId: freight.freightId }, now);
+    }
+    return this.detail(consignment.importId, actorEntityId);
+  }
+
+  /**
+   * BL1 — THE AGENT SAYS CUSTOMS LET IT GO.
+   *
+   * The one act that separates a bonded run from a delivery, and it is the AGENT's: they are the party at
+   * the counter, and they are the only one who knows. Recorded against their name with the moment, and
+   * not derived from anything — accepting the last paper on our own list is our process finishing, which
+   * is not the same event and can be days earlier.
+   *
+   * Idempotent: saying it twice is somebody making sure, not a second release.
+   */
+  recordRelease(importId: string, actorEntityId: string, by: string, now = Date.now()): ImportDetail {
+    const consignment = this.requireImport(importId);
+    if (consignment.agentEntityId !== actorEntityId) {
+      throw new GlosError('FORBIDDEN', 'Only the appointed clearing agent can record that customs released this container');
+    }
+    if (!by?.trim()) throw new GlosError('FIELD_REQUIRED', 'Say who is recording the release');
+    if (!consignment.releasedAt) {
+      Object.assign(consignment, { releasedAt: new Date(now).toISOString(), releasedBy: by.trim() });
+      this.imports.set(consignment.importId, consignment);
     }
     return this.detail(consignment.importId, actorEntityId);
   }
@@ -1487,6 +1543,8 @@ export class ImportService {
             : 0,
       feeState: feeStateOf(consignment.fee),
       ...(consignment.roadFreightCode ? { roadFreightCode: consignment.roadFreightCode } : {}),
+      ...(consignment.bondedFreightId ? { bondedFreightId: consignment.bondedFreightId, bondedFreightCode: consignment.bondedFreightCode } : {}),
+      ...(consignment.releasedAt ? { releasedAt: consignment.releasedAt, releasedBy: consignment.releasedBy } : {}),
       createdAt: consignment.createdAt,
     };
   }

@@ -2,6 +2,7 @@
 import { PapersWatchService } from './papers-watch.service';
 import { ConsignmentNoteService } from './consignment-note.service';
 import { SiteService, SITE_BASIS, type Site } from './site.service';
+import { TransitAuthorityService, TRANSIT_BASIS } from './transit-authority.service';
 import { MailService } from '../../foundation/mail/mail.service';
 import { isSandbox } from '../../foundation/runtime/sandbox';
 import { Body, Controller, Delete, Get, Header, Inject, Param, Patch, Post, Query, Res, StreamableFile, Optional } from '@nestjs/common';
@@ -69,6 +70,9 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   AppointAgentDto,
   RevokeAgentDto,
   PublishRequiredDto,
+  ReleaseDto,
+  TransitAuthorityDto,
+  WithdrawTransitDto,
   SupplyPaperDto,
   PaperDecisionDto,
   KnownPapersQueryDto,
@@ -174,6 +178,7 @@ export class SbgController {
     private readonly handleDirectory: HandleDirectory,
     private readonly imports: ImportService,
     private readonly sites: SiteService,
+    private readonly transit: TransitAuthorityService,
     private readonly readiness: CompanyReadinessService,
     private readonly borderRules: BorderRuleService,
     private readonly entityAdmins: EntityAdminService,
@@ -802,6 +807,43 @@ export class SbgController {
   @Post('imports/:importId/revoke')
   revokeClearingAgent(@Param('importId') importId: string, @Body() dto: RevokeAgentDto, @Actor() actor: IntrospectionResult): ImportDetail {
     return this.imports.revoke(importId, this.actingCompany(actor, dto.entityId), this.namedActor(actor, dto.by), dto.reason);
+  }
+
+  /**
+   * BL1 — the appointed agent records that customs released the container.
+   *
+   * The agent's, because they are the party at the counter and the only one who knows. It is what lets a
+   * split chain mint its delivery leg: before it, the box is still the state's business.
+   */
+  @Roles('operator', 'entity_admin')
+  @Post('imports/:importId/released')
+  recordImportRelease(@Param('importId') importId: string, @Body() dto: ReleaseDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    return this.imports.recordRelease(importId, this.actingCompany(actor, dto.entityId), this.namedActor(actor, dto.by));
+  }
+
+  /**
+   * BL1 — a carrier's permission to move uncleared goods, and the register of them.
+   *
+   * Operator-recorded. A carrier stating their own transit licence would be the only paper on this
+   * network nobody else ever looks at, and this one decides whether somebody's uncleared cargo may be
+   * put on their truck — so it goes through the same desk that already records a lapsed driving licence.
+   */
+  @Roles('operator')
+  @Post('carriers/:carrierDid/transit-authorities')
+  declareTransitAuthority(@Param('carrierDid') carrierDid: string, @Body() dto: TransitAuthorityDto, @Actor() actor: IntrospectionResult) {
+    return this.transit.declare({ carrierDid, country: dto.country, reference: dto.reference, expiresAt: dto.expiresAt }, this.namedActor(actor, dto.by));
+  }
+
+  @Roles('operator', 'entity_admin')
+  @Get('carriers/:carrierDid/transit-authorities')
+  listTransitAuthorities(@Param('carrierDid') carrierDid: string) {
+    return { items: this.transit.list(carrierDid), basis: TRANSIT_BASIS };
+  }
+
+  @Roles('operator')
+  @Post('carriers/:carrierDid/transit-authorities/:authorityId/withdraw')
+  withdrawTransitAuthority(@Param('authorityId') authorityId: string, @Body() dto: WithdrawTransitDto, @Actor() actor: IntrospectionResult) {
+    return this.transit.withdraw(authorityId, this.namedActor(actor, dto.by), dto.reason);
   }
 
   /** The agent publishes what they will need. We never assert this list — see the service. */
