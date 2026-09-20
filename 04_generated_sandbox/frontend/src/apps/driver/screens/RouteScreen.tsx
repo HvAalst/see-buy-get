@@ -3,6 +3,7 @@ import { useT, type Translate } from '../../../shared/i18n';
 import { MAX_WORK_RADIUS_KM } from '../logic';
 import { CUSTOM_PLACE, type CustomPlace, type DriverActions, type DriverState } from '../useDriverApp';
 import { RoadSection } from './RoadSection';
+import { CounterSection } from './CounterSection';
 
 export interface RouteScreenProps {
   state: DriverState;
@@ -130,6 +131,9 @@ export function RouteScreen({ state, actions }: RouteScreenProps) {
       {/* Below the search, in both modes. Whichever way this driver is looking for work, they are about to
           drive a road — and the map of it only exists because the people driving it report it. */}
       <RoadSection state={state} actions={actions} />
+      {/* CL5 — the counter beside the road. The same argument in a different building: nobody publishes
+          what either will demand this month, so the people who meet them write it down. */}
+      <CounterSection state={state} actions={actions} />
     </div>
   );
 }

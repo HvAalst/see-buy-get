@@ -26,11 +26,18 @@ export const MEDIA_KINDS = [
    * adds beside them — the importer who says the hole was there before, the agent who says it was not.
    */
   'interchange',
+  /**
+   * CL5 — a photograph of an OFFICIAL DOCUMENT somebody was asked for at a counter.
+   *
+   * The one kind of image on this network that two gates stand in front of: the country's, and the
+   * person's. See FieldObservationService for both, and for why neither substitutes for the other.
+   */
+  'field_evidence',
 ] as const;
 
 export type MediaKind = (typeof MEDIA_KINDS)[number];
 
-export type RetentionClass = 'shipment-proof' | 'dispute-evidence' | 'account-doc' | 'vehicle-asset' | 'road-report';
+export type RetentionClass = 'shipment-proof' | 'dispute-evidence' | 'account-doc' | 'vehicle-asset' | 'road-report' | 'field-evidence';
 export type MediaStatus = 'active' | 'expired';
 
 /** What a media item is attached to — drives who may see it and when its retention clock starts. */
@@ -79,6 +86,21 @@ export const RETENTION_DAYS: Record<RetentionClass, number> = {
   // decision somebody may have to review. Nothing here expires on a timer, because time passing is not
   // evidence that a bridge came down.
   'road-report': 180,
+  /**
+   * CL5 — AND THIS ONE'S CLOCK STARTS AT UPLOAD, which no other bin's does.
+   *
+   * Every other class waits for a lifecycle event because time passing is not evidence: a bridge does not
+   * come back up because 180 days elapsed. A field observation has no such event. It is dated knowledge
+   * that stays useful for years, and if its photograph waited for something to finish it would be kept
+   * for ever — an accumulating archive of other people's customs paperwork, which is the precise thing
+   * this slice exists to prevent.
+   *
+   * So the PHOTOGRAPH is corroboration with a short life and the OBSERVATION outlives it. Ninety days is
+   * long enough for somebody reviewing a surprise at a border to look at what was actually handed over,
+   * and short enough that we are not a document archive. When the bytes go the words remain, which is
+   * the same shape as an operator stripping a photograph off by hand.
+   */
+  'field-evidence': 90,
 };
 
 /** The bin a kind lands in. */
@@ -99,6 +121,7 @@ export const KIND_RETENTION: Record<MediaKind, RetentionClass> = {
   // An argument about who put the hole in somebody else's container is a dispute about money, and its
   // evidence is kept on the dispute clock rather than the shipment one.
   interchange: 'dispute-evidence',
+  field_evidence: 'field-evidence',
 };
 
 /** Only real raster image types — no SVG (it can carry script), no arbitrary bytes. */

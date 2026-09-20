@@ -78,6 +78,17 @@ export class MediaService implements OnApplicationBootstrap, OnModuleDestroy {
       createdAt: new Date().toISOString(),
       status: 'active',
     };
+    /*
+     * CL5 — THE ONE BIN WHOSE CLOCK STARTS HERE.
+     *
+     * Every other class is anchored by a lifecycle event, because time passing is not evidence that
+     * anything changed. A field observation has no such event — it is dated knowledge that stays useful
+     * for years — so a photograph waiting for one would be kept for ever, and an archive of other
+     * people's customs paperwork is the precise thing this slice exists to prevent.
+     */
+    if (ref.retentionClass === 'field-evidence') {
+      ref.expiresAt = new Date(Date.parse(ref.createdAt) + RETENTION_DAYS['field-evidence'] * DAY_MS).toISOString();
+    }
     this.refs.set(mediaId, ref);
     return { mediaId };
   }

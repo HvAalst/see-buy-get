@@ -174,6 +174,34 @@ export function createDriverApi(sbg: SbgClient) {
     reportRoad: (body: { kind: string; at: { lat: number; lng: number }; value?: number; note?: string; photoRef?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/route-constraints', { body: body as never })),
 
+    /**
+     * CL5 — MAY A PHOTOGRAPH BE KEPT IN THIS COUNTRY, AND WHAT MUST BE AGREED TO FIRST?
+     *
+     * Asked BEFORE the camera is offered. The notice comes back with the answer so the screen never keeps
+     * its own copy of a consent text — that is how two versions of one start existing, and only one of
+     * them was ever agreed to.
+     */
+    observationNotice: (country: string) => sbg.request((c) => c.GET('/v1/sbg/field-observations/notice', { params: { query: { country } } as never })),
+
+    /** CL5 — what you were asked for at a counter. First-hand or refused, at the server and on the form. */
+    recordObservation: (body: {
+      country: string;
+      place: string;
+      subject: string;
+      note?: string;
+      happenedOn: string;
+      firstHand: boolean;
+      evidenceMediaId?: string;
+      consentAgreed?: boolean;
+      consentNoticeVersion?: string;
+    }) => sbg.request((c) => c.POST('/v1/sbg/field-observations', { body: body as never })),
+
+    /** The atlas — public, and the only honest way to ask "which country" of somebody at a border. */
+    countryCatalogue: () => sbg.request((c) => c.GET('/v1/sbg/country-catalogue', {})),
+
+    /** CL5 — what has been observed in a country, newest first by the date it happened. */
+    fieldObservations: (country: string) => sbg.request((c) => c.GET('/v1/sbg/field-observations', { params: { query: { country } } as never })),
+
     /** A later passer-by agrees it is still there. */
     confirmRoad: (constraintId: string, body: { note?: string; photoRef?: string } = {}) =>
       sbg.request((c) => c.POST('/v1/sbg/route-constraints/{id}/confirm', { params: { path: { id: constraintId } }, body: body as never })),

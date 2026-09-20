@@ -121,6 +121,13 @@ export interface DriverState {
   /** The crowd-sourced road map around the driver: what other drivers have reported, never a survey. */
   road: RoadConstraint[];
   roadState: 'idle' | 'loading' | 'error' | 'ready';
+  /**
+   * CL5 — whether a photograph of an official document may be kept in this country, and the notice the
+   * person must agree to. Absent until asked; NEVER assumed true, because assuming it invites a picture
+   * we then have to refuse.
+   */
+  observationNotice: { country?: string; mayHoldEvidence: boolean; version: string; text: string } | null;
+  observations: Array<{ observationId: string; subject: string; place: string; happenedOn: string; tier: 'told' | 'evidenced' }>;
   /** Where that list was read from. Null until the phone gives a fix — the distances need one. */
   roadAt: { lat: number; lng: number } | null;
   /** Screen-level failure — rendered as an ErrorNote, never as a raw string. */
@@ -203,6 +210,8 @@ const INITIAL: DriverState = {
   boardPlace: { ...EMPTY_PLACE },
   road: [],
   roadState: 'idle',
+  observationNotice: null,
+  observations: [],
   roadAt: null,
   error: null,
   toasts: [],
@@ -717,6 +726,72 @@ export function useDriverApp() {
   const loadBoard = useCallback(() => {
     void fetchBoard(stateRef.current.boardReach);
   }, [fetchBoard]);
+
+  /* ------------------------------------------- the counter, as drivers are asked at it */
+
+  /**
+   * CL5 — ASK WHETHER WE MAY KEEP A PHOTOGRAPH HERE, BEFORE OFFERING A CAMERA.
+   *
+   * The answer is about a jurisdiction, not about this moment, so it is read when the form opens and not
+   * on any timer. The notice travels with it: the screen shows the server's words and hands the version
+   * back with the consent, so there is never a second copy of a consent text in the world.
+   */
+  const loadObservationNotice = useCallback(
+    async (country: string) => {
+      if (!client || !country) return;
+      const [notice, list] = await Promise.all([client.api.observationNotice(country), client.api.fieldObservations(country)]);
+      setState((s) => ({
+        ...s,
+        // A failure leaves it NULL, which the screen reads as "no camera". Defaulting to yes on an error
+        // would invite exactly the photograph we then have to refuse.
+        observationNotice: notice.error ? null : (narrow<{ country?: string; mayHoldEvidence: boolean; version: string; text: string }>(notice.data) ?? null),
+        observations: list.error ? s.observations : (narrow<{ items: DriverState['observations'] }>(list.data)?.items ?? []),
+      }));
+    },
+    [client],
+  );
+
+  /** The atlas, read once when the form first opens. Public, and it does not change while somebody looks. */
+  const countries = useCallback(async (): Promise<Array<{ code: string; name: string }>> => {
+    if (!client) return [];
+    const r = await client.api.countryCatalogue();
+    if (r.error) return [];
+    return narrow<{ items: Array<{ code: string; name: string }> }>(r.data)?.items ?? [];
+  }, [client]);
+
+  /**
+   * CL5 — record what you were asked for. Answers whether it took, so the sheet can shut itself.
+   *
+   * A refusal is SHOWN rather than swallowed: the server's refusals here are the rules of the feature —
+   * not first-hand, the country will not allow a photograph, the notice has moved on — and each one tells
+   * the person something they need in order to try again.
+   */
+  const recordObservation = useCallback(
+    async (body: {
+      country: string;
+      place: string;
+      subject: string;
+      note?: string;
+      happenedOn: string;
+      firstHand: boolean;
+      evidenceMediaId?: string;
+      consentAgreed?: boolean;
+      consentNoticeVersion?: string;
+    }): Promise<boolean> => {
+      if (!client) return false;
+      setState((s) => ({ ...s, busy: 'observation' }));
+      const r = await client.api.recordObservation(body);
+      setState((s) => ({ ...s, busy: null }));
+      if (r.error) {
+        pushToast({ tone: 'danger', icon: 'warning', title: t('driver.counter.refused'), detail: r.error.detail || r.error.title });
+        return false;
+      }
+      pushToast({ tone: 'ok', icon: 'check', title: t('driver.counter.saved') });
+      await loadObservationNotice(body.country);
+      return true;
+    },
+    [client, pushToast, loadObservationNotice],
+  );
 
   /* ------------------------------------------------- the road, as drivers report it */
 
@@ -1392,6 +1467,9 @@ const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehic
       queryJobs,
       loadJobs,
       loadBoard,
+      loadObservationNotice,
+      recordObservation,
+      countries,
       loadRoad,
       reportRoad,
       answerRoad,

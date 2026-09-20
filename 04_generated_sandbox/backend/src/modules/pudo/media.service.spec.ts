@@ -49,6 +49,27 @@ describe('MediaService (S26) — upload, gating, retention', () => {
    * that says "2 photos" and then refuses them is a warning nobody can check. Everything around it stays
    * shut: another kind, or a hazard nobody has posted yet, is still the owner's alone.
    */
+  /**
+   * CL5 — the only bin whose clock does not wait for something to happen.
+   *
+   * Every other class is anchored by a lifecycle event, and a photograph with no event to wait for is a
+   * photograph kept for ever. A field observation has no such event, so this one is dated at upload.
+   */
+  it('dates a field-evidence photograph at upload, because nothing will ever anchor it', () => {
+    const { mediaId } = upload(media, { kind: 'field_evidence' });
+    const ref = media.get(mediaId)!;
+    expect(ref.retentionClass).toBe('field-evidence');
+    expect(ref.expiresAt).toBeTruthy();
+    const days = Math.round((Date.parse(ref.expiresAt!) - Date.parse(ref.createdAt)) / 86400000);
+    expect(days).toBe(90);
+  });
+
+  it('leaves every other kind unanchored at upload — those wait for their event', () => {
+    // The contrast IS the rule: a bridge does not come back up because ninety days elapsed.
+    expect(media.get(upload(media, { kind: 'hazard' }).mediaId)!.expiresAt).toBeUndefined();
+    expect(media.get(upload(media, { kind: 'vehicle' }).mediaId)!.expiresAt).toBeUndefined();
+  });
+
   describe('a posted road-hazard photo, and only that', () => {
     it('lets a peer read one that is attached to a constraint', () => {
       const { mediaId } = media.upload({ ownerDid: 'did:driver:a', kind: 'hazard', dataUrl: PNG_1x1 });
