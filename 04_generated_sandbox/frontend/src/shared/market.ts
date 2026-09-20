@@ -1,3 +1,4 @@
+import type { GeoPoint } from './geo';
 /**
  * CL3 — the market series, and the one question two different apps ask of it.
  *
@@ -69,6 +70,15 @@ export interface LaneSeries {
   lane: string;
   from: string;
   to: string;
+  /**
+   * Where the two ends are — the GAZETTEER CENTROID of each named place, not a load's own coordinate.
+   *
+   * Absent where the end is 'unknown': a load more than 60 km from anywhere we can name has no honest
+   * place and therefore no honest dot. Such a lane is still a lane, and a reader must keep it in the
+   * list and say it cannot be drawn rather than dropping it.
+   */
+  fromPoint?: GeoPoint;
+  toPoint?: GeoPoint;
   postedLoads: number;
   claimedLoads: number;
   priorPostedLoads: number;

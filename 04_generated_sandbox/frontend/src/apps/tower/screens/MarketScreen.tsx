@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'preact/hooks';
-import { Icon } from '../../../shared/ui';
+import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
+import { Icon, PlaceMap, type PlaceMapLine } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import {
   MOOD_LABEL,
@@ -11,12 +11,20 @@ import {
   quietLanes,
   takeUp,
   thinWindow,
-  topLanes,
+  laneEnds,
+  laneWeights,
+  lanePlottable,
+  lanesNear,
+  lanesUnplaceable,
   type MarketSeriesView,
 } from '../market';
 import type { TowerActions } from '../useTowerApp';
 
 const RANGES = [30, 90, 365] as const;
+
+/** How far from a place counts as near it. City, county, corridor — three steps somebody can mean. */
+const RADII = [25, 100, 400] as const;
+const LANE_PAGE = 10;
 
 /**
  * CL3 — WHAT THE MARKET IS DOING, derived from what the loads already say.
@@ -36,6 +44,11 @@ export function MarketScreen({ actions }: { actions: TowerActions }) {
   const [series, setSeries] = useState<MarketSeriesView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [laneQuery, setLaneQuery] = useState('');
+  const [centre, setCentre] = useState('');
+  const [radius, setRadius] = useState<number>(RADII[1]);
+  const [lanePage, setLanePage] = useState(0);
+  const [picked, setPicked] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!client) return;
@@ -59,6 +72,35 @@ export function MarketScreen({ actions }: { actions: TowerActions }) {
   const met = series ? takeUp(series.totals) : null;
   const points = series ? chartPoints(series.days) : [];
   const quiet = series ? quietLanes(series.lanes) : [];
+
+  /*
+   * WHICH LANES ARE ON SCREEN, and the map and the table must always answer that the same way — one
+   * filter, two renderings of its result. Two lists built separately is how a map ends up showing a
+   * lane the table below it has filtered out.
+   */
+  const allLanes = useMemo(() => series?.lanes ?? [], [series]);
+  const ends = useMemo(() => laneEnds(allLanes), [allLanes]);
+  const foundLanes = useMemo(() => {
+    const q = laneQuery.trim().toLowerCase();
+    const named = q ? allLanes.filter((l) => l.lane.toLowerCase().includes(q)) : allLanes;
+    const here = ends.find((e) => e.name === centre);
+    return here ? lanesNear(named, here.point, radius) : named;
+  }, [allLanes, ends, laneQuery, centre, radius]);
+  // Only worth saying while a radius is being applied: without one, nothing has been set aside.
+  const unplaceable = useMemo(() => (centre ? lanesUnplaceable(allLanes) : 0), [centre, allLanes]);
+  const lanePages = Math.max(1, Math.ceil(foundLanes.length / LANE_PAGE));
+  const shownLanes = foundLanes.slice(lanePage * LANE_PAGE, lanePage * LANE_PAGE + LANE_PAGE);
+  /* Only the page you are looking at is drawn. A map of four hundred lanes is a scribble, and the point
+     of drawing them is to see where the ones in front of you actually are. */
+  const weightOf = laneWeights(shownLanes);
+  const drawn: PlaceMapLine[] = shownLanes.filter(lanePlottable).map((l) => ({
+    id: l.lane,
+    label: t('tower.market.laneTip', { lane: l.lane, posted: l.postedLoads, claimed: l.claimedLoads }),
+    from: l.fromPoint!,
+    to: l.toPoint!,
+    weight: weightOf(l),
+    tone: l.quiet ? ('warn' as const) : ('plain' as const),
+  }));
   const wait = series?.timeToClaim;
   const price = series?.priceVsStack;
   const priceOver = priceClaim(price);
@@ -219,10 +261,88 @@ export function MarketScreen({ actions }: { actions: TowerActions }) {
           <section class="cons__panel">
             <div class="cons__panelhead">
               <span class="cons__panelt">{t('tower.market.lanesTitle')}</span>
+              <span class="chint">{t('tower.market.laneCount', { n: allLanes.length })}</span>
               {quiet.length ? <span class="ctag ctag--warn">{t('tower.market.quietCount', { n: quiet.length })}</span> : null}
             </div>
+
+            {/*
+              * THE MAP GOES ABOVE THE LIST AND NEVER INSTEAD OF IT. A lane named "Nairobi → South B" is
+              * one of a great many pairs inside one city, and a name does not tell you where it is; a
+              * line does, and only a line does. But the numbers are in the table, and a map cannot be
+              * read for a figure — so this is the same rule the geospatial work settled on, a pin beside
+              * the list rather than in place of it.
+              */}
+            {drawn.length ? (
+              <>
+                <PlaceMap lines={drawn} selectedId={picked} onPick={(id) => setPicked(id === picked ? null : id)} label={t('tower.market.mapLabel')} />
+                {/* Said under the map, every time, because a straight line between two dots reads as a
+                    road to anybody not thinking about it — and because the dots are town centroids, so
+                    two lanes inside one neighbourhood share one. Neither is a defect; both would be
+                    misreadings if we let them pass unmentioned. */}
+                <p class="chint">{t('tower.market.mapBasis')}</p>
+              </>
+            ) : null}
+
+            {series.lanes.length > 0 ? (
+              <div class="twr-knobs__row">
+                <label class="twr-knob cfield">
+                  <span class="cfield__label">{t('tower.market.search')}</span>
+                  <input
+                    class="cinput"
+                    value={laneQuery}
+                    onInput={(e) => {
+                      setLaneQuery((e.target as HTMLInputElement).value);
+                      setLanePage(0);
+                    }}
+                    placeholder={t('tower.market.searchPh')}
+                  />
+                </label>
+                <label class="twr-knob cfield">
+                  <span class="cfield__label">{t('tower.market.near')}</span>
+                  <select
+                    class="cinput"
+                    value={centre}
+                    onChange={(e) => {
+                      setCentre((e.target as HTMLSelectElement).value);
+                      setLanePage(0);
+                    }}
+                  >
+                    {/* The places the market actually runs through, alphabetical. It cannot offer a town
+                        no lane reaches, which is the whole advantage over a free-text box. */}
+                    <option value="">{t('tower.market.nearAnywhere')}</option>
+                    {ends.map((e) => (
+                      <option key={e.name} value={e.name}>
+                        {e.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {centre ? (
+                  <label class="twr-knob cfield">
+                    <span class="cfield__label">{t('tower.market.within')}</span>
+                    <select
+                      class="cinput"
+                      value={String(radius)}
+                      onChange={(e) => {
+                        setRadius(Number((e.target as HTMLSelectElement).value));
+                        setLanePage(0);
+                      }}
+                    >
+                      {RADII.map((km) => (
+                        <option key={km} value={String(km)}>
+                          {t('tower.market.km', { n: km })}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+              </div>
+            ) : null}
+
             {series.lanes.length === 0 ? (
               <p class="cons__empty">{t('tower.market.lanesNone')}</p>
+            ) : foundLanes.length === 0 ? (
+              <p class="cons__empty">{t('tower.market.lanesNoMatch')}</p>
             ) : (
               <table class="ctbl ctbl--stack">
                 <thead>
@@ -235,9 +355,20 @@ export function MarketScreen({ actions }: { actions: TowerActions }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {topLanes(series.lanes).map((l) => (
-                    <tr key={l.lane}>
-                      <td class="ctbl__lead">{l.lane}</td>
+                  {shownLanes.map((l) => (
+                    <tr key={l.lane} class={picked === l.lane ? 'is-open' : undefined}>
+                      <td class="ctbl__lead">
+                        {/* The name is the control, rather than a click handler on the row: a row is not
+                            focusable and cannot be pressed with a keyboard, and this console's contract
+                            says the keyboard is a first-class pointer. */}
+                        <button type="button" class="ctbl__pick" aria-pressed={picked === l.lane} onClick={() => setPicked(picked === l.lane ? null : l.lane)}>
+                          {l.lane}
+                        </button>
+                        {/* A lane we cannot draw stays in the list and says so. Dropping it would make
+                            the map and the table disagree about how many lanes there are, and the one
+                            that is wrong would be the map. */}
+                        {lanePlottable(l) ? null : <div class="chint">{t('tower.market.notOnMap')}</div>}
+                      </td>
                       <td>
                         <span class="ctbl__lbl">{t('tower.market.col.posted')}</span>
                         {l.postedLoads}
@@ -259,6 +390,18 @@ export function MarketScreen({ actions }: { actions: TowerActions }) {
                 </tbody>
               </table>
             )}
+            {lanePages > 1 ? (
+              <div class="twr-panelend">
+                <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={lanePage === 0} onClick={() => setLanePage(lanePage - 1)}>
+                  {t('tower.imports.prev')}
+                </button>
+                <span class="chint">{t('tower.market.lanePage', { page: lanePage + 1, pages: lanePages, shown: shownLanes.length, total: foundLanes.length })}</span>
+                <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={lanePage >= lanePages - 1} onClick={() => setLanePage(lanePage + 1)}>
+                  {t('tower.imports.next')}
+                </button>
+              </div>
+            ) : null}
+            {unplaceable > 0 ? <p class="chint">{t('tower.market.unplaceable', { n: unplaceable })}</p> : null}
             <p class="ctbl__sub">{t('tower.market.lanesFoot')}</p>
           </section>
         </>

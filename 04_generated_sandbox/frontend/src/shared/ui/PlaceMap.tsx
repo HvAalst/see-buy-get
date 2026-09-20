@@ -10,9 +10,32 @@ export interface PlaceMapPin {
   point: GeoPoint;
 }
 
+/**
+ * A PAIR OF PLACES, DRAWN AS A LINE — a lane, a corridor, a leg between two known ends.
+ *
+ * IT IS NOT A ROUTE AND MUST NEVER BE LABELLED AS ONE. We know where something starts and where it
+ * finishes; we do not know the road it takes, and a straight line drawn across a map reads as a road to
+ * anybody who is not thinking about it. Whatever renders this has to say what it is. (The honest way to
+ * draw a real road is from the GPS trail of legs that were actually driven, which is a different
+ * feature with a different claim behind it.)
+ *
+ * A weight of 0..1 scales the stroke, so a busy pair reads heavier than a quiet one without needing a
+ * second colour, and the tone marks the one the reader has singled out.
+ */
+export interface PlaceMapLine {
+  id: string;
+  label: string;
+  from: GeoPoint;
+  to: GeoPoint;
+  weight?: number;
+  tone?: 'plain' | 'warn';
+}
+
 export interface PlaceMapProps {
   /** Tappable places (pick mode) — rendered as blue dots with name chips. */
   pins?: PlaceMapPin[];
+  /** Pairs of places drawn as lines. See PlaceMapLine: a pair of ends, never a route. */
+  lines?: PlaceMapLine[];
   selectedId?: string | null;
   onPick?: (id: string) => void;
   /** The person's own position (typed place words, the store pin) — the orange locator dot. */

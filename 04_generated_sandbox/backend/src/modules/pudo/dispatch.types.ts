@@ -630,6 +630,20 @@ export class LaneSeries {
   lane: string;
   from: string;
   to: string;
+  /**
+   * Where the two ends are, so a lane can be drawn and a radius can be measured.
+   *
+   * ABSENT WHERE THE END IS 'unknown' — a load more than 60 km from anywhere the gazetteer knows has no
+   * honest place name and therefore no honest dot, and a lane with one is still a real lane. The reader
+   * must keep it in the list and say it cannot be placed, never drop it for being unplottable.
+   *
+   * These are the gazetteer's CENTROIDS, not the loads' own coordinates. Two different lanes inside one
+   * neighbourhood share a dot, which is the coarsening working rather than the map failing.
+   */
+  @ApiPropertyOptional()
+  fromPoint?: GeoPoint;
+  @ApiPropertyOptional()
+  toPoint?: GeoPoint;
   postedLoads: number;
   claimedLoads: number;
   priorPostedLoads: number;

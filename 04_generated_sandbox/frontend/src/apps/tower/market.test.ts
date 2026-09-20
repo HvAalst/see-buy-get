@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   boardVsMarket,
   chartPoints,
+  laneWeights,
+  lanePlottable,
+  lanesNear,
+  lanesUnplaceable,
+  type LanePlaces,
   dayTakeUp,
   marketMood,
   priceClaim,
@@ -134,5 +139,60 @@ describe('scarcity, as the console is allowed to describe it', () => {
     // And where the market itself is too small to answer, it refuses rather than blaming a radius.
     expect(boardVsMarket(0, null)).toBe('unknown');
     expect(boardVsMarket(0, view({ totals: totals({ offeredLoads: 2 }) }))).toBe('unknown');
+  });
+});
+
+describe('finding one lane among a market of them', () => {
+  // Real gazetteer centroids, which is what the server now sends for each end.
+  const NBO = { lat: -1.2864, lng: 36.8172 };
+  const SOUTH_B = { lat: -1.308, lng: 36.837 };
+  const MSA = { lat: -4.0435, lng: 39.6682 };
+  const KSM = { lat: -0.0917, lng: 34.768 };
+
+  const lane = (over: Partial<LanePlaces> & { postedLoads?: number } = {}) => ({
+    lane: 'Nairobi → Mombasa',
+    from: 'Nairobi',
+    to: 'Mombasa',
+    fromPoint: NBO,
+    toPoint: MSA,
+    postedLoads: 1,
+    ...over,
+  });
+
+  it('takes a lane with EITHER end inside the radius, because half a market is not a market', () => {
+    const lanes = [
+      lane({ lane: 'a', fromPoint: NBO, toPoint: MSA }),
+      lane({ lane: 'b', fromPoint: MSA, toPoint: NBO }),
+      lane({ lane: 'c', fromPoint: MSA, toPoint: KSM }),
+    ];
+    // Leaving Nairobi and arriving in Nairobi both count; a lane that never touches it does not.
+    expect(lanesNear(lanes, NBO, 50).map((l) => l.lane)).toEqual(['a', 'b']);
+  });
+
+  it('separates two neighbourhoods of one city at a small radius, and joins them at a large one', () => {
+    // The user's own case: inside Nairobi there are many lanes, and a radius has to be able to tell
+    // them apart. South B is about 4 km from the city centre.
+    const lanes = [lane({ lane: 'cbd', fromPoint: NBO, toPoint: MSA }), lane({ lane: 'southb', fromPoint: SOUTH_B, toPoint: MSA })];
+    expect(lanesNear(lanes, SOUTH_B, 2).map((l) => l.lane)).toEqual(['southb']);
+    expect(lanesNear(lanes, SOUTH_B, 10).map((l) => l.lane)).toEqual(['cbd', 'southb']);
+  });
+
+  it('never counts a lane it cannot place as near, and says how many those are', () => {
+    const lanes = [lane({ lane: 'placed' }), lane({ lane: 'nowhere', from: 'unknown', to: 'unknown', fromPoint: undefined, toPoint: undefined })];
+    // Excluded from the radius, because we do not know where it is — not because it is far away.
+    expect(lanesNear(lanes, NBO, 5000).map((l) => l.lane)).toEqual(['placed']);
+    // And counted, so a screen can say what its filter set aside rather than quietly losing a row.
+    expect(lanesUnplaceable(lanes)).toBe(1);
+    expect(lanePlottable(lanes[0])).toBe(true);
+    expect(lanePlottable(lanes[1])).toBe(false);
+  });
+
+  it('weighs a lane against the busiest one SHOWN, so the stroke answers which of these is the big one', () => {
+    const w = laneWeights([{ postedLoads: 20 }, { postedLoads: 5 }, { postedLoads: 0 }]);
+    expect(w({ postedLoads: 20 })).toBe(1);
+    expect(w({ postedLoads: 5 })).toBe(0.25);
+    expect(w({ postedLoads: 0 })).toBe(0);
+    // A market where nothing has been posted divides by nothing rather than by zero.
+    expect(laneWeights([{ postedLoads: 0 }])({ postedLoads: 0 })).toBe(0);
   });
 });

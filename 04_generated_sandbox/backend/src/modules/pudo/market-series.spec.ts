@@ -142,12 +142,35 @@ describe('CL3 — scarcity, derived from what the loads already say', () => {
     expect(fresh).toMatchObject({ priorPostedLoads: 0, quiet: false });
   });
 
-  it('buckets a lane end it cannot name honestly as unknown', () => {
+  it('buckets a lane end it cannot name honestly as unknown, and gives it no coordinate either', () => {
     // Deep ocean: nothing in the gazetteer is near enough to name without implying precision we lack.
     const nowhere = { lat: -40, lng: -120 };
     const [lane] = lanesOf([freight({ pickupLocation: nowhere, destLocation: nowhere, createdAt: at(1) })], WINDOW);
     expect(lane.from).toBe(UNKNOWN_PLACE);
     expect(lane.to).toBe(UNKNOWN_PLACE);
+    // An end with no honest NAME has no honest DOT. A reader must keep the lane and say it cannot be
+    // placed; a fallback coordinate here would put a pin on a map for a load nobody can locate.
+    expect(lane.fromPoint).toBeUndefined();
+    expect(lane.toPoint).toBeUndefined();
+  });
+
+  it('gives each lane end the gazetteer CENTROID, not the load coordinate it was derived from', () => {
+    // A load in South B, and one two streets away. Both coarsen to the same place, and the lane carries
+    // the PLACE. That is the coarsening working — the public market says where a load is without saying
+    // where it is — and it is why two lanes inside one neighbourhood share a dot on any map drawn here.
+    const southB = { lat: -1.308, lng: 36.837 };
+    const twoStreetsOver = { lat: -1.3105, lng: 36.8392 };
+    const msa = { lat: -4.043, lng: 39.668 };
+    const [lane] = lanesOf(
+      [freight({ pickupLocation: southB, destLocation: msa, createdAt: at(1) }), freight({ pickupLocation: twoStreetsOver, destLocation: msa, createdAt: at(2) })],
+      WINDOW,
+    );
+    expect(lane.postedLoads).toBe(2);
+    expect(lane.from).toBe('South B');
+    expect(lane.fromPoint).toEqual({ lat: -1.308, lng: 36.837 });
+    // Not the second load's own coordinate, and not an average of the two.
+    expect(lane.fromPoint).not.toEqual(twoStreetsOver);
+    expect(lane.toPoint).toEqual({ lat: -4.0435, lng: 39.6682 });
   });
 
   it('takes the median rather than the mean, so one freak wait is not the market', () => {

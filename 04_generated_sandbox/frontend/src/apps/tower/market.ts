@@ -1,4 +1,5 @@
 import type { MessageKey } from '../../shared/i18n';
+import { haversineKm, type GeoPoint } from '../../shared/geo';
 import { THIN_MARKET_LOADS, boardVsMarket, thinWindow, type MarketDay, type MarketSeriesTotals, type MarketSeriesView, type PriceVsStack } from '../../shared/market';
 
 /**
@@ -101,6 +102,76 @@ export function quietLanes<T extends { quiet: boolean }>(lanes: T[]): T[] {
 /** The lanes worth showing at all — busiest first, and never an endless tail. */
 export function topLanes<T>(lanes: T[], limit = 8): T[] {
   return lanes.slice(0, limit);
+}
+
+/* --------------------------------------------------- finding a lane among many -- */
+
+/** The shape of a lane this file needs. Kept minimal so the tests do not have to build a whole series. */
+export interface LanePlaces {
+  lane: string;
+  from: string;
+  to: string;
+  fromPoint?: GeoPoint;
+  toPoint?: GeoPoint;
+}
+
+/** Can this lane be drawn at all? Both ends have to be somewhere the gazetteer could name. */
+export function lanePlottable(lane: LanePlaces): boolean {
+  return Boolean(lane.fromPoint && lane.toPoint);
+}
+
+/**
+ * Lanes with EITHER end within a radius of a place.
+ *
+ * Either end, not just the start, and the control has to say so. A haulier looking at Nakuru wants the
+ * loads leaving Nakuru and the loads arriving there — half a market is not a market, and a filter whose
+ * name says "from" while it means "touching" is worse than either.
+ *
+ * A LANE WITH AN UNPLACEABLE END IS NOT SILENTLY DROPPED. It is excluded from the radius, because we
+ * genuinely do not know whether it is near, and the caller is expected to say how many were set aside
+ * that way. An unknown end is a fact about a load nobody could locate, not an absence of one.
+ */
+export function lanesNear<T extends LanePlaces>(lanes: T[], centre: GeoPoint, km: number): T[] {
+  return lanes.filter((l) => {
+    const ends = [l.fromPoint, l.toPoint].filter(Boolean) as GeoPoint[];
+    return ends.some((p) => haversineKm(centre, p) <= km);
+  });
+}
+
+/**
+ * THE PLACES THIS MARKET ACTUALLY TOUCHES, as somewhere to measure a radius from.
+ *
+ * Derived from the lane ends rather than offered as a search box over a gazetteer, and that is the
+ * better control as well as the cheaper one: typing a town no lane reaches returns an empty list and
+ * no explanation, while a list of the places the market runs through cannot name one it does not.
+ *
+ * ALPHABETICAL, never by traffic. A picker ordered by size is a ranking, and this product does not
+ * publish rankings of the places it serves.
+ */
+export function laneEnds<T extends LanePlaces>(lanes: T[]): { name: string; point: GeoPoint }[] {
+  const seen = new Map<string, GeoPoint>();
+  for (const l of lanes) {
+    if (l.fromPoint) seen.set(l.from, l.fromPoint);
+    if (l.toPoint) seen.set(l.to, l.toPoint);
+  }
+  return [...seen.entries()].map(([name, point]) => ({ name, point })).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** How many of these could not be judged against a radius, because an end has no place. */
+export function lanesUnplaceable<T extends LanePlaces>(lanes: T[]): number {
+  return lanes.filter((l) => !l.fromPoint && !l.toPoint).length;
+}
+
+/**
+ * A lane's share of the busiest lane's traffic, 0..1 — the stroke weight on the map.
+ *
+ * Against the BUSIEST OF WHAT IS SHOWN rather than an absolute scale, for the same reason the two-line
+ * chart shares one scale: a relative weight answers "which of these is the big one", which is the only
+ * question a stroke width can honestly answer.
+ */
+export function laneWeights<T extends { postedLoads: number }>(lanes: T[]): (l: T) => number {
+  const peak = lanes.reduce((m, l) => Math.max(m, l.postedLoads), 0);
+  return (l) => (peak > 0 ? l.postedLoads / peak : 0);
 }
 
 /**

@@ -1324,6 +1324,41 @@
   color: var(--tx3);
 }
 
+/*
+ * A LANE ON THE DOT-PLOT — two ends and the line between them.
+ *
+ * Under the pins, so a dot is never lost beneath a stroke, and pointer-events off on the layer with them
+ * back on for each line: an SVG covering the whole plot would otherwise swallow every tap meant for the
+ * surface underneath it, which in drop mode is the whole control.
+ *
+ * Blue, because on this surface blue is the interface colour and orange is reserved for the one thing
+ * that is CHOSEN — here, the lane the reader has singled out.
+ */
+.pmap__lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.pmap__line {
+  stroke: var(--blue);
+  stroke-opacity: 0.55;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.pmap__line--warn {
+  stroke: #8a3b00;
+}
+
+.pmap__line--on {
+  stroke: var(--org);
+  stroke-opacity: 1;
+  stroke-width: 3.5 !important;
+}
+
 .pmap__pin {
   position: absolute;
   transform: translate(-50%, -50%);

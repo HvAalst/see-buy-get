@@ -197,6 +197,21 @@ export function lookupPlace(query: string): GazetteerMatch | null {
  * Returns null beyond `withinKm` rather than reaching for a far-off name: "near Nairobi" said of a load 140
  * km away is worse than saying nothing, because it reads as precision and is not.
  */
+/**
+ * The same answer as `nearestPlace`, with the gazetteer's own coordinate for the place it names.
+ *
+ * WHICH COORDINATE THIS IS, because a map will be drawn from it: the CENTROID of the named town or
+ * neighbourhood, not the point that was passed in. That is the point of the coarsening — the public
+ * market names where a load is without publishing where it is — so a lane end plotted from this is
+ * accurate to the place and deliberately inaccurate to the load. Anything reading it has to say so.
+ */
+export function nearestPlaceAt(point: GeoPoint, withinKm = 60): { name: string; km: number; location: GeoPoint } | null {
+  const found = nearestPlace(point, withinKm);
+  if (!found) return null;
+  const entry = GAZETTEER.find((e) => e.name === found.name);
+  return entry ? { ...found, location: entry.location } : null;
+}
+
 export function nearestPlace(point: GeoPoint, withinKm = 60): { name: string; km: number } | null {
   let best: { name: string; km: number; broad: boolean } | null = null;
   for (const entry of GAZETTEER) {

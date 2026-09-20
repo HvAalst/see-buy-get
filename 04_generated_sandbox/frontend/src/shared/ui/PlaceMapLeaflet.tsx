@@ -15,7 +15,7 @@ import type { PlaceMapProps } from './PlaceMap';
  */
 const NAIROBI: L.LatLngExpression = [-1.2864, 36.8172];
 
-export function PlaceMapLeaflet({ pins = [], selectedId, onPick, reference, onDrop, dropped, label }: PlaceMapProps) {
+export function PlaceMapLeaflet({ pins = [], lines = [], selectedId, onPick, reference, onDrop, dropped, label }: PlaceMapProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
@@ -55,6 +55,35 @@ export function PlaceMapLeaflet({ pins = [], selectedId, onPick, reference, onDr
     layer.clearLayers();
 
     const points: L.LatLngExpression[] = [];
+    /*
+     * The lanes go down FIRST, so a marker is never hidden under a stroke, and each one is a straight
+     * segment between two ends — see PlaceMapLine: this is a pair of places, not the road between them.
+     * Leaflet draws a geodesic-looking line across a Mercator projection, which over a few hundred
+     * kilometres is visually a straight line, and that is honest here: it claims a relationship between
+     * two dots and nothing about what lies between.
+     */
+    for (const lane of lines) {
+      const on = lane.id === selectedId;
+      const line = L.polyline(
+        [
+          [lane.from.lat, lane.from.lng],
+          [lane.to.lat, lane.to.lng],
+        ],
+        {
+          color: on ? '#fb6200' : lane.tone === 'warn' ? '#8a3b00' : '#4c46e0',
+          weight: on ? 4 : 1.5 + (lane.weight ?? 0) * 3,
+          opacity: on ? 1 : 0.65,
+        },
+      );
+      line.bindTooltip(lane.label, { sticky: true });
+      line.on('click', (e: L.LeafletMouseEvent) => {
+        // Stopped, or the map's own click handler reads it as a drop on an empty patch of map.
+        L.DomEvent.stop(e);
+        onPickRef.current?.(lane.id);
+      });
+      line.addTo(layer);
+      points.push([lane.from.lat, lane.from.lng], [lane.to.lat, lane.to.lng]);
+    }
     for (const pin of pins) {
       const marker = L.marker([pin.point.lat, pin.point.lng], { icon: dotIcon(pin.id === selectedId ? 'on' : 'pin', pin.label) });
       marker.on('click', () => {
@@ -87,7 +116,7 @@ export function PlaceMapLeaflet({ pins = [], selectedId, onPick, reference, onDr
       if (points.length === 1) map.setView(points[0], 15);
       else if (points.length > 1) map.fitBounds(L.latLngBounds(points), { padding: [36, 36], maxZoom: 16 });
     }
-  }, [pins, selectedId, reference, dropped]);
+  }, [pins, lines, selectedId, reference, dropped]);
 
   return <div ref={hostRef} class="pmap-leaflet" role={onDrop ? 'button' : 'img'} aria-label={label} />;
 }

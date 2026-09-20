@@ -30,7 +30,8 @@
 import { TruckSubtype } from './fleet.config';
 import { BodySeries, Freight, LaneSeries, MarketDay, MarketSeries, PriceVsStack, TimeToClaim } from './dispatch.types';
 import { distanceSplit } from './pricing';
-import { nearestPlace } from './geo-gazetteer';
+import { nearestPlaceAt } from './geo-gazetteer';
+import { GeoPoint } from './pudo.types';
 import { CLAIM_STRETCH_RATIO, QUIET_LANE_RATIO, THIN_MARKET_LOADS } from './pudo.config';
 
 /** The bucket a load's kilometres land in. A real body, or the honest absence of one. */
@@ -311,9 +312,11 @@ export function priceVsStackOf(freights: Freight[], window: { from: number; to: 
 /** A lane end we cannot name honestly. The never-infer rule, applied to places instead of bodies. */
 export const UNKNOWN_PLACE = 'unknown';
 
-function placeName(point?: { lat: number; lng: number }): string {
-  if (!point) return UNKNOWN_PLACE;
-  return nearestPlace(point)?.name ?? UNKNOWN_PLACE;
+/** The coarse name AND the gazetteer's coordinate for it, in one lookup. */
+function placeAt(point?: { lat: number; lng: number }): { name: string; at?: { lat: number; lng: number } } {
+  if (!point) return { name: UNKNOWN_PLACE };
+  const found = nearestPlaceAt(point);
+  return found ? { name: found.name, at: found.location } : { name: UNKNOWN_PLACE };
 }
 
 /**
@@ -326,19 +329,30 @@ function placeName(point?: { lat: number; lng: number }): string {
 export function lanesOf(freights: Freight[], window: { from: number; to: number }): LaneSeries[] {
   const span = window.to - window.from;
   const rows = new Map<string, LaneSeries>();
-  const row = (from: string, to: string): LaneSeries => {
-    const lane = from + ' → ' + to;
+  const row = (from: { name: string; at?: GeoPoint }, to: { name: string; at?: GeoPoint }): LaneSeries => {
+    const lane = from.name + ' → ' + to.name;
     let r = rows.get(lane);
     if (!r) {
-      r = { lane, from, to, postedLoads: 0, claimedLoads: 0, priorPostedLoads: 0, quiet: false, thin: true };
+      r = {
+        lane,
+        from: from.name,
+        to: to.name,
+        ...(from.at ? { fromPoint: from.at } : {}),
+        ...(to.at ? { toPoint: to.at } : {}),
+        postedLoads: 0,
+        claimedLoads: 0,
+        priorPostedLoads: 0,
+        quiet: false,
+        thin: true,
+      };
       rows.set(lane, r);
     }
     return r;
   };
 
   for (const f of freights) {
-    const from = placeName(f.pickupLocation);
-    const to = placeName(f.destLocation);
+    const from = placeAt(f.pickupLocation);
+    const to = placeAt(f.destLocation);
     if (inWindow(f.createdAt, window.from, window.to)) row(from, to).postedLoads += 1;
     if (f.claimedAt && inWindow(f.claimedAt, window.from, window.to)) row(from, to).claimedLoads += 1;
     if (inWindow(f.createdAt, window.from - span, window.from - 1)) row(from, to).priorPostedLoads += 1;

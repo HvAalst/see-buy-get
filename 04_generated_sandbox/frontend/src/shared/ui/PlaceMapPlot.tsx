@@ -7,8 +7,8 @@ import type { PlaceMapProps } from './PlaceMap';
  * lat/lng via the inverse projection. No tiles, no network — works on the cheapest phone. PlaceMap picks
  * between this and the Leaflet tile map (G3a); the props are identical so either can render a picker.
  */
-export function PlaceMapPlot({ pins = [], selectedId, onPick, reference, onDrop, dropped, label }: PlaceMapProps) {
-  const bounds = fitBounds([...pins.map((p) => p.point), reference ?? null, dropped ?? null]);
+export function PlaceMapPlot({ pins = [], lines = [], selectedId, onPick, reference, onDrop, dropped, label }: PlaceMapProps) {
+  const bounds = fitBounds([...pins.map((p) => p.point), ...lines.flatMap((l) => [l.from, l.to]), reference ?? null, dropped ?? null]);
 
   const drop = (e: MouseEvent) => {
     if (!onDrop) return;
@@ -26,7 +26,31 @@ export function PlaceMapPlot({ pins = [], selectedId, onPick, reference, onDrop,
       aria-label={label}
       onClick={onDrop ? (drop as unknown as (e: Event) => void) : undefined}
     >
-      {pins.length === 0 && !reference && !dropped ? <p class="pmap__empty">Nothing to show here yet.</p> : null}
+      {pins.length === 0 && lines.length === 0 && !reference && !dropped ? <p class="pmap__empty">Nothing to show here yet.</p> : null}
+
+      {/* Under the pins, in the same 0-100 projection. preserveAspectRatio is none because the square
+          the projection produces gets stretched to whatever box this is drawn in, and a line has to be
+          stretched with it or it will not join the two dots it is between. */}
+      {lines.length ? (
+        <svg class="pmap__lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          {lines.map((l) => {
+            const a = project(l.from, bounds);
+            const b = project(l.to, bounds);
+            const on = l.id === selectedId;
+            return (
+              <line
+                key={l.id}
+                x1={a.x}
+                y1={a.y}
+                x2={b.x}
+                y2={b.y}
+                class={`pmap__line${on ? ' pmap__line--on' : ''}${l.tone === 'warn' ? ' pmap__line--warn' : ''}`}
+                style={`stroke-width:${0.5 + (l.weight ?? 0) * 1.6}`}
+              />
+            );
+          })}
+        </svg>
+      ) : null}
 
       {pins.map((pin) => {
         const { x, y } = project(pin.point, bounds);

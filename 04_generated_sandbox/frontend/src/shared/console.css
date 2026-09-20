@@ -562,6 +562,21 @@
   display: none;
 }
 
+/* A cell that IS the control — picking the row it names. Reads as the text it replaced, behaves as a
+   button, and underlines on hover so a pointer can tell it apart from the text beside it. */
+.ctbl__pick {
+  display: inline;
+  padding: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+
+.ctbl__pick:hover {
+  text-decoration: underline;
+}
+
 .ctbl__num {
   text-align: right;
   white-space: nowrap;
