@@ -23,7 +23,9 @@ import { MarketScreen } from './screens/MarketScreen';
 import { DepotsScreen } from './screens/DepotsScreen';
 import { MoversScreen } from './screens/MoversScreen';
 import { SignInScreen } from './screens/SignInScreen';
+import { ConsoleMenu } from './ConsoleMenu';
 import { ConsolePhoneNav, ConsoleRail } from './ConsoleNav';
+import { SettingsScreen } from './screens/SettingsScreen';
 import { groupsFor } from './nav';
 import { waitingLine } from './queues';
 import { useWideScreen } from '../../shared/useWideScreen';
@@ -49,6 +51,7 @@ export function App() {
   // than left to CSS, because a stylesheet can move a menu but cannot swap it for a different one.
   const wide = useWideScreen();
   const [passwordOpen, setPasswordOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   if (state.phase === 'boot') return <div class="twr-boot" aria-busy="true" />;
 
@@ -100,6 +103,8 @@ export function App() {
     // Their own books and what they are owed — never the network's ledger, which is not theirs to read.
     'money',
     'company',
+    // Their own entry, their saved places and their password. Staff act for nobody and have none.
+    ...(state.who?.entityId ? (['settings'] as Screen[]) : []),
     'imports',
     'market',
     // Y4 — offered to BOTH: a yard reads its own register here, and network staff read the directory.
@@ -151,26 +156,33 @@ export function App() {
             </span>
           ) : null}
         </div>
-        <div class="cons__who">
-          <span>
-            {t('tower.signedInAs')} <span class="cons__whoname">{state.who?.name}</span>
-            {/* Which COMPANY, when it is one — an administrator of two sister companies signs in twice,
-                and the difference has to be visible from the masthead, not inferred from the table. */}
-            {state.who?.entityId ? <span class="ctag ctag--quiet twr-whoco">{companyName(state)}</span> : null}
-            {/* Said in the masthead, where every decision is taken: a name typed beside the setup key proves nothing. */}
-            {state.creds?.mode === 'operator' ? <span class="ctag ctag--quiet twr-whoco">{t('tower.signIn.unverified')}</span> : null}
-          </span>
-          {/* The setup key has no password of its own to change; everybody with an account does. */}
-          {state.creds && state.creds.mode !== 'operator' ? (
-            <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setPasswordOpen((open) => !open)}>
-              {t('tower.password.open')}
-            </button>
-          ) : null}
-          <HelpLink app="console" buttonClass="cbtn cbtn--ghost cbtn--sm" />
-          <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={actions.signOut}>
-            {t('tower.signOut')}
-          </button>
-        </div>
+        {/*
+          * ONE CONTROL, not six things along a line. What was here: "Signed in as X", the company, an
+          * unverified tag, then Change password, Help and Sign out — four different weights competing,
+          * with the identity (the thing an operator checks before a decision that names them) the
+          * quietest of them. The user pointed at BondBridge's topbar, and it is right.
+          *
+          * The ONE thing that stays outside, visible without opening anything, is the unverified
+          * warning: a name typed beside a shared setup key proves nothing, and every decision taken
+          * here is attributed to it. A warning behind a click is a warning nobody reads.
+          */}
+        <ConsoleMenu
+          name={state.who?.name ?? ''}
+          under={state.who?.entityId ? companyName(state) : undefined}
+          warn={state.creds?.mode === 'operator' ? t('tower.signIn.unverified') : undefined}
+          entries={[
+            // A company administrator manages their own entry, their places and their password. Staff
+            // act for nobody, so they have no settings of their own to keep — and their password is the
+            // panel that has always opened over the work area.
+            ...(state.who?.entityId ? [{ key: 'settings', icon: 'edit' as const, label: t('tower.nav.settings'), onGo: () => actions.go('settings') }] : []),
+            ...(state.creds && state.creds.mode !== 'operator' && !state.who?.entityId
+              ? [{ key: 'password', icon: 'key' as const, label: t('tower.password.open'), onGo: () => setPasswordOpen(true) }]
+              : []),
+            { key: 'help', icon: 'info' as const, label: t('guide.link'), onGo: () => setHelpOpen(true) },
+            { key: 'out', icon: 'lock' as const, label: t('tower.signOut'), danger: true, onGo: actions.signOut },
+          ]}
+        />
+        <HelpLink app="console" open={helpOpen} onOpenChange={setHelpOpen} />
       </header>
 
       <div class="cons__body">
@@ -178,7 +190,9 @@ export function App() {
 
         <main class="cons__main">
           {passwordOpen && state.creds && state.creds.mode !== 'operator' ? <CompanyPasswordPanel actions={actions} onClose={() => setPasswordOpen(false)} /> : null}
-          {state.screen === 'presence' ? (
+          {state.screen === 'settings' ? (
+            <SettingsScreen state={state} actions={actions} />
+          ) : state.screen === 'presence' ? (
             <PresenceScreen state={state} actions={actions} />
           ) : state.screen === 'corridors' ? (
             <CorridorsScreen state={state} actions={actions} />

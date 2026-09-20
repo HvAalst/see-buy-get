@@ -9,7 +9,11 @@ import type { TowerActions } from '../useTowerApp';
  * for them, which is exactly the one that should not be kept. Proven with the current password; at least ten
  * characters, because this console sets prices. The console keeps using the new one without asking again.
  */
-export function CompanyPasswordPanel({ actions, onClose }: { actions: TowerActions; onClose: () => void }) {
+/**
+ * `onClose` is optional: this is a PANEL OVER THE WORK AREA when staff open it from the account menu,
+ * and a section of a page when a company reads it in their settings. A page has nothing to close.
+ */
+export function CompanyPasswordPanel({ actions, onClose }: { actions: TowerActions; onClose?: () => void }) {
   const t = useT();
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');

@@ -630,6 +630,10 @@ export class SbgController {
     const entity = this.entities.get(entityId);
     return {
       entity: { entityId: entity.entityId, name: entity.name, kind: entity.kind, jurisdiction: entity.jurisdiction, currency: entity.currency, status: entity.status ?? 'active' },
+      // Their own public address. A company reading its own record should be able to see the page a
+      // shipper reads about them, and until now the only way to learn your own handle was to be an
+      // appointed clearing agent and read it off the clearance record.
+      ...(this.handleOf(entityId) ? { handle: this.handleOf(entityId) } : {}),
       record: this.entities.recordOf(entityId),
       readiness: entity.kind === 'group' ? null : this.readiness.readinessOf(entityId),
       documents: this.companyDocuments.list(entityId),

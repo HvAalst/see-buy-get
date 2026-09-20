@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { NAV_GROUPS, SCREEN_META, activeGroupKey, firstScreen, groupBadge, groupOf, groupsFor, opensSheet } from './nav';
 import type { Screen } from './useTowerApp';
 
-const ALL: Screen[] = ['network', 'market', 'movers', 'depots', 'hazards', 'claims', 'disposal', 'approvals', 'papers', 'imports', 'reports', 'support', 'money', 'companies', 'company', 'rates', 'corridors', 'borders', 'presence', 'pictures'];
+const ALL: Screen[] = ['network', 'market', 'movers', 'depots', 'hazards', 'claims', 'disposal', 'approvals', 'papers', 'imports', 'reports', 'support', 'money', 'companies', 'company', 'rates', 'corridors', 'borders', 'presence', 'pictures', 'settings'];
 
 /**
  * The console's navigation.
@@ -13,7 +13,10 @@ const ALL: Screen[] = ['network', 'market', 'movers', 'depots', 'hazards', 'clai
  * zero standing in for a question nobody has asked yet.
  */
 describe('every screen has exactly one home', () => {
-  it('places all ten', () => {
+  // The list is written out rather than derived from SCREEN_META on purpose: a test that builds its
+  // expectation from the thing it is testing asserts nothing. Adding a screen means adding it here,
+  // which is exactly the moment to notice it has no home.
+  it('places every one of them', () => {
     for (const screen of ALL) expect(groupOf(screen)).not.toBeNull();
   });
 

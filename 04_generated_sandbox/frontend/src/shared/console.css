@@ -114,29 +114,6 @@
   text-overflow: ellipsis;
 }
 
-/* At EVERY width, not only below the sidebar line: whoever is signed in is the part of a masthead that
-   can be any length, so it is the part that gives way. The buttons beside it never shrink — a control
-   you cannot read is worse than a name you cannot finish. */
-.cons__who {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-  font-size: var(--c-fs-sm);
-  color: var(--tx2);
-  white-space: nowrap;
-}
-
-.cons__who > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.cons__whoname {
-  font-weight: 600;
-  color: var(--tx);
-}
-
 .cons__body {
   display: grid;
   grid-template-columns: var(--c-rail-w) minmax(0, 1fr);
@@ -1425,5 +1402,145 @@
   .cons__panel--flush {
     margin-left: -12px;
     margin-right: -12px;
+  }
+}
+
+/* ------------------------------------------------------------------ menu --- */
+
+/*
+ * THE ACCOUNT MENU — BondBridge's topbar shape, which the user pointed at and which is right.
+ *
+ * What it replaces: "Signed in as X", a company tag, an unverified tag, then Change password, Help and
+ * Sign out, all along one line. Six things of four weights competing, with the identity — the thing an
+ * operator checks before a decision that names them — the quietest of them.
+ *
+ * Its numbers are BondBridge's, deliberately: a 220px panel, an identity block with a hairline under it,
+ * rows of 10/16 at 13px with a 16px icon column, and the ending action alone at the bottom under another
+ * hairline. Being shown a reference and then inventing different numbers is not using the reference.
+ */
+.cmenu {
+  position: relative;
+  flex: none;
+}
+
+.cmenu__btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 8px 4px 4px;
+  border-radius: 999px;
+  color: var(--tx);
+}
+
+.cmenu__btn:hover,
+.cmenu--open .cmenu__btn {
+  background: var(--panel);
+}
+
+/* Initials, not a photograph: this console holds no picture of anybody, and a placeholder face for a
+   company administrator would be furniture. Two letters say which account you are in. */
+.cmenu__face {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--navy);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.cmenu__name {
+  font-size: var(--c-fs);
+  font-weight: 600;
+  color: var(--tx);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cmenu__caret {
+  flex: none;
+  color: var(--tx3);
+  transform: rotate(90deg);
+}
+
+.cmenu--open .cmenu__caret {
+  transform: rotate(-90deg);
+}
+
+.cmenu__pop {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 220px;
+  padding: 4px 0;
+  background: var(--bg);
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-card);
+  box-shadow: var(--sh-lg);
+}
+
+.cmenu__id {
+  display: grid;
+  gap: 2px;
+  padding: 10px 16px 12px;
+  border-bottom: 1px solid var(--bd-soft);
+}
+
+.cmenu__idname {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--navy);
+  line-height: 1.25;
+}
+
+.cmenu__idsub {
+  font-size: var(--c-fs-sm);
+  color: var(--tx3);
+  overflow-wrap: anywhere;
+}
+
+.cmenu__list {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0;
+}
+
+.cmenu__list--end {
+  border-top: 1px solid var(--bd-soft);
+}
+
+.cmenu__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 16px;
+  font-size: var(--c-fs);
+  font-weight: 500;
+  color: var(--tx);
+  text-align: left;
+}
+
+.cmenu__item:hover {
+  background: var(--panel);
+}
+
+/* The one row that ends something. Red is kept for exactly this — never for the ordinary path. */
+.cmenu__item--danger {
+  color: var(--dang);
+}
+
+/* In a hand the name goes and the initials stay: a masthead at 360px is a brand and a way out. */
+@media (max-width: 640px) {
+  .cmenu__name {
+    display: none;
   }
 }

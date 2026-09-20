@@ -63,7 +63,6 @@ export const enTower = {
   'tower.staff.never': 'Never',
   'tower.staff.revoke': 'Take away',
   'tower.staff.revokeConfirm': 'Yes, sign them out',
-  'tower.signedInAs': 'Signed in as',
 
   // The masthead's live line: what is waiting, never who is looking.
   'tower.work.unknown': 'Loading the queue…',
@@ -266,6 +265,20 @@ export const enTower = {
   'tower.nav.money': 'Money',
   'tower.nav.rates': 'Rates & tax',
   'tower.nav.companies': 'The companies',
+  'tower.nav.settings': 'Settings',
+  /* A company's own settings: their entry, their places, their password. */
+  'tower.settings.title': 'Settings',
+  'tower.settings.lede': 'What you publish about yourself, the places you use, and how you sign in.',
+  'tower.settings.companyOnly': 'Network staff act for no company, so there is nothing here to set.',
+  'tower.settings.placesTitle': 'Your places',
+  'tower.settings.placesCount': '{n} saved',
+  'tower.settings.placesLede': 'Ports you collect from and addresses you deliver to. Add one while minting a road leg.',
+  'tower.settings.placesNone': 'None yet. You will be offered one the next time you mint a road leg.',
+  'tower.settings.kindPort': 'Port',
+  'tower.settings.kindDelivery': 'Delivery',
+  'tower.settings.elsewhereTitle': 'Elsewhere',
+  'tower.settings.recordSub': 'What we hold and have verified about you.',
+  'tower.settings.pageSub': 'The page anybody can read about you.',
   'tower.nav.company': 'Company record',
   'tower.nav.borders': 'Borders',
   'tower.nav.imports': 'Containers',

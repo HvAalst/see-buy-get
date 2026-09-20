@@ -10,15 +10,37 @@ import './guide.css';
  *
  * `label="signin"` says "Need help signing in?"; the console passes its own button class.
  */
-export function HelpLink({ app, label = 'link', buttonClass = 'btn btn--link' }: { app: GuideApp; label?: 'link' | 'signin'; buttonClass?: string }) {
+/**
+ * `open` / `onOpenChange` make this CONTROLLABLE, for a caller that wants the help sheet without the
+ * button beside it — the console's account menu opens it from a row in a dropdown. Left uncontrolled it
+ * behaves exactly as it always has: its own state, its own button.
+ */
+export function HelpLink({
+  app,
+  label = 'link',
+  buttonClass = 'btn btn--link',
+  open: openFromParent,
+  onOpenChange,
+}: {
+  app: GuideApp;
+  label?: 'link' | 'signin';
+  buttonClass?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
   const t = useT();
-  const [open, setOpen] = useState(false);
+  const [ownOpen, setOwnOpen] = useState(false);
+  const controlled = openFromParent !== undefined;
+  const open = controlled ? openFromParent : ownOpen;
+  const setOpen = (next: boolean) => (controlled ? onOpenChange?.(next) : setOwnOpen(next));
 
   return (
     <>
-      <button type="button" class={buttonClass} onClick={() => setOpen(true)}>
-        {t(label === 'signin' ? 'guide.signinLink' : 'guide.link')}
-      </button>
+      {controlled ? null : (
+        <button type="button" class={buttonClass} onClick={() => setOpen(true)}>
+          {t(label === 'signin' ? 'guide.signinLink' : 'guide.link')}
+        </button>
+      )}
       <Sheet open={open} onClose={() => setOpen(false)} title={t('guide.title')}>
         <p class="card__note">{t('guide.lede')}</p>
         <div class="guide">
