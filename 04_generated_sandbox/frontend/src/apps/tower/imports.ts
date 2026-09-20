@@ -17,6 +17,11 @@ export interface DocumentGrant {
   scope: 'company' | 'consignment';
   ownerEntityId: string;
   readerEntityId: string;
+  /** The name a person knows them by, and where to go and read who they are. Absent when we hold none. */
+  readerName?: string;
+  readerHandle?: string;
+  /** How many papers this grant opens TODAY. Derived on every read, because it moves as papers arrive. */
+  reaches?: number;
   importId?: string;
   grantedBy: string;
   grantedAt: string;

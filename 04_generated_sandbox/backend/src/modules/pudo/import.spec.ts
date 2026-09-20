@@ -1,5 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { ImportService } from './import.service';
+import { HandleService } from '../../foundation/handle/handle.service';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { CompanyDocumentService } from '../../foundation/entity/company-documents.service';
 import { DidService } from '../../foundation/did/did.service';
@@ -74,7 +75,7 @@ describe('an import consignment, its papers, and the agent who clears them', () 
       // boot — so `app.boot.spec.ts` is what actually proves this service resolves in the real module, and
       // this list exists only to get an instance to exercise.
       providers: [
-        ImportService,
+        ImportService, HandleService,
         ContainerBoxService,
         MediaService,
         EntityService,

@@ -20486,6 +20486,17 @@
             "type": "string",
             "description": "Who may read them — the clearing agent. Exactly one company, never a list."
           },
+          "readerName": {
+            "type": "string",
+            "description": "THE READER'S NAME AND ADDRESS, because an entity id is not an answer to \"who can read my papers\".\n\nThe screen showed `partner-et-djibouti-clearing-lj2ga` — a primary key, wrapped over three lines in a\ncolumn too narrow for it. Somebody deciding whether to revoke access to their own commercial papers\nwas being asked to recognise a slug. The name is what they know the company by; the handle is where\nthey can go and read who it is before deciding.\n\nAbsent where the record has no name for that id, rather than falling back to the id dressed as a\nname — an unknown reader is a thing worth seeing plainly."
+          },
+          "readerHandle": {
+            "type": "string"
+          },
+          "reaches": {
+            "type": "number",
+            "description": "How many papers this grant actually reaches today. Derived, and it moves as papers are added."
+          },
           "importId": {
             "type": "string",
             "description": "Which container, on a `consignment` grant. Absent on a standing one."

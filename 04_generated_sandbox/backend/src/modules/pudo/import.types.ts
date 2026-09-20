@@ -320,6 +320,21 @@ export class DocumentGrant {
   @ApiProperty() ownerEntityId: string;
   /** Who may read them — the clearing agent. Exactly one company, never a list. */
   @ApiProperty() readerEntityId: string;
+  /**
+   * THE READER'S NAME AND ADDRESS, because an entity id is not an answer to "who can read my papers".
+   *
+   * The screen showed `partner-et-djibouti-clearing-lj2ga` — a primary key, wrapped over three lines in a
+   * column too narrow for it. Somebody deciding whether to revoke access to their own commercial papers
+   * was being asked to recognise a slug. The name is what they know the company by; the handle is where
+   * they can go and read who it is before deciding.
+   *
+   * Absent where the record has no name for that id, rather than falling back to the id dressed as a
+   * name — an unknown reader is a thing worth seeing plainly.
+   */
+  @ApiPropertyOptional() readerName?: string;
+  @ApiPropertyOptional() readerHandle?: string;
+  /** How many papers this grant actually reaches today. Derived, and it moves as papers are added. */
+  @ApiPropertyOptional() reaches?: number;
   /** Which container, on a `consignment` grant. Absent on a standing one. */
   @ApiPropertyOptional() importId?: string;
   @ApiProperty() grantedBy: string;

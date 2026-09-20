@@ -1279,8 +1279,12 @@
   flex-direction: column;
 }
 
+/* A row may be a button or a link — a link where it leads somewhere outside this console, so there is
+   no journey to come back from. Either way it is a ROW, not a piece of blue text: every line inside sets
+   its own colour, and the anchor default would tint whatever did not. */
 .crow {
   display: flex;
+  color: inherit;
   align-items: center;
   gap: 12px;
   width: 100%;

@@ -6,6 +6,7 @@ import { ConsoleAction } from '../ConsoleAction';
 import { ConsoleDetail } from '../ConsoleDetail';
 import { PaperFile, PaperFiles } from './PaperFile';
 import { ConsignmentNoteCard } from './ConsignmentNoteCard';
+import { publicPageUrl } from '../../../lib/sbg/config';
 import { ParticipantPicker } from './ParticipantPicker';
 import { SitePicker } from './SitePicker';
 import { ConsoleSelect } from '../ConsoleSelect';
@@ -740,16 +741,47 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                 {liveGrants(detail.grants).length === 0 ? (
                   <p class="cons__empty">{t('tower.imports.grantsNone')}</p>
                 ) : (
-                  <ul class="twr-checklist">
-                    {liveGrants(detail.grants).map((g) => (
-                      <li key={g.grantId}>
-                        {/* The count makes a grant concrete: this is how many papers they can actually read. */}
-                        <b>{t(`tower.imports.grant.${g.scope}` as never)}</b> ({g.scope === 'company' ? companyPapers(detail.documents).length : consignmentPapers(detail.documents, detail.code).length}) →{' '}
-                        {g.readerEntityId}
-                        <div class="chint">{t('tower.imports.grant.since', { when: g.grantedAt.slice(0, 10), who: g.grantedBy })}</div>
-                      </li>
-                    ))}
-                  </ul>
+                  /*
+                    * WHO FIRST, THEN WHAT THEY CAN READ. This was a three-column grid printing
+                    * `partner-et-djibouti-clearing-lj2ga` — a primary key, wrapped over three lines in a
+                    * column too narrow to hold it. Somebody deciding whether to revoke access to their
+                    * own commercial papers was being asked to recognise a slug.
+                    *
+                    * The row reads as a list entry: the company's NAME, then the scope and how many
+                    * papers it actually opens, then who gave it and when. Where the reader has a public
+                    * page the row IS the link to it, opening in a new tab — the way to go and read who
+                    * somebody is before deciding what they may see, with no journey to come back from.
+                    */
+                  <div class="crows">
+                    {liveGrants(detail.grants).map((g) => {
+                      const reaches = g.reaches ?? (g.scope === 'company' ? companyPapers(detail.documents).length : consignmentPapers(detail.documents, detail.code).length);
+                      const page = g.readerHandle ? publicPageUrl(g.readerHandle) : null;
+                      const inside = (
+                        <>
+                          <span class="crow__body">
+                            <span class="crow__top">
+                              <span class="crow__name">{g.readerName ?? g.readerEntityId}</span>
+                              {g.readerHandle ? <span class="ctag ctag--quiet">@{g.readerHandle}</span> : null}
+                            </span>
+                            <span class="crow__sub">
+                              {t(`tower.imports.grant.${g.scope}` as never)} · {reaches === 0 ? t('tower.imports.grantNoPapers') : t('tower.imports.grantPapers', { n: reaches })}
+                            </span>
+                            <span class="chint">{t('tower.imports.grant.since', { when: g.grantedAt.slice(0, 10), who: g.grantedBy })}</span>
+                          </span>
+                          <span class="crow__tail">{page ? <Icon name="chevronRight" size={16} /> : null}</span>
+                        </>
+                      );
+                      return page ? (
+                        <a key={g.grantId} class="crow" href={page} target="_blank" rel="noopener noreferrer">
+                          {inside}
+                        </a>
+                      ) : (
+                        <div key={g.grantId} class="crow">
+                          {inside}
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </section>
 

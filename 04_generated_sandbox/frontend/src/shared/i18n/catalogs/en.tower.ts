@@ -637,6 +637,8 @@ export const enTower = {
   'tower.pick.noMatch': 'Nobody of that name.',
   'tower.pick.empty': 'Nobody listed here yet.',
   'tower.pick.agents': 'Clearing agents',
+  'tower.imports.grantPapers': '{n} papers',
+  'tower.imports.grantNoPapers': 'nothing to read yet',
   'tower.pick.agentsBasis': '{n} listed, alphabetically. Not a ranking — advertising more moves nobody up. This container clears in {country}; each one says where it is registered, which is not the same as where it works.',
   'tower.pick.drivers': 'Drivers',
   'tower.pick.fleets': 'Fleets',

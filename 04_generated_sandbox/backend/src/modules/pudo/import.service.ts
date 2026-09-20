@@ -10,6 +10,7 @@ import { ACCOUNT_CODES } from '../../foundation/books/books.types';
 import { DispatchService } from './dispatch.service';
 import { ContainerBoxService } from './container-box.service';
 import { MediaService } from './media.service';
+import { HandleService } from '../../foundation/handle/handle.service';
 import { BoxEnding, ConditionStance, FreeDayKind, InterchangeSide } from './container-box';
 import type { BoxView } from './container-box.service';
 import type { GeoPoint } from './pudo.types';
@@ -94,6 +95,7 @@ export class ImportService {
     private readonly dispatch: DispatchService,
     private readonly boxes: ContainerBoxService,
     private readonly media: MediaService,
+    private readonly handles: HandleService,
   ) {}
 
   /* ------------------------------------------------------------ the container -- */
@@ -1483,10 +1485,30 @@ export class ImportService {
     return owned.filter((d) => (d.relatesTo ? perConsignment && sameRef(d.relatesTo, consignment.code) : company));
   }
 
+  /**
+   * The grants on this consignment, each one saying WHO in a name rather than an id.
+   *
+   * `reaches` is derived on every read and not stored: it is how many papers the grant can actually open
+   * today, and that changes every time a paper is uploaded. A stored count would be a number that was
+   * true once.
+   */
   private grantsOn(consignment: ImportConsignment): DocumentGrant[] {
+    const owned = this.documents.list(consignment.importerEntityId);
+    const company = owned.filter((d) => !d.relatesTo && d.status !== 'superseded').length;
+    const here = owned.filter((d) => d.relatesTo?.toUpperCase() === consignment.code.toUpperCase() && d.status !== 'superseded').length;
     return [...this.grants.values()]
       .filter((g) => g.ownerEntityId === consignment.importerEntityId && (!g.importId || g.importId === consignment.importId))
-      .sort((a, b) => b.grantedAt.localeCompare(a.grantedAt));
+      .sort((a, b) => b.grantedAt.localeCompare(a.grantedAt))
+      .map((g) => {
+        const reader = this.entities.find(g.readerEntityId);
+        const handle = this.handles.forId(g.readerEntityId)?.handle;
+        return {
+          ...g,
+          ...(reader?.name ? { readerName: reader.name } : {}),
+          ...(handle ? { readerHandle: handle } : {}),
+          reaches: g.scope === 'company' ? company : here,
+        };
+      });
   }
 
   private liveGrants(ownerEntityId: string, readerEntityId: string, importId: string): DocumentGrant[] {
