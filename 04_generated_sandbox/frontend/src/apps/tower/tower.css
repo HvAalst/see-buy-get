@@ -810,3 +810,10 @@
 .twr-detail {
   scroll-margin-top: calc(var(--c-mast-h) + 12px);
 }
+
+/* The one control the containers header carries at a desk. Short, because a header is two facts and
+   whatever fits beside them. */
+.twr-find {
+  max-width: 220px;
+  margin-left: auto;
+}

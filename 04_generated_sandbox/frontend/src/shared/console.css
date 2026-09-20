@@ -308,6 +308,12 @@
   padding-right: 16px;
 }
 
+.cons__panel > .crows,
+.cons__panel > .cdos {
+  padding-left: 0;
+  padding-right: 0;
+}
+
 .cons__panel > .cons__panelhead + *:not(table) {
   padding-top: 14px;
 }
@@ -1014,6 +1020,12 @@
   color: var(--ok);
 }
 
+/* A tag that is also a control, and is currently ON. It has to look pressed rather than merely
+   coloured: the same tag unpressed is the count, and the difference decides what the list below is. */
+.ctag--pressed {
+  box-shadow: inset 0 0 0 1.5px var(--org);
+}
+
 .ctag--quiet {
   background: var(--panel);
   color: var(--tx2);
@@ -1241,5 +1253,173 @@
 @media (max-width: 640px) {
   .ctbl--stack {
     padding: 0 12px 12px;
+  }
+}
+
+/* ------------------------------------------------------------------- rows --- */
+
+/*
+ * A LIST YOU RUN YOUR THUMB DOWN — the shape of a messaging app, chosen for the messaging app's reason.
+ *
+ * The console's table is right at a desk, where the job is comparing many rows across several columns.
+ * It is wrong in a hand: twenty containers as twenty bordered cards is a page you scroll through rather
+ * than a list you scan, and the user's word for it was that it filled the whole screen. A conversation
+ * list solves the same problem — hundreds of items, two lines each, the whole row tappable — and it is
+ * the layout everybody with a phone already knows how to read.
+ *
+ * NO BORDER AND NO RADIUS ON THE ROW. A box around each item says "these are separate things"; a
+ * hairline between them says "this is one list", which is what it is. The only rounded thing left is
+ * the panel, and below the sidebar line even that goes flush to the screen edge.
+ *
+ * THE WHOLE ROW IS THE CONTROL. An "Open" button beside a row somebody is already pointing at is a
+ * smaller target saying the same thing — and on a table it made the row look like it held two actions.
+ */
+.crows {
+  display: flex;
+  flex-direction: column;
+}
+
+.crow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--bd-soft);
+  background: var(--bg);
+  text-align: left;
+}
+
+.crow:last-child {
+  border-bottom: 0;
+}
+
+.crow:hover {
+  background: var(--blue-soft);
+}
+
+/* Orange, because it is the row you have OPEN — a state, never an action. The same signal as the rail. */
+.crow--on {
+  background: var(--org-light);
+}
+
+.crow__body {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.crow__top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.crow__name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--navy);
+  white-space: nowrap;
+}
+
+/* The line that gives way. A route can be any length; the code beside it cannot be abbreviated. */
+.crow__sub {
+  color: var(--tx2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crow__tail {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* ---------------------------------------------------------------- actions --- */
+
+/*
+ * A TITLE THAT OPENS A FORM, instead of a form that is always open.
+ *
+ * Two forms sat above this screen's list: what a company says it clears, and the fields for recording a
+ * container. Each is a page long in a hand, and neither is a thing anybody does on most visits — so
+ * between somebody and the list they came for stood two screens of fields for jobs they were not doing.
+ *
+ * One line each now, and the form arrives in a sheet when it is asked for. The rows are grouped in one
+ * panel with a hairline between them, which is the settings-list shape the rest of this console already
+ * borrows from BondBridge.
+ */
+.cdos {
+  display: flex;
+  flex-direction: column;
+}
+
+.cdo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--bd-soft);
+  background: var(--bg);
+  text-align: left;
+}
+
+.cdo:last-child {
+  border-bottom: 0;
+}
+
+.cdo:hover {
+  background: var(--blue-soft);
+}
+
+.cdo__body {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.cdo__t {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--navy);
+}
+
+.cdo__sub {
+  font-size: var(--c-fs-sm);
+  color: var(--tx3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cdo__go {
+  flex: none;
+  color: var(--tx3);
+}
+
+/* Below the sidebar line a list panel goes flush to the screen: side borders and a radius around
+   something that fills the width are furniture drawing attention to itself. */
+@media (max-width: 1100px) {
+  .cons__panel--flush {
+    border-left: 0;
+    border-right: 0;
+    border-radius: 0;
+    /* Out to the screen edge, which means cancelling exactly the gutter the work area is carrying —
+       16px here, and 12px in the narrow block below, where .cons__main tightens. */
+    margin-left: -16px;
+    margin-right: -16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .cons__panel--flush {
+    margin-left: -12px;
+    margin-right: -12px;
   }
 }

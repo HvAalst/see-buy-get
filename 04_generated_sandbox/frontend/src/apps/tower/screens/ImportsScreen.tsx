@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { AuthImage, Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
+import { useWideScreen } from '../../../shared/useWideScreen';
+import { ConsoleAction } from '../ConsoleAction';
 import { ConsoleDetail } from '../ConsoleDetail';
 import { PaperFile, PaperFiles } from './PaperFile';
 import { ConsoleSelect } from '../ConsoleSelect';
@@ -224,6 +226,8 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
    * has to step over on its way to the one that differs.
    */
   const mixedParties = partiesDiffer(shown);
+  // A table at a desk, a list in a hand. The same line the navigation and the detail already read.
+  const wide = useWideScreen();
 
   const registerFault = registerBlocker(form);
   const publishFault = publishBlocker(lines);
@@ -307,68 +311,149 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
         </section>
       ) : null}
 
-      {/* ---- CL6: what this company SAYS it clears. Their advertisement, and their words ---- */}
+      {/*
+        * THE TWO THINGS SOMEBODY MIGHT COME HERE TO DO, as two lines rather than two pages of fields.
+        *
+        * Recording a container is first and the directory entry second, which is the order of how often
+        * they are done — the entry is written once and edited rarely, and it was at the top of the
+        * screen. The list is what this page is, so it comes after both.
+        */}
       {isCompany ? (
         <section class="cons__panel">
-          <div class="cons__panelhead">
-            <span class="cons__panelt">{t('tower.imports.offerTitle')}</span>
-            {mine?.handle ? <span class="ctag ctag--quiet">@{mine.handle}</span> : null}
-          </div>
-          {/* The one asserted thing in this design, and the hint says so: everything else about them is
-              derived from the record, and a claim shown as a finding would undo the page's whole worth. */}
-          <p class="cons__lede">{t('tower.imports.offerHint')}</p>
+          <div class="cdos">
+            <ConsoleAction title={t('tower.imports.newTitle')} hint={t('tower.imports.newHint')}>
+              {(close) => (
+                <>
+                  <div class="twr-knobs__row">
+                    <label class="twr-knob cfield">
+                      <span class="cfield__label">{t('tower.imports.f.goods')}</span>
+                      <input class="cinput" value={form.goodsDescription} onChange={(e) => setForm({ ...form, goodsDescription: (e.target as HTMLInputElement).value })} />
+                    </label>
+                    <label class="twr-knob cfield">
+                      <span class="cfield__label">{t('tower.imports.f.origin')}</span>
+                      <input class="cinput" maxLength={2} value={form.originCountry} onChange={(e) => setForm({ ...form, originCountry: (e.target as HTMLInputElement).value })} />
+                    </label>
+                    <label class="twr-knob cfield">
+                      <span class="cfield__label">{t('tower.imports.f.dest')}</span>
+                      <input class="cinput" maxLength={2} value={form.destCountry} onChange={(e) => setForm({ ...form, destCountry: (e.target as HTMLInputElement).value })} />
+                    </label>
+                    <label class="twr-knob cfield">
+                      <span class="cfield__label">{t('tower.imports.f.port')}</span>
+                      <input class="cinput" value={form.destPort} onChange={(e) => setForm({ ...form, destPort: (e.target as HTMLInputElement).value })} />
+                    </label>
+                    <label class="twr-knob cfield">
+                      <span class="cfield__label">{t('tower.imports.f.container')}</span>
+                      <input class="cinput" value={form.containerNo} onChange={(e) => setForm({ ...form, containerNo: (e.target as HTMLInputElement).value })} />
+                    </label>
+                    <label class="twr-knob cfield">
+                      <span class="cfield__label">{t('tower.imports.f.carrier')}</span>
+                      <input class="cinput" value={form.carrierRef} onChange={(e) => setForm({ ...form, carrierRef: (e.target as HTMLInputElement).value })} />
+                    </label>
+                    <label class="twr-knob cfield">
+                      <span class="cfield__label">{t('tower.imports.f.eta')}</span>
+                      <input class="cinput" type="date" value={form.etaAt} onChange={(e) => setForm({ ...form, etaAt: (e.target as HTMLInputElement).value })} />
+                    </label>
+                  </div>
+                  <div class="twr-panelend">
+                    {registerFault ? <span class="chint">{t(registerFault)}</span> : null}
+                    <button
+                      type="button"
+                      class="cbtn cbtn--primary"
+                      disabled={Boolean(registerFault) || busy === 'register'}
+                      onClick={() =>
+                        run(
+                          'register',
+                          async () => {
+                            const r = await client!.api.registerImport({
+                              goodsDescription: form.goodsDescription.trim(),
+                              originCountry: form.originCountry.trim().toUpperCase(),
+                              destCountry: form.destCountry.trim().toUpperCase(),
+                              destPort: form.destPort.trim(),
+                              ...(form.containerNo.trim() ? { containerNo: form.containerNo.trim() } : {}),
+                              ...(form.carrierRef.trim() ? { carrierRef: form.carrierRef.trim() } : {}),
+                              ...(form.etaAt.trim() ? { etaAt: form.etaAt.trim() } : {}),
+                              ...(who ? { by: who } : {}),
+                            });
+                            if (!r.error) setDone(t('tower.imports.registered', { code: (r.data as unknown as { code?: string })?.code ?? '' }));
+                            return r;
+                          },
+                          t('tower.imports.registered', { code: '' }),
+                          () => {
+                            setForm({ ...EMPTY_IMPORT_FORM });
+                            close();
+                          },
+                        )
+                      }
+                    >
+                      {t('tower.imports.register')}
+                    </button>
+                  </div>
+                </>
+              )}
+            </ConsoleAction>
+            <ConsoleAction title={t('tower.imports.offerTitle')} hint={mine?.handle ? '@' + mine.handle : t('tower.imports.offerLine')}>
+              {(close) => (
+                <>
+                  {/* The one asserted thing in this design, and the hint says so: everything else about them is
+                      derived from the record, and a claim shown as a finding would undo the page's whole worth. */}
+                  <p class="cons__lede">{t('tower.imports.offerHint')}</p>
 
-          {/* Not a <label>: the control is a button, and a label wrapping a button either does nothing
-              or fires it twice depending on the browser. */}
-          <div class="cfield">
-            <span class="cfield__label">{t('tower.imports.f.offerSpecialisms')}</span>
-            <ConsoleSelect
-              label={t('tower.imports.f.offerSpecialisms')}
-              options={CLEARANCE_SPECIALISMS.map((sp) => ({ value: sp, label: t(`home.agents.spec.${sp}` as never) }))}
-              chosen={offerForm.specialisms}
-              onChange={(specialisms) => setOfferForm({ ...offerForm, specialisms })}
-              placeholder={t('tower.imports.offerPick')}
-              summary={t('tower.imports.offerChosen', { n: offerForm.specialisms.length, all: CLEARANCE_SPECIALISMS.length })}
-              removeLabel={(what) => t('tower.imports.offerRemove', { what })}
-            />
-          </div>
+                  {/* Not a <label>: the control is a button, and a label wrapping a button either does nothing
+                      or fires it twice depending on the browser. */}
+                  <div class="cfield">
+                    <span class="cfield__label">{t('tower.imports.f.offerSpecialisms')}</span>
+                    <ConsoleSelect
+                      label={t('tower.imports.f.offerSpecialisms')}
+                      options={CLEARANCE_SPECIALISMS.map((sp) => ({ value: sp, label: t(`home.agents.spec.${sp}` as never) }))}
+                      chosen={offerForm.specialisms}
+                      onChange={(specialisms) => setOfferForm({ ...offerForm, specialisms })}
+                      placeholder={t('tower.imports.offerPick')}
+                      summary={t('tower.imports.offerChosen', { n: offerForm.specialisms.length, all: CLEARANCE_SPECIALISMS.length })}
+                      removeLabel={(what) => t('tower.imports.offerRemove', { what })}
+                    />
+                  </div>
 
-          <div class="twr-knobs__row">
-            <label class="twr-knob cfield">
-              <span class="cfield__label">{t('tower.imports.f.offerPlaces')}</span>
-              <input class="cinput" value={offerForm.places} onChange={(e) => setOfferForm({ ...offerForm, places: (e.target as HTMLInputElement).value })} />
-            </label>
-            <label class="twr-knob cfield">
-              <span class="cfield__label">{t('tower.imports.f.offerWords')}</span>
-              <input class="cinput" value={offerForm.words} onChange={(e) => setOfferForm({ ...offerForm, words: (e.target as HTMLInputElement).value })} />
-            </label>
-          </div>
+                  <div class="twr-knobs__row">
+                    <label class="twr-knob cfield">
+                      <span class="cfield__label">{t('tower.imports.f.offerPlaces')}</span>
+                      <input class="cinput" value={offerForm.places} onChange={(e) => setOfferForm({ ...offerForm, places: (e.target as HTMLInputElement).value })} />
+                    </label>
+                    <label class="twr-knob cfield">
+                      <span class="cfield__label">{t('tower.imports.f.offerWords')}</span>
+                      <input class="cinput" value={offerForm.words} onChange={(e) => setOfferForm({ ...offerForm, words: (e.target as HTMLInputElement).value })} />
+                    </label>
+                  </div>
 
-          <div class="twr-panelend">
-            {offerForm.specialisms.length === 0 ? <span class="chint">{t('tower.imports.offerNeedOne')}</span> : null}
-            <button
-              type="button"
-              class="cbtn cbtn--primary"
-              disabled={offerForm.specialisms.length === 0 || busy === 'offer'}
-              onClick={() =>
-                run(
-                  'offer',
-                  () =>
-                    client!.api.setClearanceOffer(state.who!.entityId!, {
-                      specialisms: offerForm.specialisms,
-                      places: offerForm.places
-                        .split(',')
-                        .map((x) => x.trim())
-                        .filter(Boolean),
-                      ...(offerForm.words.trim() ? { words: offerForm.words.trim() } : {}),
-                      ...(who ? { by: who } : {}),
-                    }),
-                  t('tower.imports.offerSaved'),
-                )
-              }
-            >
-              {t('tower.imports.offerSave')}
-            </button>
+                  <div class="twr-panelend">
+                    {offerForm.specialisms.length === 0 ? <span class="chint">{t('tower.imports.offerNeedOne')}</span> : null}
+                    <button
+                      type="button"
+                      class="cbtn cbtn--primary"
+                      disabled={offerForm.specialisms.length === 0 || busy === 'offer'}
+                      onClick={() =>
+                        run(
+                          'offer',
+                          () =>
+                            client!.api.setClearanceOffer(state.who!.entityId!, {
+                              specialisms: offerForm.specialisms,
+                              places: offerForm.places
+                                .split(',')
+                                .map((x) => x.trim())
+                                .filter(Boolean),
+                              ...(offerForm.words.trim() ? { words: offerForm.words.trim() } : {}),
+                              ...(who ? { by: who } : {}),
+                            }),
+                          t('tower.imports.offerSaved'),
+                          close,
+                        )
+                      }
+                    >
+                      {t('tower.imports.offerSave')}
+                    </button>
+                  </div>
+                </>
+              )}
+            </ConsoleAction>
           </div>
         </section>
       ) : null}
@@ -380,140 +465,83 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
       ) : null}
       {error ? <p class="cerr">{error}</p> : null}
 
-      {/* ---- record a container. Only a company can: staff act for nobody and have no papers to share. ---- */}
-      {isCompany ? (
-        <section class="cons__panel">
-          <div class="cons__panelhead">
-            <span class="cons__panelt">{t('tower.imports.newTitle')}</span>
-          </div>
-          <div class="twr-knobs__row">
-            <label class="twr-knob cfield">
-              <span class="cfield__label">{t('tower.imports.f.goods')}</span>
-              <input class="cinput" value={form.goodsDescription} onChange={(e) => setForm({ ...form, goodsDescription: (e.target as HTMLInputElement).value })} />
-            </label>
-            <label class="twr-knob cfield">
-              <span class="cfield__label">{t('tower.imports.f.origin')}</span>
-              <input class="cinput" maxLength={2} value={form.originCountry} onChange={(e) => setForm({ ...form, originCountry: (e.target as HTMLInputElement).value })} />
-            </label>
-            <label class="twr-knob cfield">
-              <span class="cfield__label">{t('tower.imports.f.dest')}</span>
-              <input class="cinput" maxLength={2} value={form.destCountry} onChange={(e) => setForm({ ...form, destCountry: (e.target as HTMLInputElement).value })} />
-            </label>
-            <label class="twr-knob cfield">
-              <span class="cfield__label">{t('tower.imports.f.port')}</span>
-              <input class="cinput" value={form.destPort} onChange={(e) => setForm({ ...form, destPort: (e.target as HTMLInputElement).value })} />
-            </label>
-            <label class="twr-knob cfield">
-              <span class="cfield__label">{t('tower.imports.f.container')}</span>
-              <input class="cinput" value={form.containerNo} onChange={(e) => setForm({ ...form, containerNo: (e.target as HTMLInputElement).value })} />
-            </label>
-            <label class="twr-knob cfield">
-              <span class="cfield__label">{t('tower.imports.f.carrier')}</span>
-              <input class="cinput" value={form.carrierRef} onChange={(e) => setForm({ ...form, carrierRef: (e.target as HTMLInputElement).value })} />
-            </label>
-            <label class="twr-knob cfield">
-              <span class="cfield__label">{t('tower.imports.f.eta')}</span>
-              <input class="cinput" type="date" value={form.etaAt} onChange={(e) => setForm({ ...form, etaAt: (e.target as HTMLInputElement).value })} />
-            </label>
-          </div>
-          <div class="twr-panelend">
-            {registerFault ? <span class="chint">{t(registerFault)}</span> : null}
-            <button
-              type="button"
-              class="cbtn cbtn--primary"
-              disabled={Boolean(registerFault) || busy === 'register'}
-              onClick={() =>
-                run(
-                  'register',
-                  async () => {
-                    const r = await client!.api.registerImport({
-                      goodsDescription: form.goodsDescription.trim(),
-                      originCountry: form.originCountry.trim().toUpperCase(),
-                      destCountry: form.destCountry.trim().toUpperCase(),
-                      destPort: form.destPort.trim(),
-                      ...(form.containerNo.trim() ? { containerNo: form.containerNo.trim() } : {}),
-                      ...(form.carrierRef.trim() ? { carrierRef: form.carrierRef.trim() } : {}),
-                      ...(form.etaAt.trim() ? { etaAt: form.etaAt.trim() } : {}),
-                      ...(who ? { by: who } : {}),
-                    });
-                    if (!r.error) setDone(t('tower.imports.registered', { code: (r.data as unknown as { code?: string })?.code ?? '' }));
-                    return r;
-                  },
-                  t('tower.imports.registered', { code: '' }),
-                  () => setForm({ ...EMPTY_IMPORT_FORM }),
-                )
-              }
-            >
-              {t('tower.imports.register')}
-            </button>
-          </div>
-        </section>
-      ) : null}
-
       {/* ---- the containers ---- */}
-      <section class="cons__panel">
+      <section class="cons__panel cons__panel--flush">
         <div class="cons__panelhead">
           <span class="cons__panelt">{rows === null ? t('tower.imports.loading') : t('tower.imports.count', { n: rows.length })}</span>
-          {rows !== null && found.length !== rows.length ? <span class="ctag ctag--quiet">{t('tower.imports.found', { n: found.length })}</span> : null}
-          {/* Said here rather than on the navigation badge: a number beside a group reads as a demand, and
-              this one is only meaningful once the list has actually been read. */}
-          {waiting ? <span class="ctag ctag--warn">{t('tower.imports.waitingOnYou', { n: waiting })}</span> : null}
+          {/*
+            * THE WAITING COUNT IS THE FILTER. It was a tag beside a labelled row of buttons reading
+            * "Show: All / Waiting on you", which is three controls saying what this one says — and the
+            * header already had to carry the number anyway. Pressed, the list is the ones waiting on
+            * you; pressed again, it is all of them. Nothing else was ever worth a row of its own.
+            *
+            * Said here rather than on the navigation badge: a number beside a group reads as a demand,
+            * and this one is only meaningful once the list has actually been read.
+            */}
+          {waiting !== null && waiting > 0 ? (
+            <button
+              type="button"
+              class={`ctag ctag--warn${onlyWaiting ? ' ctag--pressed' : ''}`}
+              aria-pressed={onlyWaiting}
+              onClick={() => {
+                setOnlyWaiting(!onlyWaiting);
+                setPage(0);
+              }}
+            >
+              {t('tower.imports.waitingOnYou', { n: waiting })}
+            </button>
+          ) : null}
+          {/* Only where there is a table to search. In a hand the header is two facts and no more — the
+              list is scrolled, not queried, and a field here cost more room than it was worth. */}
+          {wide && rows !== null && rows.length > PAGE ? (
+            <input
+              class="cinput cinput--sm twr-find"
+              value={query}
+              onInput={(e) => {
+                setQuery((e.target as HTMLInputElement).value);
+                setPage(0);
+              }}
+              placeholder={t('tower.imports.searchPh')}
+              aria-label={t('tower.imports.search')}
+            />
+          ) : null}
         </div>
-        {/* SEARCH FIRST, because with eighty-nine of them the list is not the answer — the one you want is.
-            It reads the code, the container number, the goods, the port and the agent, which is every way
-            somebody actually remembers a container. */}
-        {rows !== null && rows.length > PAGE ? (
-          <div class="twr-knobs__row">
-            <label class="twr-knob cfield">
-              <span class="cfield__label">{t('tower.imports.search')}</span>
-              <input
-                class="cinput"
-                value={query}
-                onInput={(e) => {
-                  setQuery((e.target as HTMLInputElement).value);
-                  setPage(0);
-                }}
-                placeholder={t('tower.imports.searchPh')}
-              />
-            </label>
-            {/* WHICH SLICE, and only offered where there IS a slice: a filter for nought of them is a
-                control that empties the list and explains nothing. The question an importer asks all
-                day is which of these needs them, and the answer is usually four rows out of eighty-nine. */}
-            {waiting !== null && waiting > 0 ? (
-              <div class="twr-knob cfield">
-                <span class="cfield__label">{t('tower.imports.show')}</span>
-                <div class="twr-panelend">
-                  <button
-                    type="button"
-                    class={`cbtn cbtn--ghost cbtn--sm${onlyWaiting ? '' : ' cbtn--on'}`}
-                    onClick={() => {
-                      setOnlyWaiting(false);
-                      setPage(0);
-                    }}
-                  >
-                    {t('tower.imports.showAll', { n: rows.length })}
-                  </button>
-                  <button
-                    type="button"
-                    class={`cbtn cbtn--ghost cbtn--sm${onlyWaiting ? ' cbtn--on' : ''}`}
-                    onClick={() => {
-                      setOnlyWaiting(true);
-                      setPage(0);
-                    }}
-                  >
-                    {t('tower.imports.showWaiting', { n: waiting })}
-                  </button>
-                </div>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
         {rows === null ? (
           <p class="cons__empty">{t('tower.imports.loading')}</p>
         ) : rows.length === 0 ? (
           <p class="cons__empty">{isCompany ? t('tower.imports.noneCompany') : t('tower.imports.none')}</p>
+        ) : !wide ? (
+          /*
+            * THE SAME ROWS, AS A LIST YOU RUN YOUR THUMB DOWN. CSS can move a table and cannot turn one
+            * into a conversation list — so below the sidebar line this is a different component, the
+            * same decision the navigation and the detail already made. The code and the route, because
+            * that is how somebody recognises a container at a glance; everything else is one tap away.
+            */
+          <div class="crows">
+            {shown.map((row) => (
+              <button
+                key={row.importId}
+                type="button"
+                class={`crow${detail?.importId === row.importId ? ' crow--on' : ''}`}
+                onClick={() => (detail?.importId === row.importId ? setDetail(null) : void openOne(row.importId))}
+              >
+                <span class="crow__body">
+                  <span class="crow__top">
+                    <span class="crow__name">{row.code}</span>
+                    {row.waitingOnYou ? <span class="ctag ctag--warn">{row.waitingOnYou}</span> : null}
+                  </span>
+                  <span class="crow__sub">
+                    {row.originCountry} → {row.destCountry} · {row.destPort}
+                  </span>
+                </span>
+                <span class="crow__tail">
+                  <Icon name="chevronRight" size={16} />
+                </span>
+              </button>
+            ))}
+          </div>
         ) : (
-          <table class="ctbl ctbl--zebra ctbl--stack">
+          <table class="ctbl ctbl--zebra">
             <thead>
               <tr>
                 <th>{t('tower.imports.col.code')}</th>
@@ -1392,7 +1420,6 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                 {detail.box.freeDays.length > 0 && detail.box.clock.freeDays == null && detail.box.clock.kind !== 'stopped' ? (
                   <p class="chint">{t('tower.imports.clockClaimIdle')}</p>
                 ) : null}
-
 
                 {/* ---- Y3: what the box looked like at each gate ----
                     "You damaged my box" against "it was like that when we took it" is an argument with no
