@@ -5,6 +5,7 @@ import { useWideScreen } from '../../../shared/useWideScreen';
 import { ConsoleAction } from '../ConsoleAction';
 import { ConsoleDetail } from '../ConsoleDetail';
 import { ConsoleFold } from '../ConsoleFold';
+import { ConsolePick } from '../ConsolePick';
 import { PaperFile, PaperFiles } from './PaperFile';
 import { PaperHelp } from './PaperHelp';
 import { ConsignmentNoteCard } from './ConsignmentNoteCard';
@@ -1181,6 +1182,7 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                   <label class="twr-knob cfield">
                     <span class="cfield__label">{t('tower.imports.f.containerNo')}</span>
                     <input
+                      class="cinput"
                       maxLength={13}
                       placeholder="MSCU1234566"
                       value={cargoForm.containerNo}
@@ -1194,37 +1196,30 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                     <span class="cfield__label">{t('tower.imports.f.cscPlateDate')}</span>
                     <input class="cinput" type="date" value={cargoForm.cscPlateDate} onChange={(e) => setCargoForm({ ...cargoForm, cscPlateDate: (e.target as HTMLInputElement).value })} />
                   </label>
-                  <label class="twr-knob cfield">
-                    <span class="cfield__label">{t('tower.imports.f.box')}</span>
-                    <input
-                      list="box-codes"
-                      maxLength={4}
-                      placeholder="45G1"
+                  {/* The catalogue is the COMMON codes; the standard builds thousands. So the sheet's
+                      search doubles as an entry field, and anything of the right shape can be recorded. */}
+                  <div class="twr-knob">
+                    <ConsolePick
+                      label={t('tower.imports.f.box')}
                       value={cargoForm.containerType}
-                      onChange={(e) => setCargoForm({ ...cargoForm, containerType: (e.target as HTMLInputElement).value.toUpperCase() })}
+                      onChange={(containerType) => setCargoForm({ ...cargoForm, containerType })}
+                      options={boxes.map((b) => ({ value: b.code, label: b.code, sub: b.label }))}
+                      hint={t('tower.imports.boxAny')}
+                      placeholder="45G1"
+                      allowFree={(typed) => (/^[A-Za-z0-9]{4}$/.test(typed) ? typed.toUpperCase() : null)}
                     />
-                    <datalist id="box-codes">
-                      {boxes.map((b) => (
-                        <option key={b.code} value={b.code}>
-                          {b.label}
-                        </option>
-                      ))}
-                    </datalist>
-                    <span class="chint">{t('tower.imports.boxAny')}</span>
-                  </label>
+                  </div>
                   {/* WHAT THE GOODS ARE — the importer's, because we must not read it out of a description.
                       This is the whole distance between a food tank and a fuel tank. */}
-                  <label class="twr-knob cfield">
-                    <span class="cfield__label">{t('tower.imports.f.nature')}</span>
-                    <select class="cinput" value={cargoForm.natureCode} onChange={(e) => setCargoForm({ ...cargoForm, natureCode: (e.target as HTMLSelectElement).value })}>
-                      <option value="">{t('tower.imports.naturePick')}</option>
-                      {CARGO_NATURES.map((n) => (
-                        <option key={n} value={n}>
-                          {t(`tower.imports.nature.${n}` as never)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  <div class="twr-knob">
+                    <ConsolePick
+                      label={t('tower.imports.f.nature')}
+                      value={cargoForm.natureCode}
+                      onChange={(natureCode) => setCargoForm({ ...cargoForm, natureCode })}
+                      options={CARGO_NATURES.map((n) => ({ value: n, label: t(`tower.imports.nature.${n}` as never) }))}
+                      placeholder={t('tower.imports.naturePick')}
+                    />
+                  </div>
                   {/* Only for a box with no roof: its own height is the floor the cargo sits on. */}
                   {detail.containerFacts?.openTop || detail.containerFacts?.heightUnstated || boxes.find((b) => b.code === cargoForm.containerType)?.openTop ? (
                     <label class="twr-knob cfield">

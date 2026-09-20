@@ -263,6 +263,14 @@ export const enTower = {
   'tower.depots.f.pinNone': 'Optional. Without it a haulier is sent to the middle of the town.',
   'tower.depots.anywhere': 'Anywhere',
   'tower.depots.reachHint': 'A yard on this list with no number on it costs a haulier a morning, so a telephone is asked for.',
+  // ConsolePick — one choice from a list, in a sheet rather than a popup the page does not own.
+  'tower.choose.choose': 'Choose…',
+  'tower.choose.search': 'Search',
+  'tower.choose.searchOrType': 'Search, or type a code',
+  'tower.choose.none': 'Nothing matches that.',
+  'tower.choose.use': 'Use {what}',
+  'tower.choose.useSub': 'Not one of the common ones — it is recorded as you typed it.',
+
   'tower.country.choose': 'Choose a country…',
   'tower.country.search': 'Type a name or a code',
   'tower.country.none': 'No country of that name.',
