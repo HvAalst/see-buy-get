@@ -26,7 +26,7 @@ import { canonicalBody, bodyOf, excludedByShipper } from './freight-body';
 import { blockersFor, takeable } from './freight-board';
 import { nearestPlace } from './geo-gazetteer';
 import { isPackaging, selfLoading, type Packaging } from './packaging';
-import { buildSeries } from './market-series';
+import { buildSeries, carriersOn } from './market-series';
 import { TruckSubtype } from './fleet.config';
 import { isTempBreach, loadSafetyItems, missingKeys, requiredLoadKeys, requiredUnloadKeys, tempBand, unloadSafetyItems } from './heavy-cargo';
 import { MediaService } from './media.service';
@@ -1357,6 +1357,17 @@ export class DispatchService {
     const near = (f: Freight) => !input.from || radius == null || this.router.roadKm(input.from, f.pickupLocation) <= radius;
     const scoped = [...this.freights.values()].filter(near);
     return buildSeries(scoped, { from: input.since, to: input.until }, (a, b) => this.router.roadKm(a, b));
+  }
+
+  /**
+   * Who carried on one lane. The lane is named by its two ENDS, the same way the series names it.
+   *
+   * Returns dids and counts; resolving a did to a trading name and a public handle belongs to the caller,
+   * which already holds the fleet register and the handle directory. Keeping that out of here is what
+   * stops a dispatch service growing two more dependencies for one read.
+   */
+  laneCarriage(input: { from: string; to: string; since: number; until: number }): ReturnType<typeof carriersOn> {
+    return carriersOn([...this.freights.values()], input.from, input.to, { from: input.since, to: input.until });
   }
 
   /* ------------------------------------------------- FB0c: negotiate before commit -- */

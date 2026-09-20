@@ -312,6 +312,47 @@ export function priceVsStackOf(freights: Freight[], window: { from: number; to: 
 /** A lane end we cannot name honestly. The never-infer rule, applied to places instead of bodies. */
 export const UNKNOWN_PLACE = 'unknown';
 
+/**
+ * WHO ACTUALLY CARRIED ON THIS LANE — grouped by the fleet whose vehicle took the load.
+ *
+ * "If we know it was taken, we know who took it": a claim stamps the carriage — vehicle, plate, driver,
+ * and the fleet manager where there is one. This counts loads CLAIMED inside the window, because a claim
+ * is the taking; a load posted in the window and taken after it belongs to the window it was taken in.
+ *
+ * WHAT IT DELIBERATELY DOES NOT RETURN IS A DRIVER. A driver is a person, and a list of the individuals
+ * who run Mombasa to Nairobi is a movement pattern about people, not a fact about a market. Handles in
+ * this network are issued to companies, shops, hubs and fleets — never to a person — and that boundary is
+ * the one this function keeps: it groups by the FLEET, and every load claimed by somebody without one is
+ * counted as independent and nobody is named.
+ */
+export function carriersOn(
+  freights: Freight[],
+  from: string,
+  to: string,
+  window: { from: number; to: number },
+): { carriers: { managerDid: string; loads: number }[]; independentLoads: number; claimedLoads: number } {
+  const byFleet = new Map<string, number>();
+  let independentLoads = 0;
+  let claimedLoads = 0;
+
+  for (const f of freights) {
+    if (!f.claimedAt || !inWindow(f.claimedAt, window.from, window.to)) continue;
+    if (placeAt(f.pickupLocation).name !== from || placeAt(f.destLocation).name !== to) continue;
+    claimedLoads += 1;
+    const fleet = f.carriage?.managerDid;
+    if (fleet) byFleet.set(fleet, (byFleet.get(fleet) ?? 0) + 1);
+    else independentLoads += 1;
+  }
+
+  // Sorted by did only so the answer is stable; the reader sorts by NAME, which is the caller's to
+  // resolve. Never by volume — this network does not publish a ranking of the people in it.
+  return {
+    carriers: [...byFleet.entries()].map(([managerDid, loads]) => ({ managerDid, loads })).sort((a, b) => a.managerDid.localeCompare(b.managerDid)),
+    independentLoads,
+    claimedLoads,
+  };
+}
+
 /** The coarse name AND the gazetteer's coordinate for it, in one lookup. */
 function placeAt(point?: { lat: number; lng: number }): { name: string; at?: { lat: number; lng: number } } {
   if (!point) return { name: UNKNOWN_PLACE };

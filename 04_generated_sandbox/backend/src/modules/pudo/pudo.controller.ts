@@ -50,7 +50,7 @@ import { FleetService } from './fleet.service';
 import { DispatchService } from './dispatch.service';
 import { RouteConstraintService } from './route-constraint.service';
 import { ConstraintView, ConstraintsResponse, RouteConstraintsResponse } from './route-constraint.types';
-import { FreightBoardResponse, FreightProposalsResponse, MarketResponse, MarketSeries, PostedFreightResponse, FreightCancelledResponse, FreightClaimResponse, FreightClaimQueueRow } from './dispatch.types';
+import { FreightBoardResponse, FreightProposalsResponse, MarketResponse, MarketSeries, LaneCarriers, PostedFreightResponse, FreightCancelledResponse, FreightClaimResponse, FreightClaimQueueRow } from './dispatch.types';
 import { MarketPulseService } from './market-pulse.service';
 import { CargoService } from './cargo.service';
 import { MediaService } from './media.service';
@@ -96,7 +96,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyRecordDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto } from './pudo.dto';
+  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto } from './pudo.dto';
 import { incotermEntry } from '../../foundation/incoterms/catalogue';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
@@ -4103,6 +4103,51 @@ export class SbgController {
     }
     const from = q.lat != null && q.lng != null ? { lat: Number(q.lat), lng: Number(q.lng) } : undefined;
     return this.dispatch.marketSeries({ from, radiusKm: q.radiusKm, since, until });
+  }
+
+  /**
+   * WHO CARRIED ON ONE LANE — the fleets, alphabetical, each with the public page it already has.
+   *
+   * NOT @Public, and the reason is the sentence directly above that makes the series public: "nothing here
+   * identifies a load, a shipper or a driver". Naming the carriers on a lane identifies somebody, so it
+   * cannot ride on that justification and does not try to. It is for people signed into the market —
+   * network staff and the companies trading in it.
+   *
+   * It names FLEETS AND NEVER DRIVERS. A driver is a person, and the individuals who run a corridor are a
+   * movement pattern about people rather than a fact about a market. Handles are issued to companies,
+   * shops, hubs and fleets; the set this returns is exactly the set that already has a public page, and a
+   * load taken by an owner-driver is counted as independent with nobody named.
+   *
+   * ALPHABETICAL, NEVER BY VOLUME. The same rule as the directory: this network states what it measured
+   * and does not publish a ranking of the people in it. The counts are there because they are measured and
+   * a reader can check them; the ORDER makes no claim.
+   */
+  @Roles('operator', 'entity_admin')
+  @Get('market/lane-carriers')
+  laneCarriers(@Query() q: LaneCarriersQueryDto): LaneCarriers {
+    const until = q.until ? Date.parse(q.until) : Date.now();
+    const since = q.since ? Date.parse(q.since) : until - 365 * 24 * 3_600_000;
+    if (!Number.isFinite(since) || !Number.isFinite(until) || since > until) {
+      throw new GlosError('INVALID_INPUT', 'The period must start before it ends');
+    }
+    this.handleDirectory.ensure();
+    const found = this.dispatch.laneCarriage({ from: q.from, to: q.to, since, until });
+    const carriers = found.carriers
+      .map((c) => {
+        const fleet = this.managers.list().find((m) => m.did === c.managerDid);
+        const handle = this.handles.forId(c.managerDid)?.handle;
+        return { name: fleet?.companyName ?? c.managerDid, ...(handle ? { handle } : {}), loads: c.loads };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+    return {
+      lane: q.from + ' → ' + q.to,
+      from: q.from,
+      to: q.to,
+      claimedLoads: found.claimedLoads,
+      carriers,
+      independentLoads: found.independentLoads,
+      basis: 'Fleets whose vehicle claimed a load on this lane in this window, alphabetical. Loads taken by an owner-driver are counted and nobody is named. Nothing here is a recommendation.',
+    };
   }
 
   /**

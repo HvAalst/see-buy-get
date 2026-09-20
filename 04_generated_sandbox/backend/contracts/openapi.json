@@ -13618,6 +13618,61 @@
         }
       }
     },
+    "/v1/sbg/market/lane-carriers": {
+      "get": {
+        "operationId": "Sbg.laneCarriers",
+        "summary": "",
+        "description": "WHO CARRIED ON ONE LANE — the fleets, alphabetical, each with the public page it already has.\n\nNOT @Public, and the reason is the sentence directly above that makes the series public: \"nothing here\nidentifies a load, a shipper or a driver\". Naming the carriers on a lane identifies somebody, so it\ncannot ride on that justification and does not try to. It is for people signed into the market —\nnetwork staff and the companies trading in it.\n\nIt names FLEETS AND NEVER DRIVERS. A driver is a person, and the individuals who run a corridor are a\nmovement pattern about people rather than a fact about a market. Handles are issued to companies,\nshops, hubs and fleets; the set this returns is exactly the set that already has a public page, and a\nload taken by an owner-driver is counted as independent with nobody named.\n\nALPHABETICAL, NEVER BY VOLUME. The same rule as the directory: this network states what it measured\nand does not publish a ranking of the people in it. The counts are there because they are measured and\na reader can check them; the ORDER makes no claim.",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "maxLength": 80,
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "maxLength": 80,
+              "type": "string"
+            }
+          },
+          {
+            "name": "since",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "until",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LaneCarriers"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/offers/response": {
       "get": {
         "operationId": "Sbg.offerResponse",
@@ -28771,6 +28826,67 @@
           "totals",
           "timeToClaim",
           "priceVsStack"
+        ]
+      },
+      "LaneCarrier": {
+        "type": "object",
+        "properties": {
+          "handle": {
+            "type": "string",
+            "description": "Their page at /@handle. Present for everything the directory has issued a handle to."
+          },
+          "name": {
+            "type": "string"
+          },
+          "loads": {
+            "type": "number",
+            "description": "Loads on this lane claimed by this fleet inside the window."
+          }
+        },
+        "required": [
+          "name",
+          "loads"
+        ]
+      },
+      "LaneCarriers": {
+        "type": "object",
+        "properties": {
+          "carriers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LaneCarrier"
+            }
+          },
+          "lane": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "claimedLoads": {
+            "type": "number",
+            "description": "Every load on this lane that was CLAIMED in the window — the sum the rows below are drawn from."
+          },
+          "independentLoads": {
+            "type": "number",
+            "description": "Loads carried by somebody with no fleet behind them — an owner-driver.\n\nCounted and never named: they are real work by real people, and the person is not a business with a\npublic page. A screen that dropped this number would understate the lane and flatter the fleets."
+          },
+          "basis": {
+            "type": "string",
+            "description": "One sentence naming what was counted, shown verbatim. A list with no basis reads as a ranking."
+          }
+        },
+        "required": [
+          "carriers",
+          "lane",
+          "from",
+          "to",
+          "claimedLoads",
+          "independentLoads",
+          "basis"
         ]
       },
       "FreightInstructionsView": {

@@ -1734,6 +1734,14 @@ export class MarketSeriesQueryDto {
   @IsOptional() @IsDateString() until?: string;
 }
 
+/** Who carried on one lane. The lane is named by its two ENDS, exactly as the series names it. */
+export class LaneCarriersQueryDto {
+  @IsString() @MaxLength(80) from!: string;
+  @IsString() @MaxLength(80) to!: string;
+  @IsOptional() @IsDateString() since?: string;
+  @IsOptional() @IsDateString() until?: string;
+}
+
 /** FB0c — a driver's price for a load posted 'negotiate'. It reserves nothing; the poster's acceptance is
  *  what claims the load. */
 export class ProposeFreightDto {

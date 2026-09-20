@@ -43,8 +43,17 @@ export function takeUp(totals: MarketSeriesTotals): number | null {
   return Math.round((totals.metLoads / totals.offeredLoads) * 100);
 }
 
-/** The same question for one day. Null on a day nothing was posted. */
-export function dayTakeUp(day: MarketDay): number | null {
+/**
+ * The same question for one day — or for anything else that was posted and taken: a lane asks it too.
+ *
+ * Structural rather than typed to MarketDay, because the question is about two counts and nothing else,
+ * and a second copy of this arithmetic under another name is how two places start disagreeing.
+ *
+ * NULL where nothing was posted. And the CALLER must still withhold it on a thin sample: a ratio IS the
+ * claim, so one load out of two publishes as 50% and means nothing — the CL3 rule, which is the one
+ * exception to "state the figure, withhold the verdict".
+ */
+export function dayTakeUp(day: { postedLoads: number; claimedLoads: number }): number | null {
   if (!day.postedLoads) return null;
   return Math.round((day.claimedLoads / day.postedLoads) * 100);
 }

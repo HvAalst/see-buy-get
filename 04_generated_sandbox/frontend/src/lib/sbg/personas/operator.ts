@@ -486,6 +486,20 @@ export function createOperatorApi(sbg: SbgClient) {
      * Every figure is derived from timestamps the loads already carry, so it keeps working in a market where
      * nobody reports anything — which is the only kind of market this has to work in.
      */
+    /**
+     * WHO CARRIED ON ONE LANE. Signed-in only, unlike the series it sits beside.
+     *
+     * The series is public because it identifies nobody; this names fleets, so it cannot ride on that
+     * justification. It names FLEETS AND NEVER DRIVERS, and a load taken by an owner-driver is counted
+     * with nobody named.
+     */
+    laneCarriers: (query: { from: string; to: string; since?: string; until?: string }) =>
+      sbg.request((c) =>
+        c.GET('/v1/sbg/market/lane-carriers', {
+          params: { query: { from: query.from, to: query.to, ...(query.since ? { since: query.since } : {}), ...(query.until ? { until: query.until } : {}) } },
+        } as never),
+      ),
+
     marketSeries: (query: { lat?: number; lng?: number; radiusKm?: number; since?: string; until?: string } = {}) =>
       sbg.request((c) =>
         c.GET('/v1/sbg/market/series', {

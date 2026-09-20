@@ -652,6 +652,42 @@ export class LaneSeries {
   thin: boolean;
 }
 
+/**
+ * ONE CARRIER ON ONE LANE — a fleet, what it moved there, and where its public page is.
+ *
+ * A FLEET, NEVER A DRIVER. A driver is a person; naming the individuals who run a corridor would publish
+ * a movement pattern about people. Handles in this network go to companies, shops, hubs and fleets, and
+ * this list is exactly the set of things that already have a public page.
+ */
+export class LaneCarrier {
+  name: string;
+  /** Their page at /@handle. Present for everything the directory has issued a handle to. */
+  @ApiPropertyOptional()
+  handle?: string;
+  /** Loads on this lane claimed by this fleet inside the window. */
+  loads: number;
+}
+
+/** Who carried on one lane in one window. Alphabetical, never ranked; the basis says what it counted. */
+export class LaneCarriers {
+  lane: string;
+  from: string;
+  to: string;
+  /** Every load on this lane that was CLAIMED in the window — the sum the rows below are drawn from. */
+  claimedLoads: number;
+  @ApiProperty({ type: [LaneCarrier] })
+  carriers: LaneCarrier[];
+  /**
+   * Loads carried by somebody with no fleet behind them — an owner-driver.
+   *
+   * Counted and never named: they are real work by real people, and the person is not a business with a
+   * public page. A screen that dropped this number would understate the lane and flatter the fleets.
+   */
+  independentLoads: number;
+  /** One sentence naming what was counted, shown verbatim. A list with no basis reads as a ranking. */
+  basis: string;
+}
+
 /** FB4 — the market series. The response of the analytics endpoint, and the moat. */
 export class MarketSeries {
   /** The window these figures cover, echoed as ISO instants. A kilometre count means nothing without the

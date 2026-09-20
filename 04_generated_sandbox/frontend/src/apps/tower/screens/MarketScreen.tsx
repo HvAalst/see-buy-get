@@ -18,6 +18,7 @@ import {
   lanesUnplaceable,
   type MarketSeriesView,
 } from '../market';
+import { LaneSheet } from './LaneSheet';
 import type { TowerActions } from '../useTowerApp';
 
 const RANGES = [30, 90, 365] as const;
@@ -50,10 +51,11 @@ export function MarketScreen({ actions }: { actions: TowerActions }) {
   const [lanePage, setLanePage] = useState(0);
   const [picked, setPicked] = useState<string | null>(null);
 
+  const since = useMemo(() => new Date(Date.now() - days * 24 * 3_600_000).toISOString(), [days]);
+
   const load = useCallback(async () => {
     if (!client) return;
     setLoading(true);
-    const since = new Date(Date.now() - days * 24 * 3_600_000).toISOString();
     const r = await client.api.marketSeries({ since });
     setLoading(false);
     if (r.error) {
@@ -62,7 +64,7 @@ export function MarketScreen({ actions }: { actions: TowerActions }) {
     }
     setError(null);
     setSeries(r.data as unknown as MarketSeriesView);
-  }, [client, days]);
+  }, [client, since]);
 
   useEffect(() => {
     void load();
@@ -92,6 +94,7 @@ export function MarketScreen({ actions }: { actions: TowerActions }) {
   const shownLanes = foundLanes.slice(lanePage * LANE_PAGE, lanePage * LANE_PAGE + LANE_PAGE);
   /* Only the page you are looking at is drawn. A map of four hundred lanes is a scribble, and the point
      of drawing them is to see where the ones in front of you actually are. */
+  const openLane = picked ? (allLanes.find((l) => l.lane === picked) ?? null) : null;
   const weightOf = laneWeights(shownLanes);
   const drawn: PlaceMapLine[] = shownLanes.filter(lanePlottable).map((l) => ({
     id: l.lane,
@@ -402,6 +405,7 @@ export function MarketScreen({ actions }: { actions: TowerActions }) {
               </div>
             ) : null}
             {unplaceable > 0 ? <p class="chint">{t('tower.market.unplaceable', { n: unplaceable })}</p> : null}
+            {openLane ? <LaneSheet lane={openLane} since={since} api={client?.api as never} onClose={() => setPicked(null)} /> : null}
             <p class="ctbl__sub">{t('tower.market.lanesFoot')}</p>
           </section>
         </>

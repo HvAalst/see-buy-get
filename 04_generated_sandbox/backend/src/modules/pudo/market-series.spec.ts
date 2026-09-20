@@ -1,4 +1,4 @@
-import { buildSeries, lanesOf, loadedKmOf, median, UNKNOWN_BODY, UNKNOWN_PLACE } from './market-series';
+import { buildSeries, carriersOn, lanesOf, loadedKmOf, median, UNKNOWN_BODY, UNKNOWN_PLACE } from './market-series';
 import { Freight } from './dispatch.types';
 
 /**
@@ -152,6 +152,66 @@ describe('CL3 — scarcity, derived from what the loads already say', () => {
     // placed; a fallback coordinate here would put a pin on a map for a load nobody can locate.
     expect(lane.fromPoint).toBeUndefined();
     expect(lane.toPoint).toBeUndefined();
+  });
+
+  it('names the FLEET that carried, never the driver, and counts an owner-driver without naming them', () => {
+    const NBO = { lat: -1.2864, lng: 36.8172 };
+    const MSA = { lat: -4.0435, lng: 39.6682 };
+    const carried = (managerDid: string | undefined, when: number) =>
+      freight({
+        pickupLocation: NBO,
+        destLocation: MSA,
+        createdAt: at(when),
+        claimedAt: at(when),
+        carriage: { vehicleId: 'v1', plate: 'KAA 001A', vehicleClass: 'rigid', driverDid: 'did:driver:amos', ...(managerDid ? { managerDid } : {}), at: at(when) },
+      });
+
+    const found = carriersOn([carried('fleet-b', 1), carried('fleet-b', 2), carried('fleet-a', 3), carried(undefined, 4)], 'Nairobi', 'Mombasa', WINDOW);
+
+    expect(found.claimedLoads).toBe(4);
+    // Grouped by fleet, and stable — the caller sorts by trading name, never by volume.
+    expect(found.carriers).toEqual([
+      { managerDid: 'fleet-a', loads: 1 },
+      { managerDid: 'fleet-b', loads: 2 },
+    ]);
+    // The owner-driver is real work and is counted; the PERSON is not a business with a public page, and
+    // a list of the individuals who run a corridor is a movement pattern about people.
+    expect(found.independentLoads).toBe(1);
+  });
+
+  it('counts a load in the window it was TAKEN in, and ignores one that was never taken at all', () => {
+    const NBO = { lat: -1.2864, lng: 36.8172 };
+    const MSA = { lat: -4.0435, lng: 39.6682 };
+    const withCarriage = (over: Record<string, unknown>) =>
+      freight({ pickupLocation: NBO, destLocation: MSA, carriage: { vehicleId: 'v', plate: 'p', vehicleClass: 'rigid', driverDid: 'd', managerDid: 'fleet-a', at: at(1) }, ...over });
+
+    const found = carriersOn(
+      [
+        // Posted before the window, taken inside it — this lane carried it in this window.
+        withCarriage({ createdAt: at(-30), claimedAt: at(2) }),
+        // Posted inside, taken after: it belongs to the window it was taken in, which is not this one.
+        withCarriage({ createdAt: at(3), claimedAt: at(400) }),
+        // Never taken at all. "If we know it was taken, we know who took it" — nobody took this.
+        withCarriage({ createdAt: at(4), claimedAt: undefined }),
+      ],
+      'Nairobi',
+      'Mombasa',
+      WINDOW,
+    );
+    expect(found.claimedLoads).toBe(1);
+    expect(found.carriers).toEqual([{ managerDid: 'fleet-a', loads: 1 }]);
+  });
+
+  it('asks about ONE lane and does not answer with its neighbours', () => {
+    const NBO = { lat: -1.2864, lng: 36.8172 };
+    const MSA = { lat: -4.0435, lng: 39.6682 };
+    const SOUTH_B = { lat: -1.308, lng: 36.837 };
+    const on = (pickup: { lat: number; lng: number }, dest: { lat: number; lng: number }) =>
+      freight({ pickupLocation: pickup, destLocation: dest, createdAt: at(1), claimedAt: at(1), carriage: { vehicleId: 'v', plate: 'p', vehicleClass: 'rigid', driverDid: 'd', managerDid: 'f', at: at(1) } });
+
+    // Nairobi → South B is a different lane from Nairobi → Mombasa, and so is the reverse direction.
+    const found = carriersOn([on(NBO, MSA), on(NBO, SOUTH_B), on(MSA, NBO)], 'Nairobi', 'Mombasa', WINDOW);
+    expect(found.claimedLoads).toBe(1);
   });
 
   it('gives each lane end the gazetteer CENTROID, not the load coordinate it was derived from', () => {
