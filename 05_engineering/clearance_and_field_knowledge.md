@@ -939,12 +939,18 @@ apart from what we derived. And a **binnenvaartschip is a leg of its own** — v
 stops, an air draft that is the road bridge check over again — settled through us where presence allows.
 The CSC plate date is carried, with nothing stated about it.
 
-### CL5 — Field knowledge, first-hand only
-Last, and now blocked ONCE rather than twice: PRE shipped 2026-09-17, so the road-map defect it waited on
-is gone.
+### CL5 — Field knowledge, first-hand only — THE GATES SHIPPED 2026-09-20, commit `67343f4`
+No longer blocked: the question §11 held open was answered by the user rather than by a lawyer, and the
+answer made the jurisdiction the unit — see §11.
 
-- **Blocked by:** a lawyer's answer on holding photographs of official documents, which §11 records as
-  open — and nothing else. Every other dependency of this slice is shipped.
+- **Built:** `fieldEvidence` (a presence capability no level grants, one refusal sentence, two tests),
+  `FieldObservationService` (both gates, the versioned redaction notice, first-hand-only, positive by
+  the shape of the form, tier derived, evidence removable — eleven tests), and four routes. The "may I?"
+  question is a route of its own, asked BEFORE the camera is offered: somebody who photographs a customs
+  document and is only then told we cannot hold it has been made to do something they cannot undo.
+- **Still owed — SCREENS.** The gates are enforced and nothing on a phone reaches them yet. Tracked as
+  `ui` on progress.html. The capture screen is the one that matters, because it is where the notice has
+  to be shown; the console's review list is secondary.
 - **Build:** an observation carrying its tier, jurisdiction, subject, date and optional photograph; rumour
   refused at intake; ageing derived from the date the way papers are; **positive observations enforced by the
   shape of the form**, so that "they asked me for X" is expressible and "X is no longer required" is not.
@@ -970,8 +976,18 @@ jurisdiction is not a product decision.
 - **A receiver with standing may not be an identified party.** Under a C term the claimant is the receiver,
   but a counter booking can have a walk-in receiver with no account and no verified phone. Standing without
   identity is unsolved.
-- **Photographs of official documents** may themselves be controlled in some jurisdictions. Retention,
-  and who may read them back, needs a lawyer's answer before the evidenced tier ships.
+- ~~**Photographs of official documents** may themselves be controlled in some jurisdictions.~~
+  **ANSWERED by the user, 2026-09-20, and built (`67343f4`):** *"cl5 is by default off because it's
+  correct that we cant just hold photographs of official documents. It needs two gates, one by the sister
+  sbg operator and another one by the person who uploads his docs. we must state that they should upload
+  docs with sensitive numbers blacked out."* The answer is better than the question was, because it does
+  not wait on one lawyer for all jurisdictions: it makes the jurisdiction the unit. **`fieldEvidence` is
+  a presence capability NO level grants** — off at `established` too — so the sister operating in a
+  country switches it on there and nowhere else, through CA2's two people. The person's gate is given on
+  the upload itself against a VERSIONED notice, kept verbatim beside their agreement. Where either gate
+  is shut the observation is still recorded, as `told` rather than `evidenced`; the tier is derived,
+  never chosen. **Retention and who may read them back are still the open part** — an evidenced
+  observation can be stripped of its photograph today, and nothing expires one on a clock.
 - ~~**A disputed observation has no adjudication.**~~ **CLOSED by PRE and reused twice since.** A dispute is
   now its own dated, attributed account beside the first — on a road hazard, and on a customs hold in CL4
   item 1. The deliberate part is that nothing adjudicates it: both accounts stand and a reader weighs them.
