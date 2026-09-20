@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   EMPTY_FEE_FORM,
+  kindForLabel,
   EMPTY_IMPORT_FORM,
   EMPTY_RECEIPT_FORM,
   EMPTY_ROAD_FORM,
@@ -223,5 +224,35 @@ describe('a container, its papers, and the agent who clears them', () => {
     expect(readersOf({ relatesTo: 'IMP-097' }, 'IMP-097', grants)).toEqual(['agent-a']);
     // And another container's paper is not on this container at all.
     expect(readersOf({ relatesTo: 'IMP-014' }, 'IMP-097', grants)).toEqual([]);
+  });
+});
+
+describe('reconciling the agent-s words with our kinds of paper', () => {
+  it('lands a plainly-named paper on its own kind, longest phrase first', () => {
+    expect(kindForLabel('Packing list')).toBe('packing_list');
+    expect(kindForLabel('Original bill of lading, 3 copies')).toBe('bill_of_lading');
+    // Two kinds start with the same word; the longer phrase is the one that was meant.
+    expect(kindForLabel('Certificate of origin')).toBe('certificate_of_origin');
+    expect(kindForLabel('Certificate of incorporation')).toBe('certificate_of_incorporation');
+  });
+
+  it('reads an investment licence as a licence, in either spelling', () => {
+    // The paper the user was looking at. We do not know what an investment licence IS — but we can see
+    // that it is a licence, which is enough to set the kind and no more than we are entitled to say.
+    expect(kindForLabel('Investment licence')).toBe('licence');
+    expect(kindForLabel('Investment license')).toBe('licence');
+  });
+
+  it('takes the plural as the same paper', () => {
+    expect(kindForLabel('Import permits')).toBe('import_permit');
+    expect(kindForLabel('Trading licences')).toBe('licence');
+  });
+
+  it('says other rather than guessing, and stops at a word boundary', () => {
+    expect(kindForLabel('KEBS pre-export verification')).toBe('other');
+    expect(kindForLabel('')).toBe('other');
+    // The boundary that matters: a word merely STARTING with a kind is not that kind. A licenced
+    // warehouse note is a note about a warehouse, and filing it as somebody-s licence would be wrong.
+    expect(kindForLabel('Licenced warehouse note')).toBe('other');
   });
 });

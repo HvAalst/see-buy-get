@@ -1,5 +1,5 @@
 import type { MessageKey } from '../../shared/i18n';
-import type { CompanyDocument } from './company';
+import { DOCUMENT_KINDS, type CompanyDocument, type DocumentKind } from './company';
 
 /**
  * CL2a — A CONTAINER, ITS PAPERS, AND THE AGENT APPOINTED TO CLEAR IT, as the console reads it.
@@ -612,6 +612,44 @@ export function readersOf(doc: { relatesTo?: string }, code: string, grants: Doc
     .filter((g) => g.scope === need)
     .map((g) => g.readerEntityId);
   return [...new Set(readers)];
+}
+
+/**
+ * THE KIND OF PAPER AN AGENT'S WORDS DESCRIBE, or `other` when we cannot tell.
+ *
+ * The register's kinds are ours; the required line's label is the AGENT's — free text they typed when
+ * publishing their list. Offering somebody an upload form pre-titled "Investment licence" while the kind
+ * beside it says "Commercial invoice" is worse than not helping at all, so the two are reconciled where
+ * the words plainly agree and left at `other` where they do not.
+ *
+ * It matches the slug's own words, never a translated label, so this stays pure and stays true in every
+ * locale. "Investment licence" carries "licence" and lands on `licence`, which is what it is. The longest
+ * match wins, so "certificate of origin" cannot be captured by a shorter certificate.
+ */
+export function kindForLabel(label: string): DocumentKind {
+  const said = label
+    .toLowerCase()
+    // Both spellings are the same paper, and an importer typing either means the same thing.
+    .replace(/licens/g, 'licenc')
+    .replace(/[^a-z ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!said) return 'other';
+
+  let best: DocumentKind = 'other';
+  let longest = 0;
+  for (const kind of DOCUMENT_KINDS) {
+    if (kind === 'other') continue;
+    const phrase = kind.replace(/_/g, ' ');
+    // WHOLE WORDS, and a plural is the same paper: an agent writes "Import permits" as readily as
+    // "Import permit", while "Licenced warehouse note" is not a licence and must not be read as one.
+    if (!new RegExp(`(^| )${phrase}s?( |$)`).test(said)) continue;
+    if (phrase.length > longest) {
+      longest = phrase.length;
+      best = kind;
+    }
+  }
+  return best;
 }
 
 function numeric(value: string): boolean {

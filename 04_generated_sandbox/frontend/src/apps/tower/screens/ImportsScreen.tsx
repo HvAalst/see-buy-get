@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from 'preact/hooks';
+import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { AuthImage, Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { useWideScreen } from '../../../shared/useWideScreen';
 import { ConsoleAction } from '../ConsoleAction';
 import { ConsoleDetail } from '../ConsoleDetail';
 import { PaperFile, PaperFiles } from './PaperFile';
+import { PaperHelp } from './PaperHelp';
 import { ConsignmentNoteCard } from './ConsignmentNoteCard';
 import { publicPageUrl } from '../../../lib/sbg/config';
 import { ParticipantPicker } from './ParticipantPicker';
@@ -23,6 +24,7 @@ import {
   feeQuoteBlocker,
   feeTone,
   knownNotAsked,
+  kindForLabel,
   receiptBlocker,
   roadBlocker,
   type FeeQuoteForm,
@@ -78,6 +80,27 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
   const [lines, setLines] = useState<Array<{ label: string; copies: string; note: string }>>([{ label: '', copies: '', note: '' }]);
   const [pick, setPick] = useState<Record<string, string>>({});
   const [upload, setUpload] = useState({ kind: 'commercial_invoice', title: '', dataUrl: '', expiresAt: '', belongs: 'consignment' });
+  const uploadRef = useRef<HTMLElement | null>(null);
+
+  /**
+   * THE DOOR OUT OF A REQUIRED LINE WITH NOTHING TO ATTACH.
+   *
+   * The form that fixes it was always on this sheet and had no thread back to the line that needed it,
+   * so an importer with an empty register was told to choose from a list with nothing in it. This fills
+   * the form in from the line — the agent's own wording as the title, and the kind those words describe
+   * where they plainly describe one — brings it into view and puts the cursor on the only thing left to
+   * supply, the file. Filled in, never submitted: what gets uploaded is still their decision.
+   */
+  const putOnRecord = useCallback((label: string) => {
+    setUpload((was) => ({ ...was, title: label, kind: kindForLabel(label) }));
+    // After the paint that closes the sheet the form is filled in and the section is where it will be.
+    requestAnimationFrame(() => {
+      const section = uploadRef.current;
+      if (!section) return;
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      section.querySelector<HTMLInputElement>('input[type="file"]')?.focus();
+    });
+  }, []);
   const [feeForm, setFeeForm] = useState<FeeQuoteForm>({ ...EMPTY_FEE_FORM });
   const [receiptForm, setReceiptForm] = useState<ReceiptForm>({ ...EMPTY_RECEIPT_FORM });
   const [roadForm, setRoadForm] = useState<RoadLegForm>({ ...EMPTY_ROAD_FORM });
@@ -851,7 +874,7 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                 </PaperFiles>
               </section>
 
-              <section class="cons__panel">
+              <section class="cons__panel" ref={uploadRef}>
                 <div class="cons__panelhead">
                   <span class="cons__panelt">{t('tower.imports.uploadTitle')}</span>
                 </div>
@@ -1009,6 +1032,7 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                 <span class="chint">{ready?.asked ? t('tower.imports.progress', { accepted: ready.accepted, asked: ready.asked }) : t('tower.imports.noneAsked')}</span>
               )}
             </div>
+            {detail.youAre === 'importer' && detail.required.length > 0 ? <p class="cons__lede">{t('tower.imports.supplyHint')}</p> : null}
             {detail.required.length === 0 ? (
               <p class="cons__empty">{detail.agentEntityId ? t('tower.imports.requiredNone') : t('tower.imports.requiredNoAgent')}</p>
             ) : (
@@ -1029,6 +1053,7 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                         run('supply:' + paper.key, () => client!.api.supplyRequiredPaper(detail.importId, { key: paper.key, documentId: pick[paper.key], ...(who ? { by: who } : {}) }), t('tower.imports.supplied'))
                       }
                       onAccept={() => run('accept:' + paper.key, () => client!.api.acceptRequiredPaper(detail.importId, paper.key, { ...(who ? { by: who } : {}) }), t('tower.imports.acceptDone'))}
+                      onPutOnRecord={detail.youAre === 'importer' ? putOnRecord : undefined}
                       onReject={(why) => run('reject:' + paper.key, () => client!.api.rejectRequiredPaper(detail.importId, paper.key, { reason: why, ...(who ? { by: who } : {}) }), t('tower.imports.rejectDone'))}
                     />
                   ))}
@@ -2012,6 +2037,7 @@ function PaperRow({
   onSupply,
   onAccept,
   onReject,
+  onPutOnRecord,
 }: {
   paper: RequiredPaperView;
   detail: ImportDetailView;
@@ -2024,6 +2050,7 @@ function PaperRow({
   onSupply: () => void;
   onAccept: () => void;
   onReject: (reason: string) => void;
+  onPutOnRecord?: (label: string) => void;
 }) {
   const [why, setWhy] = useState('');
   const tone = paperTone(paper);
@@ -2053,23 +2080,38 @@ function PaperRow({
         {paper.stale ? <div class="chint">{t('tower.imports.stale')}</div> : null}
         {paper.rejectionReason ? <div class="chint">{paper.rejectionReason}</div> : null}
       </td>
-      <td class="ctbl__num">
+      {/* NOT `ctbl__num`. That class is for a column of figures and sets `white-space: nowrap`, so a
+          cell holding a full-width select and a button beside it could not put them on two lines — the
+          select took the width and the button went off the right of the phone. A cell of controls is a
+          row that wraps, and the wrapping belongs to a div INSIDE the cell: a class that changes
+          `display` on a `<td>` collapses the row into one anonymous cell, which this table has been
+          bitten by before and the stylesheet guard now refuses. */}
+      <td>
         {detail.youAre === 'importer' ? (
-          <>
-            <select class="cinput" value={pick} onChange={(e) => onPick((e.target as HTMLSelectElement).value)}>
-              <option value="">{t('tower.imports.pick')}</option>
-              {choices.map((d) => (
-                <option key={d.documentId} value={d.documentId}>
-                  {d.title}
-                </option>
-              ))}
-            </select>
-            <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={!pick || busy === 'supply:' + paper.key} onClick={onSupply}>
-              {t('tower.imports.supply')}
-            </button>
-          </>
+          <div class="twr-panelend">
+            {/* An empty dropdown is not a choice, it is a dead end wearing a control's clothes. Where
+                there is nothing to choose, say so and let the "i" beside it explain the way out. */}
+            {choices.length === 0 ? (
+              <span class="chint">{t('tower.imports.pickNone')}</span>
+            ) : (
+              <select class="cinput" value={pick} onChange={(e) => onPick((e.target as HTMLSelectElement).value)}>
+                <option value="">{t('tower.imports.pick')}</option>
+                {choices.map((d) => (
+                  <option key={d.documentId} value={d.documentId}>
+                    {d.title}
+                  </option>
+                ))}
+              </select>
+            )}
+            {choices.length > 0 ? (
+              <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={!pick || busy === 'supply:' + paper.key} onClick={onSupply}>
+                {t('tower.imports.supply')}
+              </button>
+            ) : null}
+            <PaperHelp paper={paper} hasPapers={choices.length > 0} onPutOnRecord={onPutOnRecord} />
+          </div>
         ) : detail.youAre === 'agent' && paper.documentId ? (
-          <>
+          <div class="twr-panelend">
             <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy === 'accept:' + paper.key} onClick={onAccept}>
               {t('tower.imports.accept')}
             </button>
@@ -2077,7 +2119,7 @@ function PaperRow({
             <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={!why.trim() || busy === 'reject:' + paper.key} onClick={() => onReject(why.trim())}>
               {t('tower.imports.reject')}
             </button>
-          </>
+          </div>
         ) : null}
       </td>
     </tr>

@@ -528,6 +528,22 @@ export const enTower = {
   'tower.imports.supplyHint': 'Attach one of your own papers. Nothing is uploaded here — it comes from your register, fingerprinted.',
   'tower.imports.supplied': 'Attached. The agent can read it now.',
   'tower.imports.pick': 'Choose a paper…',
+  'tower.imports.pickNone': 'Nothing on record yet',
+
+  // The "i" on a required line. What the agent asked for, and the way off the line when the list is empty.
+  'tower.imports.help': 'What this paper is',
+  'tower.imports.helpWhat': 'What this is',
+  'tower.imports.helpAsked': '{who} asked for it on {when}.',
+  'tower.imports.helpCopies': 'They asked for {n} copies.',
+  'tower.imports.helpNoNote':
+    'They asked for it by name and said nothing more. We have not seen this document and cannot tell you what is meant by it — if you are unsure, ask them before you attach anything, because a wrong paper is sent back and the container waits either way.',
+  'tower.imports.helpNext': 'What to do next',
+  'tower.imports.helpOnce':
+    'A paper is put on record once, and then attached to this container and to any other that needs it. Nothing is uploaded on the line itself — attaching points at a paper you already hold, with the fingerprint it was filed under.',
+  'tower.imports.helpPick': 'Choose it in the list on that line. Everything you have on record is there, whether or not it was filed for this container.',
+  'tower.imports.helpNotThere': 'If the paper you want is not in that list, it is not on record yet.',
+  'tower.imports.helpEmpty': 'You have nothing on record yet, so that list is empty. That is all that is wrong — put this paper on record and it will be there to choose.',
+  'tower.imports.helpPut': 'Put this paper on record',
   'tower.imports.accept': 'Accept',
   'tower.imports.acceptDone': 'Accepted.',
   'tower.imports.reject': 'Send back',
