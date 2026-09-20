@@ -496,6 +496,28 @@ export const enTower = {
   'tower.imports.grant.since': 'since {when}, by {who}',
   'tower.imports.grant.revoked': 'revoked {when}',
 
+  // THE SUBTITLE ON A FOLDED SECTION. State, never prose: what is in there NOW, so the row can be
+  // skipped without opening it. The paragraph explaining what a section is for stays inside the section.
+  'tower.imports.fold.noAgent': 'Nobody appointed yet',
+  'tower.imports.fold.readers': '{n} can read your papers',
+  'tower.imports.fold.noReaders': 'Nobody can read your papers',
+  'tower.imports.fold.onRecord': '{n} on record',
+  'tower.imports.fold.nothingOnRecord': 'Nothing on record yet',
+  'tower.imports.fold.addPaper': 'Upload one, then attach it where it is asked for',
+  'tower.imports.fold.published': '{n} papers on your list',
+  'tower.imports.fold.notPublished': 'You have not published a list yet',
+  'tower.imports.fold.knownNew': '{n} others ask for that you have not listed',
+  'tower.imports.fold.knownNone': 'Nothing here you have not already listed',
+  'tower.imports.fold.noFee': 'No fee quoted yet',
+  'tower.imports.fold.road': 'Leg {code}',
+  'tower.imports.fold.noRoad': 'No leg from the port yet',
+  'tower.imports.fold.gaps': '{n} things still needed before it can travel',
+  'tower.imports.fold.boxReady': 'Nothing missing',
+  'tower.imports.fold.notArrived': 'Not arrived yet',
+  'tower.imports.fold.holdsOpen': '{n} still open',
+  'tower.imports.fold.holdsNone': 'None',
+  'tower.imports.fold.holdsClear': 'All released',
+
   'tower.imports.requiredTitle': 'What this container needs',
   'tower.imports.requiredNone': 'The agent has not published a list yet.',
   'tower.imports.requiredNoAgent': 'Appoint an agent and they will publish what they need.',

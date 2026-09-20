@@ -1366,6 +1366,73 @@
   margin-left: auto;
 }
 
+/* ------------------------------------------------------------------ folds --- */
+
+/*
+ * A SECTION FOLDED INTO ITS OWN HEADLINE — see ConsoleFold.tsx for why.
+ *
+ * It borrows the section rhythm rather than inventing one: the row sits where `.cons__panelhead` sits,
+ * with the same 18px title, and the section's own hairline still separates it from the next. A closed
+ * fold is therefore a heading with a fact beside it, which is what it should look like.
+ */
+.cfold {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 20px 0 0;
+  background: transparent;
+  text-align: left;
+}
+
+.cfold__body {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+/* The line that says whether to open it. One line, and it gives way before the row does. */
+.cfold__sub {
+  font-size: var(--c-fs);
+  color: var(--tx3);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cfold__aside {
+  flex: none;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.cfold__go {
+  flex: none;
+  color: var(--tx3);
+  transition: transform 0.15s ease;
+}
+
+/* Pointing DOWN means "there is more below this"; pointing right means "there is more behind this".
+   The fold opens downward, so the arrow turns rather than the row changing its mind about what it is. */
+.cfold--open .cfold__go {
+  transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cfold__go {
+    transition: none;
+  }
+}
+
+.cfold__open {
+  padding-top: 14px;
+}
+
 /* ---------------------------------------------------------------- actions --- */
 
 /*

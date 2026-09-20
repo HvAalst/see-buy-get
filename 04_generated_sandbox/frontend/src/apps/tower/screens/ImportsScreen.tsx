@@ -4,6 +4,7 @@ import { useT } from '../../../shared/i18n';
 import { useWideScreen } from '../../../shared/useWideScreen';
 import { ConsoleAction } from '../ConsoleAction';
 import { ConsoleDetail } from '../ConsoleDetail';
+import { ConsoleFold } from '../ConsoleFold';
 import { PaperFile, PaperFiles } from './PaperFile';
 import { PaperHelp } from './PaperHelp';
 import { ConsignmentNoteCard } from './ConsignmentNoteCard';
@@ -81,6 +82,7 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
   const [pick, setPick] = useState<Record<string, string>>({});
   const [upload, setUpload] = useState({ kind: 'commercial_invoice', title: '', dataUrl: '', expiresAt: '', belongs: 'consignment' });
   const uploadRef = useRef<HTMLElement | null>(null);
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   /**
    * THE DOOR OUT OF A REQUIRED LINE WITH NOTHING TO ATTACH.
@@ -93,6 +95,8 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
    */
   const putOnRecord = useCallback((label: string) => {
     setUpload((was) => ({ ...was, title: label, kind: kindForLabel(label) }));
+    // The form is behind a fold now, so the door has to open it as well as point at it.
+    setUploadOpen(true);
     // After the paint that closes the sheet the form is filled in and the section is where it will be.
     requestAnimationFrame(() => {
       const section = uploadRef.current;
@@ -684,168 +688,135 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
             </p>
           ) : null}
 
-          {/* ---- the importer's side: appoint, share, and see what is missing ---- */}
+
+          {/* ---- the agent's side: publish what you need, prompted by what others were asked for ---- */}
+          {detail.youAre === 'agent' ? (
+            <>
+              <ConsoleFold
+                title={t('tower.imports.publishTitle')}
+                hint={detail.required.length === 0 ? t('tower.imports.fold.notPublished') : t('tower.imports.fold.published', { n: detail.required.length })}
+              >
+                <p class="cons__lede">{t('tower.imports.publishHint')}</p>
+                {lines.map((line, i) => (
+                  <div class="twr-knobs__row" key={`line-${i}`}>
+                    <label class="twr-knob cfield">
+                      <span class="cfield__label">{t('tower.imports.f.label')}</span>
+                      <input class="cinput" value={line.label} onChange={(e) => setLines(lines.map((l, j) => (j === i ? { ...l, label: (e.target as HTMLInputElement).value } : l)))} />
+                    </label>
+                    <label class="twr-knob cfield">
+                      <span class="cfield__label">{t('tower.imports.f.copies')}</span>
+                      <input class="cinput" type="number" min={1} max={50} value={line.copies} onChange={(e) => setLines(lines.map((l, j) => (j === i ? { ...l, copies: (e.target as HTMLInputElement).value } : l)))} />
+                    </label>
+                    <label class="twr-knob cfield">
+                      <span class="cfield__label">{t('tower.imports.f.note')}</span>
+                      <input class="cinput" value={line.note} onChange={(e) => setLines(lines.map((l, j) => (j === i ? { ...l, note: (e.target as HTMLInputElement).value } : l)))} />
+                    </label>
+                  </div>
+                ))}
+                <div class="twr-panelend">
+                  <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setLines([...lines, { label: '', copies: '', note: '' }])}>
+                    {t('tower.imports.addLine')}
+                  </button>
+                  {publishFault ? <span class="chint">{t(publishFault)}</span> : null}
+                  <button
+                    type="button"
+                    class="cbtn cbtn--primary"
+                    disabled={Boolean(publishFault) || busy === 'publish'}
+                    onClick={() =>
+                      run(
+                        'publish',
+                        () =>
+                          client!.api.publishRequiredPapers(detail.importId, {
+                            items: lines
+                              .filter((l) => l.label.trim())
+                              .map((l) => ({ label: l.label.trim(), ...(l.copies ? { copies: Number(l.copies) } : {}), ...(l.note.trim() ? { note: l.note.trim() } : {}) })),
+                            ...(who ? { by: who } : {}),
+                          }),
+                        t('tower.imports.published'),
+                      )
+                    }
+                  >
+                    {t('tower.imports.publish')}
+                  </button>
+                </div>
+              </ConsoleFold>
+
+              <ConsoleFold
+                title={t('tower.imports.knownTitle')}
+                hint={knownNotAsked(known, lines.filter((l) => l.label.trim())).length === 0 ? t('tower.imports.fold.knownNone') : t('tower.imports.fold.knownNew', { n: knownNotAsked(known, lines.filter((l) => l.label.trim())).length })}
+              >
+                <p class="cons__lede">{t('tower.imports.knownHint')}</p>
+                {knownNotAsked(known, lines.filter((l) => l.label.trim())).length === 0 ? (
+                  <p class="cons__empty">{t('tower.imports.knownNone')}</p>
+                ) : (
+                  <ul class="twr-checklist">
+                    {knownNotAsked(
+                      known,
+                      lines.filter((l) => l.label.trim()),
+                    ).map((k) => (
+                      <li key={k.key}>
+                        <b>{k.label}</b>
+                        <div class="chint">{t('tower.imports.knownRow', { agents: k.agents, times: k.times, when: k.lastAskedAt.slice(0, 10) })}</div>
+                        <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setLines([...lines.filter((l) => l.label.trim()), { label: k.label, copies: '', note: '' }])}>
+                          {t('tower.imports.knownAdd')}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </ConsoleFold>
+            </>
+          ) : null}
+
+          {/* ---- the list itself, read by both sides ---- */}
+          <ConsoleFold
+            title={<>{detail.code} · {t('tower.imports.requiredTitle')}</>}
+            hint={ready?.asked ? t('tower.imports.progress', { accepted: ready.accepted, asked: ready.asked }) : t('tower.imports.noneAsked')}
+            defaultOpen={detail.waitingOnYou > 0}
+          >
+            {detail.youAre === 'importer' && detail.required.length > 0 ? <p class="cons__lede">{t('tower.imports.supplyHint')}</p> : null}
+            {detail.required.length === 0 ? (
+              <p class="cons__empty">{detail.agentEntityId ? t('tower.imports.requiredNone') : t('tower.imports.requiredNoAgent')}</p>
+            ) : (
+              <table class="ctbl ctbl--stack">
+                <tbody>
+                  {[...outstanding(detail), ...detail.required.filter((r) => !outstanding(detail).includes(r))].map((paper) => (
+                    <PaperRow
+                      key={paper.key}
+                      paper={paper}
+                      detail={detail}
+                      t={t}
+                      busy={busy}
+                      api={client?.api as never}
+                      onError={setError}
+                      pick={pick[paper.key] ?? ''}
+                      onPick={(v) => setPick({ ...pick, [paper.key]: v })}
+                      onSupply={() =>
+                        run('supply:' + paper.key, () => client!.api.supplyRequiredPaper(detail.importId, { key: paper.key, documentId: pick[paper.key], ...(who ? { by: who } : {}) }), t('tower.imports.supplied'))
+                      }
+                      onAccept={() => run('accept:' + paper.key, () => client!.api.acceptRequiredPaper(detail.importId, paper.key, { ...(who ? { by: who } : {}) }), t('tower.imports.acceptDone'))}
+                      onPutOnRecord={detail.youAre === 'importer' ? putOnRecord : undefined}
+                      onReject={(why) => run('reject:' + paper.key, () => client!.api.rejectRequiredPaper(detail.importId, paper.key, { reason: why, ...(who ? { by: who } : {}) }), t('tower.imports.rejectDone'))}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </ConsoleFold>
+
+          {/* ---- what the asking is answered with: the papers this company holds ---- */}
           {detail.youAre === 'importer' ? (
             <>
-              <section class="cons__panel">
-                <div class="cons__panelhead">
-                  <span class="cons__panelt">{detail.agentEntityId ? t('tower.imports.revokeTitle') : t('tower.imports.appointTitle')}</span>
-                </div>
-                <p class="cons__lede">{t('tower.imports.appointHint')}</p>
-                {detail.agentEntityId ? (
-                  <div class="twr-knobs__row">
-                    <label class="twr-knob cfield">
-                      <span class="cfield__label">{t('tower.imports.f.reason')}</span>
-                      <input class="cinput" value={reason} onChange={(e) => setReason((e.target as HTMLInputElement).value)} />
-                    </label>
-                    <div class="twr-panelend">
-                      <button
-                        type="button"
-                        class="cbtn cbtn--ghost"
-                        disabled={busy === 'revoke'}
-                        onClick={() =>
-                          run('revoke', () => client!.api.revokeClearingAgent(detail.importId, { ...(reason.trim() ? { reason: reason.trim() } : {}), ...(who ? { by: who } : {}) }), t('tower.imports.revoked'), () =>
-                            setReason(''),
-                          )
-                        }
-                      >
-                        {t('tower.imports.revoke')}
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    {/*
-                      * CHOSEN FROM THE DIRECTORY, not typed. This asked for the agent's COMPANY ID —
-                      * a primary key nobody knows, obtainable only if the agent sent it to you out of
-                      * band, which is the exact gap the public finder was built to close.
-                      */}
-                    <div class="twr-panelend">
-                      <button type="button" class="cbtn cbtn--primary" onClick={() => setPicking(true)}>
-                        {t('tower.imports.chooseAgent')}
-                      </button>
-                    </div>
-                    <ParticipantPicker
-                      open={picking}
-                      title={t('tower.imports.chooseAgent')}
-                      actionLabel={t('tower.imports.appoint')}
-                      onClose={() => setPicking(false)}
-                      kinds={[
-                        {
-                          key: 'agents',
-                          labelKey: 'tower.pick.agents',
-                          /*
-                           * ONE KIND, so the picker draws no tab bar. Appointing a clearing agent
-                           * accepts a company that clears and nothing else; offering drivers and shops
-                           * beside it would present four wrong answers and one right one.
-                           *
-                           * AND NO COUNTRY FILTER, which the drive argued me out of. Filtering to the
-                           * container's destination is logically right — an agent clears at the border
-                           * the goods arrive at — and it answered with NOTHING for every container in
-                           * the sandbox, because the agents are registered next door. An empty list
-                           * from a filter nobody chose is the wall again. Every row carries its own
-                           * country instead, so an importer can see who is where and decide; a
-                           * registered address is not the same thing as where somebody works.
-                           */
-                          load: async () => {
-                            const r = await (client!.api as never as { findAgents: (q: { country?: string }) => Promise<{ data?: unknown }> }).findAgents({});
-                            const got = (r.data ?? { items: [], basis: '' }) as { items: AgentCardView[]; basis: string };
-                            return {
-                              /*
-                               * THE SENTENCE, NOT THE TOKEN. This route answers `basis:
-                               * "alphabetical-never-ranked"`, which is a machine word — the public
-                               * finder screen quietly ignores it and renders its own sentence. Printing
-                               * it verbatim would put a slug in front of a reader, so this does the
-                               * same as that screen. Worth saying that it is the odd one out: every
-                               * other basis in this product (the contact card, the yard register, the
-                               * saved places, the clearance record) is a sentence the server sends so
-                               * no screen can show the figures without it.
-                               */
-                              basis: t('tower.pick.agentsBasis', { n: got.items.length, country: detail.destCountry }),
-                              rows: got.items.map((a) => ({
-                                id: a.entityId,
-                                name: a.name,
-                                ...(a.handle ? { handle: a.handle } : {}),
-                                ...(a.country ? { country: a.country } : {}),
-                                ...(a.offer?.specialisms?.length ? { says: a.offer.specialisms.map((s: string) => t(`home.agents.spec.${s}` as never)).join(', ') } : {}),
-                                seen: a.thin ? t('tower.imports.agentNew') : t('tower.imports.agentSeen', { appointed: a.appointed, cleared: a.cleared }),
-                                ...(a.contact?.phone ? { phone: a.contact.phone } : {}),
-                              })),
-                            };
-                          },
-                        },
-                      ]}
-                      onPick={(row) => {
-                        setPicking(false);
-                        void run('appoint', () => client!.api.appointClearingAgent(detail.importId, { agentEntityId: row.id, ...(who ? { by: who } : {}) }), t('tower.imports.appointed', { name: row.name }));
-                      }}
-                    />
-                  </>
-                )}
-              </section>
-
-              <section class="cons__panel">
-                <div class="cons__panelhead">
-                  <span class="cons__panelt">{t('tower.imports.grantsTitle')}</span>
-                </div>
-                {liveGrants(detail.grants).length === 0 ? (
-                  <p class="cons__empty">{t('tower.imports.grantsNone')}</p>
-                ) : (
-                  /*
-                    * WHO FIRST, THEN WHAT THEY CAN READ. This was a three-column grid printing
-                    * `partner-et-djibouti-clearing-lj2ga` — a primary key, wrapped over three lines in a
-                    * column too narrow to hold it. Somebody deciding whether to revoke access to their
-                    * own commercial papers was being asked to recognise a slug.
-                    *
-                    * The row reads as a list entry: the company's NAME, then the scope and how many
-                    * papers it actually opens, then who gave it and when. Where the reader has a public
-                    * page the row IS the link to it, opening in a new tab — the way to go and read who
-                    * somebody is before deciding what they may see, with no journey to come back from.
-                    */
-                  <div class="crows">
-                    {liveGrants(detail.grants).map((g) => {
-                      const reaches = g.reaches ?? (g.scope === 'company' ? companyPapers(detail.documents).length : consignmentPapers(detail.documents, detail.code).length);
-                      const page = g.readerHandle ? publicPageUrl(g.readerHandle) : null;
-                      const inside = (
-                        <>
-                          <span class="crow__body">
-                            <span class="crow__top">
-                              <span class="crow__name">{g.readerName ?? g.readerEntityId}</span>
-                              {g.readerHandle ? <span class="ctag ctag--quiet">@{g.readerHandle}</span> : null}
-                            </span>
-                            <span class="crow__sub">
-                              {t(`tower.imports.grant.${g.scope}` as never)} · {reaches === 0 ? t('tower.imports.grantNoPapers') : t('tower.imports.grantPapers', { n: reaches })}
-                            </span>
-                            <span class="chint">{t('tower.imports.grant.since', { when: g.grantedAt.slice(0, 10), who: g.grantedBy })}</span>
-                          </span>
-                          <span class="crow__tail">{page ? <Icon name="chevronRight" size={16} /> : null}</span>
-                        </>
-                      );
-                      return page ? (
-                        <a key={g.grantId} class="crow" href={page} target="_blank" rel="noopener noreferrer">
-                          {inside}
-                        </a>
-                      ) : (
-                        <div key={g.grantId} class="crow">
-                          {inside}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </section>
-
               {/*
                 * THE REGISTER, and until now it was not on the screen at all — these documents existed
                 * only as <option> elements inside the attach control on each required line. Somebody
                 * who had uploaded ten papers could not see that they had, could not open one to check
                 * it was the right scan, and could not tell which of them an agent could already read.
                 */}
-              <section class="cons__panel">
-                <div class="cons__panelhead">
-                  <span class="cons__panelt">{t('tower.imports.registerTitle')}</span>
-                  <span class="chint">{t('tower.imports.registerCount', { n: companyPapers(detail.documents).length + consignmentPapers(detail.documents, detail.code).length })}</span>
-                </div>
+              <ConsoleFold
+                title={t('tower.imports.registerTitle')}
+                hint={detail.documents.length === 0 ? t('tower.imports.fold.nothingOnRecord') : t('tower.imports.fold.onRecord', { n: detail.documents.length })}
+              >
                 <p class="cfield__label">{t('tower.imports.registerFor', { code: detail.code })}</p>
                 <PaperFiles empty={t('tower.imports.registerNone')}>
                   {consignmentPapers(detail.documents, detail.code).map((d) => (
@@ -872,12 +843,13 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                     />
                   ))}
                 </PaperFiles>
-              </section>
+              </ConsoleFold>
 
-              <section class="cons__panel" ref={uploadRef}>
-                <div class="cons__panelhead">
-                  <span class="cons__panelt">{t('tower.imports.uploadTitle')}</span>
-                </div>
+              <ConsoleFold
+                title={t('tower.imports.uploadTitle')}
+                hint={t('tower.imports.fold.addPaper')}
+                open={uploadOpen} onOpenChange={setUploadOpen} panelRef={uploadRef}
+              >
                 <p class="cons__lede">{t('tower.imports.uploadHint')}</p>
                 <div class="twr-knobs__row">
                   <label class="twr-knob cfield">
@@ -937,139 +909,18 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                     {t('tower.imports.upload')}
                   </button>
                 </div>
-              </section>
+              </ConsoleFold>
             </>
           ) : null}
-
-          {/* ---- the agent's side: publish what you need, prompted by what others were asked for ---- */}
-          {detail.youAre === 'agent' ? (
-            <>
-              <section class="cons__panel">
-                <div class="cons__panelhead">
-                  <span class="cons__panelt">{t('tower.imports.publishTitle')}</span>
-                </div>
-                <p class="cons__lede">{t('tower.imports.publishHint')}</p>
-                {lines.map((line, i) => (
-                  <div class="twr-knobs__row" key={`line-${i}`}>
-                    <label class="twr-knob cfield">
-                      <span class="cfield__label">{t('tower.imports.f.label')}</span>
-                      <input class="cinput" value={line.label} onChange={(e) => setLines(lines.map((l, j) => (j === i ? { ...l, label: (e.target as HTMLInputElement).value } : l)))} />
-                    </label>
-                    <label class="twr-knob cfield">
-                      <span class="cfield__label">{t('tower.imports.f.copies')}</span>
-                      <input class="cinput" type="number" min={1} max={50} value={line.copies} onChange={(e) => setLines(lines.map((l, j) => (j === i ? { ...l, copies: (e.target as HTMLInputElement).value } : l)))} />
-                    </label>
-                    <label class="twr-knob cfield">
-                      <span class="cfield__label">{t('tower.imports.f.note')}</span>
-                      <input class="cinput" value={line.note} onChange={(e) => setLines(lines.map((l, j) => (j === i ? { ...l, note: (e.target as HTMLInputElement).value } : l)))} />
-                    </label>
-                  </div>
-                ))}
-                <div class="twr-panelend">
-                  <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setLines([...lines, { label: '', copies: '', note: '' }])}>
-                    {t('tower.imports.addLine')}
-                  </button>
-                  {publishFault ? <span class="chint">{t(publishFault)}</span> : null}
-                  <button
-                    type="button"
-                    class="cbtn cbtn--primary"
-                    disabled={Boolean(publishFault) || busy === 'publish'}
-                    onClick={() =>
-                      run(
-                        'publish',
-                        () =>
-                          client!.api.publishRequiredPapers(detail.importId, {
-                            items: lines
-                              .filter((l) => l.label.trim())
-                              .map((l) => ({ label: l.label.trim(), ...(l.copies ? { copies: Number(l.copies) } : {}), ...(l.note.trim() ? { note: l.note.trim() } : {}) })),
-                            ...(who ? { by: who } : {}),
-                          }),
-                        t('tower.imports.published'),
-                      )
-                    }
-                  >
-                    {t('tower.imports.publish')}
-                  </button>
-                </div>
-              </section>
-
-              <section class="cons__panel">
-                <div class="cons__panelhead">
-                  <span class="cons__panelt">{t('tower.imports.knownTitle')}</span>
-                </div>
-                <p class="cons__lede">{t('tower.imports.knownHint')}</p>
-                {knownNotAsked(known, lines.filter((l) => l.label.trim())).length === 0 ? (
-                  <p class="cons__empty">{t('tower.imports.knownNone')}</p>
-                ) : (
-                  <ul class="twr-checklist">
-                    {knownNotAsked(
-                      known,
-                      lines.filter((l) => l.label.trim()),
-                    ).map((k) => (
-                      <li key={k.key}>
-                        <b>{k.label}</b>
-                        <div class="chint">{t('tower.imports.knownRow', { agents: k.agents, times: k.times, when: k.lastAskedAt.slice(0, 10) })}</div>
-                        <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setLines([...lines.filter((l) => l.label.trim()), { label: k.label, copies: '', note: '' }])}>
-                          {t('tower.imports.knownAdd')}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
-            </>
-          ) : null}
-
-          {/* ---- the list itself, read by both sides ---- */}
-          <section class="cons__panel">
-            <div class="cons__panelhead">
-              <span class="cons__panelt">
-                {detail.code} · {t('tower.imports.requiredTitle')}
-              </span>
-              {ready?.done ? (
-                <span class="ctag ctag--ok">{t('tower.imports.progress', { accepted: ready.accepted, asked: ready.asked })}</span>
-              ) : (
-                <span class="chint">{ready?.asked ? t('tower.imports.progress', { accepted: ready.accepted, asked: ready.asked }) : t('tower.imports.noneAsked')}</span>
-              )}
-            </div>
-            {detail.youAre === 'importer' && detail.required.length > 0 ? <p class="cons__lede">{t('tower.imports.supplyHint')}</p> : null}
-            {detail.required.length === 0 ? (
-              <p class="cons__empty">{detail.agentEntityId ? t('tower.imports.requiredNone') : t('tower.imports.requiredNoAgent')}</p>
-            ) : (
-              <table class="ctbl ctbl--stack">
-                <tbody>
-                  {[...outstanding(detail), ...detail.required.filter((r) => !outstanding(detail).includes(r))].map((paper) => (
-                    <PaperRow
-                      key={paper.key}
-                      paper={paper}
-                      detail={detail}
-                      t={t}
-                      busy={busy}
-                      api={client?.api as never}
-                      onError={setError}
-                      pick={pick[paper.key] ?? ''}
-                      onPick={(v) => setPick({ ...pick, [paper.key]: v })}
-                      onSupply={() =>
-                        run('supply:' + paper.key, () => client!.api.supplyRequiredPaper(detail.importId, { key: paper.key, documentId: pick[paper.key], ...(who ? { by: who } : {}) }), t('tower.imports.supplied'))
-                      }
-                      onAccept={() => run('accept:' + paper.key, () => client!.api.acceptRequiredPaper(detail.importId, paper.key, { ...(who ? { by: who } : {}) }), t('tower.imports.acceptDone'))}
-                      onPutOnRecord={detail.youAre === 'importer' ? putOnRecord : undefined}
-                      onReject={(why) => run('reject:' + paper.key, () => client!.api.rejectRequiredPaper(detail.importId, paper.key, { reason: why, ...(who ? { by: who } : {}) }), t('tower.imports.rejectDone'))}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </section>
 
           {/* ---- CL2b: what the agent charges ---- */}
-          <section class="cons__panel">
-            <div class="cons__panelhead">
-              <span class="cons__panelt">{t('tower.imports.feeTitle')}</span>
-              <span class={`ctag ${feeTone(detail.feeState) === 'ok' ? 'ctag--ok' : feeTone(detail.feeState) === 'warn' ? 'ctag--warn' : 'ctag--quiet'}`}>
+          <ConsoleFold
+            title={t('tower.imports.feeTitle')}
+            hint={detail.fee ? `${detail.fee.currency} ${detail.fee.amount}` : t('tower.imports.fold.noFee')}
+            aside={<><span class={`ctag ${feeTone(detail.feeState) === 'ok' ? 'ctag--ok' : feeTone(detail.feeState) === 'warn' ? 'ctag--warn' : 'ctag--quiet'}`}>
                 {t(`tower.imports.fee.${detail.feeState}` as never)}
-              </span>
-            </div>
+              </span></>}
+          >
             <p class="cons__lede">{t('tower.imports.feeHint')}</p>
 
             {detail.fee ? (
@@ -1172,15 +1023,14 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                 </div>
               </>
             ) : null}
-          </section>
+          </ConsoleFold>
 
           {/* ---- CL2b: the road leg, minted by a person from the port ---- */}
           {detail.youAre === 'importer' ? (
-            <section class="cons__panel">
-              <div class="cons__panelhead">
-                <span class="cons__panelt">{t('tower.imports.roadTitle')}</span>
-                {detail.roadFreightCode ? <span class="ctag ctag--ok">{t('tower.imports.roadAlready', { code: detail.roadFreightCode })}</span> : null}
-              </div>
+            <ConsoleFold
+              title={t('tower.imports.roadTitle')}
+              hint={detail.roadFreightCode ? t('tower.imports.fold.road', { code: detail.roadFreightCode }) : t('tower.imports.fold.noRoad')}
+            >
               <p class="cons__lede">{t('tower.imports.roadHint')}</p>
               {/*
                 * THE JOURNEY, SAID BEFORE THE LEG IS MINTED.
@@ -1258,7 +1108,7 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                   </div>
                 </>
               )}
-            </section>
+            </ConsoleFold>
           ) : null}
 
           {/*
@@ -1277,12 +1127,13 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
           {detail.roadFreightId ? <ConsignmentNoteCard freightId={detail.roadFreightId} api={client?.api as never} /> : null}
 
           {/* ---- CL7: what kind of box, and what is in it ---- */}
-          <section class="cons__panel">
-            <div class="cons__panelhead">
-              <span class="cons__panelt">{t('tower.imports.boxTitle')}</span>
-              {detail.containerFacts ? <span class="ctag ctag--quiet">{detail.containerFacts.label}</span> : null}
-              {detail.containerFacts?.outOfGauge ? <span class="ctag ctag--warn">{t('tower.imports.outOfGauge')}</span> : null}
-            </div>
+          <ConsoleFold
+            title={t('tower.imports.boxTitle')}
+            hint={detail.cargoGaps.length > 0 ? t('tower.imports.fold.gaps', { n: detail.cargoGaps.length }) : t('tower.imports.fold.boxReady')}
+            aside={<>{detail.containerFacts ? <span class="ctag ctag--quiet">{detail.containerFacts.label}</span> : null}
+              {detail.containerFacts?.outOfGauge ? <span class="ctag ctag--warn">{t('tower.imports.outOfGauge')}</span> : null}</>}
+            defaultOpen={detail.cargoGaps.length > 0}
+          >
 
             {/* WHAT IS MISSING, FIRST AND LOUDLY. Each of these is a fact no code, description or weight
                 can supply, and each makes the road leg refuse — so it is said from the moment the
@@ -1508,23 +1359,22 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                 ) : null}
               </>
             ) : null}
-          </section>
+          </ConsoleFold>
 
           {/* ---- Y0 + Y1: the box is somebody else's property, and a clock is running on it ----
               The panel exists whether or not a number has been recorded, because the ABSENCE is the thing
               worth saying: no number means no box, no clock, and nothing anybody can be warned about. */}
-          <section class="cons__panel">
-            <div class="cons__panelhead">
-              <span class="cons__panelt">{t('tower.imports.clockTitle')}</span>
-              {detail.box ? <span class="ctag ctag--quiet">{detail.box.containerNo}</span> : null}
-              {/* The one figure a reader is looking for, and the only place a state is coloured. */}
+          <ConsoleFold
+            title={t('tower.imports.clockTitle')}
+            hint={detail.box ? detail.box.containerNo : t('tower.imports.fold.notArrived')}
+            aside={<>{/* The one figure a reader is looking for, and the only place a state is coloured. */}
               {detail.box?.clock.overdue ? (
                 <span class="ctag ctag--warn">{t('tower.imports.clockOverdue', { n: Math.abs(detail.box.clock.daysLeft ?? 0) })}</span>
               ) : detail.box?.clock.daysLeft != null ? (
                 <span class="ctag ctag--quiet">{t('tower.imports.clockLeft', { n: detail.box.clock.daysLeft })}</span>
               ) : null}
-              {detail.box?.ending ? <span class="ctag ctag--quiet">{t(`tower.imports.clockEnded.${detail.box.ending}` as never)}</span> : null}
-            </div>
+              {detail.box?.ending ? <span class="ctag ctag--quiet">{t(`tower.imports.clockEnded.${detail.box.ending}` as never)}</span> : null}</>}
+          >
 
             {!detail.box ? (
               <p class="cons__lede">{t('tower.imports.clockNoBox')}</p>
@@ -1907,14 +1757,14 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                 )}
               </>
             )}
-          </section>
+          </ConsoleFold>
 
           {/* ---- CL4 item 1: what the state did, and the two accounts of it ---- */}
-          <section class="cons__panel">
-            <div class="cons__panelhead">
-              <span class="cons__panelt">{t('tower.imports.holdsTitle')}</span>
-              {detail.customsHolds.length ? <span class="ctag ctag--quiet">{detail.customsHolds.length}</span> : null}
-            </div>
+          <ConsoleFold
+            title={t('tower.imports.holdsTitle')}
+            hint={detail.customsHolds.length === 0 ? t('tower.imports.fold.holdsNone') : detail.customsHolds.some((h) => !h.releasedAt) ? t('tower.imports.fold.holdsOpen', { n: detail.customsHolds.filter((h) => !h.releasedAt).length }) : t('tower.imports.fold.holdsClear')}
+            defaultOpen={detail.customsHolds.some((h) => !h.releasedAt)}
+          >
             {/* Said before the form, because this field's whole risk is being read as an excuse box. It is
                 not counted against the agent anywhere, and it is not counted FOR them either. */}
             <p class="cons__lede">{t('tower.imports.holdsHint')}</p>
@@ -2017,7 +1867,160 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                 </button>
               </div>
             ) : null}
-          </section>
+          </ConsoleFold>
+
+          {/* ---- set once: who may read these papers, and who clears them ---- */}
+          {detail.youAre === 'importer' ? (
+            <>
+              <ConsoleFold
+                title={t('tower.imports.grantsTitle')}
+                hint={liveGrants(detail.grants).length === 0 ? t('tower.imports.fold.noReaders') : t('tower.imports.fold.readers', { n: liveGrants(detail.grants).length })}
+              >
+                {liveGrants(detail.grants).length === 0 ? (
+                  <p class="cons__empty">{t('tower.imports.grantsNone')}</p>
+                ) : (
+                  /*
+                    * WHO FIRST, THEN WHAT THEY CAN READ. This was a three-column grid printing
+                    * `partner-et-djibouti-clearing-lj2ga` — a primary key, wrapped over three lines in a
+                    * column too narrow to hold it. Somebody deciding whether to revoke access to their
+                    * own commercial papers was being asked to recognise a slug.
+                    *
+                    * The row reads as a list entry: the company's NAME, then the scope and how many
+                    * papers it actually opens, then who gave it and when. Where the reader has a public
+                    * page the row IS the link to it, opening in a new tab — the way to go and read who
+                    * somebody is before deciding what they may see, with no journey to come back from.
+                    */
+                  <div class="crows">
+                    {liveGrants(detail.grants).map((g) => {
+                      const reaches = g.reaches ?? (g.scope === 'company' ? companyPapers(detail.documents).length : consignmentPapers(detail.documents, detail.code).length);
+                      const page = g.readerHandle ? publicPageUrl(g.readerHandle) : null;
+                      const inside = (
+                        <>
+                          <span class="crow__body">
+                            <span class="crow__top">
+                              <span class="crow__name">{g.readerName ?? g.readerEntityId}</span>
+                              {g.readerHandle ? <span class="ctag ctag--quiet">@{g.readerHandle}</span> : null}
+                            </span>
+                            <span class="crow__sub">
+                              {t(`tower.imports.grant.${g.scope}` as never)} · {reaches === 0 ? t('tower.imports.grantNoPapers') : t('tower.imports.grantPapers', { n: reaches })}
+                            </span>
+                            <span class="chint">{t('tower.imports.grant.since', { when: g.grantedAt.slice(0, 10), who: g.grantedBy })}</span>
+                          </span>
+                          <span class="crow__tail">{page ? <Icon name="chevronRight" size={16} /> : null}</span>
+                        </>
+                      );
+                      return page ? (
+                        <a key={g.grantId} class="crow" href={page} target="_blank" rel="noopener noreferrer">
+                          {inside}
+                        </a>
+                      ) : (
+                        <div key={g.grantId} class="crow">
+                          {inside}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </ConsoleFold>
+
+              <ConsoleFold
+                title={detail.agentEntityId ? t('tower.imports.revokeTitle') : t('tower.imports.appointTitle')}
+                hint={detail.agentName ?? t('tower.imports.fold.noAgent')}
+              >
+                <p class="cons__lede">{t('tower.imports.appointHint')}</p>
+                {detail.agentEntityId ? (
+                  <div class="twr-knobs__row">
+                    <label class="twr-knob cfield">
+                      <span class="cfield__label">{t('tower.imports.f.reason')}</span>
+                      <input class="cinput" value={reason} onChange={(e) => setReason((e.target as HTMLInputElement).value)} />
+                    </label>
+                    <div class="twr-panelend">
+                      <button
+                        type="button"
+                        class="cbtn cbtn--ghost"
+                        disabled={busy === 'revoke'}
+                        onClick={() =>
+                          run('revoke', () => client!.api.revokeClearingAgent(detail.importId, { ...(reason.trim() ? { reason: reason.trim() } : {}), ...(who ? { by: who } : {}) }), t('tower.imports.revoked'), () =>
+                            setReason(''),
+                          )
+                        }
+                      >
+                        {t('tower.imports.revoke')}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/*
+                      * CHOSEN FROM THE DIRECTORY, not typed. This asked for the agent's COMPANY ID —
+                      * a primary key nobody knows, obtainable only if the agent sent it to you out of
+                      * band, which is the exact gap the public finder was built to close.
+                      */}
+                    <div class="twr-panelend">
+                      <button type="button" class="cbtn cbtn--primary" onClick={() => setPicking(true)}>
+                        {t('tower.imports.chooseAgent')}
+                      </button>
+                    </div>
+                    <ParticipantPicker
+                      open={picking}
+                      title={t('tower.imports.chooseAgent')}
+                      actionLabel={t('tower.imports.appoint')}
+                      onClose={() => setPicking(false)}
+                      kinds={[
+                        {
+                          key: 'agents',
+                          labelKey: 'tower.pick.agents',
+                          /*
+                           * ONE KIND, so the picker draws no tab bar. Appointing a clearing agent
+                           * accepts a company that clears and nothing else; offering drivers and shops
+                           * beside it would present four wrong answers and one right one.
+                           *
+                           * AND NO COUNTRY FILTER, which the drive argued me out of. Filtering to the
+                           * container's destination is logically right — an agent clears at the border
+                           * the goods arrive at — and it answered with NOTHING for every container in
+                           * the sandbox, because the agents are registered next door. An empty list
+                           * from a filter nobody chose is the wall again. Every row carries its own
+                           * country instead, so an importer can see who is where and decide; a
+                           * registered address is not the same thing as where somebody works.
+                           */
+                          load: async () => {
+                            const r = await (client!.api as never as { findAgents: (q: { country?: string }) => Promise<{ data?: unknown }> }).findAgents({});
+                            const got = (r.data ?? { items: [], basis: '' }) as { items: AgentCardView[]; basis: string };
+                            return {
+                              /*
+                               * THE SENTENCE, NOT THE TOKEN. This route answers `basis:
+                               * "alphabetical-never-ranked"`, which is a machine word — the public
+                               * finder screen quietly ignores it and renders its own sentence. Printing
+                               * it verbatim would put a slug in front of a reader, so this does the
+                               * same as that screen. Worth saying that it is the odd one out: every
+                               * other basis in this product (the contact card, the yard register, the
+                               * saved places, the clearance record) is a sentence the server sends so
+                               * no screen can show the figures without it.
+                               */
+                              basis: t('tower.pick.agentsBasis', { n: got.items.length, country: detail.destCountry }),
+                              rows: got.items.map((a) => ({
+                                id: a.entityId,
+                                name: a.name,
+                                ...(a.handle ? { handle: a.handle } : {}),
+                                ...(a.country ? { country: a.country } : {}),
+                                ...(a.offer?.specialisms?.length ? { says: a.offer.specialisms.map((s: string) => t(`home.agents.spec.${s}` as never)).join(', ') } : {}),
+                                seen: a.thin ? t('tower.imports.agentNew') : t('tower.imports.agentSeen', { appointed: a.appointed, cleared: a.cleared }),
+                                ...(a.contact?.phone ? { phone: a.contact.phone } : {}),
+                              })),
+                            };
+                          },
+                        },
+                      ]}
+                      onPick={(row) => {
+                        setPicking(false);
+                        void run('appoint', () => client!.api.appointClearingAgent(detail.importId, { agentEntityId: row.id, ...(who ? { by: who } : {}) }), t('tower.imports.appointed', { name: row.name }));
+                      }}
+                    />
+                  </>
+                )}
+              </ConsoleFold>
+            </>
+          ) : null}
         </ConsoleDetail>
       ) : null}
     </>
