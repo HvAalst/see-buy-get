@@ -12,6 +12,7 @@ import { AgentService } from './agent.service';
 import { DispatchService } from './dispatch.service';
 import { Freight, FreightTrackView } from './dispatch.types';
 import { DriverService } from './driver.service';
+import { ImportService } from './import.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { tempBand } from './heavy-cargo';
 import { incotermEntry } from '../../foundation/incoterms/catalogue';
@@ -33,6 +34,7 @@ export class ConsignmentNoteService implements OnModuleInit {
     private readonly agents: AgentService,
     private readonly vendors: VendorService,
     private readonly events: EventBus,
+    private readonly imports: ImportService,
     @Optional() private readonly accounts?: AccountService,
     @Optional() private readonly mail?: MailService,
   ) {}
@@ -72,6 +74,13 @@ export class ConsignmentNoteService implements OnModuleInit {
     const volume = f.dimensionsCm ? Math.round(((f.dimensionsCm[0] * f.dimensionsCm[1] * f.dimensionsCm[2]) / 1_000_000) * 1000) / 1000 : undefined;
     const band = tempBand(f.natureCode);
     const documents: string[] = [];
+    /*
+     * THE CLEARANCE PACK FIRST, because that is what box 5 is for: the papers that travel WITH the
+     * goods. A leg minted from a container carries the consignment's code as its external order id, and
+     * the accepted papers hang off that — which is what makes this note the one place the information
+     * gathers rather than a fifth place somebody has to type it.
+     */
+    if (f.externalOrderId) documents.push(...this.imports.papersOnNote(f.externalOrderId));
     if (f.loadSafety?.securementPhotoRef) documents.push(`Photo of the secured load (${f.loadSafety.securementPhotoRef})`);
     if (f.tempReadings?.length) documents.push(`Temperature log, ${f.tempReadings.length} reading(s)`);
     if (f.unloadReport) documents.push(`Unload report, ${f.unloadReport.confirmed.length} item(s) confirmed`);
@@ -193,6 +202,10 @@ export class ConsignmentNoteService implements OnModuleInit {
   }
 
   private senderOf(f: Freight): NoteParty {
+    // A CONTAINER's road leg: the importer is the sender. Asked first, because such a leg carries no
+    // shipper DID at all and would otherwise fall through to the placeholder at the bottom.
+    const parties = f.externalOrderId ? this.imports.noteParties(f.externalOrderId) : null;
+    if (parties) return { name: parties.sender.name, ...(parties.sender.country ? { country: countryName(parties.sender.country) } : {}) };
     // A store's order: the store is the sender, whoever pressed the button.
     if (f.shipperDid && this.vendors.has(f.shipperDid)) {
       const v = this.vendors.get(f.shipperDid);
@@ -208,6 +221,17 @@ export class ConsignmentNoteService implements OnModuleInit {
   }
 
   private consigneeOf(f: Freight): NoteParty {
+    // Before the buyer reading below, which would otherwise invent "the buyer of order IMP-097" for a
+    // container nobody has sold. `externalOrderId` carries a shop order OR a consignment code, and only
+    // the import register can tell them apart.
+    const parties = f.externalOrderId ? this.imports.noteParties(f.externalOrderId) : null;
+    if (parties) {
+      return {
+        name: parties.consignee.name,
+        address: f.destLabel,
+        ...(parties.consignee.country ? { country: countryName(parties.consignee.country) } : {}),
+      };
+    }
     if (f.externalOrderId || f.buyerPhoneHash) {
       // A buyer: known to the network by a verified phone, never printed here. Delivery is to the shop they chose.
       return { name: f.externalOrderId ? `The buyer of order ${f.externalOrderId}` : 'The buyer', address: `Collects at ${f.destLabel}`, ...(f.destCountry ? { country: countryName(f.destCountry) } : {}) };

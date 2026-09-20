@@ -1352,6 +1352,55 @@ export class ImportService {
     return this.detail(consignment.importId, actorEntityId);
   }
 
+  /**
+   * BOX 5 OF THE CONSIGNMENT NOTE — the documents attached to this container, for the leg carrying it.
+   *
+   * A CMR box 5 lists what travels WITH the goods, and for an imported container that is the clearance
+   * pack: the bill of lading, the invoice, the permit a border asked for. Those already exist on this
+   * consignment, accepted by the agent who asked for them, and until now the note listed only the
+   * photographs the driver took.
+   *
+   * ONLY THE ACCEPTED ONES. A paper the agent has not accepted is a paper somebody may still reject, and
+   * a note is not a place to publish an argument in progress — it says what is attached, and a document
+   * still being argued over is not yet attached to anything.
+   *
+   * Named and FINGERPRINTED, never attached as bytes. The note is read by a driver at a roadside and a
+   * clerk at a counter, neither of whom is entitled to the importer's document register; a title and
+   * eight characters let somebody check that the copy in their hand is the copy this note means.
+   */
+  /**
+   * BOXES 1 AND 2 — who sends this road leg, and who receives it.
+   *
+   * BOTH ARE THE IMPORTER, and that is not a mistake: a haulage leg from a port is the importer sending
+   * their own goods to their own yard, which is an ordinary CMR and reads oddly only to somebody who has
+   * not seen one. The carrier is the third party, and it is the box that is empty until a driver claims.
+   *
+   * Found by reading the note the drive produced. Box 1 said "Sender" — a placeholder — because the leg
+   * carries no shipper DID: an importer is a COMPANY, and the freight machinery names parties by DID.
+   * Box 2 was worse: the note recognises `externalOrderId` as a shop order and printed "The buyer of
+   * order IMP-097", inventing a buyer for a container nobody had sold. Returning null for a code that is
+   * not a consignment is what keeps the shop-order reading intact for the orders it was written for.
+   */
+  noteParties(code: string): { sender: { name: string; country?: string }; consignee: { name: string; country?: string } } | null {
+    const consignment = [...this.imports.values()].find((c) => c.code.toUpperCase() === (code ?? '').toUpperCase());
+    if (!consignment) return null;
+    const importer = this.entities.find(consignment.importerEntityId);
+    const party = { name: importer?.name ?? consignment.importerEntityId, ...(importer?.jurisdiction ? { country: importer.jurisdiction } : {}) };
+    return { sender: party, consignee: party };
+  }
+
+  papersOnNote(code: string): string[] {
+    const consignment = [...this.imports.values()].find((c) => c.code.toUpperCase() === (code ?? '').toUpperCase());
+    if (!consignment) return [];
+    const byId = new Map(this.documents.list(consignment.importerEntityId).map((d) => [d.documentId, d]));
+    return consignment.required
+      .filter((line) => line.acceptedAt && line.documentId)
+      .map((line) => {
+        const doc = byId.get(line.documentId!);
+        return doc ? `${line.label} — ${doc.title} (${doc.fingerprint.slice(0, 8)})` : line.label;
+      });
+  }
+
   /* ------------------------------------------------------------------ private -- */
 
   /**

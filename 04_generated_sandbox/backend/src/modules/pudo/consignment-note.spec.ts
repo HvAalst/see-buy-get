@@ -41,6 +41,14 @@ describe('the consignment note', () => {
     { get: (did: string) => ({ shopName: did === 'did:shop:a1' ? 'Mama Sarah Shop' : 'Riverside Corner', landmark: 'Next to the market', country: 'KE', did }) } as never,
     { has: (id: string) => id === 'ven_1', get: () => ({ did: 'did:store', name: 'Nairobi Threads', address: 'Biashara St 12', country: 'KE' }) } as never,
     new EventBus(),
+    // The clearance pack for box 5. Named here so the note spec stays a note spec and does not have to
+    // stand up a container to assert what a driver reads at a roadside.
+    {
+      papersOnNote: (code: string) => (code === 'IMP-001' ? ['Bill of lading — BL for IMP-001 (ab12cd34)'] : []),
+      // Only a code the import register knows is a container. Everything else is a shop order, and the
+      // note-s buyer reading is right for those.
+      noteParties: (code: string) => (code === 'IMP-001' ? { sender: { name: 'Yukel Imports', country: 'KE' }, consignee: { name: 'Yukel Imports', country: 'KE' } } : null),
+    } as never,
   );
 
   it('fills every box it can from the record, and says so where it cannot', () => {
@@ -162,5 +170,33 @@ describe('the consignment note', () => {
     for (const no of ['>1<', '>2<', '>16<', '>20<', '>24<']) expect(html).toContain(`<span class="no">${no.replace(/[<>]/g, '')}</span>`);
     expect(html).toContain('<svg viewBox="0 0 120 120"');
     expect(html).toContain('T-1234');
+  });
+  it('names the IMPORTER on a container-s leg, and invents no buyer for it', () => {
+    /*
+     * Both found by reading the note a drive produced rather than by a unit test.
+     *
+     * Box 1 said "Sender" — the placeholder — because a container leg carries no shipper DID: an
+     * importer is a COMPANY, and the freight machinery names parties by DID. Box 2 was worse: the note
+     * reads externalOrderId as a shop order and printed "The buyer of order IMP-001", inventing a buyer
+     * for a container nobody had sold.
+     */
+    const note = service.build(base({ externalOrderId: 'IMP-001', postedByDid: undefined, shipperDid: undefined }));
+    expect(note.sender.name).toBe('Yukel Imports');
+    expect(note.consignee.name).toBe('Yukel Imports');
+    expect(note.consignee.name).not.toContain('buyer');
+    // Sending your own goods to your own yard is an ordinary CMR; the CARRIER is the third party.
+    expect(note.consignee.address).toBe('Riverside Corner');
+  });
+
+  it('lists the clearance pack in box 5, which is what travels WITH the goods', () => {
+    /*
+     * A CMR box 5 is the documents attached. For an imported container that is the pack the agent asked
+     * for and accepted, and until now the note listed only the photographs the driver took — so the one
+     * page a roadside officer reads said nothing about the papers in the cab.
+     */
+    const note = service.build(base({ externalOrderId: 'IMP-001' }));
+    expect(note.documents[0]).toContain('Bill of lading');
+    // A container the note knows nothing about adds nothing, rather than an empty line.
+    expect(service.build(base({ externalOrderId: 'IMP-404' })).documents).not.toContain(undefined);
   });
 });

@@ -5,6 +5,8 @@ import { useWideScreen } from '../../../shared/useWideScreen';
 import { ConsoleAction } from '../ConsoleAction';
 import { ConsoleDetail } from '../ConsoleDetail';
 import { PaperFile, PaperFiles } from './PaperFile';
+import { ConsignmentNoteCard } from './ConsignmentNoteCard';
+import { SitePicker } from './SitePicker';
 import { ConsoleSelect } from '../ConsoleSelect';
 import { DOCUMENT_KINDS, DOCUMENT_LABEL, shortFingerprint, type CompanyDocument } from '../company';
 import {
@@ -1049,19 +1051,34 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
               <p class="cons__lede">{t('tower.imports.roadHint')}</p>
               {detail.roadFreightCode ? null : (
                 <>
+                  {/*
+                    * BOTH ENDS ARE PLACES, and they are chosen the same way. This asked for a latitude,
+                    * a longitude and a sentence — two fields nobody knows by heart and one a driver has
+                    * to interpret — for the same port, every time, on every container.
+                    */}
                   <div class="twr-knobs__row">
-                    <label class="twr-knob cfield">
-                      <span class="cfield__label">{t('tower.imports.f.portLat')}</span>
-                      <input class="cinput" value={roadForm.lat} onChange={(e) => setRoadForm({ ...roadForm, lat: (e.target as HTMLInputElement).value })} />
-                    </label>
-                    <label class="twr-knob cfield">
-                      <span class="cfield__label">{t('tower.imports.f.portLng')}</span>
-                      <input class="cinput" value={roadForm.lng} onChange={(e) => setRoadForm({ ...roadForm, lng: (e.target as HTMLInputElement).value })} />
-                    </label>
-                    <label class="twr-knob cfield">
-                      <span class="cfield__label">{t('tower.imports.f.roadDest')}</span>
-                      <input class="cinput" value={roadForm.destLabel} onChange={(e) => setRoadForm({ ...roadForm, destLabel: (e.target as HTMLInputElement).value })} />
-                    </label>
+                    <div class="twr-knob">
+                      <SitePicker
+                        kind="port"
+                        entityId={detail.importerEntityId}
+                        api={client?.api as never}
+                        value={roadForm.pickupSiteId}
+                        onChange={(pickupSiteId) => setRoadForm({ ...roadForm, pickupSiteId })}
+                        label={t('tower.imports.f.collectedFrom')}
+                        addLabel={t('tower.sites.addPort')}
+                      />
+                    </div>
+                    <div class="twr-knob">
+                      <SitePicker
+                        kind="delivery"
+                        entityId={detail.importerEntityId}
+                        api={client?.api as never}
+                        value={roadForm.destSiteId}
+                        onChange={(destSiteId) => setRoadForm({ ...roadForm, destSiteId })}
+                        label={t('tower.imports.f.deliverTo')}
+                        addLabel={t('tower.sites.addDelivery')}
+                      />
+                    </div>
                     <label class="twr-knob cfield">
                       <span class="cfield__label">{t('tower.imports.f.weight')}</span>
                       <input class="cinput" type="number" min={1} value={roadForm.weightKg} onChange={(e) => setRoadForm({ ...roadForm, weightKg: (e.target as HTMLInputElement).value })} />
@@ -1078,8 +1095,8 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                           'road',
                           () =>
                             client!.api.mintImportRoadLeg(detail.importId, {
-                              pickupLocation: { lat: Number(roadForm.lat), lng: Number(roadForm.lng) },
-                              destLabel: roadForm.destLabel.trim(),
+                              pickupSiteId: roadForm.pickupSiteId,
+                              destSiteId: roadForm.destSiteId,
                               weightKg: Number(roadForm.weightKg),
                               ...(who ? { by: who } : {}),
                             }),
@@ -1095,6 +1112,21 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
               )}
             </section>
           ) : null}
+
+          {/*
+            * THE NOTE, WHERE THE LEG IS MADE. The waybill is a legal document and the user's point is
+            * the right one: there has to be ONE place the information gathers, or the same facts get
+            * typed into a form, a note and an email and disagree with each other by the third copy.
+            *
+            * This note is derived from what the network already holds — the importer is box 1, the
+            * saved places are boxes 3 and 4, the accepted clearance papers are box 5, the container's
+            * own declaration is boxes 6 to 12. Nothing on it is typed here.
+            *
+            * The carrier boxes are EMPTY UNTIL A DRIVER CLAIMS IT, and the screen says which those are
+            * rather than showing a page of blanks: a document that looks finished and is not is worse
+            * than one that says what it is still waiting for.
+            */}
+          {detail.roadFreightId ? <ConsignmentNoteCard freightId={detail.roadFreightId} api={client?.api as never} /> : null}
 
           {/* ---- CL7: what kind of box, and what is in it ---- */}
           <section class="cons__panel">

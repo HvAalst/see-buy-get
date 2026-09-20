@@ -29,6 +29,7 @@ import { GraduationService } from './graduation.service';
 import { VendorCallbackService } from './vendor-callback.service';
 import { ConsignmentService } from './consignment.service';
 import { ImportService } from './import.service';
+import { SiteService } from './site.service';
 import { ContainerBoxService } from './container-box.service';
 import { EmptyDepotService } from './empty-depot.service';
 import { ContactCardService } from './contact-card.service';
@@ -108,7 +109,7 @@ describe('dimensional weight', () => {
       providers: [
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
         GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService,
-        BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, ImportService, ContainerBoxService, EmptyDepotService, ContactCardService, VehicleService,
+        BagPlanService, ForthcomingService, DockService, ToteService, ConsignmentService, ImportService, SiteService, ContainerBoxService, EmptyDepotService, ContactCardService, VehicleService,
         DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService, FleetManagerService,
         MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,

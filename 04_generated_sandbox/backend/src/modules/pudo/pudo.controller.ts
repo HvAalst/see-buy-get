@@ -1,6 +1,7 @@
 ﻿import { driverPapers, lapsedOf, offRoadLine } from './papers';
 import { PapersWatchService } from './papers-watch.service';
 import { ConsignmentNoteService } from './consignment-note.service';
+import { SiteService, SITE_BASIS, type Site } from './site.service';
 import { MailService } from '../../foundation/mail/mail.service';
 import { isSandbox } from '../../foundation/runtime/sandbox';
 import { Body, Controller, Delete, Get, Header, Inject, Param, Patch, Post, Query, Res, StreamableFile, Optional } from '@nestjs/common';
@@ -96,7 +97,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyRecordDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto } from './pudo.dto';
+  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto } from './pudo.dto';
 import { incotermEntry } from '../../foundation/incoterms/catalogue';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
@@ -172,6 +173,7 @@ export class SbgController {
     private readonly handles: HandleService,
     private readonly handleDirectory: HandleDirectory,
     private readonly imports: ImportService,
+    private readonly sites: SiteService,
     private readonly readiness: CompanyReadinessService,
     private readonly borderRules: BorderRuleService,
     private readonly entityAdmins: EntityAdminService,
@@ -1301,14 +1303,58 @@ export class SbgController {
     };
   }
 
+  /* ---- the places a company keeps: the ports it collects from, the addresses it delivers to ---- */
+
+  /**
+   * Save a place. One company's own list — see SiteService for why it is not pooled.
+   *
+   * The point comes from a dropped pin or from an address resolved through the gazetteer, and the record
+   * says WHICH, because a resolved address is the centre of a town and a pin is somebody pointing at a
+   * gate. Both end up on a consignment note, where the difference has legal weight.
+   */
+  @Roles('operator', 'entity_admin')
+  @Post('entities/:entityId/sites')
+  declareSite(@Param('entityId') entityId: string, @Body() dto: DeclareSiteDto, @Actor() actor: IntrospectionResult): Site {
+    return this.sites.declare(
+      this.actingCompany(actor, entityId),
+      { kind: dto.kind, name: dto.name, ...(dto.location ? { location: dto.location } : {}), ...(dto.address ? { address: dto.address } : {}) },
+      this.namedActor(actor, dto.by),
+    );
+  }
+
+  /** This company's saved places, alphabetical. Theirs alone: nobody else's list is reachable here. */
+  @Roles('operator', 'entity_admin')
+  @Get('entities/:entityId/sites')
+  sitesOf(@Param('entityId') entityId: string, @Query() q: SitesQueryDto, @Actor() actor: IntrospectionResult): { sites: Site[]; basis: string } {
+    return { sites: this.sites.list(this.actingCompany(actor, entityId), q.kind), basis: SITE_BASIS };
+  }
+
   /** CL2b — mint the road leg from the port. A person does this; we observe no arrival and invent none. */
   @Roles('operator', 'entity_admin')
   @Post('imports/:importId/road-leg')
   mintImportRoadLeg(@Param('importId') importId: string, @Body() dto: MintRoadLegDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    const acting = this.actingCompany(actor, dto.entityId);
+    /*
+     * A SAVED PLACE ANSWERS BOTH QUESTIONS AT ONCE — the point a truck is routed to and the name that
+     * goes on the consignment note. Resolved here rather than inside the import service, which has no
+     * business knowing about somebody's address book; what it receives is the same shape it always did.
+     */
+    const from = dto.pickupSiteId ? this.sites.require(acting, dto.pickupSiteId) : undefined;
+    const to = dto.destSiteId ? this.sites.require(acting, dto.destSiteId) : undefined;
+    const pickupLocation = from?.location ?? dto.pickupLocation;
+    if (!pickupLocation) throw new GlosError('FIELD_REQUIRED', 'Say which port it is collected from');
+    const destLabel = to ? (to.address ?? to.name) : dto.destLabel;
+    if (!destLabel) throw new GlosError('FIELD_REQUIRED', 'Say where the container is going');
     return this.imports.mintRoadLeg(
       importId,
-      this.actingCompany(actor, dto.entityId),
-      { pickupLocation: dto.pickupLocation, pickupLabel: dto.pickupLabel, destLabel: dto.destLabel, destLocation: dto.destLocation, weightKg: dto.weightKg },
+      acting,
+      {
+        pickupLocation,
+        pickupLabel: from?.name ?? dto.pickupLabel,
+        destLabel,
+        destLocation: to?.location ?? dto.destLocation,
+        weightKg: dto.weightKg,
+      },
       this.namedActor(actor, dto.by),
     );
   }

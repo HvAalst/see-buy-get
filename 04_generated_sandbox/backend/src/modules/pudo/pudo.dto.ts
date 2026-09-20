@@ -359,10 +359,26 @@ export class ClearanceReceiptDto {
 
 /** CL2b — the road leg from the port of destination, minted by a person on the existing freight machinery. */
 export class MintRoadLegDto {
-  @ValidateNested() @Type(() => GeoDto) pickupLocation!: GeoDto;
+  /**
+   * THE PLACES, BY ID. A site carries its own name and point, so the leg stops asking for coordinates.
+   *
+   * The raw fields below are still accepted, and only for network staff acting through the API on a
+   * company with no saved places yet. A screen sends ids.
+   */
+  @IsOptional() @IsString() pickupSiteId?: string;
+  @IsOptional() @IsString() destSiteId?: string;
+  /*
+   * OPTIONAL NOW, AND THE CONTROLLER SAYS SO IF BOTH ROUTES ARE EMPTY.
+   *
+   * Found by driving it: validation runs BEFORE any handler code, so a required destLabel refused a
+   * request that carried a saved place perfectly capable of supplying one. A decorator that duplicates
+   * a rule the handler also holds ends up enforcing the older version of it — the same trap as the @Min
+   * that once shadowed the box's tare sentence.
+   */
+  @IsOptional() @ValidateNested() @Type(() => GeoDto) pickupLocation?: GeoDto;
   /** Defaults to the port the container is cleared at. */
   @IsOptional() @IsString() @MaxLength(120) pickupLabel?: string;
-  @IsString() @MaxLength(120) destLabel!: string;
+  @IsOptional() @IsString() @MaxLength(120) destLabel?: string;
   @IsOptional() @ValidateNested() @Type(() => GeoDto) destLocation?: GeoDto;
   @IsNumber() @Min(1) weightKg!: number;
   @IsOptional() @IsString() entityId?: string;
@@ -1732,6 +1748,23 @@ export class MarketSeriesQueryDto {
   @IsOptional() @IsDateString() since?: string;
   /** Window end, ISO. Defaults to now. */
   @IsOptional() @IsDateString() until?: string;
+}
+
+/** Save a place this company will choose again — a port it collects from, or somewhere it delivers. */
+export class DeclareSiteDto {
+  @IsOptional() @IsString() entityId?: string;
+  @IsIn(['port', 'delivery']) kind!: 'port' | 'delivery';
+  @IsString() @MaxLength(80) name!: string;
+  /** A dropped pin. Exactly one of this and `address` is needed; a pin wins where both arrive. */
+  @IsOptional() @ValidateNested() @Type(() => GeoDto) location?: GeoDto;
+  /** An address to resolve. Refused where we cannot place it, rather than guessed at. */
+  @IsOptional() @IsString() @MaxLength(200) address?: string;
+  @IsOptional() @IsString() by?: string;
+}
+
+export class SitesQueryDto {
+  @IsOptional() @IsString() entityId?: string;
+  @IsOptional() @IsIn(['port', 'delivery']) kind?: 'port' | 'delivery';
 }
 
 /** Who carried on one lane. The lane is named by its two ENDS, exactly as the series names it. */

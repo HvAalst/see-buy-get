@@ -5839,6 +5839,83 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/sites": {
+      "post": {
+        "operationId": "Sbg.declareSite",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeclareSiteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "Sbg.sitesOf",
+        "summary": "",
+        "description": "This company's saved places, alphabetical. Theirs alone: nobody else's list is reachable here.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "kind",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "port",
+                "delivery"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/imports/{importId}/road-leg": {
       "post": {
         "operationId": "Sbg.mintImportRoadLeg",
@@ -22171,9 +22248,55 @@
           "basis"
         ]
       },
+      "DeclareSiteDto": {
+        "type": "object",
+        "properties": {
+          "entityId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "port",
+              "delivery"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "location": {
+            "description": "A dropped pin. Exactly one of this and `address` is needed; a pin wins where both arrive.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GeoDto"
+              }
+            ]
+          },
+          "address": {
+            "type": "string",
+            "description": "An address to resolve. Refused where we cannot place it, rather than guessed at.",
+            "maxLength": 200
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "name"
+        ]
+      },
       "MintRoadLegDto": {
         "type": "object",
         "properties": {
+          "pickupSiteId": {
+            "type": "string",
+            "description": "THE PLACES, BY ID. A site carries its own name and point, so the leg stops asking for coordinates.\n\nThe raw fields below are still accepted, and only for network staff acting through the API on a\ncompany with no saved places yet. A screen sends ids."
+          },
+          "destSiteId": {
+            "type": "string"
+          },
           "pickupLocation": {
             "$ref": "#/components/schemas/GeoDto"
           },
@@ -22201,8 +22324,6 @@
           }
         },
         "required": [
-          "pickupLocation",
-          "destLabel",
           "weightKg"
         ]
       },

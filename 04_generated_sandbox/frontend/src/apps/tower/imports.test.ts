@@ -146,12 +146,17 @@ describe('a container, its papers, and the agent who clears them', () => {
     expect(receiptBlocker({ reference: 'MPESA-1', amount: '' })).toBeNull();
     expect(receiptBlocker({ reference: 'MPESA-1', amount: '-2' })).toBe('tower.imports.needAmount');
 
+    /*
+     * BOTH ENDS ARE PLACES NOW, chosen from the company's own list rather than typed.
+     *
+     * The case this replaces asserted that a latitude of "0" is a real coordinate and must not be read
+     * as "not given" — a genuine trap, and one that cannot happen any more: a place is an id or it is
+     * nothing, and half a place is not expressible.
+     */
     expect(roadBlocker(EMPTY_ROAD_FORM)).toBe('tower.imports.needPort');
-    expect(roadBlocker({ lat: '11.6', lng: '43.14', destLabel: '', weightKg: '10' })).toBe('tower.imports.needDest');
-    expect(roadBlocker({ lat: '11.6', lng: '43.14', destLabel: 'Addis', weightKg: '0' })).toBe('tower.imports.needAmount');
-    expect(roadBlocker({ lat: '11.6', lng: '43.14', destLabel: 'Addis', weightKg: '12000' })).toBeNull();
-    // Zero is a real coordinate, and a screen that treats it as "not given" refuses a legitimate port.
-    expect(roadBlocker({ lat: '0', lng: '0', destLabel: 'Null Island', weightKg: '1' })).toBeNull();
+    expect(roadBlocker({ pickupSiteId: 'site_1', destSiteId: '', weightKg: '10' })).toBe('tower.imports.needDest');
+    expect(roadBlocker({ pickupSiteId: 'site_1', destSiteId: 'site_2', weightKg: '0' })).toBe('tower.imports.needAmount');
+    expect(roadBlocker({ pickupSiteId: 'site_1', destSiteId: 'site_2', weightKg: '12000' })).toBeNull();
   });
 
   it('shows a fee as settled only once money actually arrived', () => {

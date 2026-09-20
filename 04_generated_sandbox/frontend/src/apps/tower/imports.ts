@@ -456,12 +456,12 @@ export interface ReceiptForm {
 export const EMPTY_RECEIPT_FORM: ReceiptForm = { reference: '', amount: '' };
 
 export interface RoadLegForm {
-  lat: string;
-  lng: string;
-  destLabel: string;
+  /** Both ends are SAVED PLACES now — a port chosen from the list, and somewhere to deliver it. */
+  pickupSiteId: string;
+  destSiteId: string;
   weightKg: string;
 }
-export const EMPTY_ROAD_FORM: RoadLegForm = { lat: '', lng: '', destLabel: '', weightKg: '' };
+export const EMPTY_ROAD_FORM: RoadLegForm = { pickupSiteId: '', destSiteId: '', weightKg: '' };
 
 /** A fee is a figure somebody will be asked to pay, so it is a real number above zero or it is nothing. */
 export function feeQuoteBlocker(form: FeeQuoteForm): MessageKey | null {
@@ -480,10 +480,16 @@ export function receiptBlocker(form: ReceiptForm): MessageKey | null {
   return null;
 }
 
-/** A road leg needs somewhere to collect from, somewhere to go, and something to carry. */
+/**
+ * A road leg needs somewhere to collect from, somewhere to go, and something to carry.
+ *
+ * Both ends are SAVED PLACES, so the question is "which one" rather than "what are its coordinates".
+ * That is the whole of the change: a place is named once and chosen afterwards, and neither end can be
+ * half-answered the way a latitude without a longitude could be.
+ */
 export function roadBlocker(form: RoadLegForm): MessageKey | null {
-  if (!numeric(form.lat) || !numeric(form.lng)) return 'tower.imports.needPort';
-  if (!form.destLabel.trim()) return 'tower.imports.needDest';
+  if (!form.pickupSiteId) return 'tower.imports.needPort';
+  if (!form.destSiteId) return 'tower.imports.needDest';
   if (!positive(form.weightKg)) return 'tower.imports.needAmount';
   return null;
 }

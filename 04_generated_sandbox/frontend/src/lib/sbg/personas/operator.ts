@@ -268,6 +268,24 @@ export function createOperatorApi(sbg: SbgClient) {
     rejectRequiredPaper: (importId: string, key: string, body: { reason: string; entityId?: string; by?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/required/{key}/reject', { params: { path: { importId, key } }, body: body as never })),
 
+    /**
+     * THE CONSIGNMENT NOTE for a leg — the one document the load carries, as JSON.
+     *
+     * Fetched by the importer as well as the carrier because the importer is the SENDER on it (box 1),
+     * and somebody who is named on a legal document is entitled to read it before it travels.
+     */
+    freightNote: (freightId: string) => sbg.request((c) => c.GET('/v1/sbg/dispatch/freight/{id}/consignment-note', { params: { path: { id: freightId } } })),
+
+    /* ---- the places a company keeps: the ports it collects from, the addresses it delivers to ---- */
+
+    /** This company-s own saved places. Nobody else-s list is reachable through this. */
+    sites: (entityId: string, kind?: string) =>
+      sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/sites', { params: { path: { entityId }, query: kind ? { kind } : {} } } as never)),
+
+    /** Save one. A dropped pin or an address to resolve — never both, because the toggle is the answer. */
+    declareSite: (entityId: string, body: Record<string, unknown>) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/sites', { params: { path: { entityId } }, body: body as never })),
+
     /** Read a shared paper. The grant decides; a paper you may not read answers NOT FOUND, never FORBIDDEN. */
     importDocumentFile: (importId: string, documentId: string, entityId?: string) =>
       sbg.request((c) =>
@@ -289,7 +307,22 @@ export function createOperatorApi(sbg: SbgClient) {
       sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/fee/receipt', { params: { path: { importId } }, body: body as never })),
 
     /** Mint the road leg from the port of destination, on the freight machinery that already exists. */
-    mintImportRoadLeg: (importId: string, body: { pickupLocation: { lat: number; lng: number }; pickupLabel?: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; entityId?: string; by?: string }) =>
+    mintImportRoadLeg: (
+      importId: string,
+      body: {
+        /** A saved place, which carries its own name and point. What a screen sends. */
+        pickupSiteId?: string;
+        destSiteId?: string;
+        /** The raw form, for staff acting through the API on a company with nothing saved yet. */
+        pickupLocation?: { lat: number; lng: number };
+        pickupLabel?: string;
+        destLabel?: string;
+        destLocation?: { lat: number; lng: number };
+        weightKg: number;
+        entityId?: string;
+        by?: string;
+      },
+    ) =>
       sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/road-leg', { params: { path: { importId } }, body: body as never })),
 
     /**
