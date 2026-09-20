@@ -196,6 +196,10 @@
   color: var(--navy);
 }
 
+/*
+ * THE GROUND IS THE APP'S OWN GREY, and the sections are drawn on it rather than floated above it.
+ * Nothing here sets a background: `.cons` supplies it, as it always did.
+ */
 .cons__main {
   min-width: 0;
   padding: 22px 24px 64px;
@@ -223,11 +227,29 @@
   font-size: var(--c-fs);
 }
 
+/*
+ * A SECTION, NOT A CARD — the user, on a screen of them: "the divs with rounded corners take much space
+ * because of the margins... keep paragraphs in blocks, separate them with a horizontal line, make
+ * distinctions with titles of 18px."
+ *
+ * Every rounded box cost a border, a radius, a shadow and twenty pixels of gap to say one thing: this
+ * is a different subject from the last one. A hairline and an 18px heading say it for the price of one
+ * pixel, which is the BondBridge settings shape the rest of this console already borrows from — and
+ * with the grey behind it, the shadow was decorating a distinction that was already made.
+ *
+ * The LAST section carries no rule: a line under the final block is a promise of something after it.
+ */
 .cons__panel {
-  background: var(--card);
-  border: 1px solid var(--bd-soft);
-  border-radius: var(--r-card);
-  box-shadow: var(--sh-sm);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  border-bottom: 1px solid var(--bd);
+  padding-bottom: 20px;
+}
+
+.cons__panel:last-child {
+  border-bottom: 0;
 }
 
 .cons__panelhead {
@@ -236,8 +258,10 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 8px var(--c-gap);
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--bd-soft);
+  /* No rule under the heading: the SECTION has one, and a title boxed in on both sides is the card
+     coming back in a thinner disguise. The 18px is the distinction. No side padding either — the work
+     area is the gutter now, and an inset from a border that is gone is space spent on nothing. */
+  padding: 20px 0 2px;
 }
 
 /*
@@ -258,45 +282,26 @@
 
 
 /*
- * THE RHYTHM, taken from the BondBridge settings page the user pointed at.
+ * THE RHYTHM, taken from the BondBridge settings page the user pointed at — and rewritten when the
+ * panels stopped being cards, because what stood here argued the opposite of what the code now does.
  *
- * Panels were stacking flush against each other with a hairline between, and their contents sat against
- * the border because a panel has no padding of its own — every screen that put a table inside one got
- * away with it, and every screen that put prose or a form inside one did not.
+ * It used to ask for 20px BETWEEN blocks on the grounds that "a hairline alone is not separation".
+ * That was sound while the blocks were cards distinguished by nothing but their edges. It is not sound
+ * now: the distinction is carried by an 18px heading AS WELL as the rule, which is the shape of the
+ * settings page the user pointed at.
  *
- * Four numbers, and they are the ones that page uses: 20px between blocks, 16px inside one, a heading
- * with 2px under it and its one description line with 12px under that, and rows of 10/14 inside a
- * bordered group. Space between blocks is what makes a page readable at a glance; a hairline alone is
- * not separation.
+ * So the air moved INSIDE the section rather than between two of them — 20px above each heading, 20px
+ * under the last thing in the block — and a reader sees the same gap between two subjects with a line
+ * through the middle of it, for one pixel and no shadow.
  */
 .cons__panel + .cons__panel {
-  margin-top: 20px;
+  margin-top: 0;
 }
 
-/*
- * A PANEL PADS ITS OWN CONTENTS, rather than every screen remembering to.
- *
- * A table is excluded because its cells carry their own padding — which is exactly why this defect hid
- * for so long: every screen that put a table in a panel looked right, and every screen that put prose or
- * a form in one had it sitting against the border.
- */
-.cons__panel > *:not(.cons__panelhead):not(table) {
-  padding-left: 16px;
-  padding-right: 16px;
-}
-
-.cons__panel > .crows,
-.cons__panel > .cdos {
-  padding-left: 0;
-  padding-right: 0;
-}
-
+/* A SECTION DOES NOT INSET ITS CONTENTS. There is no border to inset them from any more, and every
+   child — a callout with its own padding, a list, a table — keeps what it came with. */
 .cons__panel > .cons__panelhead + *:not(table) {
   padding-top: 14px;
-}
-
-.cons__panel > *:last-child:not(table) {
-  padding-bottom: 16px;
 }
 
 /* And air between the things inside it. */
@@ -454,6 +459,18 @@
   font-size: var(--c-fs);
 }
 
+/* The cells' side padding used to sit inside a card. With the card gone the first column would be
+   indented past every heading above it, so the outer edges give theirs up. */
+.ctbl th:first-child,
+.ctbl td:first-child {
+  padding-left: 0;
+}
+
+.ctbl th:last-child,
+.ctbl td:last-child {
+  padding-right: 0;
+}
+
 .ctbl th {
   text-align: left;
   font-size: 11px;
@@ -589,18 +606,31 @@
 
 /* --------------------------------------------------------------- controls -- */
 
+/*
+ * A LABEL WRAPS RATHER THAN LEAVING THE SCREEN — the user, on a phone: "text in buttons that doesn't
+ * fit".
+ *
+ * `white-space: nowrap` with no ceiling is a bet that every label is short. "Choose a clearing agent"
+ * is twenty-three characters, and a button that cannot wrap cannot be narrower than its longest line,
+ * so in a sheet on a phone it does not shrink — it pushes out past the edge, taking its row with it.
+ * Two lines of a button is mild; a button you cannot read the end of is not.
+ *
+ * `min-height` still governs the ordinary one-line case, so nothing that fitted before changes shape.
+ */
 .cbtn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   min-height: var(--c-ctl-h);
-  padding: 0 14px;
+  max-width: 100%;
+  padding: 6px 14px;
   border-radius: var(--r-ctl);
   border: 1px solid transparent;
   font-size: var(--c-fs);
   font-weight: 600;
-  white-space: nowrap;
+  line-height: 1.25;
+  text-align: center;
 }
 
 .cbtn:disabled {
@@ -1122,13 +1152,8 @@
     padding-right: 12px;
   }
 
-  .cons__panel > *:not(.cons__panelhead):not(table) {
-    padding-left: 12px;
-    padding-right: 12px;
-  }
-
   .cons__panelhead {
-    padding: 12px;
+    padding: 16px 0 2px;
   }
 
   .cons__title {
@@ -1175,15 +1200,22 @@
   }
 
   .ctbl--stack tbody tr:last-child {
+    border-bottom: 0;
+  }
+
+  /* A BLOCK WITH A RULE UNDER IT, not a rounded card. Same reason the panels stopped being cards:
+     a box per row spends a border and ten pixels of gap saying what one hairline says. */
+  .ctbl--stack tr {
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--bd);
+    border-radius: 0;
+    padding: 12px 0;
     margin-bottom: 0;
   }
 
-  .ctbl--stack tr {
-    background: var(--bg);
-    border: 1px solid var(--bd-soft);
-    border-radius: var(--r-ctl);
-    padding: 12px 14px;
-    margin-bottom: 10px;
+  .ctbl--stack tbody tr:last-child {
+    border-bottom: 0;
   }
 
   /* The card carries the ground now, so the cells inside it must not — including the stripe, which
@@ -1301,11 +1333,21 @@
   min-width: 0;
 }
 
+/*
+ * It may not wrap — a row is one line and a code broken across two is a different-looking code — but
+ * it must not run off the right either, which is what it did: this had `nowrap` and neither of the two
+ * properties that make `nowrap` safe. A container reference always fits and is never touched; a
+ * country's long form or a company's full name meets the edge and ends in an ellipsis instead of
+ * disappearing past it.
+ */
 .crow__name {
   font-size: 15px;
   font-weight: 600;
   color: var(--navy);
   white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* The line that gives way. A route can be any length; the code beside it cannot be abbreviated. */
@@ -1387,25 +1429,9 @@
   color: var(--tx3);
 }
 
-/* Below the sidebar line a list panel goes flush to the screen: side borders and a radius around
-   something that fills the width are furniture drawing attention to itself. */
-@media (max-width: 1100px) {
-  .cons__panel--flush {
-    border-left: 0;
-    border-right: 0;
-    border-radius: 0;
-    /* Out to the screen edge, which means cancelling exactly the gutter the work area is carrying —
-       16px here, and 12px in the narrow block below, where .cons__main tightens. */
-    margin-left: -16px;
-    margin-right: -16px;
-  }
-}
+
 
 @media (max-width: 640px) {
-  .cons__panel--flush {
-    margin-left: -12px;
-    margin-right: -12px;
-  }
 }
 
 /* ------------------------------------------------------------------ menu --- */

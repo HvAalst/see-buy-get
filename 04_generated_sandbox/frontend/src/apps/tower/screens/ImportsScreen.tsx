@@ -498,7 +498,7 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
       {error ? <p class="cerr">{error}</p> : null}
 
       {/* ---- the containers ---- */}
-      <section class="cons__panel cons__panel--flush">
+      <section class="cons__panel">
         <div class="cons__panelhead">
           <span class="cons__panelt">{rows === null ? t('tower.imports.loading') : t('tower.imports.count', { n: rows.length })}</span>
           {/*
@@ -1012,7 +1012,7 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
             {detail.required.length === 0 ? (
               <p class="cons__empty">{detail.agentEntityId ? t('tower.imports.requiredNone') : t('tower.imports.requiredNoAgent')}</p>
             ) : (
-              <table class="ctbl">
+              <table class="ctbl ctbl--stack">
                 <tbody>
                   {[...outstanding(detail), ...detail.required.filter((r) => !outstanding(detail).includes(r))].map((paper) => (
                     <PaperRow

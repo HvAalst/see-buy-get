@@ -43,10 +43,24 @@
 
 /* --------------------------------------------------------------- the queue -- */
 
+/*
+ * IT WRAPS. A select, a text box and a button in one unwrapping flex row is a row that runs off the
+ * right of a phone — which is what it did, with the select clipped mid-word and the button past the
+ * edge. Nothing in here has a useful half, so they go onto the next line rather than off the screen.
+ */
 .twr-panelend {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
+  min-width: 0;
+}
+
+/* A control in one of these takes the width it is given rather than its content's idea of it. */
+.twr-panelend > .cinput {
+  flex: 1 1 160px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* What this session has just done. Not a toast: a toast takes the record of a decision away on a timer,
@@ -781,11 +795,22 @@
   gap: 6px;
 }
 
+/*
+ * AND SO DOES THIS. A customs hold is a title, a date, a tag and two parties' accounts of what
+ * happened; laid out as one unwrapping flex row they became four narrow columns, each word on its own
+ * line — the ladder in the user's screenshot. They are lines of a paragraph, so they wrap like one.
+ */
 .twr-checklist li {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  line-height: 1.4;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  line-height: 1.5;
+  min-width: 0;
+}
+
+.twr-checklist li > * {
+  min-width: 0;
 }
 
 .twr-checklist li svg {
