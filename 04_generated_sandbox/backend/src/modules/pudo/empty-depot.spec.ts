@@ -180,4 +180,32 @@ describe('a yard that says it holds empties', () => {
     expect(() => depots.registerOf(otherYardId)).toThrow(/has not said it holds empties/);
     expect(() => depots.say(otherYardId, 'CSQU3054383', {}, 'Gate')).toThrow(/has not said it holds empties/);
   });
+  it('places a yard by its NAME when nobody dropped a pin, and says which it did', () => {
+    /*
+     * A haulier is going to drive there. A pin the yard dropped is them pointing at their own gate; a
+     * point worked out from their name is the middle of a town, which is a direction and not an
+     * address. The finder carries both and says which, so no screen can show the second as the first.
+     */
+    const svc = depots;
+    svc.declare(yardId, { placeLabel: 'Mombasa yard', country: 'KE' }, 'Hans');
+    svc.declare(otherYardId, { placeLabel: 'Our gate', country: 'KE', location: { lat: -4.0619, lng: 39.6417 } }, 'Hans');
+
+    const rows = svc.list();
+    const named = rows.find((r) => r.entityId === yardId)!;
+    const pinned = rows.find((r) => r.entityId === otherYardId)!;
+
+    expect(named.locationFrom).toBe('name');
+    expect(named.location).toBeDefined();
+    expect(pinned.locationFrom).toBe('pin');
+    expect(pinned.location).toEqual({ lat: -4.0619, lng: 39.6417 });
+  });
+
+  it('gives a yard whose name means nothing to us no point at all', () => {
+    // Rather than a pin on the capital. An absence is a fact a reader can act on; a wrong pin is not.
+    const svc = depots;
+    svc.declare(yardId, { placeLabel: 'Zzzq depot', country: 'KE' }, 'Hans');
+    const [row] = svc.list({ text: 'Zzzq' });
+    expect(row.location).toBeUndefined();
+    expect(row.locationFrom).toBeUndefined();
+  });
 });

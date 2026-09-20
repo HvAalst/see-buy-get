@@ -4,10 +4,19 @@ import { useT } from '../../../shared/i18n';
 import { ContactCardPanel, type ContactCardView } from './ContactCardPanel';
 import { ConsoleAction } from '../ConsoleAction';
 import { CountrySelect, useCountryAtlas } from './CountrySelect';
+import { YardSheet } from './YardSheet';
+import { initials } from '../ConsoleMenu';
+import { PlaceMap } from '../../../shared/ui';
+import type { GeoPoint } from '../../../shared/geo';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
 /** One yard as the finder lists it. Counts travel; the container numbers do not. */
 export interface DepotRow {
+  /** Where it is, and HOW WELL WE KNOW: a pin the yard dropped, or their name resolved to a town. */
+  location?: GeoPoint;
+  locationFrom?: 'pin' | 'name';
+  /** Two sources kept apart, and neither is an inventory. Printed verbatim wherever the counts are. */
+  basis: string;
   entityId: string;
   placeLabel: string;
   country: string;
@@ -78,7 +87,14 @@ export function DepotsScreen({ state, actions }: { state: TowerState; actions: T
    * the declare form: "has no input fields on how you can be reached. confusing." Asked here, once, at
    * the moment somebody is putting themselves on a list.
    */
-  const [form, setForm] = useState({ placeLabel: '', country: '', phone: '', email: '', hours: '' });
+  const [form, setForm] = useState<{ placeLabel: string; country: string; phone: string; email: string; hours: string; pin: GeoPoint | null }>({
+    placeLabel: '',
+    country: '',
+    phone: '',
+    email: '',
+    hours: '',
+    pin: null,
+  });
   const [boxForm, setBoxForm] = useState({ containerNo: '', position: '', note: '' });
   const [find, setFind] = useState({ country: '', q: '' });
   const [busy, setBusy] = useState<string | null>(null);
@@ -115,6 +131,8 @@ export function DepotsScreen({ state, actions }: { state: TowerState; actions: T
     after?.();
     await load();
   };
+
+  const [openYard, setOpenYard] = useState<DepotRow | null>(null);
 
   const atlas = useCountryAtlas(client?.api as never);
   /* The countries that actually have yards, out of the answer itself — never a menu of empty answers. */
@@ -162,6 +180,14 @@ export function DepotsScreen({ state, actions }: { state: TowerState; actions: T
                     <span class="cfield__label">{t('tower.contact.f.hours')}</span>
                     <input class="cinput" value={form.hours} onChange={(e) => setForm({ ...form, hours: (e.target as HTMLInputElement).value })} placeholder={t('tower.contact.f.hoursPh')} />
                   </label>
+                  {/* THE GATE, dropped by the only people who know where it is. Without this the finder
+                      can only resolve the yard's NAME to the middle of a town, which is a direction
+                      rather than an address. Optional, because a yard that will not is still a yard. */}
+                  <div class="cfield">
+                    <span class="cfield__label">{t('tower.depots.f.pin')}</span>
+                    <PlaceMap onDrop={(p) => setForm({ ...form, pin: p })} dropped={form.pin} label={t('tower.depots.f.pinLabel')} />
+                    <span class="chint">{form.pin ? t('tower.sites.pinAt', { lat: form.pin.lat.toFixed(4), lng: form.pin.lng.toFixed(4) }) : t('tower.depots.f.pinNone')}</span>
+                  </div>
                   <p class="chint">{t('tower.depots.reachHint')}</p>
                   <div class="twr-panelend">
                     <button
@@ -172,7 +198,12 @@ export function DepotsScreen({ state, actions }: { state: TowerState; actions: T
                         run(
                           'declare',
                           async () => {
-                            const made = await client!.api.declareDepot({ placeLabel: form.placeLabel.trim(), country: form.country, ...(who ? { by: who } : {}) });
+                            const made = await client!.api.declareDepot({
+                              placeLabel: form.placeLabel.trim(),
+                              country: form.country,
+                              ...(form.pin ? { location: form.pin } : {}),
+                              ...(who ? { by: who } : {}),
+                            });
                             if (made.error) return made;
                             /*
                              * ONE ACT, TWO WRITES. Being listed and being reachable are the same
@@ -370,41 +401,34 @@ export function DepotsScreen({ state, actions }: { state: TowerState; actions: T
 
         {rows && rows.length === 0 ? <p class="cons__empty">{t('tower.depots.findNone')}</p> : null}
         {rows && rows.length > 0 ? (
+          /*
+            * A NAME, A COUNTRY AND AN ARROW. The row carried the counts, who said so and when, the
+            * telephone, the hours and a contact name — four lines to read past before comparing this
+            * yard with the next. All of it is one tap away and none of it helps you choose which yard
+            * to open, which is the only question a list answers.
+            */
           <div class="crows">
-            {rows.map((d) => {
-              /*
-               * THE ROW IS THE CALL. This finder exists so somebody can ring a yard, and a telephone
-               * number printed in a table cell is a number you copy out by hand — on the phone you are
-               * holding, which already knows how to dial. Everything but digits and a leading plus is
-               * stripped, because a tel: carrying spaces is one some dialers refuse.
-               */
-              const ring = d.contact?.phone ? `tel:${d.contact.phone.replace(/[^+\d]/g, '')}` : null;
-              const inside = (
-                <>
-                  <span class="crow__body">
-                    <span class="crow__top">
-                      <span class="crow__name">{d.placeLabel}</span>
-                      <span class="ctag ctag--quiet">{d.country}</span>
-                    </span>
-                    <span class="crow__sub">{t('tower.depots.rowCounts', { said: d.saidCount, inbound: d.inboundCount })}</span>
-                    {/* A yard with no entry says so rather than looking like one nobody rings. */}
-                    <span class="chint">{d.contact ? [d.contact.phone, d.contact.hours, d.contact.contactName].filter(Boolean).join(' · ') : t('tower.depots.noContact')}</span>
+            {rows.map((d) => (
+              <button key={d.entityId} type="button" class="crow" onClick={() => setOpenYard(d)}>
+                {/* Initials, the same avatar the account menu uses: something to recognise a yard by
+                    at a glance, in a list somebody scrolls. */}
+                <span class="cmenu__face" aria-hidden="true">
+                  {initials(d.placeLabel)}
+                </span>
+                <span class="crow__body">
+                  <span class="crow__top">
+                    <span class="crow__name">{d.placeLabel}</span>
+                    <span class="ctag ctag--quiet">{d.country}</span>
                   </span>
-                  <span class="crow__tail">{ring ? <Icon name="keypad" size={16} /> : null}</span>
-                </>
-              );
-              return ring ? (
-                <a key={d.entityId} class="crow" href={ring}>
-                  {inside}
-                </a>
-              ) : (
-                <div key={d.entityId} class="crow">
-                  {inside}
-                </div>
-              );
-            })}
+                </span>
+                <span class="crow__tail">
+                  <Icon name="chevronRight" size={16} />
+                </span>
+              </button>
+            ))}
           </div>
         ) : null}
+        {openYard ? <YardSheet yard={openYard} onClose={() => setOpenYard(null)} /> : null}
       </section>
     </>
   );

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { GlosError } from '../../foundation/http/glos-error';
+import { lookupPlace } from './geo-gazetteer';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { ContainerBoxService } from './container-box.service';
 import { CONTACT_BASIS, ContactCard, ContactCardService } from './contact-card.service';
@@ -148,7 +149,20 @@ export class EmptyDepotService {
    * The counts travel, the numbers do not: which boxes are standing in a yard is a map of somebody
    * else's assets, and publishing it to every participant serves nobody who is deciding where to drive.
    */
-  list(q: { country?: string; text?: string } = {}, now = Date.now()): Array<EmptyDepot & { saidCount: number; derivedCount: number; inboundCount: number; contact?: ContactCard & { basis: string }; basis: string }> {
+  list(
+    q: { country?: string; text?: string } = {},
+    now = Date.now(),
+  ): Array<
+    EmptyDepot & {
+      saidCount: number;
+      derivedCount: number;
+      inboundCount: number;
+      contact?: ContactCard & { basis: string };
+      /** How the point below was arrived at. Absent where there is no point at all. */
+      locationFrom?: 'pin' | 'name';
+      basis: string;
+    }
+  > {
     const country = q.country?.trim().toUpperCase();
     const text = q.text?.trim().toLowerCase();
     return [...this.depots.values()]
@@ -158,11 +172,24 @@ export class EmptyDepotService {
       .map((d) => {
         const register = this.registerOf(d.entityId, now);
         const card = this.contacts.of(d.entityId);
+        /*
+         * WHERE IT IS, AND HOW WELL WE KNOW — a haulier is going to drive there.
+         *
+         * A pin the yard dropped is the yard pointing at its own gate. Everything else is their NAME
+         * resolved through the gazetteer, which lands on the middle of a town and is not a gate: good
+         * enough to know which side of the city to set off for, not good enough to arrive at. The
+         * difference travels as `locationFrom` so no screen can show the second and imply the first.
+         *
+         * Absent entirely where the name resolves to nothing, rather than a pin on the capital.
+         */
+        const named = d.location ? undefined : lookupPlace(`${d.placeLabel}, ${d.country}`) ?? lookupPlace(d.placeLabel);
+        const where = d.location ?? named?.entry.location;
         return {
           ...d,
           saidCount: register.said.length,
           derivedCount: register.derived.length,
           inboundCount: register.inbound.length,
+          ...(where ? { location: where, locationFrom: d.location ? ('pin' as const) : ('name' as const) } : {}),
           // A finder that says "ring them" and prints no number is the defect this closes.
           ...(card ? { contact: { ...card, basis: CONTACT_BASIS } } : {}),
           basis: DEPOT_BASIS,

@@ -997,6 +997,12 @@
   border-top: 1px solid var(--bd-soft);
 }
 
+/* Without labels the row is icons only, so the buttons centre on their own height rather than
+   reserving a line that is no longer there. */
+.bnav--bare .bnav__item {
+  gap: 0;
+}
+
 .bnav__item {
   position: relative;
   flex: 1;

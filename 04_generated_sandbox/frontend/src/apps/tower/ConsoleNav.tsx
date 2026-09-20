@@ -111,7 +111,11 @@ export function ConsolePhoneNav({ groups, screen, counts, onGo }: ConsoleNavProp
 
   return (
     <>
+      {/* ICONS ALONE. Four one-word labels under four icons, on a surface somebody works in all day:
+          after the first morning the words are not read and are still taking the room. The label is now
+          the button's accessible name, so nothing is lost to a screen reader. */}
       <BottomNav
+        labels={false}
         items={groups.map((g) => ({
           key: g.key,
           label: t(g.labelKey),
