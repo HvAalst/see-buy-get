@@ -6,6 +6,7 @@ import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
 import { DRIVER_ISSUES, DriverIssue } from './rating.service';
 import { MERCHANT_TAGS, MerchantTag } from './merchant-rating.service';
 import { TRUCK_SUBTYPES } from './fleet.config';
+import { SITE_KINDS, type SiteKind } from './site.service';
 import { PACKAGING, type Packaging } from './packaging';
 import { MEDIA_KINDS, MediaKind } from './media.types';
 import { CONSTRAINT_KINDS, ConstraintKind } from './route-constraint.types';
@@ -269,7 +270,12 @@ export class RegisterImportDto {
   @IsString() @MaxLength(200) goodsDescription!: string;
   @IsString() @MaxLength(2) originCountry!: string;
   @IsString() @MaxLength(2) destCountry!: string;
+  /** Where it CLEARS. A saved place of kind 'clearance' supplies this on a screen; staff may type it. */
   @IsString() @MaxLength(80) destPort!: string;
+  @IsOptional() @IsString() clearanceSiteId?: string;
+  /** Where the vessel put it down, when that is somewhere else. A label off a bill of lading. */
+  @IsOptional() @IsString() @MaxLength(80) dischargePort?: string;
+  @IsOptional() @IsString() dischargeSiteId?: string;
   @IsOptional() @IsString() @MaxLength(20) containerNo?: string;
   /** The carrier's own reference. Recorded, and read by nothing yet — the carrier seam is not wired. */
   @IsOptional() @IsString() @MaxLength(60) carrierRef?: string;
@@ -1753,7 +1759,14 @@ export class MarketSeriesQueryDto {
 /** Save a place this company will choose again — a port it collects from, or somewhere it delivers. */
 export class DeclareSiteDto {
   @IsOptional() @IsString() entityId?: string;
-  @IsIn(['port', 'delivery']) kind!: 'port' | 'delivery';
+  /*
+   * READ FROM SITE_KINDS, never restated. A literal here is a second copy of a rule that lives in the
+   * service, and a second copy drifts: adding 'clearance' to the kinds left this decorator refusing it,
+   * with a message naming two kinds while the service knew three. Third time a DTO decorator carrying a
+   * duplicate of a rule has bitten in this project — the box's tare sentence and the road leg's
+   * destination label were the others.
+   */
+  @IsIn([...SITE_KINDS]) kind!: SiteKind;
   @IsString() @MaxLength(80) name!: string;
   /** A dropped pin. Exactly one of this and `address` is needed; a pin wins where both arrive. */
   @IsOptional() @ValidateNested() @Type(() => GeoDto) location?: GeoDto;
@@ -1764,7 +1777,7 @@ export class DeclareSiteDto {
 
 export class SitesQueryDto {
   @IsOptional() @IsString() entityId?: string;
-  @IsOptional() @IsIn(['port', 'delivery']) kind?: 'port' | 'delivery';
+  @IsOptional() @IsIn([...SITE_KINDS]) kind?: SiteKind;
 }
 
 /** Who carried on one lane. The lane is named by its two ENDS, exactly as the series names it. */

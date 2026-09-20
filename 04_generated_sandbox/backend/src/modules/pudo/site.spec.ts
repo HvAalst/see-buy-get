@@ -36,7 +36,7 @@ describe('the places a company keeps', () => {
   it('will not keep two ports with one name, because that is the confusion it exists to end', () => {
     const s = fresh();
     s.declare('imp', { kind: 'port', name: 'Mombasa', location: { lat: -4.04, lng: 39.66 } }, 'Hans');
-    expect(() => s.declare('imp', { kind: 'port', name: 'mombasa', location: { lat: -4.05, lng: 39.67 } }, 'Hans')).toThrow(/already have a port/i);
+    expect(() => s.declare('imp', { kind: 'port', name: 'mombasa', location: { lat: -4.05, lng: 39.67 } }, 'Hans')).toThrow(/already have a place/i);
     // A DELIVERY place may share the name: they are different lists answering different questions.
     expect(() => s.declare('imp', { kind: 'delivery', name: 'Mombasa', location: { lat: -4.05, lng: 39.67 } }, 'Hans')).not.toThrow();
   });
@@ -63,6 +63,12 @@ describe('the places a company keeps', () => {
   it('refuses a point that is not on this planet', () => {
     const s = fresh();
     expect(() => s.declare('imp', { kind: 'port', name: 'Nowhere', location: { lat: 91, lng: 0 } }, 'Hans')).toThrow(/planet/);
-    expect([...SITE_KINDS]).toEqual(['port', 'delivery']);
+    /*
+     * THREE, and they are the chain a container travels: the quay, the counter, the yard. The middle
+     * one arrived when the user asked how a landlocked import is shown — a reefer discharged at
+     * Djibouti and cleared at Modjo is two places and therefore two legs, and a model with one "port"
+     * on it cannot say that.
+     */
+    expect([...SITE_KINDS]).toEqual(['port', 'clearance', 'delivery']);
   });
 });

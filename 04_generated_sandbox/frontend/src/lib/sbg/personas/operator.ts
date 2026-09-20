@@ -228,7 +228,22 @@ export function createOperatorApi(sbg: SbgClient) {
      */
 
     /** The importer records a container that is on its way. It exists before it arrives — that is the point. */
-    registerImport: (body: { importerEntityId?: string; goodsDescription: string; originCountry: string; destCountry: string; destPort: string; containerNo?: string; carrierRef?: string; etaAt?: string; by?: string }) =>
+    registerImport: (body: {
+      importerEntityId?: string;
+      goodsDescription: string;
+      originCountry: string;
+      destCountry: string;
+      /** Where it CLEARS. A screen sends `clearanceSiteId` and this follows from it. */
+      destPort: string;
+      clearanceSiteId?: string;
+      /** Where the vessel put it down, when that is somewhere else. */
+      dischargePort?: string;
+      dischargeSiteId?: string;
+      containerNo?: string;
+      carrierRef?: string;
+      etaAt?: string;
+      by?: string;
+    }) =>
       sbg.request((c) => c.POST('/v1/sbg/imports', { body: body as never })),
 
     /** The consignments this company is a party to. Staff naming no company see the network's. */

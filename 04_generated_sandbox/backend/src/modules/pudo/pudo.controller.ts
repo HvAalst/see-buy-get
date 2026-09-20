@@ -722,7 +722,23 @@ export class SbgController {
   @Roles('operator', 'entity_admin')
   @Post('imports')
   registerImport(@Body() dto: RegisterImportDto, @Actor() actor: IntrospectionResult) {
-    return this.imports.register({ ...dto, importerEntityId: this.actingCompany(actor, dto.importerEntityId) }, this.namedActor(actor, dto.by));
+    const acting = this.actingCompany(actor, dto.importerEntityId);
+    /*
+     * THE TWO PLACES, RESOLVED FROM SAVED SITES. A screen sends ids; staff typing through the API may
+     * still send labels, which is why both survive. Resolved here and not in the import service, for the
+     * same reason the road leg's are: that service has no business holding an address book.
+     */
+    const clearsAt = dto.clearanceSiteId ? this.sites.require(acting, dto.clearanceSiteId) : undefined;
+    const discharge = dto.dischargeSiteId ? this.sites.require(acting, dto.dischargeSiteId) : undefined;
+    return this.imports.register(
+      {
+        ...dto,
+        importerEntityId: acting,
+        destPort: clearsAt?.name ?? dto.destPort,
+        ...(discharge?.name ?? dto.dischargePort ? { dischargePort: discharge?.name ?? dto.dischargePort } : {}),
+      },
+      this.namedActor(actor, dto.by),
+    );
   }
 
   /**

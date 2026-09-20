@@ -5,7 +5,7 @@ import type { GeoPoint } from '../../../shared/geo';
 
 export interface SiteView {
   siteId: string;
-  kind: 'port' | 'delivery';
+  kind: 'port' | 'clearance' | 'delivery';
   name: string;
   location: GeoPoint;
   address?: string;
@@ -43,7 +43,7 @@ export function SitePicker({
   label,
   addLabel,
 }: {
-  kind: 'port' | 'delivery';
+  kind: 'port' | 'clearance' | 'delivery';
   entityId: string;
   api: Api | null;
   value: string;

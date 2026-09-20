@@ -517,7 +517,13 @@ export class ImportConsignment {
   @ApiProperty() originCountry: string;
   @ApiProperty() destCountry: string;
   /** Where it is cleared — "Djibouti", "Mombasa", or an airport. A label, not a modelled place. */
+  /** WHERE IT CLEARS. The papers a border asks for are that border's, and this is which border. */
   @ApiProperty() destPort: string;
+  /**
+   * WHERE THE VESSEL PUT IT DOWN, when that is somewhere else — a landlocked import discharged at a
+   * coastal port and cleared inland. Absent means the two are the same place.
+   */
+  @ApiPropertyOptional() dischargePort?: string;
   /** How the goods arrived. Absent on anything recorded before the field existed — see modeOf(). */
   @ApiPropertyOptional({ enum: CONSIGNMENT_MODES }) mode?: ConsignmentMode;
 
@@ -629,7 +635,13 @@ export class ImportRow {
   @ApiPropertyOptional() containerNo?: string;
   @ApiProperty() originCountry: string;
   @ApiProperty() destCountry: string;
+  /** WHERE IT CLEARS. The papers a border asks for are that border's, and this is which border. */
   @ApiProperty() destPort: string;
+  /**
+   * WHERE THE VESSEL PUT IT DOWN, when that is somewhere else — a landlocked import discharged at a
+   * coastal port and cleared inland. Absent means the two are the same place.
+   */
+  @ApiPropertyOptional() dischargePort?: string;
   @ApiPropertyOptional() etaAt?: string;
   @ApiProperty() importerEntityId: string;
   @ApiPropertyOptional() importerName?: string;

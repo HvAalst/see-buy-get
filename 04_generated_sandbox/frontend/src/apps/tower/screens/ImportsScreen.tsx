@@ -9,6 +9,8 @@ import { ConsignmentNoteCard } from './ConsignmentNoteCard';
 import { publicPageUrl } from '../../../lib/sbg/config';
 import { ParticipantPicker } from './ParticipantPicker';
 import { SitePicker } from './SitePicker';
+import { CountryPicker } from './CountryPicker';
+import { useCountryAtlas } from './CountrySelect';
 import { ConsoleSelect } from '../ConsoleSelect';
 import { DOCUMENT_KINDS, DOCUMENT_LABEL, shortFingerprint, type CompanyDocument } from '../company';
 import {
@@ -233,6 +235,7 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
   const mixedParties = partiesDiffer(shown);
   // A table at a desk, a list in a hand. The same line the navigation and the detail already read.
   const wide = useWideScreen();
+  const atlas = useCountryAtlas(client?.api as never);
 
   const registerFault = registerBlocker(form);
   const publishFault = publishBlocker(lines);
@@ -334,18 +337,40 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                       <span class="cfield__label">{t('tower.imports.f.goods')}</span>
                       <input class="cinput" value={form.goodsDescription} onChange={(e) => setForm({ ...form, goodsDescription: (e.target as HTMLInputElement).value })} />
                     </label>
-                    <label class="twr-knob cfield">
-                      <span class="cfield__label">{t('tower.imports.f.origin')}</span>
-                      <input class="cinput" maxLength={2} value={form.originCountry} onChange={(e) => setForm({ ...form, originCountry: (e.target as HTMLInputElement).value })} />
-                    </label>
-                    <label class="twr-knob cfield">
-                      <span class="cfield__label">{t('tower.imports.f.dest')}</span>
-                      <input class="cinput" maxLength={2} value={form.destCountry} onChange={(e) => setForm({ ...form, destCountry: (e.target as HTMLInputElement).value })} />
-                    </label>
-                    <label class="twr-knob cfield">
-                      <span class="cfield__label">{t('tower.imports.f.port')}</span>
-                      <input class="cinput" value={form.destPort} onChange={(e) => setForm({ ...form, destPort: (e.target as HTMLInputElement).value })} />
-                    </label>
+                    <div class="twr-knob">
+                      <CountryPicker value={form.originCountry} onChange={(originCountry) => setForm({ ...form, originCountry })} label={t('tower.imports.f.origin')} options={atlas} />
+                    </div>
+                    <div class="twr-knob">
+                      <CountryPicker value={form.destCountry} onChange={(destCountry) => setForm({ ...form, destCountry })} label={t('tower.imports.f.dest')} options={atlas} />
+                    </div>
+                    {/*
+                      * TWO PLACES, AND THE ORDER IS THE JOURNEY. Where the vessel puts it down, then
+                      * where the customs entry is made. For a coastal import they are the same place
+                      * and the first is left empty; for a landlocked one they are Djibouti and Modjo,
+                      * and until now the record could only hold one of them.
+                      */}
+                    <div class="twr-knob">
+                      <SitePicker
+                        kind="port"
+                        entityId={state.who?.entityId ?? ''}
+                        api={client?.api as never}
+                        value={form.dischargeSiteId}
+                        onChange={(dischargeSiteId) => setForm({ ...form, dischargeSiteId })}
+                        label={t('tower.imports.f.discharge')}
+                        addLabel={t('tower.sites.addPort')}
+                      />
+                    </div>
+                    <div class="twr-knob">
+                      <SitePicker
+                        kind="clearance"
+                        entityId={state.who?.entityId ?? ''}
+                        api={client?.api as never}
+                        value={form.clearanceSiteId}
+                        onChange={(clearanceSiteId) => setForm({ ...form, clearanceSiteId })}
+                        label={t('tower.imports.f.clearedAt')}
+                        addLabel={t('tower.sites.addClearance')}
+                      />
+                    </div>
                     <label class="twr-knob cfield">
                       <span class="cfield__label">{t('tower.imports.f.container')}</span>
                       <input class="cinput" value={form.containerNo} onChange={(e) => setForm({ ...form, containerNo: (e.target as HTMLInputElement).value })} />
@@ -374,6 +399,8 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                               originCountry: form.originCountry.trim().toUpperCase(),
                               destCountry: form.destCountry.trim().toUpperCase(),
                               destPort: form.destPort.trim(),
+                              ...(form.clearanceSiteId ? { clearanceSiteId: form.clearanceSiteId } : {}),
+                              ...(form.dischargeSiteId ? { dischargeSiteId: form.dischargeSiteId } : {}),
                               ...(form.containerNo.trim() ? { containerNo: form.containerNo.trim() } : {}),
                               ...(form.carrierRef.trim() ? { carrierRef: form.carrierRef.trim() } : {}),
                               ...(form.etaAt.trim() ? { etaAt: form.etaAt.trim() } : {}),
@@ -1130,6 +1157,21 @@ export function ImportsScreen({ state, actions }: { state: TowerState; actions: 
                 {detail.roadFreightCode ? <span class="ctag ctag--ok">{t('tower.imports.roadAlready', { code: detail.roadFreightCode })}</span> : null}
               </div>
               <p class="cons__lede">{t('tower.imports.roadHint')}</p>
+              {/*
+                * THE JOURNEY, SAID BEFORE THE LEG IS MINTED.
+                *
+                * A landlocked container is discharged at a coastal port and cleared inland: Djibouti and
+                * Modjo, not one place twice. That is TWO road legs — the bonded run to the customs
+                * station, then the delivery after release — and this screen can mint one. Saying so is
+                * the honest half-measure: the alternative is a screen that quietly mints one leg for a
+                * journey with two in it and lets somebody discover the other at a gate.
+                */}
+              <p class="chint">
+                {detail.dischargePort
+                  ? t('tower.imports.chainSplit', { quay: detail.dischargePort, counter: detail.destPort })
+                  : t('tower.imports.chainSame', { place: detail.destPort })}
+              </p>
+              {detail.dischargePort && !detail.roadFreightCode ? <p class="cons__caveat">{t('tower.imports.chainOneLeg')}</p> : null}
               {detail.roadFreightCode ? null : (
                 <>
                   {/*

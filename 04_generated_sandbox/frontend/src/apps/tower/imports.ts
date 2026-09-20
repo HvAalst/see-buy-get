@@ -60,6 +60,8 @@ export interface ImportRow {
   originCountry: string;
   destCountry: string;
   destPort: string;
+  /** Where the vessel put it down, when that is somewhere else. Absent means it clears where it lands. */
+  dischargePort?: string;
   etaAt?: string;
   importerEntityId: string;
   importerName?: string;
@@ -332,7 +334,15 @@ export interface RegisterImportForm {
   goodsDescription: string;
   originCountry: string;
   destCountry: string;
+  /** Kept for staff typing a label through the API; a screen sends `clearanceSiteId`. */
   destPort: string;
+  /**
+   * WHERE IT CLEARS and WHERE IT WAS DISCHARGED — two saved places, because for a landlocked import
+   * they are two places and the difference is two legs. The quay is optional and means, when absent,
+   * that the box clears where it lands.
+   */
+  clearanceSiteId: string;
+  dischargeSiteId: string;
   containerNo: string;
   carrierRef: string;
   etaAt: string;
@@ -343,6 +353,8 @@ export const EMPTY_IMPORT_FORM: RegisterImportForm = {
   originCountry: '',
   destCountry: '',
   destPort: '',
+  clearanceSiteId: '',
+  dischargeSiteId: '',
   containerNo: '',
   carrierRef: '',
   etaAt: '',
@@ -355,7 +367,8 @@ export function registerBlocker(form: RegisterImportForm): MessageKey | null {
   if (!form.goodsDescription.trim()) return 'tower.imports.need.goods';
   if (!/^[A-Za-z]{2}$/.test(form.originCountry.trim())) return 'tower.imports.need.origin';
   if (!/^[A-Za-z]{2}$/.test(form.destCountry.trim())) return 'tower.imports.need.dest';
-  if (!form.destPort.trim()) return 'tower.imports.need.port';
+  // A PLACE, chosen. The typed label survives for staff on the API; a screen answers with a site.
+  if (!form.clearanceSiteId && !form.destPort.trim()) return 'tower.imports.need.port';
   if (form.etaAt.trim() && !/^\d{4}-\d{2}-\d{2}$/.test(form.etaAt.trim())) return 'tower.imports.need.date';
   return null;
 }

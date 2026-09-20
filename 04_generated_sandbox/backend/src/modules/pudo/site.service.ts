@@ -5,8 +5,19 @@ import { randomBytes } from 'node:crypto';
 import { GeoPoint } from './pudo.types';
 import { lookupPlace } from './geo-gazetteer';
 
-/** What a site is FOR. The same object either way — a named place with a real point behind it. */
-export const SITE_KINDS = ['port', 'delivery'] as const;
+/**
+ * What a site is FOR — and these three are the CHAIN a container travels, which is why there are three.
+ *
+ *   port       where the vessel puts it down     (Djibouti)
+ *   clearance  where the customs entry is made   (Modjo, Nazareth, Addis Ababa)
+ *   delivery   where it is finally handed over   (the importer's yard)
+ *
+ * The middle one is the addition, and the user's question is what produced it: "for the reefer the
+ * destination is Djibouti, for clearance it may be nazareth or addis ababa. different location,
+ * different legs and the expeditor needs to know this." Quite so — for a landlocked import the box
+ * moves inland under bond and clears at a dry port, and a model with one "port" on it cannot say that.
+ */
+export const SITE_KINDS = ['port', 'clearance', 'delivery'] as const;
 export type SiteKind = (typeof SITE_KINDS)[number];
 
 export interface Site {
@@ -70,7 +81,7 @@ export class SiteService {
   ): Site {
     const name = (input.name ?? '').trim();
     if (!name) throw new GlosError('FIELD_REQUIRED', 'Give the place a name you will recognise next time');
-    if (!SITE_KINDS.includes(input.kind)) throw new GlosError('VALIDATION_FAILED', 'A site is a port or a delivery place');
+    if (!SITE_KINDS.includes(input.kind)) throw new GlosError('VALIDATION_FAILED', 'A site is a port, a place of clearance or a delivery place');
 
     const address = input.address?.trim();
     let location = input.location;
@@ -92,7 +103,7 @@ export class SiteService {
     }
 
     const clash = this.list(entityId, input.kind).find((s) => s.name.toLowerCase() === name.toLowerCase());
-    if (clash) throw new GlosError('CONFLICT', `You already have a ${input.kind === 'port' ? 'port' : 'place'} called "${clash.name}" — change that one rather than keeping two`);
+    if (clash) throw new GlosError('CONFLICT', `You already have a place called "${clash.name}" on that list — change that one rather than keeping two`);
 
     const site: Site = {
       siteId: `site_${randomBytes(8).toString('hex')}`,

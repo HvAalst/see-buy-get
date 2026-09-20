@@ -114,7 +114,23 @@ export class ImportService {
       goodsDescription: string;
       originCountry: string;
       destCountry: string;
+      /**
+       * WHERE IT IS CLEARED. Not where the ship put it down — see `dischargePort`.
+       *
+       * This field has always meant the clearance place: it keys what a border was observed to ask for,
+       * it is the place an agent is found by, and it slices the agent's record. The only thing that read
+       * it as the quay was the road leg's default pickup label, which is exactly the confusion the split
+       * removes.
+       */
       destPort: string;
+      /**
+       * WHERE THE VESSEL PUT IT DOWN, when that is somewhere else.
+       *
+       * A LABEL, like destPort and for the same reason: ocean carriage is not ours — no vessel, no
+       * schedule, no port of loading — so this is a fact copied off a bill of lading and never a booking
+       * we hold. Absent means the two are the same place, which is the ordinary coastal case.
+       */
+      dischargePort?: string;
       containerNo?: string;
       carrierRef?: string;
       etaAt?: string;
@@ -155,6 +171,7 @@ export class ImportService {
       originCountry,
       destCountry,
       destPort,
+      ...(input.dischargePort?.trim() && input.dischargePort.trim().toLowerCase() !== destPort.toLowerCase() ? { dischargePort: input.dischargePort.trim() } : {}),
       ...(input.carrierRef?.trim() ? { carrierRef: input.carrierRef.trim() } : {}),
       ...(input.mode && (CONSIGNMENT_MODES as readonly string[]).includes(input.mode) ? { mode: input.mode as ConsignmentMode } : {}),
       // `manual` is the only source anything writes. See the class comment on the carrier seam.
@@ -1452,6 +1469,7 @@ export class ImportService {
       originCountry: consignment.originCountry,
       destCountry: consignment.destCountry,
       destPort: consignment.destPort,
+      ...(consignment.dischargePort ? { dischargePort: consignment.dischargePort } : {}),
       ...(consignment.etaAt ? { etaAt: consignment.etaAt } : {}),
       importerEntityId: consignment.importerEntityId,
       ...(this.nameOf(consignment.importerEntityId) ? { importerName: this.nameOf(consignment.importerEntityId) } : {}),

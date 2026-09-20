@@ -5903,6 +5903,7 @@
             "schema": {
               "enum": [
                 "port",
+                "clearance",
                 "delivery"
               ],
               "type": "string"
@@ -19966,7 +19967,19 @@
           },
           "destPort": {
             "type": "string",
+            "description": "Where it CLEARS. A saved place of kind 'clearance' supplies this on a screen; staff may type it.",
             "maxLength": 80
+          },
+          "clearanceSiteId": {
+            "type": "string"
+          },
+          "dischargePort": {
+            "type": "string",
+            "description": "Where the vessel put it down, when that is somewhere else. A label off a bill of lading.",
+            "maxLength": 80
+          },
+          "dischargeSiteId": {
+            "type": "string"
           },
           "containerNo": {
             "type": "string",
@@ -20267,6 +20280,10 @@
           "destPort": {
             "type": "string",
             "description": "Where it is cleared — \"Djibouti\", \"Mombasa\", or an airport. A label, not a modelled place."
+          },
+          "dischargePort": {
+            "type": "string",
+            "description": "WHERE THE VESSEL PUT IT DOWN, when that is somewhere else — a landlocked import discharged at a\ncoastal port and cleared inland. Absent means the two are the same place."
           },
           "mode": {
             "type": "string",
@@ -20934,7 +20951,12 @@
             "type": "string"
           },
           "destPort": {
-            "type": "string"
+            "type": "string",
+            "description": "WHERE IT CLEARS. The papers a border asks for are that border's, and this is which border."
+          },
+          "dischargePort": {
+            "type": "string",
+            "description": "WHERE THE VESSEL PUT IT DOWN, when that is somewhere else — a landlocked import discharged at a\ncoastal port and cleared inland. Absent means the two are the same place."
           },
           "etaAt": {
             "type": "string"
@@ -22269,6 +22291,7 @@
             "type": "string",
             "enum": [
               "port",
+              "clearance",
               "delivery"
             ]
           },

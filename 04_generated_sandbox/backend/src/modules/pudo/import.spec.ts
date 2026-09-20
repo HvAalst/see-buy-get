@@ -1190,4 +1190,32 @@ describe('an import consignment, its papers, and the agent who clears them', () 
       });
     });
   });
+  describe('the quay and the counter are two places', () => {
+    /*
+     * The user's case: "for the reefer the destination is Djibouti, for clearance it may be nazareth or
+     * addis ababa. different location, different legs and the expeditor needs to know this."
+     *
+     * destPort has always MEANT the clearance place — it keys what a border was observed to ask for, it
+     * is what an agent is found by, and it slices the agent's record. What was missing is the quay, and
+     * with one field doing both jobs a landlocked import could not be recorded truthfully.
+     */
+    it('records where it clears and where it was discharged, and keeps them apart', () => {
+      const c = imports.register(
+        { importerEntityId: importerId, goodsDescription: 'Reefer of grapes', originCountry: 'NL', destCountry: 'ET', destPort: 'Modjo', dischargePort: 'Djibouti' },
+        'Hans',
+      );
+      expect(c.destPort).toBe('Modjo');
+      expect(c.dischargePort).toBe('Djibouti');
+    });
+
+    it('says nothing about a quay when it is the same place as the counter', () => {
+      // The ordinary coastal case. Carrying "Mombasa, discharged at Mombasa" would be noise on every
+      // screen that shows the chain, and an absence here means exactly one thing.
+      const c = imports.register(
+        { importerEntityId: importerId, goodsDescription: 'Tiles', originCountry: 'CN', destCountry: 'KE', destPort: 'Mombasa', dischargePort: 'mombasa' },
+        'Hans',
+      );
+      expect(c.dischargePort).toBeUndefined();
+    });
+  });
 });
