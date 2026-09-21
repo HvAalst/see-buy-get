@@ -192,7 +192,7 @@ function RecentChanges({ pricing }: { pricing: EntityPricing }) {
         <span class="cons__panelt">{t('tower.changes.title')}</span>
         <span class="ctbl__sub">{t('tower.changes.hint')}</span>
       </div>
-      <table class="ctbl">
+      <table class="ctbl ctbl--stack">
         <thead>
           <tr>
             <th>{t('tower.changes.col.when')}</th>
@@ -206,13 +206,13 @@ function RecentChanges({ pricing }: { pricing: EntityPricing }) {
           {pricing.recentChanges.map((c, i) => (
             <tr key={`${c.at}-${i}`}>
               <td class="ctbl__sub">{new Date(c.at).toLocaleString()}</td>
-              <td class="ctbl__strong">{c.by}</td>
-              <td>
+              <td class="ctbl__strong"><span class="ctbl__lbl">{t('tower.changes.col.who')}</span>{c.by}</td>
+              <td><span class="ctbl__lbl">{t('tower.changes.col.what')}</span>
                 {t(`tower.changes.what.${c.what}` as never)}
                 {c.lane ? <span class="ctbl__sub"> · {laneLabel(c.lane, t)}</span> : null}
               </td>
-              <td class="ctbl__sub">{c.from}</td>
-              <td>{c.to}</td>
+              <td class="ctbl__sub"><span class="ctbl__lbl">{t('tower.changes.col.from')}</span>{c.from}</td>
+              <td><span class="ctbl__lbl">{t('tower.changes.col.to')}</span>{c.to}</td>
             </tr>
           ))}
         </tbody>
@@ -267,7 +267,7 @@ function Administrators({ pricing, state, actions }: { pricing: EntityPricing; s
       ) : null}
 
       {open ? (
-        <div class="twr-knobs" style="padding:12px 16px">
+        <div class="twr-knobs" style="padding:12px 0">
           <div class="twr-knobs__row">
             <div class="twr-knob">
               <label class="cfield">
@@ -295,7 +295,7 @@ function Administrators({ pricing, state, actions }: { pricing: EntityPricing; s
           <p>{t('tower.admins.emptyBody')}</p>
         </div>
       ) : (
-        <table class="ctbl">
+        <table class="ctbl ctbl--stack">
           <thead>
             <tr>
               <th>{t('tower.admins.col.who')}</th>
@@ -308,9 +308,9 @@ function Administrators({ pricing, state, actions }: { pricing: EntityPricing; s
             {rows.map((a) => (
               <tr key={a.adminId}>
                 <td class="ctbl__strong">{a.name}</td>
-                <td class="ctbl__mono">{a.email}</td>
-                <td class="ctbl__sub">{a.lastSeenAt ? new Date(a.lastSeenAt).toLocaleString() : t('tower.admins.never')}</td>
-                <td class="ctbl__num">
+                <td class="ctbl__mono"><span class="ctbl__lbl">{t('tower.admins.col.email')}</span>{a.email}</td>
+                <td class="ctbl__sub"><span class="ctbl__lbl">{t('tower.admins.col.lastSeen')}</span>{a.lastSeenAt ? new Date(a.lastSeenAt).toLocaleString() : t('tower.admins.never')}</td>
+                <td>
                   <button
                     type="button"
                     class="cbtn cbtn--ghost cbtn--sm"
@@ -485,7 +485,7 @@ function RateImpact({ state }: { state: TowerState }) {
           <p>{t('tower.impact.emptyBody')}</p>
         </div>
       ) : (
-        <table class="ctbl">
+        <table class="ctbl ctbl--stack">
           <thead>
             <tr>
               <th>{t('tower.impact.col.rate')}</th>
@@ -500,19 +500,19 @@ function RateImpact({ state }: { state: TowerState }) {
             {impact.spells.map((s, i) => (
               <tr key={`${s.from}-${i}`}>
                 <td class="ctbl__strong">{pctLabel(s.feePct)}</td>
-                <td class="ctbl__sub">
+                <td class="ctbl__sub"><span class="ctbl__lbl">{t('tower.impact.col.period')}</span>
                   {new Date(s.from).toLocaleDateString()} → {new Date(s.to).toLocaleDateString()}
                 </td>
-                <td class="ctbl__num">{s.shipments}</td>
-                <td class="ctbl__num">{s.gross.toLocaleString()}</td>
-                <td class="ctbl__num">{s.margin.toLocaleString()}</td>
-                <td class="ctbl__num">{s.avgMargin.toLocaleString()}</td>
+                <td class="ctbl__num"><span class="ctbl__lbl">{t('tower.impact.col.shipments')}</span>{s.shipments}</td>
+                <td class="ctbl__num"><span class="ctbl__lbl">{t('tower.impact.col.gross')}</span>{s.gross.toLocaleString()}</td>
+                <td class="ctbl__num"><span class="ctbl__lbl">{t('tower.impact.col.margin')}</span>{s.margin.toLocaleString()}</td>
+                <td class="ctbl__num"><span class="ctbl__lbl">{t('tower.impact.col.avg')}</span>{s.avgMargin.toLocaleString()}</td>
               </tr>
             ))}
           </tbody>
         </table>
       )}
-      {impact.unpriced ? <p class="chint" style="padding:8px 16px 12px">{t('tower.impact.unpriced', { n: impact.unpriced })}</p> : null}
+      {impact.unpriced ? <p class="chint" style="padding:8px 0 12px">{t('tower.impact.unpriced', { n: impact.unpriced })}</p> : null}
     </section>
   );
 }

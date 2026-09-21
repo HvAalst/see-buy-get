@@ -89,7 +89,7 @@ export function PresenceScreen({ state, actions }: { state: TowerState; actions:
         {rows === null ? (
           <p class="cons__empty">{t('tower.queues.loading')}</p>
         ) : (
-          <table class="ctbl">
+          <table class="ctbl ctbl--stack">
             <thead>
               <tr>
                 <th>{t('tower.presence.col.country')}</th>
@@ -307,12 +307,12 @@ function PresenceRowView({ row, state, actions }: { row: PresenceRow; state: Tow
           {/* A country listed only because it has a company has had nothing DECIDED about it. */}
           {row.recorded ? null : <div class="ctbl__sub">{t('tower.presence.derived')}</div>}
         </td>
-        <td>
+        <td><span class="ctbl__lbl">{t('tower.presence.col.standing')}</span>
           <span class={`ctag ${row.level === 'established' ? 'ctag--ok' : row.level === 'observed' ? 'ctag--quiet' : 'ctag--info'}`}>{t(LEVEL_LABEL[row.level])}</span>
           {waiting ? <div class="ctag ctag--warn" style="margin-top:4px">{t('tower.presence.pendingTag')}</div> : null}
         </td>
-        <td class="ctbl__sub">{t(PROMISE_LABEL[promise])}</td>
-        <td class="ctbl__sub">
+        <td class="ctbl__sub"><span class="ctbl__lbl">{t('tower.presence.col.promise')}</span>{t(PROMISE_LABEL[promise])}</td>
+        <td class="ctbl__sub"><span class="ctbl__lbl">{t('tower.presence.col.may')}</span>
           {granted.length === 0 ? (
             t('tower.presence.nothing')
           ) : (
@@ -329,12 +329,12 @@ function PresenceRowView({ row, state, actions }: { row: PresenceRow; state: Tow
             <div class="chint">{t('tower.presence.switchedOff', { list: switchedOff.map((s) => t(CAPABILITY_LABEL[s.capability])).join(', ') })}</div>
           ) : null}
         </td>
-        <td class="ctbl__sub">
+        <td class="ctbl__sub"><span class="ctbl__lbl">{t('tower.presence.col.decided')}</span>
           {row.setBy ? t('tower.presence.by', { who: row.setBy }) : '—'}
           {row.approvedBy ? <div class="ctbl__sub">{t('tower.presence.approvedBy', { who: row.approvedBy })}</div> : null}
           {row.note ? <div class="ctbl__sub">{row.note}</div> : null}
         </td>
-        <td class="ctbl__num">
+        <td>
           <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => actions.open(open ? null : row.jurisdiction)}>
             {t(open ? 'tower.presence.close' : 'tower.presence.change')}
           </button>

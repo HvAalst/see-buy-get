@@ -32,14 +32,14 @@ export function CompanyPasswordPanel({ actions, onClose }: { actions: TowerActio
         </button>
       </div>
       {done ? (
-        <p class="twr-done" style="margin:12px 16px">
+        <p class="twr-done" style="margin:12px 0">
           <Icon name="check" size={16} />
           {t('account.password.done')}
         </p>
       ) : (
         <>
           {error ? (
-            <p class="cerr" style="margin:12px 16px">
+            <p class="cerr" style="margin:12px 0">
               {error}
             </p>
           ) : null}

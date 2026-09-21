@@ -56,7 +56,7 @@ export function CorridorsScreen({ state, actions }: { state: TowerState; actions
         ) : null}
 
         {state.queueError ? (
-          <p class="cerr" style="margin:12px 16px">
+          <p class="cerr" style="margin:12px 0">
             {state.queueError}
           </p>
         ) : null}
@@ -69,7 +69,7 @@ export function CorridorsScreen({ state, actions }: { state: TowerState; actions
             <p>{t('tower.corridors.emptyBody')}</p>
           </div>
         ) : (
-          <table class="ctbl">
+          <table class="ctbl ctbl--stack">
             <thead>
               <tr>
                 <th>{t('tower.corridors.col.name')}</th>
@@ -93,14 +93,14 @@ export function CorridorsScreen({ state, actions }: { state: TowerState; actions
                       {row.note ? <div class="ctbl__sub">{row.note}</div> : null}
                       <div class="ctbl__mono">{row.corridorId}</div>
                     </td>
-                    <td>{`${row.originZone} → ${row.destZone}`}</td>
-                    <td class="ctbl__sub">
+                    <td><span class="ctbl__lbl">{t('tower.corridors.col.zones')}</span>{`${row.originZone} → ${row.destZone}`}</td>
+                    <td class="ctbl__sub"><span class="ctbl__lbl">{t('tower.corridors.col.runs')}</span>
                       {t(row.vehicleType === 'truck' ? 'tower.corridors.truck' : 'tower.corridors.bus')}
                       {row.schedule ? ` · ${row.schedule}` : ''}
                     </td>
                     {/* The number that changes what blocking MEANS. */}
-                    <td class="ctbl__num">{row.shifts}</td>
-                    <td>
+                    <td class="ctbl__num"><span class="ctbl__lbl">{t('tower.corridors.col.shifts')}</span>{row.shifts}</td>
+                    <td><span class="ctbl__lbl">{t('tower.corridors.col.status')}</span>
                       {proposed ? (
                         <span class="ctag">{t('tower.corridors.proposed')}</span>
                       ) : blocked ? (
@@ -109,7 +109,7 @@ export function CorridorsScreen({ state, actions }: { state: TowerState; actions
                         <span class="ctag ctag--ok">{t('tower.corridors.active')}</span>
                       )}
                     </td>
-                    <td class="ctbl__num">
+                    <td>
                       {proposed ? (
                         <button
                           type="button"

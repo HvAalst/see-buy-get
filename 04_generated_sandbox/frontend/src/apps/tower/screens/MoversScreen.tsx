@@ -55,7 +55,7 @@ export function MoversScreen({ state, actions }: { state: TowerState; actions: T
             <p>{t('tower.movers.noneBody')}</p>
           </div>
         ) : (
-          <table class="ctbl">
+          <table class="ctbl ctbl--stack">
             <thead>
               <tr>
                 <th>{t('tower.movers.col.fleet')}</th>
@@ -94,16 +94,16 @@ function MoverRowView({ row, state, actions }: { row: MoverRow; state: TowerStat
             {` · ${t('tower.movers.drivers', { n: row.drivers })}`}
           </div>
         </td>
-        <td class="ctbl__num">{m.claimed}</td>
+        <td class="ctbl__num"><span class="ctbl__lbl">{t('tower.movers.col.taken')}</span>{m.claimed}</td>
         {/* Shown plainly, never softened: what happened, including the bad. */}
-        <td class="ctbl__num">{m.handedBack > 0 ? <span class="ctag ctag--warn">{m.handedBack}</span> : m.handedBack}</td>
-        <td class="ctbl__num">{m.delivered}</td>
-        <td class="ctbl__sub">
+        <td class="ctbl__num"><span class="ctbl__lbl">{t('tower.movers.col.gaveBack')}</span>{m.handedBack > 0 ? <span class="ctag ctag--warn">{m.handedBack}</span> : m.handedBack}</td>
+        <td class="ctbl__num"><span class="ctbl__lbl">{t('tower.movers.col.delivered')}</span>{m.delivered}</td>
+        <td class="ctbl__sub"><span class="ctbl__lbl">{t('tower.movers.col.rates')}</span>
           {/* A thin record says so instead of showing a percentage worked out from almost nothing. */}
           {m.thin ? t('tower.movers.thin', { n: m.ratesNeed }) : t('tower.movers.rates', { kept: Math.round((m.keptRate ?? 0) * 100), delivered: Math.round((m.deliveredRate ?? 0) * 100) })}
           {m.tightKept > 0 ? <div>{t('tower.movers.tight', { kept: m.tightKept, delivered: m.tightDelivered })}</div> : null}
         </td>
-        <td class="ctbl__num">
+        <td>
           <button type="button" class="cbtn cbtn--ghost cbtn--sm" aria-expanded={open} onClick={() => actions.open(open ? null : row.did)}>
             {open ? t('common.close') : t('tower.movers.why')}
           </button>
@@ -132,7 +132,7 @@ function MoverRowView({ row, state, actions }: { row: MoverRow; state: TowerStat
             {row.perDriver.length === 0 ? (
               <p class="cons__empty" style="text-align:left">{t('tower.movers.noDriverWork')}</p>
             ) : (
-              <table class="ctbl">
+              <table class="ctbl ctbl--stack">
                 <thead>
                   <tr>
                     <th>{t('tower.movers.col.driver')}</th>
@@ -145,9 +145,9 @@ function MoverRowView({ row, state, actions }: { row: MoverRow; state: TowerStat
                   {row.perDriver.map((d) => (
                     <tr key={d.driver}>
                       <td>{d.driver}</td>
-                      <td class="ctbl__num">{d.claimed}</td>
-                      <td class="ctbl__num">{d.handedBack}</td>
-                      <td class="ctbl__num">{d.delivered}</td>
+                      <td class="ctbl__num"><span class="ctbl__lbl">{t('tower.movers.col.taken')}</span>{d.claimed}</td>
+                      <td class="ctbl__num"><span class="ctbl__lbl">{t('tower.movers.col.gaveBack')}</span>{d.handedBack}</td>
+                      <td class="ctbl__num"><span class="ctbl__lbl">{t('tower.movers.col.delivered')}</span>{d.delivered}</td>
                     </tr>
                   ))}
                 </tbody>

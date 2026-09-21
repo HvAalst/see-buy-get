@@ -80,7 +80,7 @@ export function ClaimsScreen({ state, actions }: { state: TowerState; actions: T
         emptyBody={t('tower.claims.emptyBody')}
       >
         {rows?.length ? (
-          <table class="ctbl">
+          <table class="ctbl ctbl--stack">
             <thead>
               <tr>
                 <th>{t('tower.claims.col.claim')}</th>
@@ -101,7 +101,7 @@ export function ClaimsScreen({ state, actions }: { state: TowerState; actions: T
         {state.freightClaims?.length ? (
           <>
             <h2 class="cons__panelt" style="margin-top:20px">{t('tower.claims.freightTitle')}</h2>
-            <table class="ctbl">
+            <table class="ctbl ctbl--stack">
               <thead>
                 <tr>
                   <th>{t('tower.claims.col.claim')}</th>
@@ -142,13 +142,13 @@ function ClaimRowView({ row, now, state, actions }: { row: ClaimRow; now: number
             {row.reason || '—'}
           </div>
         </td>
-        <td class="ctbl__sub">{coverLine(row, t)}</td>
-        <td class="ctbl__mono">{row.evidence?.length ? t('tower.claims.nPhotos', { n: row.evidence.length }) : t('tower.claims.noEvidence')}</td>
-        <td>
+        <td class="ctbl__sub"><span class="ctbl__lbl">{t('tower.claims.col.cover')}</span>{coverLine(row, t)}</td>
+        <td class="ctbl__mono"><span class="ctbl__lbl">{t('tower.claims.col.evidence')}</span>{row.evidence?.length ? t('tower.claims.nPhotos', { n: row.evidence.length }) : t('tower.claims.noEvidence')}</td>
+        <td><span class="ctbl__lbl">{t('tower.claims.col.waiting')}</span>
           <div>{waited == null ? '—' : t('tower.wait.days', { n: waited })}</div>
           {slow ? <span class="ctag ctag--warn">{t('tower.claims.slow')}</span> : null}
         </td>
-        <td class="ctbl__num">
+        <td>
           <button type="button" class="cbtn cbtn--ghost cbtn--sm" aria-expanded={open} onClick={() => actions.open(open ? null : row.parcelId)}>
             {open ? t('common.close') : t('tower.claims.decide')}
           </button>
@@ -198,19 +198,19 @@ function FreightClaimRowView({ row, now, state, actions }: { row: FreightClaimRo
             {row.attempts ? ` · ${t('tower.claims.freightAttempts', { n: row.attempts })}` : ''}
           </div>
         </td>
-        <td class="ctbl__sub">
+        <td class="ctbl__sub"><span class="ctbl__lbl">{t('tower.claims.col.cover')}</span>
           {freightCoverLine(row, t)}
           {/* FP8 — the other side of an award: the carrier bears it up to the haul's price. Said before deciding. */}
           {carrierBearsLine(row, t) ? <div>{carrierBearsLine(row, t)}</div> : null}
           {/* CL1 — which party owns this loss, and why. An award decided without it is decided blind. */}
           {row.standingWhy ? <div class="ctbl__sub">{row.standingWhy}</div> : null}
         </td>
-        <td class="ctbl__mono">{row.evidence.length ? t('tower.claims.nPhotos', { n: row.evidence.length }) : t('tower.claims.noEvidence')}</td>
-        <td>
+        <td class="ctbl__mono"><span class="ctbl__lbl">{t('tower.claims.col.evidence')}</span>{row.evidence.length ? t('tower.claims.nPhotos', { n: row.evidence.length }) : t('tower.claims.noEvidence')}</td>
+        <td><span class="ctbl__lbl">{t('tower.claims.col.waiting')}</span>
           <div>{waited == null ? '—' : t('tower.wait.days', { n: waited })}</div>
           {slow ? <span class="ctag ctag--warn">{t('tower.claims.slow')}</span> : null}
         </td>
-        <td class="ctbl__num">
+        <td>
           <button type="button" class="cbtn cbtn--ghost cbtn--sm" aria-expanded={open} onClick={() => actions.open(open ? null : row.freightId)}>
             {open ? t('common.close') : t('tower.claims.decide')}
           </button>
@@ -347,7 +347,7 @@ export function DisposalScreen({ state, actions }: { state: TowerState; actions:
         emptyBody={t('tower.disposal.emptyBody')}
       >
         {rows?.length ? (
-          <table class="ctbl">
+          <table class="ctbl ctbl--stack">
             <thead>
               <tr>
                 <th>{t('tower.disposal.col.parcel')}</th>
@@ -381,14 +381,14 @@ function DisposalRowView({ row, state, actions }: { row: DisposalRow; state: Tow
         <td class="ctbl__strong">{row.parcelId}</td>
         {/* A NAME, not the DID this column used to print — the operator reads it to know whose shelf this is
             and who is owed. Where the server cannot name one, it says so rather than showing the key. */}
-        <td class="ctbl__strong">{row.shopName ?? t('tower.disposal.unknownShop')}</td>
-        <td class="ctbl__num">{row.declaredValue != null ? money(row.declaredValue) : '—'}</td>
-        <td class="ctbl__num ctbl__strong">{money(row.owedToShop)}</td>
-        <td>
+        <td class="ctbl__strong"><span class="ctbl__lbl">{t('tower.disposal.col.where')}</span>{row.shopName ?? t('tower.disposal.unknownShop')}</td>
+        <td class="ctbl__num"><span class="ctbl__lbl">{t('tower.disposal.col.worth')}</span>{row.declaredValue != null ? money(row.declaredValue) : '—'}</td>
+        <td class="ctbl__num ctbl__strong"><span class="ctbl__lbl">{t('tower.disposal.col.owed')}</span>{money(row.owedToShop)}</td>
+        <td><span class="ctbl__lbl">{t('tower.disposal.col.held')}</span>
           <div>{t('tower.wait.days', { n: row.heldDays })}</div>
           {long ? <span class="ctag ctag--warn">{t('tower.disposal.longHeld')}</span> : null}
         </td>
-        <td class="ctbl__num">
+        <td>
           <button type="button" class="cbtn cbtn--ghost cbtn--sm" aria-expanded={open} onClick={() => actions.open(open ? null : row.parcelId)}>
             {open ? t('common.close') : t('tower.disposal.close')}
           </button>
@@ -464,7 +464,7 @@ export function ApprovalsScreen({ state, actions }: { state: TowerState; actions
         emptyBody={t('tower.approvals.emptyBody')}
       >
         {rows?.length ? (
-          <table class="ctbl">
+          <table class="ctbl ctbl--stack">
             <thead>
               <tr>
                 <th>{t('tower.approvals.col.shop')}</th>
@@ -521,7 +521,7 @@ function DriverApplicationsPanel({ state, actions }: { state: TowerState; action
       ) : rows.length === 0 ? (
         <p class="cons__empty">{t('tower.drivers.none')}</p>
       ) : (
-        <table class="ctbl">
+        <table class="ctbl ctbl--stack">
           <thead>
             <tr>
               <th>{t('tower.drivers.col.driver')}</th>
@@ -557,12 +557,12 @@ function DriverApplicationRow({ row, state, actions }: { row: DriverApplication;
             {row.criminalRecordClear ? '' : ` · ${t('tower.drivers.recordNotClear')}`}
           </div>
         </td>
-        <td class="ctbl__sub">
+        <td class="ctbl__sub"><span class="ctbl__lbl">{t('tower.drivers.col.licence')}</span>
           <div class="ctbl__mono">{row.licence?.number ?? '—'}</div>
           <div>{row.licence?.expiresAt ? row.licence.expiresAt.slice(0, 10) : t('tower.papers.noDate')}</div>
         </td>
-        <td class="ctbl__sub">{row.kyc?.submittedAt ? t('tower.drivers.sent', { date: row.kyc.submittedAt.slice(0, 10) }) : t('tower.drivers.noPapers')}</td>
-        <td class="ctbl__num">
+        <td class="ctbl__sub"><span class="ctbl__lbl">{t('tower.drivers.col.papers')}</span>{row.kyc?.submittedAt ? t('tower.drivers.sent', { date: row.kyc.submittedAt.slice(0, 10) }) : t('tower.drivers.noPapers')}</td>
+        <td>
           <span class="twr-clear__act">
             <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy} onClick={() => void actions.decideDriver(row.did, true)}>
               {t('tower.approvals.approve')}
@@ -641,7 +641,7 @@ function StalledPanel({ rows }: { rows: StalledRow[] | null }) {
           <p>{t('tower.stalled.emptyBody')}</p>
         </div>
       ) : (
-        <table class="ctbl">
+        <table class="ctbl ctbl--stack">
           <thead>
             <tr>
               <th>{t('tower.stalled.col.shop')}</th>
@@ -657,8 +657,8 @@ function StalledPanel({ rows }: { rows: StalledRow[] | null }) {
                   <div class="ctbl__strong">{row.shopName || row.did}</div>
                   <div class="ctbl__sub">{row.zone || '—'}</div>
                 </td>
-                <td class="ctbl__num">{stuckLabel(stuckDays(row.since, now), t)}</td>
-                <td class="ctbl__sub">
+                <td class="ctbl__num"><span class="ctbl__lbl">{t('tower.stalled.col.stuck')}</span>{stuckLabel(stuckDays(row.since, now), t)}</td>
+                <td class="ctbl__sub"><span class="ctbl__lbl">{t('tower.stalled.col.why')}</span>
                   {t(STALLED_REASON[row.reason] ?? 'tower.stalled.reason.documents')}
                   {/* What WE said, on a shop we turned down — so whoever rings them is not guessing. */}
                   {row.rejectedWhy ? <div>{t('tower.stalled.rejectedWhy', { why: row.rejectedWhy })}</div> : null}
@@ -666,7 +666,7 @@ function StalledPanel({ rows }: { rows: StalledRow[] | null }) {
                       message we have not sent — which is the state this whole list used to be in. */}
                   {row.told === false ? <span class="ctag ctag--warn">{t('tower.stalled.notTold')}</span> : null}
                 </td>
-                <td class="ctbl__sub">
+                <td class="ctbl__sub"><span class="ctbl__lbl">{t('tower.stalled.col.missing')}</span>
                   {/* An approved shop that never topped up is missing no documents at all, and an empty
                       cell there would read as "not loaded" rather than as "nothing outstanding". */}
                   {row.missing.length ? missingWords(row.missing, t) : t('tower.stalled.nothingMissing')}
@@ -696,17 +696,17 @@ function ApprovalRowView({ row, state, actions }: { row: ApprovalRow; state: Tow
         <div class="ctbl__strong">{row.shopName ?? t('tower.network.unnamedShop')}</div>
         <div class="ctbl__sub">{row.zone ?? '—'}</div>
       </td>
-      <td class="ctbl__num">{t('tower.approvals.slots', { n: shelfSlots(row) })}</td>
-      <td class="ctbl__sub">
+      <td class="ctbl__num"><span class="ctbl__lbl">{t('tower.approvals.col.shelf')}</span>{t('tower.approvals.slots', { n: shelfSlots(row) })}</td>
+      <td class="ctbl__sub"><span class="ctbl__lbl">{t('tower.approvals.col.kit')}</span>
         {t('tower.approvals.android', { version: row.requirements?.androidVersion ?? '—' })} ·{' '}
         {t('tower.approvals.licence', { licence: row.requirements?.tradingLicence ?? '—' })}
       </td>
-      <td class="ctbl__mono">
+      <td class="ctbl__mono"><span class="ctbl__lbl">{t('tower.approvals.col.docs')}</span>
         {/* An application with NO documents is a different decision from one with three, and the screen
             says which it is rather than rendering an empty cell that reads as "not loaded". */}
         {docs.length ? t('tower.approvals.nDocs', { n: docs.length }) : t('tower.approvals.noDocs')}
       </td>
-      <td class="ctbl__num">
+      <td>
         <span class="twr-clear__act">
           <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy} onClick={() => void actions.decideApproval(row.did, true)}>
             {t('tower.approvals.approve')}
@@ -790,7 +790,7 @@ function QueuePanel({
       ) : null}
 
       {state.error ? (
-        <p class="cerr" style="margin:12px 16px">
+        <p class="cerr" style="margin:12px 0">
           <b>{t('tower.queues.failedTitle')}</b> — {state.error.detail || state.error.title}
         </p>
       ) : null}

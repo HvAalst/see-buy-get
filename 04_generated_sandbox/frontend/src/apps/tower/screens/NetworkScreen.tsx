@@ -345,7 +345,7 @@ function FleetsPanel({ actions }: { actions: TowerActions }) {
       ) : rows.length === 0 ? (
         <p class="cons__empty">{t('tower.network.fleetsNone')}</p>
       ) : (
-        <table class="ctbl">
+        <table class="ctbl ctbl--stack">
           <thead>
             <tr>
               <th>{t('tower.network.fleets.company')}</th>
@@ -358,15 +358,15 @@ function FleetsPanel({ actions }: { actions: TowerActions }) {
             {rows.map((f) => (
               <tr key={f.did}>
                 <td class="ctbl__strong">{f.companyName}</td>
-                <td>
+                <td><span class="ctbl__lbl">{t('tower.network.fleets.status')}</span>
                   <span class={`ctag ${f.status === 'ACTIVE' ? 'ctag--ok' : 'ctag--quiet'}`}>{f.status}</span>
                 </td>
-                <td>
+                <td><span class="ctbl__lbl">{t('tower.network.fleets.code')}</span>
                   <span class="ctbl__mono">{f.loginCode ?? '—'}</span>
                   {f.codeRotatedAt ? <div class="ctbl__sub">{t('tower.network.fleets.rotatedAt', { when: new Date(f.codeRotatedAt).toLocaleString() })}</div> : null}
                   {credentialAge(f.codeRotatedAt ?? f.createdAt)?.due ? <span class="ctag ctag--warn">{t('tower.network.fleets.due')}</span> : null}
                 </td>
-                <td class="ctbl__num">
+                <td>
                   {f.status !== 'ACTIVE' ? null : confirm === f.did ? (
                     <span class="twr-panelend">
                       <button

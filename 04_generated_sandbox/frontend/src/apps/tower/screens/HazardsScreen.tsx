@@ -69,7 +69,7 @@ export function HazardsScreen({ state, actions }: { state: TowerState; actions: 
         ) : null}
 
         {state.error ? (
-          <p class="cerr" style="margin:12px 16px">
+          <p class="cerr" style="margin:12px 0">
             <b>{t('tower.hazards.failedTitle')}</b> — {state.error.detail || state.error.title}
           </p>
         ) : null}
@@ -82,7 +82,7 @@ export function HazardsScreen({ state, actions }: { state: TowerState; actions: 
             <p>{t('tower.hazards.emptyBody')}</p>
           </div>
         ) : (
-          <table class="ctbl">
+          <table class="ctbl ctbl--stack">
             <thead>
               <tr>
                 <th>{t('tower.hazards.col.hazard')}</th>
@@ -121,8 +121,8 @@ function HazardRow({ row, now, state, actions }: { row: ConstraintView; now: num
             {KIND_EFFECT[row.kind] === 'blocks' ? t('tower.hazards.blocks') : t('tower.hazards.advisory')}
           </div>
         </td>
-        <td class="ctbl__num">{measureLabel(row, t)}</td>
-        <td>
+        <td class="ctbl__num"><span class="ctbl__lbl">{t('tower.hazards.col.measure')}</span>{measureLabel(row, t)}</td>
+        <td><span class="ctbl__lbl">{t('tower.hazards.col.where')}</span>
           <div class="ctbl__mono">{pointLabel(row.at)}</div>
           {href ? (
             <a class="twr-link" href={href} target="_blank" rel="noopener noreferrer">
@@ -130,7 +130,7 @@ function HazardRow({ row, now, state, actions }: { row: ConstraintView; now: num
             </a>
           ) : null}
         </td>
-        <td>
+        <td><span class="ctbl__lbl">{t('tower.hazards.col.evidence')}</span>
           <div>{t('tower.hazards.evidence', { confirmations: row.confirmations, refutations: row.refutations })}</div>
           <div class="ctbl__sub">{t('tower.hazards.reportedAt', { date: new Date(row.reportedAt).toLocaleDateString() })}</div>
           {/* The counts say how many. Only the accounts say WHAT, and this column used to hold a single
@@ -144,11 +144,11 @@ function HazardRow({ row, now, state, actions }: { row: ConstraintView; now: num
             </div>
           ) : null}
         </td>
-        <td>
+        <td><span class="ctbl__lbl">{t('tower.hazards.col.waiting')}</span>
           <div>{waitLabel(row, now, t)}</div>
           {isLongWait(row, now) ? <span class="ctag ctag--warn">{t('tower.hazards.longWait')}</span> : null}
         </td>
-        <td class="ctbl__num">
+        <td>
           <button
             type="button"
             class="cbtn cbtn--ghost cbtn--sm"

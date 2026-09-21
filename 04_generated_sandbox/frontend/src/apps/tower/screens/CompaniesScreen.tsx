@@ -135,7 +135,7 @@ function CreateCompany({ state, actions }: { state: TowerState; actions: TowerAc
       <div class="cons__panelhead">
         <span class="cons__panelt">{t('tower.companies.createTitle')}</span>
       </div>
-      <p class="chint" style="margin:8px 16px">
+      <p class="chint" style="margin:8px 0">
         {t('tower.companies.createLede')}
       </p>
       <div class="twr-corridorform">
@@ -207,7 +207,7 @@ function CompanyCard({ row, state, actions }: { row: CompanyRow; state: TowerSta
         {isGroup ? (
           <p class="chint">{t('tower.companies.groupCharges')}</p>
         ) : pricing ? (
-          <table class="ctbl">
+          <table class="ctbl ctbl--stack">
             <thead>
               <tr>
                 <th>{t('tower.rates.col.lane')}</th>
@@ -220,9 +220,9 @@ function CompanyCard({ row, state, actions }: { row: CompanyRow; state: TowerSta
               {pricing.lanes.map((lane) => (
                 <tr key={lane.lane ?? 'default'}>
                   <td>{laneLabel(lane.lane, t)}</td>
-                  <td class="ctbl__num ctbl__strong">{pctLabel(lane.rates.totalPct)}</td>
-                  <td class="ctbl__num">{lane.tax.ratePct ? pctLabel(lane.tax.ratePct) : '—'}</td>
-                  <td class="ctbl__num">{lane.insurance.freeLimit ? money(lane.insurance.freeLimit, entity.currency) : '—'}</td>
+                  <td class="ctbl__num ctbl__strong"><span class="ctbl__lbl">{t('tower.rates.col.total')}</span>{pctLabel(lane.rates.totalPct)}</td>
+                  <td class="ctbl__num"><span class="ctbl__lbl">{t('tower.tax.rate')}</span>{lane.tax.ratePct ? pctLabel(lane.tax.ratePct) : '—'}</td>
+                  <td class="ctbl__num"><span class="ctbl__lbl">{t('tower.cover.freeLimit')}</span>{lane.insurance.freeLimit ? money(lane.insurance.freeLimit, entity.currency) : '—'}</td>
                 </tr>
               ))}
             </tbody>

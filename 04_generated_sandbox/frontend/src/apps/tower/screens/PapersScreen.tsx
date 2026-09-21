@@ -94,7 +94,7 @@ export function PapersScreen({ state, actions }: { state: TowerState; actions: T
             <p>{t('tower.papers.noCouriersBody')}</p>
           </div>
         ) : (
-          <table class="ctbl">
+          <table class="ctbl ctbl--stack">
             <thead>
               <tr>
                 <th>{t('tower.papers.col.courier')}</th>
@@ -125,7 +125,7 @@ export function PapersScreen({ state, actions }: { state: TowerState; actions: T
             <p>{t('tower.papers.noVehiclesBody')}</p>
           </div>
         ) : (
-          <table class="ctbl">
+          <table class="ctbl ctbl--stack">
             <thead>
               <tr>
                 <th>{t('tower.papers.col.vehicle')}</th>
@@ -177,16 +177,16 @@ function CourierRow({ row, state, actions }: { row: CourierPaperRow; state: Towe
           </div>
           {row.drives.length ? <div class="ctbl__sub">{t('tower.papers.drives', { plates: row.drives.join(', ') })}</div> : null}
         </td>
-        <td>
+        <td><span class="ctbl__lbl">{t('tower.papers.col.licence')}</span>
           <div class="ctbl__mono">{row.licence.number ?? '—'}</div>
           <div class="ctbl__sub">{row.licence.expiresAt ? row.licence.expiresAt.slice(0, 10) : t('tower.papers.noDate')}</div>
         </td>
-        <td>
+        <td><span class="ctbl__lbl">{t('tower.papers.col.today')}</span>
           <PaperTags papers={row.papers} />
           {isStuck(row) ? <div class="ctbl__sub">{t('tower.papers.stuckCourier')}</div> : null}
           {row.onShift ? <div class="ctbl__sub">{t('tower.papers.onShift')}</div> : null}
         </td>
-        <td class="ctbl__num">
+        <td>
           <button type="button" class="cbtn cbtn--ghost cbtn--sm" aria-expanded={open} onClick={() => actions.open(open ? null : row.did)}>
             {open ? t('tower.papers.cancel') : t('tower.papers.recordLicence')}
           </button>
@@ -265,16 +265,16 @@ function VehicleRow({ row, state, actions }: { row: LooseVehicleRow; state: Towe
           <div class="ctbl__strong ctbl__mono">{row.plate}</div>
           <div class="ctbl__sub">{[row.vehicleClass, row.status.toLowerCase()].join(' · ')}</div>
         </td>
-        <td>
+        <td><span class="ctbl__lbl">{t('tower.papers.col.papers')}</span>
           <div class="ctbl__sub">{t('tower.papers.insuranceLine', { ref: row.documents.insuranceRef ?? '—', date: row.documents.insuranceExpiresAt?.slice(0, 10) ?? t('tower.papers.noDate') })}</div>
           <div class="ctbl__sub">{t('tower.papers.inspectionLine', { ref: row.documents.inspectionRef ?? '—', date: row.documents.inspectionExpiresAt?.slice(0, 10) ?? t('tower.papers.noDate') })}</div>
         </td>
-        <td>
+        <td><span class="ctbl__lbl">{t('tower.papers.col.today')}</span>
           <PaperTags papers={row.papers} />
           {isStuck(row) ? <div class="ctbl__sub">{t('tower.papers.stuckVehicle')}</div> : null}
           {row.onShiftWith ? <div class="ctbl__sub">{t('tower.papers.onShiftWith', { name: row.onShiftWith })}</div> : null}
         </td>
-        <td class="ctbl__num">
+        <td>
           <button type="button" class="cbtn cbtn--ghost cbtn--sm" aria-expanded={open} onClick={() => actions.open(open ? null : row.vehicleId)}>
             {open ? t('tower.papers.cancel') : t('tower.papers.recordPapers')}
           </button>

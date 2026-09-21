@@ -89,7 +89,7 @@ export function MoneyScreen({ state, actions }: { state: TowerState; actions: To
           </p>
         ) : null}
 
-        {state.queueError ? <p class="cerr" style="margin:12px 16px">{state.queueError}</p> : null}
+        {state.queueError ? <p class="cerr" style="margin:12px 0">{state.queueError}</p> : null}
 
         {state.payouts === null ? (
           <p class="cons__empty">{t('tower.queues.loading')}</p>
@@ -226,7 +226,7 @@ function NetworkLedger({ state }: { state: TowerState }) {
             </tbody>
           </table>
           {rows.length > 8 ? (
-            <p style="padding:8px 16px 12px">
+            <p style="padding:8px 0 12px">
               <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setShowAll(!showAll)}>
                 {showAll ? t('tower.money.showFewer') : t('tower.money.showAll', { n: rows.length })}
               </button>

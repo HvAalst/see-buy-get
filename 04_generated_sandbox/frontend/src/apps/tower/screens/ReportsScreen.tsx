@@ -41,7 +41,7 @@ export function ReportsScreen({ state, actions }: { state: TowerState; actions: 
         </div>
 
         {state.queueError ? (
-          <p class="cerr" style="margin:12px 16px">
+          <p class="cerr" style="margin:12px 0">
             {state.queueError}
           </p>
         ) : null}
@@ -54,7 +54,7 @@ export function ReportsScreen({ state, actions }: { state: TowerState; actions: 
             <p>{t('tower.reports.emptyBody')}</p>
           </div>
         ) : (
-          <table class="ctbl">
+          <table class="ctbl ctbl--stack">
             <thead>
               <tr>
                 <th>{t('tower.reports.col.reason')}</th>
@@ -72,7 +72,7 @@ export function ReportsScreen({ state, actions }: { state: TowerState; actions: 
                     <td>
                       <span class={`ctag ${r.reason === 'scam' ? 'ctag--warn' : ''}`}>{t(REASON_KEY[r.reason])}</span>
                     </td>
-                    <td>
+                    <td><span class="ctbl__lbl">{t('tower.reports.col.message')}</span>
                       <div class="ctbl__strong" style="white-space:pre-wrap; overflow-wrap:anywhere">
                         {reportedText(r)}
                       </div>
@@ -80,10 +80,10 @@ export function ReportsScreen({ state, actions }: { state: TowerState; actions: 
                         {r.conversationId} · #{r.seq}
                       </div>
                     </td>
-                    <td class="ctbl__mono">{shortId(r.reportedDid)}</td>
+                    <td class="ctbl__mono"><span class="ctbl__lbl">{t('tower.reports.col.from')}</span>{shortId(r.reportedDid)}</td>
                     {/* The number that separates a bad day from a pattern. */}
-                    <td class="ctbl__num">{against}</td>
-                    <td class="ctbl__sub">{formatDate(r.at)}</td>
+                    <td class="ctbl__num"><span class="ctbl__lbl">{t('tower.reports.col.reporters')}</span>{against}</td>
+                    <td class="ctbl__sub"><span class="ctbl__lbl">{t('tower.reports.col.when')}</span>{formatDate(r.at)}</td>
                   </tr>
                 );
               })}
@@ -99,13 +99,13 @@ export function ReportsScreen({ state, actions }: { state: TowerState; actions: 
             {state.disputeReports === null ? t('tower.queues.loading') : t('tower.reports.disputeCount', { n: state.disputeReports.length })}
           </span>
         </div>
-        <p class="cons__lede" style="margin:12px 16px">
+        <p class="cons__lede" style="margin:12px 0">
           {t('tower.reports.disputeLede')}
         </p>
         {state.disputeReports === null ? null : state.disputeReports.length === 0 ? (
           <p class="cons__empty">{t('tower.reports.disputeEmpty')}</p>
         ) : (
-          <table class="ctbl">
+          <table class="ctbl ctbl--stack">
             <thead>
               <tr>
                 <th>{t('tower.reports.col.load')}</th>
@@ -124,11 +124,11 @@ export function ReportsScreen({ state, actions }: { state: TowerState; actions: 
                       {shortId(d.posterDid)} ↔ {shortId(d.askerDid)}
                     </div>
                   </td>
-                  <td>
+                  <td><span class="ctbl__lbl">{t('tower.reports.col.sharedBy')}</span>
                     <span class="ctag">{t(d.sharedBy === 'poster' ? 'tower.reports.sharedBy.poster' : 'tower.reports.sharedBy.asker')}</span>
                     {d.note ? <div class="ctbl__sub">“{d.note}”</div> : null}
                   </td>
-                  <td>
+                  <td><span class="ctbl__lbl">{t('tower.reports.col.messages')}</span>
                     {d.messages.map((m) => (
                       <div key={m.seq} class="ctbl__sub" style="overflow-wrap:anywhere">
                         <b>{t(m.from === 'poster' ? 'tower.reports.fromPoster' : 'tower.reports.fromAsker')}</b> · {formatDate(m.at)} — {disputeLine(m)}
@@ -149,7 +149,7 @@ export function ReportsScreen({ state, actions }: { state: TowerState; actions: 
                       </div>
                     ))}
                   </td>
-                  <td class="ctbl__mono" title={d.fingerprint}>
+                  <td class="ctbl__mono" title={d.fingerprint}><span class="ctbl__lbl">{t('tower.reports.col.fingerprint')}</span>
                     {shortHash(d.fingerprint)}
                   </td>
                 </tr>

@@ -170,11 +170,11 @@ function Readiness({ view }: { view: CompanyRecordView }) {
         </span>
       </div>
       {readiness?.ready ? (
-        <p class="chint" style="margin:12px 16px">
+        <p class="chint" style="margin:12px 0">
           {t('tower.company.readyYes', { level })}
         </p>
       ) : (
-        <div style="margin:12px 16px">
+        <div style="margin:12px 0">
           <p class="chint">{t('tower.company.readyNo', { met, total })}</p>
           <ul class="twr-checklist">
             {(readiness?.items ?? []).map((item) => (
@@ -263,7 +263,7 @@ function AddressSection({ view, busy, onSave }: { view: CompanyRecordView; busy:
           ['tower.company.f.operatingAddress', operating, setOperating],
         ] as const
       ).map(([title, value, setValue]) => (
-        <div key={title} style="margin:8px 16px">
+        <div key={title} style="margin:8px 0">
           <p class="cfield__label">{t(title)}</p>
           <div class="twr-corridorform">
             {ADDRESS_KEYS.map((k) => (
@@ -388,7 +388,7 @@ function ObligationsSection({ view, busy, onSave }: { view: CompanyRecordView; b
         <span class="cons__panelt">{t('tower.company.s.obligations', { country: view.entity.jurisdiction ?? '' })}</span>
       </div>
       {view.obligations.map((o) => (
-        <div key={o.key} style="margin:8px 16px">
+        <div key={o.key} style="margin:8px 0">
           <p class="cfield__label">
             {o.name}
             {o.authority ? ` — ${o.authority}` : ''}
@@ -604,7 +604,7 @@ function Lapses({ view }: { view: CompanyRecordView }) {
       <div class="cons__panelhead">
         <span class="cons__panelt">{t('tower.company.s.lapses')}</span>
       </div>
-      <ul class="twr-checklist" style="margin:12px 16px">
+      <ul class="twr-checklist" style="margin:12px 0">
         {view.lapses.map((l, i) => (
           <li key={i} class="is-missing">
             <Icon name="warning" size={14} /> {t('tower.company.lapse.line', { caps: t(CAPABILITY_LABEL[l.capability]), kind: kindLabel(l.source, l.kind), reference: l.reference, date: l.expiredAt })}

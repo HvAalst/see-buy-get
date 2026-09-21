@@ -86,7 +86,7 @@ export function BordersScreen({ state, actions }: { state: TowerState; actions: 
         ) : rules.length === 0 ? (
           <p class="cons__empty">{t('tower.borders.none')}</p>
         ) : (
-          <table class="ctbl">
+          <table class="ctbl ctbl--stack">
             <thead>
               <tr>
                 <th>{t('tower.borders.col.direction')}</th>
@@ -107,13 +107,13 @@ export function BordersScreen({ state, actions }: { state: TowerState; actions: 
                     <div class="ctbl__sub">{t('tower.borders.by', { who: rule.setBy })}</div>
                     {rule.note ? <div class="ctbl__sub">{rule.note}</div> : null}
                   </td>
-                  <td class="ctbl__sub">{rule.crossings.length ? rule.crossings.map((c) => <div key={c.name}>{crossingLine(c)}</div>) : t('tower.borders.nothing')}</td>
-                  <td class="ctbl__sub">{[...rule.permits, ...rule.regionalInsurance].join(', ') || t('tower.borders.nothing')}</td>
-                  <td class="ctbl__sub">{rule.maxWeightKg ? t('tower.borders.maxKg', { kg: rule.maxWeightKg.toLocaleString() }) : t('tower.borders.nothing')}</td>
-                  <td>
+                  <td class="ctbl__sub"><span class="ctbl__lbl">{t('tower.borders.col.crossings')}</span>{rule.crossings.length ? rule.crossings.map((c) => <div key={c.name}>{crossingLine(c)}</div>) : t('tower.borders.nothing')}</td>
+                  <td class="ctbl__sub"><span class="ctbl__lbl">{t('tower.borders.col.carry')}</span>{[...rule.permits, ...rule.regionalInsurance].join(', ') || t('tower.borders.nothing')}</td>
+                  <td class="ctbl__sub"><span class="ctbl__lbl">{t('tower.borders.col.limits')}</span>{rule.maxWeightKg ? t('tower.borders.maxKg', { kg: rule.maxWeightKg.toLocaleString() }) : t('tower.borders.nothing')}</td>
+                  <td><span class="ctbl__lbl">{t('tower.borders.col.cabotage')}</span>
                     <span class={`ctag ${rule.cabotage === 'allowed' ? 'ctag--ok' : 'ctag--quiet'}`}>{t(rule.cabotage === 'allowed' ? 'tower.borders.cabotage.allowed' : 'tower.borders.cabotage.forbidden')}</span>
                   </td>
-                  <td class="ctbl__num">
+                  <td>
                     <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setForm(formFromRule(rule))}>
                       {t('tower.borders.edit')}
                     </button>
