@@ -29,6 +29,12 @@ export interface DriverRecord {
   /** FP4 — the licence's state today, and why no shift can start (the server's words) when it has lapsed. */
   papers?: Array<{ kind: 'insurance' | 'inspection' | 'licence'; state: 'ok' | 'due' | 'lapsed' | 'none'; expiresAt?: string; daysLeft?: number }>;
   offRoad?: string[];
+  /** Present when a fleet employs them — whose office records their licence. Absent: they ride on their own. */
+  managerDid?: string;
+  /** FP4 — a renewed licence they sent, not yet checked. Its date is their reading and switches nothing on. */
+  licenceRenewal?: { copyRef: string; expiresAt: string; number?: string; sentAt: string };
+  /** Why the last card they sent was not accepted, so they can send a better one. */
+  licenceRenewalRefusal?: { reason: string; at: string };
 }
 
 /** R5 — one row of the driver jobs + earnings register (a claimed freight haul). No buyer identity. */

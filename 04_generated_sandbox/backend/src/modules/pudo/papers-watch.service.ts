@@ -42,7 +42,19 @@ export interface CourierPaperRow {
   status: string;
   registry: string;
   jurisdiction?: string;
-  licence: { number?: string; expiresAt?: string };
+  /** What they are cleared to ride or drive — whether a licence is even the question starts here. */
+  classes: string[];
+  /** Their badge portrait, when they have one: the face on the row, and something to check a card against. */
+  portraitRef?: string;
+  /**
+   * The licence on record, and — the half that makes the date checkable — the photograph it was READ from
+   * and who read it. No copyRef means the date was typed on somebody's word.
+   */
+  licence: { number?: string; expiresAt?: string; copyRef?: string; recordedBy?: string; recordedAt?: string };
+  /** A renewed licence they sent and nobody has checked yet. This is the work: the card is here to read. */
+  renewal?: { copyRef: string; expiresAt: string; number?: string; sentAt: string };
+  /** Why the last card they sent was not accepted — so the next member of staff knows what was asked. */
+  renewalRefusal?: { reason: string; at: string; by?: string };
   /**
    * The licence and ID the driver actually submitted, so a new expiry date is typed while LOOKING at the
    * document it came from.
@@ -189,7 +201,17 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
           status: d.status,
           registry: d.registry,
           jurisdiction: d.jurisdiction,
-          licence: { number: d.licence?.number && d.licence.number !== 'n/a' ? d.licence.number : undefined, expiresAt: d.licence?.expiresAt },
+          classes: d.licence?.classes ?? [],
+          ...(d.portrait?.photoRef ? { portraitRef: d.portrait.photoRef } : {}),
+          licence: {
+            number: d.licence?.number && d.licence.number !== 'n/a' ? d.licence.number : undefined,
+            expiresAt: d.licence?.expiresAt,
+            ...(d.licence?.copyRef ? { copyRef: d.licence.copyRef } : {}),
+            ...(d.licence?.recordedBy ? { recordedBy: d.licence.recordedBy } : {}),
+            ...(d.licence?.recordedAt ? { recordedAt: d.licence.recordedAt } : {}),
+          },
+          ...(d.licenceRenewal ? { renewal: { ...d.licenceRenewal } } : {}),
+          ...(d.licenceRenewalRefusal ? { renewalRefusal: { ...d.licenceRenewalRefusal } } : {}),
           ...(d.kyc ? { documents: { licenceCopyRef: d.kyc.licenceCopyRef, idCopyRef: d.kyc.idCopyRef, submittedAt: d.kyc.submittedAt } } : {}),
           papers,
           offRoad: lapsedOf(papers).map(offRoadLine),
@@ -197,7 +219,9 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
           drives: this.fleet.recentVehicles(d.did).map((v) => v.plate),
         };
       })
-      .sort((a, b) => worst(a.papers) - worst(b.papers) || a.displayName.localeCompare(b.displayName));
+      // A card waiting to be read comes first: that courier has done their part and is waiting on us.
+      // Then worst first, as before — lapsed, running out, undated, in date.
+      .sort((a, b) => Number(Boolean(b.renewal)) - Number(Boolean(a.renewal)) || worst(a.papers) - worst(b.papers) || a.displayName.localeCompare(b.displayName));
     const vehicles: LooseVehicleRow[] = this.vehicles
       .list()
       .filter((v) => !v.managerDid && v.status !== 'RETIRED')
@@ -256,13 +280,24 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
     // Every driver, fleet or independent: a lapsed licence ends the shift and tells them; a due one tells them.
     for (const d of this.drivers.list()) {
       if (d.status !== 'ACTIVE') continue;
+      /*
+       * WHO RECORDS IT, said to the person who has to act. A courier without a fleet was told to go to "the
+       * fleet office" — an office they do not have — which is the same dead end the console had from the
+       * other side. They send a photograph from the app instead, and the network's staff read it.
+       */
+      const own = !d.managerDid;
+      const next = own ? 'send a photo of the renewed licence from the app, and the network records the new date' : 'the fleet office records the new date';
       for (const p of driverPapers(d, now)) {
         if (p.state !== 'due' && p.state !== 'lapsed') continue;
         if (p.state === 'lapsed' && this.fleet.activeForDriver(d.did)) {
-          this.endShift(d.did, `Your shift was ended: ${offRoadLine(p)}. Renew it and the fleet office records the new date; until then no shift can start.`);
+          this.endShift(d.did, `Your shift was ended: ${offRoadLine(p)}. Renew it — ${next}; until then no shift can start.`);
           out.shiftsEnded++;
         }
-        if (await this.tellOnce(`driver:${d.did}:${p.kind}:${p.expiresAt}:${p.state}`, d.did, p.state === 'lapsed' ? `Your licence has lapsed` : `Your licence runs out in ${p.daysLeft} day(s)`, p.state === 'lapsed' ? `${offRoadLine(p)}. No shift can start until the fleet office records the renewed licence.` : `${paperLabel(p.kind)} to ${paperDay(p.expiresAt ?? '')}. Renew it in time and tell the fleet office the new date, or shifts stop that day.`, p.state === 'lapsed' ? 'papers_lapsed' : 'papers_due', now)) out.notified++;
+        const body =
+          p.state === 'lapsed'
+            ? `${offRoadLine(p)}. No shift can start until the renewal is recorded: ${next}.`
+            : `${paperLabel(p.kind)} to ${paperDay(p.expiresAt ?? '')}. Renew it in time — ${next} — or shifts stop that day.`;
+        if (await this.tellOnce(`driver:${d.did}:${p.kind}:${p.expiresAt}:${p.state}`, d.did, p.state === 'lapsed' ? `Your licence has lapsed` : `Your licence runs out in ${p.daysLeft} day(s)`, body, p.state === 'lapsed' ? 'papers_lapsed' : 'papers_due', now)) out.notified++;
       }
     }
     // Every fleet: a lapsed vehicle paper ends the shift on it and tells the driver; the fleet is mailed the report once per change.

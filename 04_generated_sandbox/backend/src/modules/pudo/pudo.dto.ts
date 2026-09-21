@@ -1492,6 +1492,24 @@ export class VehicleDocsDto {
 export class RenewLicenceDto {
   @IsOptional() @IsString() @MaxLength(64) number?: string;
   @IsString() @Matches(/^\d{4}-\d{2}-\d{2}/) expiresAt!: string;
+  /** Who is recording it, for a console on the shared key; a named sign-in's own name wins. */
+  @IsOptional() @IsString() @MaxLength(120) by?: string;
+}
+
+/** FP4 — a courier without a fleet sends the renewed card: the photograph, and the date they read off it. */
+export class SendLicenceRenewalDto {
+  @IsString() @MaxLength(64) copyRef!: string;
+  @IsString() @Matches(/^\d{4}-\d{2}-\d{2}/) expiresAt!: string;
+  @IsOptional() @IsString() @MaxLength(64) number?: string;
+}
+
+/**
+ * FP4 — the card they sent is not accepted. Type only: an empty reason is refused by the SERVICE, in the
+ * sentence the courier is shown, not by a decorator that would answer in its own words instead.
+ */
+export class RefuseLicenceRenewalDto {
+  @IsString() @MaxLength(500) reason!: string;
+  @IsOptional() @IsString() @MaxLength(120) by?: string;
 }
 
 export class RegisterDriverDto {

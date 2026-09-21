@@ -44,6 +44,8 @@ export const NOTIFICATION_KINDS = [
   'claim_decided',
   'papers_due',
   'papers_lapsed',
+  /** A renewed licence the courier sent was recorded, or refused with a reason they can act on. */
+  'papers_checked',
   'bus_inbound',
   'intake_expected',
   'bag_ready_to_close',

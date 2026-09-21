@@ -149,6 +149,31 @@ export class DriverLicence {
   number: string;
   classes: VehicleClass[]; // vehicle classes the driver is cleared to operate
   expiresAt?: string; // heavy registry: enforced (expired ⇒ cannot operate)
+  /**
+   * The photograph the date on record was READ FROM, when somebody recorded it from one. Absent means the
+   * date was typed on somebody's word — the registration form, or an operator who saw the card in person
+   * — and a screen must say so rather than show an older licence as if it carried this date.
+   */
+  copyRef?: string;
+  /** Who recorded the current date, and when. Absent on dates recorded before this was kept. */
+  recordedBy?: string;
+  recordedAt?: string;
+}
+
+/**
+ * A RENEWED LICENCE THE COURIER SENT, waiting for the network to check it.
+ *
+ * A courier without a fleet has no office to show the new card to, and the network's staff were asked to
+ * record a renewal they had no way to see. This is how the card reaches them: a photograph from the
+ * driver app, and the date the courier read off it. The date here is the COURIER'S reading and switches
+ * nothing on — the licence on record changes only when a member of staff types the date they read off
+ * the same photograph.
+ */
+export class LicenceRenewal {
+  copyRef: string;
+  expiresAt: string;
+  number?: string;
+  sentAt: string;
 }
 
 export class DriverKyc {
@@ -194,6 +219,10 @@ export class FleetDriver {
   badgeId?: string; // scannable handover badge — issued on activation
   registry: DriverRegistry; // light (bike/motorcycle) | heavy (everything else)
   licence: DriverLicence;
+  /** A renewed licence sent for checking — see LicenceRenewal. Cleared when it is recorded or refused. */
+  licenceRenewal?: LicenceRenewal;
+  /** Why the last renewal they sent was not accepted. Shown to them; cleared when they send another. */
+  licenceRenewalRefusal?: { reason: string; at: string; by?: string };
   kyc?: DriverKyc;
   /** Why the last vetting decision went against them, and when. Cleared on approval. Present on a DRAFT
    *  driver = "we looked and said no", which is a different state from "never sent anything". */

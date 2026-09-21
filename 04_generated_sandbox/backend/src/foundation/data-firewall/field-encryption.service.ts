@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypto';
+import { isSandbox } from '../runtime/sandbox';
 
 /**
  * FieldEncryption — AES-256-GCM encryption for PII at rest in the Identity Vault (T-003).
@@ -11,6 +12,21 @@ export class FieldEncryption {
   private readonly key = createHash('sha256')
     .update(process.env.GLOS_VAULT_KEY || 'glos-dev-vault-key-change-me')
     .digest(); // 32 bytes
+
+  /**
+   * THE DEFAULT KEY IS PRINTED IN THIS FILE, so outside a sandbox the server refuses to start without a
+   * real one.
+   *
+   * While the vault lived only in memory, the default key protected nothing that outlived the process.
+   * The vault now keeps its ciphertext on disk, and ciphertext under a key anyone can read in the source
+   * is the Golden Record in plain text with extra steps. Refused at boot rather than warned about: a
+   * warning in a deploy log is read after the file has been copied.
+   */
+  constructor() {
+    if (!isSandbox() && !process.env.GLOS_VAULT_KEY) {
+      throw new Error('GLOS_VAULT_KEY is not set: outside a sandbox the identity vault will not encrypt personal data under the key printed in the source');
+    }
+  }
 
   encrypt(plaintext: string): string {
     const iv = randomBytes(12);

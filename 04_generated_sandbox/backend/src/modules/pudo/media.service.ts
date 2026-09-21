@@ -315,6 +315,25 @@ export class MediaService implements OnApplicationBootstrap, OnModuleDestroy {
   }
 
   /**
+   * An account document has been REPLACED — a licence renewed from a newer photograph — so the old one
+   * starts its clock instead of waiting for the account to close.
+   *
+   * Account documents are kept for the life of the account because they are what it was vetted on. A
+   * superseded licence is not that any more; kept until the courier leaves, a long-serving one would
+   * leave a drawer of every card they ever held. It is not purged on the spot either: for the bin's
+   * grace period it still answers "what was on record before this date was typed". Account documents
+   * only, so this cannot become a way to start the clock on somebody's evidence.
+   */
+  retireAccountDoc(mediaId: string | undefined, at: Date = new Date()): void {
+    if (!mediaId) return;
+    const ref = this.refs.get(mediaId);
+    if (!ref || ref.status !== 'active' || ref.expiresAt) return;
+    if (ref.retentionClass !== 'account-doc') return;
+    ref.expiresAt = new Date(at.getTime() + RETENTION_DAYS['account-doc'] * DAY_MS).toISOString();
+    this.refs.set(mediaId, ref);
+  }
+
+  /**
    * CL5 — STOP HOLDING A PHOTOGRAPH OF AN OFFICIAL DOCUMENT, NOW, and keep the fact that we did.
    *
    * Taking a photograph back off an observation used to unlink it and leave the bytes on disk for the rest

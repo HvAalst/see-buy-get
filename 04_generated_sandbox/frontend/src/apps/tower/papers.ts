@@ -14,8 +14,20 @@ export interface CourierPaperRow {
   status: string;
   registry: string;
   jurisdiction?: string;
-  licence: { number?: string; expiresAt?: string };
-  /** The licence and ID the driver submitted, so a new expiry is typed while LOOKING at the document. */
+  /** What they are cleared to ride or drive. Absent from a server that predates it; read as unknown. */
+  classes?: string[];
+  /** Their badge portrait — the face on the row, when they have one. */
+  portraitRef?: string;
+  /**
+   * The licence on record and, when somebody recorded it from one, the photograph it was READ from and
+   * who read it. No copyRef means the date was typed on somebody's word, and the screen says so.
+   */
+  licence: { number?: string; expiresAt?: string; copyRef?: string; recordedBy?: string; recordedAt?: string };
+  /** A renewed card they sent from the driver app, waiting to be read. Its date is THEIR reading. */
+  renewal?: { copyRef: string; expiresAt: string; number?: string; sentAt: string };
+  /** Why the last card they sent was not accepted. */
+  renewalRefusal?: { reason: string; at: string; by?: string };
+  /** The licence and ID the driver submitted AT VETTING — heavy registry only, and showing the old date. */
   documents?: { licenceCopyRef?: string; idCopyRef?: string; submittedAt?: string };
   papers: PaperView[];
   /** The lapsed papers, in the server's words. Non-empty means no shift can start. */
@@ -92,11 +104,25 @@ export function isStuck(row: { offRoad: string[] }): boolean {
   return row.offRoad.length > 0;
 }
 
+/** A courier waiting on somebody HERE: off the road, or with a card sent that nobody has read yet. */
+export function isWaiting(row: CourierPaperRow): boolean {
+  return isStuck(row) || Boolean(row.renewal);
+}
+
 /**
- * How many cannot work until somebody here types a date — the number the badge carries. Null while unread,
- * like every other count in the console: a zero says "you are up to date", which is a different claim.
+ * How many are waiting on somebody here — the number the badge carries. Off the road, or a card sent and
+ * unread: a courier whose licence is merely running out waits on nobody, but one who has sent the new
+ * card has done their part and is waiting on us. Each counted once. Null while unread, like every other
+ * count in the console: a zero says "you are up to date", which is a different claim.
  */
-export function stuckCount(report: PapersNetworkView | null): number | null {
+export function waitingCount(report: PapersNetworkView | null): number | null {
   if (!report) return null;
-  return report.couriers.filter(isStuck).length + report.vehicles.filter(isStuck).length;
+  return report.couriers.filter(isWaiting).length + report.vehicles.filter(isStuck).length;
+}
+
+/** How to reach one courier, as the vault answered. `held: false` is an answer the screen says, not an error. */
+export interface CourierContact {
+  held: boolean;
+  fullName?: string;
+  phone?: string;
 }

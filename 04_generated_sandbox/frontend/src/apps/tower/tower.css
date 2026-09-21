@@ -288,6 +288,80 @@
   color: var(--warn);
 }
 
+/*
+ * ONE PERSON, opened from a list: their face, their name, and the facts that tell two "Peer D."s apart.
+ * The name appears here and nowhere else in the sheet — the sheet's own title says only what kind of
+ * thing this is, so a phone does not print the name twice and a desk (which has no sheet title) still
+ * shows it once.
+ */
+.twr-person {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--bd);
+}
+
+.twr-person__body {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.twr-person__name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--navy);
+  overflow-wrap: anywhere;
+}
+
+.twr-person__sub {
+  margin: 0;
+  color: var(--tx2);
+  overflow-wrap: anywhere;
+}
+
+/* Facts about one thing, label over value, as many to a row as fit — the companies screen’s figures,
+   without the card-era inset they carried there. */
+.twr-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
+  gap: 10px 18px;
+  padding: 6px 0 12px;
+}
+
+/*
+ * A CARD TO BE READ, not a thumbnail to be recognised. The evidence strip's 112px tile was drawn for a
+ * broken pallet; an expiry date is eight small digits, and the member of staff is about to put somebody
+ * back on the road on the strength of reading them. So the full image, at the width of the sheet, and a
+ * press opens it at its own size.
+ */
+.twr-cardphoto {
+  display: block;
+  width: 100%;
+  max-width: 520px;
+  padding: 0;
+  border: 1px solid var(--bd);
+  border-radius: var(--r-ctl);
+  background: var(--panel);
+  overflow: hidden;
+  cursor: zoom-in;
+}
+
+.twr-cardphoto:hover {
+  border-color: var(--org);
+}
+
+.twr-cardphoto__img {
+  width: 100%;
+  height: auto;
+  border-radius: 0;
+  object-fit: contain;
+}
+
 /* CL3 — a two-line day chart with no charting library: one shared scale, so a day nothing moved
    cannot look like a day everything did. */
 .twr-spark { display: flex; align-items: flex-end; gap: 2px; height: 96px; margin: 8px 0; }

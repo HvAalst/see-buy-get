@@ -10,7 +10,7 @@ import { CorridorsScreen } from './screens/CorridorsScreen';
 import { PresenceScreen } from './screens/PresenceScreen';
 import { HazardsScreen } from './screens/HazardsScreen';
 import { PapersScreen } from './screens/PapersScreen';
-import { stuckCount } from './papers';
+import { waitingCount } from './papers';
 import { ApprovalsScreen, ClaimsScreen, DisposalScreen } from './screens/QueuesScreen';
 import { ReportsScreen } from './screens/ReportsScreen';
 import { MoneyScreen } from './screens/MoneyScreen';
@@ -126,8 +126,9 @@ export function App() {
     claims: state.claims == null && state.freightClaims == null ? null : (state.claims?.length ?? 0) + (state.freightClaims?.length ?? 0),
     disposal: state.disposal?.length ?? null,
     approvals: state.approvals?.length ?? null,
-    // FP4 — only the STUCK count: a courier whose licence is merely running out is not waiting on anybody here.
-    papers: stuckCount(state.papers),
+    // FP4 — who is waiting on somebody HERE: off the road, or a renewed card sent and not yet read. A courier
+    // whose licence is merely running out is waiting on nobody; one who has sent the new card is waiting on us.
+    papers: waitingCount(state.papers),
     reports: state.reports?.length ?? null,
   };
 

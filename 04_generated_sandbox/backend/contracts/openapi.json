@@ -12589,6 +12589,92 @@
         }
       }
     },
+    "/v1/sbg/fleet/drivers/{did}/licence-renewal": {
+      "post": {
+        "operationId": "Sbg.sendLicenceRenewal",
+        "summary": "",
+        "description": "FP4 — a courier without a fleet sends the renewed card from their app. The courier themselves and\nnobody else: staff sending one \"on their behalf\" would be the checker supplying the thing checked.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendLicenceRenewalDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/drivers/{did}/licence-renewal/refuse": {
+      "post": {
+        "operationId": "Sbg.refuseLicenceRenewal",
+        "summary": "",
+        "description": "FP4 — the card they sent is not accepted, with the reason they are shown. Network staff only.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefuseLicenceRenewalDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/papers/couriers/{did}/contact": {
+      "get": {
+        "operationId": "Sbg.courierContact",
+        "summary": "",
+        "description": "FP4 — how to reach a courier without a fleet: their legal name and phone, from the identity vault.\n\nONE COURIER AT A TIME, on purpose. The papers report lists everybody and carries no contact at all;\nthis is asked when a member of staff opens one courier, and each answer is a receipted reveal against\nthat staff account — so the vault's access log says who looked at whose number, and a list page never\nturns into an export of phone numbers.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/dispatch/freight/{id}/hand-back": {
       "post": {
         "operationId": "Sbg.handBackFreight",
@@ -27846,11 +27932,43 @@
           },
           "expiresAt": {
             "type": "string"
+          },
+          "copyRef": {
+            "type": "string"
+          },
+          "recordedBy": {
+            "type": "string",
+            "description": "Who recorded the current date, and when. Absent on dates recorded before this was kept."
+          },
+          "recordedAt": {
+            "type": "string"
           }
         },
         "required": [
           "number",
           "classes"
+        ]
+      },
+      "LicenceRenewal": {
+        "type": "object",
+        "properties": {
+          "copyRef": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string"
+          },
+          "number": {
+            "type": "string"
+          },
+          "sentAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "copyRef",
+          "expiresAt",
+          "sentAt"
         ]
       },
       "DriverKyc": {
@@ -27913,6 +28031,31 @@
           },
           "licence": {
             "$ref": "#/components/schemas/DriverLicence"
+          },
+          "licenceRenewal": {
+            "description": "A renewed licence sent for checking — see LicenceRenewal. Cleared when it is recorded or refused.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LicenceRenewal"
+              }
+            ]
+          },
+          "licenceRenewalRefusal": {
+            "type": "object",
+            "properties": {
+              "reason": {
+                "required": true,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "by": {
+                "required": false,
+                "type": "string"
+              }
+            }
           },
           "kyc": {
             "$ref": "#/components/schemas/DriverKyc"
@@ -27977,6 +28120,7 @@
           "displayName",
           "registry",
           "licence",
+          "licenceRenewalRefusal",
           "kycRejection",
           "criminalRecordClear",
           "status",
@@ -28012,10 +28156,52 @@
           "expiresAt": {
             "type": "string",
             "pattern": "/^\\d{4}-\\d{2}-\\d{2}/"
+          },
+          "by": {
+            "type": "string",
+            "description": "Who is recording it, for a console on the shared key; a named sign-in's own name wins.",
+            "maxLength": 120
           }
         },
         "required": [
           "expiresAt"
+        ]
+      },
+      "SendLicenceRenewalDto": {
+        "type": "object",
+        "properties": {
+          "copyRef": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "expiresAt": {
+            "type": "string",
+            "pattern": "/^\\d{4}-\\d{2}-\\d{2}/"
+          },
+          "number": {
+            "type": "string",
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "copyRef",
+          "expiresAt"
+        ]
+      },
+      "RefuseLicenceRenewalDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "by": {
+            "type": "string",
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "reason"
         ]
       },
       "HandBackDto": {

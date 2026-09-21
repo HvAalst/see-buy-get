@@ -793,6 +793,30 @@ export function useDriverApp() {
     [client, pushToast, loadObservationNotice],
   );
 
+  /**
+   * FP4 — a courier without a fleet sends their renewed licence: the photo, and the date they read off it.
+   *
+   * Until this existed the app told them to "show the fleet office", which they do not have. Nothing
+   * switches on here: the date waits beside the photo until network staff read the same card. Refreshes
+   * the driver's own record so the home screen says "sent" the moment it is, not on the next poll.
+   */
+  const sendLicenceRenewal = useCallback(
+    async (body: { copyRef: string; expiresAt: string; number?: string }): Promise<boolean> => {
+      if (!client || !did) return false;
+      setState((s) => ({ ...s, busy: 'licence' }));
+      const r = await client.api.sendLicenceRenewal(did, body);
+      setState((s) => ({ ...s, busy: null }));
+      if (r.error) {
+        pushToast({ tone: 'danger', icon: 'warning', title: t('driver.licence.refused'), detail: r.error.detail || r.error.title });
+        return false;
+      }
+      pushToast({ tone: 'ok', icon: 'check', title: t('driver.licence.sent') });
+      await refresh();
+      return true;
+    },
+    [client, did, pushToast, refresh],
+  );
+
   /* ------------------------------------------------- the road, as drivers report it */
 
   /**
@@ -1469,6 +1493,7 @@ const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehic
       loadBoard,
       loadObservationNotice,
       recordObservation,
+      sendLicenceRenewal,
       countries,
       loadRoad,
       reportRoad,

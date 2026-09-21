@@ -163,9 +163,9 @@ export class PersonService {
   /**
    * The person's self-view profile fields. `displayName` is a genuine PII reveal (audited consent
    * receipt) — call it only for the person acting as themselves, never for a counterparty projection.
-   * Reveal is guarded by vault.exists(): the vault store is in-memory but person.vaultRef is persisted,
-   * so after a restart a stale ref must degrade to "no name" rather than throw and 404 the whole
-   * authenticated surface (this method is on the hot path of me/enroll/login/setProfile).
+   * Reveal is guarded by vault.exists(): the vault kept its records in memory until it was made durable,
+   * so a person enrolled before that holds a ref to nothing, and it must degrade to "no name" rather than
+   * throw and 404 the whole authenticated surface (this method is on the hot path of me/enroll/login/setProfile).
    */
   profile(person: Person): { displayName?: string; avatarMediaId?: string } {
     const displayName = person.vaultRef && this.vault.exists(person.vaultRef)

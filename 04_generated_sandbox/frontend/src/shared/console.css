@@ -304,6 +304,14 @@
   padding-top: 14px;
 }
 
+/* …EXCEPT A CALLOUT WITH ITS OWN GROUND. Given as padding, the air lands INSIDE the box: a warning drawn
+   lopsided, jammed against the heading with no gap above it. A framed first child keeps its own padding
+   and takes the air outside, where the eye reads it as space. */
+.cons__panel > .cons__panelhead + .cons__caveat {
+  padding-top: 10px;
+  margin-top: 14px;
+}
+
 /* And air between the things inside it. */
 .cons__panel > *:not(.cons__panelhead) + *:not(.cons__panelhead) {
   margin-top: 12px;
@@ -1367,6 +1375,55 @@
   align-items: center;
   gap: 8px;
   margin-left: auto;
+}
+
+/*
+ * A number a person carries, beside their name — a courier's badge. Quiet, and never the part that gives
+ * way: two couriers called "Peer D." are told apart by it, so the NAME ellipses first.
+ */
+.crow__id {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--c-fs-sm);
+  color: var(--tx3);
+}
+
+/*
+ * A PERSON'S FACE ON A ROW: their portrait when they have one, their initials when they do not.
+ *
+ * A soft ground, not the masthead's navy. The masthead face is ONE control; a list of twelve navy discs is
+ * the wall of equal-weight marks this console keeps being told makes it hard to read.
+ */
+.cface {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--blue-soft);
+  color: var(--navy);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.cface--lg {
+  width: 56px;
+  height: 56px;
+  font-size: 18px;
+}
+
+/* Two classes deep on purpose: the tower restates .authimg (height:auto, a small radius) in a sheet that
+   loads after this one, and at equal weight the later rule would un-fill the circle. */
+.cface .cface__img {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: cover;
+  border: 0;
+  border-radius: 999px;
 }
 
 /* ------------------------------------------------------------------ folds --- */

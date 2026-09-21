@@ -1,5 +1,6 @@
 import { driverPapers, lapsedOf, offRoadLine, paperLapsesAt } from './papers';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+import { MediaService } from './media.service';
 import { GlosError } from '../../foundation/http/glos-error';
 import { MAX_NUDGE_MIN_EARN } from './pudo.config';
 import { PersistentMap } from '../../foundation/store/persistent-map';
@@ -58,6 +59,9 @@ export class DriverService {
     private readonly managers: FleetManagerService,
     private readonly entities: EntityService,
     private readonly presence: PresenceService,
+    // Optional so the specs that build this by hand keep working; app.boot.spec catches it missing from
+    // the module. Without it a courier cannot send a photograph, and is told so rather than silently not.
+    @Optional() private readonly media?: MediaService,
   ) {}
 
   /**
@@ -266,7 +270,7 @@ export class DriverService {
    * recording it would take the driver off the road the moment it was saved. A changed number keeps the
    * one-licence-one-driver rule: the old print is released, the new one claimed.
    */
-  renewLicence(did: string, input: { number?: string; expiresAt: string }, now: number = Date.now()): FleetDriver {
+  renewLicence(did: string, input: { number?: string; expiresAt: string }, now: number = Date.now(), by?: string): FleetDriver {
     const driver = this.require(did);
     if (paperLapsesAt(input.expiresAt) <= now) throw new GlosError('LICENCE_EXPIRED', 'The expiry date given has already passed — a renewed licence runs into the future');
     const number = input.number?.trim();
@@ -277,7 +281,101 @@ export class DriverService {
       this.fingerprints.add(print);
       driver.licence.number = number;
     }
+    /*
+     * WHAT THE DATE WAS READ FROM. A renewal the courier sent is the photograph this date came off, so it
+     * becomes the licence's own copy. A date recorded with nothing sent was read off a card in somebody's
+     * hand, and says so by having no copy — never by leaving the OLD card's photograph beside a NEW date.
+     * Either way the previous card starts its clock (MediaService.retireAccountDoc).
+     */
+    const pending = driver.licenceRenewal;
+    const previous = driver.licence.copyRef;
+    driver.licence.copyRef = pending?.copyRef;
+    if (previous && previous !== pending?.copyRef) this.media?.retireAccountDoc(previous, new Date(now));
     driver.licence.expiresAt = input.expiresAt;
+    driver.licence.recordedAt = new Date(now).toISOString();
+    driver.licence.recordedBy = by;
+    driver.licenceRenewal = undefined;
+    driver.licenceRenewalRefusal = undefined;
+    this.drivers.set(did, driver);
+    // The courier who sent a card is waiting on an answer; one whose fleet office typed the date is not.
+    if (pending) {
+      void this.events
+        .publish(GlosEvent.Pudo.DriverLicenceChecked, { did, accepted: true, expiresAt: input.expiresAt }, { source: 'pudo' })
+        .catch(() => undefined);
+    }
+    return driver;
+  }
+
+  /**
+   * A COURIER WITHOUT A FLEET SENDS THEIR RENEWED LICENCE: the photograph, and the date they read off it.
+   *
+   * Until this existed their app told them to "show the fleet office" — which they do not have — and the
+   * console asked staff to record a renewal they had no way to see. The date sent here switches nothing
+   * on; it waits beside the photograph until somebody here reads the same card and types it
+   * (renewLicence). A fleet driver is turned away with the reason: their office records their licence,
+   * and a second route to the same date would be two people who each think the other checked it.
+   */
+  sendLicenceRenewal(did: string, input: { copyRef: string; expiresAt: string; number?: string }, now: number = Date.now()): FleetDriver {
+    const driver = this.require(did);
+    if (driver.managerDid) throw new GlosError('FORBIDDEN', 'Your fleet office records your licence — show them the renewed card');
+    if (driver.status === 'SUSPENDED') throw new GlosError('INVALID_STATE', 'A suspended courier cannot send papers');
+    if (!input.expiresAt || paperLapsesAt(input.expiresAt) <= now) throw new GlosError('LICENCE_EXPIRED', 'That date has already passed — a renewed licence runs into the future');
+    if (!this.media) throw new GlosError('INVALID_STATE', 'Photographs cannot be kept in this deployment, so a licence cannot be sent');
+    // Only the courier's OWN fresh photograph: adopt() refuses another actor's media and anything already
+    // attached elsewhere, so this cannot relabel somebody else's picture as a licence.
+    if (!this.media.adopt(input.copyRef, did, { type: 'driver', id: did }, 'kyc_licence')) {
+      throw new GlosError('PHOTO_REQUIRED', 'That photograph could not be attached — take it again');
+    }
+    // A second send replaces the first. The earlier photograph was never accepted, so nothing rests on it.
+    const earlier = driver.licenceRenewal?.copyRef;
+    if (earlier && earlier !== input.copyRef) this.media.purgeByOwner(earlier, did);
+    const number = input.number?.trim();
+    driver.licenceRenewal = { copyRef: input.copyRef, expiresAt: input.expiresAt, ...(number ? { number } : {}), sentAt: new Date(now).toISOString() };
+    driver.licenceRenewalRefusal = undefined;
+    this.drivers.set(did, driver);
+    return driver;
+  }
+
+  /**
+   * How to reach a courier the network contracts directly: legal name and phone, revealed from the vault
+   * with a receipt naming who asked and why.
+   *
+   * The minimum for the purpose — no national ID, no date of birth: this answers "how do we tell them",
+   * not "who are they". A fleet driver is refused, and it is the contract line again: the network
+   * contracts their fleet, so their fleet's office is who we call.
+   *
+   * `held: false` is an answer, not an error. A courier registered while the vault still lived in memory
+   * points at a record that is gone, and the screen must be able to say "we hold no way to reach them"
+   * rather than fail to open.
+   */
+  contactFor(did: string, requesterDid: string): { held: boolean; fullName?: string; phone?: string } {
+    const driver = this.require(did);
+    if (driver.managerDid) throw new GlosError('FORBIDDEN', 'This driver is in a fleet — reach them through the fleet office');
+    if (!driver.vaultRef || !this.vault.exists(driver.vaultRef)) return { held: false };
+    const pii = this.vault.reveal(driver.vaultRef, { purpose: 'papers-renewal', requesterDid });
+    return { held: true, ...(pii.fullName ? { fullName: pii.fullName } : {}), ...(pii.phone ? { phone: pii.phone } : {}) };
+  }
+
+  /**
+   * The card they sent is not accepted — unreadable, not a driving licence, a date that is not on it.
+   *
+   * A REFUSAL CARRIES A REASON, as every refusal here does: the courier is shown it, and one they cannot
+   * act on leaves them where silence did. The photograph is deleted now rather than kept on a clock:
+   * nothing was recorded from it, so it is a picture of somebody's licence that proves nothing.
+   */
+  refuseLicenceRenewal(did: string, reason: string, by?: string, now: number = Date.now()): FleetDriver {
+    const driver = this.require(did);
+    const pending = driver.licenceRenewal;
+    if (!pending) throw new GlosError('INVALID_STATE', 'Nothing has been sent to refuse');
+    const why = reason?.trim();
+    if (!why) throw new GlosError('REASON_REQUIRED', 'A refusal must say why: the courier is shown it');
+    this.media?.purgeByOwner(pending.copyRef, did);
+    driver.licenceRenewal = undefined;
+    driver.licenceRenewalRefusal = { reason: why, at: new Date(now).toISOString(), ...(by ? { by } : {}) };
+    this.drivers.set(did, driver);
+    void this.events
+      .publish(GlosEvent.Pudo.DriverLicenceChecked, { did, accepted: false, reason: why }, { source: 'pudo' })
+      .catch(() => undefined);
     return driver;
   }
 

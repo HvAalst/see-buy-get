@@ -37,6 +37,13 @@ export function createDriverApi(sbg: SbgClient) {
     /** The driver's own record (status, badge, registry). */
     me: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}', { params: { path: { did } } })),
 
+    /**
+     * FP4 — a courier without a fleet sends the renewed licence: the photo (an uploaded `kyc_licence`
+     * media id) and the date they read off it. It switches nothing on until network staff read the card.
+     */
+    sendLicenceRenewal: (did: string, body: { copyRef: string; expiresAt: string; number?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/licence-renewal', { params: { path: { did } }, body: body as never })),
+
     /** The current shift session (coupled vehicle, corridor) — null-ish when off shift. */
     session: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}/session', { params: { path: { did } } })),
 

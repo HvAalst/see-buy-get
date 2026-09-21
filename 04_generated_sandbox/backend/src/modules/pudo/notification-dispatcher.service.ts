@@ -13,6 +13,7 @@ import { ToteService } from './tote.service';
 import { MdpService } from './mdp.service';
 import { DispatchService } from './dispatch.service';
 import { haversineKm } from './geo';
+import { paperDay } from './papers';
 import { GeoPoint } from './pudo.types';
 import { UnclaimedService } from './unclaimed.service';
 import { VendorService } from './vendor.service';
@@ -164,6 +165,25 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<{ did: string; reason: string }>(GlosEvent.Pudo.AgentKycRejected, (e) => this.onSignupStalled(e.payload.did));
     // …and the same for a driver, who was left in exactly the same silence.
     this.events.subscribe<{ did: string; reason: string }>(GlosEvent.Pudo.DriverKycRejected, (e) => this.onDriverRefused(e.payload));
+    // FP4 (courier) — the renewed licence they sent was checked. They sent it and are waiting: either answer.
+    this.events.subscribe<{ did: string; accepted: boolean; expiresAt?: string; reason?: string }>(GlosEvent.Pudo.DriverLicenceChecked, (e) => this.onLicenceChecked(e.payload));
+  }
+
+  private async onLicenceChecked(payload: { did: string; accepted: boolean; expiresAt?: string; reason?: string }): Promise<void> {
+    try {
+      await this.notifications.notify(payload.did, {
+        kind: 'papers_checked',
+        title: payload.accepted ? 'Your licence is recorded' : 'Your licence photo was not accepted',
+        body: payload.accepted
+          ? `Recorded to ${payload.expiresAt ? paperDay(payload.expiresAt) : "its new date"}. You can start a shift.`
+          : `${payload.reason} Send a new photo of the renewed licence from the app.`,
+        link: '/',
+        tag: `papers:${payload.did}:checked`,
+        data: { did: payload.did },
+      });
+    } catch (err) {
+      this.logger.warn(`licence check notice failed for ${payload.did}: ${(err as Error).message}`);
+    }
   }
 
   private async onFreightDeliveryFailed(payload: { freightId: string; code: string; posterDid?: string; outcome: string; note?: string; destLabel?: string; attempts: number }): Promise<void> {

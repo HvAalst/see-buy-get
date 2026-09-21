@@ -65,6 +65,11 @@ export const GlosEvent = {
     AgentKycRejected: 'pudo.agent_kyc_rejected',
     /** The same, for a heavy-registry driver: they are shown the reason and can send fresh papers. */
     DriverKycRejected: 'pudo.driver_kyc_rejected',
+    /**
+     * A renewed licence a courier sent was checked: recorded (they may start shifts again) or refused,
+     * with the reason. Published only when somebody was waiting on the answer.
+     */
+    DriverLicenceChecked: 'pudo.driver_licence_checked',
     WalletToppedUp: 'pudo.wallet_topped_up',
     InboundCreated: 'pudo.inbound_created',
     ParcelPaid: 'pudo.parcel_paid', // vendor prepaid the full cost → label unblocked + drop-off PUDO notified

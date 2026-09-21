@@ -1,4 +1,4 @@
-import type { PapersNetworkView } from './papers';
+import type { CourierContact, PapersNetworkView } from './papers';
 import type { MoversView } from './movers';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { narrow, type SbgError } from '../../lib/sbg';
@@ -201,6 +201,10 @@ export interface TowerActions {
   signIn(name: string, key: string): Promise<void>;
   /** FP4 — the papers only network staff can put right: a courier's renewed licence, a fleetless vehicle's papers, and the check run now. */
   recordCourierLicence(did: string, body: { number?: string; expiresAt: string }, name: string): Promise<void>;
+  /** FP4 — the card a courier sent is not accepted, with the reason they are shown. */
+  refuseLicenceRenewal(did: string, reason: string, name: string): Promise<void>;
+  /** FP4 — how to reach ONE courier: a receipted look in the vault, asked when their sheet opens. */
+  courierContact(did: string): Promise<{ contact: CourierContact | null; error: string | null }>;
   recordVehiclePapers(vehicleId: string, documents: { insuranceRef?: string; insuranceExpiresAt?: string; inspectionRef?: string; inspectionExpiresAt?: string }, plate: string): Promise<void>;
   runPapersSweep(): Promise<void>;
   recordTransitAuthority(carrierDid: string, body: { country: string; reference: string; expiresAt: string }, name: string): Promise<void>;
@@ -1308,6 +1312,30 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         }
         setState((s) => ({ ...s, busyId: null, openId: null, done: t('tower.papers.licenceDone', { name }) }));
         await loadPapers(client);
+      },
+      /** FP4 — the card is not accepted. The reason is the courier's to read, so the server insists on one. */
+      refuseLicenceRenewal: async (did: string, reason: string, name: string) => {
+        const client = clientRef.current;
+        if (!client) return;
+        setState((s) => ({ ...s, busyId: did, queueError: null, done: null }));
+        const { error } = await client.api.refuseLicenceRenewal(did, { reason });
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, openId: null, done: t('tower.papers.cardRefusedDone', { name }) }));
+        await loadPapers(client);
+      },
+      /**
+       * FP4 — one courier's name and phone. Asked by the sheet when it opens and held there, never in the
+       * console's state: a phone number kept in a store outlives the look that was receipted for it.
+       */
+      courierContact: async (did: string) => {
+        const client = clientRef.current;
+        if (!client) return { contact: null, error: null };
+        const { data, error } = await client.api.courierContact(did);
+        if (error) return { contact: null, error: error.detail || error.title };
+        return { contact: narrow<CourierContact>(data), error: null };
       },
       /** FP4 — a fleetless vehicle's papers. The date is the switch in both directions. */
       recordVehiclePapers: async (vehicleId: string, documents: { insuranceRef?: string; insuranceExpiresAt?: string; inspectionRef?: string; inspectionExpiresAt?: string }, plate: string) => {

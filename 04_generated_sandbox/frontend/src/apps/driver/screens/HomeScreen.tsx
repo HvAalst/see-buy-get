@@ -1,8 +1,9 @@
 import { DarkSpellNote } from './DarkSpellNote';
 import { HelpLink } from '../../../shared/guide/HelpLink';
 import { useState } from 'preact/hooks';
-import { Button, Card, Checklist, ErrorNote, GlanceNumber, Icon, Note, Pill, QrBlock, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
+import { Button, Card, Checklist, ErrorNote, GlanceNumber, Icon, Note, PhotoField, Pill, QrBlock, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
+import { paperDay } from '../../../shared/papers';
 import { qrPayload } from '../../../shared/qr';
 import {
   canStartShift,
@@ -36,6 +37,13 @@ function OffShift({ state, actions }: HomeScreenProps) {
   // ones the coupling would refuse with). A licence running out is said here too, once, where it can be acted on.
   const offRoad = state.driver?.offRoad ?? [];
   const licenceDue = (state.driver?.papers ?? []).find((p) => p.kind === 'licence' && p.state === 'due');
+  // Who records their licence decides what the note can tell them to do: a fleet's office, or — for a
+  // courier who rides on their own — the network, from a photo sent here.
+  const own = Boolean(state.driver) && !state.driver?.managerDid;
+  // Once the new card is sent, the notes keep their FACTS (how long is left, why no shift can start) and
+  // drop the instruction to send it — the note below says it has been, and telling somebody to do what
+  // they have just done reads as "it did not go through".
+  const cardSent = own && Boolean(state.driver?.licenceRenewal);
   const ready = canStartShift(state.driver?.status) && offRoad.length === 0;
   // Which of this driver's usual roads they are running today. Optional: a driver who does not yet know
   // starts the shift anyway and says it later, when they look for work.
@@ -52,10 +60,18 @@ function OffShift({ state, actions }: HomeScreenProps) {
       <p class="scr__lede">{t('driver.home.startLede')}</p>
 
       {notice ? <Note tone="warn" icon="clock" title={t('driver.home.notActivated')} detail={notice} /> : null}
-      {offRoad.length ? <Note tone="danger" icon="clock" title={t('driver.home.offRoadTitle')} detail={offRoad.join('. ') + '. ' + t('driver.home.offRoadDetail')} /> : null}
-      {!offRoad.length && licenceDue ? (
-        <Note tone="warn" icon="clock" title={t('driver.home.licenceDueTitle', { days: licenceDue.daysLeft ?? 0 })} detail={t('driver.home.licenceDueDetail')} />
+      {offRoad.length ? (
+        <Note tone="danger" icon="clock" title={t('driver.home.offRoadTitle')} detail={offRoad.join('. ') + '.' + (cardSent ? '' : ' ' + t(own ? 'driver.home.offRoadDetailOwn' : 'driver.home.offRoadDetail'))} />
       ) : null}
+      {!offRoad.length && licenceDue ? (
+        <Note
+          tone="warn"
+          icon="clock"
+          title={t('driver.home.licenceDueTitle', { days: licenceDue.daysLeft ?? 0 })}
+          detail={cardSent ? undefined : t(own ? 'driver.home.licenceDueDetailOwn' : 'driver.home.licenceDueDetail')}
+        />
+      ) : null}
+      {own ? <LicenceRenewal state={state} actions={actions} needed={offRoad.length > 0 || Boolean(licenceDue)} /> : null}
       {/* A refused start names the paper (FP4) — that sentence was written for the driver, so it is shown. */}
       {/* FP8 — and a refused start after a working day names the rest owed (HOURS_EXCEEDED), the same way. */}
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} showDetail={state.error.code === 'CANNOT_COUPLE' || state.error.code === 'HOURS_EXCEEDED'} /> : null}
@@ -178,6 +194,82 @@ function OffShift({ state, actions }: HomeScreenProps) {
       </div>
     </div>
   );
+}
+
+/**
+ * FP4 — THE RENEWED CARD, sent from here by a courier who rides on their own.
+ *
+ * They were told to "show the fleet office", which they do not have, and the network's staff were asked
+ * to record a renewal nobody could show them. So the card travels as a photograph, with the date the
+ * courier read off it, and waits until somebody at the network reads the same photograph and records it.
+ *
+ * Shown only when there is something to do or something to know: a licence running out or lapsed, a card
+ * waiting to be checked, or a card that was not accepted and why. A courier whose licence is fine sees
+ * nothing here at all.
+ */
+function LicenceRenewal({ state, actions, needed }: HomeScreenProps & { needed: boolean }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const [photo, setPhoto] = useState('');
+  const [expiresAt, setExpiresAt] = useState('');
+  const [number, setNumber] = useState('');
+  const pending = state.driver?.licenceRenewal;
+  const refusal = state.driver?.licenceRenewalRefusal;
+  if (!pending && !refusal && !needed) return null;
+  // The server refuses a date already past as the typo it is; the form says so by not letting it through.
+  const ready = Boolean(photo) && Boolean(expiresAt) && expiresAt > isoDay(new Date());
+
+  return (
+    <>
+      {pending ? (
+        <Note tone="info" icon="check" title={t('driver.licence.pendingTitle', { date: formatDate(pending.sentAt) })} detail={t('driver.licence.pendingDetail', { expires: paperDay(pending.expiresAt) })} />
+      ) : refusal ? (
+        // The reason is the staff member's own sentence, written for this courier — shown as it was written.
+        <Note tone="warn" icon="warning" title={t('driver.licence.refusedTitle')} detail={refusal.reason} />
+      ) : null}
+      <Button variant={pending ? 'link' : 'outline'} full={!pending} onClick={() => setOpen(true)}>
+        {t(pending ? 'driver.licence.sendAgain' : refusal ? 'driver.licence.sendNew' : 'driver.licence.send')}
+      </Button>
+
+      {open ? (
+        <Sheet open onClose={() => setOpen(false)} title={t('driver.licence.send')}>
+          <p class="t-body">{t('driver.licence.sheetBody')}</p>
+          <PhotoField id="licence-photo" value={photo} label={t('driver.licence.photo')} upload={(file) => actions.uploadPhoto('kyc_licence', file)} onCapture={setPhoto} />
+          <label class="field">
+            <span class="field__label">{t('driver.licence.expires')}</span>
+            <input class="input" type="date" min={isoDay(new Date(Date.now() + 86_400_000))} value={expiresAt} onInput={(e) => setExpiresAt((e.target as HTMLInputElement).value)} />
+          </label>
+          <label class="field">
+            <span class="field__label">{t('driver.licence.number')}</span>
+            <input class="input" value={number} autoComplete="off" onInput={(e) => setNumber((e.target as HTMLInputElement).value)} />
+          </label>
+          <Button
+            chevron={false}
+            disabled={!ready}
+            busy={state.busy === 'licence'}
+            onClick={async () => {
+              const ok = await actions.sendLicenceRenewal({ copyRef: photo, expiresAt, ...(number.trim() ? { number: number.trim() } : {}) });
+              if (!ok) return;
+              setOpen(false);
+              setPhoto('');
+              setExpiresAt('');
+              setNumber('');
+            }}
+          >
+            {t('driver.licence.submit')}
+          </Button>
+          <Button variant="link" onClick={() => setOpen(false)}>
+            {t('driver.notYet')}
+          </Button>
+        </Sheet>
+      ) : null}
+    </>
+  );
+}
+
+/** A calendar day as the phone reckons it, in the form a date input and the server both read. */
+function isoDay(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 /**

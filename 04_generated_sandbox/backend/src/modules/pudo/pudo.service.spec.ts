@@ -21,6 +21,7 @@ import { SbgController } from './pudo.controller';
 import { IS_PUBLIC_KEY } from '../../foundation/auth/public.decorator';
 import { IdentityController } from './identity.controller';
 import { MediaService } from './media.service';
+import { PapersWatchService } from './papers-watch.service';
 import { MonitorService } from './monitor.service';
 import { RatingService, MIN_PUBLIC_RATINGS } from './rating.service';
 import { GraduationService } from './graduation.service';
@@ -5455,6 +5456,157 @@ describe('PUDO Light', () => {
     expect(() => drivers.renewLicence(lapsed.did, { number: 'L-PP1', expiresAt: '2099-01-01' })).toThrow(/already exists/);
     fleet.couple(lapsed.did, bike.vehicleId);
     fleet.uncouple(lapsed.did);
+  });
+
+  it('FP4: a courier without a fleet sends the renewed card; staff record the date FROM it, or refuse it with a reason', () => {
+    const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const c = drivers.register({ displayName: 'Card C.', fullName: 'Card Courier', nationalId: 'ID-CARD-1', mobile: '+254700111222', licenceClasses: ['motorcycle'], licenceNumber: 'L-CARD-1', licenceExpiresAt: '2026-02-01', criminalRecordClear: true });
+    expect(drivers.canOperate(c.did)).toBe(false);
+    const heard: unknown[] = [];
+    events.subscribe(GlosEvent.Pudo.DriverLicenceChecked, (e) => {
+      heard.push(e.payload);
+    });
+    const report = new PapersWatchService(managers, vehicles, drivers, fleet);
+    const rowOf = () => report.networkReport().couriers.find((r) => r.did === c.did)!;
+
+    // Somebody else's photograph cannot be sent as theirs, and a date already past is the typo it is.
+    const stranger = media.upload({ ownerDid: 'did:glos:someone-else', kind: 'kyc_licence', dataUrl: PNG });
+    expect(() => drivers.sendLicenceRenewal(c.did, { copyRef: stranger.mediaId, expiresAt: '2099-01-01' })).toThrow(/take it again/);
+    const first = media.upload({ ownerDid: c.did, kind: 'kyc_licence', dataUrl: PNG });
+    expect(() => drivers.sendLicenceRenewal(c.did, { copyRef: first.mediaId, expiresAt: '2026-01-01' })).toThrow(/already passed/);
+
+    // Sent, it waits beside the licence and switches nothing on: the courier's reading is not the record.
+    drivers.sendLicenceRenewal(c.did, { copyRef: first.mediaId, expiresAt: '2030-05-31', number: 'L-CARD-2' });
+    expect(drivers.canOperate(c.did)).toBe(false);
+    expect(media.get(first.mediaId)).toMatchObject({ kind: 'kyc_licence', link: { type: 'driver', id: c.did } });
+    expect(rowOf()).toMatchObject({ classes: ['motorcycle'], renewal: { copyRef: first.mediaId, expiresAt: '2030-05-31', number: 'L-CARD-2' } });
+    // …and it goes to the top of the list, because that courier is now waiting on us.
+    expect(report.networkReport().couriers[0].did).toBe(c.did);
+
+    // A second card replaces the first, which is deleted: it was never accepted, so nothing rests on it.
+    const second = media.upload({ ownerDid: c.did, kind: 'kyc_licence', dataUrl: PNG });
+    drivers.sendLicenceRenewal(c.did, { copyRef: second.mediaId, expiresAt: '2030-05-31' });
+    expect(media.get(first.mediaId)).toBeUndefined();
+
+    // Refused: the reason is the courier's to read, so it is required; the photograph goes now.
+    expect(() => drivers.refuseLicenceRenewal(c.did, '  ', 'Amina Otieno')).toThrow(/say why/);
+    drivers.refuseLicenceRenewal(c.did, 'The date is not readable in the photo.', 'Amina Otieno');
+    expect(media.get(second.mediaId)).toBeUndefined();
+    expect(rowOf().renewal).toBeUndefined();
+    expect(rowOf().renewalRefusal).toMatchObject({ reason: 'The date is not readable in the photo.', by: 'Amina Otieno' });
+    expect(() => drivers.refuseLicenceRenewal(c.did, 'again')).toThrow(/Nothing has been sent/);
+
+    // Sent again and recorded: the DATE is the one staff typed, the photograph becomes the licence's own
+    // copy with who read it, and the courier can drive.
+    const third = media.upload({ ownerDid: c.did, kind: 'kyc_licence', dataUrl: PNG });
+    drivers.sendLicenceRenewal(c.did, { copyRef: third.mediaId, expiresAt: '2030-05-31' });
+    expect(rowOf().renewalRefusal).toBeUndefined(); // sending again clears the old refusal
+    drivers.renewLicence(c.did, { expiresAt: '2030-05-30' }, Date.now(), 'Amina Otieno');
+    expect(drivers.canOperate(c.did)).toBe(true);
+    expect(rowOf().licence).toMatchObject({ expiresAt: '2030-05-30', copyRef: third.mediaId, recordedBy: 'Amina Otieno' });
+    expect(rowOf().renewal).toBeUndefined();
+    expect(media.get(third.mediaId)?.expiresAt).toBeUndefined(); // the current card is kept, not timed
+
+    // A later date recorded with NO card sent never leaves the old card beside the new date; the old
+    // photograph starts its clock instead of waiting for the account to close.
+    drivers.renewLicence(c.did, { expiresAt: '2031-01-31' }, Date.now(), 'Brian K.');
+    expect(rowOf().licence.copyRef).toBeUndefined();
+    expect(rowOf().licence.recordedBy).toBe('Brian K.');
+    expect(media.get(third.mediaId)?.expiresAt).toBeDefined();
+
+    // Told each time they were waiting on an answer — and not when nobody was.
+    expect(heard).toEqual([
+      expect.objectContaining({ did: c.did, accepted: false, reason: 'The date is not readable in the photo.' }),
+      expect.objectContaining({ did: c.did, accepted: true, expiresAt: '2030-05-30' }),
+    ]);
+
+    // A fleet driver's card goes to their fleet office: a second route to the same date would be two
+    // people each thinking the other had checked it.
+    const mgr = activateManager('Card Fleet', 'CF1');
+    const fd = mkManagedDriver(mgr.did, 'CF1D');
+    const fleetCard = media.upload({ ownerDid: fd.did, kind: 'kyc_licence', dataUrl: PNG });
+    expect(() => drivers.sendLicenceRenewal(fd.did, { copyRef: fleetCard.mediaId, expiresAt: '2030-05-31' })).toThrow(/fleet office/);
+  });
+
+  it('FP4: only the courier sends their own card, and only staff refuse one', () => {
+    const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const c = drivers.register({ displayName: 'Own O.', fullName: 'Own Courier', nationalId: 'ID-OWN-1', mobile: '+254700111333', licenceClasses: ['motorcycle'], criminalRecordClear: true });
+    const card = media.upload({ ownerDid: c.did, kind: 'kyc_licence', dataUrl: PNG });
+    const dto = { copyRef: card.mediaId, expiresAt: '2030-05-31' } as never;
+    // Staff cannot send one "on their behalf": the checker would be supplying the thing checked.
+    expect(() => controller.sendLicenceRenewal(c.did, dto, { active: true, role: 'operator', sub: 'operator:opr_x', actorName: 'Amina Otieno' } as never)).toThrow(/Only the courier/);
+    expect(() => controller.sendLicenceRenewal(c.did, dto, { active: true, role: 'driver', did: 'did:glos:another-driver' } as never)).toThrow(/Only the courier/);
+    const sent = controller.sendLicenceRenewal(c.did, dto, { active: true, role: 'driver', did: c.did } as never);
+    expect(sent.licenceRenewal).toMatchObject({ copyRef: card.mediaId, expiresAt: '2030-05-31' });
+    // A named staff sign-in's own name is what the refusal records — not whatever the body says.
+    const refused = controller.refuseLicenceRenewal(c.did, { reason: 'Not a driving licence.', by: 'Somebody Else' } as never, { active: true, role: 'operator', sub: 'operator:opr_x', actorName: 'Amina Otieno' } as never);
+    expect(refused.licenceRenewalRefusal).toMatchObject({ reason: 'Not a driving licence.', by: 'Amina Otieno' });
+  });
+
+  it('FP4: staff reach a courier without a fleet through the vault — one receipted look at a time, nothing beyond name and phone', () => {
+    const c = drivers.register({ displayName: 'Call C.', fullName: 'Call Courier', nationalId: 'ID-CALL-1', mobile: '+254700333444', licenceClasses: ['bike'] });
+    const before = vault.getAccessLog().length;
+    const staff = { active: true, role: 'operator', sub: 'operator:opr_y', actorName: 'Brian K.' } as never;
+    expect(controller.courierContact(c.did, staff)).toEqual({ held: true, fullName: 'Call Courier', phone: '+254700333444' });
+    const log = vault.getAccessLog();
+    expect(log).toHaveLength(before + 1);
+    expect(log[log.length - 1]).toMatchObject({ purpose: 'papers-renewal', requesterDid: 'operator:opr_y', vaultRef: drivers.get(c.did).vaultRef });
+    // A record the vault no longer holds is an answer the screen can say, not a crash.
+    const gone = drivers.register({ displayName: 'Gone G.', fullName: 'Gone Courier', nationalId: 'ID-GONE-1', mobile: '+254700333555', licenceClasses: ['bike'] });
+    drivers.get(gone.did).vaultRef = 'vault_that_no_longer_exists';
+    expect(controller.courierContact(gone.did, staff)).toEqual({ held: false });
+    // A fleet driver is reached through the fleet the network contracts, never directly.
+    const mgr = activateManager('Call Fleet', 'CF2');
+    const fd = mkManagedDriver(mgr.did, 'CF2D');
+    expect(() => controller.courierContact(fd.did, staff)).toThrow(/fleet office/);
+  });
+
+  it('FP4: the fleet office is a ROLE — a driver whose token names the fleet records no licence, touches no vehicle papers, and reads no colleague', () => {
+    const mgr = activateManager('Office Fleet', 'OF1');
+    const amos = mkManagedDriver(mgr.did, 'OF1A');
+    const colleague = mkManagedDriver(mgr.did, 'OF1B');
+    const office = { active: true, role: 'fleet_manager', tenant: mgr.did } as never;
+    // Exactly what a fleet driver's sign-in mints: the fleet rides in the token as its tenant.
+    const asAmos = { active: true, role: 'driver', did: amos.did, tenant: mgr.did } as never;
+    const staff = { active: true, role: 'operator', sub: 'operator:opr_x', actorName: 'Amina Otieno' } as never;
+
+    // His own licence on his own word — the one thing the route exists to prevent — and a colleague's.
+    expect(() => controller.renewDriverLicence(amos.did, { expiresAt: '2099-12-31' } as never, asAmos)).toThrow(/never by the driver/);
+    expect(() => controller.renewDriverLicence(colleague.did, { expiresAt: '2099-12-31' } as never, asAmos)).toThrow(/not in your fleet/);
+    expect(controller.renewDriverLicence(amos.did, { expiresAt: '2099-12-31' } as never, office).licence.expiresAt).toBe('2099-12-31');
+
+    // The fleet's vehicle papers, and parking it: the office, not a driver who happens to drive it.
+    const v = vehicles.register({ plate: 'OFF-1', vehicleClass: 'motorcycle', ownerName: 'Office Fleet', managerDid: mgr.did });
+    expect(() => controller.updateVehicleDocs(v.vehicleId, { insuranceExpiresAt: '2099-01-01' } as never, asAmos)).toThrow(/not yours/);
+    expect(() => controller.groundVehicle(v.vehicleId, asAmos)).toThrow(/not yours/);
+    expect(() => controller.retireVehicle(v.vehicleId, asAmos)).toThrow(/not yours/);
+    expect(() => controller.updateVehicleDocs(v.vehicleId, { insuranceExpiresAt: '2099-01-01' } as never, office)).not.toThrow();
+
+    // Reading a driver's record and shift: themselves, their office, staff — never a colleague.
+    expect(controller.getFleetDriver(amos.did, asAmos).did).toBe(amos.did);
+    expect(controller.getFleetDriver(amos.did, office).did).toBe(amos.did);
+    expect(controller.getFleetDriver(amos.did, staff).did).toBe(amos.did);
+    expect(() => controller.driverSession(amos.did, asAmos)).not.toThrow();
+    for (const read of [
+      () => controller.getFleetDriver(colleague.did, asAmos),
+      () => controller.driverSession(colleague.did, asAmos),
+      () => controller.driverClaims(colleague.did, asAmos),
+      () => controller.driverHours(colleague.did, asAmos),
+    ]) {
+      expect(read).toThrow(/theirs, their fleet office/);
+    }
+
+    // Coupling a colleague to a vehicle, or taking them off one, is the office's too.
+    expect(() => controller.uncouple(colleague.did, asAmos)).toThrow(/not in your fleet/);
+
+    // The driver list: the office sees its own, staff see everybody — and a driver, or anyone with no fleet
+    // at all, sees nothing. "No tenant" used to mean "no filter", which was every driver in the network.
+    const own = drivers.register({ displayName: 'Loose L.', fullName: 'Loose Courier', nationalId: 'ID-LOOSE-OF1', mobile: '+254700777001', licenceClasses: ['bike'] });
+    const asOwnCourier = { active: true, role: 'driver', did: own.did } as never;
+    expect(() => controller.listFleetDrivers(asAmos)).toThrow(/fleet office and the network/);
+    expect(() => controller.listFleetDrivers(asOwnCourier)).toThrow(/fleet office and the network/);
+    expect(controller.listFleetDrivers(office).map((d) => d.did).sort()).toEqual([amos.did, colleague.did].sort());
+    expect(controller.listFleetDrivers(staff).map((d) => d.did)).toEqual(expect.arrayContaining([amos.did, colleague.did, own.did]));
   });
 
   it('FP3b: a delivery that could not be made is written down, the load stays in transit, and the sender is told', () => {

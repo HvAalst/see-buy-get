@@ -28,7 +28,7 @@ import { dirname, join } from 'path';
  */
 
 /** Where the snapshot files live. Kept out of git (see .gitignore `data/`). */
-const DATA_DIR = process.env.GLOS_DATA_DIR || join(process.cwd(), 'data');
+export const DATA_DIR = process.env.GLOS_DATA_DIR || join(process.cwd(), 'data');
 
 /**
  * On by default; off when GLOS_PERSIST=off, and ALWAYS off under Jest (JEST_WORKER_ID is set in every
@@ -39,7 +39,7 @@ const DATA_DIR = process.env.GLOS_DATA_DIR || join(process.cwd(), 'data');
  * Evaluated per construction (not a frozen module const) so a test can toggle the env before building
  * an instance. The disk round-trip tests do exactly this.
  */
-function persistenceEnabled(): boolean {
+export function persistenceEnabled(): boolean {
   return (process.env.GLOS_PERSIST ?? 'on').toLowerCase() !== 'off' && process.env.JEST_WORKER_ID === undefined;
 }
 

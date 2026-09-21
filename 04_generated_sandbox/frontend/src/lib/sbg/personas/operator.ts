@@ -736,6 +736,11 @@ export function createOperatorApi(sbg: SbgClient) {
     /** Record a courier's renewed licence — the new date is the whole of the renewal. */
     renewLicence: (did: string, body: { number?: string; expiresAt: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/licence', { params: { path: { did } }, body: body as never })),
+    /** The renewed card a courier sent is not accepted — with the reason they are shown. */
+    refuseLicenceRenewal: (did: string, body: { reason: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/licence-renewal/refuse', { params: { path: { did } }, body: body as never })),
+    /** How to reach ONE courier without a fleet — a receipted reveal from the identity vault, per look. */
+    courierContact: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/papers/couriers/{did}/contact', { params: { path: { did } } })),
     /** Record a fleetless vehicle's papers (YYYY-MM-DD dates). */
     setVehicleDocuments: (vehicleId: string, documents: { insuranceRef?: string; insuranceExpiresAt?: string; inspectionRef?: string; inspectionExpiresAt?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/vehicles/{id}/documents', { params: { path: { id: vehicleId } }, body: documents as never })),

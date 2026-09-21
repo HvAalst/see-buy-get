@@ -1,5 +1,6 @@
 ﻿import { driverPapers, lapsedOf, offRoadLine } from './papers';
 import { PapersWatchService } from './papers-watch.service';
+import type { FleetDriver } from './fleet.types';
 import { ConsignmentNoteService } from './consignment-note.service';
 import { SiteService, SITE_BASIS, type Site } from './site.service';
 import { TransitAuthorityService, TRANSIT_BASIS } from './transit-authority.service';
@@ -104,7 +105,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyRecordDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto } from './pudo.dto';
+  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto } from './pudo.dto';
 import { incotermEntry } from '../../foundation/incoterms/catalogue';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
@@ -3778,7 +3779,32 @@ export class SbgController {
   /** The vehicle's owning fleet, or an operator. A vehicle with no fleet (an independent courier's) is operator-only. */
   private assertVehicleOwner(vehicleId: string, actor: IntrospectionResult): void {
     const v = this.vehicles.get(vehicleId); // 404 if unknown
-    if (actor?.role !== 'operator' && (!v.managerDid || actingTenant(actor) !== v.managerDid)) throw new GlosError('FORBIDDEN', 'This vehicle is not yours');
+    if (actor?.role !== 'operator' && !this.isFleetOffice(actor, v.managerDid)) throw new GlosError('FORBIDDEN', 'This vehicle is not yours');
+  }
+
+  /**
+   * THE FLEET'S OFFICE — the role says it is an office, the tenant says which one.
+   *
+   * A fleet DRIVER's token carries the fleet as its tenant too: it is how their app is scoped to their own
+   * fleet's work. So "tenant matches" on its own let a driver record their OWN licence renewal — the one
+   * thing that route says must never happen, because the date is there to replace the driver's word — and
+   * a colleague's, and ground or retire the fleet's vehicles. One place already asked the right question
+   * (the vehicle photos); now every check that means "the fleet office" asks it.
+   */
+  private isFleetOffice(actor: IntrospectionResult | undefined, managerDid: string | undefined): boolean {
+    return actor?.role === 'fleet_manager' && Boolean(managerDid) && actingTenant(actor) === managerDid;
+  }
+
+  /**
+   * Who may read one driver's own record and shift: the driver, their fleet's office, or network staff.
+   *
+   * These answered any signed-in caller who knew the DID — another courier included — and the record
+   * carries a licence number, vetting flags, and what staff wrote about the papers somebody sent.
+   */
+  private assertDriverReader(did: string, actor: IntrospectionResult): FleetDriver {
+    const driver = this.drivers.get(did); // 404 if unknown
+    if (actor?.role === 'operator' || (actor?.did && actor.did === did) || this.isFleetOffice(actor, driver.managerDid)) return driver;
+    throw new GlosError('FORBIDDEN', 'A driver’s record is theirs, their fleet office’s and the network’s to read');
   }
 
   // --- fleet: drivers (own ID, staged onboarding) ---
@@ -3834,6 +3860,17 @@ export class SbgController {
    */
   @Get('fleet/drivers')
   listFleetDrivers(@Actor() actor: IntrospectionResult) {
+    /*
+     * NETWORK STAFF SEE EVERYBODY; A FLEET'S OFFICE SEES ITS OWN; NOBODY ELSE SEES THE LIST AT ALL.
+     *
+     * It was scoped by the caller's tenant and nothing else — so a fleet DRIVER, whose token names the
+     * fleet, got every colleague's record, and anyone with no tenant at all (an independent courier, a
+     * shopper) passed "no fleet" as "no filter" and got every driver in the network: licence numbers,
+     * vetting flags, vault references. The list is an office's working tool, and it now asks for one.
+     */
+    if (actor?.role !== 'operator' && !(actor?.role === 'fleet_manager' && actingTenant(actor))) {
+      throw new GlosError('FORBIDDEN', 'The driver list belongs to a fleet office and the network');
+    }
     return this.drivers
       .list({ managerDid: actingTenant(actor) })
       .map((d) => ({ ...d, rateReach: this.dispatch.rateReachFor(d.did), papers: driverPapers(d), offRoad: lapsedOf(driverPapers(d)).map(offRoadLine) }));
@@ -3867,8 +3904,8 @@ export class SbgController {
   }
 
   @Get('fleet/drivers/:did')
-  getFleetDriver(@Param('did') did: string) {
-    const driver = this.drivers.get(did);
+  getFleetDriver(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
+    const driver = this.assertDriverReader(did, actor);
     // REP4 — the driver's own rating + whether it has fallen below the enforcing floor, so the app can explain
     // WHY freight vanished (rather than the driver seeing an empty marketplace with no reason).
     const rating = this.ratings.driverRating(did);
@@ -3885,9 +3922,44 @@ export class SbgController {
   @Post('fleet/drivers/:did/licence')
   renewDriverLicence(@Param('did') did: string, @Body() dto: RenewLicenceDto, @Actor() actor: IntrospectionResult) {
     const driver = this.drivers.get(did);
-    if (actor?.role !== 'operator' && (!driver.managerDid || actingTenant(actor) !== driver.managerDid)) throw new GlosError('FORBIDDEN', 'This driver is not in your fleet');
-    const renewed = this.drivers.renewLicence(did, dto);
+    if (actor?.role !== 'operator' && !this.isFleetOffice(actor, driver.managerDid)) {
+      throw new GlosError('FORBIDDEN', actor?.did === did ? 'A licence is recorded by your fleet office or the network, never by the driver it belongs to' : 'This driver is not in your fleet');
+    }
+    const renewed = this.drivers.renewLicence(did, { number: dto.number, expiresAt: dto.expiresAt }, Date.now(), auditActor(actor, dto.by));
     return { ...renewed, papers: driverPapers(renewed), offRoad: lapsedOf(driverPapers(renewed)).map(offRoadLine) };
+  }
+
+  /**
+   * FP4 — a courier without a fleet sends the renewed card from their app. The courier themselves and
+   * nobody else: staff sending one "on their behalf" would be the checker supplying the thing checked.
+   */
+  @Post('fleet/drivers/:did/licence-renewal')
+  sendLicenceRenewal(@Param('did') did: string, @Body() dto: SendLicenceRenewalDto, @Actor() actor: IntrospectionResult) {
+    if (!actor?.did || actor.did !== did) throw new GlosError('FORBIDDEN', 'Only the courier can send their own licence');
+    const sent = this.drivers.sendLicenceRenewal(did, { copyRef: dto.copyRef, expiresAt: dto.expiresAt, number: dto.number });
+    return { ...sent, papers: driverPapers(sent), offRoad: lapsedOf(driverPapers(sent)).map(offRoadLine) };
+  }
+
+  /** FP4 — the card they sent is not accepted, with the reason they are shown. Network staff only. */
+  @Roles('operator')
+  @Post('fleet/drivers/:did/licence-renewal/refuse')
+  refuseLicenceRenewal(@Param('did') did: string, @Body() dto: RefuseLicenceRenewalDto, @Actor() actor: IntrospectionResult) {
+    const refused = this.drivers.refuseLicenceRenewal(did, dto.reason, auditActor(actor, dto.by));
+    return { ...refused, papers: driverPapers(refused), offRoad: lapsedOf(driverPapers(refused)).map(offRoadLine) };
+  }
+
+  /**
+   * FP4 — how to reach a courier without a fleet: their legal name and phone, from the identity vault.
+   *
+   * ONE COURIER AT A TIME, on purpose. The papers report lists everybody and carries no contact at all;
+   * this is asked when a member of staff opens one courier, and each answer is a receipted reveal against
+   * that staff account — so the vault's access log says who looked at whose number, and a list page never
+   * turns into an export of phone numbers.
+   */
+  @Roles('operator')
+  @Get('fleet/papers/couriers/:did/contact')
+  courierContact(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
+    return this.drivers.contactFor(did, actor?.did ?? actor?.sub ?? 'operator');
   }
 
   /**
@@ -3904,8 +3976,8 @@ export class SbgController {
 
   /** FP8 — the driver's own hours, as the app says them: on duty, the limit, whether it is passed. */
   @Get('fleet/drivers/:did/hours')
-  driverHours(@Param('did') did: string) {
-    this.drivers.get(did);
+  driverHours(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
+    this.assertDriverReader(did, actor);
     return this.fleet.hoursFor(did);
   }
 
@@ -3978,7 +4050,8 @@ export class SbgController {
   private assertDriverInFleet(did: string, actor: IntrospectionResult): void {
     if (actor?.role === 'operator' || actor?.did === did) return;
     const driver = this.drivers.get(did);
-    if (!driver.managerDid || driver.managerDid !== actor?.tenant) throw new GlosError('FORBIDDEN', 'That driver is not in your fleet');
+    // The office, not a colleague: a fleet driver's token names the fleet too (see isFleetOffice).
+    if (!this.isFleetOffice(actor, driver.managerDid)) throw new GlosError('FORBIDDEN', 'That driver is not in your fleet');
   }
 
   /** Driver starts a shift by scanning the vehicle's dashboard QR → couples them for the day. */
@@ -4087,7 +4160,8 @@ export class SbgController {
    *  how somebody hears nothing for a week and blames the network — so the two things the network knows and
    *  was never saying, their own floor and their own rate, travel with the card that shows them. */
   @Get('fleet/drivers/:did/session')
-  driverSession(@Param('did') did: string) {
+  driverSession(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
+    this.assertDriverReader(did, actor);
     // FP8 — the shift clock rides with the session: the home screen reads it without a second call.
     return { ...this.fleet.sessionFor(did), quiet: this.dispatch.quietReport(did), hours: this.fleet.hoursFor(did) };
   }
@@ -4682,7 +4756,8 @@ export class SbgController {
   }
 
   @Get('fleet/drivers/:did/claims')
-  driverClaims(@Param('did') did: string) {
+  driverClaims(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
+    this.assertDriverReader(did, actor);
     return { remainingCapacityKg: this.dispatch.remainingCapacity(did), remainingTotes: this.dispatch.remainingTotes(did), claims: this.dispatch.claimsFor(did) };
   }
 
