@@ -284,6 +284,18 @@ export function createOperatorApi(sbg: SbgClient) {
     recordImportRelease: (importId: string, body: { entityId?: string; by?: string } = {}) =>
       sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/released', { params: { path: { importId } }, body: body as never })),
 
+    /** CL5 — what people were asked for at a counter, every country, newest first by when it happened. */
+    fieldObservations: (country?: string) =>
+      sbg.request((c) => c.GET('/v1/sbg/field-observations', { params: { query: country ? { country } : {} } as never })),
+
+    /**
+     * CL5 — take a photograph back off an observation, keeping the words. Staff only, always with a reason,
+     * which is kept on the observation: the day a country's answer changes, or somebody photographs a
+     * number they meant to cover.
+     */
+    removeObservationEvidence: (observationId: string, body: { reason: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/field-observations/{observationId}/remove-evidence', { params: { path: { observationId } }, body: body as never })),
+
     /** BL1 — a carrier's permission to move uncleared goods, and the register of them. */
     transitAuthorities: (carrierDid: string) => sbg.request((c) => c.GET('/v1/sbg/carriers/{carrierDid}/transit-authorities', { params: { path: { carrierDid } } })),
 

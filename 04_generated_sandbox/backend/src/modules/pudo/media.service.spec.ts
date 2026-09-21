@@ -64,6 +64,25 @@ describe('MediaService (S26) — upload, gating, retention', () => {
     expect(days).toBe(90);
   });
 
+  it('withdraws a field-evidence photograph now, leaving a tombstone', () => {
+    const { mediaId } = upload(media, { kind: 'field_evidence' });
+    media.withdrawFieldEvidence(mediaId);
+    // The bytes are gone at once, not in ninety days — and the record that they existed stays.
+    expect(() => media.blob(mediaId)).toThrow(/retention window/);
+    expect(media.get(mediaId)?.status).toBe('expired');
+  });
+
+  it('refuses to withdraw anything that is not field evidence — it cannot become a way to destroy proof', () => {
+    // Every other public door refuses the evidence bins, because a party must never destroy proof
+    // mid-case. This one must not become the back door to the same thing.
+    const dispute = upload(media, { kind: 'dispute' }).mediaId;
+    expect(() => media.withdrawFieldEvidence(dispute)).toThrow(/Only a photograph of an official document/);
+    expect(media.get(dispute)?.status).toBe('active');
+    // An unknown id, or nothing at all, is a quiet no-op rather than an error.
+    expect(() => media.withdrawFieldEvidence('med_nope')).not.toThrow();
+    expect(() => media.withdrawFieldEvidence(undefined)).not.toThrow();
+  });
+
   it('leaves every other kind unanchored at upload — those wait for their event', () => {
     // The contrast IS the rule: a bridge does not come back up because ninety days elapsed.
     expect(media.get(upload(media, { kind: 'hazard' }).mediaId)!.expiresAt).toBeUndefined();

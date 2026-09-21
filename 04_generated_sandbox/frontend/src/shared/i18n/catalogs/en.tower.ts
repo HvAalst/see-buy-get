@@ -132,6 +132,26 @@ export const enTower = {
   'tower.papers.failedTitle': 'Could not read the papers',
   'tower.papers.loading': 'Reading…',
   // BL1 — permission to move goods that have not been cleared. A paper only staff can put right.
+  // CL5 — what people were asked for at a border, beside the rules for crossing it.
+  'tower.observations.title': 'What people were asked for at the border',
+  'tower.observations.lede':
+    'First-hand accounts from drivers and agents at a counter: which paper, where, on which day. The rules above are ours to keep; these are somebody’s afternoon, and they are shown as that.',
+  'tower.observations.basis': 'Not what any border requires. A requirement that ended shows here as nobody having been asked since — nothing is ever marked stale by hand.',
+  'tower.observations.count': '{n} · {evidenced} with a photo',
+  'tower.observations.country': 'Country',
+  'tower.observations.allCountries': 'Every country',
+  'tower.observations.none': 'Nobody has recorded anything here yet.',
+  'tower.observations.told': 'said',
+  'tower.observations.evidenced': 'with a photo',
+  'tower.observations.by': 'by {who}',
+  'tower.observations.open': 'Show the photograph larger',
+  'tower.observations.photoAlt': 'The paper asked for: {subject}',
+  'tower.observations.consent': '{who} agreed on {when} that the numbers were blacked out (notice v{version})',
+  'tower.observations.remove': 'Take the photograph back',
+  'tower.observations.removeKeeps': 'The observation stays — it was first-hand and still is. Only the picture goes, and your reason is kept beside it.',
+  'tower.observations.why': 'Why',
+  'tower.observations.removed': 'Removed. The observation is still there, now without its photograph.',
+
   'tower.papers.transitTitle': 'Who may carry uncleared goods',
   'tower.papers.transitLede':
     'A container cleared inland travels from the quay under bond, and only a carrier holding a transit authority in that country is offered the load. A fleet keeps its own driving licences in the fleet app; this one has no office but ours, and when it lapses the carrier simply stops being offered bonded work.',

@@ -3,6 +3,7 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { randomBytes } from 'node:crypto';
 import { PresenceService } from '../../foundation/presence/presence.service';
+import { MediaService } from './media.service';
 
 /**
  * CL5 — WHAT SOMEBODY WAS ACTUALLY ASKED FOR, BY SOMEBODY WHO WAS STANDING THERE.
@@ -94,7 +95,12 @@ export const OBSERVATION_BASIS =
 export class FieldObservationService {
   private readonly rows = new PersistentMap<string, FieldObservation>('field-observations');
 
-  constructor(@Optional() private readonly presence?: PresenceService) {}
+  constructor(
+    @Optional() private readonly presence?: PresenceService,
+    // Optional for the specs that build this by hand; the app always provides it, and without it a
+    // withdrawn photograph would still be sitting in the store — see removeEvidence.
+    @Optional() private readonly media?: MediaService,
+  ) {}
 
   /**
    * May a photograph be kept for this country today? Asked BEFORE the camera is offered, so that nobody
@@ -221,6 +227,13 @@ export class FieldObservationService {
     const row = this.rows.get(observationId);
     if (!row) throw new GlosError('NOT_FOUND', 'No such observation');
     if (!reason?.trim()) throw new GlosError('FIELD_REQUIRED', 'Say why the photograph is being removed');
+    /*
+     * THE BYTES GO NOW, not in ninety days. Unlinking alone left the photograph on disk and still served,
+     * which is holding it — and both reasons to take one back (a visible number, a country withdrawing
+     * permission) mean we must stop holding it immediately. Found by driving: the observation read "told"
+     * and the photograph was still answering 200.
+     */
+    this.media?.withdrawFieldEvidence(row.evidenceMediaId);
     const next: FieldObservation = {
       ...row,
       tier: 'told',

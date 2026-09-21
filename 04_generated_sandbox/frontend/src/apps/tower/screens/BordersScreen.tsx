@@ -4,6 +4,7 @@ import { useT } from '../../../shared/i18n';
 import { EMPTY_BORDER_FORM, borderFormBlocker, crossingLine, formFromRule, toBorderBody, type BorderForm, type BorderRuleRow } from '../borders';
 import { countryNameOf, type CatalogueCountry } from '../presence';
 import type { TowerActions, TowerState } from '../useTowerApp';
+import { FieldObservationsPanel } from './FieldObservationsPanel';
 
 /**
  * CA6 — THE RULES OF CROSSING A BORDER.
@@ -123,6 +124,10 @@ export function BordersScreen({ state, actions }: { state: TowerState; actions: 
           </table>
         )}
       </section>
+
+      {/* CL5 — the rules above are ours; this is what people were actually asked for. Kept apart on
+          purpose: merging them would assert a requirement on the strength of one driver's afternoon. */}
+      <FieldObservationsPanel actions={actions} isOperator={state.who?.mode === 'operator'} catalogue={catalogue} />
 
       <section class="cons__panel twr-corridornew">
         <div class="cons__panelhead">

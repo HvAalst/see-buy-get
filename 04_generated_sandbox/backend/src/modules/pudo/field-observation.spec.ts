@@ -85,6 +85,18 @@ describe('what somebody was asked for, and whether we may photograph it', () => 
     expect(s.mayHoldEvidence('ET')).toBe(false);
   });
 
+  it('stops HOLDING the photograph when it is taken back, not merely unlinking it', () => {
+    // Found by driving: the observation read "told" while the photograph still answered 200 for the rest
+    // of its ninety days. Both reasons to take one back — a visible number, a country withdrawing its
+    // permission — mean we must stop holding it now.
+    const withdrawn: string[] = [];
+    const media = { withdrawFieldEvidence: (id?: string) => id && withdrawn.push(id) };
+    const s = new FieldObservationService({ can: () => true } as never, media as never);
+    const o = s.record({ ...told, evidenceMediaId: 'med_9', consent: { agreed: true, noticeVersion: REDACTION_NOTICE_VERSION } }, who, NOW);
+    s.removeEvidence(o.observationId, 'Hans', 'A declaration number was visible', NOW);
+    expect(withdrawn).toEqual(['med_9']);
+  });
+
   it('takes a photograph back without losing the observation', () => {
     const s = svc(['ET']);
     const o = s.record({ ...told, evidenceMediaId: 'med_1', consent: { agreed: true, noticeVersion: REDACTION_NOTICE_VERSION } }, who, NOW);

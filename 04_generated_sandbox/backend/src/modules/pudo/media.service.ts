@@ -315,6 +315,31 @@ export class MediaService implements OnApplicationBootstrap, OnModuleDestroy {
   }
 
   /**
+   * CL5 — STOP HOLDING A PHOTOGRAPH OF AN OFFICIAL DOCUMENT, NOW, and keep the fact that we did.
+   *
+   * Taking a photograph back off an observation used to unlink it and leave the bytes on disk for the rest
+   * of their ninety days — still served, still ours. Both reasons anybody takes one back mean the opposite:
+   * a number was visible that should have been covered, or a country withdrew its permission. In either
+   * case holding it for another eighty-nine days is the thing the user said we cannot do.
+   *
+   * ONE BIN ONLY, BY CONSTRUCTION. Every other public door into this store refuses the evidence bins, and
+   * rightly: a party must never destroy proof mid-case. This one refuses everything EXCEPT field evidence,
+   * so it cannot become a way to purge a dispute photo because somebody found the method.
+   *
+   * A TOMBSTONE, NOT A HARD DELETE. The bytes go; the record that a photograph existed and was withdrawn
+   * stays, because a withdrawal nobody can see happened is indistinguishable from one that never did.
+   */
+  withdrawFieldEvidence(mediaId: string | undefined): void {
+    if (!mediaId) return;
+    const ref = this.refs.get(mediaId);
+    if (!ref || ref.status !== 'active') return;
+    if (ref.retentionClass !== 'field-evidence') {
+      throw new GlosError('MEDIA_LOCKED', 'Only a photograph of an official document can be withdrawn this way');
+    }
+    this.purge(ref, /* tombstone */ true);
+  }
+
+  /**
    * The retention sweep, two passes: (1) media whose retention window has closed → delete the bytes,
    * leave the ref as a tombstone (audit line). (2) never-linked uploads older than the upload grace →
    * hard delete (an abandoned capture that never reached any lifecycle event carries no evidence value,
