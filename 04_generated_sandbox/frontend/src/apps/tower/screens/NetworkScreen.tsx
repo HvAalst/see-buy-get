@@ -2,6 +2,7 @@ import { credentialAge } from '../../../shared/account/password';
 import type { StaffRow } from '../api';
 import { useState, useCallback, useEffect } from 'preact/hooks';
 import { Icon, PlaceMap } from '../../../shared/ui';
+import { ConsoleFold } from '../ConsoleFold';
 import { useT } from '../../../shared/i18n';
 import {
   AGENT_OFFLINE_H,
@@ -43,7 +44,7 @@ export function NetworkScreen({ state, actions }: { state: TowerState; actions: 
   const [pinned, setPinned] = useState<string | null>(null);
   const pins = (state.agents ?? [])
     .filter((a): a is typeof a & { location: { lat: number; lng: number } } => Boolean(a.location))
-    .map((a) => ({ id: a.did, label: a.shopName ?? a.did, point: a.location }));
+    .map((a) => ({ id: a.did, label: a.shopName ?? t('tower.network.unnamedShop'), point: a.location }));
 
   return (
     <>
@@ -81,11 +82,11 @@ export function NetworkScreen({ state, actions }: { state: TowerState; actions: 
         <Kpi label={t('tower.network.kpi.active')} value={d ? `${Math.round((d.agentRetention ?? 0) * 100)}%` : '—'} />
       </div>
 
-      <section class="cons__panel">
-        <div class="cons__panelhead">
-          <span class="cons__panelt">{t('tower.network.mixTitle')}</span>
-          <span class="ctbl__sub">{t('tower.network.mixHint')}</span>
-        </div>
+      <ConsoleFold
+        title={t('tower.network.mixTitle')}
+        hint={d ? t('tower.network.fold.parcels', { n: statusMixRows(d.statusMix).reduce((sum, r) => sum + r.count, 0) }) : t('tower.queues.loading')}
+      >
+        <p class="cons__lede">{t('tower.network.mixHint')}</p>
         {!d ? (
           <p class="cons__empty">{t('tower.queues.loading')}</p>
         ) : (
@@ -115,13 +116,14 @@ export function NetworkScreen({ state, actions }: { state: TowerState; actions: 
             </tbody>
           </table>
         )}
-      </section>
+      </ConsoleFold>
 
-      <section class="cons__panel" style="margin-top:18px">
-        <div class="cons__panelhead">
-          <span class="cons__panelt">{t('tower.network.flagsTitle')}</span>
-          <span class="ctbl__sub">{t('tower.network.flagsHint')}</span>
-        </div>
+      <ConsoleFold
+        title={t('tower.network.flagsTitle')}
+        hint={!d ? t('tower.queues.loading') : groupFlags(d.flags ?? []).length === 0 ? t('tower.network.fold.noAlerts') : t('tower.network.fold.alerts', { kinds: groupFlags(d.flags ?? []).length, n: (d.flags ?? []).length })}
+        aside={<>{d && groupFlags(d.flags ?? []).length ? <span class="ctag ctag--warn">{t('tower.network.fold.oldest', { age: ageLabel(groupFlags(d.flags ?? [])[0].oldestHours, t) })}</span> : null}</>}
+      >
+        <p class="cons__lede">{t('tower.network.flagsHint')}</p>
         {!d ? (
           <p class="cons__empty">{t('tower.queues.loading')}</p>
         ) : groupFlags(d.flags ?? []).length === 0 ? (
@@ -130,7 +132,7 @@ export function NetworkScreen({ state, actions }: { state: TowerState; actions: 
             <p>{t('tower.network.noFlagsBody')}</p>
           </div>
         ) : (
-          <table class="ctbl">
+          <table class="ctbl ctbl--stack">
             <thead>
               <tr>
                 <th>{t('tower.network.col.alert')}</th>
@@ -143,9 +145,16 @@ export function NetworkScreen({ state, actions }: { state: TowerState; actions: 
               {groupFlags(d.flags ?? []).map((g) => (
                 <tr key={g.type}>
                   <td class="ctbl__strong">{flagLabel(g.type, t)}</td>
-                  <td class="ctbl__num">{g.count}</td>
-                  <td>{ageLabel(g.oldestHours, t)}</td>
+                  <td class="ctbl__num">
+                    <span class="ctbl__lbl">{t('tower.network.col.howMany')}</span>
+                    {g.count}
+                  </td>
+                  <td>
+                    <span class="ctbl__lbl">{t('tower.network.col.longest')}</span>
+                    {ageLabel(g.oldestHours, t)}
+                  </td>
                   <td class="ctbl__sub">
+                    <span class="ctbl__lbl">{t('tower.network.col.example')}</span>
                     <span class="ctbl__mono">{g.example.subject}</span> {g.example.detail ? `· ${g.example.detail}` : ''}
                   </td>
                 </tr>
@@ -153,13 +162,12 @@ export function NetworkScreen({ state, actions }: { state: TowerState; actions: 
             </tbody>
           </table>
         )}
-      </section>
+      </ConsoleFold>
 
-      <section class="cons__panel" style="margin-top:18px">
-        <div class="cons__panelhead">
-          <span class="cons__panelt">{t('tower.network.shopsTitle')}</span>
-          <span class="ctbl__sub">{coverageLine(state.coverage ?? undefined, t)}</span>
-        </div>
+      <ConsoleFold
+        title={t('tower.network.shopsTitle')}
+        hint={coverageLine(state.coverage ?? undefined, t)}
+      >
 
         {/* Where the shops actually are. A shop with no pin on it is not missing from the network — it
             simply never dropped one, so it stays in the table below and out of here. */}
@@ -177,7 +185,7 @@ export function NetworkScreen({ state, actions }: { state: TowerState; actions: 
             <p>{t('tower.network.noShopsBody')}</p>
           </div>
         ) : (
-          <table class="ctbl">
+          <table class="ctbl ctbl--stack">
             <thead>
               <tr>
                 <th>{t('tower.network.col.shop')}</th>
@@ -195,33 +203,44 @@ export function NetworkScreen({ state, actions }: { state: TowerState; actions: 
                   // Orange marks the row a pin is pointing at — a STATE, the same as everywhere else here.
                   <tr key={row.did} class={pinned === row.did ? 'is-open' : undefined}>
                     <td>
-                      <div class="ctbl__strong">{row.shopName ?? row.did}</div>
-                      <div class="ctbl__mono">{row.did.slice(0, 18)}…</div>
+                      <div class="ctbl__strong">{row.shopName ?? t('tower.network.unnamedShop')}</div>
                     </td>
-                    <td>{row.zone ?? '—'}</td>
                     <td>
+                      <span class="ctbl__lbl">{t('tower.network.col.zone')}</span>
+                      {row.zone ?? '—'}
+                    </td>
+                    <td>
+                      <span class="ctbl__lbl">{t('tower.network.col.state')}</span>
                       <span class={`ctag ctag--${s.tone === 'bad' ? 'warn' : s.tone}`}>{t(s.labelKey)}</span>
                     </td>
                     {/* A dash, never 0.00: no float rail is a different fact from an empty till. */}
-                    <td class="ctbl__num">{row.balance == null ? '—' : money(row.balance)}</td>
-                    <td class="ctbl__num">{slotsLabel(row)}</td>
-                    <td class="ctbl__num">{ratingLabel(row)}</td>
+                    <td class="ctbl__num">
+                      <span class="ctbl__lbl">{t('tower.network.col.wallet')}</span>
+                      {row.balance == null ? '—' : money(row.balance)}
+                    </td>
+                    <td class="ctbl__num">
+                      <span class="ctbl__lbl">{t('tower.network.col.slots')}</span>
+                      {slotsLabel(row)}
+                    </td>
+                    <td class="ctbl__num">
+                      <span class="ctbl__lbl">{t('tower.network.col.rating')}</span>
+                      {ratingLabel(row)}
+                    </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
         )}
-      </section>
+      </ConsoleFold>
 
       {state.who?.mode === 'operator' ? <FleetsPanel actions={actions} /> : null}
       {state.who?.mode === 'operator' ? <StaffPanel actions={actions} /> : null}
 
-      <section class="cons__panel" style="margin-top:18px">
-        <div class="cons__panelhead">
-          <span class="cons__panelt">{t('tower.network.hubsTitle')}</span>
-          <span class="ctbl__sub">{t('tower.network.bagsOnRoad', { n: bagsInTransit(state.totes ?? []) })}</span>
-        </div>
+      <ConsoleFold
+        title={t('tower.network.hubsTitle')}
+        hint={t('tower.network.bagsOnRoad', { n: bagsInTransit(state.totes ?? []) })}
+      >
         {state.hubs === null ? (
           <p class="cons__empty">{t('tower.queues.loading')}</p>
         ) : state.hubs.length === 0 ? (
@@ -242,7 +261,7 @@ export function NetworkScreen({ state, actions }: { state: TowerState; actions: 
                 {filling.length === 0 ? (
                   <p class="chint">{t('tower.network.noOpenBags')}</p>
                 ) : (
-                  <table class="ctbl">
+                  <table class="ctbl ctbl--stack">
                     <thead>
                       <tr>
                         <th>{t('tower.network.col.bag')}</th>
@@ -255,9 +274,18 @@ export function NetworkScreen({ state, actions }: { state: TowerState; actions: 
                       {filling.map((bag) => (
                         <tr key={bag.toteId}>
                           <td class="ctbl__mono">{bag.code}</td>
-                          <td>{bag.destinationLabel ?? bag.destinationNodeId ?? '—'}</td>
-                          <td class="ctbl__num">{bag.parcels?.length ?? 0}</td>
-                          <td class="ctbl__num">{fillPct(bag)}%</td>
+                          <td>
+                            <span class="ctbl__lbl">{t('tower.network.col.destination')}</span>
+                            {bag.destinationLabel ?? bag.destinationNodeId ?? '—'}
+                          </td>
+                          <td class="ctbl__num">
+                            <span class="ctbl__lbl">{t('tower.network.col.parcels')}</span>
+                            {bag.parcels?.length ?? 0}
+                          </td>
+                          <td class="ctbl__num">
+                            <span class="ctbl__lbl">{t('tower.network.col.fill')}</span>
+                            {fillPct(bag)}%
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -267,7 +295,7 @@ export function NetworkScreen({ state, actions }: { state: TowerState; actions: 
             ))}
           </div>
         )}
-      </section>
+      </ConsoleFold>
     </>
   );
 }
@@ -307,11 +335,11 @@ function FleetsPanel({ actions }: { actions: TowerActions }) {
   }, [load]);
 
   return (
-    <section class="cons__panel" style="margin-top:18px">
-      <div class="cons__panelhead">
-        <span class="cons__panelt">{t('tower.network.fleetsTitle')}</span>
-      </div>
-      {error ? <p class="cerr" style="margin:12px 16px">{error}</p> : null}
+    <ConsoleFold
+      title={t('tower.network.fleetsTitle')}
+      hint={rows === null ? t('tower.queues.loading') : t('tower.network.fold.fleets', { n: rows.length })}
+    >
+      {error ? <p class="cerr">{error}</p> : null}
       {rows === null ? (
         <p class="cons__empty">{t('tower.queues.loading')}</p>
       ) : rows.length === 0 ? (
@@ -372,7 +400,7 @@ function FleetsPanel({ actions }: { actions: TowerActions }) {
           </tbody>
         </table>
       )}
-    </section>
+    </ConsoleFold>
   );
 }
 
@@ -419,15 +447,17 @@ function StaffPanel({ actions }: { actions: TowerActions }) {
   };
 
   return (
-    <section class="cons__panel" style="margin-top:18px">
-      <div class="cons__panelhead">
-        <span class="cons__panelt">{t('tower.staff.title')}</span>
+    <ConsoleFold
+      title={t('tower.staff.title')}
+      hint={rows === null ? t('tower.queues.loading') : t('tower.network.fold.staff', { n: rows.length })}
+    >
+      <div class="twr-panelend">
         <button type="button" class="cbtn cbtn--ghost cbtn--sm" aria-expanded={open} onClick={() => setOpen(!open)}>
-          {open ? t('common.close') : t('tower.staff.add')}
+        {open ? t('common.close') : t('tower.staff.add')}
         </button>
       </div>
-      <p class="ctbl__sub" style="margin:10px 16px 0">{t('tower.staff.lede')}</p>
-      {error ? <p class="cerr" style="margin:12px 16px">{error}</p> : null}
+      <p class="cons__lede">{t('tower.staff.lede')}</p>
+      {error ? <p class="cerr">{error}</p> : null}
 
       {made ? (
         <div class="twr-reveal">
@@ -444,7 +474,7 @@ function StaffPanel({ actions }: { actions: TowerActions }) {
       ) : null}
 
       {open ? (
-        <div class="twr-knobs" style="padding:12px 16px">
+        <div class="twr-knobs">
           <div class="twr-knobs__row">
             <div class="twr-knob">
               <label class="cfield">
@@ -469,7 +499,7 @@ function StaffPanel({ actions }: { actions: TowerActions }) {
       ) : rows.length === 0 ? (
         <p class="cons__empty">{t('tower.staff.none')}</p>
       ) : (
-        <table class="ctbl">
+        <table class="ctbl ctbl--stack">
           <thead>
             <tr>
               <th>{t('tower.staff.col.who')}</th>
@@ -483,10 +513,21 @@ function StaffPanel({ actions }: { actions: TowerActions }) {
             {rows.map((a) => (
               <tr key={a.operatorId}>
                 <td class="ctbl__strong">{a.name}</td>
-                <td class="ctbl__mono">{a.email}</td>
-                <td class="ctbl__sub">{a.lastSeenAt ? new Date(a.lastSeenAt).toLocaleString() : t('tower.staff.never')}</td>
-                <td class="ctbl__sub">{a.passwordChangedAt ? new Date(a.passwordChangedAt).toLocaleDateString() : t('tower.staff.never')}</td>
-                <td class="ctbl__num">
+                <td class="ctbl__mono">
+                  <span class="ctbl__lbl">{t('tower.staff.col.email')}</span>
+                  {a.email}
+                </td>
+                <td class="ctbl__sub">
+                  <span class="ctbl__lbl">{t('tower.staff.col.lastSeen')}</span>
+                  {a.lastSeenAt ? new Date(a.lastSeenAt).toLocaleString() : t('tower.staff.never')}
+                </td>
+                <td class="ctbl__sub">
+                  <span class="ctbl__lbl">{t('tower.staff.col.password')}</span>
+                  {a.passwordChangedAt ? new Date(a.passwordChangedAt).toLocaleDateString() : t('tower.staff.never')}
+                </td>
+                {/* NOT ctbl__num: a cell of buttons is not a figure, and that class's nowrap would stop a
+                    label from wrapping — the trap the required-papers row fell into. */}
+                <td>
                   {confirm === a.operatorId ? (
                     <span class="twr-panelend">
                       <button
@@ -520,6 +561,6 @@ function StaffPanel({ actions }: { actions: TowerActions }) {
           </tbody>
         </table>
       )}
-    </section>
+    </ConsoleFold>
   );
 }

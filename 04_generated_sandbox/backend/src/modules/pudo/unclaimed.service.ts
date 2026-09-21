@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { GlosError } from '../../foundation/http/glos-error';
 import { ParcelService } from './parcel.service';
+import { AgentService } from './agent.service';
 import { ShelfService } from './shelf.service';
 import { ReturnService } from './return.service';
 import { WalletGateService } from './wallet-gate.service';
@@ -12,6 +13,12 @@ import { Parcel, ReceiverIntent, isCollectable } from './pudo.types';
 export interface DisposalRow {
   parcelId: string;
   agentDid?: string;
+  /**
+   * The shop holding it, BY NAME. The console printed the DID in this column — eighteen characters of
+   * did:glos: in the place an operator reads to know whose shelf this is and who is owed. An id on a
+   * screen is a bug, and the screen cannot resolve a name it was never sent, so the server does.
+   */
+  shopName?: string;
   relinquishedAt: string;
   heldDays: number;
   declaredValue?: number;
@@ -43,6 +50,8 @@ export class UnclaimedService {
     private readonly shelf: ShelfService,
     private readonly returns: ReturnService,
     private readonly gate: WalletGateService,
+    // Optional so the specs that build this by hand keep working — app.boot.spec catches it missing.
+    @Optional() private readonly agents?: AgentService,
   ) {}
 
   /**
@@ -211,6 +220,7 @@ export class UnclaimedService {
       .map((p) => ({
         parcelId: p.parcelId,
         agentDid: p.destAgentDid,
+        ...(p.destAgentDid && this.agents?.find(p.destAgentDid)?.shopName ? { shopName: this.agents.find(p.destAgentDid)!.shopName } : {}),
         relinquishedAt: p.relinquishedAt!,
         heldDays: Math.max(0, Math.floor((now - new Date(p.unclaimedAt ?? p.relinquishedAt!).getTime()) / 86_400_000)),
         declaredValue: p.declaredValue,

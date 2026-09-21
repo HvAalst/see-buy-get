@@ -1645,6 +1645,14 @@ export const enTowerNetwork = {
   'tower.network.kpi.float': 'Money across shop floats',
   'tower.network.kpi.active': 'Shops still active',
 
+  // The overview, folded. Each subtitle is STATE — what is in the section now — never its description.
+  'tower.network.fold.parcels': '{n} parcels in the network',
+  'tower.network.fold.alerts': '{kinds} kinds of alert · {n} parcels',
+  'tower.network.fold.noAlerts': 'Nothing standing',
+  'tower.network.fold.oldest': 'oldest {age}',
+  'tower.network.fold.fleets': '{n} fleets',
+  'tower.network.fold.staff': '{n} people on staff',
+  'tower.network.unnamedShop': 'A shop with no name yet',
   'tower.network.mixTitle': 'Where every parcel is',
   'tower.network.mixHint': 'In the order a parcel travels, not by size',
   'tower.network.col.status': 'Stage',

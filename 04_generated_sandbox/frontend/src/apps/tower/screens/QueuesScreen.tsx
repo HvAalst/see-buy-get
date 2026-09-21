@@ -379,7 +379,9 @@ function DisposalRowView({ row, state, actions }: { row: DisposalRow; state: Tow
     <>
       <tr class={open ? 'is-open' : undefined}>
         <td class="ctbl__strong">{row.parcelId}</td>
-        <td class="ctbl__mono">{row.agentDid ?? t('tower.disposal.unknownShop')}</td>
+        {/* A NAME, not the DID this column used to print — the operator reads it to know whose shelf this is
+            and who is owed. Where the server cannot name one, it says so rather than showing the key. */}
+        <td class="ctbl__strong">{row.shopName ?? t('tower.disposal.unknownShop')}</td>
         <td class="ctbl__num">{row.declaredValue != null ? money(row.declaredValue) : '—'}</td>
         <td class="ctbl__num ctbl__strong">{money(row.owedToShop)}</td>
         <td>
@@ -691,7 +693,7 @@ function ApprovalRowView({ row, state, actions }: { row: ApprovalRow; state: Tow
     <>
     <tr>
       <td>
-        <div class="ctbl__strong">{row.shopName ?? row.did}</div>
+        <div class="ctbl__strong">{row.shopName ?? t('tower.network.unnamedShop')}</div>
         <div class="ctbl__sub">{row.zone ?? '—'}</div>
       </td>
       <td class="ctbl__num">{t('tower.approvals.slots', { n: shelfSlots(row) })}</td>

@@ -395,6 +395,16 @@ describe('the collection window closing', () => {
       expect(unclaimed.awaitingDisposal().map((r) => r.parcelId)).toContain(parcel.parcelId);
     });
 
+    it('names the shop holding it — the console printed its DID in that column', () => {
+      const { parcel } = stranded();
+      unclaimed.respond(parcel.parcelId, 'relinquish');
+      const row = unclaimed.awaitingDisposal().find((r) => r.parcelId === parcel.parcelId)!;
+      // An operator reads this column to know whose shelf it is and who is owed. The screen cannot
+      // resolve a name it was never sent, so the server sends it.
+      expect(row.shopName).toMatch(/^W Dest \d+$/);
+      expect(row.shopName).not.toContain('did:');
+    });
+
     it('lets a store that is standing ready to pay have it instead', () => {
       // THE ORDERING RULE. The receiver said they did not want it, not that it should be destroyed, and
       // disposing of goods somebody is willing to pay to recover is the one outcome nobody asked for.

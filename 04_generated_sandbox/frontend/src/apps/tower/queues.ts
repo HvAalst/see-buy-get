@@ -138,6 +138,8 @@ export interface DisposalRow {
   declaredValue?: number;
   owedToShop?: number;
   agentDid?: string;
+  /** The shop holding it, by name — resolved by the server, because a screen cannot name what it was not sent. */
+  shopName?: string;
   currency?: string;
 }
 

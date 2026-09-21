@@ -1191,8 +1191,11 @@
     width: 100%;
   }
 
+  /* No side inset. This was written for a table sitting inside a CARD; the panels stopped being cards,
+     and round twelve removed every other inset from a border that no longer exists but missed this one,
+     so a stacked table on a phone started 16px to the right of the heading above it. */
   .ctbl--stack {
-    padding: 0 16px 16px;
+    padding: 0 0 16px;
   }
 
   .ctbl--stack thead {
