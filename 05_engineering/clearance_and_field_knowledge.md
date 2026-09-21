@@ -939,7 +939,7 @@ apart from what we derived. And a **binnenvaartschip is a leg of its own** — v
 stops, an air draft that is the road bridge check over again — settled through us where presence allows.
 The CSC plate date is carried, with nothing stated about it.
 
-### CL5 — Field knowledge, first-hand only — THE GATES SHIPPED 2026-09-20, commit `67343f4`
+### CL5 — Field knowledge, first-hand only — SHIPPED 2026-09-21: gates `67343f4`, capture `cc85d83`, review `2459cc7`
 No longer blocked: the question §11 held open was answered by the user rather than by a lawyer, and the
 answer made the jurisdiction the unit — see §11.
 
@@ -948,9 +948,16 @@ answer made the jurisdiction the unit — see §11.
   the shape of the form, tier derived, evidence removable — eleven tests), and four routes. The "may I?"
   question is a route of its own, asked BEFORE the camera is offered: somebody who photographs a customs
   document and is only then told we cannot hold it has been made to do something they cannot undo.
-- **Still owed — SCREENS.** The gates are enforced and nothing on a phone reaches them yet. Tracked as
-  `ui` on progress.html. The capture screen is the one that matters, because it is where the notice has
-  to be shown; the console's review list is secondary.
+- **Screens — BOTH SHIPPED.** Capture in the cab (`cc85d83`): the driver's Route screen, beside the road,
+  reading the permission BEFORE a camera is offered and choosing the country from the atlas. Review in the
+  console (`2459cc7`): the Borders screen, date first, consent trail shown, a photograph taken back with
+  a reason.
+- **Retention — ANSWERED.** `field_evidence` lands in the only bin whose clock starts at UPLOAD: ninety
+  days, then the words remain and the bytes do not, because an observation has no lifecycle event to
+  wait for. And taking a photograph back DELETES it at once, leaving a tombstone — the first version only
+  unlinked it, and driving it showed the bytes still answering 200.
+- **Who reads them back — ANSWERED.** The uploader and staff, which is what the media store already
+  enforces (owner or operator), and the review screen is staff-only to match.
 - **Build:** an observation carrying its tier, jurisdiction, subject, date and optional photograph; rumour
   refused at intake; ageing derived from the date the way papers are; **positive observations enforced by the
   shape of the form**, so that "they asked me for X" is expressible and "X is no longer required" is not.
