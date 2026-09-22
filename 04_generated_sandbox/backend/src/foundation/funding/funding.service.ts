@@ -113,6 +113,29 @@ export class FundingService {
     }
 
     /*
+     * PAID IN A DIFFERENT CURRENCY FROM THE ONE THE ACCOUNT IS KEPT IN.
+     *
+     * The rule above says the rail decides the AMOUNT. It does not get to decide what that amount is
+     * denominated in, and the difference matters: a shop's deposit account is per sister and per currency,
+     * so crediting "500" from a USD callback into a KES deposit produces a balance that is a figure
+     * denominated in nothing — the exact failure the money model refuses everywhere else ("you may compare
+     * across sisters, you may never total across them").
+     *
+     * NOT CONVERTED HERE, deliberately, even though an FX service exists. A conversion needs a rate, a
+     * moment and somebody who carries the spread; the shipment path stamps its rate on the parcel and shows
+     * the buyer both figures. Doing it silently on a callback would hand a shopkeeper a balance set by our
+     * mid-rate at a moment they never saw, on a number they cannot check. So it is held, visibly, with both
+     * currencies named, and a person decides — the same answer as a payment with nobody's name on it, for
+     * the same reason: we would be guessing.
+     */
+    if (payment.currency && match.currency && payment.currency.toUpperCase() !== match.currency.toUpperCase()) {
+      return {
+        unmatched: this.recordUnmatched(payment, `paid in ${payment.currency} against a request in ${match.currency} — this account is kept in ${match.currency}, and converting it here would invent a rate`, now),
+        duplicate: false,
+      };
+    }
+
+    /*
      * PAID TWICE AGAINST ONE REFERENCE. It happens: a paybill payment that looked like it failed is made
      * again, quoting the same number. Both payments are real and both are this shop's money, so the second
      * one is credited as a funding of its own that was paid without being asked for — openedAt equal to
