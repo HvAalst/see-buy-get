@@ -4998,6 +4998,8 @@ describe('PUDO Light', () => {
   const deliverOk = (freight: { freightId: string }, did?: string) =>
     dispatch.deliverFreight(freight.freightId, did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: 'med_pod' });
 
+  /** A driver's own sign-in — what the driver app calls their own routes with. */
+  const asDriver = (did: string) => ({ active: true, role: 'driver', did }) as never;
   const coupleTipper = (tag: string, bounds: { min: number; max: number }, baseFee = 10) => {
     const d = drivers.register({ displayName: tag, fullName: tag, nationalId: 'ID-' + tag, mobile: '+2547' + tag, licenceClasses: ['truck'], licenceNumber: 'L-' + tag, licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
     drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
@@ -5609,6 +5611,66 @@ describe('PUDO Light', () => {
     expect(controller.listFleetDrivers(staff).map((d) => d.did)).toEqual(expect.arrayContaining([amos.did, colleague.did, own.did]));
   });
 
+  it('a route that names a participant refuses a stranger, and lets the participant and the right office through', () => {
+    const mgr = activateManager('Routes Fleet', 'RT1');
+    const fleetDriver = mkManagedDriver(mgr.did, 'RT1A');
+    const office = { active: true, role: 'fleet_manager', tenant: mgr.did } as never;
+    const asFleetDriver = { active: true, role: 'driver', did: fleetDriver.did, tenant: mgr.did } as never;
+    const staff = { active: true, role: 'operator', sub: 'operator:opr_x', actorName: 'Amina Otieno' } as never;
+    // Anybody who signed up with a phone number — what every one of these routes used to accept.
+    const stranger = { active: true, role: 'consumer', did: 'did:glos:just-a-shopper' } as never;
+    const courier = drivers.register({ displayName: 'Route R.', fullName: 'Route Courier', nationalId: 'ID-RT-1', mobile: '+254700888001', licenceClasses: ['bike'] });
+    const asCourier = asDriver(courier.did);
+    // Let through means the OWNER CHECK passed — a business rule may still refuse ("You are not on shift"),
+    // which is a different answer from "this is not yours" and is not what this test is about.
+    const DENIED = /Only the driver|Only the shop|not yours|theirs, their fleet office/;
+
+    // A driver's own shift and work: ending it, snoozing it, their dot on the map, their floor, their area.
+    const own: Array<(who: never) => unknown> = [
+      (who) => controller.endSession(courier.did, who),
+      (who) => controller.snoozeWork(courier.did, { minutes: 30 } as never, who),
+      (who) => controller.resumeWork(courier.did, who),
+      (who) => controller.pingDriver(courier.did, who),
+      (who) => controller.locate(courier.did, { lat: -1.28, lng: 36.82 } as never, who),
+      (who) => controller.setNudgeMinEarn(courier.did, { amount: 100 } as never, who),
+      (who) => controller.declareArea(courier.did, { radiusKm: 5 } as never, who),
+    ];
+    for (const act of own) expect(() => act(stranger)).toThrow(/Only the driver/);
+    // Not the office either: a position is a claim about the driver's own phone, the floor their own decision.
+    expect(() => controller.locate(fleetDriver.did, { lat: -1.28, lng: 36.82 } as never, office)).toThrow(/Only the driver/);
+    expect(() => controller.setNudgeMinEarn(fleetDriver.did, { amount: 100 } as never, office)).toThrow(/Only the driver/);
+    // The driver themselves can, and staff can.
+    expect(() => controller.snoozeWork(courier.did, { minutes: 30 } as never, asCourier)).not.toThrow(DENIED);
+    expect(() => controller.resumeWork(courier.did, staff)).not.toThrow(DENIED);
+    expect(() => controller.locate(courier.did, { lat: -1.28, lng: 36.82 } as never, asCourier)).not.toThrow(DENIED);
+
+    // What a driver has driven, run and been offered: themselves, their office, staff.
+    expect(() => controller.driverVehicles(fleetDriver.did, office)).not.toThrow(DENIED);
+    expect(() => controller.driverLegs(fleetDriver.did, asFleetDriver)).not.toThrow(DENIED);
+    expect(() => controller.driverOffers(courier.did, stranger)).toThrow(/theirs, their fleet office/);
+
+    // The fleet's dispatch desk and its own papers: the office — not a driver whose token names the fleet.
+    expect(() => controller.fleetDispatch(mgr.did, {} as never, asFleetDriver)).toThrow(/not yours/);
+    expect(() => controller.fleetAssign(mgr.did, { freightId: 'frt_none', driverDid: fleetDriver.did } as never, asFleetDriver)).toThrow(/not yours/);
+    expect(() => controller.fleetDispatch(mgr.did, {} as never, office)).not.toThrow(DENIED);
+    expect(() => controller.managerSubmitKyc(mgr.did, { businessRegCertRef: 'r', operatorLicenceRef: 'l', ownerIdRef: 'i', proofOfAddressRef: 'a' } as never, stranger)).toThrow(/not yours/);
+
+    // A shop's own settings, record and float: the shop, or staff.
+    const shop = onboardAgent('Routes Shop', 'RZ');
+    const asShop = { active: true, role: 'agent', did: shop.did } as never;
+    const shops: Array<(who: never) => unknown> = [
+      (who) => controller.topUp(shop.did, { amount: 50 } as never, who),
+      (who) => controller.setAgentPrice(shop.did, { price: 0.5 } as never, who),
+      (who) => controller.setAvailability(shop.did, { open: false } as never, who),
+      (who) => controller.deposit(shop.did, who),
+    ];
+    for (const act of shops) expect(() => act(stranger)).toThrow(/Only the shop/);
+    expect(() => controller.getAgent(shop.did, stranger)).toThrow(/not yours/);
+    expect(controller.getAgent(shop.did, asShop).did).toBe(shop.did);
+    expect(() => controller.setAvailability(shop.did, { open: true } as never, asShop)).not.toThrow(DENIED);
+    expect(() => controller.setAvailability(shop.did, { open: true } as never, staff)).not.toThrow(DENIED);
+  });
+
   it('FP3b: a delivery that could not be made is written down, the load stays in transit, and the sender is told', () => {
     const pickup = { lat: -1.88, lng: 36.38 };
     const d = coupleTipper('DF1', { min: 0.8, max: 1.5 });
@@ -6106,7 +6168,7 @@ describe('PUDO Light', () => {
     const [offer] = dispatch.suggestNearby(rider.did, origin.location, 5);
     expect(offer.ref).toBe(mine.code);
     dispatch.claim(offer.offerId);
-    controller.snoozeWork(rider.did, { minutes: 30 } as never);
+    controller.snoozeWork(rider.did, { minutes: 30 } as never, asDriver(rider.did));
 
     // The marketplace goes quiet on ALL surfaces at once — they share the gate, so they cannot disagree.
     expect(dispatch.suggestNearby(rider.did, origin.location, 5)).toEqual([]);
@@ -6118,7 +6180,7 @@ describe('PUDO Light', () => {
     expect(mdps.loadBag(mine.code, drivers.get(rider.did).badgeId!).moved).toEqual(['SNZ-1']);
 
     // It ends when they say…
-    controller.resumeWork(rider.did);
+    controller.resumeWork(rider.did, asDriver(rider.did));
     expect(dispatch.suggestNearby(rider.did, origin.location, 5).map((o) => o.ref)).toContain(other.code);
 
     // …or on its own, so a snooze nobody remembers cannot cost them an afternoon.
@@ -6271,9 +6333,9 @@ describe('PUDO Light', () => {
     expect(listed[0]).toMatchObject({ busy: false, plate: expect.any(String), capacityKg: 20_000 });
 
     // Naming a known vehicle starts the day exactly as scanning its dashboard would.
-    const asg: any = controller.startSession(d.did, { vehicleId: mine } as never);
+    const asg: any = controller.startSession(d.did, { vehicleId: mine } as never, asDriver(d.did));
     expect(asg.vehicleId).toBe(mine);
-    expect(() => controller.startSession(d.did, {} as never)).toThrow(/Scan the vehicle QR/);
+    expect(() => controller.startSession(d.did, {} as never, asDriver(d.did))).toThrow(/Scan the vehicle QR/);
 
     // Someone else on shift with it is SHOWN and marked, not hidden — "where is my bus?" deserves an answer.
     const other = drivers.register({ displayName: 'Other', fullName: 'O O', nationalId: 'ID-other-pick', mobile: '+2547other', licenceClasses: ['truck'], licenceNumber: 'L-o', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
@@ -6282,7 +6344,7 @@ describe('PUDO Light', () => {
     fleet.uncouple(d.did); // our driver hands it back at the end of the day…
     fleet.couple(other.did, mine); // …and it goes out with someone else
     expect(fleet.recentVehicles(other.did)[0]).toMatchObject({ vehicleId: mine, busy: true });
-    expect(() => controller.startSession(d.did, { vehicleId: mine } as never)).toThrow(/already coupled/i);
+    expect(() => controller.startSession(d.did, { vehicleId: mine } as never, asDriver(d.did))).toThrow(/already coupled/i);
   });
 
   it('refuses a leg that is off shift, or half-named', () => {
@@ -6308,10 +6370,10 @@ describe('PUDO Light', () => {
     const route = { from: owner.location, to: { lat: owner.location.lat + 3, lng: owner.location.lng + 3 } };
 
     // An EMPTY lot is an intention, not a load — nothing to plan around.
-    expect((controller.suggestWork(truck.did, route as never) as any).expected).toEqual([]);
+    expect((controller.suggestWork(truck.did, route as never, asDriver(truck.did)) as any).expected).toEqual([]);
 
     consignments.deposit(lot.code, 'farmer-A', 300); // 30% of a truckload, still open
-    const res: any = controller.suggestWork(truck.did, route as never);
+    const res: any = controller.suggestWork(truck.did, route as never, asDriver(truck.did));
     expect(res.expected).toHaveLength(1);
     expect(res.expected[0]).toMatchObject({ kind: 'consignment', code: lot.code, weightKg: 300, targetKg: 1000, fillPct: 30, pickupLabel: 'Co-op store' });
     // Nothing claimable rides on it: no offer, no ref — a driver plans, the co-op promises nothing.
@@ -6323,7 +6385,7 @@ describe('PUDO Light', () => {
 
     // Once it posts, it leaves the advisory list and becomes ordinary claimable freight.
     consignments.deposit(lot.code, 'farmer-B', 800); // → full → posts
-    const after: any = controller.suggestWork(truck.did, route as never);
+    const after: any = controller.suggestWork(truck.did, route as never, asDriver(truck.did));
     expect(after.expected).toEqual([]);
     expect(after.offers.some((o: any) => o.pickupLabel === 'Co-op store')).toBe(true);
   });
@@ -6455,7 +6517,7 @@ describe('PUDO Light', () => {
     rating.rateDriver({ driverDid: d.did, byAgentDid: 'a2', stars: 1 });
     rating.rateDriver({ driverDid: d.did, byAgentDid: 'a3', stars: 1 });
     expect(dispatch.suggest(d.did, { from: pickup, to: dest }).some((o) => o.ref === f.freightId)).toBe(false); // freight withheld
-    expect((controller.suggestWork(d.did, { from: pickup, to: dest } as never) as { freightPaused: boolean }).freightPaused).toBe(true); // live verdict for the app's note
+    expect((controller.suggestWork(d.did, { from: pickup, to: dest } as never, asDriver(d.did)) as { freightPaused: boolean }).freightPaused).toBe(true); // live verdict for the app's note
     expect(() => dispatch.claim(coldOffer.offerId)).toThrow(/network minimum|paused/i); // stale offer refused too
 
     // Recoverable: enough good ratings pull the average back over the floor → freight returns.

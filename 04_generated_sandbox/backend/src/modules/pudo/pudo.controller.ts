@@ -308,7 +308,8 @@ export class SbgController {
 
   /** Upload KYC documents (ID copy, trading licence, shop photos) → KYC_PENDING. */
   @Post('agents/:did/submit-kyc')
-  submitKyc(@Param('did') did: string, @Body() dto: SubmitKycDto) {
+  submitKyc(@Param('did') did: string, @Body() dto: SubmitKycDto, @Actor() actor: IntrospectionResult) {
+    this.assertAgentActs(did, actor);
     return this.agents.submitKyc(did, dto);
   }
 
@@ -321,7 +322,8 @@ export class SbgController {
 
   /** Record the refundable equipment/starter-kit deposit. */
   @Post('agents/:did/deposit')
-  deposit(@Param('did') did: string) {
+  deposit(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
+    this.assertAgentActs(did, actor);
     return this.agents.recordDeposit(did);
   }
 
@@ -1844,25 +1846,29 @@ export class SbgController {
   }
 
   @Post('agents/:did/ping')
-  ping(@Param('did') did: string) {
+  ping(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
+    this.assertAgentActs(did, actor);
     return this.agents.ping(did);
   }
 
   /** Agent marks the shop open or temporarily closed. */
   @Post('agents/:did/availability')
-  setAvailability(@Param('did') did: string, @Body() dto: AvailabilityDto) {
+  setAvailability(@Param('did') did: string, @Body() dto: AvailabilityDto, @Actor() actor: IntrospectionResult) {
+    this.assertAgentActs(did, actor);
     return this.agents.setAvailability(did, dto.open);
   }
 
   /** Set the weekly opening schedule (pickup window + ETA constraint). */
   @Post('agents/:did/hours')
-  setHours(@Param('did') did: string, @Body() dto: SetHoursDto) {
+  setHours(@Param('did') did: string, @Body() dto: SetHoursDto, @Actor() actor: IntrospectionResult) {
+    this.assertAgentActs(did, actor);
     return this.agents.setHours(did, dto.openingHours);
   }
 
   /** Reconfigure the shelf grid (rows × columns). */
   @Post('agents/:did/shelf')
-  setShelf(@Param('did') did: string, @Body() dto: ShelfDto) {
+  setShelf(@Param('did') did: string, @Body() dto: ShelfDto, @Actor() actor: IntrospectionResult) {
+    this.assertAgentActs(did, actor);
     return this.agents.setShelf(did, dto);
   }
 
@@ -1874,13 +1880,15 @@ export class SbgController {
 
   /** Move the shop's map pin (My-shop location editor). */
   @Post('agents/:did/location')
-  setLocation(@Param('did') did: string, @Body() dto: SetLocationDto) {
+  setLocation(@Param('did') did: string, @Body() dto: SetLocationDto, @Actor() actor: IntrospectionResult) {
+    this.assertAgentActs(did, actor);
     return this.agents.setLocation(did, { lat: dto.lat, lng: dto.lng });
   }
 
   /** Set (or clear) the shop-front photo shown on the My-shop dashboard. */
   @Post('agents/:did/shopfront')
-  setShopfront(@Param('did') did: string, @Body() dto: ShopfrontDto) {
+  setShopfront(@Param('did') did: string, @Body() dto: ShopfrontDto, @Actor() actor: IntrospectionResult) {
+    this.assertAgentActs(did, actor);
     return this.agents.setShopfront(did, dto.mediaId);
   }
 
@@ -1907,7 +1915,8 @@ export class SbgController {
 
   /** The shelf grid + free-slot availability for a PUDO. */
   @Get('agents/:did/shelf')
-  getShelf(@Param('did') did: string) {
+  getShelf(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
+    this.assertAgentOwner(did, actor);
     return { grid: this.shelf.grid(did), capacity: this.shelf.capacity(did), available: this.shelf.available(did) };
   }
 
@@ -1919,7 +1928,8 @@ export class SbgController {
   }
 
   @Get('agents/:did')
-  getAgent(@Param('did') did: string) {
+  getAgent(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
+    this.assertAgentOwner(did, actor);
     const a = this.agents.get(did);
     return { ...a, balance: this.agents.balance(did), currency: NETWORK_CURRENCY, rating: this.ratings.agentRating(did) };
   }
@@ -1944,12 +1954,16 @@ export class SbgController {
    * `code` to choose between the top-up and unlock prompts.
    */
   @Get('agents/:did/can-transact')
-  canTransact(@Param('did') did: string) {
+  canTransact(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
+    this.assertAgentOwner(did, actor);
     return this.gate.canTransact(did);
   }
 
   @Post('agents/:did/top-up')
-  topUp(@Param('did') did: string, @Body() dto: TopUpDto) {
+  topUp(@Param('did') did: string, @Body() dto: TopUpDto, @Actor() actor: IntrospectionResult) {
+    // Closes a STRANGER topping up somebody's float. It does not answer whose word a top-up rests on —
+    // the shop's own, today, standing in for a payment rail that does not exist: see progress.html.
+    this.assertAgentActs(did, actor);
     return this.gate.topUp(did, dto.amount, dto.bankRef);
   }
 
@@ -2239,7 +2253,8 @@ export class SbgController {
 
   /** Destination PUDO receives a whole bag → shelves each parcel + frees the tote (closes the tote leg). */
   @Post('agents/:did/receive-bag')
-  receiveBag(@Param('did') did: string, @Body() dto: ReceiveBagDto) {
+  receiveBag(@Param('did') did: string, @Body() dto: ReceiveBagDto, @Actor() actor: IntrospectionResult) {
+    this.assertAgentActs(did, actor);
     return this.mdps.deliverBag(did, dto.code);
   }
 
@@ -2327,6 +2342,18 @@ export class SbgController {
     this.agents.get(did); // 404 if unknown
     if (actor?.role !== 'operator' && (!actor?.did || actor.did !== did)) {
       throw new GlosError('FORBIDDEN', 'This shop is not yours to view');
+    }
+  }
+
+  /**
+   * What only the SHOP does — its hours, shelf, prices, pin, papers, float, the bags it receives — from its own
+   * sign-in, or network staff standing in for it. These took any valid token: any account could close a
+   * shop, reprice it, move its pin, or credit its float.
+   */
+  private assertAgentActs(did: string, actor: IntrospectionResult): void {
+    this.agents.get(did); // 404 if unknown
+    if (actor?.role !== 'operator' && (!actor?.did || actor.did !== did)) {
+      throw new GlosError('FORBIDDEN', 'Only the shop can do this, from its own sign-in');
     }
   }
 
@@ -2656,7 +2683,8 @@ export class SbgController {
 
   /** A PUDO agent sets its open-data per-parcel handling price. */
   @Patch('agents/:did/pricing')
-  setAgentPrice(@Param('did') did: string, @Body() dto: SetPriceDto) {
+  setAgentPrice(@Param('did') did: string, @Body() dto: SetPriceDto, @Actor() actor: IntrospectionResult) {
+    this.assertAgentActs(did, actor);
     return this.agents.setPrice(did, dto.price);
   }
 
@@ -3624,7 +3652,7 @@ export class SbgController {
   /** The fleet itself (its token's tenant), or network staff. Anyone else is told the fleet is not theirs. */
   private assertFleetSelf(did: string, actor: IntrospectionResult): void {
     this.managers.get(did); // 404 if unknown
-    if (actor?.role !== 'operator' && actingTenant(actor) !== did) throw new GlosError('FORBIDDEN', 'This fleet is not yours');
+    if (actor?.role !== 'operator' && !this.isFleetOffice(actor, did)) throw new GlosError('FORBIDDEN', 'This fleet is not yours');
   }
 
   /**
@@ -3688,7 +3716,7 @@ export class SbgController {
   @Roles('fleet_manager', 'operator')
   @Post('fleet/managers/:did/code/rotate')
   rotateManagerCode(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
-    if (actor?.role !== 'operator' && actingTenant(actor) !== did) throw new GlosError('FORBIDDEN', 'This fleet is not yours');
+    this.assertFleetSelf(did, actor);
     const m = this.managers.rotateCode(did);
     // The fleet's contact address hears about it — without the code, which only the Fleet app shows.
     if (m.contactEmail) void this.mail?.send('fleet-code-issued', { address: m.contactEmail, name: m.companyName }, { company: m.companyName, when: m.codeRotatedAt!, byStaff: actor?.role === 'operator' });
@@ -3697,7 +3725,8 @@ export class SbgController {
 
   /** Upload business KYC (registration cert, operator licence, owner ID, proof of address) → KYC_PENDING. */
   @Post('fleet/managers/:did/submit-kyc')
-  managerSubmitKyc(@Param('did') did: string, @Body() dto: ManagerKycDto) {
+  managerSubmitKyc(@Param('did') did: string, @Body() dto: ManagerKycDto, @Actor() actor: IntrospectionResult) {
+    this.assertFleetSelf(did, actor);
     return this.managers.submitKyc(did, dto);
   }
 
@@ -3805,6 +3834,21 @@ export class SbgController {
     const driver = this.drivers.get(did); // 404 if unknown
     if (actor?.role === 'operator' || (actor?.did && actor.did === did) || this.isFleetOffice(actor, driver.managerDid)) return driver;
     throw new GlosError('FORBIDDEN', 'A driver’s record is theirs, their fleet office’s and the network’s to read');
+  }
+
+  /**
+   * What only the DRIVER does — from their own sign-in — or network staff standing in for them.
+   *
+   * Where they are, whether their shift is running, which road they are taking, whether they want work
+   * right now, the least a job must pay them. These took any valid token, so any account could end any
+   * driver's shift, snooze them off the market, or move their dot on the map. Not the fleet office either:
+   * a position is a claim about the driver's own phone, and the earnings floor is the driver's own decision
+   * about their own time — the office has its own controls (couple, assign a corridor, dispatch a load).
+   */
+  private assertDriverActs(did: string, actor: IntrospectionResult): FleetDriver {
+    const driver = this.drivers.get(did); // 404 if unknown
+    if (actor?.role === 'operator' || (actor?.did && actor.did === did)) return driver;
+    throw new GlosError('FORBIDDEN', 'Only the driver can do this, from their own sign-in');
   }
 
   // --- fleet: drivers (own ID, staged onboarding) ---
@@ -4006,7 +4050,8 @@ export class SbgController {
 
   /** Heavy registry: upload ID + licence copy → KYC_PENDING. */
   @Post('fleet/drivers/:did/submit-kyc')
-  driverSubmitKyc(@Param('did') did: string, @Body() dto: DriverKycDto) {
+  driverSubmitKyc(@Param('did') did: string, @Body() dto: DriverKycDto, @Actor() actor: IntrospectionResult) {
+    this.assertDriverInFleet(did, actor);
     return this.drivers.submitKyc(did, dto);
   }
 
@@ -4023,7 +4068,8 @@ export class SbgController {
   }
 
   @Post('fleet/drivers/:did/ping')
-  pingDriver(@Param('did') did: string) {
+  pingDriver(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
+    this.assertDriverActs(did, actor);
     return this.drivers.ping(did);
   }
 
@@ -4056,7 +4102,8 @@ export class SbgController {
 
   /** Driver starts a shift by scanning the vehicle's dashboard QR → couples them for the day. */
   @Post('fleet/drivers/:did/start-session')
-  startSession(@Param('did') did: string, @Body() dto: StartSessionDto) {
+  startSession(@Param('did') did: string, @Body() dto: StartSessionDto, @Actor() actor: IntrospectionResult) {
+    this.assertDriverActs(did, actor);
     // Naming a vehicle they have driven before is the same act as scanning it — the coupling rules (licence,
     // usable vehicle, nobody else on it) are what actually protect this, and they run either way.
     if (dto.vehicleId?.trim()) return this.fleet.couple(did, dto.vehicleId.trim(), undefined, dto.leg);
@@ -4066,7 +4113,8 @@ export class SbgController {
 
   /** The vehicles this driver has driven before — the "which one today?" list, before they reach the yard. */
   @Get('fleet/drivers/:did/vehicles')
-  driverVehicles(@Param('did') did: string) {
+  driverVehicles(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
+    this.assertDriverReader(did, actor);
     return { vehicles: this.fleet.recentVehicles(did) };
   }
 
@@ -4075,7 +4123,8 @@ export class SbgController {
    * reached Addis turns round, and the loads worth telling them about are now the ones on the road back.
    */
   @Post('fleet/drivers/:did/leg')
-  declareLeg(@Param('did') did: string, @Body() dto: DeclareLegDto) {
+  declareLeg(@Param('did') did: string, @Body() dto: DeclareLegDto, @Actor() actor: IntrospectionResult) {
+    this.assertDriverActs(did, actor);
     return this.fleet.declareLeg(did, dto);
   }
 
@@ -4087,13 +4136,15 @@ export class SbgController {
    * already know. This is the way back for the driver who was only doing that one bag as a favour.
    */
   @Post('fleet/drivers/:did/derived-leg')
-  setDerivedLeg(@Param('did') did: string, @Body() dto: DerivedLegDto) {
+  setDerivedLeg(@Param('did') did: string, @Body() dto: DerivedLegDto, @Actor() actor: IntrospectionResult) {
+    this.assertDriverActs(did, actor);
     return this.fleet.setDerivedLeg(did, dto.on);
   }
 
   /** The roads this driver has run before — offered instead of making them name two places every morning. */
   @Get('fleet/drivers/:did/legs')
-  driverLegs(@Param('did') did: string) {
+  driverLegs(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
+    this.assertDriverReader(did, actor);
     return { legs: this.fleet.recentLegs(did) };
   }
 
@@ -4102,7 +4153,8 @@ export class SbgController {
    * is no corridor to name — there is a district, and it moves with them.
    */
   @Post('fleet/drivers/:did/area')
-  declareArea(@Param('did') did: string, @Body() dto: DeclareAreaDto) {
+  declareArea(@Param('did') did: string, @Body() dto: DeclareAreaDto, @Actor() actor: IntrospectionResult) {
+    this.assertDriverActs(did, actor);
     return this.fleet.declareArea(did, dto.radiusKm);
   }
 
@@ -4111,19 +4163,22 @@ export class SbgController {
    * Stops NEW work only: whatever they are already carrying is still theirs to hand over and deliver.
    */
   @Post('fleet/drivers/:did/snooze')
-  snoozeWork(@Param('did') did: string, @Body() dto: SnoozeDto) {
+  snoozeWork(@Param('did') did: string, @Body() dto: SnoozeDto, @Actor() actor: IntrospectionResult) {
+    this.assertDriverActs(did, actor);
     return this.fleet.snooze(did, dto.minutes);
   }
 
   /** Take work again, now. */
   @Post('fleet/drivers/:did/resume')
-  resumeWork(@Param('did') did: string) {
+  resumeWork(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
+    this.assertDriverActs(did, actor);
     return this.fleet.resume(did);
   }
 
   /** Find work AROUND me rather than along a road — the same marketplace, matched by distance. */
   @Post('fleet/drivers/:did/suggest-nearby')
-  suggestNearby(@Param('did') did: string, @Body() dto: SuggestNearbyDto) {
+  suggestNearby(@Param('did') did: string, @Body() dto: SuggestNearbyDto, @Actor() actor: IntrospectionResult) {
+    this.assertDriverActs(did, actor); // it moves their dot on the map as well as reading offers
     this.fleet.reportLocation(did, dto.at); // where they say they are IS their live position
     const offers = this.dispatch.suggestNearby(did, dto.at, dto.radiusKm, Date.now(), dto.minEarn);
     return {
@@ -4137,7 +4192,8 @@ export class SbgController {
 
   /** Driver closes the shift → decouples driver + vehicle. */
   @Post('fleet/drivers/:did/end-session')
-  endSession(@Param('did') did: string) {
+  endSession(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
+    this.assertDriverActs(did, actor);
     return this.fleet.endSession(did);
   }
 
@@ -4150,7 +4206,8 @@ export class SbgController {
    * and still be interrupted at the wheel for a job beneath it.
    */
   @Post('fleet/drivers/:did/min-earn')
-  setNudgeMinEarn(@Param('did') did: string, @Body() dto: NudgeMinEarnDto) {
+  setNudgeMinEarn(@Param('did') did: string, @Body() dto: NudgeMinEarnDto, @Actor() actor: IntrospectionResult) {
+    this.assertDriverActs(did, actor); // the driver's own floor — never the office's to set
     return this.drivers.setNudgeMinEarn(did, dto.amount);
   }
 
@@ -4188,7 +4245,8 @@ export class SbgController {
    * behaviour is unchanged.
    */
   @Post('agents/:did/totes')
-  registerAgentTote(@Param('did') did: string, @Body() dto: OpenBagDto) {
+  registerAgentTote(@Param('did') did: string, @Body() dto: OpenBagDto, @Actor() actor: IntrospectionResult) {
+    this.assertAgentActs(did, actor);
     // Every field is optional, so a bodyless call still means "just a bare tote" — and unlike a union
     // type, this one the schema emitter can actually describe.
     if (dto?.destZone) return this.mdps.openShopBag(did, dto.destZone);
@@ -4712,7 +4770,8 @@ export class SbgController {
 
   /** A driver declares a route A→B → the platform suggests the loads sitting on the way. */
   @Post('fleet/drivers/:did/suggest-work')
-  suggestWork(@Param('did') did: string, @Body() dto: SuggestRouteDto) {
+  suggestWork(@Param('did') did: string, @Body() dto: SuggestRouteDto, @Actor() actor: IntrospectionResult) {
+    this.assertDriverActs(did, actor); // it moves their dot on the map as well as reading offers
     const offers = this.dispatch.suggest(did, dto, Date.now(), dto.minEarn); // S34c — the driver's min-earning filter
     this.fleet.reportLocation(did, dto.from); // the driver is at the route start → live map
     // F3 — what is COMING but cannot be taken yet: consolidation lots still filling along this route. Advisory
@@ -4726,7 +4785,8 @@ export class SbgController {
 
   /** Driver GPS heartbeat — updates the vehicle's position on the live fleet map. */
   @Post('fleet/drivers/:did/locate')
-  locate(@Param('did') did: string, @Body() dto: LocateDto) {
+  locate(@Param('did') did: string, @Body() dto: LocateDto, @Actor() actor: IntrospectionResult) {
+    this.assertDriverActs(did, actor);
     const a = this.fleet.reportLocation(did, dto);
     return { located: Boolean(a), location: a?.location };
   }
@@ -4751,7 +4811,8 @@ export class SbgController {
   }
 
   @Get('fleet/drivers/:did/offers')
-  driverOffers(@Param('did') did: string) {
+  driverOffers(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
+    this.assertDriverReader(did, actor);
     return this.dispatch.activeOffersFor(did);
   }
 

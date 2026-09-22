@@ -720,9 +720,11 @@ const run = async () => {
   // A GPS heartbeat each, so the live map has something on it. Positions ON THE ROAD between the shops
   // rather than at them: a dot sitting exactly on a shop is indistinguishable from a dot that has not
   // moved, and the one thing this map exists to show is movement.
+  // A position is a claim about the driver's own phone, so the fleet office may not post one; the seed
+  // stands in as network staff, the only other caller the route accepts.
   const heartbeat = async (driver, lat, lng) => {
     if (!driver) return;
-    await req('POST', `/v1/sbg/fleet/drivers/${encodeURIComponent(driver.did)}/locate`, { token: fm, body: { lat, lng } });
+    await req('POST', `/v1/sbg/fleet/drivers/${encodeURIComponent(driver.did)}/locate`, { token: op, body: { lat, lng } });
   };
   await heartbeat(amos, -1.2942, 36.8331); // between Mama Sarah (Z-A) and Riverside (Z-B)
   await heartbeat(graceNow?.status === 'ACTIVE' ? graceNow : null, -1.2881, 36.8198); // near Downtown Kiosk

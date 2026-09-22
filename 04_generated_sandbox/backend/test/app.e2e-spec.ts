@@ -615,10 +615,13 @@ describe('GLOS backend (e2e)', () => {
     const driver = await request(http).post('/v1/sbg/drivers').set(auth).send({ driverDid: 'did:glos:bus1', name: 'John', corridorId: corridor.body.corridorId }).expect(201);
 
     // Screen 1 Accept → Screen 2 Handover → arrive → Screen 3 Pickup (OTP).
-    await request(http).post('/v1/sbg/parcels/accept').set(auth).send({ agentDid: origin, parcelId: 'E2E-QR-1', size: 'M', destZone: 'SouthTown', senderMobile: '+254700', receiverMobile: '+254711', dropoffPhotoRef: 'drop.jpg' }).expect(201);
+    // The release code is minted at intake and held by the sender from that moment — never handed back on
+    // arrival, because the shop that releases a parcel must never learn its secret (see parcel-release-secret).
+    const accepted = await request(http).post('/v1/sbg/parcels/accept').set(auth).send({ agentDid: origin, parcelId: 'E2E-QR-1', size: 'M', destZone: 'SouthTown', senderMobile: '+254700', receiverMobile: '+254711', dropoffPhotoRef: 'drop.jpg' }).expect(201);
     await request(http).post('/v1/sbg/parcels/handover').set(auth).send({ agentDid: origin, driverBadgeId: driver.body.badgeId, parcelIds: ['E2E-QR-1'] }).expect(201);
     const arrival = await request(http).post('/v1/sbg/parcels/E2E-QR-1/arrive').set(auth).send({ destAgentDid: dest }).expect(201);
-    const delivered = await request(http).post('/v1/sbg/parcels/E2E-QR-1/pickup').set(auth).send({ agentDid: dest, otp: arrival.body.otp, deliveredPhotoRef: 'del.jpg' }).expect(201);
+    expect(arrival.body.otp).toBeUndefined();
+    const delivered = await request(http).post('/v1/sbg/parcels/E2E-QR-1/pickup').set(auth).send({ agentDid: dest, otp: accepted.body.otp, deliveredPhotoRef: 'del.jpg' }).expect(201);
     expect(delivered.body.status).toBe('Delivered');
 
     // Tier-1 customer rates → graduates into the shared reputation core.
