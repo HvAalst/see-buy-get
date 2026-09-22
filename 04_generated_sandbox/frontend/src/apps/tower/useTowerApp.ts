@@ -258,6 +258,8 @@ export interface TowerActions {
   movePayout(payoutId: string, action: PayoutAction, reason?: string): Promise<void>;
   /** Move one funding request along. the provider reference is what a confirmation cannot do without. */
   moveFunding(fundingId: string, action: FundingAction, input?: { providerRef?: string; amount?: number; reason?: string }): Promise<void>;
+  /** Say whose an unattributed payment was, and credit it. A judgement — the server records the name. */
+  applyFunding(unmatchedId: string, payerKind: 'agent' | 'vendor', payerDid: string): Promise<void>;
   lookupParcel(parcelId: string): Promise<void>;
   reissueRelease(parcelId: string): Promise<void>;
   dismissReissued(): void;
@@ -466,11 +468,15 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
      * its own lesson: a refusal a screen handles quietly is still a screen asking for something it knows
      * it may not have.
      */
-    const [books, payouts, finance, funding] = await Promise.all([
+    const [books, payouts, finance, funding, shops] = await Promise.all([
       client.api.books(entityId),
       client.api.payouts(entityId),
       staff ? client.api.finance() : Promise.resolve({ error: null, data: null } as never),
       client.api.funding(entityId),
+      // The shop list, so that attributing a stray payment can offer NAMES to pick from rather than
+      // asking somebody to paste a DID. Staff only — it is the same list the overview reads, and a
+      // company administrator never sees the unattributed pile that needs it.
+      staff ? client.api.agents() : Promise.resolve({ error: null, data: null } as never),
     ]);
     setState((s) => ({
       ...s,
@@ -483,6 +489,9 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       // so nothing is filtered here — "which company am I" is a question the token already answered.
       funding: funding.error ? null : (narrow<{ items: FundingRow[] }>(funding.data)?.items ?? []),
       unmatched: funding.error ? [] : (narrow<{ unmatched: UnmatchedRow[] }>(funding.data)?.unmatched ?? []),
+      // Kept as-is on a failure rather than emptied: "we could not ask" must never wear "there are no
+      // shops" clothes, and here it would mean a stray payment looked unattributable to anybody.
+      agents: shops.error ? s.agents : (narrow<AgentRow[]>(shops.data) ?? s.agents),
     }));
   }, []);
 
@@ -1275,6 +1284,25 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
           return;
         }
         setState((s) => ({ ...s, busyId: null, done: t('tower.money.in.moved', { action }) }));
+        await loadMoney(client, entityId);
+      },
+      /**
+       * SAY WHOSE AN UNATTRIBUTED PAYMENT WAS.
+       *
+       * The only way out of that list. It credits real money on one person's judgement, so the name that
+       * goes into the record comes from the signed token, not from anything typed here.
+       */
+      applyFunding: async (unmatchedId: string, payerKind: 'agent' | 'vendor', payerDid: string) => {
+        const client = clientRef.current;
+        const entityId = stateRef.current.entityId;
+        if (!client || !entityId) return;
+        setState((s) => ({ ...s, busyId: unmatchedId, queueError: null }));
+        const { error } = await client.api.applyFunding(unmatchedId, payerKind, payerDid, stateRef.current.who?.name);
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, done: t('tower.money.in.applied') }));
         await loadMoney(client, entityId);
       },
       lookupParcel,

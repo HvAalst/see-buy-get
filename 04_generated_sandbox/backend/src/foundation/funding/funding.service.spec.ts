@@ -51,7 +51,7 @@ describe('money coming in', () => {
 
   /** A confirmation as it arrives from the rail, signed — never a hand-built RailPayment, because the
    *  signature check is the thing that makes a webhook better than the shop's own word. */
-  function railSays(fields: { providerRef: string; reference?: string; amount: number; fee?: number }): RailPayment {
+  function railSays(fields: { providerRef: string; reference?: string; amount: number; fee?: number; currency?: string }): RailPayment {
     const { headers, body } = rail.simulate({ currency: 'KES', ...fields });
     return rail.verify(headers, body);
   }
@@ -198,6 +198,57 @@ describe('money coming in', () => {
       const { unmatched } = funding.confirm({ provider: 'statement', providerRef: 'BANK-991', reference: request.reference, amount: 5000, currency: 'KES' });
       expect(unmatched?.reason).toMatch(/already paid via sandbox/);
       expect(credited).toHaveLength(1);
+    });
+  });
+
+  describe('saying whose an unattributed payment was', () => {
+    /** Money in the account with nobody's name on it — the state an operator has to get out of. */
+    const orphan = (amount = 400, currency = 'KES') => funding.confirm(railSays({ providerRef: `MPX${amount}`, amount, currency })).unmatched!;
+
+    it('credits it through the same path a matched payment takes', () => {
+      // The books must not be able to tell the two apart — one crediting path, never two.
+      const held = orphan(400);
+      const { funding: made } = funding.apply(held.id, { payerKind: 'agent', payerDid: 'did:shop:njeri' }, 'Amina Otieno');
+      expect(credited).toEqual([{ payerDid: 'did:shop:njeri', gross: 400, fee: 0, reference: 'MPX400' }]);
+      expect(made.status).toBe('confirmed');
+      expect(made.providerRef).toBe('MPX400');
+      expect(made.payerName).toBe('Mama Njeri Shop');
+    });
+
+    it('keeps who decided, and when — because this was a judgement', () => {
+      const held = orphan(400);
+      funding.apply(held.id, { payerKind: 'agent', payerDid: 'did:shop:njeri' }, 'Amina Otieno');
+      const [record] = funding.unmatchedPayments(true);
+      expect(record.appliedBy).toBe('Amina Otieno');
+      expect(record.appliedAt).toBeTruthy();
+      expect(record.appliedTo).toBeTruthy();
+    });
+
+    it('takes it off the chase list, without deleting the record', () => {
+      const held = orphan(400);
+      funding.apply(held.id, { payerKind: 'agent', payerDid: 'did:shop:njeri' }, 'Amina');
+      expect(funding.unmatchedPayments()).toHaveLength(0);
+      expect(funding.unmatchedPayments(true)).toHaveLength(1);
+    });
+
+    it('refuses to apply the same payment twice', () => {
+      // It arrived once. Applying it twice credits a shop twice, and it is the easiest mistake on the
+      // whole screen to make — two operators, one phone call, one list.
+      const held = orphan(400);
+      funding.apply(held.id, { payerKind: 'agent', payerDid: 'did:shop:njeri' }, 'Amina');
+      expect(() => funding.apply(held.id, { payerKind: 'agent', payerDid: 'did:shop:njeri' }, 'Brian')).toThrow(/already applied/);
+      expect(credited).toHaveLength(1);
+    });
+
+    it('refuses a payer with no account to credit', () => {
+      const held = orphan(400);
+      expect(() => funding.apply(held.id, { payerKind: 'agent', payerDid: 'did:shop:nowhere' }, 'Amina')).toThrow(/no sister holds money/);
+    });
+
+    it('refuses to apply a payment in another currency, rather than converting it', () => {
+      const held = orphan(400, 'USD');
+      expect(() => funding.apply(held.id, { payerKind: 'agent', payerDid: 'did:shop:njeri' }, 'Amina')).toThrow(/invent an exchange rate/);
+      expect(credited).toEqual([]);
     });
   });
 

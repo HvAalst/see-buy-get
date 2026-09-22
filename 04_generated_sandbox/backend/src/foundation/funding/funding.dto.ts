@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNumber, IsOptional, IsPositive, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsIn, IsNumber, IsOptional, IsPositive, IsString, MaxLength, MinLength } from 'class-validator';
 
 /**
  * A member of staff confirming a payment they can see on a bank statement.
@@ -49,6 +49,31 @@ export class SimulateFundingDto extends ConfirmFundingDto {
   @IsString()
   @MaxLength(40)
   reference?: string;
+}
+
+/**
+ * Whose the unattributed payment was.
+ *
+ * Both fields required, and no defaulting to "agent": a shop's float and a store's prepaid balance are
+ * different liabilities of ours, and guessing which one a bare id belongs to is how a payment ends up on
+ * the wrong book.
+ */
+export class ApplyFundingDto {
+  @ApiProperty({ enum: ['agent', 'vendor'], description: 'A shop (agent) or a store (vendor).' })
+  @IsIn(['agent', 'vendor'])
+  payerKind: 'agent' | 'vendor';
+
+  @ApiProperty({ description: 'The shop’s DID or the store’s id — chosen from a list, never typed.' })
+  @IsString()
+  @MinLength(3)
+  @MaxLength(120)
+  payerDid: string;
+
+  @ApiPropertyOptional({ description: 'The person deciding. Recorded on the payment, because this is a judgement.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  by?: string;
 }
 
 /** Why a funding request failed, expired or was reversed. Always in words somebody can act on. */

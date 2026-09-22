@@ -1870,6 +1870,18 @@ export const enTowerMoney = {
     'Payments that arrived quoting no reference, or one nobody is waiting on. They are recorded and deliberately NOT posted: we do not know whose book they belong in, and a guess in the books is worse than a hole in them. That is also why they are listed whichever company is selected — they belong to none of them yet.',
   'tower.money.in.unmatchedCol.from': 'From',
   'tower.money.in.unmatchedCol.why': 'Why it could not be matched',
+  'tower.money.in.act.apply': 'Say whose this is',
+  'tower.money.in.applyTitle': 'Whose payment was this?',
+  'tower.money.in.applyBody': 'Reference {ref}. It could not be matched because {reason}.',
+  'tower.money.in.applyCaveat':
+    'This credits the money to whoever you pick, and it can only be done once — the payment arrived once. Your name is recorded against it.',
+  'tower.money.in.applySuggest': 'Waiting for a payment like this',
+  'tower.money.in.applyAsked': 'asked for {amount} · quoted {ref}',
+  'tower.money.in.applyAnyShop': 'Or any shop',
+  'tower.money.in.applySearch': 'Search shops by name or zone',
+  'tower.money.in.applyNoFloat': 'no float here',
+  'tower.money.in.applyNoMatch': 'No shop matches that.',
+  'tower.money.in.applied': 'Recorded — the payment is credited.',
 
   'tower.money.ledgerTitle': 'The network’s own ledger',
   'tower.money.todayRevenue': 'today’s fees {amount}',

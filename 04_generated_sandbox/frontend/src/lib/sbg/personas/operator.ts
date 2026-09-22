@@ -140,6 +140,20 @@ export function createOperatorApi(sbg: SbgClient) {
     simulateFunding: (fundingId: string, providerRef: string, amount: number) =>
       sbg.request((c) => c.POST('/v1/rails/funding/{fundingId}/simulate', { params: { path: { fundingId } }, body: { providerRef, amount } })),
 
+    /**
+     * Say whose an unattributed payment was, and credit it.
+     *
+     * The only way out of the unmatched list, and a JUDGEMENT rather than a rule — somebody rang the shop.
+     * The server records who made it, so this is one of the few actions that carries a name into the books.
+     */
+    applyFunding: (unmatchedId: string, payerKind: 'agent' | 'vendor', payerDid: string, by?: string) =>
+      sbg.request((c) =>
+        c.POST('/v1/rails/funding/unmatched/{id}/apply', {
+          params: { path: { id: unmatchedId } },
+          body: { payerKind, payerDid, ...(by ? { by } : {}) },
+        }),
+      ),
+
     /** Close a request nobody paid, or take back one that bounced. */
     moveFunding: (fundingId: string, action: 'fail' | 'expire' | 'reverse', reason: string) =>
       sbg.request((c) =>

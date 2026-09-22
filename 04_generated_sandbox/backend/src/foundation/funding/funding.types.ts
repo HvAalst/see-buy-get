@@ -110,8 +110,8 @@ export class Funding {
  * take apart afterwards. So it is recorded here, in full, where an operator can see it and chase it, and
  * the books stay silent about money they cannot name.
  *
- * (Applying one of these to a shop by hand is a real and missing step — it is a named gap, not an
- * oversight. Until it exists the honest answer to "where did my top-up go" is this list.)
+ * A person can APPLY one — say whose it is and have it credited. That is the only way out of this list,
+ * it is deliberately a judgement rather than a rule, and the record keeps who made it: see `appliedAt`.
  */
 export class UnmatchedPayment {
   id: string;
@@ -127,6 +127,19 @@ export class UnmatchedPayment {
   at: string;
   /** Why it could not be attributed, in words an operator can act on. */
   reason: string;
+  /**
+   * WHEN SOMEBODY WORKED OUT WHOSE IT WAS.
+   *
+   * Kept rather than deleted, and this is the whole point of the record: the money arrived unattributed
+   * and was later attributed BY A PERSON, on their judgement, and that is a different fact from a payment
+   * the rail matched itself. An auditor asking "why is this shop's float 400 higher" gets the payment,
+   * the person, and the moment — instead of a credit that looks exactly like every other one.
+   */
+  appliedAt?: string;
+  /** The funding record the applied payment became, so the books can be walked to from here. */
+  appliedTo?: string;
+  /** Who decided. Never a role — a name. */
+  appliedBy?: string;
 }
 
 /** What the rail is asked to set up. Deliberately tiny, like its outbound twin. */

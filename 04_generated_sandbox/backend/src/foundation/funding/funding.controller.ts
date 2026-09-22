@@ -9,7 +9,7 @@ import { GlosError } from '../http/glos-error';
 import { isSandbox } from '../runtime/sandbox';
 import { FundingService } from './funding.service';
 import { FUNDING_RAIL, FundingRail } from './funding.types';
-import { ConfirmFundingDto, FundingFailureDto, SimulateFundingDto } from './funding.dto';
+import { ApplyFundingDto, ConfirmFundingDto, FundingFailureDto, SimulateFundingDto } from './funding.dto';
 
 /**
  * The door money comes in through, and the operator's view of what is standing outside it.
@@ -137,6 +137,19 @@ export class FundingController {
       paidAt: new Date().toISOString(),
     });
     return this.callback(this.rail.provider, headers, body);
+  }
+
+  /**
+   * SAY WHOSE AN UNATTRIBUTED PAYMENT WAS, and credit it.
+   *
+   * The only way out of the unmatched list. A person looked at a payment with a mistyped reference, rang
+   * the shop, and now says it is theirs — so their name goes on it, from the token rather than the body.
+   * The route is under `unmatched/` because the id is a payment, never a funding request.
+   */
+  @Roles('operator')
+  @Post('unmatched/:id/apply')
+  applyUnmatched(@Param('id') id: string, @Body() dto: ApplyFundingDto, @Actor() actor: IntrospectionResult) {
+    return this.funding.apply(id, { payerKind: dto.payerKind, payerDid: dto.payerDid }, auditActor(actor, dto.by));
   }
 
   /** The payer said no, or the rail did. Nothing moved, so nothing is unwound. */

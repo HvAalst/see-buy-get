@@ -207,6 +207,38 @@
         }
       }
     },
+    "/v1/rails/funding/unmatched/{id}/apply": {
+      "post": {
+        "operationId": "Funding.applyUnmatched",
+        "summary": "",
+        "description": "SAY WHOSE AN UNATTRIBUTED PAYMENT WAS, and credit it.\n\nThe only way out of the unmatched list. A person looked at a payment with a mistyped reference, rang\nthe shop, and now says it is theirs — so their name goes on it, from the token rather than the body.\nThe route is under `unmatched/` because the id is a payment, never a funding request.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyFundingDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/rails/funding/{fundingId}/fail": {
       "post": {
         "operationId": "Funding.fail",
@@ -17562,6 +17594,34 @@
         "required": [
           "providerRef",
           "amount"
+        ]
+      },
+      "ApplyFundingDto": {
+        "type": "object",
+        "properties": {
+          "payerKind": {
+            "type": "string",
+            "enum": [
+              "agent",
+              "vendor"
+            ],
+            "description": "A shop (agent) or a store (vendor)."
+          },
+          "payerDid": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 120,
+            "description": "The shop’s DID or the store’s id — chosen from a list, never typed."
+          },
+          "by": {
+            "type": "string",
+            "maxLength": 80,
+            "description": "The person deciding. Recorded on the payment, because this is a judgement."
+          }
+        },
+        "required": [
+          "payerKind",
+          "payerDid"
         ]
       },
       "FundingFailureDto": {

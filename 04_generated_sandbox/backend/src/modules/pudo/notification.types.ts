@@ -68,6 +68,18 @@ export const NOTIFICATION_KINDS = [
   'box_due',
   'signup_incomplete',
   'signup_rejected',
+  /**
+   * A PAYMENT THE SHOP MADE WAS CONFIRMED — or came back.
+   *
+   * Since money coming in stopped resting on the payer's word, a shop pays at a kiosk and then waits: the
+   * confirmation arrives on a provider's callback minutes later, and until this existed the only way to
+   * learn of it was to reopen the app and press "Check again". A shopkeeper standing at a counter, unable
+   * to scan, refreshing a screen, is the worst moment this network has to offer.
+   *
+   * One kind for both directions. The title says which, exactly as `papers_checked` covers a licence that
+   * was recorded and one that was refused: what a reader wants is the outcome, not a taxonomy.
+   */
+  'money_in',
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 

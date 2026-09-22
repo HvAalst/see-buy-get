@@ -1,5 +1,6 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, Optional, OnModuleInit } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
+import { NotificationService } from './notification.service';
 import { FundingService } from '../../foundation/funding/funding.service';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { currencyForJurisdiction } from '../../foundation/money/currency';
@@ -32,6 +33,9 @@ export class FundingPayerRegistrar implements OnModuleInit {
     private readonly agents: AgentService,
     private readonly vendors: VendorService,
     private readonly entities: EntityService,
+    /** @Optional so the many specs that hand-list this module's providers keep compiling — the
+     *  established pattern here, and the reason 334 tests once went red in one edit. */
+    @Optional() private readonly notifications?: NotificationService,
   ) {}
 
   onModuleInit(): void {
@@ -43,8 +47,16 @@ export class FundingPayerRegistrar implements OnModuleInit {
         }
         return { ...this.money(this.agents.entityIdOf(agent)), label: agent.shopName };
       },
-      credit: (did, c) => ({ entryId: this.gate.topUp(did, c.gross, c.reference, c.fee).entryId ?? '' }),
-      reverse: (did, c) => ({ entryId: this.gate.reverseTopUp(did, c.gross, c.reference)?.entryId ?? '' }),
+      credit: (did, c) => {
+        const entry = this.gate.topUp(did, c.gross, c.reference, c.fee);
+        this.tellShop(did, c.gross, entry.currency, 'in');
+        return { entryId: entry.entryId ?? '' };
+      },
+      reverse: (did, c) => {
+        const entry = this.gate.reverseTopUp(did, c.gross, c.reference);
+        this.tellShop(did, c.gross, entry?.currency, 'back');
+        return { entryId: entry?.entryId ?? '' };
+      },
     });
 
     this.funding.register('vendor', {
@@ -52,9 +64,54 @@ export class FundingPayerRegistrar implements OnModuleInit {
         const vendor = this.vendors.get(vendorId);
         return { ...this.money(this.vendors.entityIdOf(vendor)), label: vendor.name };
       },
-      credit: (vendorId, c) => ({ entryId: this.vendors.topUpConfirmed(vendorId, c.gross, c.reference, c.fee).entryId }),
-      reverse: (vendorId, c) => ({ entryId: this.vendors.reverseTopUp(vendorId, c.gross, c.reference).entryId }),
+      credit: (vendorId, c) => {
+        const done = this.vendors.topUpConfirmed(vendorId, c.gross, c.reference, c.fee);
+        this.tellStore(vendorId, 'balance_topped_up', c, done.vendor.balance);
+        return { entryId: done.entryId };
+      },
+      reverse: (vendorId, c) => {
+        const done = this.vendors.reverseTopUp(vendorId, c.gross, c.reference);
+        this.tellStore(vendorId, 'balance_returned', c, done.vendor.balance);
+        return { entryId: done.entryId };
+      },
     });
+  }
+
+  /**
+   * TELL THE SHOP, on the channel a shopkeeper actually reads.
+   *
+   * They paid at a kiosk and walked back to the counter. The confirmation lands minutes later on a
+   * provider's callback, and without this the only way to find out is to reopen the app and press "Check
+   * again" — which is a person standing at a till, unable to scan, refreshing a screen.
+   *
+   * Kept SHORT on purpose: this is read on a lock screen, which is the lesson the papers notifications
+   * cost us (164 characters down to 95). Failures are swallowed — a notification that will not send must
+   * never undo a payment that did arrive.
+   */
+  private tellShop(did: string, amount: number, currency: string | undefined, direction: 'in' | 'back'): void {
+    const money = `${currency ?? ''} ${amount.toFixed(2)}`.trim();
+    const payload =
+      direction === 'in'
+        ? { title: 'Your payment came through', body: `${money} is in your wallet. You can scan again.` }
+        : { title: 'A payment was taken back', body: `${money} was returned by the payment provider.` };
+    void this.notifications
+      ?.notify(did, { kind: 'money_in', ...payload, link: '/', tag: `money_in:${did}`, data: {} })
+      .catch(() => undefined);
+  }
+
+  /**
+   * TELL THE STORE, on the channel a store actually reads — its own signed callback.
+   *
+   * A store is an integration, not a person with a phone: the vendor app has no notification bell, so
+   * writing to an inbox would be a message nobody ever opens. It already receives HMAC-signed status
+   * callbacks for its parcels, and its balance changing is the same kind of fact.
+   */
+  private tellStore(vendorId: string, event: string, c: { gross: number; reference: string }, balance: number | null | undefined): void {
+    try {
+      this.vendors.notify(vendorId, event, { amount: c.gross, providerRef: c.reference, balance: balance ?? null });
+    } catch {
+      /* a callback that cannot be queued must never undo a payment that arrived */
+    }
   }
 
   /** Which sister collects, and in what money — rule 1, collection follows the payer. */

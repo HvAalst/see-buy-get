@@ -29,6 +29,8 @@ const KIND_ICON: Record<string, IconName> = {
   papers_due: 'clock',
   papers_lapsed: 'block',
   papers_checked: 'check',
+  /** A payment the shop made was confirmed by the provider — or came back. */
+  money_in: 'wallet',
   box_due: 'clock',
   signup_incomplete: 'edit',
   signup_rejected: 'warning',

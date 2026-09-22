@@ -3,7 +3,7 @@ import { Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { EntityPicker } from './EntityPicker';
 import { amount, money } from '../queues';
-import { FUNDING_ACTIONS, PAYOUT_ACTIONS, fundingLine, fundingTone, payoutTone, type FundingAction, type FundingRow } from '../settlement';
+import { FUNDING_ACTIONS, PAYOUT_ACTIONS, fundingLine, fundingTone, payoutTone, type FundingAction, type FundingRow, type UnmatchedRow } from '../settlement';
 import { ConsoleDetail } from '../ConsoleDetail';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
@@ -185,6 +185,7 @@ export function MoneyScreen({ state, actions }: { state: TowerState; actions: To
 function MoneyIn({ state, actions }: { state: TowerState; actions: TowerActions }) {
   const t = useT();
   const [asking, setAsking] = useState<{ row: FundingRow; action: FundingAction } | null>(null);
+  const [attributing, setAttributing] = useState<UnmatchedRow | null>(null);
   const rows = state.funding;
 
   return (
@@ -279,6 +280,7 @@ function MoneyIn({ state, actions }: { state: TowerState; actions: TowerActions 
                 <th class="ctbl__num">{t('tower.money.col.amount')}</th>
                 <th>{t('tower.money.col.ref')}</th>
                 <th>{t('tower.money.in.unmatchedCol.why')}</th>
+                <th />
               </tr>
             </thead>
             <tbody>
@@ -297,6 +299,12 @@ function MoneyIn({ state, actions }: { state: TowerState; actions: TowerActions 
                     <span class="ctbl__lbl">{t('tower.money.in.unmatchedCol.why')}</span>
                     {u.reason}
                   </td>
+                  <td class="ctbl__num">
+                    {/* The ONE way out of this list, and it is deliberately a person's judgement. */}
+                    <button type="button" class="cbtn cbtn--sm cbtn--ghost" disabled={state.busyId === u.id} onClick={() => setAttributing(u)}>
+                      {t('tower.money.in.act.apply')}
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -305,6 +313,7 @@ function MoneyIn({ state, actions }: { state: TowerState; actions: TowerActions 
       ) : null}
 
       {asking ? <ConfirmFundingSheet ask={asking} onClose={() => setAsking(null)} state={state} actions={actions} /> : null}
+      {attributing ? <AttributePaymentPanel payment={attributing} onClose={() => setAttributing(null)} state={state} actions={actions} /> : null}
     </>
   );
 }
@@ -437,6 +446,129 @@ function NetworkLedger({ state }: { state: TowerState }) {
         </>
       )}
     </section>
+  );
+}
+
+/**
+ * WHOSE PAYMENT WAS THIS? — the one way out of the unattributed list.
+ *
+ * Real money arrived and we could not say whose. Somebody has to decide, and the screen's job is to make
+ * the likely answer one tap away and the unlikely answer possible.
+ *
+ * SO THE SUGGESTIONS COME FIRST, and they are not a ranking. A shop that asked to pay in 400 and mistyped
+ * its reference is the overwhelmingly common cause of a 400 arriving unattributed — so the open requests
+ * in the same currency are listed with the closest amount at the top, each showing its own figure so the
+ * operator can see for themselves why it is being suggested. Nothing is pre-selected: the list narrows the
+ * search, it does not make the decision.
+ *
+ * Below it, every shop, searchable — because somebody paying the paybill without ever opening a request is
+ * the other half of real life, and a screen that only offered the suggestions would strand them.
+ */
+function AttributePaymentPanel({
+  payment,
+  onClose,
+  state,
+  actions,
+}: {
+  payment: UnmatchedRow;
+  onClose: () => void;
+  state: TowerState;
+  actions: TowerActions;
+}) {
+  const t = useT();
+  const [q, setQ] = useState('');
+  const paid = payment.amount ?? 0;
+
+  // Open requests in the SAME currency only: applying across currencies is refused by the server, and
+  // offering it here would be offering a button that cannot work.
+  const suggestions = (state.funding ?? [])
+    .filter((f) => f.status === 'awaiting' && (f.currency ?? '') === (payment.currency ?? ''))
+    .sort((a, b) => Math.abs((a.amount ?? 0) - paid) - Math.abs((b.amount ?? 0) - paid))
+    .slice(0, 5);
+
+  const needle = q.trim().toLowerCase();
+  const shops = (state.agents ?? [])
+    .filter((a) => (a.status ?? '') !== 'DRAFT' && (a.status ?? '') !== 'KYC_PENDING')
+    .filter((a) => !needle || (a.shopName ?? '').toLowerCase().includes(needle) || (a.zone ?? '').toLowerCase().includes(needle))
+    .slice(0, 40);
+
+  const apply = async (payerKind: 'agent' | 'vendor', payerDid: string) => {
+    await actions.applyFunding(payment.id, payerKind, payerDid);
+    onClose();
+  };
+
+  return (
+    <ConsoleDetail openKey={payment.id} title={t('tower.money.in.applyTitle')} onClose={onClose}>
+      <div class="cons__panelhead">
+        <span class="cons__panelt">{t('tower.money.in.applyTitle')}</span>
+        <span class="ctbl__sub">{amount(paid, payment.currency)}</span>
+      </div>
+      {/* What is actually known about it — all of it, because the decision rests on nothing else. */}
+      <p class="cons__lede">
+        {t('tower.money.in.applyBody', { ref: payment.providerRef ?? '—', reason: payment.reason ?? '' })}
+      </p>
+      <p class="cons__caveat">
+        <Icon name="warning" size={18} />
+        <span>{t('tower.money.in.applyCaveat')}</span>
+      </p>
+
+      {suggestions.length ? (
+        <>
+          <p class="cfield__label" style="margin-top:6px">{t('tower.money.in.applySuggest')}</p>
+          <div class="rows" role="list">
+            {suggestions.map((f) => (
+              <button
+                key={f.fundingId}
+                type="button"
+                class="crow"
+                disabled={state.busyId === payment.id}
+                onClick={() => void apply((f.payerKind as 'agent' | 'vendor') ?? 'agent', f.payerDid ?? '')}
+              >
+                <span class="crow__body">
+                  <span class="crow__t">{f.payerName ?? f.payerDid?.slice(0, 22)}</span>
+                  <span class="crow__s">{t('tower.money.in.applyAsked', { amount: amount(f.amount ?? 0, f.currency), ref: f.reference ?? '' })}</span>
+                </span>
+                <span class="crow__end">
+                  <Icon name="chevronRight" size={20} />
+                </span>
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
+
+      <p class="cfield__label" style="margin-top:14px">{t('tower.money.in.applyAnyShop')}</p>
+      {state.agents === null ? (
+        <p class="chint">{t('tower.queues.loading')}</p>
+      ) : (
+        <>
+          <input class="cinput" value={q} onInput={(e) => setQ((e.target as HTMLInputElement).value)} placeholder={t('tower.money.in.applySearch')} aria-label={t('tower.money.in.applySearch')} />
+          <div class="rows" role="list">
+            {shops.map((a) => (
+              <button key={a.did} type="button" class="crow" disabled={state.busyId === payment.id} onClick={() => void apply('agent', a.did)}>
+                <span class="crow__body">
+                  <span class="crow__t">{a.shopName ?? a.did.slice(0, 22)}</span>
+                  {/* The zone, and — where it applies — the one fact that decides whether this shop can be
+                      credited at all. Its BALANCE is deliberately not shown: the row does not carry a
+                      currency, and a figure without one is not a figure. */}
+                  <span class="crow__s">{[a.zone, a.balance === null ? t('tower.money.in.applyNoFloat') : ''].filter(Boolean).join(' · ')}</span>
+                </span>
+                <span class="crow__end">
+                  <Icon name="chevronRight" size={20} />
+                </span>
+              </button>
+            ))}
+          </div>
+          {shops.length === 0 ? <p class="chint">{t('tower.money.in.applyNoMatch')}</p> : null}
+        </>
+      )}
+
+      <div class="twr-clear__act">
+        <button type="button" class="cbtn cbtn--ghost" onClick={onClose}>
+          {t('tower.money.in.cancel')}
+        </button>
+      </div>
+    </ConsoleDetail>
   );
 }
 

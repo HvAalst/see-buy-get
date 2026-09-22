@@ -27,6 +27,9 @@ import { ForthcomingService } from './forthcoming.service';
 import { DockService } from './dock.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { FundingPayerRegistrar } from './funding-payers';
+import { NotificationService } from './notification.service';
+import { OutboxPushSender } from './push-sender';
+import { PUSH_SENDER } from './notification.types';
 import { GazetteerGeocoder, GEOCODER } from './geocoder';
 import { HeuristicRouter, ROUTER } from './router';
 import { DigitalTwinService } from '../m7/digital-twin.service';
@@ -76,6 +79,7 @@ describe('a shop’s float rests on a confirmed payment', () => {
   let entities: EntityService;
   let funding: FundingService;
   let rail: SandboxFundingRail;
+  let notifications: NotificationService;
 
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -88,7 +92,7 @@ describe('a shop’s float rests on a confirmed payment', () => {
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
         EntityService, PresenceService, BooksService, FxService,
-        FundingService, FundingPayerRegistrar, SandboxFundingRail, { provide: FUNDING_RAIL, useExisting: SandboxFundingRail },
+        FundingService, FundingPayerRegistrar, NotificationService, OutboxPushSender, { provide: PUSH_SENDER, useExisting: OutboxPushSender }, SandboxFundingRail, { provide: FUNDING_RAIL, useExisting: SandboxFundingRail },
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
         GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder },
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
@@ -104,6 +108,7 @@ describe('a shop’s float rests on a confirmed payment', () => {
     gate = moduleRef.get(WalletGateService);
     funding = moduleRef.get(FundingService);
     rail = moduleRef.get(SandboxFundingRail);
+    notifications = moduleRef.get(NotificationService);
     // …and neither does compile() call onModuleInit, so the payers register themselves by hand here.
     moduleRef.get(FundingPayerRegistrar).onModuleInit();
   });
@@ -219,6 +224,43 @@ describe('a shop’s float rests on a confirmed payment', () => {
       railConfirms(request.reference, 500);
       expect(agents.balance(a.did)).toBe(500);
       expect(held()).toBe(500);
+    });
+  });
+
+  describe('the shop is told', () => {
+    it('gets a notification the moment the payment is confirmed', () => {
+      /*
+       * They paid at a kiosk and walked back to the counter. Before this, the only way to learn the money
+       * had landed was to reopen the app and press "Check again" — a shopkeeper at a till, unable to
+       * scan, refreshing a screen. `WalletToppedUp` was published all along and nothing subscribed to it.
+       */
+      const a = shop();
+      const request = funding.open({ payerKind: 'agent', payerDid: a.did, amount: 5000 });
+      railConfirms(request.reference, 5000);
+      const inbox = notifications.inboxFor(a.did);
+      expect(inbox.map((n) => n.kind)).toContain('money_in');
+      const told = inbox.find((n) => n.kind === 'money_in')!;
+      expect(told.title).toMatch(/came through/);
+      expect(told.body).toContain('5000.00');
+      // Short enough to be read on a lock screen — the lesson the papers notifications cost us.
+      expect(told.body.length).toBeLessThan(80);
+    });
+
+    it('is told when a payment is taken back, because their balance just fell', () => {
+      const a = shop();
+      const request = funding.open({ payerKind: 'agent', payerDid: a.did, amount: 5000 });
+      railConfirms(request.reference, 5000);
+      funding.reverse(request.fundingId, 'recalled by the sender');
+      expect(notifications.inboxFor(a.did).filter((n) => n.kind === 'money_in').map((n) => n.title)).toContain('A payment was taken back');
+    });
+
+    it('sends a STORE its own signed callback instead, because it has no inbox to read', () => {
+      const store = vendors.register({ name: 'Soko Online', country: 'KE', location: { lat: -1.3, lng: 36.8 }, callbackUrl: 'https://soko.example/hook' });
+      const request = funding.open({ payerKind: 'vendor', payerDid: store.vendorId, amount: 2000 });
+      railConfirms(request.reference, 2000);
+      const sent = vendors.outboxFor(store.vendorId);
+      expect(sent[0]?.event).toBe('balance_topped_up');
+      expect(JSON.parse(sent[0].body).data.amount).toBe(2000);
     });
   });
 

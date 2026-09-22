@@ -246,9 +246,74 @@ export class FundingService {
     return this.list({ payerDid, purpose }).find((f) => FUNDING_OPEN.includes(f.status)) ?? null;
   }
 
-  /** Money that arrived with nobody's name on it. Newest first; the operator's chase list. */
-  unmatchedPayments(): UnmatchedPayment[] {
-    return [...this.unmatched.values()].sort((a, b) => b.at.localeCompare(a.at));
+  /**
+   * Money that arrived with nobody's name on it — the operator's chase list, newest first.
+   *
+   * Applied ones are excluded: this list is work, and a payment somebody has already attributed is not
+   * work any more. It is still held (see `UnmatchedPayment.appliedAt`) so the decision can be traced.
+   */
+  unmatchedPayments(includeApplied = false): UnmatchedPayment[] {
+    return [...this.unmatched.values()].filter((u) => includeApplied || !u.appliedAt).sort((a, b) => b.at.localeCompare(a.at));
+  }
+
+  /**
+   * SAY WHOSE PAYMENT THIS WAS, and credit it.
+   *
+   * The only way out of the unmatched list, and deliberately a judgement rather than a rule: somebody
+   * looked at a paybill payment with a mistyped reference, rang the shop, and now says it is theirs. The
+   * alternative was what existed before — the money sat visible and unposted for ever, and the shopkeeper
+   * who paid it was short.
+   *
+   * WHAT IT PRODUCES IS AN ORDINARY CONFIRMED FUNDING, on purpose: the posting path is the same one a
+   * rail-matched payment takes, so the books cannot be told apart by an auditor and no second code path
+   * exists for crediting money. What is NOT the same is the record — the funding carries the provider's
+   * reference, and the unmatched record keeps who applied it and when.
+   *
+   * Refused if already applied. A payment applied twice is a shop credited twice for money that arrived
+   * once, and it would be the easiest mistake on the whole screen to make.
+   */
+  apply(unmatchedId: string, to: { payerKind: FundingPayerKind; payerDid: string }, by: string, now: number = Date.now()): { funding: Funding; unmatchedId: string } {
+    const record = this.unmatched.get(unmatchedId);
+    if (!record) throw new GlosError('NOT_FOUND', `No unattributed payment found: ${unmatchedId}`);
+    if (record.appliedAt) throw new GlosError('INVALID_STATE', `That payment was already applied on ${record.appliedAt} — it arrived once and can only be credited once`);
+
+    const payer = this.payerFor(to.payerKind);
+    // Refuses a payer with no account to credit, exactly as opening a request does.
+    const { entityId, currency, label } = payer.resolve(to.payerDid);
+    if (record.currency && record.currency.toUpperCase() !== currency.toUpperCase()) {
+      // The same rule `confirm` holds: we do not convert on somebody's behalf at a rate they never saw.
+      throw new GlosError('AMOUNT_INVALID', `That payment is in ${record.currency} and ${label} is settled in ${currency} — applying it here would invent an exchange rate`);
+    }
+
+    const { entryId } = payer.credit(to.payerDid, { purpose: 'float', gross: record.amount, fee: 0, reference: record.providerRef, fundingId: unmatchedId });
+    const funding: Funding = {
+      fundingId: `fnd_${randomBytes(8).toString('hex')}`,
+      entityId,
+      payerKind: to.payerKind,
+      payerDid: to.payerDid,
+      payerName: label,
+      purpose: 'float',
+      // Asked for and received are the same figure here: nobody asked for it, it simply arrived.
+      amount: record.amount,
+      currency: record.currency,
+      status: 'confirmed',
+      reference: record.reference || record.providerRef,
+      provider: record.provider,
+      instructions: `Attributed by hand: this payment arrived with no request open against it (${record.reason}).`,
+      openedAt: new Date(now).toISOString(),
+      providerRef: record.providerRef,
+      confirmedAmount: record.amount,
+      fee: 0,
+      confirmedAt: record.at,
+      entryId,
+    };
+    this.save(funding);
+
+    record.appliedAt = new Date(now).toISOString();
+    record.appliedTo = funding.fundingId;
+    record.appliedBy = by;
+    this.unmatched.set(record.id, record);
+    return { funding, unmatchedId };
   }
 
   private followOn(paid: Funding, amount: number, now: number): Funding {
