@@ -79,6 +79,10 @@ import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { SandboxPayoutRail } from '../../foundation/payouts/sandbox-rail.adapter';
 import { PAYOUT_RAIL } from '../../foundation/payouts/payout.types';
+import { FundingService } from '../../foundation/funding/funding.service';
+import { FundingPayerRegistrar } from './funding-payers';
+import { SandboxFundingRail } from '../../foundation/funding/sandbox-funding-rail.adapter';
+import { FUNDING_RAIL } from '../../foundation/funding/funding.types';
 
 /**
  * ITEM 9 — dimensional weight where the dimensions are actually known.
@@ -119,6 +123,7 @@ describe('dimensional weight', () => {
         WalletService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
         EntityService, EntityAdminService, OperatorAccountService, ConsignmentNoteService, PresenceService, CompanyDocumentService, HandleService, HandleDirectory, CompanyReadinessService, BorderRuleService, BooksService, FxService,
         PayoutService, ReturnService, UnclaimedService, MerchantRatingService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },
+        FundingService, FundingPayerRegistrar, SandboxFundingRail, { provide: FUNDING_RAIL, useExisting: SandboxFundingRail },
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
         GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder },
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },

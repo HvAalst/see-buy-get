@@ -132,6 +132,24 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
         </div>
       </div>
 
+      {/* A TOP-UP STILL WAITING ON THE PROVIDER, said on the home screen and not only inside the sheet.
+          "Why is my balance still low" is asked here, looking at the float — and the answer to it is the
+          most useful sentence this screen can carry that day. */}
+      {state.funding?.status === 'awaiting' ? (
+        <button type="button" class="row" onClick={() => setSheet('topup')}>
+          <span class="row__ic">
+            <Icon name="clock" size={24} />
+          </span>
+          <span class="row__body">
+            <span class="row__t">{t('agent.home.topUpWaitNote', { amount: money(state.funding.amount) })}</span>
+            <span class="row__s">{t('agent.home.topUpWaitRow', { reference: state.funding.reference })}</span>
+          </span>
+          <span class="row__end">
+            <Icon name="chevronRight" size={22} />
+          </span>
+        </button>
+      ) : null}
+
       {onboarding ? <Note tone="warn" icon="clock" title={t('agent.home.notActive')} detail={onboarding} /> : null}
       {gate ? <Note tone={gate.tone} icon={gate.tone === 'danger' ? 'lock' : 'wallet'} title={gate.title} detail={gate.detail} /> : null}
 
@@ -216,10 +234,43 @@ function SettingRow({ icon, title, sub, onClick }: { icon: IconName; title: stri
   );
 }
 
+/**
+ * TOP UP — WHICH IS ASKING TO PAY, NOT PAYING.
+ *
+ * This sheet used to take a number, close itself, and show "Balance topped up · Added 50.00". The money
+ * had not moved and nobody outside the building had said it had: the shop's own word created the entry.
+ * It now hands back a reference, and the sheet's job is to make that reference impossible to mistype and
+ * to be honest about what happens next — the float changes when the payment provider confirms it.
+ *
+ * So the sheet has two faces. With a request waiting, it shows the reference and the rail's own words and
+ * offers nothing else, because there is nothing else to do. With none, it asks for an amount.
+ */
 function TopUpSheet({ open, onClose, state, actions }: { open: boolean; onClose: () => void; state: AgentState; actions: AgentActions }) {
   const t = useT();
   const [amount, setAmount] = useState('50');
   const value = Number(amount);
+  const waiting = state.funding?.status === 'awaiting' ? state.funding : null;
+
+  if (waiting) {
+    return (
+      <Sheet open={open} onClose={onClose} title={t('agent.home.topUpWaitTitle')}>
+        <Note tone="info" icon="clock" title={t('agent.home.topUpWaitNote', { amount: money(waiting.amount) })} detail={waiting.instructions} />
+        {/* The one thing they have to get exactly right, so it is the biggest thing on the sheet. */}
+        <div class="field">
+          <span class="field__label">{t('agent.home.topUpReference')}</span>
+          <p class="payref">{waiting.reference}</p>
+        </div>
+        <p class="t-body">{t('agent.home.topUpWaitBody')}</p>
+        <Button variant="outline" chevron={false} busy={state.refreshing} onClick={() => void actions.refresh()}>
+          {t('agent.home.topUpCheck')}
+        </Button>
+        <Button variant="link" onClick={onClose}>
+          {t('agent.home.notNow')}
+        </Button>
+      </Sheet>
+    );
+  }
+
   return (
     <Sheet open={open} onClose={onClose} title={t('agent.home.topUpTitle')}>
       <p class="t-body">{t('agent.home.topUpBody')}</p>
@@ -233,12 +284,9 @@ function TopUpSheet({ open, onClose, state, actions }: { open: boolean; onClose:
         chevron={false}
         busy={state.busy === 'topup'}
         disabled={!(value > 0)}
-        onClick={() => {
-          onClose();
-          void actions.topUp(value);
-        }}
+        onClick={() => void actions.topUp(value)}
       >
-        {value > 0 ? t('agent.home.addAmount', { amount: value.toFixed(2) }) : t('agent.home.addMoney')}
+        {value > 0 ? t('agent.home.askAmount', { amount: value.toFixed(2) }) : t('agent.home.addMoney')}
       </Button>
       <Button variant="link" onClick={onClose}>
         {t('agent.home.notNow')}

@@ -108,6 +108,26 @@ export interface GateView {
   shortfall?: number;
 }
 
+/**
+ * A top-up the shop has asked for and is waiting on.
+ *
+ * It is a REQUEST, not a movement: `reference` is what the shopkeeper quotes when they pay, and the float
+ * only changes when the payment provider confirms the payment. See `foundation/funding` on the server.
+ */
+export interface FundingView {
+  fundingId: string;
+  amount: number;
+  currency: string;
+  status: 'awaiting' | 'confirmed' | 'failed' | 'expired' | 'reversed';
+  /** What the payer quotes. Short and unambiguous on purpose — it is read off one screen, typed into another. */
+  reference: string;
+  /** The provider's own words about how to pay. Shown verbatim so this screen cannot drift from the rail. */
+  instructions: string;
+  openedAt: string;
+  confirmedAmount?: number;
+  confirmedAt?: string;
+}
+
 export interface CorridorRow {
   corridorId: string;
   name: string;

@@ -275,3 +275,22 @@ export interface OriginOption {
   quote?: QuoteView;
   error?: string;
 }
+
+/**
+ * A prepayment the store has asked to make, and is waiting on.
+ *
+ * Not a movement: `reference` is what the store quotes when it pays, and the prepaid balance changes when
+ * the payment provider confirms the payment — see `foundation/funding` on the server, and the shop app's
+ * twin of this type. The amount the books move by is the amount the provider confirms, not this one.
+ */
+export interface VendorFundingView {
+  fundingId: string;
+  amount: number;
+  currency: string;
+  status: 'awaiting' | 'confirmed' | 'failed' | 'expired' | 'reversed';
+  reference: string;
+  instructions: string;
+  openedAt: string;
+  confirmedAmount?: number;
+  confirmedAt?: string;
+}

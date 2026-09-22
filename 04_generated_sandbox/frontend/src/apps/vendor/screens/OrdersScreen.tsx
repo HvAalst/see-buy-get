@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, Checkbox, Chip, CodeCard, ErrorNote, GlanceNumber, Icon, Pager, Pill, ReadAloud, SearchInput, SelectionBar, Sheet } from '../../../shared/ui';
+import { Button, Card, Checkbox, Chip, CodeCard, ErrorNote, GlanceNumber, Icon, Note, Pager, Pill, ReadAloud, SearchInput, SelectionBar, Sheet } from '../../../shared/ui';
 import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
 import { triggerDownload } from '../../../shared/download';
 import { toggleAll, toggleId } from '../../../shared/register';
@@ -403,10 +403,36 @@ function FilterSheet({ open, onClose, query, points, onApply, onClearAll }: { op
   );
 }
 
+/**
+ * PREPAY — which is asking to pay, not paying. The twin of the shop app's sheet, and the same two faces:
+ * with a request waiting it shows the reference and the rail's own words, because there is nothing else
+ * to do; with none it asks for an amount.
+ */
 function TopUpSheet({ open, onClose, state, actions }: { open: boolean; onClose: () => void; state: VendorState; actions: VendorActions }) {
   const t = useT();
   const [amount, setAmount] = useState('100');
   const value = Number(amount);
+  const waiting = state.funding?.status === 'awaiting' ? state.funding : null;
+
+  if (waiting) {
+    return (
+      <Sheet open={open} onClose={onClose} title={t('vendor.topup.waitTitle')}>
+        <Note tone="info" icon="clock" title={t('vendor.topup.waitNote', { amount: waiting.amount.toFixed(2) })} detail={waiting.instructions} />
+        <div class="field">
+          <span class="field__label">{t('vendor.topup.reference')}</span>
+          <p class="payref">{waiting.reference}</p>
+        </div>
+        <p class="t-body">{t('vendor.topup.waitBody')}</p>
+        <Button variant="outline" chevron={false} busy={state.refreshing} onClick={() => void actions.refresh()}>
+          {t('vendor.topup.check')}
+        </Button>
+        <Button variant="link" onClick={onClose}>
+          {t('vendor.topup.notNow')}
+        </Button>
+      </Sheet>
+    );
+  }
+
   return (
     <Sheet open={open} onClose={onClose} title={t('vendor.topup.title')}>
       <p class="t-body">{t('vendor.topup.body')}</p>
@@ -416,16 +442,8 @@ function TopUpSheet({ open, onClose, state, actions }: { open: boolean; onClose:
         </label>
         <input id="vtopup" class="input" type="number" inputMode="decimal" min="1" step="1" value={amount} onInput={(e) => setAmount(e.currentTarget.value)} />
       </div>
-      <Button
-        chevron={false}
-        busy={state.busy === 'topup'}
-        disabled={!(value > 0)}
-        onClick={() => {
-          onClose();
-          void actions.topUp(value);
-        }}
-      >
-        {value > 0 ? t('vendor.topup.add', { amount: value.toFixed(2) }) : t('vendor.topup.addMoney')}
+      <Button chevron={false} busy={state.busy === 'topup'} disabled={!(value > 0)} onClick={() => void actions.topUp(value)}>
+        {value > 0 ? t('vendor.topup.ask', { amount: value.toFixed(2) }) : t('vendor.topup.addMoney')}
       </Button>
       <Button variant="link" onClick={onClose}>
         {t('vendor.topup.notNow')}

@@ -276,18 +276,46 @@ export class VendorService {
     return entry;
   }
 
-  /** Real money in — the vendor prepays the daughter company. */
-  topUp(vendorId: string, amount: number): Vendor {
+  /**
+   * Real money in — the vendor prepays the daughter company.
+   *
+   * **A PAYMENT RAIL CALLS THIS, NOT A STORE.** Reached only from a confirmed funding, exactly as the
+   * shop's float is: see `foundation/funding` and the twin of this method in WalletGateService, which
+   * carries the full reasoning. `fee` is what the provider took; the store is credited the GROSS and the
+   * fee is our expense, so custody holds the difference.
+   */
+  topUp(vendorId: string, amount: number, ref?: string, fee = 0): Vendor {
+    return this.topUpConfirmed(vendorId, amount, ref, fee).vendor;
+  }
+
+  /** The same movement, handing back the journal entry as well: a confirmed payment keeps the entry id
+   *  so an auditor can walk from the provider's reference to the books in one step, without a search. */
+  topUpConfirmed(vendorId: string, amount: number, ref?: string, fee = 0): { vendor: Vendor; entryId: string } {
     if (amount <= 0) throw new GlosError('AMOUNT_INVALID', 'Top-up must be positive');
     const vendor = this.get(vendorId);
+    const cost = Math.min(Math.max(Number.isFinite(fee) ? Math.round(fee * 100) / 100 : 0, 0), amount);
     // The store's float is a DEPOSIT: the sister holds the money and owes it back as shipping. Nothing
     // is earned until a parcel moves — we charge for service, not for balance.
-    const entryId = this.post(vendor, 'top-up', vendorId, [
-      { code: ACCOUNT_CODES.CASH_CUSTODY, amount },
+    const entryId = this.post(vendor, 'top-up', ref ?? vendorId, [
+      { code: ACCOUNT_CODES.CASH_CUSTODY, amount: Math.round((amount - cost) * 100) / 100 },
+      ...(cost > 0 ? [{ code: ACCOUNT_CODES.EXPENSE_PAYMENT_FEES, amount: cost }] : []),
       { code: ACCOUNT_CODES.DEPOSIT_VENDOR, counterparty: vendorId, amount: -amount },
     ]);
     this.book(vendor, 'TOP_UP', '+', amount, undefined, 'prepay', entryId);
-    return this.syncBalance(vendor);
+    return { vendor: this.syncBalance(vendor), entryId };
+  }
+
+  /** A confirmed prepayment that came back. The mirror of the shop's `reverseTopUp`, and for the same
+   *  reasons — its own entry, and the provider's fee stays spent because it was. */
+  reverseTopUp(vendorId: string, amount: number, ref: string): { vendor: Vendor; entryId: string } {
+    const vendor = this.get(vendorId);
+    if (amount <= 0) return { vendor, entryId: '' };
+    const entryId = this.post(vendor, 'top-up-reversal', ref, [
+      { code: ACCOUNT_CODES.DEPOSIT_VENDOR, counterparty: vendorId, amount },
+      { code: ACCOUNT_CODES.CASH_CUSTODY, amount: -amount },
+    ]);
+    this.book(vendor, 'TOP_UP', '-', amount, undefined, 'prepay reversed', entryId);
+    return { vendor: this.syncBalance(vendor), entryId };
   }
 
   /**

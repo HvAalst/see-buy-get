@@ -237,9 +237,17 @@ export const enVendor = {
 
   // Top-up sheet.
   'vendor.topup.title': 'Top up your balance',
-  'vendor.topup.body': 'You prepay the shipping; the buyer\'s share is collected at your checkout and stays your income.',
+  // Says plainly that pressing this adds nothing — see the shop app's twin for why that matters.
+  'vendor.topup.body':
+    'You prepay the shipping; the buyer\'s share is collected at your checkout and stays your income. Tell us how much you are paying in and we will give you a reference to quote — your balance changes once the payment comes through.',
   'vendor.topup.amount': 'Amount',
   'vendor.topup.add': 'Add {amount}',
+  'vendor.topup.ask': 'Pay in {amount}',
+  'vendor.topup.waitTitle': 'Waiting for your payment',
+  'vendor.topup.waitNote': 'You said you are paying in {amount}',
+  'vendor.topup.reference': 'Quote this reference',
+  'vendor.topup.waitBody': 'Nothing has been added yet. When the payment provider confirms it, the amount they confirm goes into your balance.',
+  'vendor.topup.check': 'Check again',
   'vendor.topup.addMoney': 'Add money',
   'vendor.topup.notNow': 'Not now',
 
@@ -436,8 +444,9 @@ export const enVendor = {
   'vendor.toast.unpaidDetail': 'Top up, then release the label.',
   'vendor.toast.paidTitle': 'Paid',
   'vendor.toast.paidDetail': 'The label is released.',
-  'vendor.toast.topUpTitle': 'Balance topped up',
-  'vendor.toast.topUpDetail': 'Added {amount}.',
+  // NOT "topped up": asking is not paying, and the balance has not changed yet.
+  'vendor.toast.topUpAsked': 'Quote this when you pay',
+  'vendor.toast.topUpAskedDetail': 'Reference {reference}. Your balance changes when the payment is confirmed.',
   'vendor.toast.pinSaved': 'Store pin saved',
 
   // The store's own dock — a place the network collects FROM. Outbound only, and never a shop counter.

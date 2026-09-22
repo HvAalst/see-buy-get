@@ -121,6 +121,34 @@ export function createOperatorApi(sbg: SbgClient) {
         }),
       ),
 
+    /* ---- money coming IN: what shops and stores have asked to pay, and what has been confirmed ---- */
+
+    /** Every funding request, plus the payments that arrived with nobody's name on them. */
+    funding: (entityId?: string) => sbg.request((c) => c.GET('/v1/rails/funding', { params: { query: entityId ? { entityId } : {} } })),
+
+    /**
+     * Confirm a payment from a bank statement — a person, reading a statement line, naming it.
+     *
+     * The fallback, never the ordinary path: not every shop pays by mobile money and a transfer has no
+     * webhook behind it. The reference is required and is the whole point — without something an auditor
+     * can look up, this would be the shop's own word wearing a staff badge.
+     */
+    confirmFunding: (fundingId: string, providerRef: string, amount: number) =>
+      sbg.request((c) => c.POST('/v1/rails/funding/{fundingId}/confirm', { params: { path: { fundingId } }, body: { providerRef, amount } })),
+
+    /** SANDBOX: stand in for the payment provider — the callback is signed and verified as a real one is. */
+    simulateFunding: (fundingId: string, providerRef: string, amount: number) =>
+      sbg.request((c) => c.POST('/v1/rails/funding/{fundingId}/simulate', { params: { path: { fundingId } }, body: { providerRef, amount } })),
+
+    /** Close a request nobody paid, or take back one that bounced. */
+    moveFunding: (fundingId: string, action: 'fail' | 'expire' | 'reverse', reason: string) =>
+      sbg.request((c) =>
+        c.POST(`/v1/rails/funding/{fundingId}/${action}` as '/v1/rails/funding/{fundingId}/fail', {
+          params: { path: { fundingId } },
+          body: { reason },
+        }),
+      ),
+
     /* ---- the network at a glance: monitoring, not deciding ---- */
 
     /** The five numbers, where every parcel is, and every standing alert — in one read. */

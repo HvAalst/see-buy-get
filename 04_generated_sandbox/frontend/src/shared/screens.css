@@ -490,3 +490,26 @@
     animation-duration: 2s;
   }
 }
+
+/* ------------------------------------------------------------------ a payment reference --
+ *
+ * The one string a shopkeeper has to copy exactly, from this screen onto a phone keypad, usually
+ * standing at a counter. So it is large, spaced, tabular and selectable — and it is the biggest thing
+ * on the sheet it appears in, because everything else there can be got wrong without costing anything.
+ */
+.payref {
+  margin: 0;
+  padding: 14px 16px;
+  border: 1.5px dashed var(--bd);
+  border-radius: var(--r-ctl);
+  background: var(--panel);
+  color: var(--tx);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  /* It exists to be copied. */
+  user-select: all;
+  -webkit-user-select: all;
+}

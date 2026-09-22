@@ -144,9 +144,17 @@ export function createVendorApi(sbg: SbgClient) {
     /** Settle an unpaid order after a top-up — releases its label. */
     settle: (parcelId: string) => sbg.request((c) => c.POST('/v1/sbg/parcels/{id}/settle', { params: { path: { id: parcelId } } })),
 
-    /** Prepay the daughter company ('no prepay, no label'). */
+    /**
+     * ASK to prepay the daughter company ('no prepay, no label').
+     *
+     * It hands back a reference and how to pay; the balance moves when the payment provider confirms the
+     * payment. Before 2026-09-22 this credited the balance with whatever number was typed here.
+     */
     topUp: (vendorId: string, amount: number) =>
       sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/top-up', { params: { path: { id: vendorId } }, body: { amount } })),
+
+    /** What this store is waiting to have confirmed, and what was confirmed lately. */
+    funding: (vendorId: string) => sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/funding', { params: { path: { id: vendorId } } })),
 
     /** The prepaid settlement book, newest first. */
     settlement: (vendorId: string) => sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/settlement', { params: { path: { id: vendorId } } })),

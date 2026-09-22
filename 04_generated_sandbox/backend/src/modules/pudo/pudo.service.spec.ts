@@ -87,6 +87,10 @@ import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { SandboxPayoutRail } from '../../foundation/payouts/sandbox-rail.adapter';
 import { PAYOUT_RAIL } from '../../foundation/payouts/payout.types';
+import { FundingService } from '../../foundation/funding/funding.service';
+import { FundingPayerRegistrar } from './funding-payers';
+import { SandboxFundingRail } from '../../foundation/funding/sandbox-funding-rail.adapter';
+import { FUNDING_RAIL } from '../../foundation/funding/funding.types';
 import { GlosEvent } from '../../foundation/events/glos-events';
 
 describe('PUDO Light', () => {
@@ -141,6 +145,7 @@ describe('PUDO Light', () => {
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         WalletService, AuthService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus, EntityService, EntityAdminService, OperatorAccountService, ConsignmentNoteService, MailService, OutboxMailSender, { provide: MAIL_SENDER, useExisting: OutboxMailSender }, PresenceService, CompanyDocumentService, HandleService, HandleDirectory, CompanyReadinessService, BorderRuleService, BooksService, FxService, ApiKeyService,
         PayoutService, ReturnService, UnclaimedService, MerchantRatingService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },
+        FundingService, FundingPayerRegistrar, SandboxFundingRail, { provide: FUNDING_RAIL, useExisting: SandboxFundingRail },
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
         GazetteerGeocoder, { provide: GEOCODER, useExisting: GazetteerGeocoder },
         HeuristicRouter, { provide: ROUTER, useExisting: HeuristicRouter },
@@ -974,7 +979,8 @@ describe('PUDO Light', () => {
     expect(() => controller.settleParcel(minted.parcel.parcelId, { role: 'genesis', did: other.did } as never)).toThrow(/not yours/);
     expect(() => controller.topUpVendor(mine.vendorId, { amount: 100 } as never, { role: 'genesis', did: other.did } as never)).toThrow(/not yours/);
     expect(() => controller.updateVendor(mine.vendorId, { callbackUrl: 'https://evil.example/hook' } as never, { role: 'genesis', did: other.did } as never)).toThrow(/not yours/);
-    controller.topUpVendor(mine.vendorId, { amount: 100 } as never, { role: 'genesis', did: mine.did } as never);
+    // A confirmed payment is what puts money on a store's balance now — the route only ASKS (foundation/funding).
+    vendors.topUp(mine.vendorId, 100, 'MPESA-TEST-1');
     const settled: any = controller.settleParcel(minted.parcel.parcelId, { role: 'genesis', did: mine.did } as never);
     expect(settled.paid).toBe(true);
     // The owner-ALLOW side of the profile gate — without it, an always-throw regression stays green.
@@ -1262,7 +1268,7 @@ describe('PUDO Light', () => {
     expect(preview.status).toBe('Created');
     expect(preview.intakeReady).toBe(false); // awaiting the store's payment
     // Once settled it becomes intakeable.
-    controller.topUpVendor(vendor.vendorId, { amount: 100 } as never, { role: 'genesis', did: vendor.did } as never);
+    vendors.topUp(vendor.vendorId, 100, 'MPESA-TEST-2'); // the confirmed-payment path; the route only asks
     controller.settleParcel(minted.parcel.parcelId, { role: 'genesis', did: vendor.did } as never);
     const after: any = controller.intakePreview(minted.parcel.parcelId, { role: 'agent', did: origin.did } as never);
     expect(after.intakeReady).toBe(true);
@@ -5662,7 +5668,8 @@ describe('PUDO Light', () => {
       (who) => controller.topUp(shop.did, { amount: 50 } as never, who),
       (who) => controller.setAgentPrice(shop.did, { price: 0.5 } as never, who),
       (who) => controller.setAvailability(shop.did, { open: false } as never, who),
-      (who) => controller.deposit(shop.did, who),
+      // The starter-kit deposit left this list on 2026-09-22: it is @Roles('operator') now, so the guard
+      // refuses a stranger before the handler is reached. Held by `money-in.spec.ts` instead.
     ];
     for (const act of shops) expect(() => act(stranger)).toThrow(/Only the shop/);
     expect(() => controller.getAgent(shop.did, stranger)).toThrow(/not yours/);

@@ -13,7 +13,7 @@ import type { DisputeReportRow, ReportRow } from './reports';
 import { EMPTY_COUNTRY_FORM, newCountryCode, overridesOf, type CatalogueCountry, type NewCountryForm, type PresenceLevel, type PresenceProposalRow, type PresenceRow } from './presence';
 import type { ExpiringItem } from './company';
 import type { AgentRow, CoverageCounts, FlagRow, HubRow, ToteRow } from './network';
-import { runSummary, type PayoutAction, type PayoutRow, type RunResult } from './settlement';
+import { runSummary, type FundingAction, type FundingRow, type PayoutAction, type PayoutRow, type RunResult, type UnmatchedRow } from './settlement';
 import type { HelpOption } from './pictures';
 import { resolveBaseUrl } from '../../lib/sbg';
 
@@ -114,6 +114,10 @@ export interface TowerState {
   /* ---- money: the selected company's books and payouts, and the network ledger ---- */
   books: BooksView | null;
   payouts: PayoutRow[] | null;
+  /** Money coming IN: what shops and stores have asked to pay, newest first. Null until read. */
+  funding: FundingRow[] | null;
+  /** …and what arrived with nobody's name on it. Staff only; never posted to any book. */
+  unmatched: UnmatchedRow[];
   finance: FinanceView | null;
 
   /* ---- the companies, side by side (the group's view) ---- */
@@ -252,6 +256,8 @@ export interface TowerActions {
   decideDriver(did: string, approve: boolean, reason?: string): Promise<void>;
   runPayouts(): Promise<void>;
   movePayout(payoutId: string, action: PayoutAction, reason?: string): Promise<void>;
+  /** Move one funding request along. the provider reference is what a confirmation cannot do without. */
+  moveFunding(fundingId: string, action: FundingAction, input?: { providerRef?: string; amount?: number; reason?: string }): Promise<void>;
   lookupParcel(parcelId: string): Promise<void>;
   reissueRelease(parcelId: string): Promise<void>;
   dismissReissued(): void;
@@ -317,6 +323,8 @@ const INITIAL: TowerState = {
   apiBase: resolveBaseUrl(),
   books: null,
   payouts: null,
+  funding: null,
+  unmatched: [],
   finance: null,
   dashboard: null,
   agents: null,
@@ -458,10 +466,11 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
      * its own lesson: a refusal a screen handles quietly is still a screen asking for something it knows
      * it may not have.
      */
-    const [books, payouts, finance] = await Promise.all([
+    const [books, payouts, finance, funding] = await Promise.all([
       client.api.books(entityId),
       client.api.payouts(entityId),
       staff ? client.api.finance() : Promise.resolve({ error: null, data: null } as never),
+      client.api.funding(entityId),
     ]);
     setState((s) => ({
       ...s,
@@ -470,6 +479,10 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       // Operator-only, so a company administrator simply never gets one — and the screen renders no
       // ledger rather than an empty one, which would say the network's books were empty.
       finance: finance.error ? null : narrow<FinanceView>(finance.data),
+      // Money coming in. A company administrator is served only its own company's requests by the server,
+      // so nothing is filtered here — "which company am I" is a question the token already answered.
+      funding: funding.error ? null : (narrow<{ items: FundingRow[] }>(funding.data)?.items ?? []),
+      unmatched: funding.error ? [] : (narrow<{ unmatched: UnmatchedRow[] }>(funding.data)?.unmatched ?? []),
     }));
   }, []);
 
@@ -1236,6 +1249,32 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
           return;
         }
         setState((s) => ({ ...s, busyId: null, done: t('tower.money.moved', { action }) }));
+        await loadMoney(client, entityId);
+      },
+      /**
+       * Move one funding request along — and never by declaring money arrived.
+       *
+       * `confirm` is a member of staff naming a bank statement line; `simulate` is the sandbox standing
+       * in for the payment provider, signed and verified exactly as a real callback is. Both demand a
+       * provider reference, because a confirmation nobody can look up afterwards is the shop's own word
+       * with extra steps.
+       */
+      moveFunding: async (fundingId: string, action: FundingAction, input?: { providerRef?: string; amount?: number; reason?: string }) => {
+        const client = clientRef.current;
+        const entityId = stateRef.current.entityId;
+        if (!client || !entityId) return;
+        setState((s) => ({ ...s, busyId: fundingId, queueError: null }));
+        const { error } =
+          action === 'confirm'
+            ? await client.api.confirmFunding(fundingId, input?.providerRef ?? '', input?.amount ?? 0)
+            : action === 'simulate'
+              ? await client.api.simulateFunding(fundingId, input?.providerRef ?? '', input?.amount ?? 0)
+              : await client.api.moveFunding(fundingId, action, input?.reason ?? '');
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, done: t('tower.money.in.moved', { action }) }));
         await loadMoney(client, entityId);
       },
       lookupParcel,

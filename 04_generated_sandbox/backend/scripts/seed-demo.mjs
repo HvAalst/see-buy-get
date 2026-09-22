@@ -43,6 +43,22 @@ async function req(method, path, { token, body } = {}) {
 }
 
 /**
+ * PUT MONEY IN THE WAY MONEY GETS IN — ask, then let the provider confirm it.
+ *
+ * A top-up used to BE the credit. It is not: asking moves nothing and the books wait for a payment
+ * provider (money model, rule 5 — see foundation/funding). `op` is the operator token, because
+ * standing in for the provider is a staff act, and in a live deployment it is the provider's own POST.
+ */
+async function fundVia(path, amount, tok, op) {
+  const asked = need(await req('POST', path, { token: tok, body: { amount } }), 'ask to pay in');
+  const providerRef = `MPX${Math.random().toString(16).slice(2, 10).toUpperCase()}`;
+  return need(
+    await req('POST', `/v1/rails/funding/${asked.fundingId}/simulate`, { token: op, body: { providerRef, amount } }),
+    'provider confirmation',
+  );
+}
+
+/**
  * Upload a real image and return its media id, so a seeded document can actually be LOOKED at.
  *
  * Every photo in this world used to be a filename with no bytes behind it, which was invisible until
@@ -167,13 +183,14 @@ const run = async () => {
         );
       }
       need(await req('POST', `/v1/sbg/agents/${encodeURIComponent(did)}/kyc-decision`, { token: op, body: { approve: true, by: 'seed' } }), `approve ${label}`);
-      need(await req('POST', `/v1/sbg/agents/${encodeURIComponent(did)}/deposit`, { token: tok }), `deposit ${label}`);
+      // The starter-kit deposit is recorded by the staff who hand over the kit, not by the shop.
+      need(await req('POST', `/v1/sbg/agents/${encodeURIComponent(did)}/deposit`, { token: op }), `deposit ${label}`);
       say(`activated: ${label}`);
     }
     const gate = need(await req('GET', `/v1/sbg/agents/${encodeURIComponent(did)}/can-transact`, { token: tok }), 'gate');
     if ((gate.balance ?? 0) < 20) {
-      need(await req('POST', `/v1/sbg/agents/${encodeURIComponent(did)}/top-up`, { token: tok, body: { amount: 60 } }), 'top-up');
-      say(`wallet topped up: ${label}`);
+      await fundVia(`/v1/sbg/agents/${encodeURIComponent(did)}/top-up`, 60, tok, op);
+      say(`wallet funded (payment confirmed): ${label}`);
     }
   }
 
@@ -539,7 +556,7 @@ const run = async () => {
   // when the balance dips under 40 covered the first run and starved every one after it: the float drained
   // faster than the threshold refilled it, and the seed died at an intake with SHIPMENT_NOT_PAID.
   if ((vLogin.balance ?? 0) < 300) {
-    need(await req('POST', `/v1/sbg/vendors/${shop.vendorId}/top-up`, { token: tokV, body: { amount: 600 } }), 'vendor top-up');
+    await fundVia(`/v1/sbg/vendors/${shop.vendorId}/top-up`, 600, tokV, op);
     say(`vendor balance topped up: Nairobi Threads (was ${(vLogin.balance ?? 0).toFixed(2)})`);
   }
 
@@ -634,7 +651,7 @@ const run = async () => {
   say(`vendor history: minted ${history.length}/${HISTORY_N} shipments`);
 
   // Fund the store, then settle HALF of the still-unpaid ones so the Paid filter has both sides to show.
-  need(await req('POST', `/v1/sbg/vendors/${shop.vendorId}/top-up`, { token: tokV, body: { amount: 3000 } }), 'vendor bulk top-up');
+  await fundVia(`/v1/sbg/vendors/${shop.vendorId}/top-up`, 3000, tokV, op);
   const unpaidOnes = history.filter((h) => !h.paid);
   for (let k = 0; k < Math.floor(unpaidOnes.length / 2); k++) {
     const s = await req('POST', `/v1/sbg/parcels/${encodeURIComponent(unpaidOnes[k].parcelId)}/settle`, { token: tokV });

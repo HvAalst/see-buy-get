@@ -117,6 +117,7 @@ import { OperatorAccountService } from '../../foundation/entity/operator-account
 import { CARGO_LANES } from './cargo.types';
 import { ReturnService } from './return.service';
 import { PayoutService } from '../../foundation/payouts/payout.service';
+import { FundingService } from '../../foundation/funding/funding.service';
 import { BooksService } from '../../foundation/books/books.service';
 import { FX_BASE, FX_RATE_MAX_AGE_H, FxService } from '../../foundation/money/fx.service';
 import { BagPlanService } from './bag-plan.service';
@@ -204,6 +205,7 @@ export class SbgController {
     private readonly vehicles: VehicleService,
     private readonly drivers: DriverService,
     private readonly payouts: PayoutService,
+    private readonly funding: FundingService,
     private readonly returns: ReturnService,
     private readonly fleet: FleetService,
     private readonly dispatch: DispatchService,
@@ -320,10 +322,23 @@ export class SbgController {
     return this.agents.decideKyc(did, dto.approve, auditActor(actor, dto.by), dto.reason);
   }
 
-  /** Record the refundable equipment/starter-kit deposit. */
+  /**
+   * Record the refundable equipment/starter-kit deposit.
+   *
+   * STAFF, not the shop. It used to be the shop's own to declare, which made it the second thing in this
+   * system a party could say about its own money and have believed. Unlike a top-up it is not a candidate
+   * for a payment rail: it is taken once, at onboarding, in cash or in kind, by the person handing over
+   * the printer — so the network genuinely is the observer here, and the question the user raised about
+   * staff confirming *every* top-up does not arise for something that happens once per shop.
+   *
+   * It is still a FLAG rather than a posting. A refundable deposit is money we hold and owe back, and it
+   * belongs in the books beside the float it must never be mixed with — named as a gap on progress.html
+   * rather than guessed at here, because it needs an amount in the sister's own currency and the constant
+   * it has today is in dollars.
+   */
+  @Roles('operator')
   @Post('agents/:did/deposit')
-  deposit(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
-    this.assertAgentActs(did, actor);
+  deposit(@Param('did') did: string) {
     return this.agents.recordDeposit(did);
   }
 
@@ -1959,12 +1974,26 @@ export class SbgController {
     return this.gate.canTransact(did);
   }
 
+  /**
+   * ASK TO TOP UP. It hands back a reference and how to pay; **it moves no money.**
+   *
+   * Until 2026-09-22 this route credited the float with whatever number arrived in the body, and the
+   * books recorded cash the network could not prove it held. Money is now created only by a confirmed
+   * payment — rule 5 of the money model, and the user's own words: *"if a shop tops up then we need proof
+   * of that… we need psp, airtime or mobile money webhook confirmation."* See `foundation/funding`.
+   */
   @Post('agents/:did/top-up')
   topUp(@Param('did') did: string, @Body() dto: TopUpDto, @Actor() actor: IntrospectionResult) {
-    // Closes a STRANGER topping up somebody's float. It does not answer whose word a top-up rests on —
-    // the shop's own, today, standing in for a payment rail that does not exist: see progress.html.
     this.assertAgentActs(did, actor);
-    return this.gate.topUp(did, dto.amount, dto.bankRef);
+    return this.funding.open({ payerKind: 'agent', payerDid: did, amount: dto.amount });
+  }
+
+  /** What this shop is waiting to have confirmed, and what has been confirmed lately. Owner-scoped:
+   *  it is their money and nobody else's business. */
+  @Get('agents/:did/funding')
+  agentFunding(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
+    this.assertAgentActs(did, actor);
+    return { open: this.funding.openFor(did), items: this.funding.list({ payerDid: did }).slice(0, 10) };
   }
 
   /** A shop's EARNINGS register (R4): its OWN ledger (top-ups / handling pay / shipping fees / refunds),
@@ -2708,13 +2737,26 @@ export class SbgController {
     return this.vehicles.setPrice(id, dto.price);
   }
 
-  /** Vendor prepays its balance with the per-country daughter company. Owner-scoped (PG0): money movement
-   *  on a store's book is the store's own action, even in the crediting direction. */
+  /**
+   * A store ASKS to prepay its balance with the per-country daughter company.
+   *
+   * The twin of the shop's top-up, and changed for the same reason: this used to credit the store's
+   * prepaid balance with a number it typed itself. It now opens a funding request and waits for a rail
+   * to confirm the payment. Owner-scoped, as it was.
+   */
   @Scopes('vendor:manage:self')
   @Post('vendors/:id/top-up')
   topUpVendor(@Param('id') id: string, @Body() dto: TopUpDto, @Actor() actor: IntrospectionResult) {
     this.assertVendorOwner(id, actor);
-    return VendorService.publicView(this.vendors.topUp(id, dto.amount));
+    return this.funding.open({ payerKind: 'vendor', payerDid: id, amount: dto.amount });
+  }
+
+  /** What this store is waiting to have confirmed, and what has been confirmed lately. Owner-scoped. */
+  @Scopes('vendor:read:self')
+  @Get('vendors/:id/funding')
+  vendorFunding(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    this.assertVendorOwner(id, actor);
+    return { open: this.funding.openFor(id), items: this.funding.list({ payerDid: id }).slice(0, 10) };
   }
 
   /** A vendor's prepaid balance + settlement book (top-ups / billings / rebates). Owner-scoped — this is the

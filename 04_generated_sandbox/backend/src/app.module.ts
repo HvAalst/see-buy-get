@@ -11,6 +11,7 @@ import { MailModule } from './foundation/mail/mail.module';
 import { PresenceModule } from './foundation/presence/presence.module';
 import { BooksModule } from './foundation/books/books.module';
 import { PayoutsModule } from './foundation/payouts/payouts.module';
+import { FundingModule } from './foundation/funding/funding.module';
 import { MoneyModule } from './foundation/money/money.module';
 import { AuthModule } from './foundation/auth/auth.module';
 import { HealthModule } from './health/health.module';
@@ -46,6 +47,7 @@ import { SseModule } from './modules/sse/sse.module';
     PresenceModule,
     BooksModule,
     PayoutsModule,
+    FundingModule,
     MoneyModule,
     AuthModule,
     HealthModule,

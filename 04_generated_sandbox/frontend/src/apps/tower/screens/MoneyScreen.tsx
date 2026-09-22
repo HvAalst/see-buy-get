@@ -3,7 +3,8 @@ import { Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { EntityPicker } from './EntityPicker';
 import { amount, money } from '../queues';
-import { PAYOUT_ACTIONS, payoutTone } from '../settlement';
+import { FUNDING_ACTIONS, PAYOUT_ACTIONS, fundingLine, fundingTone, payoutTone, type FundingAction, type FundingRow } from '../settlement';
+import { ConsoleDetail } from '../ConsoleDetail';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
 /**
@@ -157,11 +158,212 @@ export function MoneyScreen({ state, actions }: { state: TowerState; actions: To
         )}
       </section>
 
+      {/* Money coming IN — the mirror of the panel above, and the reason the two KPIs at the top can be
+          believed at all. Placed after the payouts because a company reads "can I pay everybody" first
+          and "who still owes us a top-up" second. */}
+      <MoneyIn state={state} actions={actions} />
+
       {/* The network's own ledger. Operator-only, and network-wide rather than per company — which is
           why the float is stated per currency: two sisters settle in different money, and a total across
           them would be a figure denominated in nothing. */}
       {isOperator ? <NetworkLedger state={state} /> : null}
     </>
+  );
+}
+
+/**
+ * MONEY COMING IN — and the rule this panel exists to make visible.
+ *
+ * Until 2026-09-22 a shop's own app created the entry that put cash in the held figure at the top of this
+ * screen. There was nothing to look at here because there was nothing to wait for: asking WAS paying.
+ * Now a request sits in this table with the reference the payer was told to quote, and it only becomes
+ * money when a payment provider confirms it — at the amount the provider confirms.
+ *
+ * Neither button on a row declares a payment. Confirm asks for the statement line; the sandbox one signs
+ * a callback and sends it through the provider's own door.
+ */
+function MoneyIn({ state, actions }: { state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const [asking, setAsking] = useState<{ row: FundingRow; action: FundingAction } | null>(null);
+  const rows = state.funding;
+
+  return (
+    <>
+      <section class="cons__panel" style="margin-top:18px">
+        <div class="cons__panelhead">
+          <span class="cons__panelt">{t('tower.money.in.title')}</span>
+        </div>
+        <p class="cons__caveat">
+          <Icon name="wallet" size={18} />
+          <span>{t('tower.money.in.lede')}</span>
+        </p>
+
+        {rows === null ? (
+          <p class="cons__empty">{t('tower.queues.loading')}</p>
+        ) : rows.length === 0 ? (
+          <div class="cons__empty">
+            <p class="cons__emptyt">{t('tower.money.in.emptyTitle')}</p>
+            <p>{t('tower.money.in.emptyBody')}</p>
+          </div>
+        ) : (
+          <table class="ctbl ctbl--stack">
+            <thead>
+              <tr>
+                <th>{t('tower.money.in.col.payer')}</th>
+                <th>{t('tower.money.in.col.what')}</th>
+                <th>{t('tower.money.in.col.ref')}</th>
+                <th>{t('tower.money.col.state')}</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.fundingId}>
+                  <td class="ctbl__strong">{row.payerName ?? `${row.payerDid?.slice(0, 22) ?? "—"}…`}</td>
+                  <td class="ctbl__strong">
+                    <span class="ctbl__lbl">{t('tower.money.in.col.what')}</span>
+                    {fundingLine(row, t)}
+                  </td>
+                  <td class="ctbl__mono">
+                    <span class="ctbl__lbl">{t('tower.money.in.col.ref')}</span>
+                    {/* Their reference while they are still paying; the PROVIDER's once it has been paid —
+                        which is the one an auditor is given when somebody says they were never credited. */}
+                    {row.providerRef || row.reference || '—'}
+                  </td>
+                  <td>
+                    <span class="ctbl__lbl">{t('tower.money.col.state')}</span>
+                    <span class={`ctag ctag--${fundingTone(row.status)}`}>{t(`tower.money.in.state.${row.status}` as never)}</span>
+                  </td>
+                  <td class="ctbl__num">
+                    <span class="twr-clear__act">
+                      {(FUNDING_ACTIONS[row.status] ?? []).map((act) => (
+                        <button
+                          key={act.action}
+                          type="button"
+                          class={`cbtn cbtn--sm ${act.tone === 'danger' ? 'cbtn--danger' : 'cbtn--ghost'}`}
+                          disabled={state.busyId === row.fundingId}
+                          onClick={() =>
+                            act.needsRef
+                              ? setAsking({ row, action: act.action })
+                              : void actions.moveFunding(row.fundingId, act.action, { reason: act.reasonKey ? t(act.reasonKey) : '' })
+                          }
+                        >
+                          {t(act.labelKey)}
+                        </button>
+                      ))}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      {/* Payments with nobody's name on them. Shown even when empty is NOT the choice here — an empty
+          section would be noise; what matters is that they are never silently dropped. */}
+      {state.unmatched.length ? (
+        <section class="cons__panel" style="margin-top:18px">
+          <div class="cons__panelhead">
+            <span class="cons__panelt">{t('tower.money.in.unmatchedTitle')}</span>
+            <span class="ctbl__sub">{state.unmatched.length}</span>
+          </div>
+          <p class="cons__caveat">
+            <Icon name="warning" size={18} />
+            <span>{t('tower.money.in.unmatchedLede')}</span>
+          </p>
+          <table class="ctbl ctbl--stack">
+            <thead>
+              <tr>
+                <th>{t('tower.money.in.unmatchedCol.from')}</th>
+                <th class="ctbl__num">{t('tower.money.col.amount')}</th>
+                <th>{t('tower.money.col.ref')}</th>
+                <th>{t('tower.money.in.unmatchedCol.why')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {state.unmatched.map((u) => (
+                <tr key={u.id}>
+                  <td>{u.payerLabel || u.provider || '—'}</td>
+                  <td class="ctbl__num ctbl__strong">
+                    <span class="ctbl__lbl">{t('tower.money.col.amount')}</span>
+                    {amount(u.amount ?? 0, u.currency)}
+                  </td>
+                  <td class="ctbl__mono">
+                    <span class="ctbl__lbl">{t('tower.money.col.ref')}</span>
+                    {u.providerRef || '—'}
+                  </td>
+                  <td class="ctbl__sub">
+                    <span class="ctbl__lbl">{t('tower.money.in.unmatchedCol.why')}</span>
+                    {u.reason}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      ) : null}
+
+      {asking ? <ConfirmFundingSheet ask={asking} onClose={() => setAsking(null)} state={state} actions={actions} /> : null}
+    </>
+  );
+}
+
+/**
+ * THE REFERENCE IS THE WHOLE FORM.
+ *
+ * Both confirm paths ask for it and neither will proceed without one, because a payment nobody can look
+ * up afterwards is the payer's own word with a member of staff's name on it. The amount is asked for
+ * separately and defaults to what was requested — it must be what ARRIVED, which is not always the same
+ * number, and typing it is how somebody notices.
+ */
+function ConfirmFundingSheet({ ask, onClose, state, actions }: { ask: { row: FundingRow; action: FundingAction }; onClose: () => void; state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const [ref, setRef] = useState('');
+  const [value, setValue] = useState(String(ask.row.amount ?? 0));
+  const amountNum = Number(value);
+  const ready = ref.trim().length >= 3 && amountNum > 0;
+
+  return (
+    <ConsoleDetail openKey={ask.row.fundingId} title={t('tower.money.in.refTitle')} onClose={onClose}>
+      {/* Its own heading, because at desk width ConsoleDetail renders a panel and not a titled sheet —
+          and because the one thing this form must not be is ambiguous about WHOSE payment it records. */}
+      <div class="cons__panelhead">
+        <span class="cons__panelt">{t('tower.money.in.refTitle')}</span>
+        <span class="ctbl__sub">{ask.row.payerName ?? ask.row.payerDid?.slice(0, 22)}</span>
+      </div>
+      <p class="cons__lede">{t('tower.money.in.refBody')}</p>
+      {ask.action === 'simulate' ? (
+        <p class="cons__caveat">
+          <Icon name="warning" size={18} />
+          <span>{t('tower.money.in.sandboxNote')}</span>
+        </p>
+      ) : null}
+      <label class="cfield">
+        <span class="cfield__label">{t('tower.money.in.refLabel')}</span>
+        <input class="cinput" value={ref} onInput={(e) => setRef((e.target as HTMLInputElement).value)} />
+      </label>
+      <label class="cfield">
+        <span class="cfield__label">{t('tower.money.in.amountLabel')}</span>
+        <input class="cinput" type="number" step="0.01" min="0" value={value} onInput={(e) => setValue((e.target as HTMLInputElement).value)} />
+      </label>
+      <div class="twr-clear__act">
+        <button
+          type="button"
+          class="cbtn cbtn--primary"
+          disabled={!ready || state.busyId === ask.row.fundingId}
+          onClick={async () => {
+            await actions.moveFunding(ask.row.fundingId, ask.action, { providerRef: ref.trim(), amount: amountNum });
+            onClose();
+          }}
+        >
+          {t('tower.money.in.refConfirm')}
+        </button>
+        <button type="button" class="cbtn cbtn--ghost" onClick={onClose}>
+          {t('tower.money.in.cancel')}
+        </button>
+      </div>
+    </ConsoleDetail>
   );
 }
 

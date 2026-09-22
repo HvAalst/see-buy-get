@@ -29,6 +29,7 @@ import type {
   OriginOption,
   QuoteView, ReturnOfferView,
   SettlementRow,
+  VendorFundingView,
   VendorRegisteredView,
   VendorView,
 } from './types';
@@ -106,6 +107,8 @@ export interface VendorState {
   phase: Phase;
   screen: Screen;
   vendor: VendorView | null;
+  /** A prepayment asked for and not yet confirmed by the payment provider. Null when nothing is waiting. */
+  funding: VendorFundingView | null;
   orders: OrderRow[];
   ordersTotal: number;
   ordersState: 'idle' | 'loading' | 'ready' | 'error';
@@ -160,6 +163,7 @@ const INITIAL: VendorState = {
   phase: 'boot',
   screen: 'orders',
   vendor: null,
+  funding: null,
   orders: [],
   ordersTotal: 0,
   ordersState: 'idle',
@@ -326,7 +330,7 @@ export function useVendorApp() {
       // The register page loads on its own (ordersEpoch-guarded) path; the header counts come from the
       // store-wide stats endpoint, NOT the filtered page. Both run alongside the checkouts inbox.
       void fetchOrdersWith(stateRef.current.orderQuery);
-      const [statsR, checkoutsR, returnsR] = await Promise.all([client.api.orderStats(creds.vendorId), client.api.checkouts(creds.vendorId), client.api.returns(creds.vendorId)]);
+      const [statsR, checkoutsR, returnsR, fundingR] = await Promise.all([client.api.orderStats(creds.vendorId), client.api.checkouts(creds.vendorId), client.api.returns(creds.vendorId), client.api.funding(creds.vendorId)]);
       if (superseded()) return;
       setState((s) => ({
         ...s,
@@ -335,6 +339,8 @@ export function useVendorApp() {
         orderStats: statsR.error ? s.orderStats : (narrow<OrderStats>(statsR.data) ?? s.orderStats),
         checkouts: checkoutsR.error ? s.checkouts : (narrow<CheckoutRow[]>(checkoutsR.data) ?? []),
         returns: returnsR.error ? s.returns : (narrow<{ items: ReturnOfferView[] }>(returnsR.data)?.items ?? []),
+        // A prepayment still waiting on the provider — the answer to "why is my balance still low".
+        funding: fundingR.error ? s.funding : (narrow<{ open: VendorFundingView | null }>(fundingR.data)?.open ?? null),
         error: null,
         stale: false,
         refreshing: false,
@@ -836,17 +842,26 @@ export function useVendorApp() {
     [client, creds, run, fail, pushToast, refresh],
   );
 
+  /**
+   * ASK to prepay — which is not prepaying.
+   *
+   * The twin of the shop app's, and changed for the same reason: this used to claim "Balance topped up"
+   * the instant the request returned, and the balance it claimed rested on the store's own word. The
+   * money model's rule 5 says money is created only by a confirmed payment, so what comes back now is a
+   * reference to quote, and the balance moves when the provider confirms it.
+   */
   const topUp = useCallback(
     async (amount: number) => {
       if (!client || !creds || !(amount > 0)) return;
       await run('topup', async () => {
         const r = await client.api.topUp(creds.vendorId, amount);
         if (r.error) return fail(r.error);
-        pushToast({ tone: 'ok', icon: 'wallet', title: t('vendor.toast.topUpTitle'), detail: t('vendor.toast.topUpDetail', { amount: amount.toFixed(2) }) });
-        await refresh();
+        const funding = narrow<VendorFundingView>(r.data);
+        setState((s) => ({ ...s, funding }));
+        pushToast({ tone: 'info', icon: 'wallet', title: t('vendor.toast.topUpAsked'), detail: t('vendor.toast.topUpAskedDetail', { reference: funding.reference }) });
       });
     },
-    [client, creds, run, fail, pushToast, refresh],
+    [client, creds, run, fail, pushToast],
   );
 
   /** Move the store's map pin — the origin ranking and "near your store" all key off it. */

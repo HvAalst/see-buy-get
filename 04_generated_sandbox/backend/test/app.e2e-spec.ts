@@ -21,6 +21,26 @@ describe('GLOS backend (e2e)', () => {
     await app.close();
   });
 
+  /**
+   * PUT MONEY IN THE WAY MONEY ACTUALLY GETS IN — ask, then let the provider confirm it.
+   *
+   * These tests used to POST a top-up and carry on, because a top-up used to BE the credit. It is not:
+   * asking moves nothing and the books wait for a payment provider (money model, rule 5). So the helper
+   * does both halves over HTTP, and the second half goes through the signed callback door — which makes
+   * the end-to-end suite the only place that proves the whole inbound rail, signature included.
+   */
+  async function fund(path: string, amount: number, auth: Record<string, string>): Promise<{ asked: request.Response; paid: request.Response }> {
+    const http = app.getHttpServer();
+    const asked = await request(http).post(path).set(auth).send({ amount }).expect(201);
+    const fundingId = asked.body.fundingId as string;
+    expect(asked.body.status).toBe('awaiting');
+    const providerRef = `MPX${Math.random().toString(16).slice(2, 10).toUpperCase()}`;
+    // The sandbox rail signs it exactly as a provider would and it is verified on the way back in.
+    const paid = await request(http).post(`/v1/rails/funding/${fundingId}/simulate`).set(auth).send({ providerRef, amount }).expect(201);
+    expect(paid.body.status).toBe('confirmed');
+    return { asked, paid };
+  }
+
   it('/v1/health (GET) is public and returns ok', () => {
     return request(app.getHttpServer())
       .get('/v1/health')
@@ -600,7 +620,7 @@ describe('GLOS backend (e2e)', () => {
       const did = reg.body.did as string;
       await request(http).post(`/v1/sbg/agents/${did}/submit-kyc`).set(auth).send({ idCopyRef: 'id.jpg', tradingLicenceRef: 'lic.pdf', shopPhotoRefs: ['shop.jpg'] }).expect(201);
       await request(http).post(`/v1/sbg/agents/${did}/kyc-decision`).set(auth).send({ approve: true }).expect(201);
-      await request(http).post(`/v1/sbg/agents/${did}/top-up`).set(auth).send({ amount: 50 }).expect(201);
+      await fund(`/v1/sbg/agents/${did}/top-up`, 50, auth);
       return did;
     }
     const origin = await onboard('North PUDO', 'NorthTown');
@@ -653,7 +673,7 @@ describe('GLOS backend (e2e)', () => {
       const did = reg.body.did as string;
       await request(http).post(`/v1/sbg/agents/${did}/submit-kyc`).set(auth).send({ idCopyRef: 'id.jpg', tradingLicenceRef: 'lic.pdf', shopPhotoRefs: ['shop.jpg'] }).expect(201);
       await request(http).post(`/v1/sbg/agents/${did}/kyc-decision`).set(auth).send({ approve: true }).expect(201);
-      await request(http).post(`/v1/sbg/agents/${did}/top-up`).set(auth).send({ amount: 20 }).expect(201);
+      await fund(`/v1/sbg/agents/${did}/top-up`, 20, auth);
       return did;
     }
     const origin = await onboard('Origin PUDO', 'NorthTown');
@@ -667,7 +687,7 @@ describe('GLOS backend (e2e)', () => {
     // But a later fetch must NOT re-expose the signing secret (a guessed vendorId would leak the key).
     const reFetched = await request(http).get(`/v1/sbg/vendors/${vendor.body.vendorId}`).set(auth).expect(200);
     expect(reFetched.body.secret).toBeUndefined();
-    const topped = await request(http).post(`/v1/sbg/vendors/${vendor.body.vendorId}/top-up`).set(auth).send({ amount: 50 }).expect(201); // prepay the daughter co
+    const { asked: topped } = await fund(`/v1/sbg/vendors/${vendor.body.vendorId}/top-up`, 50, auth); // prepay the daughter co
     expect(topped.body.secret).toBeUndefined();
     const order = await request(http).post('/v1/sbg/inbound/orders').set(auth).send({ vendorId: vendor.body.vendorId, externalOrderId: 'ORD-77', originPudoDid: origin, destPudoDid: dest, buyerMobile: '+254700999', size: 'M', contentPhotoRef: 'content.jpg', items: [{ name: 'Books', qty: 3 }] }).expect(201);
     const parcelId = order.body.parcel.parcelId as string;
@@ -702,13 +722,13 @@ describe('GLOS backend (e2e)', () => {
       const did = reg.body.did as string;
       await request(http).post(`/v1/sbg/agents/${did}/submit-kyc`).set(auth).send({ idCopyRef: 'id.jpg', tradingLicenceRef: 'lic.pdf', shopPhotoRefs: ['shop.jpg'] }).expect(201);
       await request(http).post(`/v1/sbg/agents/${did}/kyc-decision`).set(auth).send({ approve: true }).expect(201);
-      await request(http).post(`/v1/sbg/agents/${did}/top-up`).set(auth).send({ amount: 20 }).expect(201);
+      await fund(`/v1/sbg/agents/${did}/top-up`, 20, auth);
       return did;
     }
     const origin = await onboard('MDP Origin', 'NorthTown');
     const dest = await onboard('MDP Dest', 'EastTown');
     const vendor = await request(http).post('/v1/sbg/vendors').set(auth).send({ name: 'HubShop' }).expect(201);
-    await request(http).post(`/v1/sbg/vendors/${vendor.body.vendorId}/top-up`).set(auth).send({ amount: 50 }).expect(201); // prepay the daughter co
+    await fund(`/v1/sbg/vendors/${vendor.body.vendorId}/top-up`, 50, auth); // prepay the daughter co
 
     // An MDP hub that last-mile-serves the destination zone.
     const hub = await request(http).post('/v1/sbg/mdps').set(auth).send({ name: 'East Sort Hub', zones: ['EastTown'], location: { lat: -1.25, lng: 36.95 } }).expect(201);
@@ -762,7 +782,7 @@ describe('GLOS backend (e2e)', () => {
     const origin = reg.body.did as string;
     await request(http).post(`/v1/sbg/agents/${origin}/submit-kyc`).set(auth).send({ idCopyRef: 'id', tradingLicenceRef: 'l', shopPhotoRefs: ['s'] }).expect(201);
     await request(http).post(`/v1/sbg/agents/${origin}/kyc-decision`).set(auth).send({ approve: true }).expect(201);
-    await request(http).post(`/v1/sbg/agents/${origin}/top-up`).set(auth).send({ amount: 50 }).expect(201);
+    await fund(`/v1/sbg/agents/${origin}/top-up`, 50, auth);
     const corridor = await request(http).post('/v1/sbg/corridors').set(auth).send({ name: 'feeder', originZone: 'NorthTown', destZone: 'SouthTown' }).expect(201);
 
     // A bike courier (light registry → ACTIVE immediately) + a bike (own IDs).
@@ -796,7 +816,7 @@ describe('GLOS backend (e2e)', () => {
     const origin = reg.body.did as string;
     await request(http).post(`/v1/sbg/agents/${origin}/submit-kyc`).set(auth).send({ idCopyRef: 'id', tradingLicenceRef: 'l', shopPhotoRefs: ['s'] }).expect(201);
     await request(http).post(`/v1/sbg/agents/${origin}/kyc-decision`).set(auth).send({ approve: true }).expect(201);
-    await request(http).post(`/v1/sbg/agents/${origin}/top-up`).set(auth).send({ amount: 50 }).expect(201);
+    await fund(`/v1/sbg/agents/${origin}/top-up`, 50, auth);
     const hub = await request(http).post('/v1/sbg/mdps').set(auth).send({ name: 'Hub', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } }).expect(201);
 
     // A motorcycle courier (light → ACTIVE) coupled to a motorcycle.

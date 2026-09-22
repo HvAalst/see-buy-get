@@ -45,9 +45,18 @@ export function createAgentApi(sbg: SbgClient) {
     /** The 'no money, no scan' gate — { ok, code, balance, shortfall } as readable state. */
     canTransact: (did: string) => sbg.request((c) => c.GET('/v1/sbg/agents/{did}/can-transact', { params: { path: { did } } })),
 
-    /** Prepay the wallet that funds every accept scan. */
+    /**
+     * ASK to top up the wallet that funds every accept scan.
+     *
+     * It does NOT add money. It hands back a reference and how to pay against it; the balance moves when
+     * the payment provider confirms the payment. Before 2026-09-22 this route credited the float with
+     * whatever number was typed here — see `foundation/funding` for why that changed.
+     */
     topUp: (did: string, amount: number) =>
       sbg.request((c) => c.POST('/v1/sbg/agents/{did}/top-up', { params: { path: { did } }, body: { amount } })),
+
+    /** What this shop is waiting to have confirmed, and what was confirmed lately. */
+    funding: (did: string) => sbg.request((c) => c.GET('/v1/sbg/agents/{did}/funding', { params: { path: { did } } })),
 
     /** Shop open / temporarily closed (Risk #30) — distinct from the lifecycle status. */
     setAvailability: (did: string, open: boolean) =>

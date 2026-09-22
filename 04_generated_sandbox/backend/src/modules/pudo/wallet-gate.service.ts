@@ -197,10 +197,24 @@ export class WalletGateService {
     };
   }
 
-  /** Real money in → the shop's DEPOSIT grows and the sister holds the cash. Nothing is earned here:
-   *  we charge for service, not for balance, so revenue waits until a parcel actually moves. */
-  topUp(did: string, amount: number, bankRef = 'cash'): PudoLedgerEntry {
+  /**
+   * Real money in → the shop's DEPOSIT grows and the sister holds the cash. Nothing is earned here:
+   * we charge for service, not for balance, so revenue waits until a parcel actually moves.
+   *
+   * **A PAYMENT RAIL CALLS THIS, NOT A SHOP.** Until 2026-09-22 the shop's own app reached this through
+   * `POST agents/:did/top-up` and money appeared because somebody typed a number. It is now reached only
+   * from a confirmed funding (`FundingService.confirm`), which is reached only from a signed provider
+   * callback or a statement line a member of staff can point at. See `foundation/funding`.
+   *
+   * `fee` is what the provider took to move the money. The shop is credited the GROSS — never net-credited,
+   * which would push an opaque deduction onto the least sophisticated party — and the fee is OUR expense,
+   * so the cash we actually hold is the gross less the fee. That is the whole reason `expense.payment_fees`
+   * exists, and the first thing that breaks reconciliation when it is left out: the deposits add up to more
+   * than the custody, and nothing says why.
+   */
+  topUp(did: string, amount: number, bankRef = 'cash', fee = 0): PudoLedgerEntry {
     if (amount <= 0) throw new GlosError('AMOUNT_INVALID', 'Top-up amount must be positive');
+    const cost = Math.min(Math.max(Number.isFinite(fee) ? Math.round(fee * 100) / 100 : 0, 0), amount);
     // KYC gate. This used to ride on "the m1 wallet exists", which was provisioned at approval — an
     // implicit coupling that stopped meaning anything once the balance moved into the books. Say it.
     const status = this.agents.get(did).status;
@@ -212,13 +226,41 @@ export class WalletGateService {
     const repay = Math.min(amount, this.agents.creditOwed(did));
     const toDeposit = Math.round((amount - repay) * 100) / 100;
     const entryId = this.postAgent(did, 'top-up', bankRef, [
-      { code: ACCOUNT_CODES.CASH_CUSTODY, amount },
+      // What we actually hold is what the payer sent LESS what the rail took on the way.
+      { code: ACCOUNT_CODES.CASH_CUSTODY, amount: Math.round((amount - cost) * 100) / 100 },
+      ...(cost > 0 ? [{ code: ACCOUNT_CODES.EXPENSE_PAYMENT_FEES, amount: cost }] : []),
       ...(repay > 0 ? [{ code: ACCOUNT_CODES.RECEIVABLE_AGENT, counterparty: did, amount: -repay }] : []),
       ...(toDeposit > 0 ? [{ code: ACCOUNT_CODES.DEPOSIT_AGENT, counterparty: did, amount: -toDeposit }] : []),
     ]);
     const entry = this.record('TOP_UP', '+', amount, did, bankRef, 'bank', entryId);
     this.agents.refreshLock(did);
     void this.events.publish(GlosEvent.Pudo.WalletToppedUp, { did, amount, bankRef }, { source: 'pudo' }).catch(() => undefined);
+    return entry;
+  }
+
+  /**
+   * A confirmed top-up that came back — a mobile-money reversal, a recalled transfer, a chargeback.
+   *
+   * Its own entry, never an unwinding of the first: the money did arrive and did go back, and a book that
+   * shows neither cannot be reconciled against a statement that shows both.
+   *
+   * THE FEE IS NOT GIVEN BACK, and the entry says so by leaving it alone. A provider that recalls a
+   * payment takes the gross out of our account and keeps what it charged to carry it; the expense was
+   * real and stays booked. The sister is out of pocket by exactly that fee, visibly, which is the true
+   * position and the reason somebody should care about reversals.
+   *
+   * It is taken back out of the DEPOSIT in full, even where the original top-up went to clearing trade
+   * credit. That position has moved on since; reconstructing the split would be guessing at a state that
+   * no longer exists. A shop that has already spent the money goes honestly negative — it owes it.
+   */
+  reverseTopUp(did: string, amount: number, ref: string): PudoLedgerEntry | null {
+    if (amount <= 0) return null;
+    const entryId = this.postAgent(did, 'top-up-reversal', ref, [
+      { code: ACCOUNT_CODES.DEPOSIT_AGENT, counterparty: did, amount },
+      { code: ACCOUNT_CODES.CASH_CUSTODY, amount: -amount },
+    ]);
+    const entry = this.record('TOP_UP', '-', amount, did, ref, 'bank', entryId);
+    this.agents.refreshLock(did);
     return entry;
   }
 

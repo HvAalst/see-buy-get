@@ -39,6 +39,22 @@ async function req(method, path, { token, body } = {}) {
   }
   return { ok: res.ok, status: res.status, data };
 }
+
+/**
+ * PUT MONEY IN THE WAY MONEY GETS IN — ask, then let the provider confirm it.
+ *
+ * A top-up used to BE the credit. It is not: asking moves nothing and the books wait for a payment
+ * provider (money model, rule 5 — see foundation/funding). `op` is the operator token, because
+ * standing in for the provider is a staff act, and in a live deployment it is the provider's own POST.
+ */
+async function fundVia(path, amount, tok, op) {
+  const asked = need(await req('POST', path, { token: tok, body: { amount } }), 'ask to pay in');
+  const providerRef = `MPX${Math.random().toString(16).slice(2, 10).toUpperCase()}`;
+  return need(
+    await req('POST', `/v1/rails/funding/${asked.fundingId}/simulate`, { token: op, body: { providerRef, amount } }),
+    'provider confirmation',
+  );
+}
 const need = (r, what) => {
   if (!r.ok) die(`${what} → ${r.status} ${JSON.stringify(r.data)}`);
   return r.data;
@@ -106,8 +122,9 @@ const run = async () => {
     const tok = acct.token.access_token;
     need(await req('POST', `/v1/sbg/agents/${encodeURIComponent(did)}/submit-kyc`, { token: tok, body: { idCopyRef: 'id.jpg', tradingLicenceRef: 'licence.jpg', shopPhotoRefs: ['shop.jpg'] } }), `kyc ${label}`);
     need(await req('POST', `/v1/sbg/agents/${encodeURIComponent(did)}/kyc-decision`, { token: op, body: { approve: true, by: 'seed' } }), `approve ${label}`);
-    need(await req('POST', `/v1/sbg/agents/${encodeURIComponent(did)}/deposit`, { token: tok }), `deposit ${label}`);
-    await req('POST', `/v1/sbg/agents/${encodeURIComponent(did)}/top-up`, { token: tok, body: { amount: 60 } });
+    // The starter-kit deposit is recorded by the staff who hand over the kit, not by the shop.
+    need(await req('POST', `/v1/sbg/agents/${encodeURIComponent(did)}/deposit`, { token: op }), `deposit ${label}`);
+    await fundVia(`/v1/sbg/agents/${encodeURIComponent(did)}/top-up`, 60, tok, op);
     return { did, shopName: label, zone };
   };
   let open = ((await req('GET', '/v1/sbg/network/points')).data ?? []).filter((p) => p.openState === 'open');
@@ -186,7 +203,7 @@ const run = async () => {
   if (history.length === 0) die('no parcels minted — check routing/corridors between the two PUDOs');
 
   // Fund the store, then settle HALF the still-unpaid ones so the Paid filter has both sides.
-  await req('POST', `/v1/sbg/vendors/${vendorId}/top-up`, { token: tokV, body: { amount: 3000 } });
+  await fundVia(`/v1/sbg/vendors/${vendorId}/top-up`, 3000, tokV, op);
   const unpaid = history.filter((h) => !h.paid);
   for (let k = 0; k < Math.floor(unpaid.length / 2); k++) {
     const s = await req('POST', `/v1/sbg/parcels/${encodeURIComponent(unpaid[k].parcelId)}/settle`, { token: tokV });

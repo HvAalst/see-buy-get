@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PAYOUT_ACTIONS, payoutTone, runSummary } from './settlement';
+import { FUNDING_ACTIONS, PAYOUT_ACTIONS, fundingLine, fundingTone, payoutTone, runSummary } from './settlement';
 
 /**
  * Paying people.
@@ -70,5 +70,61 @@ describe('what a run did', () => {
 
   it('says nothing about skipping when nobody was skipped', () => {
     expect(runSummary({ day: '2026-09-09', raised: [1] }, t)).toBe('tower.money.runRaised(n=1,day=2026-09-09)');
+  });
+});
+
+/**
+ * Money coming IN — the mirror, and the rule read backwards.
+ *
+ * The shop's own app used to create the entry that put cash in the held figure at the top of the Money
+ * screen. What this file holds is the two ways that could come back: a console that offers a way to
+ * declare money arrived without a provider reference, and a row that reads settled when only half of
+ * what was asked for was actually paid.
+ */
+describe('money coming in', () => {
+  it('offers no way to declare a payment without a provider reference', () => {
+    // Both confirm paths demand one. Without it this console is the payer's own word with a staff badge.
+    const confirms = FUNDING_ACTIONS.awaiting.filter((a) => a.action === 'confirm' || a.action === 'simulate');
+    expect(confirms).toHaveLength(2);
+    expect(confirms.every((a) => a.needsRef)).toBe(true);
+  });
+
+  it('offers nothing at all for a state this build has never heard of', () => {
+    expect(FUNDING_ACTIONS.something_new).toBeUndefined();
+  });
+
+  it('lets a confirmed payment be reversed, and nothing else', () => {
+    expect(FUNDING_ACTIONS.confirmed.map((a) => a.action)).toEqual(['reverse']);
+    expect(FUNDING_ACTIONS.expired).toEqual([]);
+  });
+
+  it('is not green until a rail has confirmed it', () => {
+    expect(fundingTone('confirmed')).toBe('ok');
+    expect(fundingTone('awaiting')).toBe('info'); // asked for is not paid
+    expect(fundingTone('reversed')).toBe('warn');
+    expect(fundingTone('expired')).toBe('quiet');
+    expect(fundingTone('something_new')).toBe('quiet');
+  });
+
+  it('says what was ASKED for while it is still waiting', () => {
+    expect(fundingLine({ fundingId: 'f1', status: 'awaiting', amount: 5000, currency: 'KES' }, t)).toBe('tower.money.in.asked(amount=KES 5000.00)');
+  });
+
+  it('says what ARRIVED once it is confirmed, and what the provider took', () => {
+    const line = fundingLine({ fundingId: 'f1', status: 'confirmed', amount: 5000, confirmedAmount: 5000, fee: 75, currency: 'KES' }, t);
+    expect(line).toContain('tower.money.in.arrived(amount=KES 5000.00)');
+    expect(line).toContain('tower.money.in.fee(amount=KES 75.00)');
+  });
+
+  it('shows the shortfall when somebody paid less than they said they would', () => {
+    // The case this line exists for: ask for 5,000, pay 500. Showing only the asked-for amount is how a
+    // half-paid top-up reads as settled.
+    const line = fundingLine({ fundingId: 'f1', status: 'confirmed', amount: 5000, confirmedAmount: 500, currency: 'KES' }, t);
+    expect(line).toContain('tower.money.in.arrived(amount=KES 500.00)');
+    expect(line).toContain('tower.money.in.short(amount=KES 5000.00)');
+  });
+
+  it('says nothing about a shortfall when the full amount arrived', () => {
+    expect(fundingLine({ fundingId: 'f1', status: 'confirmed', amount: 5000, confirmedAmount: 5000, currency: 'KES' }, t)).not.toContain('tower.money.in.short');
   });
 });

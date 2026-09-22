@@ -29,6 +29,7 @@ import type {
   ClassifyView,
   ConsignmentView,
   CollectView,
+  FundingView,
   GateView,
   GeocodeView,
   HandoverView,
@@ -160,6 +161,9 @@ export interface AgentState {
   screen: Screen;
   agent: AgentView | null;
   gate: GateView | null;
+  /** A top-up asked for and not yet confirmed by the payment provider. Null when nothing is pending —
+   *  which is the ordinary state, because a confirmed payment stops being a waiting one. */
+  funding: FundingView | null;
   /** Parcels waiting at this shop for the bus (loaded when the handover screen opens). */
   shopParcels: ParcelView[];
   shopParcelsState: 'idle' | 'loading' | 'ready' | 'error';
@@ -274,6 +278,7 @@ const INITIAL: AgentState = {
   screen: 'home',
   agent: null,
   gate: null,
+  funding: null,
   shopParcels: [],
   shopParcelsState: 'idle',
   bagPlan: { groups: [], bags: [] },
@@ -442,11 +447,25 @@ export function useAgentApp() {
       }
       const gate = narrow<GateView>(gateR.data);
 
+      /*
+       * A TOP-UP THE SHOP IS STILL WAITING ON.
+       *
+       * Read on every refresh rather than only when the sheet is opened: a payment that has not been
+       * confirmed yet is the answer to "why is my balance still low", and the shopkeeper is most likely
+       * to ask that question on the home screen rather than inside the Top up sheet. A failure to read it
+       * is not a failure of the screen — the float and the gate above are what the day runs on — so it
+       * falls back to nothing rather than taking the cockpit down with it.
+       */
+      const fundingR = await client.api.funding(did);
+      if (superseded()) return;
+      const funding = fundingR.error ? null : (narrow<{ open: FundingView | null }>(fundingR.data).open ?? null);
+
       setState((s) => ({
         ...s,
         phase: 'ready',
         agent,
         gate,
+        funding,
         error: null,
         stale: false,
         refreshing: false,
@@ -1065,6 +1084,14 @@ export function useAgentApp() {
     [client, did, run, uploadPhoto, fail, pushToast, refresh],
   );
 
+  /**
+   * ASK to top up — and say so, because nothing has been added.
+   *
+   * The toast used to read "Balance topped up · Added 50.00" the instant this returned. It was never
+   * true, and after 2026-09-22 it is not even close: the money arrives when the payment provider says it
+   * did. So this hands back the reference to quote and the screen shows it; the float moves later, on a
+   * refresh, when the confirmation has landed.
+   */
   const topUp = useCallback(
     async (amount: number) => {
       if (!client || !did || !(amount > 0)) return;
@@ -1072,11 +1099,12 @@ export function useAgentApp() {
         const r = await client.api.topUp(did, amount);
         if (r.error) return fail(r.error);
         buzz();
-        pushToast({ tone: 'ok', icon: 'wallet', title: t('agent.toast.walletTopped'), detail: t('agent.toast.walletToppedDetail', { amount: amount.toFixed(2) }) });
-        await refresh();
+        const funding = narrow<FundingView>(r.data);
+        setState((s) => ({ ...s, funding }));
+        pushToast({ tone: 'info', icon: 'wallet', title: t('agent.toast.topUpAsked'), detail: t('agent.toast.topUpAskedDetail', { reference: funding.reference }) });
       });
     },
-    [client, did, run, fail, pushToast, refresh],
+    [client, did, run, fail, pushToast],
   );
 
   const setOpen = useCallback(

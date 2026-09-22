@@ -99,11 +99,21 @@ export const ERROR_CODES = {
   OTP_LOCKED: { status: 400, title: 'Too many wrong codes' },
   PIN_INVALID: { status: 400, title: 'PIN must be 4 digits' },
 
+  // --- 400 Bad Request: a payment provider's callback -------------------------------------------
+  // The body reached us but does not say what a confirmation has to say. Separate from the signature
+  // failures below because they mean different things to whoever is reading the log: this one is a
+  // mis-shaped message, those are a message we will not take anybody's word for.
+  CALLBACK_INVALID: { status: 400, title: 'This payment confirmation is incomplete' },
+
   // --- 401 Unauthorized ------------------------------------------------------------------------
   UNAUTHORIZED: { status: 401, title: 'Authentication required' },
   AUTH_FAILED: { status: 401, title: 'Wrong email or password' },
   AUTH_CODE_INVALID: { status: 401, title: 'Unknown sign-in code' },
   AUTH_NOT_ACTIVE: { status: 401, title: 'This account is not active yet' },
+  // Money is created by a confirmed payment, so an unsigned or replayed confirmation is refused the way
+  // a forged token is — these two are the lock on the door that creates money.
+  CALLBACK_UNSIGNED: { status: 401, title: 'This payment confirmation is not signed' },
+  CALLBACK_STALE: { status: 401, title: 'This payment confirmation is too old to accept' },
 
   // --- 402 Payment Required --------------------------------------------------------------------
   PAYMENT_REQUIRED: { status: 402, title: 'Payment is required' },

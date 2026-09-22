@@ -115,6 +115,215 @@
         }
       }
     },
+    "/v1/rails/funding": {
+      "get": {
+        "operationId": "Funding.list",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": false,
+            "in": "query",
+            "description": "Staff only: one company, instead of every company.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/rails/funding/{fundingId}/confirm": {
+      "post": {
+        "operationId": "Funding.confirmByHand",
+        "summary": "",
+        "description": "A member of staff confirms a payment they can see on a bank statement.\n\nThe fallback that has to exist: not every shop pays by mobile money, and a transfer into the bank\naccount has no webhook behind it. It is deliberately NOT the ordinary path — the user's words,\n2026-09-22: *\"sbg staff confirming every top up is a tough call\"* — and it is recorded as what it is,\nwith the person who confirmed it and the statement reference they were reading. A top-up nobody can\npoint at a statement line for cannot be entered here.",
+        "parameters": [
+          {
+            "name": "fundingId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmFundingDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/rails/funding/{fundingId}/simulate": {
+      "post": {
+        "operationId": "Funding.simulate",
+        "summary": "",
+        "description": "SANDBOX ONLY — stand in for the provider, and go through its front door to do it.\n\nThis builds a callback, signs it with the rail's own secret and feeds it to the same `verify()` a\nreal provider's POST meets. Nothing is bypassed: if the signature check breaks, every demo breaks\nwith it, which is the only way a lock gets tested before the day it matters. 404 in production,\nwhere a payment is confirmed by a provider and by nobody wearing our badge.",
+        "parameters": [
+          {
+            "name": "fundingId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimulateFundingDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/rails/funding/{fundingId}/fail": {
+      "post": {
+        "operationId": "Funding.fail",
+        "summary": "",
+        "description": "The payer said no, or the rail did. Nothing moved, so nothing is unwound.",
+        "parameters": [
+          {
+            "name": "fundingId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FundingFailureDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Funding"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/rails/funding/{fundingId}/expire": {
+      "post": {
+        "operationId": "Funding.expire",
+        "summary": "",
+        "description": "Nobody ever paid it — close the request so the list stops reading as money on its way.",
+        "parameters": [
+          {
+            "name": "fundingId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FundingFailureDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Funding"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/rails/funding/{fundingId}/reverse": {
+      "post": {
+        "operationId": "Funding.reverse",
+        "summary": "",
+        "description": "It arrived and went back. Its own entry, never an unwinding of the first.",
+        "parameters": [
+          {
+            "name": "fundingId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FundingFailureDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Funding"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/auth/token": {
       "post": {
         "operationId": "Auth.token",
@@ -3870,7 +4079,7 @@
       "post": {
         "operationId": "Sbg.deposit",
         "summary": "",
-        "description": "Record the refundable equipment/starter-kit deposit.",
+        "description": "Record the refundable equipment/starter-kit deposit.\n\nSTAFF, not the shop. It used to be the shop's own to declare, which made it the second thing in this\nsystem a party could say about its own money and have believed. Unlike a top-up it is not a candidate\nfor a payment rail: it is taken once, at onboarding, in cash or in kind, by the person handing over\nthe printer — so the network genuinely is the observer here, and the question the user raised about\nstaff confirming *every* top-up does not arise for something that happens once per shop.\n\nIt is still a FLAG rather than a posting. A refundable deposit is money we hold and owe back, and it\nbelongs in the books beside the float it must never be mixed with — named as a gap on progress.html\nrather than guessed at here, because it needs an amount in the sister's own currency and the constant\nit has today is in dollars.",
         "parameters": [
           {
             "name": "did",
@@ -7497,6 +7706,8 @@
     "/v1/sbg/agents/{did}/top-up": {
       "post": {
         "operationId": "Sbg.topUp",
+        "summary": "",
+        "description": "ASK TO TOP UP. It hands back a reference and how to pay; **it moves no money.**\n\nUntil 2026-09-22 this route credited the float with whatever number arrived in the body, and the\nbooks recorded cash the network could not prove it held. Money is now created only by a confirmed\npayment — rule 5 of the money model, and the user's own words: *\"if a shop tops up then we need proof\nof that… we need psp, airtime or mobile money webhook confirmation.\"* See `foundation/funding`.",
         "parameters": [
           {
             "name": "did",
@@ -7523,10 +7734,32 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PudoLedgerEntry"
+                  "$ref": "#/components/schemas/Funding"
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/v1/sbg/agents/{did}/funding": {
+      "get": {
+        "operationId": "Sbg.agentFunding",
+        "summary": "",
+        "description": "What this shop is waiting to have confirmed, and what has been confirmed lately. Owner-scoped:\n it is their money and nobody else's business.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
           }
         }
       }
@@ -9967,7 +10200,7 @@
       "post": {
         "operationId": "Sbg.topUpVendor",
         "summary": "",
-        "description": "Vendor prepays its balance with the per-country daughter company. Owner-scoped (PG0): money movement\n on a store's book is the store's own action, even in the crediting direction.",
+        "description": "A store ASKS to prepay its balance with the per-country daughter company.\n\nThe twin of the shop's top-up, and changed for the same reason: this used to credit the store's\nprepaid balance with a number it typed itself. It now opens a funding request and waits for a rail\nto confirm the payment. Owner-scoped, as it was.",
         "parameters": [
           {
             "name": "id",
@@ -9994,10 +10227,32 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Funding"
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/v1/sbg/vendors/{id}/funding": {
+      "get": {
+        "operationId": "Sbg.vendorFunding",
+        "summary": "",
+        "description": "What this store is waiting to have confirmed, and what has been confirmed lately. Owner-scoped.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
           }
         }
       }
@@ -17246,6 +17501,181 @@
       }
     },
     "schemas": {
+      "ConfirmFundingDto": {
+        "type": "object",
+        "properties": {
+          "providerRef": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 80,
+            "description": "The payment's own reference on the statement or provider receipt — the thing an auditor can look up."
+          },
+          "amount": {
+            "type": "number",
+            "minimum": 1,
+            "description": "What actually arrived. The rail is the authority on this, never what was asked for."
+          },
+          "provider": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "Which rail carried it, if it was not a plain bank transfer."
+          },
+          "fee": {
+            "type": "number",
+            "description": "What the provider took to move it. Our expense — never netted off the payer’s credit."
+          }
+        },
+        "required": [
+          "providerRef",
+          "amount"
+        ]
+      },
+      "SimulateFundingDto": {
+        "type": "object",
+        "properties": {
+          "providerRef": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 80,
+            "description": "The payment's own reference on the statement or provider receipt — the thing an auditor can look up."
+          },
+          "amount": {
+            "type": "number",
+            "minimum": 1,
+            "description": "What actually arrived. The rail is the authority on this, never what was asked for."
+          },
+          "provider": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "Which rail carried it, if it was not a plain bank transfer."
+          },
+          "fee": {
+            "type": "number",
+            "description": "What the provider took to move it. Our expense — never netted off the payer’s credit."
+          },
+          "reference": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "Pretend the payer quoted this instead — an empty string means they quoted none. SANDBOX ONLY."
+          }
+        },
+        "required": [
+          "providerRef",
+          "amount"
+        ]
+      },
+      "FundingFailureDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "Funding": {
+        "type": "object",
+        "properties": {
+          "fundingId": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string",
+            "description": "The sister collecting it — rule 1, collection follows the payer. Its books are where this posts."
+          },
+          "payerKind": {
+            "type": "object"
+          },
+          "payerDid": {
+            "type": "string"
+          },
+          "payerName": {
+            "type": "string",
+            "description": "WHO IS PAYING, in the words somebody would use out loud — \"Mama Sarah Shop\", not a DID.\n\nStamped when the request is opened, because that is the only moment the payer is resolved and because\na name that is re-read later is a name that can change under a record it is describing. This console\nhas a standing rule about it: never an id where a name belongs. A row that says\n`did:glos:ab6ed968206e6…` is a row nobody can act on without a second lookup."
+          },
+          "purpose": {
+            "type": "object"
+          },
+          "amount": {
+            "type": "number",
+            "description": "What was ASKED for. Never what moved: `confirmedAmount` is what moved, and where the two differ the\npair is the whole story. Kept even after confirmation for that reason."
+          },
+          "currency": {
+            "type": "string"
+          },
+          "status": {
+            "type": "object"
+          },
+          "reference": {
+            "type": "string",
+            "description": "OUR reference, the thing the payer quotes when they pay — a paybill account number, an airtime\ntop-up memo, the reference line on a transfer. Short and human-typeable on purpose: it is read off a\nphone screen and typed into another phone, often by somebody standing at a counter."
+          },
+          "provider": {
+            "type": "string",
+            "description": "Which rail this was opened against. A sister's paybill is not the same as its card acquirer."
+          },
+          "instructions": {
+            "type": "string",
+            "description": "The words the payer is shown. The RAIL's words, kept with the intent so the screen cannot drift\n from what the provider actually needs — the same reason the CL5 consent notice travels with the gate."
+          },
+          "openedAt": {
+            "type": "string"
+          },
+          "providerRef": {
+            "type": "string",
+            "description": "The provider's own reference for the money that arrived. The thing you quote when somebody says\n they paid and we say we never saw it."
+          },
+          "confirmedAmount": {
+            "type": "number",
+            "description": "What actually arrived, in the currency above. Present only once confirmed."
+          },
+          "fee": {
+            "type": "number",
+            "description": "What the rail took to move it. An expense of ours, never netted off the payer's credit — see\n the money model: \"credit the GROSS at top-up, never net-credit\"."
+          },
+          "confirmedAt": {
+            "type": "string"
+          },
+          "failedAt": {
+            "type": "string"
+          },
+          "expiredAt": {
+            "type": "string"
+          },
+          "reversedAt": {
+            "type": "string"
+          },
+          "failureReason": {
+            "type": "string"
+          },
+          "entryId": {
+            "type": "string",
+            "description": "The journal entry that created the money. Present ONLY once confirmed — before that nothing moved."
+          },
+          "reversalEntryId": {
+            "type": "string",
+            "description": "…and the entry that took it back, if the payment was later recalled."
+          }
+        },
+        "required": [
+          "fundingId",
+          "entityId",
+          "payerKind",
+          "payerDid",
+          "purpose",
+          "amount",
+          "currency",
+          "status",
+          "reference",
+          "provider",
+          "instructions",
+          "openedAt"
+        ]
+      },
       "RegisterDto": {
         "type": "object",
         "properties": {
@@ -23553,52 +23983,6 @@
         },
         "required": [
           "amount"
-        ]
-      },
-      "PudoLedgerEntry": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "type": {
-            "type": "object"
-          },
-          "sign": {
-            "type": "object"
-          },
-          "amount": {
-            "type": "number"
-          },
-          "currency": {
-            "type": "string",
-            "description": "What the amount IS. Optional only because rows written before this field existed have none — read\n it through agentLedgerCurrencyOf(), which defaults them, never straight off the record."
-          },
-          "entryId": {
-            "type": "string",
-            "description": "The journal entry this row projects. The BOOKS are the money; this row is how a shopkeeper reads\n it. Absent on rows written before the books existed, and on records that move no money of ours."
-          },
-          "did": {
-            "type": "string"
-          },
-          "reference": {
-            "type": "string"
-          },
-          "refType": {
-            "type": "object"
-          },
-          "at": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "type",
-          "sign",
-          "amount",
-          "reference",
-          "refType",
-          "at"
         ]
       },
       "CorridorDto": {
