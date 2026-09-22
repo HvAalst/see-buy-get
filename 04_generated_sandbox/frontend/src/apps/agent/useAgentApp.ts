@@ -1093,10 +1093,10 @@ export function useAgentApp() {
    * refresh, when the confirmation has landed.
    */
   const topUp = useCallback(
-    async (amount: number) => {
+    async (amount: number, phone?: string) => {
       if (!client || !did || !(amount > 0)) return;
       await run('topup', async () => {
-        const r = await client.api.topUp(did, amount);
+        const r = await client.api.topUp(did, amount, phone);
         if (r.error) return fail(r.error);
         buzz();
         const funding = narrow<FundingView>(r.data);

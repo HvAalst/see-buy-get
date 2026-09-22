@@ -259,16 +259,30 @@ function SettingRow({ icon, title, sub, onClick }: { icon: IconName; title: stri
 function TopUpSheet({ open, onClose, state, actions }: { open: boolean; onClose: () => void; state: AgentState; actions: AgentActions }) {
   const t = useT();
   const [amount, setAmount] = useState('50');
+  const [phone, setPhone] = useState('');
   const value = Number(amount);
   const waiting = state.funding?.status === 'awaiting' ? state.funding : null;
+  const refused = state.funding?.status === 'failed' ? state.funding : null;
 
   if (waiting) {
     return (
-      <Sheet open={open} onClose={onClose} title={t('agent.home.topUpWaitTitle')}>
-        <Note tone="info" icon="clock" title={t('agent.home.topUpWaitNote', { amount: money(waiting.amount) })} detail={waiting.instructions} />
-        {/* The one thing they have to get exactly right, so it is the biggest thing on the sheet. */}
+      <Sheet open={open} onClose={onClose} title={t(waiting.pushed ? 'agent.home.topUpPushTitle' : 'agent.home.topUpWaitTitle')}>
+        {/*
+         * TWO WAYS OF WAITING, AND THEY ASK DIFFERENT THINGS OF THE PERSON.
+         *
+         * A prompt is on their phone: the job is to pick it up and enter a PIN, and the biggest thing on
+         * the sheet should say so. Nobody pushed anything: the job is to read a reference off this screen
+         * and type it at a kiosk, and the reference is the biggest thing. Showing the wrong one leaves a
+         * shopkeeper watching a handset that is never going to ring.
+         */}
+        <Note
+          tone="info"
+          icon={waiting.pushed ? 'keypad' : 'clock'}
+          title={t(waiting.pushed ? 'agent.home.topUpPushNote' : 'agent.home.topUpWaitNote', { amount: money(waiting.amount) })}
+          detail={waiting.instructions}
+        />
         <div class="field">
-          <span class="field__label">{t('agent.home.topUpReference')}</span>
+          <span class="field__label">{t(waiting.pushed ? 'agent.home.topUpReferenceAlso' : 'agent.home.topUpReference')}</span>
           <p class="payref">{waiting.reference}</p>
         </div>
         <p class="t-body">{t('agent.home.topUpWaitBody')}</p>
@@ -285,19 +299,46 @@ function TopUpSheet({ open, onClose, state, actions }: { open: boolean; onClose:
   return (
     <Sheet open={open} onClose={onClose} title={t('agent.home.topUpTitle')}>
       <p class="t-body">{t('agent.home.topUpBody')}</p>
+      {/* A prompt the payer answered "no" to, said in the provider's own words — because the next thing
+          they will do is ask again, and "nothing happened" is not an answer they can act on. */}
+      {refused?.failureReason ? <Note tone="warn" icon="clock" title={t('agent.home.topUpRefused')} detail={refused.failureReason} /> : null}
       <div class="field">
         <label class="field__label" for="topup">
           {t('agent.home.amount')}
         </label>
         <input id="topup" class="input" type="number" inputMode="decimal" min="1" step="1" value={amount} onInput={(e) => setAmount(e.currentTarget.value)} />
       </div>
+      {/*
+       * THE NUMBER THE PROMPT GOES TO — typed, never read off the shop's record.
+       *
+       * The phone that pays is often not the one we have on file: a shopkeeper sends somebody to the
+       * kiosk, the float is topped up from the owner's own line. And a PIN request landing on a handset
+       * whose owner did not ask for it is the one thing worse than no prompt at all. Optional, because
+       * the paybill has to keep working for everybody who has no phone to hand.
+       */}
+      <div class="field">
+        <label class="field__label" for="topup-phone">
+          {t('agent.home.topUpPhone')}
+        </label>
+        <input
+          id="topup-phone"
+          class="input"
+          type="tel"
+          inputMode="tel"
+          autocomplete="tel"
+          placeholder="07xx xxx xxx"
+          value={phone}
+          onInput={(e) => setPhone(e.currentTarget.value)}
+        />
+        <p class="hint">{t('agent.home.topUpPhoneHint')}</p>
+      </div>
       <Button
         chevron={false}
         busy={state.busy === 'topup'}
         disabled={!(value > 0)}
-        onClick={() => void actions.topUp(value)}
+        onClick={() => void actions.topUp(value, phone.trim() || undefined)}
       >
-        {value > 0 ? t('agent.home.askAmount', { amount: value.toFixed(2) }) : t('agent.home.addMoney')}
+        {value > 0 ? t(phone.trim() ? 'agent.home.askAmountPush' : 'agent.home.askAmount', { amount: value.toFixed(2) }) : t('agent.home.addMoney')}
       </Button>
       <Button variant="link" onClick={onClose}>
         {t('agent.home.notNow')}

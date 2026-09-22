@@ -51,138 +51,138 @@ describe('money coming in', () => {
 
   /** A confirmation as it arrives from the rail, signed — never a hand-built RailPayment, because the
    *  signature check is the thing that makes a webhook better than the shop's own word. */
-  function railSays(fields: { providerRef: string; reference?: string; amount: number; fee?: number; currency?: string }): RailPayment {
+  async function railSays(fields: { providerRef: string; reference?: string; amount: number; fee?: number; currency?: string }): Promise<RailPayment> {
     const { headers, body } = rail.simulate({ currency: 'KES', ...fields });
     return rail.verify(headers, body);
   }
 
   describe('asking is not paying', () => {
-    it('hands back a reference and credits nobody', () => {
-      const request = ask(5000);
+    it('hands back a reference and credits nobody', async () => {
+      const request = await ask(5000);
       expect(request.status).toBe('awaiting');
       expect(request.reference).toMatch(/^SBG-/);
       expect(request.entryId).toBeUndefined();
       expect(credited).toEqual([]);
     });
 
-    it('tells the payer how to pay, in the rail’s own words', () => {
-      expect(ask().instructions).toContain('5000.00 KES');
+    it('tells the payer how to pay, in the rail’s own words', async () => {
+      expect((await ask()).instructions).toContain('5000.00 KES');
     });
 
-    it('refuses to open one where the payer has no account to credit', () => {
-      expect(() => ask(5000, 'did:shop:nowhere')).toThrow(/no sister holds money/);
+    it('refuses to open one where the payer has no account to credit', async () => {
+      await expect(ask(5000, 'did:shop:nowhere')).rejects.toThrow(/no sister holds money/);
     });
 
-    it('refuses an amount of nothing', () => {
-      expect(() => ask(0)).toThrow(/greater than zero/);
+    it('refuses an amount of nothing', async () => {
+      await expect(ask(0)).rejects.toThrow(/greater than zero/);
     });
 
-    it('supersedes an earlier request rather than leaving two live references', () => {
-      const first = ask(1000);
-      ask(2000);
+    it('supersedes an earlier request rather than leaving two live references', async () => {
+      const first = await ask(1000);
+      await ask(2000);
       expect(funding.get(first.fundingId).status).toBe('expired');
       expect(funding.openFor('did:shop:njeri')?.amount).toBe(2000);
     });
   });
 
   describe('the rail is the authority', () => {
-    it('creates the money only when the rail confirms it', () => {
-      const request = ask(5000);
-      const { funding: done } = funding.confirm(railSays({ providerRef: 'RJ84K2LMN0', reference: request.reference, amount: 5000 }));
+    it('creates the money only when the rail confirms it', async () => {
+      const request = await ask(5000);
+      const { funding: done } = funding.confirm(await railSays({ providerRef: 'RJ84K2LMN0', reference: request.reference, amount: 5000 }));
       expect(done?.status).toBe('confirmed');
       expect(done?.entryId).toBe('je_1');
       expect(credited).toEqual([{ payerDid: 'did:shop:njeri', gross: 5000, fee: 0, reference: 'RJ84K2LMN0' }]);
     });
 
-    it('credits what ARRIVED, not what was asked for', () => {
+    it('credits what ARRIVED, not what was asked for', async () => {
       // The trap this rule exists for: ask for 5,000, pay 500. The books must move by 500.
-      const request = ask(5000);
-      const { funding: done } = funding.confirm(railSays({ providerRef: 'RJ84K2LMN0', reference: request.reference, amount: 500 }));
+      const request = await ask(5000);
+      const { funding: done } = funding.confirm(await railSays({ providerRef: 'RJ84K2LMN0', reference: request.reference, amount: 500 }));
       expect(credited[0].gross).toBe(500);
       expect(done?.confirmedAmount).toBe(500);
       // …and what they asked for is kept beside it, because a half-paid request is a thing somebody rings up about.
       expect(done?.amount).toBe(5000);
     });
 
-    it('passes the provider’s fee through as ours, and credits the payer the gross', () => {
-      const request = ask(5000);
-      funding.confirm(railSays({ providerRef: 'RJ84K2LMN0', reference: request.reference, amount: 5000, fee: 75 }));
+    it('passes the provider’s fee through as ours, and credits the payer the gross', async () => {
+      const request = await ask(5000);
+      funding.confirm(await railSays({ providerRef: 'RJ84K2LMN0', reference: request.reference, amount: 5000, fee: 75 }));
       expect(credited[0]).toMatchObject({ gross: 5000, fee: 75 });
     });
 
-    it('credits once when a provider retries its callback', () => {
-      const request = ask(5000);
-      const payment = railSays({ providerRef: 'RJ84K2LMN0', reference: request.reference, amount: 5000 });
+    it('credits once when a provider retries its callback', async () => {
+      const request = await ask(5000);
+      const payment = await railSays({ providerRef: 'RJ84K2LMN0', reference: request.reference, amount: 5000 });
       funding.confirm(payment);
       const second = funding.confirm(payment);
       expect(second.duplicate).toBe(true);
       expect(credited).toHaveLength(1);
     });
 
-    it('takes the money even when we had given up on the request', () => {
+    it('takes the money even when we had given up on the request', async () => {
       // Our bookkeeping state does not get a vote on whether the money came. It came.
-      const request = ask(5000);
+      const request = await ask(5000);
       funding.expire(request.fundingId, 'nobody paid it');
-      funding.confirm(railSays({ providerRef: 'RJ84K2LMN0', reference: request.reference, amount: 5000 }));
+      funding.confirm(await railSays({ providerRef: 'RJ84K2LMN0', reference: request.reference, amount: 5000 }));
       expect(funding.get(request.fundingId).status).toBe('confirmed');
       expect(credited).toHaveLength(1);
     });
 
-    it('credits a second, separate payment on the same reference from the same rail', () => {
-      const request = ask(5000);
-      funding.confirm(railSays({ providerRef: 'RJ84K2LMN0', reference: request.reference, amount: 5000 }));
-      funding.confirm(railSays({ providerRef: 'RJ84K2LMN1', reference: request.reference, amount: 5000 }));
+    it('credits a second, separate payment on the same reference from the same rail', async () => {
+      const request = await ask(5000);
+      funding.confirm(await railSays({ providerRef: 'RJ84K2LMN0', reference: request.reference, amount: 5000 }));
+      funding.confirm(await railSays({ providerRef: 'RJ84K2LMN1', reference: request.reference, amount: 5000 }));
       expect(credited).toHaveLength(2);
     });
   });
 
   describe('money we cannot put a name to', () => {
-    it('records a payment quoting no reference, and posts nothing', () => {
-      const { unmatched } = funding.confirm(railSays({ providerRef: 'RJ84K2LMN0', amount: 5000 }));
+    it('records a payment quoting no reference, and posts nothing', async () => {
+      const { unmatched } = funding.confirm(await railSays({ providerRef: 'RJ84K2LMN0', amount: 5000 }));
       expect(unmatched?.reason).toMatch(/quoted no reference/);
       expect(credited).toEqual([]);
       expect(funding.unmatchedPayments()).toHaveLength(1);
     });
 
-    it('records a payment quoting a reference nobody is waiting on', () => {
-      const { unmatched } = funding.confirm(railSays({ providerRef: 'RJ84K2LMN0', reference: 'SBG-ZZZZ-ZZZZ', amount: 5000 }));
+    it('records a payment quoting a reference nobody is waiting on', async () => {
+      const { unmatched } = funding.confirm(await railSays({ providerRef: 'RJ84K2LMN0', reference: 'SBG-ZZZZ-ZZZZ', amount: 5000 }));
       expect(unmatched?.reason).toMatch(/no request is open/);
       expect(credited).toEqual([]);
     });
 
-    it('does not record the same unattributable payment twice', () => {
-      const payment = railSays({ providerRef: 'RJ84K2LMN0', amount: 5000 });
+    it('does not record the same unattributable payment twice', async () => {
+      const payment = await railSays({ providerRef: 'RJ84K2LMN0', amount: 5000 });
       funding.confirm(payment);
       expect(funding.confirm(payment).duplicate).toBe(true);
       expect(funding.unmatchedPayments()).toHaveLength(1);
     });
 
-    it('matches the reference as the payer actually typed it', () => {
+    it('matches the reference as the payer actually typed it', async () => {
       /*
        * We print SBG-QNTS-QP5D; a paybill customer types it on a phone keypad and we get SBGQNTSQP5D, or
        * it lower-cased, or with a space in it. Those are the same string written differently — and the
        * only recovery from a miss is somebody ringing the shop.
        */
-      const request = ask(5000);
+      const request = await ask(5000);
       const typed = request.reference.replace(/-/g, '').toLowerCase();
-      funding.confirm(railSays({ providerRef: 'RJ84K2LMN0', reference: typed, amount: 5000 }));
+      funding.confirm(await railSays({ providerRef: 'RJ84K2LMN0', reference: typed, amount: 5000 }));
       expect(funding.get(request.fundingId).status).toBe('confirmed');
       expect(credited).toHaveLength(1);
     });
 
-    it('still misses a reference with a wrong CHARACTER in it, rather than guessing', () => {
+    it('still misses a reference with a wrong CHARACTER in it, rather than guessing', async () => {
       // Forgiving about how it was written, never about what it says: a nearest match credits the wrong shop.
-      const request = ask(5000);
+      const request = await ask(5000);
       const wrong = `${request.reference.slice(0, -1)}${request.reference.endsWith('2') ? '3' : '2'}`;
-      const { unmatched } = funding.confirm(railSays({ providerRef: 'RJ84K2LMN0', reference: wrong, amount: 5000 }));
+      const { unmatched } = funding.confirm(await railSays({ providerRef: 'RJ84K2LMN0', reference: wrong, amount: 5000 }));
       expect(unmatched).toBeTruthy();
       expect(credited).toEqual([]);
     });
 
-    it('holds a payment made in a currency the account is not kept in', () => {
+    it('holds a payment made in a currency the account is not kept in', async () => {
       // The rail decides the amount; it does not decide what that amount is denominated in. Crediting
       // "500" from a USD callback into a KES deposit is a balance denominated in nothing.
-      const request = ask(5000);
+      const request = await ask(5000);
       const { unmatched } = funding.confirm({ provider: 'sandbox', providerRef: 'RJ84K2LMN9', reference: request.reference, amount: 500, currency: 'USD' });
       expect(unmatched?.reason).toMatch(/paid in USD against a request in KES/);
       expect(credited).toEqual([]);
@@ -190,11 +190,11 @@ describe('money coming in', () => {
       expect(funding.get(request.fundingId).status).toBe('awaiting');
     });
 
-    it('holds a reference already paid by ANOTHER rail rather than crediting it twice', () => {
+    it('holds a reference already paid by ANOTHER rail rather than crediting it twice', async () => {
       // An operator typing in a statement line for a payment the mobile-money callback already confirmed
       // is far likelier than the same shop paying the same reference on two different rails.
-      const request = ask(5000);
-      funding.confirm(railSays({ providerRef: 'RJ84K2LMN0', reference: request.reference, amount: 5000 }));
+      const request = await ask(5000);
+      funding.confirm(await railSays({ providerRef: 'RJ84K2LMN0', reference: request.reference, amount: 5000 }));
       const { unmatched } = funding.confirm({ provider: 'statement', providerRef: 'BANK-991', reference: request.reference, amount: 5000, currency: 'KES' });
       expect(unmatched?.reason).toMatch(/already paid via sandbox/);
       expect(credited).toHaveLength(1);
@@ -203,11 +203,11 @@ describe('money coming in', () => {
 
   describe('saying whose an unattributed payment was', () => {
     /** Money in the account with nobody's name on it — the state an operator has to get out of. */
-    const orphan = (amount = 400, currency = 'KES') => funding.confirm(railSays({ providerRef: `MPX${amount}`, amount, currency })).unmatched!;
+    const orphan = async (amount = 400, currency = 'KES') => funding.confirm(await railSays({ providerRef: `MPX${amount}`, amount, currency })).unmatched!;
 
-    it('credits it through the same path a matched payment takes', () => {
+    it('credits it through the same path a matched payment takes', async () => {
       // The books must not be able to tell the two apart — one crediting path, never two.
-      const held = orphan(400);
+      const held = await orphan(400);
       const { funding: made } = funding.apply(held.id, { payerKind: 'agent', payerDid: 'did:shop:njeri' }, 'Amina Otieno');
       expect(credited).toEqual([{ payerDid: 'did:shop:njeri', gross: 400, fee: 0, reference: 'MPX400' }]);
       expect(made.status).toBe('confirmed');
@@ -215,8 +215,8 @@ describe('money coming in', () => {
       expect(made.payerName).toBe('Mama Njeri Shop');
     });
 
-    it('keeps who decided, and when — because this was a judgement', () => {
-      const held = orphan(400);
+    it('keeps who decided, and when — because this was a judgement', async () => {
+      const held = await orphan(400);
       funding.apply(held.id, { payerKind: 'agent', payerDid: 'did:shop:njeri' }, 'Amina Otieno');
       const [record] = funding.unmatchedPayments(true);
       expect(record.appliedBy).toBe('Amina Otieno');
@@ -224,38 +224,38 @@ describe('money coming in', () => {
       expect(record.appliedTo).toBeTruthy();
     });
 
-    it('takes it off the chase list, without deleting the record', () => {
-      const held = orphan(400);
+    it('takes it off the chase list, without deleting the record', async () => {
+      const held = await orphan(400);
       funding.apply(held.id, { payerKind: 'agent', payerDid: 'did:shop:njeri' }, 'Amina');
       expect(funding.unmatchedPayments()).toHaveLength(0);
       expect(funding.unmatchedPayments(true)).toHaveLength(1);
     });
 
-    it('refuses to apply the same payment twice', () => {
+    it('refuses to apply the same payment twice', async () => {
       // It arrived once. Applying it twice credits a shop twice, and it is the easiest mistake on the
       // whole screen to make — two operators, one phone call, one list.
-      const held = orphan(400);
+      const held = await orphan(400);
       funding.apply(held.id, { payerKind: 'agent', payerDid: 'did:shop:njeri' }, 'Amina');
       expect(() => funding.apply(held.id, { payerKind: 'agent', payerDid: 'did:shop:njeri' }, 'Brian')).toThrow(/already applied/);
       expect(credited).toHaveLength(1);
     });
 
-    it('refuses a payer with no account to credit', () => {
-      const held = orphan(400);
+    it('refuses a payer with no account to credit', async () => {
+      const held = await orphan(400);
       expect(() => funding.apply(held.id, { payerKind: 'agent', payerDid: 'did:shop:nowhere' }, 'Amina')).toThrow(/no sister holds money/);
     });
 
-    it('refuses to apply a payment in another currency, rather than converting it', () => {
-      const held = orphan(400, 'USD');
+    it('refuses to apply a payment in another currency, rather than converting it', async () => {
+      const held = await orphan(400, 'USD');
       expect(() => funding.apply(held.id, { payerKind: 'agent', payerDid: 'did:shop:njeri' }, 'Amina')).toThrow(/invent an exchange rate/);
       expect(credited).toEqual([]);
     });
   });
 
   describe('a confirmed payment that comes back', () => {
-    it('is reversed by its own mirror, never by unwinding the first', () => {
-      const request = ask(5000);
-      funding.confirm(railSays({ providerRef: 'RJ84K2LMN0', reference: request.reference, amount: 5000 }));
+    it('is reversed by its own mirror, never by unwinding the first', async () => {
+      const request = await ask(5000);
+      funding.confirm(await railSays({ providerRef: 'RJ84K2LMN0', reference: request.reference, amount: 5000 }));
       const done = funding.reverse(request.fundingId, 'recalled by the sender');
       expect(done.status).toBe('reversed');
       expect(done.reversalEntryId).toBe('je_rev_1');
@@ -263,38 +263,39 @@ describe('money coming in', () => {
       expect(reversed).toEqual([{ payerDid: 'did:shop:njeri', gross: 5000 }]);
     });
 
-    it('refuses to reverse something that never arrived', () => {
-      expect(() => funding.reverse(ask().fundingId, 'nope')).toThrow(/only a confirmed one can be reversed/);
+    it('refuses to reverse something that never arrived', async () => {
+      const unpaid = await await ask();
+      expect(() => funding.reverse(unpaid.fundingId, 'nope')).toThrow(/only a confirmed one can be reversed/);
     });
   });
 
   describe('the callback door', () => {
     const signed = (amount = 5000) => rail.simulate({ providerRef: 'RJ84K2LMN0', reference: 'SBG-AAAA-BBBB', amount, currency: 'KES' });
 
-    it('accepts what it signed itself', () => {
+    it('accepts what it signed itself', async () => {
       const { headers, body } = signed();
-      expect(rail.verify(headers, body).amount).toBe(5000);
+      expect((await rail.verify(headers, body)).amount).toBe(5000);
     });
 
-    it('refuses an unsigned confirmation', () => {
+    it('refuses an unsigned confirmation', async () => {
       const { body } = signed();
-      expect(() => rail.verify({}, body)).toThrow(/not signed/);
+      await expect(rail.verify({}, body)).rejects.toThrow(/not signed/);
     });
 
-    it('refuses a confirmation whose amount was changed after signing', () => {
+    it('refuses a confirmation whose amount was changed after signing', async () => {
       // The whole point: a body anybody can edit is a body anybody can create money with.
       const { headers, body } = signed(5000);
-      expect(() => rail.verify(headers, { ...body, amount: 500000 })).toThrow(/not signed by the payment provider/);
+      await expect(rail.verify(headers, { ...body, amount: 500000 })).rejects.toThrow(/not signed by the payment provider/);
     });
 
-    it('refuses a confirmation replayed later', () => {
+    it('refuses a confirmation replayed later', async () => {
       const { headers, body } = signed();
-      expect(() => rail.verify({ ...headers, 'x-sbg-timestamp': String(Date.now() - 60 * 60 * 1000) }, body)).toThrow(/too old/);
+      await expect(rail.verify({ ...headers, 'x-sbg-timestamp': String(Date.now() - 60 * 60 * 1000) }, body)).rejects.toThrow(/too old/);
     });
 
-    it('refuses a confirmation that does not say what was paid', () => {
+    it('refuses a confirmation that does not say what was paid', async () => {
       const { headers, body } = signed();
-      expect(() => rail.verify(headers, { ...body, providerRef: '' })).toThrow(/provider’s own reference/);
+      await expect(rail.verify(headers, { ...body, providerRef: '' })).rejects.toThrow(/provider’s own reference/);
     });
   });
 });

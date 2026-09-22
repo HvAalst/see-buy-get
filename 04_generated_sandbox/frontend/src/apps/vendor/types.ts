@@ -290,6 +290,11 @@ export interface VendorFundingView {
   status: 'awaiting' | 'confirmed' | 'failed' | 'expired' | 'reversed';
   reference: string;
   instructions: string;
+  /** Whether a payment prompt went to a phone — see the shop app's twin of this type. */
+  pushed?: boolean;
+  railRef?: string;
+  /** Why it will not be paid, in the provider's own words ("Request cancelled by user"). */
+  failureReason?: string;
   openedAt: string;
   confirmedAmount?: number;
   confirmedAt?: string;

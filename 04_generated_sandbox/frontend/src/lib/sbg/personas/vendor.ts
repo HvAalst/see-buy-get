@@ -150,8 +150,8 @@ export function createVendorApi(sbg: SbgClient) {
      * It hands back a reference and how to pay; the balance moves when the payment provider confirms the
      * payment. Before 2026-09-22 this credited the balance with whatever number was typed here.
      */
-    topUp: (vendorId: string, amount: number) =>
-      sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/top-up', { params: { path: { id: vendorId } }, body: { amount } })),
+    topUp: (vendorId: string, amount: number, phone?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/top-up', { params: { path: { id: vendorId } }, body: { amount, ...(phone ? { phone } : {}) } })),
 
     /** What this store is waiting to have confirmed, and what was confirmed lately. */
     funding: (vendorId: string) => sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/funding', { params: { path: { id: vendorId } } })),

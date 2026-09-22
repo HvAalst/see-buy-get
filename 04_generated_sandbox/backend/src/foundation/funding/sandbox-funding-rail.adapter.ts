@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 import { GlosError } from '../http/glos-error';
 import { isSandbox } from '../runtime/sandbox';
-import { FundingInstruction, FundingRail, RailPayment } from './funding.types';
+import { CallbackMeta, FundingInstruction, FundingRail, RailOpening, RailPayment } from './funding.types';
 
 /** How long a signed callback stays acceptable. Long enough for a provider's own retry, short enough that
  *  a body lifted off a log an hour later is refused. */
@@ -41,7 +41,7 @@ export class SandboxFundingRail implements FundingRail {
     }
   }
 
-  open(instruction: FundingInstruction): { reference: string; instructions: string } {
+  async open(instruction: FundingInstruction): Promise<RailOpening> {
     const reference = this.reference();
     const amount = instruction.amount.toFixed(2);
     /*
@@ -76,7 +76,7 @@ export class SandboxFundingRail implements FundingRail {
    * Daraja adapter verifies Daraja's scheme here and hands back the same `RailPayment`; nothing above this
    * line learns a provider's dialect.
    */
-  verify(headers: Record<string, string | undefined>, body: unknown): RailPayment {
+  async verify(headers: Record<string, string | undefined>, body: unknown, _meta?: CallbackMeta): Promise<RailPayment> {
     const payload = (body ?? {}) as Record<string, unknown>;
     const providerRef = String(payload.providerRef ?? '').trim();
     const amount = Number(payload.amount);

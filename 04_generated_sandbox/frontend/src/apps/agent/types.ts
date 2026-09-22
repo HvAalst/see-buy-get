@@ -123,6 +123,18 @@ export interface FundingView {
   reference: string;
   /** The provider's own words about how to pay. Shown verbatim so this screen cannot drift from the rail. */
   instructions: string;
+  /**
+   * WHETHER A PROMPT WENT TO A PHONE, or whether this payer pays the long way round.
+   *
+   * The two faces of the waiting screen turn on it. True and the shopkeeper is watching a handset for an
+   * M-Pesa PIN request; false and they are reading a reference off this screen to type at a kiosk. A
+   * screen that guessed wrong would leave somebody staring at a phone that is never going to ring.
+   */
+  pushed?: boolean;
+  /** The provider's handle for that prompt — quoted to support when no prompt ever came. */
+  railRef?: string;
+  /** Why it will not be paid, in the provider's own words ("Request cancelled by user"). */
+  failureReason?: string;
   openedAt: string;
   confirmedAmount?: number;
   confirmedAt?: string;

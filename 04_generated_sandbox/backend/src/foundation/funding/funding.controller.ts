@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Inject, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Inject, Ip, Param, Post, Query } from '@nestjs/common';
 import { ApiExcludeEndpoint, ApiQuery } from '@nestjs/swagger';
 import { Public } from '../auth/public.decorator';
 import { Roles } from '../auth/scopes.decorator';
@@ -8,7 +8,7 @@ import type { IntrospectionResult } from '../auth/auth.types';
 import { GlosError } from '../http/glos-error';
 import { isSandbox } from '../runtime/sandbox';
 import { FundingService } from './funding.service';
-import { FUNDING_RAIL, FundingRail } from './funding.types';
+import { FUNDING_RAIL, FundingRail, isPayment } from './funding.types';
 import { ApplyFundingDto, ConfirmFundingDto, FundingFailureDto, SimulateFundingDto } from './funding.dto';
 
 /**
@@ -42,14 +42,38 @@ export class FundingController {
   @Public()
   @ApiExcludeEndpoint()
   @Post(':provider/callback')
-  callback(@Param('provider') provider: string, @Headers() headers: Record<string, string | undefined>, @Body() body: Record<string, unknown>) {
+  async callback(
+    @Param('provider') provider: string,
+    @Headers() headers: Record<string, string | undefined>,
+    @Body() body: Record<string, unknown>,
+    /**
+     * WHERE IT CAME FROM, taken from the connection rather than from a header.
+     *
+     * For a rail that signs its callbacks this is noise. For M-Pesa it is most of the verification there
+     * is — Safaricom does not sign anything, so an allowlist of their published ranges plus a call back
+     * to them is the whole of it. `@Ip()` reads Express's `req.ip`, which honours `trust proxy`; a
+     * header would be whatever the caller typed.
+     */
+    @Ip() ip: string,
+  ) {
     if (provider !== this.rail.provider) {
       // Named rather than swallowed: a callback for a provider nobody wired up is a deployment mistake,
       // and answering 200 to it would hide a rail that is quietly dropping every payment it carries.
       throw new GlosError('NOT_FOUND', `No payment rail is configured for ${provider}`);
     }
-    const payment = this.rail.verify(headers, body);
-    const result = this.funding.confirm(payment);
+    const outcome = await this.rail.verify(headers, body, { ip });
+    /*
+     * THE PAYER SAID NO, and that is an answer rather than a failure.
+     *
+     * A cancelled prompt, a handset that never woke, a wrong PIN. 200, because the provider will retry
+     * anything else until it gets one and the outcome is never going to change — and the waiting request
+     * is closed, so the shop's screen stops saying "waiting for your payment" and starts saying why.
+     */
+    if (!isPayment(outcome)) {
+      const closed = this.funding.notePaymentRefused(outcome);
+      return { ok: true, duplicate: false, status: closed?.status ?? 'unknown', fundingId: closed?.fundingId, note: outcome.reason };
+    }
+    const result = this.funding.confirm(outcome);
     return {
       ok: true,
       duplicate: result.duplicate,
@@ -136,7 +160,9 @@ export class FundingController {
       fee: dto.fee ?? 0,
       paidAt: new Date().toISOString(),
     });
-    return this.callback(this.rail.provider, headers, body);
+    // Through the front door, and standing where the provider stands: the loopback address is what a
+    // real callback from this machine would arrive on, so even the sandbox's own knock is placed.
+    return this.callback(this.rail.provider, headers, body, '127.0.0.1');
   }
 
   /**

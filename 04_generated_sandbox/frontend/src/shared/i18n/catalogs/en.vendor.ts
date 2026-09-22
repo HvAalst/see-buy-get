@@ -239,7 +239,7 @@ export const enVendor = {
   'vendor.topup.title': 'Top up your balance',
   // Says plainly that pressing this adds nothing — see the shop app's twin for why that matters.
   'vendor.topup.body':
-    'You prepay the shipping; the buyer\'s share is collected at your checkout and stays your income. Tell us how much you are paying in and we will give you a reference to quote — your balance changes once the payment comes through.',
+    'You prepay the shipping; the buyer\'s share is collected at your checkout and stays your income. Tell us how much you are paying in, and where to send the payment request — your balance changes once the payment comes through.',
   'vendor.topup.amount': 'Amount',
   'vendor.topup.add': 'Add {amount}',
   'vendor.topup.ask': 'Pay in {amount}',
@@ -248,6 +248,16 @@ export const enVendor = {
   'vendor.topup.reference': 'Quote this reference',
   'vendor.topup.waitBody': 'Nothing has been added yet. When the payment provider confirms it, the amount they confirm goes into your balance.',
   'vendor.topup.check': 'Check again',
+
+  /* STK push — the shop app's twin. A prompt on a phone is the main path and the paybill is the fallback,
+     so each line here has a counterpart above it and the screen shows whichever actually happened. */
+  'vendor.topup.phone': 'Phone to send the payment request to',
+  'vendor.topup.phoneHint': 'We will try to send an M-Pesa request to this number. If it does not arrive, you can still pay with the reference.',
+  'vendor.topup.askPush': 'Send a request for {amount}',
+  'vendor.topup.pushTitle': 'Check your phone',
+  'vendor.topup.pushNote': 'We asked M-Pesa for {amount}',
+  'vendor.topup.referenceAlso': 'If the prompt does not arrive, quote this',
+  'vendor.topup.refused': 'The last request was not paid',
 
   /* Asking for notifications, where somebody will see the ask — see shared/ui/PushPrompt. The reason
      names the two things a store operator is actually waiting on, because a permission prompt with no

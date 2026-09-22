@@ -851,10 +851,10 @@ export function useVendorApp() {
    * reference to quote, and the balance moves when the provider confirms it.
    */
   const topUp = useCallback(
-    async (amount: number) => {
+    async (amount: number, phone?: string) => {
       if (!client || !creds || !(amount > 0)) return;
       await run('topup', async () => {
-        const r = await client.api.topUp(creds.vendorId, amount);
+        const r = await client.api.topUp(creds.vendorId, amount, phone);
         if (r.error) return fail(r.error);
         const funding = narrow<VendorFundingView>(r.data);
         setState((s) => ({ ...s, funding }));

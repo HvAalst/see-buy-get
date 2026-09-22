@@ -17682,6 +17682,14 @@
             "type": "string",
             "description": "The words the payer is shown. The RAIL's words, kept with the intent so the screen cannot drift\n from what the provider actually needs — the same reason the CL5 consent notice travels with the gate."
           },
+          "pushed": {
+            "type": "boolean",
+            "description": "WHETHER A PROMPT WENT TO A PHONE, or whether this payer has to go and pay the long way.\n\nRecorded rather than derived from \"did we have a number\", because the two differ exactly when it\nmatters: a number was given, the push was refused by Safaricom, and the shop must be shown the\npaybill instead of a promise. Absent on every record opened before STK existed, which reads as false."
+          },
+          "railRef": {
+            "type": "string",
+            "description": "The provider's handle for the request behind that prompt — a CheckoutRequestID. What you quote when\n a shopkeeper says no prompt ever came."
+          },
           "openedAt": {
             "type": "string"
           },
@@ -24039,6 +24047,10 @@
           },
           "bankRef": {
             "type": "string"
+          },
+          "phone": {
+            "type": "string",
+            "description": "The number the payment prompt should go to — STK push, the main path the user chose on 2026-09-22.\n\nOptional because the fallback has to keep working: a payer who gives no number is shown a paybill\nand a reference, which is how somebody paying from a kiosk or another person's handset pays. Given,\nit is the phone that will ring asking for a PIN, so it is TYPED BY THE PAYER rather than read off\ntheir record — the phone that pays is often not the one we have on file."
           }
         },
         "required": [

@@ -422,15 +422,23 @@ function FilterSheet({ open, onClose, query, points, onApply, onClearAll }: { op
 function TopUpSheet({ open, onClose, state, actions }: { open: boolean; onClose: () => void; state: VendorState; actions: VendorActions }) {
   const t = useT();
   const [amount, setAmount] = useState('100');
+  const [phone, setPhone] = useState('');
   const value = Number(amount);
   const waiting = state.funding?.status === 'awaiting' ? state.funding : null;
+  const refused = state.funding?.status === 'failed' ? state.funding : null;
 
   if (waiting) {
     return (
-      <Sheet open={open} onClose={onClose} title={t('vendor.topup.waitTitle')}>
-        <Note tone="info" icon="clock" title={t('vendor.topup.waitNote', { amount: waiting.amount.toFixed(2) })} detail={waiting.instructions} />
+      <Sheet open={open} onClose={onClose} title={t(waiting.pushed ? 'vendor.topup.pushTitle' : 'vendor.topup.waitTitle')}>
+        {/* Watching a phone and reading a reference are different jobs — see the shop app's twin. */}
+        <Note
+          tone="info"
+          icon={waiting.pushed ? 'keypad' : 'clock'}
+          title={t(waiting.pushed ? 'vendor.topup.pushNote' : 'vendor.topup.waitNote', { amount: waiting.amount.toFixed(2) })}
+          detail={waiting.instructions}
+        />
         <div class="field">
-          <span class="field__label">{t('vendor.topup.reference')}</span>
+          <span class="field__label">{t(waiting.pushed ? 'vendor.topup.referenceAlso' : 'vendor.topup.reference')}</span>
           <p class="payref">{waiting.reference}</p>
         </div>
         <p class="t-body">{t('vendor.topup.waitBody')}</p>
@@ -447,14 +455,33 @@ function TopUpSheet({ open, onClose, state, actions }: { open: boolean; onClose:
   return (
     <Sheet open={open} onClose={onClose} title={t('vendor.topup.title')}>
       <p class="t-body">{t('vendor.topup.body')}</p>
+      {refused?.failureReason ? <Note tone="warn" icon="clock" title={t('vendor.topup.refused')} detail={refused.failureReason} /> : null}
       <div class="field">
         <label class="field__label" for="vtopup">
           {t('vendor.topup.amount')}
         </label>
         <input id="vtopup" class="input" type="number" inputMode="decimal" min="1" step="1" value={amount} onInput={(e) => setAmount(e.currentTarget.value)} />
       </div>
-      <Button chevron={false} busy={state.busy === 'topup'} disabled={!(value > 0)} onClick={() => void actions.topUp(value)}>
-        {value > 0 ? t('vendor.topup.ask', { amount: value.toFixed(2) }) : t('vendor.topup.addMoney')}
+      {/* The number that will ring, typed rather than read off the store's record — the line that pays is
+          often the owner's own, and a PIN prompt on a handset nobody offered is worse than no prompt. */}
+      <div class="field">
+        <label class="field__label" for="vtopup-phone">
+          {t('vendor.topup.phone')}
+        </label>
+        <input
+          id="vtopup-phone"
+          class="input"
+          type="tel"
+          inputMode="tel"
+          autocomplete="tel"
+          placeholder="07xx xxx xxx"
+          value={phone}
+          onInput={(e) => setPhone(e.currentTarget.value)}
+        />
+        <p class="hint">{t('vendor.topup.phoneHint')}</p>
+      </div>
+      <Button chevron={false} busy={state.busy === 'topup'} disabled={!(value > 0)} onClick={() => void actions.topUp(value, phone.trim() || undefined)}>
+        {value > 0 ? t(phone.trim() ? 'vendor.topup.askPush' : 'vendor.topup.ask', { amount: value.toFixed(2) }) : t('vendor.topup.addMoney')}
       </Button>
       <Button variant="link" onClick={onClose}>
         {t('vendor.topup.notNow')}

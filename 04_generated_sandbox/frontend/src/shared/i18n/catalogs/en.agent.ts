@@ -240,7 +240,7 @@ export const enAgent = {
   'agent.home.topUpTitle': 'Top up your wallet',
   // Says plainly that pressing this does not add money. A shopkeeper who expects a balance to jump and
   // sees it sit still assumes the app is broken — and then rings somebody about it.
-  'agent.home.topUpBody': 'Every parcel you accept is paid from this wallet. Tell us how much you are paying in and we will give you a reference to quote — your balance changes once the payment comes through.',
+  'agent.home.topUpBody': 'Every parcel you accept is paid from this wallet. Tell us how much you are paying in, and where to send the payment request — your balance changes once the payment comes through.',
   'agent.home.amount': 'Amount',
   'agent.home.askAmount': 'Pay in {amount}',
   'agent.home.addAmount': 'Add {amount}',
@@ -252,6 +252,23 @@ export const enAgent = {
   'agent.home.topUpReference': 'Quote this reference',
   'agent.home.topUpWaitBody': 'Nothing has been added yet. When the payment provider confirms it, the amount they confirm goes into your wallet.',
   'agent.home.topUpCheck': 'Check again',
+
+  /* STK PUSH, the main way to pay (decided 2026-09-22) — we ask M-Pesa to make a phone ring, and the
+     shopkeeper enters their PIN there. The paybill stays as the fallback, so every one of these lines has
+     a twin above it that says the other thing; which is shown depends on whether a prompt really went. */
+  'agent.home.topUpPhone': 'Phone to send the payment request to',
+  // Why it is asked for rather than taken from the record: the phone that pays is often not the one on
+  // file, and a PIN request on a handset nobody offered is worse than no prompt at all.
+  // True whichever rail this deployment is on: where no provider is configured nothing can be pushed, and
+  // a hint that promised a prompt would be a small lie told to somebody standing at a till waiting for one.
+  'agent.home.topUpPhoneHint': 'We will try to send an M-Pesa request to this number. If it does not arrive, you can still pay with the reference.',
+  'agent.home.askAmountPush': 'Send a request for {amount}',
+  'agent.home.topUpPushTitle': 'Check your phone',
+  'agent.home.topUpPushNote': 'We asked M-Pesa for {amount}',
+  // The reference is still shown when a prompt went out, in smaller words: the prompt can time out, and
+  // then the paybill is the way through. Hiding it would leave them with nothing.
+  'agent.home.topUpReferenceAlso': 'If the prompt does not arrive, quote this',
+  'agent.home.topUpRefused': 'The last request was not paid',
 
   /* Asking for notifications where a shopkeeper will see the ask, rather than inside the bell they are
      not being notified by. The reason names what they are actually waiting on. */

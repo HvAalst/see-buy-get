@@ -52,8 +52,8 @@ export function createAgentApi(sbg: SbgClient) {
      * the payment provider confirms the payment. Before 2026-09-22 this route credited the float with
      * whatever number was typed here — see `foundation/funding` for why that changed.
      */
-    topUp: (did: string, amount: number) =>
-      sbg.request((c) => c.POST('/v1/sbg/agents/{did}/top-up', { params: { path: { did } }, body: { amount } })),
+    topUp: (did: string, amount: number, phone?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/agents/{did}/top-up', { params: { path: { did } }, body: { amount, ...(phone ? { phone } : {}) } })),
 
     /** What this shop is waiting to have confirmed, and what was confirmed lately. */
     funding: (did: string) => sbg.request((c) => c.GET('/v1/sbg/agents/{did}/funding', { params: { path: { did } } })),

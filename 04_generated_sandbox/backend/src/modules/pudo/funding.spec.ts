@@ -134,18 +134,18 @@ describe('a shop’s float rests on a confirmed payment', () => {
 
   /** The provider says money landed — signed, and read back through the same verification a live
    *  callback meets. Never a hand-built payment: the signature check is the point. */
-  function railConfirms(reference: string, amount: number, fee = 0, providerRef = `MPX${(seq += 1)}`) {
+  async function railConfirms(reference: string, amount: number, fee = 0, providerRef = `MPX${(seq += 1)}`) {
     const { headers, body } = rail.simulate({ providerRef, reference, amount, currency: 'KES', fee });
-    return funding.confirm(rail.verify(headers, body));
+    return funding.confirm(await rail.verify(headers, body));
   }
 
   const held = () => books.balance(ke(), ACCOUNT_CODES.CASH_CUSTODY);
   const paymentFees = () => books.balance(ke(), ACCOUNT_CODES.EXPENSE_PAYMENT_FEES);
 
   describe('asking', () => {
-    it('moves no money and writes no journal entry', () => {
+    it('moves no money and writes no journal entry', async () => {
       const a = shop();
-      const request = funding.open({ payerKind: 'agent', payerDid: a.did, amount: 5000 });
+      const request = await funding.open({ payerKind: 'agent', payerDid: a.did, amount: 5000 });
       expect(request.status).toBe('awaiting');
       expect(agents.balance(a.did)).toBe(0);
       expect(held()).toBe(0);
@@ -153,31 +153,31 @@ describe('a shop’s float rests on a confirmed payment', () => {
       expect(request.reference).toMatch(/^SBG-/);
     });
 
-    it('is refused for a shop that is not approved yet', () => {
+    it('is refused for a shop that is not approved yet', async () => {
       const draft = shop(false);
-      expect(() => funding.open({ payerKind: 'agent', payerDid: draft.did, amount: 5000 })).toThrow(/not approved yet/);
+      await expect(funding.open({ payerKind: 'agent', payerDid: draft.did, amount: 5000 })).rejects.toThrow(/not approved yet/);
     });
 
-    it('names the sister that collects — rule 1, collection follows the payer', () => {
+    it('names the sister that collects — rule 1, collection follows the payer', async () => {
       const a = shop();
-      const request = funding.open({ payerKind: 'agent', payerDid: a.did, amount: 5000 });
+      const request = await funding.open({ payerKind: 'agent', payerDid: a.did, amount: 5000 });
       expect(request.entityId).toBe(ke());
       expect(request.currency).toBe('KES');
     });
   });
 
   describe('when the rail confirms', () => {
-    it('credits the float and puts the cash in custody', () => {
+    it('credits the float and puts the cash in custody', async () => {
       const a = shop();
-      const request = funding.open({ payerKind: 'agent', payerDid: a.did, amount: 5000 });
-      railConfirms(request.reference, 5000);
+      const request = await funding.open({ payerKind: 'agent', payerDid: a.did, amount: 5000 });
+      await railConfirms(request.reference, 5000);
       expect(agents.balance(a.did)).toBe(5000);
       expect(held()).toBe(5000);
       // Owed back to the shop, not earned by us: we charge for service, never for balance.
       expect(books.balance(ke(), ACCOUNT_CODES.REVENUE)).toBe(0);
     });
 
-    it('credits the shop the GROSS and books the provider’s cut as our own expense', () => {
+    it('credits the shop the GROSS and books the provider’s cut as our own expense', async () => {
       /*
        * The money model, 2026-08-18: "Credit the GROSS at top-up — never net-credit, which pushes an
        * opaque deduction onto the least sophisticated party." And `expense.payment_fees` has existed since
@@ -185,58 +185,58 @@ describe('a shop’s float rests on a confirmed payment', () => {
        * out — until today nothing but a unit test had ever posted to it.
        */
       const a = shop();
-      const request = funding.open({ payerKind: 'agent', payerDid: a.did, amount: 5000 });
-      railConfirms(request.reference, 5000, 75);
+      const request = await funding.open({ payerKind: 'agent', payerDid: a.did, amount: 5000 });
+      await railConfirms(request.reference, 5000, 75);
       expect(agents.balance(a.did)).toBe(5000); // what the shopkeeper paid in
       expect(held()).toBe(4925); // what is actually in the account
       expect(paymentFees()).toBe(75); // and the difference has a name
     });
 
-    it('records what the payment was, so the books can be walked back to it', () => {
+    it('records what the payment was, so the books can be walked back to it', async () => {
       const a = shop();
-      const request = funding.open({ payerKind: 'agent', payerDid: a.did, amount: 5000 });
-      const { funding: done } = railConfirms(request.reference, 5000, 75, 'MPESA-QJ7X2');
+      const request = await funding.open({ payerKind: 'agent', payerDid: a.did, amount: 5000 });
+      const { funding: done } = await railConfirms(request.reference, 5000, 75, 'MPESA-QJ7X2');
       expect(done?.providerRef).toBe('MPESA-QJ7X2');
       expect(done?.entryId).toBeTruthy();
       expect(books.journal({ entityId: ke() }).some((e) => e.entryId === done?.entryId && e.ref === "MPESA-QJ7X2")).toBe(true);
     });
 
-    it('keeps the books balanced', () => {
+    it('keeps the books balanced', async () => {
       const a = shop();
-      const request = funding.open({ payerKind: 'agent', payerDid: a.did, amount: 5000 });
-      railConfirms(request.reference, 5000, 75);
+      const request = await funding.open({ payerKind: 'agent', payerDid: a.did, amount: 5000 });
+      await railConfirms(request.reference, 5000, 75);
       expect(books.balances(ke()).balanced).toBe(true); // the whole book sums to zero, or it is not double entry
     });
 
-    it('settles trade credit first, out of the money that arrived', () => {
+    it('settles trade credit first, out of the money that arrived', async () => {
       const a = shop();
       gate.chargeShipping(a.did, 30, 'PCL-1'); // scanned on the credit line with an empty float
       expect(agents.balance(a.did)).toBe(-30);
-      const request = funding.open({ payerKind: 'agent', payerDid: a.did, amount: 1000 });
-      railConfirms(request.reference, 1000);
+      const request = await funding.open({ payerKind: 'agent', payerDid: a.did, amount: 1000 });
+      await railConfirms(request.reference, 1000);
       expect(agents.balance(a.did)).toBe(970);
       expect(books.balance(ke(), ACCOUNT_CODES.RECEIVABLE_AGENT)).toBe(0);
     });
 
-    it('credits the amount that ARRIVED when a shop pays less than it asked for', () => {
+    it('credits the amount that ARRIVED when a shop pays less than it asked for', async () => {
       const a = shop();
-      const request = funding.open({ payerKind: 'agent', payerDid: a.did, amount: 5000 });
-      railConfirms(request.reference, 500);
+      const request = await funding.open({ payerKind: 'agent', payerDid: a.did, amount: 5000 });
+      await railConfirms(request.reference, 500);
       expect(agents.balance(a.did)).toBe(500);
       expect(held()).toBe(500);
     });
   });
 
   describe('the shop is told', () => {
-    it('gets a notification the moment the payment is confirmed', () => {
+    it('gets a notification the moment the payment is confirmed', async () => {
       /*
        * They paid at a kiosk and walked back to the counter. Before this, the only way to learn the money
        * had landed was to reopen the app and press "Check again" — a shopkeeper at a till, unable to
        * scan, refreshing a screen. `WalletToppedUp` was published all along and nothing subscribed to it.
        */
       const a = shop();
-      const request = funding.open({ payerKind: 'agent', payerDid: a.did, amount: 5000 });
-      railConfirms(request.reference, 5000);
+      const request = await funding.open({ payerKind: 'agent', payerDid: a.did, amount: 5000 });
+      await railConfirms(request.reference, 5000);
       const inbox = notifications.inboxFor(a.did);
       expect(inbox.map((n) => n.kind)).toContain('money_in');
       const told = inbox.find((n) => n.kind === 'money_in')!;
@@ -246,23 +246,23 @@ describe('a shop’s float rests on a confirmed payment', () => {
       expect(told.body.length).toBeLessThan(80);
     });
 
-    it('is told when a payment is taken back, because their balance just fell', () => {
+    it('is told when a payment is taken back, because their balance just fell', async () => {
       const a = shop();
-      const request = funding.open({ payerKind: 'agent', payerDid: a.did, amount: 5000 });
-      railConfirms(request.reference, 5000);
+      const request = await funding.open({ payerKind: 'agent', payerDid: a.did, amount: 5000 });
+      await railConfirms(request.reference, 5000);
       funding.reverse(request.fundingId, 'recalled by the sender');
       expect(notifications.inboxFor(a.did).filter((n) => n.kind === 'money_in').map((n) => n.title)).toContain('A payment was taken back');
     });
 
-    it('tells a STORE on both channels — its software and the person running it', () => {
+    it('tells a STORE on both channels — its software and the person running it', async () => {
       /*
        * A store is two audiences wearing one id. Its integration reads the signed callback; the person at
        * the desk reads a notification, and they are the one actually waiting for the labels to unblock.
        * Giving it only the callback (the first version of this) told the software and nobody else.
        */
       const store = vendors.register({ name: 'Soko Online', country: 'KE', location: { lat: -1.3, lng: 36.8 }, callbackUrl: 'https://soko.example/hook' });
-      const request = funding.open({ payerKind: 'vendor', payerDid: store.vendorId, amount: 2000 });
-      railConfirms(request.reference, 2000);
+      const request = await funding.open({ payerKind: 'vendor', payerDid: store.vendorId, amount: 2000 });
+      await railConfirms(request.reference, 2000);
 
       const sent = vendors.outboxFor(store.vendorId);
       expect(sent[0]?.event).toBe('balance_topped_up');
@@ -275,10 +275,10 @@ describe('a shop’s float rests on a confirmed payment', () => {
   });
 
   describe('when a confirmed payment comes back', () => {
-    it('takes the float back out and leaves the provider’s fee spent', () => {
+    it('takes the float back out and leaves the provider’s fee spent', async () => {
       const a = shop();
-      const request = funding.open({ payerKind: 'agent', payerDid: a.did, amount: 5000 });
-      railConfirms(request.reference, 5000, 75);
+      const request = await funding.open({ payerKind: 'agent', payerDid: a.did, amount: 5000 });
+      await railConfirms(request.reference, 5000, 75);
       funding.reverse(request.fundingId, 'recalled by the sender');
       expect(agents.balance(a.did)).toBe(0);
       // Out of pocket by exactly the fee, visibly — which is the true position after a reversal.
@@ -289,11 +289,11 @@ describe('a shop’s float rests on a confirmed payment', () => {
   });
 
   describe('a store’s prepaid balance', () => {
-    it('rests on the same confirmation', () => {
+    it('rests on the same confirmation', async () => {
       const store = vendors.register({ name: 'Soko Online', country: 'KE', location: { lat: -1.3, lng: 36.8 } });
-      const request = funding.open({ payerKind: 'vendor', payerDid: store.vendorId, amount: 2000 });
+      const request = await funding.open({ payerKind: 'vendor', payerDid: store.vendorId, amount: 2000 });
       expect(vendors.balanceOrNone(store.vendorId)).toBe(0);
-      railConfirms(request.reference, 2000, 30);
+      await railConfirms(request.reference, 2000, 30);
       expect(vendors.balanceOrNone(store.vendorId)).toBe(2000);
       expect(held()).toBe(1970);
       expect(paymentFees()).toBe(30);

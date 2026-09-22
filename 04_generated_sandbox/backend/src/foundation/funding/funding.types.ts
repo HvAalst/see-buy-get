@@ -81,6 +81,17 @@ export class Funding {
   /** The words the payer is shown. The RAIL's words, kept with the intent so the screen cannot drift
    *  from what the provider actually needs — the same reason the CL5 consent notice travels with the gate. */
   instructions: string;
+  /**
+   * WHETHER A PROMPT WENT TO A PHONE, or whether this payer has to go and pay the long way.
+   *
+   * Recorded rather than derived from "did we have a number", because the two differ exactly when it
+   * matters: a number was given, the push was refused by Safaricom, and the shop must be shown the
+   * paybill instead of a promise. Absent on every record opened before STK existed, which reads as false.
+   */
+  pushed?: boolean;
+  /** The provider's handle for the request behind that prompt — a CheckoutRequestID. What you quote when
+   *  a shopkeeper says no prompt ever came. */
+  railRef?: string;
   openedAt: string;
   /** The provider's own reference for the money that arrived. The thing you quote when somebody says
    *  they paid and we say we never saw it. */
@@ -149,6 +160,20 @@ export interface FundingInstruction {
   purpose: FundingPurpose;
   amount: number;
   currency: string;
+  /**
+   * THE NUMBER THE PAYMENT PROMPT IS SENT TO, where the payer gave one.
+   *
+   * This is what separates the two paths the user decided on: with a number we can PUSH — the phone
+   * lights up asking for a PIN, and because we initiated it we already know who is paying and how much,
+   * so there is no reference to mistype and nothing to attribute afterwards. Without one, all we can do
+   * is hand over a paybill number and a reference and hope it is typed correctly.
+   *
+   * It is a parameter rather than something read off the payer's record on purpose. The phone that pays
+   * is often not the phone we have on file — a shopkeeper sends their brother to the kiosk, a store's
+   * accounts are paid from the owner's own line — and a PIN prompt on the wrong handset is worse than no
+   * prompt at all: it teaches somebody to expect one they did not ask for.
+   */
+  payerPhone?: string;
 }
 
 /**
@@ -176,6 +201,38 @@ export interface RailPayment {
 }
 
 /**
+ * A CALLBACK THAT IS REALLY FROM THE PROVIDER AND REPORTS THAT NO MONEY MOVED.
+ *
+ * The most ordinary thing M-Pesa does, and it needed a shape of its own. A shopkeeper looks at the prompt
+ * on their phone and presses cancel; the handset is off; the PIN is wrong; there is not enough in the
+ * wallet. Safaricom tells us all four the same way it tells us about a payment — same URL, same envelope,
+ * a different result code.
+ *
+ * MODELLING IT AS AN ERROR WOULD HAVE BEEN WRONG TWICE OVER. Mechanically: every one of these providers
+ * retries a callback until it gets a 200, so answering 4xx to "the payer pressed cancel" buys a retry
+ * storm about a thing that is never going to change. And in meaning: nothing failed. A person was asked
+ * for money and said no, which is a legitimate outcome we asked for, and it belongs on their screen —
+ * the request stops saying "waiting for your payment" and starts saying what happened.
+ */
+export interface RailNonPayment {
+  provider: string;
+  /** Always false. The discriminant, and the reason `isPayment` can be a one-liner. */
+  paid: false;
+  /** The provider's handle for the request this answers — an STK CheckoutRequestID. How we find whose. */
+  railRef?: string;
+  /** The provider's own words. "Request cancelled by user" is a sentence a shop can act on. */
+  reason: string;
+}
+
+/** What comes back through the door: money, or a straight answer that none is coming. */
+export type RailCallback = RailPayment | RailNonPayment;
+
+/** `RailPayment` carries no `paid` field, so the absence of `false` is the whole test. */
+export function isPayment(callback: RailCallback): callback is RailPayment {
+  return (callback as RailNonPayment).paid !== false;
+}
+
+/**
  * A funding rail.
  *
  * The same seam as the payout rail, the geocoder and the router — the thing outside our walls is the
@@ -184,16 +241,31 @@ export interface RailPayment {
 export interface FundingRail {
   /** The provider this adapter speaks for, as it appears in the callback path. */
   readonly provider: string;
-  /** Set up a way to be paid. Returns our reference and the words the payer is shown. */
-  open(instruction: FundingInstruction): { reference: string; instructions: string };
+  /**
+   * Set up a way to be paid. Returns our reference and the words the payer is shown.
+   *
+   * ASYNCHRONOUS BECAUSE ASKING CAN BE A CONVERSATION. A paybill needs nothing of the provider — we hand
+   * over a number and a reference and the rail has spoken. An STK push is two HTTP calls before the
+   * shopkeeper has finished reading the screen: fetch an access token, then ask Safaricom to make a
+   * phone ring. A seam that could only be sync would have forced that round trip somewhere it does not
+   * belong, and `open` is exactly where the provider's slowness should be visible.
+   */
+  open(instruction: FundingInstruction): Promise<RailOpening>;
   /**
    * Is this callback really from the provider, and what does it say?
    *
-   * Returns the normalised payment, or throws. It must refuse an unsigned body, a bad signature and a
-   * replayed one — a webhook anybody can post to is not better than the shop's own word, it is worse:
-   * it is *everybody's* word.
+   * Returns the normalised payment, or throws. It must refuse a body it cannot establish the provenance
+   * of — a webhook anybody can post to is not better than the shop's own word, it is worse: it is
+   * *everybody's* word, and the URL is guessable.
+   *
+   * HOW that is established is the rail's business and differs sharply between them. A card acquirer
+   * signs its callbacks and the check is an HMAC. **M-Pesa does not sign anything.** A Daraja callback
+   * is a plain unauthenticated POST, so the only honest verification is to establish where it came from
+   * and then ASK SAFARICOM whether the transaction it describes is real — which is a network call, and
+   * is why this returns a promise. Anyone reading this before writing another adapter: the signature is
+   * not the point, the *provenance* is, and each provider makes you earn it differently.
    */
-  verify(headers: Record<string, string | undefined>, body: unknown): RailPayment;
+  verify(headers: Record<string, string | undefined>, body: unknown, meta?: CallbackMeta): Promise<RailCallback>;
   /**
    * SANDBOX ONLY: build a signed callback exactly as the provider would send one.
    *
@@ -203,6 +275,39 @@ export interface FundingRail {
    * it: a provider signs its own callbacks, and we have no business being able to.
    */
   simulate?(payment: Omit<RailPayment, 'provider'>): { headers: Record<string, string>; body: Record<string, unknown> };
+}
+
+/**
+ * What a rail hands back when a way to be paid has been set up.
+ *
+ * `pushed` is the honest half. The user's decision was "STK is main and paybill is the fallback", and a
+ * fallback is only real if the screen can tell which one happened — a shopkeeper told to watch their
+ * phone for a prompt that was never sent will stand there watching it.
+ */
+export interface RailOpening {
+  reference: string;
+  instructions: string;
+  /**
+   * TRUE only when the provider has accepted a request to make this payer's phone ring. False is the
+   * ordinary, un-dramatic case: no number was given, or the push was refused, and the payer pays the
+   * long way round.
+   */
+  pushed?: boolean;
+  /**
+   * The provider's own handle for the request — an STK CheckoutRequestID. Not the payment's reference
+   * (no payment exists yet); this is what you quote to a provider's support desk when a prompt never
+   * arrived, and what their callback comes back carrying.
+   */
+  railRef?: string;
+  /** Why no prompt was sent, in words an operator can act on. Present only when `pushed` is false and
+   *  a push was actually attempted — never for a payer who simply gave no number. */
+  pushError?: string;
+}
+
+/** What the door knows about a callback beyond its body. `ip` is the only verification an unsigned
+ *  provider leaves us, so it is carried explicitly rather than dug out of a header a proxy may forge. */
+export interface CallbackMeta {
+  ip?: string;
 }
 
 export const FUNDING_RAIL = 'FUNDING_RAIL';

@@ -108,6 +108,15 @@ export class AvailabilityDto {
 export class TopUpDto {
   @IsNumber() @Min(0.01) amount!: number;
   @IsOptional() @IsString() bankRef?: string;
+  /**
+   * The number the payment prompt should go to — STK push, the main path the user chose on 2026-09-22.
+   *
+   * Optional because the fallback has to keep working: a payer who gives no number is shown a paybill
+   * and a reference, which is how somebody paying from a kiosk or another person's handset pays. Given,
+   * it is the phone that will ring asking for a PIN, so it is TYPED BY THE PAYER rather than read off
+   * their record — the phone that pays is often not the one we have on file.
+   */
+  @IsOptional() @IsString() phone?: string;
 }
 
 export class CorridorDto {

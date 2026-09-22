@@ -57,7 +57,10 @@ export class FundingService {
    * taps Top up twice has not asked for two payments, and two live references is how the second one gets
    * paid against the first one's number and lands in the unmatched pile.
    */
-  open(input: { payerKind: FundingPayerKind; payerDid: string; purpose?: FundingPurpose; amount: number }, now: number = Date.now()): Funding {
+  async open(
+    input: { payerKind: FundingPayerKind; payerDid: string; purpose?: FundingPurpose; amount: number; payerPhone?: string },
+    now: number = Date.now(),
+  ): Promise<Funding> {
     const amount = Math.round((Number.isFinite(input.amount) ? input.amount : 0) * 100) / 100;
     if (amount <= 0) throw new GlosError('AMOUNT_INVALID', 'Ask for an amount greater than zero');
     const purpose: FundingPurpose = input.purpose ?? 'float';
@@ -71,7 +74,7 @@ export class FundingService {
     }
 
     const fundingId = `fnd_${randomBytes(8).toString('hex')}`;
-    const railed = this.rail.open({ fundingId, payerDid: input.payerDid, purpose, amount, currency });
+    const railed = await this.rail.open({ fundingId, payerDid: input.payerDid, purpose, amount, currency, payerPhone: input.payerPhone });
     const funding: Funding = {
       fundingId,
       entityId,
@@ -85,6 +88,8 @@ export class FundingService {
       reference: railed.reference || payerReference(),
       provider: this.rail.provider,
       instructions: railed.instructions,
+      ...(railed.pushed ? { pushed: true } : {}),
+      ...(railed.railRef ? { railRef: railed.railRef } : {}),
       openedAt: new Date(now).toISOString(),
     };
     return this.save(funding);
@@ -186,6 +191,28 @@ export class FundingService {
     funding.status = 'failed';
     funding.failedAt = new Date(now).toISOString();
     funding.failureReason = reason;
+    return this.save(funding);
+  }
+
+  /**
+   * THE PROVIDER SAYS THE PAYER DID NOT PAY — a prompt cancelled, a phone that never answered, a wrong PIN.
+   *
+   * Separate from `fail` because the caller is different and so is what it may assume. `fail` is a person
+   * closing a request they are looking at, and it refuses anything that is not still waiting, loudly.
+   * This is a callback: it arrives out of nowhere, possibly twice, possibly about a request somebody
+   * already expired by asking again. None of that is worth an exception — the money did not arrive either
+   * way, and a provider retrying a cancellation must not be answered with an error it will retry again.
+   *
+   * Idempotent and total: it closes the one awaiting request that prompt belongs to, and otherwise does
+   * nothing at all.
+   */
+  notePaymentRefused(outcome: { railRef?: string; reason: string }, now: number = Date.now()): Funding | undefined {
+    if (!outcome.railRef) return undefined;
+    const funding = this.list().find((f) => f.railRef === outcome.railRef);
+    if (!funding || funding.status !== 'awaiting') return funding;
+    funding.status = 'failed';
+    funding.failedAt = new Date(now).toISOString();
+    funding.failureReason = outcome.reason;
     return this.save(funding);
   }
 

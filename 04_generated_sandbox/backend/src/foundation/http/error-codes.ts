@@ -114,6 +114,14 @@ export const ERROR_CODES = {
   // a forged token is — these two are the lock on the door that creates money.
   CALLBACK_UNSIGNED: { status: 401, title: 'This payment confirmation is not signed' },
   CALLBACK_STALE: { status: 401, title: 'This payment confirmation is too old to accept' },
+  /**
+   * The provider's own records contradict the confirmation we were sent — M-Pesa says that checkout was
+   * cancelled, or never paid. A forgery and a stale replay both look like this, and so does a genuine
+   * mistake; all three are refused for the same reason and none of them may reach the books.
+   */
+  CALLBACK_CONTRADICTED: { status: 401, title: 'The payment provider says this payment was not made' },
+  /** We could not reach the provider to confirm it, and this deployment has asked not to guess. */
+  CALLBACK_UNVERIFIED: { status: 401, title: 'This payment could not be confirmed with the provider' },
 
   // --- 402 Payment Required --------------------------------------------------------------------
   PAYMENT_REQUIRED: { status: 402, title: 'Payment is required' },

@@ -1985,7 +1985,7 @@ export class SbgController {
   @Post('agents/:did/top-up')
   topUp(@Param('did') did: string, @Body() dto: TopUpDto, @Actor() actor: IntrospectionResult) {
     this.assertAgentActs(did, actor);
-    return this.funding.open({ payerKind: 'agent', payerDid: did, amount: dto.amount });
+    return this.funding.open({ payerKind: 'agent', payerDid: did, amount: dto.amount, payerPhone: dto.phone });
   }
 
   /** What this shop is waiting to have confirmed, and what has been confirmed lately. Owner-scoped:
@@ -2748,7 +2748,7 @@ export class SbgController {
   @Post('vendors/:id/top-up')
   topUpVendor(@Param('id') id: string, @Body() dto: TopUpDto, @Actor() actor: IntrospectionResult) {
     this.assertVendorOwner(id, actor);
-    return this.funding.open({ payerKind: 'vendor', payerDid: id, amount: dto.amount });
+    return this.funding.open({ payerKind: 'vendor', payerDid: id, amount: dto.amount, payerPhone: dto.phone });
   }
 
   /** What this store is waiting to have confirmed, and what has been confirmed lately. Owner-scoped. */
