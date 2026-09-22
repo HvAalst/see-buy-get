@@ -273,10 +273,12 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
     title: 'Papers running out, and vehicles off the road (fleet)',
     sentWhen: 'The six-hourly papers check finds a vehicle or driver paper lapsed or due within 30 days — once per paper per expiry date.',
     wired: true,
-    sample: { company: 'Kilima Logistics', lapsed: ['Vehicle KLM 002B — Insurance lapsed 3 Sep 2026'], due: ['Vehicle KLM 001V — Inspection certificate runs out 12 Oct 2026 (28 day(s))', 'Driver Amos K. — Driving licence runs out 20 Oct 2026 (36 day(s))'] },
+    sample: { company: 'Kilima Logistics', lapsed: ['Vehicle KLM 002B — Insurance lapsed 3 Sep 2026'], due: ['Vehicle KLM 001V — Inspection certificate runs out 12 Oct 2026 (28 days)', 'Driver Amos K. — Driving licence runs out 20 Oct 2026 (36 days)'] },
     build: (p) => ({
       subject: p.lapsed.length ? `${p.lapsed.length} off the road at ${p.company} — papers lapsed` : `Papers running out at ${p.company}`,
-      preheader: p.lapsed.length ? `${p.lapsed.length} vehicle(s) or driver(s) cannot start a shift until their papers are renewed.` : `${p.due.length} paper(s) run out within 30 days.`,
+      preheader: p.lapsed.length
+        ? `${p.lapsed.length === 1 ? 'A vehicle or driver' : `${p.lapsed.length} vehicles or drivers`} cannot start a shift until their papers are renewed.`
+        : `${p.due.length === 1 ? 'A paper runs' : `${p.due.length} papers run`} out within 30 days.`,
       blocks: [
         { kind: 'heading', text: p.lapsed.length ? 'Papers lapsed — off the road' : 'Papers running out' },
         ...(p.lapsed.length

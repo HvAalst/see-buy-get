@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { AuthImage, Button, Card, Icon, Note, PhotoField, Pill, Sheet, type IconName } from '../../../shared/ui';
+import { AuthImage, Button, Icon, Note, PhotoField, Pill, Sheet, type IconName } from '../../../shared/ui';
 import { useT, type Translate } from '../../../shared/i18n';
 import { haversineKm } from '../../../shared/geo';
 import { ROAD_KINDS, roadBlocks, roadMeasure, roadSummary, roadTone, roadValueLabel, type RoadKind } from '../logic';
@@ -23,6 +23,7 @@ import type { RoadAccount, RoadConstraint } from '../types';
 export function RoadSection({ state, actions }: { state: DriverState; actions: DriverActions }) {
   const t = useT();
   const [open, setOpen] = useState(false);
+  const [panel, setPanel] = useState(false);
 
   // Read once when the section first appears, and never again on its own: this runs on a connection the
   // driver pays for by the megabyte, and the road does not change while they are looking at it.
@@ -32,45 +33,69 @@ export function RoadSection({ state, actions }: { state: DriverState; actions: D
 
   const items = state.road;
   const loading = state.roadState === 'loading';
+  /*
+   * A ROW, AND THE MAP BEHIND IT. Open, this section was 429px — half a phone screen, under the work the
+   * driver came to this screen for. Its closed line is the SUMMARY it would show anyway, which is the one
+   * thing that decides whether to open it: "3 reported, 2 could stop you", or — in the empty state, where
+   * a driver most wants to read silence as a clear road — "Nothing reported here yet, that is not the same
+   * as clear". The caveat, the list and the report form are all a tap away, exactly as they were.
+   */
+  const summary = state.roadState === 'error' ? t('driver.road.loadFailed') : loading ? t('driver.route.loadingPlaces') : roadSummary(items, t);
 
   return (
-    <Card>
-      <h2 class="road__h">{t('driver.road.title')}</h2>
-      <p class="card__note">{t('driver.road.lede')}</p>
+    <>
+      <button type="button" class="row" onClick={() => setPanel(true)} aria-expanded={panel}>
+        <span class="row__ic">
+          <Icon name="route" size={24} />
+        </span>
+        <span class="row__body">
+          <span class="row__t">{t('driver.road.title')}</span>
+          <span class="row__s">{summary}</span>
+        </span>
+        <span class="row__end">
+          <Icon name="chevronRight" size={22} />
+        </span>
+      </button>
 
-      {state.roadState === 'error' ? (
-        <>
-          <Note tone="warn" icon="pin" title={t('driver.road.loadFailed')} detail={t('driver.toast.noLocationDetail')} />
-          <Button variant="outline" onClick={() => void actions.loadRoad()}>
-            {t('driver.road.retry')}
-          </Button>
-        </>
-      ) : (
-        <>
-          <p class="road__sum" aria-live="polite">
-            {loading ? t('driver.route.loadingPlaces') : roadSummary(items, t)}
+      {panel ? (
+        <Sheet open onClose={() => setPanel(false)} title={t('driver.road.title')}>
+          <p class="card__note">{t('driver.road.lede')}</p>
+
+          {state.roadState === 'error' ? (
+            <>
+              <Note tone="warn" icon="pin" title={t('driver.road.loadFailed')} detail={t('driver.toast.noLocationDetail')} />
+              <Button variant="outline" onClick={() => void actions.loadRoad()}>
+                {t('driver.road.retry')}
+              </Button>
+            </>
+          ) : (
+            <>
+              <p class="road__sum" aria-live="polite">
+                {summary}
+              </p>
+              <ul class="road__list">
+                {items.map((c) => (
+                  <RoadRow key={c.constraintId} c={c} at={state.roadAt} busy={state.busy} actions={actions} t={t} />
+                ))}
+              </ul>
+            </>
+          )}
+
+          {/* Shown in EVERY state, the empty one included. A list with nothing in it is the moment a driver
+              is most likely to read silence as a clear road, so that is the moment the sentence matters most. */}
+          <p class="road__caveat">
+            <Icon name="info" size={18} />
+            <span>{t('driver.road.caveat')}</span>
           </p>
-          <ul class="road__list">
-            {items.map((c) => (
-              <RoadRow key={c.constraintId} c={c} at={state.roadAt} busy={state.busy} actions={actions} t={t} />
-            ))}
-          </ul>
-        </>
-      )}
 
-      {/* Shown in EVERY state, the empty one included. A list with nothing in it is the moment a driver is
-          most likely to read silence as a clear road, so that is the moment the sentence matters most. */}
-      <p class="road__caveat">
-        <Icon name="info" size={18} />
-        <span>{t('driver.road.caveat')}</span>
-      </p>
-
-      <Button variant="outline" onClick={() => setOpen(true)}>
-        {t('driver.road.reportCta')}
-      </Button>
+          <Button variant="outline" onClick={() => setOpen(true)}>
+            {t('driver.road.reportCta')}
+          </Button>
+        </Sheet>
+      ) : null}
 
       <ReportSheet open={open} onClose={() => setOpen(false)} state={state} actions={actions} />
-    </Card>
+    </>
   );
 }
 

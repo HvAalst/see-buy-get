@@ -154,8 +154,18 @@
   cursor: not-allowed;
 }
 
+/*
+ * A ROW WRAPS BEFORE IT CRUSHES ITS OWN MIDDLE.
+ *
+ * The body was allowed to shrink to nothing (min-width: 0, so a long line ellipses) while whatever sits at
+ * the end — an amount and a status pill on the earnings register — kept its full width. On a phone that
+ * left about 130px for the text: one job's description wrapped down EIGHT lines and a single row was
+ * 1,768px tall. The body now has a floor, so a wide end drops onto its own line instead, and rows whose
+ * end is a chevron or a count are untouched — there is room for those either way.
+ */
 .row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 14px;
   width: 100%;
@@ -194,8 +204,10 @@
 }
 
 .row__body {
-  flex: 1;
-  min-width: 0;
+  /* Basis 0, so the words never ASK for their full width and push themselves onto a line below the icon;
+     the floor below is what makes a wide end (an amount and a pill) wrap instead. */
+  flex: 1 1 0;
+  min-width: min(100%, 11rem);
 }
 
 /* These sit inside a <button>, so they are spans — they need to be told to stack. */
@@ -293,6 +305,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  /* Holds the right-hand edge on one line, and stays with it on the line below when the row wraps. */
+  margin-left: auto;
   color: var(--tx3);
 }
 

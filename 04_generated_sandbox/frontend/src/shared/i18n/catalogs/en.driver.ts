@@ -592,6 +592,8 @@ export const enDriver = {
   'driver.counter.saved': 'Sent. Thank you.',
   'driver.counter.refused': 'Not recorded',
   'driver.counter.none': 'Nothing recorded here yet.',
+  'driver.counter.subIdle': 'Choose a country to see what was asked for',
+  'driver.counter.subCount': '{n} recorded for {country}',
   'driver.counter.told': 'said',
   'driver.counter.evidenced': 'with a photo',
   'driver.counter.basis': 'What people were asked for, not what the border requires. A requirement that ended shows here as nobody having been asked since.',

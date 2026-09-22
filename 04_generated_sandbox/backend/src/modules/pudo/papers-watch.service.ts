@@ -286,18 +286,24 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
        * other side. They send a photograph from the app instead, and the network's staff read it.
        */
       const own = !d.managerDid;
-      const next = own ? 'send a photo of the renewed licence from the app, and the network records the new date' : 'the fleet office records the new date';
+      // SHORT, BECAUSE A NOTIFICATION IS READ ON A LOCK SCREEN. The long version of this ran to five lines
+      // in the app's own inbox — one notification per phone screen, the next one cut in half.
+      const next = own ? 'Send a photo of the new card from the app' : 'Give the new date to the fleet office';
       for (const p of driverPapers(d, now)) {
         if (p.state !== 'due' && p.state !== 'lapsed') continue;
         if (p.state === 'lapsed' && this.fleet.activeForDriver(d.did)) {
-          this.endShift(d.did, `Your shift was ended: ${offRoadLine(p)}. Renew it — ${next}; until then no shift can start.`);
+          this.endShift(d.did, `Your shift was ended: ${offRoadLine(p)}. ${next} — no shift can start until it is recorded.`);
           out.shiftsEnded++;
         }
         const body =
           p.state === 'lapsed'
-            ? `${offRoadLine(p)}. No shift can start until the renewal is recorded: ${next}.`
-            : `${paperLabel(p.kind)} to ${paperDay(p.expiresAt ?? '')}. Renew it in time — ${next} — or shifts stop that day.`;
-        if (await this.tellOnce(`driver:${d.did}:${p.kind}:${p.expiresAt}:${p.state}`, d.did, p.state === 'lapsed' ? `Your licence has lapsed` : `Your licence runs out in ${p.daysLeft} day(s)`, body, p.state === 'lapsed' ? 'papers_lapsed' : 'papers_due', now)) out.notified++;
+            ? `${offRoadLine(p)}. ${next} — no shift can start until it is recorded.`
+            : `${paperLabel(p.kind)} to ${paperDay(p.expiresAt ?? '')}. ${next}, or shifts stop that day.`;
+        // "in 1 day", never "in 1 day(s)". A paper that has not lapsed always has at least one day left
+        // (paperStatus rounds up to the day it lapses), so the last day reads "in 1 day" and never "0".
+        const left = p.daysLeft ?? 1;
+        const title = p.state === 'lapsed' ? 'Your licence has lapsed' : `Your licence runs out in ${left} day${left === 1 ? '' : 's'}`;
+        if (await this.tellOnce(`driver:${d.did}:${p.kind}:${p.expiresAt}:${p.state}`, d.did, title, body, p.state === 'lapsed' ? 'papers_lapsed' : 'papers_due', now)) out.notified++;
       }
     }
     // Every fleet: a lapsed vehicle paper ends the shift on it and tells the driver; the fleet is mailed the report once per change.
@@ -313,7 +319,7 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
       }
       const fresh = [...report.lapsed, ...report.due].filter((r) => !this.told.has(this.mailKey(m.did, r)));
       if (fresh.length && this.mail && m.contactEmail) {
-        const line = (r: PaperRow) => `${r.subject === 'vehicle' ? 'Vehicle' : 'Driver'} ${r.label} — ${paperLabel(r.kind)}${r.expiresAt ? ` ${r.state === 'lapsed' ? 'lapsed' : 'runs out'} ${paperDay(r.expiresAt)}` : ''}${r.state === 'due' && r.daysLeft != null ? ` (${r.daysLeft} day(s))` : ''}`;
+        const line = (r: PaperRow) => `${r.subject === 'vehicle' ? 'Vehicle' : 'Driver'} ${r.label} — ${paperLabel(r.kind)}${r.expiresAt ? ` ${r.state === 'lapsed' ? 'lapsed' : 'runs out'} ${paperDay(r.expiresAt)}` : ''}${r.state === 'due' && r.daysLeft != null ? ` (${r.daysLeft} day${r.daysLeft === 1 ? '' : 's'})` : ''}`;
         const sent = await this.mail.send('papers-due', { address: m.contactEmail, name: m.companyName }, { company: m.companyName, lapsed: report.lapsed.map(line), due: report.due.map(line) });
         if (sent) {
           for (const r of fresh) this.told.set(this.mailKey(m.did, r), new Date(now).toISOString());

@@ -24,6 +24,16 @@ const KIND_ICON: Record<string, IconName> = {
   bag_ready_to_close: 'bag',
   message: 'send',
   test: 'bell',
+  // FP4 — papers and their dates. Without these a licence about to stop somebody working arrived under the
+  // same bell as everything else; the fallback is still the bell, so a kind added on the server is never a blank.
+  papers_due: 'clock',
+  papers_lapsed: 'block',
+  papers_checked: 'check',
+  box_due: 'clock',
+  signup_incomplete: 'edit',
+  signup_rejected: 'warning',
+  load_assigned: 'truck',
+  load_instructions: 'edit',
 };
 
 /**
@@ -123,7 +133,9 @@ function PushControls({ push }: { push: ReturnType<typeof usePush> }) {
   // prompt
   return (
     <div class="npush npush--off">
-      <p class="npush__lede">Get told the moment something needs you — a parcel arrives, a load is near — right on your screen, even when the app is closed.</p>
+      {/* One line: the sheet was opened to READ what is waiting, and three lines of why pushed it under
+          the fold on a phone. */}
+      <p class="npush__lede">Get told when something needs you, even when the app is closed.</p>
       <Button chevron={false} busy={push.busy === 'enable'} disabled={push.busy !== null} onClick={() => void push.enable()}>
         Turn on notifications
       </Button>
@@ -131,11 +143,25 @@ function PushControls({ push }: { push: ReturnType<typeof usePush> }) {
   );
 }
 
+/**
+ * One notification: what it is, the first two lines of what it says, and when. Pressing it opens that one
+ * in full — and marks it read, which pressing it always did. Five-line bodies meant one notification per
+ * phone screen and the next one cut in half by the bottom of the sheet.
+ */
 function NotificationRow({ item, onRead }: { item: InboxItem; onRead: () => void }) {
+  const [open, setOpen] = useState(false);
   const unread = !item.readAt;
   return (
     <li>
-      <button type="button" class={`nitem${unread ? ' nitem--unread' : ''}`} onClick={onRead}>
+      <button
+        type="button"
+        class={`nitem${unread ? ' nitem--unread' : ''}${open ? ' nitem--open' : ''}`}
+        aria-expanded={open}
+        onClick={() => {
+          setOpen((was) => !was);
+          if (unread) onRead();
+        }}
+      >
         <span class="nitem__ic">
           <Icon name={KIND_ICON[item.kind] ?? 'bell'} size={22} />
         </span>

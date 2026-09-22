@@ -176,7 +176,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         title: payload.accepted ? 'Your licence is recorded' : 'Your licence photo was not accepted',
         body: payload.accepted
           ? `Recorded to ${payload.expiresAt ? paperDay(payload.expiresAt) : "its new date"}. You can start a shift.`
-          : `${payload.reason} Send a new photo of the renewed licence from the app.`,
+          : `${payload.reason} Send a new photo from the app.`,
         link: '/',
         tag: `papers:${payload.did}:checked`,
         data: { did: payload.did },

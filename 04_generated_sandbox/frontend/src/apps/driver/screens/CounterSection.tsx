@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, Checkbox, Icon, Note, PhotoField, Pill, Sheet } from '../../../shared/ui';
+import { Button, Checkbox, Icon, Note, PhotoField, Pill, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import type { DriverActions, DriverState } from '../useDriverApp';
 
@@ -28,6 +28,7 @@ import type { DriverActions, DriverState } from '../useDriverApp';
 export function CounterSection({ state, actions }: { state: DriverState; actions: DriverActions }) {
   const t = useT();
   const [open, setOpen] = useState(false);
+  const [panel, setPanel] = useState(false);
   const [form, setForm] = useState({ place: '', subject: '', note: '', happenedOn: today(), firstHand: false });
   const [photo, setPhoto] = useState('');
   const [agreed, setAgreed] = useState(false);
@@ -63,10 +64,35 @@ export function CounterSection({ state, actions }: { state: DriverState; actions
     setAgreed(false);
   };
 
+  /*
+   * A ROW, LIKE THE ROAD BESIDE IT. Its closed line is the honest state: nothing until a country has been
+   * chosen (this screen refuses to guess which border somebody is at), then how many accounts we hold for
+   * that country.
+   */
+  const summary = !permission?.country
+    ? t('driver.counter.subIdle')
+    : state.observations.length
+      ? t('driver.counter.subCount', { n: state.observations.length, country: permission.country })
+      : t('driver.counter.none');
+
   return (
-    <Card>
-      <h2 class="road__h">{t('driver.counter.title')}</h2>
-      <p class="card__note">{t('driver.counter.lede')}</p>
+    <>
+      <button type="button" class="row" onClick={() => setPanel(true)} aria-expanded={panel}>
+        <span class="row__ic">
+          <Icon name="badge" size={24} />
+        </span>
+        <span class="row__body">
+          <span class="row__t">{t('driver.counter.title')}</span>
+          <span class="row__s">{summary}</span>
+        </span>
+        <span class="row__end">
+          <Icon name="chevronRight" size={22} />
+        </span>
+      </button>
+
+      {!panel ? null : (
+        <Sheet open onClose={() => setPanel(false)} title={t('driver.counter.title')}>
+          <p class="card__note">{t('driver.counter.lede')}</p>
 
       <Button onClick={() => setOpen(true)} variant="outline" full>
         {t('driver.counter.add')}
@@ -196,11 +222,13 @@ export function CounterSection({ state, actions }: { state: DriverState; actions
       )}
       {/* The caveat that never leaves, exactly as the road map keeps its own: this is what people were
           asked for, not what the border requires. */}
-      <p class="road__caveat">
-        <Icon name="warning" size={16} />
-        {t('driver.counter.basis')}
-      </p>
-    </Card>
+          <p class="road__caveat">
+            <Icon name="warning" size={16} />
+            {t('driver.counter.basis')}
+          </p>
+        </Sheet>
+      )}
+    </>
   );
 }
 

@@ -72,7 +72,11 @@ describe('the papers watch', () => {
     const drivers = [{ did: 'd-jane', displayName: 'Jane W.', status: 'ACTIVE', managerDid: 'did:fleet:k', licence: { number: 'L', classes: ['van'], expiresAt: day(3) } }];
     const { watch, outbox, inbox, ended } = harness({ vehicles: [{ vehicleId: 'v9', plate: 'KLM 009X', status: 'ACTIVE', managerDid: 'did:fleet:k', documents: {} }], drivers, onShift: { v9: 'd-jane' } });
     expect(await watch.sweep(now)).toEqual({ shiftsEnded: 0, notified: 1, mails: 1 });
-    expect(inbox[0]).toMatchObject({ did: 'd-jane', kind: 'papers_due', title: 'Your licence runs out in 4 day(s)' });
+    expect(inbox[0]).toMatchObject({ did: 'd-jane', kind: 'papers_due', title: 'Your licence runs out in 4 days' });
+    // Her office records it, so the message tells her where the date goes — and it is short, because the
+    // place it is read is a lock screen.
+    expect(inbox[0].body).toContain('Give the new date to the fleet office');
+    expect(inbox[0].body.length).toBeLessThan(120);
     expect(await watch.sweep(now + DAY)).toEqual({ shiftsEnded: 0, notified: 0, mails: 0 });
     // Five days on: lapsed. The shift ends, the driver is told (a new state, a new message), the fleet is mailed again.
     const r = await watch.sweep(now + 5 * DAY);
@@ -80,6 +84,17 @@ describe('the papers watch', () => {
     expect(ended).toEqual(['d-jane']);
     expect(inbox.map((n) => n.kind)).toEqual(['papers_due', 'papers_lapsed', 'papers_lapsed']);
     expect(outbox.recent('ops@kilima.example')).toHaveLength(2);
+  });
+
+  it('counts the days in words a person would use, and tells a courier with no fleet where the card goes', async () => {
+    // ONE day is "1 day", never "1 day(s)" — the driver's own screenshot of "10 day(s)" is what this is for.
+    const tomorrow = [{ did: 'd-solo', displayName: 'Solo S.', status: 'ACTIVE', licence: { number: 'L', classes: ['motorcycle'], expiresAt: day(0) } }];
+    const one = harness({ vehicles: [], drivers: tomorrow });
+    expect(await one.watch.sweep(now)).toMatchObject({ notified: 1 });
+    expect(one.inbox[0].title).toBe('Your licence runs out in 1 day');
+    // …and a courier who rides without a fleet is sent to the app, not to an office they do not have.
+    expect(one.inbox[0].body).toContain('Send a photo of the new card from the app');
+    expect(one.inbox[0].body.length).toBeLessThan(120);
   });
 
   it('reports to the network what only an operator can put right, worst first, and when it last looked', async () => {

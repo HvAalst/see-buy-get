@@ -701,10 +701,27 @@
   font-weight: 700;
   color: var(--navy);
 }
+/*
+ * TWO LINES UNTIL SOMEBODY ASKS FOR MORE.
+ *
+ * A notification body is written to be read on a lock screen, and the longest ones here run to five lines
+ * — so one notification filled a phone and the second was cut off by the bottom of the sheet. Clamped, a
+ * screen holds four or five and a reader can see which one they came for; pressing the row opens that one
+ * in full (and marks it read, which pressing it always did).
+ */
 .nitem__b {
   font-size: 14px;
   color: var(--tx2);
   line-height: 1.35;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.nitem--open .nitem__b {
+  display: block;
+  overflow: visible;
 }
 .nitem__time {
   font-size: 14px;
