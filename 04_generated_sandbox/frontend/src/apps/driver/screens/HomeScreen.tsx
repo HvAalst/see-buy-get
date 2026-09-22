@@ -1,7 +1,7 @@
 import { DarkSpellNote } from './DarkSpellNote';
 import { HelpLink } from '../../../shared/guide/HelpLink';
 import { useState } from 'preact/hooks';
-import { Button, Card, Checklist, ErrorNote, GlanceNumber, Icon, Note, PhotoField, Pill, QrBlock, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
+import { Button, Card, Checklist, ErrorNote, GlanceNumber, Icon, Note, PhotoField, Pill, PushPrompt, QrBlock, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
 import { paperDay } from '../../../shared/papers';
 import { qrPayload } from '../../../shared/qr';
@@ -26,6 +26,28 @@ export interface HomeScreenProps {
 
 export function HomeScreen({ state, actions }: HomeScreenProps) {
   return state.session.active && state.vehicle ? <OnShift state={state} actions={actions} /> : <OffShift state={state} actions={actions} />;
+}
+
+/**
+ * The notification ask, on BOTH faces of this screen and asked once per device.
+ *
+ * A driver has the sharpest reason of anybody here: a load offer is a race — it goes to whoever takes it
+ * first and it expires — and the phone is in a pocket, on a dashboard cradle, or face-down on a table.
+ * Which face they meet it on depends only on whether the app was opened before the shift or during it, so
+ * both carry it and one dismissal answers for both.
+ */
+function PushAsk({ actions }: { actions: DriverActions }) {
+  const t = useT();
+  return (
+    <PushPrompt
+      api={actions.notifications}
+      title={t('driver.push.title')}
+      reason={t('driver.push.reason')}
+      turnOn={t('driver.push.turnOn')}
+      notNow={t('driver.push.notNow')}
+      storageKey="glos-driver-push-asked"
+    />
+  );
 }
 
 /* ============================================================== off shift == */
@@ -76,6 +98,10 @@ function OffShift({ state, actions }: HomeScreenProps) {
       {/* FP8 — and a refused start after a working day names the rest owed (HOURS_EXCEEDED), the same way. */}
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} showDetail={state.error.code === 'CANNOT_COUPLE' || state.error.code === 'HOURS_EXCEEDED'} /> : null}
       <DarkSpellNote />
+
+      {/* Before the walk to the yard, which is the one calm moment in a driver's day. Below the notices,
+          because a lapsed licence is not a thing to read second. */}
+      <PushAsk actions={actions} />
 
       {/* Your own vehicles first — the morning question is "which one today?", and it has an answer before
           the driver has walked anywhere. One in use by someone else is shown and blocked, never hidden. */}
@@ -471,6 +497,9 @@ function OnShift({ state, actions }: HomeScreenProps) {
         alert={isFull(state.remaining) || state.remainingTotes === 0}
         sub={capacitySubLine(state.remaining, v.capacityKg, state.claims.length, t, state.remainingTotes ?? undefined)}
       />
+
+      {/* Under the one big number, never over it — how much room is left is why this screen exists. */}
+      <PushAsk actions={actions} />
 
       <Card
         label={t('driver.home.yourVehicle')}

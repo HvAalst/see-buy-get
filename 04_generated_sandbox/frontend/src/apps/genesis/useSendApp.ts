@@ -1109,6 +1109,8 @@ export function useSendApp() {
     // The Web Push controls (N1b) — surfaced for the TopBar NotificationBell; null while signed out.
     notifications: client?.notifications ?? null,
     actions: {
+      /** The same controls, inside actions so a SCREEN can ask for permission where somebody sees the ask. */
+      notifications: client?.notifications ?? null,
       /** CV5 — the conversations API for this person (null until signed in). */
       chatApi: client?.conversations ?? null,
       go,

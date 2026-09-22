@@ -480,6 +480,14 @@ export const en = {
   'common.instructions.amended': 'Added {when}: {text}',
   'common.instructions.none': 'No instructions from the sender.',
 
+  /* Asking for notifications, where somebody will see the ask — see shared/ui/PushPrompt. The reason names
+     what this person would actually be told, because a permission prompt with no reason attached is the one
+     that gets refused, and a refusal is close to permanent. */
+  'send.push.title': 'Know the moment it arrives',
+  'send.push.reason': 'We will tell you the moment a parcel reaches the shop you collect it from, and when one you sent is delivered — on this device, even with the app closed.',
+  'send.push.turnOn': 'Turn on notifications',
+  'send.push.notNow': 'Not now',
+
   // My parcels screen.
   'send.parcels.title': 'My parcels',
   'send.parcels.lede': 'Everything you send and receive, in one place.',

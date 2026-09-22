@@ -105,6 +105,14 @@ export const enDriver = {
   'driver.route.retryPlaces': 'Try loading the places again',
   'driver.route.aloud': 'Choose where you are starting from and where you are heading. We will only offer you loads that are on your way and fit in your van.',
 
+  /* Asking for notifications, where somebody will see the ask — see shared/ui/PushPrompt. The reason names
+     what this driver would actually be told, because a permission prompt with no reason attached is the one
+     that gets refused, and a refusal is close to permanent. */
+  'driver.push.title': 'Be told when work comes up',
+  'driver.push.reason': 'A load near you goes to whoever takes it first. We will tell you the moment one appears, and before your licence runs out — on this phone, with the app closed.',
+  'driver.push.turnOn': 'Turn on notifications',
+  'driver.push.notNow': 'Not now',
+
   // Home screen — off shift.
   'driver.home.startTitle': 'Start your shift',
   'driver.home.startLede': 'Scan the QR sticker on the dashboard of the vehicle you are driving today.',

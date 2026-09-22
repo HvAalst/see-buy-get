@@ -1474,6 +1474,8 @@ const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehic
     // The Web Push controls (N1b) — surfaced for the TopBar NotificationBell; null while signed out.
     notifications: client?.notifications ?? null,
     actions: {
+      /** The same controls, inside actions so a SCREEN can ask for permission where somebody sees the ask. */
+      notifications: client?.notifications ?? null,
       refresh,
       signIn,
       sendPinCode,

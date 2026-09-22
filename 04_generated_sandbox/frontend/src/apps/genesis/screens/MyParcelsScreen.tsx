@@ -2,7 +2,7 @@ import type { ChatThread } from '../../../shared/conversation/logic';
 import { ConversationSheet } from '../../../shared/conversation/Conversations';
 import { narrow } from '../../../lib/sbg';
 import { useEffect, useState } from 'preact/hooks';
-import { errorSentence, Button, Card, Checklist, CodeCard, ErrorNote, Icon, Note, Pill, ReadAloud, Sheet } from '../../../shared/ui';
+import { errorSentence, Button, Card, Checklist, CodeCard, ErrorNote, Icon, Note, Pill, PushPrompt, ReadAloud, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { PhotoField } from './PhotoField';
 import { LADDER, isOffLadder, ladderIndex, parcelRowLine, relationWord, sortForPerson, statusPresentation, stepTime } from '../logic';
@@ -45,6 +45,18 @@ export function MyParcelsScreen({ state, actions }: MyParcelsScreenProps) {
       {state.parcelsState === 'error' && state.parcelsError ? (
         <ErrorNote error={state.parcelsError} onRetry={() => void actions.loadParcels()} />
       ) : null}
+
+      {/* THE ASK, on the one screen in this app where somebody is waiting. Send and Track are anonymous and
+          have no bell at all; this is the signed-in tab, and what is waited on here — a parcel arriving at a
+          shop that then closes at six — is worth being told about rather than found by reopening the app. */}
+      <PushPrompt
+        api={actions.notifications}
+        title={t('send.push.title')}
+        reason={t('send.push.reason')}
+        turnOn={t('send.push.turnOn')}
+        notNow={t('send.push.notNow')}
+        storageKey="glos-send-push-asked"
+      />
 
       {received.length ? (
         <ParcelGroup title={t('send.relation.received')} items={received} actions={actions} />
