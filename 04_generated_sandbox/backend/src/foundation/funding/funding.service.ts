@@ -13,6 +13,12 @@ import { FUNDING_OPEN, FUNDING_RAIL, Funding, FundingPayer, FundingPayerKind, Fu
  * which is how these actually reach us over WhatsApp.
  */
 const ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+
+/** A reference as the payer may have typed it: letters and digits only, upper case. See `byReference`. */
+export function normaliseReference(reference: string): string {
+  return reference.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+}
+
 function payerReference(): string {
   const bytes = randomBytes(8);
   let out = '';
@@ -290,12 +296,26 @@ export class FundingService {
     return unmatched ? { unmatched } : null;
   }
 
+  /**
+   * Match what the payer actually typed — WHICH IS NOT WHAT WE PRINTED FOR THEM.
+   *
+   * We show `SBG-QNTS-QP5D`. On a paybill the customer types the account number on a phone keypad, from
+   * memory or off a screenshot, and what reaches the callback is `SBGQNTSQP5D`, `sbg qnts qp5d`, or the
+   * same thing with a stray full stop. An exact match would send every one of those to the unmatched pile
+   * — a pile whose only recovery today is a phone call — and the first live payment would probably land
+   * in it.
+   *
+   * So separators and case are ignored on both sides. That is NOT guessing at a typo: it is the same
+   * string written differently, and the alphabet was chosen with no 0/O and no 1/I/L precisely so that
+   * two different references cannot collapse into one. A genuinely mistyped CHARACTER still misses, and
+   * it should — inventing a nearest match would credit the wrong shop.
+   */
   private byReference(reference?: string): Funding | undefined {
-    const wanted = (reference ?? '').trim().toUpperCase();
+    const wanted = normaliseReference(reference ?? '');
     if (!wanted) return undefined;
     // Newest first (list() sorts that way), so a reference reused across a superseded intent resolves to
     // the live one rather than to whichever the map happened to hold first.
-    return this.list().find((f) => f.reference.toUpperCase() === wanted);
+    return this.list().find((f) => normaliseReference(f.reference) === wanted);
   }
 
   private payerFor(kind: FundingPayerKind): FundingPayer {

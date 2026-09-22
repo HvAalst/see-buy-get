@@ -157,6 +157,28 @@ describe('money coming in', () => {
       expect(funding.unmatchedPayments()).toHaveLength(1);
     });
 
+    it('matches the reference as the payer actually typed it', () => {
+      /*
+       * We print SBG-QNTS-QP5D; a paybill customer types it on a phone keypad and we get SBGQNTSQP5D, or
+       * it lower-cased, or with a space in it. Those are the same string written differently — and the
+       * only recovery from a miss is somebody ringing the shop.
+       */
+      const request = ask(5000);
+      const typed = request.reference.replace(/-/g, '').toLowerCase();
+      funding.confirm(railSays({ providerRef: 'RJ84K2LMN0', reference: typed, amount: 5000 }));
+      expect(funding.get(request.fundingId).status).toBe('confirmed');
+      expect(credited).toHaveLength(1);
+    });
+
+    it('still misses a reference with a wrong CHARACTER in it, rather than guessing', () => {
+      // Forgiving about how it was written, never about what it says: a nearest match credits the wrong shop.
+      const request = ask(5000);
+      const wrong = `${request.reference.slice(0, -1)}${request.reference.endsWith('2') ? '3' : '2'}`;
+      const { unmatched } = funding.confirm(railSays({ providerRef: 'RJ84K2LMN0', reference: wrong, amount: 5000 }));
+      expect(unmatched).toBeTruthy();
+      expect(credited).toEqual([]);
+    });
+
     it('holds a payment made in a currency the account is not kept in', () => {
       // The rail decides the amount; it does not decide what that amount is denominated in. Crediting
       // "500" from a USD callback into a KES deposit is a balance denominated in nothing.
