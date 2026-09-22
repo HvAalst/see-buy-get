@@ -100,11 +100,17 @@ export class FundingPayerRegistrar implements OnModuleInit {
   }
 
   /**
-   * TELL THE STORE, on the channel a store actually reads — its own signed callback.
+   * TELL THE STORE — BOTH WAYS, because a store is two audiences wearing one id.
    *
-   * A store is an integration, not a person with a phone: the vendor app has no notification bell, so
-   * writing to an inbox would be a message nobody ever opens. It already receives HMAC-signed status
-   * callbacks for its parcels, and its balance changing is the same kind of fact.
+   * Its SOFTWARE reads the HMAC-signed callback it already receives for every parcel status; a balance
+   * changing is the same kind of fact and belongs on the same channel.
+   *
+   * Its PERSON reads a notification. That half was missing, on the reasoning that a store is "an
+   * integration, not a person with a phone" — which was wrong, and the user said so: a store is run by
+   * somebody at a desk or on a phone who is waiting on exactly this. A callback posted to a URL tells
+   * that person nothing at all.
+   *
+   * Neither failure may undo a payment that arrived: the money is real whatever our messaging does.
    */
   private tellStore(vendorId: string, event: string, c: { gross: number; reference: string }, balance: number | null | undefined): void {
     try {
@@ -112,6 +118,17 @@ export class FundingPayerRegistrar implements OnModuleInit {
     } catch {
       /* a callback that cannot be queued must never undo a payment that arrived */
     }
+    // Keyed to the store's DID, which is what its own token acts as — the same inbox its app reads.
+    const did = this.vendors.get(vendorId).did;
+    if (!did) return;
+    const money = c.gross.toFixed(2);
+    const payload =
+      event === 'balance_topped_up'
+        ? { title: 'Your payment came through', body: `${money} is on your balance. Labels are unblocked.` }
+        : { title: 'A payment was taken back', body: `${money} was returned by the payment provider.` };
+    void this.notifications
+      ?.notify(did, { kind: 'money_in', ...payload, link: '/', tag: `money_in:${did}`, data: {} })
+      .catch(() => undefined);
   }
 
   /** Which sister collects, and in what money — rule 1, collection follows the payer. */

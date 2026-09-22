@@ -254,13 +254,23 @@ describe('a shop’s float rests on a confirmed payment', () => {
       expect(notifications.inboxFor(a.did).filter((n) => n.kind === 'money_in').map((n) => n.title)).toContain('A payment was taken back');
     });
 
-    it('sends a STORE its own signed callback instead, because it has no inbox to read', () => {
+    it('tells a STORE on both channels — its software and the person running it', () => {
+      /*
+       * A store is two audiences wearing one id. Its integration reads the signed callback; the person at
+       * the desk reads a notification, and they are the one actually waiting for the labels to unblock.
+       * Giving it only the callback (the first version of this) told the software and nobody else.
+       */
       const store = vendors.register({ name: 'Soko Online', country: 'KE', location: { lat: -1.3, lng: 36.8 }, callbackUrl: 'https://soko.example/hook' });
       const request = funding.open({ payerKind: 'vendor', payerDid: store.vendorId, amount: 2000 });
       railConfirms(request.reference, 2000);
+
       const sent = vendors.outboxFor(store.vendorId);
       expect(sent[0]?.event).toBe('balance_topped_up');
       expect(JSON.parse(sent[0].body).data.amount).toBe(2000);
+
+      const told = notifications.inboxFor(vendors.get(store.vendorId).did!);
+      expect(told.map((n) => n.kind)).toContain('money_in');
+      expect(told[0].body).toContain('2000.00');
     });
   });
 

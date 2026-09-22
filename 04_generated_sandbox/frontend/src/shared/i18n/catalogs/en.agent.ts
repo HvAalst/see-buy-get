@@ -252,6 +252,13 @@ export const enAgent = {
   'agent.home.topUpReference': 'Quote this reference',
   'agent.home.topUpWaitBody': 'Nothing has been added yet. When the payment provider confirms it, the amount they confirm goes into your wallet.',
   'agent.home.topUpCheck': 'Check again',
+
+  /* Asking for notifications where a shopkeeper will see the ask, rather than inside the bell they are
+     not being notified by. The reason names what they are actually waiting on. */
+  'agent.push.title': 'Get told, without watching your phone',
+  'agent.push.reason': 'We will tell you when a payment you made is confirmed, when a bus is coming and when a parcel is on its way to you — even when the app is closed.',
+  'agent.push.turnOn': 'Turn on notifications',
+  'agent.push.notNow': 'Not now',
   'agent.home.priceTitle': 'Your price per parcel',
   'agent.home.priceBody': 'This is what senders pay your shop to handle a parcel. It is public — nearby shops compete on it.',
   'agent.home.pricePerParcel': 'Price per parcel',

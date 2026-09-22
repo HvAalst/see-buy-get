@@ -2141,3 +2141,62 @@
   gap: 8px;
   flex: none;
 }
+
+/* ------------------------------------------------------- asking for notifications --
+ *
+ * The opt-in card, shown where somebody will actually see it rather than inside the bell they are not
+ * being notified by. Built like a `.note` because that is what it is — a thing the app is telling you —
+ * but with room for two actions, and it WRAPS before it crushes them: on a 390px screen the button and
+ * the "not now" link drop under the text rather than squeezing it into a column.
+ */
+.pushask {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--r-card);
+  background: var(--blue-soft);
+  border: 1px solid var(--blue-light);
+}
+
+.pushask__ic {
+  flex: none;
+  color: var(--blue);
+  line-height: 0;
+  padding-top: 2px;
+}
+
+.pushask__body {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.pushask__t {
+  margin: 0;
+  font-weight: 700;
+  color: var(--tx);
+}
+
+.pushask__s {
+  margin: 4px 0 0;
+  color: var(--tx2);
+  line-height: 1.45;
+}
+
+/* The outcome of an attempt — a refusal must never look like nothing happened. */
+.pushask__flash {
+  margin: 8px 0 0;
+  font-size: 15px;
+}
+
+.pushask__flash--ok { color: var(--green, #1c7c54); }
+.pushask__flash--warn,
+.pushask__flash--danger { color: var(--red, #b3261e); }
+
+.pushask__acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 12px;
+}

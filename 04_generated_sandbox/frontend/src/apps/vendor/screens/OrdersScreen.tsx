@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, Checkbox, Chip, CodeCard, ErrorNote, GlanceNumber, Icon, Note, Pager, Pill, ReadAloud, SearchInput, SelectionBar, Sheet } from '../../../shared/ui';
+import { Button, Card, Checkbox, Chip, CodeCard, ErrorNote, GlanceNumber, Icon, Note, Pager, Pill, ReadAloud, PushPrompt, SearchInput, SelectionBar, Sheet } from '../../../shared/ui';
 import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
 import { triggerDownload } from '../../../shared/download';
 import { toggleAll, toggleId } from '../../../shared/register';
@@ -107,6 +107,17 @@ export function OrdersScreen({ state, actions }: OrdersScreenProps) {
   return (
     <div class="scr">
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
+
+      {/* ASKED FOR, rather than hidden behind the bell. A store operator waits on a prepayment being
+          confirmed and on a buyer's order arriving; both happen while they are doing something else. */}
+      <PushPrompt
+        api={actions.notifications}
+        title={t('vendor.push.title')}
+        reason={t('vendor.push.reason')}
+        turnOn={t('vendor.push.turnOn')}
+        notNow={t('vendor.push.notNow')}
+        storageKey="glos-vendor-push-asked"
+      />
 
       {/* CV1 — drivers asking about an order this store sent as freight. Near the top, because an unanswered
           question is the one thing here that a driver is standing still waiting on. */}

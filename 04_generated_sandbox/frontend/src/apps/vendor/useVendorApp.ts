@@ -1047,6 +1047,8 @@ export function useVendorApp() {
       refresh,
       /** CV1 — the conversations API for this store (null until signed in). */
       chatApi: client?.conversations ?? null,
+      /** The Web Push controls — a store is run by a person, and they wait on a payment like anybody else. */
+      notifications: client?.notifications ?? null,
       issueApiKey,
       dismissIssuedKey,
       rotateSecret,

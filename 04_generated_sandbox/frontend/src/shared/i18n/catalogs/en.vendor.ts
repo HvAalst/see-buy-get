@@ -248,6 +248,14 @@ export const enVendor = {
   'vendor.topup.reference': 'Quote this reference',
   'vendor.topup.waitBody': 'Nothing has been added yet. When the payment provider confirms it, the amount they confirm goes into your balance.',
   'vendor.topup.check': 'Check again',
+
+  /* Asking for notifications, where somebody will see the ask — see shared/ui/PushPrompt. The reason
+     names the two things a store operator is actually waiting on, because a permission prompt with no
+     reason attached is the one that gets refused, and a refusal is close to permanent. */
+  'vendor.push.title': 'Get told, without watching this page',
+  'vendor.push.reason': 'We will tell you when a payment you made is confirmed and when a buyer\'s order needs shipping — on this device, even when the tab is closed.',
+  'vendor.push.turnOn': 'Turn on notifications',
+  'vendor.push.notNow': 'Not now',
   'vendor.topup.addMoney': 'Add money',
   'vendor.topup.notNow': 'Not now',
 

@@ -29,6 +29,7 @@ export { Info, type InfoProps } from './Info';
 export { OptionInfo, type OptionHelpItem, type OptionInfoProps } from './OptionInfo';
 export { OptionPicker, type OptionPickerProps, type PickerOption } from './OptionPicker';
 export { NotificationBell, type NotificationBellProps } from './NotificationBell';
+export { PushPrompt, type PushPromptProps } from './PushPrompt';
 export { OpenInMaps, type OpenInMapsProps } from './OpenInMaps';
 export { ShopDetailSheet, type ShopDetailSheetProps } from './ShopDetailSheet';
 export { SearchInput, type SearchInputProps } from './SearchInput';

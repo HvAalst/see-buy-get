@@ -1,5 +1,5 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
-import { ConnectivityNote, BottomNav, Button, Checklist, Icon, Pill, TopBar, type NavItem } from '../../shared/ui';
+import { ConnectivityNote, BottomNav, Button, Checklist, Icon, NotificationBell, Pill, TopBar, type NavItem } from '../../shared/ui';
 import { useT } from '../../shared/i18n';
 import { money, vendorWorkLine } from './logic';
 import { BooksScreen } from './screens/BooksScreen';
@@ -53,6 +53,7 @@ export function App() {
         backLabel={t('vendor.backToOrders')}
         end={
           <>
+            <NotificationBell api={actions.notifications} />
             {needRefresh ? (
               <button
                 type="button"

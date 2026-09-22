@@ -2,7 +2,7 @@ import { HelpLink } from '../../../shared/guide/HelpLink';
 import { agentConfig } from '../api';
 import { ChangePasswordSheet } from '../../../shared/account/ChangePasswordSheet';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { AuthImage, Button, Card, ErrorNote, GlanceNumber, Icon, Note, Pill, PlaceMap, ReadAloud, Sheet, type IconName } from '../../../shared/ui';
+import { AuthImage, Button, Card, ErrorNote, GlanceNumber, Icon, Note, Pill, PlaceMap, PushPrompt, ReadAloud, Sheet, type IconName } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { fromPlaceWords, toPlaceWords } from '../../../shared/placewords';
 import { canAccept, gateNotice, homeSummary, money, statusNotice } from '../logic';
@@ -149,6 +149,17 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
           </span>
         </button>
       ) : null}
+
+      {/* The same ask as the store's, and for a sharper reason: a shopkeeper who has paid at a kiosk is
+          standing at their own counter unable to scan, and the alternative to being told is refreshing. */}
+      <PushPrompt
+        api={actions.notifications}
+        title={t('agent.push.title')}
+        reason={t('agent.push.reason')}
+        turnOn={t('agent.push.turnOn')}
+        notNow={t('agent.push.notNow')}
+        storageKey="glos-agent-push-asked"
+      />
 
       {onboarding ? <Note tone="warn" icon="clock" title={t('agent.home.notActive')} detail={onboarding} /> : null}
       {gate ? <Note tone={gate.tone} icon={gate.tone === 'danger' ? 'lock' : 'wallet'} title={gate.title} detail={gate.detail} /> : null}

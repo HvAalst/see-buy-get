@@ -1,8 +1,10 @@
 import {
   createConversationsApi,
   createCredentialedClient,
+  createNotificationsApi,
   createVendorApi,
   type ConversationsApi,
+  type NotificationsApi,
   makeConfig,
   publicRequest,
   purgeTokens,
@@ -70,6 +72,9 @@ export interface VendorClient {
   client: AppClient;
   /** CV1 — questions drivers ask about this store's own freight. */
   conversations: ConversationsApi;
+  /** The store's own notifications — a store is run by a person at a desk or on a phone, not only by
+   *  an integration reading callbacks. See the money-in work: they wait on a payment to be confirmed. */
+  notifications: NotificationsApi;
 }
 
 /**
@@ -79,7 +84,7 @@ export interface VendorClient {
  */
 export function createVendorClient(vendorId: string, secret: string): VendorClient {
   const client = createCredentialedClient(vendorConfig(), tokenKeyFor(TOKEN_PREFIX, vendorId), () => vendorLogin(vendorId, secret));
-  return { api: createVendorApi(client.sbg), client, conversations: createConversationsApi(client.sbg) };
+  return { api: createVendorApi(client.sbg), client, conversations: createConversationsApi(client.sbg), notifications: createNotificationsApi(client.sbg) };
 }
 
 export function purgeVendorTokens(keepVendorId: string | null): void {
