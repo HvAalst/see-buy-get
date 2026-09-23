@@ -102,7 +102,9 @@ export const enDriver = {
   // without a parenthesis in a shouted label. Two lines of uppercase to say one thing is one too many.
   'driver.route.minEarnLabel': 'Only freight paying at least',
   'driver.route.minEarnPlaceholder': 'show all',
-  'driver.route.note': 'We only suggest loads on your route that fit your remaining capacity.',
+  // 'driver.route.note' was here and said, a thumb-length below the lede, exactly what the lede says:
+  // that we only offer loads on this driver's route that fit the space left. Removed rather than made
+  // dismissible — a reader who dismissed one would still have been reading the other.
   'driver.route.submit': 'Show shipments on my way',
   'driver.route.retryPlaces': 'Try loading the places again',
   'driver.route.aloud': 'Choose where you are starting from and where you are heading. We will only offer you loads that are on your way and fit in your van.',

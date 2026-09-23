@@ -25,6 +25,7 @@ export { ReadAloud, speak, stopSpeaking, isSpeechSupported, type ReadAloudProps 
 export { LanguageSwitcher } from './LanguageSwitcher';
 export { ErrorNote, Note, errorSentence, type ErrorNoteProps, type NoteProps } from './ErrorNote';
 export { TopUpCostNote } from './TopUpCostNote';
+export { Explainer, ExplainerBlock, ExplainerReset } from './Explainer';
 export { Icon, type IconName, type IconProps } from './Icon';
 export { Info, type InfoProps } from './Info';
 export { OptionInfo, type OptionHelpItem, type OptionInfoProps } from './OptionInfo';

@@ -1,7 +1,7 @@
 import { DarkSpellNote } from './DarkSpellNote';
 import { HelpLink } from '../../../shared/guide/HelpLink';
 import { useState } from 'preact/hooks';
-import { Button, Card, Checklist, ErrorNote, GlanceNumber, Icon, Note, PhotoField, Pill, PushPrompt, QrBlock, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
+import { Button, Card, Checklist, ErrorNote, Explainer, ExplainerBlock, ExplainerReset, GlanceNumber, Icon, Note, PhotoField, Pill, PushPrompt, QrBlock, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
 import { paperDay } from '../../../shared/papers';
 import { qrPayload } from '../../../shared/qr';
@@ -83,7 +83,7 @@ function OffShift({ state, actions }: HomeScreenProps) {
   return (
     <div class="scr">
       <h1 class="scr__title">{t('driver.home.startTitle')}</h1>
-      <p class="scr__lede">{t('driver.home.startLede')}</p>
+      <Explainer who={state.driver?.did} id="driver.shift.how" text={t('driver.home.startLede')} />
 
       {notice ? <Note tone="warn" icon="clock" title={t('driver.home.notActivated')} detail={notice} /> : null}
       {offRoad.length ? (
@@ -205,19 +205,22 @@ function OffShift({ state, actions }: HomeScreenProps) {
         </Button>
       </div>
 
-      <Card title={t('driver.home.whatHappens')} tone="soft">
-        <Checklist
-          items={[
-            t('driver.home.scan1'),
-            t('driver.home.scan2'),
-            t('driver.home.scan3'),
-          ]}
-        />
-      </Card>
+      <ExplainerBlock who={state.driver?.did} id="driver.shift.what">
+        <Card title={t('driver.home.whatHappens')} tone="soft">
+          <Checklist
+            items={[
+              t('driver.home.scan1'),
+              t('driver.home.scan2'),
+              t('driver.home.scan3'),
+            ]}
+          />
+        </Card>
+      </ExplainerBlock>
 
       <div class="scr__foot">
         <ReadAloud text={() => offShiftSummary(t)} label={t('driver.readAloud')} />
         <HelpLink app="driver" />
+        <ExplainerReset who={state.driver?.did} />
         <Button variant="link" full={false} onClick={actions.signOut}>
           {t('driver.home.notYou')}
         </Button>
@@ -578,6 +581,7 @@ function OnShift({ state, actions }: HomeScreenProps) {
       <div class="scr__foot">
         <ReadAloud text={() => shiftSummary(v.plate, state.remaining, state.claims.length, t)} />
         <HelpLink app="driver" />
+        <ExplainerReset who={state.driver?.did} />
       </div>
 
       <Sheet open={badgeOpen} onClose={() => setBadgeOpen(false)} title={t('driver.home.badgeSheetTitle')}>

@@ -50,6 +50,14 @@ export const en = {
   'common.topUpFee.nudge': 'Add {more} more and this one is free — {freeAbove} or more is never charged.',
   'common.topUpFee.free': 'No fee on this one. {freeAbove} or more is always free.',
 
+  /* Teaching text somebody has finished reading (Explainer). The dismiss is described as putting the
+     line away rather than hiding or deleting it, because the restore below is the other half of it. */
+  'common.tips.dismiss': 'I have read this — put it away',
+  // Said in words on a block, where a corner cross would read as "close this for now" rather than for good.
+  'common.tips.dismissBlock': 'Got it — do not show me this again',
+  'common.tips.restoreOne': 'Show the tip I put away',
+  'common.tips.restore': 'Show the {count} tips I put away',
+
   // CV1 — a conversation about a load (shared by the driver asking and the shop or store answering).
   'common.chat.title': 'About {code}',
   'common.chat.withWho': 'With {who}',

@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { Button, Card, ErrorNote, Icon, Note, OpenInMaps, PlacePicker, Pill, ReadAloud, Sheet, type PlaceNote } from '../../../shared/ui';
+import { Button, Card, ErrorNote, Explainer, ExplainerReset, Icon, Note, OpenInMaps, PlacePicker, Pill, ReadAloud, Sheet, type PlaceNote } from '../../../shared/ui';
 import { formatDate, useT, type Translate } from '../../../shared/i18n';
 import { narrow } from '../../../lib/sbg';
 import { ConversationList, ConversationSheet } from '../../../shared/conversation/Conversations';
@@ -48,20 +48,22 @@ export function BoardScreen({ state, actions }: BoardScreenProps) {
   return (
     <div class="scr">
       <h1 class="scr__title">{t('driver.board.title')}</h1>
-      <p class="scr__lede">{t('driver.board.lede')}</p>
+      <Explainer who={state.driver?.did} id="driver.board.how" text={t('driver.board.lede')} />
 
       {/* FP8 — an hours refusal carries the numbers in its detail; they are the whole answer to "why not". */}
       {state.error ? <ErrorNote error={state.error} showDetail={state.error.code === 'HOURS_EXCEEDED'} /> : null}
       {askFailed ? <Note tone="warn" icon="warning" title={askFailed} detail="" /> : null}
 
       {/* CV1 — the questions this driver has asked, and the answers waiting. Above the market, because an
-          answer is usually the next thing to act on. */}
-      <Card title={t('common.chat.listTitle')}>
-        <ConversationList api={actions.chatApi} refreshKey={chatTick} onOpen={setThread} />
-      </Card>
+          answer is usually the next thing to act on.
+          The card is the LIST'S to draw, so a driver who has never had a conversation does not carry a
+          white block reading "No conversations yet" down every screen of the market. Its value is the
+          answers in it; empty, it was a fifth of a phone spent on nothing. A conversation starts from a
+          load further down this same screen, so nothing is lost by it not being announced here. */}
+      <ConversationList api={actions.chatApi} refreshKey={chatTick} onOpen={setThread} cardTitle={t('common.chat.listTitle')} />
 
       <Origin state={state} actions={actions} onPick={() => setPicking(true)} />
-      <Reach value={state.boardReach} onChange={actions.setBoardReach} />
+      <Reach value={state.boardReach} onChange={actions.setBoardReach} who={state.driver?.did} />
 
       {/* No position, no honest board: every distance, price and the whole sort order are relative to it.
           FB3a — and now there is a way out of it that is not "go outside": name the place instead. */}
@@ -102,6 +104,7 @@ export function BoardScreen({ state, actions }: BoardScreenProps) {
 
       <div class="scr__foot">
         <ReadAloud text={() => boardSummary(rows, t)} />
+        <ExplainerReset who={state.driver?.did} />
       </div>
 
       <OriginSheet state={state} actions={actions} open={picking} onClose={() => setPicking(false)} />
@@ -198,7 +201,7 @@ function originNote(t: Translate, note: PlaceNote): string {
  * "Everywhere" is first and is the default. The whole point of the board is that the platform stops deciding
  * what is relevant; opening on a narrowed market would quietly re-impose exactly what was removed.
  */
-function Reach({ value, onChange }: { value: BoardReach; onChange: (r: BoardReach) => void }) {
+function Reach({ value, onChange, who }: { value: BoardReach; onChange: (r: BoardReach) => void; who: string | null | undefined }) {
   const t = useT();
   return (
     <div class="board__reach">
@@ -219,7 +222,7 @@ function Reach({ value, onChange }: { value: BoardReach; onChange: (r: BoardReac
           </button>
         ))}
       </div>
-      <p class="board__reach-note">{t('driver.board.reachNote')}</p>
+      <Explainer who={who} id="driver.board.reach" text={t('driver.board.reachNote')} />
     </div>
   );
 }

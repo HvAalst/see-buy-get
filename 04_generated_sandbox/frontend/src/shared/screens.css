@@ -33,6 +33,60 @@
   margin-top: -6px;
 }
 
+/* Teaching text that can be put away once it has been read (Explainer). It reads as the lede it stands
+   in for — same size, same colour — because it IS the lede until somebody is done with it. The cross is
+   set on the end of the line rather than beside the block: it must be findable without ever competing
+   with the screen's real action. */
+.explain {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--tx2);
+  margin-top: -6px;
+}
+
+.explain__t {
+  flex: 1;
+}
+
+/* A 44px target on a 16px mark: the hit area is padded out around the cross, not drawn around it, so it
+   stays easy to tap on a phone in a cab without turning into a button on the page. */
+.explain__x {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin: -12px -12px -12px 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--tx3);
+  cursor: pointer;
+}
+
+.explain__x:hover,
+.explain__x:focus-visible {
+  color: var(--navy);
+}
+
+/* A whole teaching block that can go (ExplainerBlock). The dismiss sits under the block, indented to it,
+   so it reads as belonging to what was just read rather than to whatever follows. */
+.explainbk {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.explainbk__x {
+  align-self: flex-start;
+  padding: 6px 2px;
+  min-height: 36px;
+}
+
 .scr__cta {
   padding-top: 4px;
 }

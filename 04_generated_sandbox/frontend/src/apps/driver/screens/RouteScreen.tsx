@@ -1,4 +1,4 @@
-import { Button, Card, ErrorNote, Icon, Note, PlacePicker, ReadAloud, type PlaceNote } from '../../../shared/ui';
+import { Button, Card, ErrorNote, Explainer, ExplainerReset, Icon, Note, PlacePicker, ReadAloud, type PlaceNote } from '../../../shared/ui';
 import { useT, type Translate } from '../../../shared/i18n';
 import { MAX_WORK_RADIUS_KM } from '../logic';
 import { CUSTOM_PLACE, type CustomPlace, type DriverActions, type DriverState } from '../useDriverApp';
@@ -67,7 +67,7 @@ export function RouteScreen({ state, actions }: RouteScreenProps) {
   return (
     <div class="scr">
       <h1 class="scr__title">{t('driver.route.title')}</h1>
-      <p class="scr__lede">{near ? t('driver.route.ledeNear') : t('driver.route.lede')}</p>
+      <Explainer who={state.driver?.did} id="driver.route.how" text={near ? t('driver.route.ledeNear') : t('driver.route.lede')} />
 
       {state.error ? <ErrorNote error={state.error} onRetry={() => void actions.loadNodes()} /> : null}
 
@@ -122,6 +122,7 @@ export function RouteScreen({ state, actions }: RouteScreenProps) {
 
           <div class="scr__foot">
             <ReadAloud text={() => t('driver.route.aloudNear', { km: state.form.radiusKm })} label={t('driver.readAloud')} />
+            <ExplainerReset who={state.driver?.did} />
           </div>
         </>
       ) : (
@@ -217,8 +218,6 @@ function RouteSearch({ state, actions, loading, empty }: RouteScreenProps & { lo
             onInput={(e) => actions.setForm({ minEarn: e.currentTarget.value })}
           />
         </div>
-
-        <p class="card__note">{t('driver.route.note')}</p>
       </Card>
 
       <div class="scr__cta">
@@ -252,6 +251,7 @@ function RouteSearch({ state, actions, loading, empty }: RouteScreenProps & { lo
 
       <div class="scr__foot">
         <ReadAloud text={() => t('driver.route.aloud')} label={t('driver.readAloud')} />
+        <ExplainerReset who={state.driver?.did} />
       </div>
     </>
   );

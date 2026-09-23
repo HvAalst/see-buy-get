@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { narrow, type ConversationsApi } from '../../lib/sbg';
 import { formatDate, useT } from '../i18n';
-import { Button, Chip, ErrorNote, Icon, Note, Pill, Sheet } from '../ui';
+import { Button, Card, Chip, ErrorNote, Icon, Note, Pill, Sheet } from '../ui';
 import {
   MAX_MESSAGE_CHARS,
   REPORT_REASONS,
@@ -758,6 +758,7 @@ export function ConversationList({
   onOpen,
   emptyText,
   source = 'mine',
+  cardTitle,
 }: {
   api: ConversationsApi | null;
   freightId?: string;
@@ -768,6 +769,15 @@ export function ConversationList({
   emptyText?: string;
   /** CV3 — `shared`: a fleet manager's read-only list of what their drivers shared. */
   source?: 'mine' | 'shared';
+  /**
+   * Draw the card yourself, and DRAW NOTHING WHEN THERE IS NOTHING IN IT.
+   *
+   * A caller that wraps this list in its own Card gets a permanent white block reading "No conversations
+   * yet" — on a phone that is a fifth of the screen spent saying nothing, every day, to every driver who
+   * has not yet had a conversation. Passing the title here hands the decision to the list, which is the
+   * only thing that knows whether it has anything to show.
+   */
+  cardTitle?: string;
 }) {
   const t = useT();
   const [threads, setThreads] = useState<ChatThread[] | null>(null);
@@ -786,9 +796,11 @@ export function ConversationList({
     void load();
   }, [load, refreshKey]);
 
+  // An error is never swallowed by cardTitle: a list that failed to load is not a list that is empty,
+  // and a driver waiting on an answer needs to know which of the two they are looking at.
   if (error) return <ErrorNote error={error} onRetry={() => void load()} />;
-  if (threads === null) return <p class="hint">{t('common.loading')}</p>;
-  if (threads.length === 0) return <p class="hint">{emptyText ?? t('common.chat.listEmpty')}</p>;
+  if (threads === null) return cardTitle ? null : <p class="hint">{t('common.loading')}</p>;
+  if (threads.length === 0) return cardTitle ? null : <p class="hint">{emptyText ?? t('common.chat.listEmpty')}</p>;
 
   /** The last message as one line — a deal card reads as what it did, not as an empty bubble. */
   const preview = (m: ChatMessage): string => {
@@ -810,7 +822,7 @@ export function ConversationList({
     return m.body ?? '';
   };
 
-  return (
+  const rows = (
     <div class="rows" role="list">
       {threads.map((x) => (
         <button key={x.conversationId} type="button" class="row" onClick={() => onOpen(x)}>
@@ -832,4 +844,6 @@ export function ConversationList({
       ))}
     </div>
   );
+
+  return cardTitle ? <Card title={cardTitle}>{rows}</Card> : rows;
 }
