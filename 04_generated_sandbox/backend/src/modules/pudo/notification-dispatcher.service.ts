@@ -750,6 +750,17 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     return this.fleet
       .list({ status: 'active' })
       .filter((a) => a.location && a.lastLocatedAt && now - new Date(a.lastLocatedAt).getTime() <= staleMs)
+      /*
+       * FP8 — AND NOT PAST THE SHIFT LIMIT.
+       *
+       * `suggestWork` returns nothing to a driver over 13 hours, the board marks the row, and the claim
+       * refuses it. This path did none of that, so the one channel that reaches a driver who is NOT
+       * looking at the app was the one channel still offering them work: a lock-screen nudge toward a
+       * load they would be turned away from, sent to the person the limit exists to protect.
+       *
+       * The mirror-at-claim rule (S31) with the sides swapped — what refuses a load must not advertise it.
+       */
+      .filter((a) => !this.fleet.overHours(a.driverDid, now))
       .map((a) => ({ driverDid: a.driverDid, km: haversineKm(a.location as GeoPoint, pickup) }))
       .filter((d) => d.km <= NotificationDispatcher.NEARBY_DRIVER_KM)
       // …and HEADING there. Near is only half the question: a driver leaving town for the south is metres

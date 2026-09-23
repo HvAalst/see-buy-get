@@ -29,6 +29,8 @@ interface HarnessOpts {
   // rule 2
   totes?: Record<string, { code: string; locationId: string; destinationLabel?: string }>;
   activeDrivers?: Array<{ driverDid: string; location?: Geo; lastLocatedAt?: string }>;
+  /** FP8 — drivers past the 13-hour shift limit, who may not be offered anything. */
+  overHours?: string[];
   mdps?: Record<string, { location: Geo }>;
   // rule 5 — which drivers' vehicles can carry the posted freight (default: all)
   canCarry?: (driverDid: string) => boolean;
@@ -74,6 +76,8 @@ function harness(opts: HarnessOpts) {
   } as unknown as AgentService;
   const fleet = {
     list: (_filter: { status?: string } = {}) => opts.activeDrivers ?? [],
+    // FP8 — nobody is over the shift limit unless a test says so.
+    overHours: (driverDid: string) => (opts.overHours ?? []).includes(driverDid),
   } as unknown as FleetService;
   const totes = { byCodeMaybe: (code: string) => opts.totes?.[code] } as unknown as ToteService;
   const mdps = {
@@ -178,6 +182,26 @@ describe('NotificationDispatcher — rule 2: driver "load near you" (N3)', () =>
     expect(near[0].body).toBe('A bag heading to Kisumu is ready for pickup nearby.');
     expect(notifications.inboxFor('d-far')).toHaveLength(0);
     expect(notifications.inboxFor('d-nogps')).toHaveLength(0);
+  });
+
+  it('does not ping a driver who is past the shift limit and could not take the load anyway', async () => {
+    /*
+     * FP8, and the half that was missing. `suggestWork` returns nothing to a driver over 13 hours, the
+     * board marks the row and the claim refuses it — but this path checked none of that, so the one
+     * channel that reaches a driver who is NOT looking at the app was the one still offering them work.
+     * A lock-screen nudge toward a load they would be turned away from, sent to the very person the
+     * limit exists to protect.
+     */
+    const { events, notifications } = harness({
+      totes: { 'BAG-9': { code: 'BAG-9', locationId: 'did:agent:pickup', destinationLabel: 'Kisumu' } },
+      agents: { 'did:agent:pickup': { location: at(0, 0) } },
+      activeDrivers: [D('d-rested', at(0, 0.01)), D('d-tired', at(0, 0.01))],
+      overHours: ['d-tired'],
+    });
+    await events.publish(GlosEvent.Pudo.ToteAvailable, { code: 'BAG-9' });
+
+    expect(notifications.inboxFor('d-rested')).toHaveLength(1);
+    expect(notifications.inboxFor('d-tired')).toHaveLength(0);
   });
 
   it('excludes a driver whose GPS is STALE or has no timestamp, even if the last point was near', async () => {
