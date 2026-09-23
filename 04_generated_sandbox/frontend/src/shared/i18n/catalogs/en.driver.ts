@@ -98,7 +98,9 @@ export const enDriver = {
   'driver.route.geoApprox': 'Found {where}, roughly. Move the pin if it is not right.',
   'driver.route.geoGuess': 'That name is not on our map — this is a best guess. Tap the map to place it yourself.',
   'driver.route.geoNotFound': 'Could not find that place — tap the map to place it yourself.',
-  'driver.route.minEarnLabel': 'Only freight paying at least (optional)',
+  // No "(optional)": the field's own placeholder says "show all", which tells a reader the same thing
+  // without a parenthesis in a shouted label. Two lines of uppercase to say one thing is one too many.
+  'driver.route.minEarnLabel': 'Only freight paying at least',
   'driver.route.minEarnPlaceholder': 'show all',
   'driver.route.note': 'We only suggest loads on your route that fit your remaining capacity.',
   'driver.route.submit': 'Show shipments on my way',
@@ -430,7 +432,10 @@ export const enDriver = {
   'driver.logic.loadClaimedMany': '{count} loads claimed',
   'driver.logic.vanFull': 'Your van is full — {loads}. Deliver something to free up space.',
   'driver.logic.freeSpace': 'Free space out of {kg} kg — {loads}.',
-  'driver.logic.freeSpaceBags': 'Free space out of {kg} kg · room for {bags} more bag(s) — {loads}.',
+  // "bag", never "bag(s)" — the same rule the licence countdown follows ("in 1 day", never "in 1 day(s)").
+  // A parenthesised plural is a sentence nobody finished, under the biggest number on the driver's screen.
+  'driver.logic.freeSpaceBagsOne': 'Free space out of {kg} kg · room for 1 more bag — {loads}.',
+  'driver.logic.freeSpaceBags': 'Free space out of {kg} kg · room for {bags} more bags — {loads}.',
   'driver.logic.bagsFull': 'No bag space left — {loads}. You still have weight free, but nowhere to put a bag.',
   'driver.logic.rateAbove': '{pct}% above',
   'driver.logic.rateBelow': '{pct}% below',

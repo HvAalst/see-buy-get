@@ -60,7 +60,9 @@ export function capacitySubLine(remainingKg: number, capacityKg: number, claimCo
   const loads = claimCount === 1 ? t('driver.logic.loadClaimedOne') : t('driver.logic.loadClaimedMany', { count: claimCount });
   if (remainingKg <= 0) return t('driver.logic.vanFull', { loads });
   if (remainingTotes != null && remainingTotes <= 0) return t('driver.logic.bagsFull', { loads });
-  if (remainingTotes != null) return t('driver.logic.freeSpaceBags', { kg: capacityKg, bags: remainingTotes, loads });
+  if (remainingTotes != null) {
+    return t(remainingTotes === 1 ? 'driver.logic.freeSpaceBagsOne' : 'driver.logic.freeSpaceBags', { kg: capacityKg, bags: remainingTotes, loads });
+  }
   return t('driver.logic.freeSpace', { kg: capacityKg, loads });
 }
 

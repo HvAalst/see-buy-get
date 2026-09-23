@@ -74,7 +74,10 @@ describe('usedPercent — the capacity bar', () => {
     // A bus with 400 kg free and no room for another bag is full in the only way the driver can act on.
     expect(capacitySubLine(400, 800, 2, t, 0)).toContain('No bag space left');
     expect(capacitySubLine(400, 800, 2, t, 0)).toContain('nowhere to put a bag');
-    expect(capacitySubLine(400, 800, 1, t, 3)).toBe('Free space out of 800 kg · room for 3 more bag(s) — 1 load claimed.');
+    expect(capacitySubLine(400, 800, 1, t, 3)).toBe('Free space out of 800 kg · room for 3 more bags — 1 load claimed.');
+    // …and "1 more bag", never "1 more bag(s)" — the same rule the licence countdown follows. This sits
+    // under the biggest number on the driver's screen, which is the worst place to leave a plural unfinished.
+    expect(capacitySubLine(400, 800, 1, t, 1)).toBe('Free space out of 800 kg · room for 1 more bag — 1 load claimed.');
     // Weight still wins when it is the one that has actually run out.
     expect(capacitySubLine(0, 800, 2, t, 5)).toContain('Your van is full');
   });

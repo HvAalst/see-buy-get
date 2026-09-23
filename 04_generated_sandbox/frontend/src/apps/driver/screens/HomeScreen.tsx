@@ -29,12 +29,16 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
 }
 
 /**
- * The notification ask, on BOTH faces of this screen and asked once per device.
+ * The notification ask — on the OFF-SHIFT face only, and that is not a compromise.
  *
- * A driver has the sharpest reason of anybody here: a load offer is a race — it goes to whoever takes it
- * first and it expires — and the phone is in a pocket, on a dashboard cradle, or face-down on a table.
- * Which face they meet it on depends only on whether the app was opened before the shift or during it, so
- * both carry it and one dismissal answers for both.
+ * It went on both faces first, reasoning that a driver might open the app at either. Measured on shift it
+ * cost 350px in the middle of the working screen and pushed the vehicle and "End my shift" under the
+ * fold, which is a bad trade for a question, and the argument for it was wrong anyway: **you cannot be on
+ * shift without having been off shift first.** The off-shift home is the first screen of every working
+ * day, because a shift has to be started from it — so nobody is missed by asking only there, and it is
+ * the better moment regardless. A driver at the coffee table can think about a question; a driver
+ * mid-shift is working, and the reason we would give them (a load near you goes to whoever takes it
+ * first) is most persuasive before the day starts rather than in the middle of it.
  */
 function PushAsk({ actions }: { actions: DriverActions }) {
   const t = useT();
@@ -498,11 +502,8 @@ function OnShift({ state, actions }: HomeScreenProps) {
         sub={capacitySubLine(state.remaining, v.capacityKg, state.claims.length, t, state.remainingTotes ?? undefined)}
       />
 
-      {/* Under the one big number, never over it — how much room is left is why this screen exists. */}
-      <PushAsk actions={actions} />
-
       <Card
-        label={t('driver.home.yourVehicle')}
+        title={t('driver.home.yourVehicle')}
         aside={v.verified ? <Pill tone="ok">{t('driver.home.checked')}</Pill> : <Pill tone="idle">{t('driver.home.notChecked')}</Pill>}
       >
         <p class="plate">{v.plate}</p>

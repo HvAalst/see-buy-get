@@ -28,7 +28,7 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
     <div class="scr">
       {state.error ? <ErrorNote error={state.error} onRetry={() => actions.go('store')} /> : null}
 
-      <Card label={t('vendor.store.yourStore')} aside={<b class="mono-t">{v?.vendorId}</b>}>
+      <Card title={t('vendor.store.yourStore')} aside={<b class="mono-t">{v?.vendorId}</b>}>
         <p class="t-body">{v?.name ?? '…'}</p>
         <p class="card__note">{v ? `${v.country}${v.address ? ` · ${v.address}` : ''}` : ''}</p>
       </Card>

@@ -199,7 +199,7 @@ function LotCard({ lot, state, actions }: { lot: ConsignmentView; state: AgentSt
   const prog = consignmentProgress(lot);
   const posted = lot.status === 'posted';
   return (
-    <Card label={`${lot.code} · ${natureLabel(lot.natureCode, t)}`} aside={<Pill tone={posted ? 'ok' : 'info'} dot>{posted ? t('agent.consignments.freightBooked') : t('agent.consignments.filling')}</Pill>}>
+    <Card title={`${lot.code} · ${natureLabel(lot.natureCode, t)}`} aside={<Pill tone={posted ? 'ok' : 'info'} dot>{posted ? t('agent.consignments.freightBooked') : t('agent.consignments.filling')}</Pill>}>
       {/* Both ends, because a co-op lot is collected where the crop is — which is the address the truck needs. */}
       <div class="kv">
         <span>{t('agent.consignments.from')}</span>
