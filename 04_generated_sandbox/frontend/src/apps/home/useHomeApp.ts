@@ -4,6 +4,7 @@ import type { SbgError } from '../../lib/sbg';
 import {
   deviceMarker,
   fetchCountries,
+  fetchTruckSubtypes,
   fetchMarket,
   fetchMarketSeries,
   fetchPoints,
@@ -46,6 +47,8 @@ export interface HomeState {
   /** The countries the network can take somebody on in. Empty until loaded — see countriesState. */
   countries: OperatingCountry[];
   countriesState: 'idle' | 'loading' | 'ready' | 'error';
+  /** The truck body types, read from the network. Empty until a courier picks a truck and we fetch them. */
+  truckSubtypes: Array<{ id: string; label: string }>;
   /** What the account became — the "you are in" card. */
   account: SignupView | null;
   store: VendorRegisteredView | null;
@@ -99,6 +102,7 @@ const INITIAL: HomeState = {
   pointsState: 'idle',
   countries: [],
   countriesState: 'idle',
+  truckSubtypes: [],
   account: null,
   store: null,
   profile: null,
@@ -167,6 +171,19 @@ export function useHomeApp() {
       countriesState: 'ready',
       form: s.form.country ? s.form : { ...s.form, country: countries.length === 1 ? countries[0].country : '' },
     }));
+  }, []);
+
+  /**
+   * The body types, fetched the first time somebody says they drive a truck.
+   *
+   * Not restated in the client: the catalogue has more than twenty entries and the hand-typed seven this
+   * form shipped with included two that were not real keys, so it offered body types the server refuses.
+   */
+  const loadTruckSubtypes = useCallback(async () => {
+    if (stateRef.current.truckSubtypes.length) return;
+    const r = await fetchTruckSubtypes();
+    if (r.error) return; // the field simply stays a plain list of nothing; the blocker still says one is needed
+    setState((s) => ({ ...s, truckSubtypes: r.data ?? [] }));
   }, []);
 
   const go = useCallback((screen: Screen) => {
@@ -291,9 +308,15 @@ export function useHomeApp() {
     [loadPoints, loadCountries],
   );
 
-  const setForm = useCallback((p: Partial<JoinForm>) => {
-    setState((s) => ({ ...s, form: { ...s.form, ...p } }));
-  }, []);
+  const setForm = useCallback(
+    (p: Partial<JoinForm>) => {
+      setState((s) => ({ ...s, form: { ...s.form, ...p } }));
+      // The moment a truck is in play, the body types are needed — and a truck is not registrable without
+      // one, so fetching them late would leave somebody looking at an empty required field.
+      if (p.vehicleClass === 'truck' || p.licenceClasses?.includes('truck')) void loadTruckSubtypes();
+    },
+    [loadTruckSubtypes],
+  );
 
   const back = useCallback(() => {
     setState((s) => {
@@ -482,7 +505,7 @@ export function useHomeApp() {
 
   return {
     state,
-    actions: { go, openStore, openProfile, findAgentsBy, startJoin, setForm, back, sendCode, confirmCode, advance, submit, restart, loadPoints, setMarketQuery, lookUpMarket, setMarketReach, setMarketView, loadSeries },
+    actions: { go, openStore, openProfile, findAgentsBy, startJoin, setForm, back, sendCode, confirmCode, advance, submit, restart, loadPoints, loadTruckSubtypes, setMarketQuery, lookUpMarket, setMarketReach, setMarketView, loadSeries },
   };
 }
 

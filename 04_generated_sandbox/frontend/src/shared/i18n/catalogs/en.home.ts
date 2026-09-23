@@ -251,8 +251,8 @@ export const enHome = {
   'home.block.licenceNumber': 'Type your driving licence number — the network cannot put you behind anything heavier than a motorcycle without it.',
   'home.block.licenceExpiry': 'Say when your licence runs out.',
   'home.block.licenceExpired': 'That licence has already run out. Renew it first — we cannot register you on an expired one.',
-  'home.block.vehicleClass': 'Say which of those you will be driving.',
-  'home.block.vehicleNotCleared': 'Pick a vehicle you are cleared to drive, or add that class above.',
+  'home.block.vehicleClass': 'Say which one you will be driving — tap it under “Your vehicle”.',
+
   'home.block.vehiclePlate': 'Type your number plate.',
   'home.block.truckSubtype': 'Say what kind of truck it is.',
   'home.block.location': 'Tap the map to drop a pin where you are.',
@@ -306,8 +306,8 @@ export const enHome = {
   'home.join.about.vehicleTitle': 'Your vehicle',
   'home.join.about.vehiclePlate': 'Number plate',
   'home.join.about.truckSubtype': 'What kind of truck',
-  'home.join.about.vehicleNeedsClass': 'Pick what you drive first, above.',
-  'home.join.about.vehicleNote': 'This is the vehicle you will start your first shift on. You can add more later, or scan the sticker on any vehicle a fleet has registered.',
+  'home.join.about.truckSubtypeLoading': 'Reading the body types…',
+  'home.join.about.vehicleNote': 'The one you will start your first shift on — picking it also clears you to drive that class. You can add more later, or scan the sticker on any vehicle a fleet has registered.',
   'home.join.about.ctaVendor': 'Create my store',
 
   // Join wizard — step: where.

@@ -22,8 +22,10 @@ import {
   servedPct,
   needsLicence,
   pickedClasses,
+  pickedVehicle,
   signupBody,
   stepBlocker,
+  vehicleClassFor,
   stepsFor,
   type JoinForm,
   type RoleSpec,
@@ -141,12 +143,33 @@ describe('stepBlocker', () => {
   it('will not let a courier join with no vehicle, because this door only makes self-employed ones', () => {
     const base = { ...filled(), licenceClasses: ['bike'], vehicleClass: 'bike' };
     expect(stepBlocker(role('driver'), 'about', { ...base, vehiclePlate: '' }, t)).toContain('number plate');
-    // A class they did not say they could drive — the server refuses the pair, so the form does first.
-    expect(stepBlocker(role('driver'), 'about', { ...base, vehicleClass: 'van', vehiclePlate: 'X' }, t)).toContain('cleared to drive');
+    // Owning a class you had not ticked is not an error — it is a reason to be cleared for it, so saying
+    // so here grants the licence class rather than sending somebody back up the form.
+    expect(pickedVehicle({ ...EMPTY_JOIN, licenceClasses: ['bike'], vehicleClass: 'bike' }, 'truck')).toMatchObject({
+      licenceClasses: ['bike', 'truck'],
+      vehicleClass: 'truck',
+    });
     // And a truck is not registrable without its kind.
     const trucker = { ...filled(), licenceClasses: ['truck'], vehicleClass: 'truck', vehiclePlate: 'T-1', licenceNumber: 'DL-9', licenceExpiresAt: '2099-01-01' };
     expect(stepBlocker(role('driver'), 'about', trucker, t)).toContain('kind of truck');
     expect(stepBlocker(role('driver'), 'about', { ...trucker, truckSubtype: 'flatbed' }, t)).toBeNull();
+  });
+
+  it('DERIVES the vehicle from a single licence class, without waiting for a tap nobody knew to make', () => {
+    /*
+     * The bug a driver hit the day this shipped. The vehicle was only ever set by tapping a chip, so a
+     * courier who accepted the default — or ticked one class and moved on — had no vehicle chosen, and
+     * Continue stayed dead with the reason printed at the foot of a long form against a second row of
+     * chips that looked like a repeat of the first.
+     */
+    expect(vehicleClassFor({ licenceClasses: ['van'], vehicleClass: '' })).toBe('van');
+    expect(stepBlocker(role('driver'), 'about', { ...filled(), licenceClasses: ['bike'], vehicleClass: '', vehiclePlate: 'B-1' }, t)).toBeNull();
+    // With two, there is a real choice and it must be made.
+    expect(vehicleClassFor({ licenceClasses: ['van', 'truck'], vehicleClass: '' })).toBe('');
+    // An answer already given survives — deriving never overrides somebody's own choice.
+    expect(vehicleClassFor({ licenceClasses: ['van', 'truck'], vehicleClass: 'truck' })).toBe('truck');
+    // And one that stopped being valid is dropped rather than quietly sent to the server.
+    expect(vehicleClassFor({ licenceClasses: ['van'], vehicleClass: 'truck' })).toBe('van');
   });
 
   it('keeps the vehicle honest about the licence as the classes are tapped', () => {

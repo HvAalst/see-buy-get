@@ -3,7 +3,7 @@ import { Button, Card, Checklist, CodeBoxes, ErrorNote, Icon, Note, PlaceMap, Re
 import { toPlaceWords } from '../../../shared/placewords';
 import { useT } from '../../../shared/i18n';
 
-import { DRIVER_CLASSES, TRUCK_SUBTYPES, joinSpoken, needsLicence, pickedClasses, roleMeta, stepBlocker, stepsFor } from '../logic';
+import { DRIVER_CLASSES, joinSpoken, needsLicence, pickedClasses, pickedVehicle, roleMeta, stepBlocker, stepsFor, vehicleClassFor } from '../logic';
 import type { HomeActions, HomeState } from '../useHomeApp';
 
 export interface JoinScreenProps {
@@ -176,6 +176,8 @@ function AboutStep({ state, actions }: JoinScreenProps) {
   const role = state.role!;
   const f = state.form;
   const blocker = stepBlocker(role, 'about', f, t);
+  // Derived once, so the card and the blocker can never disagree about which vehicle is chosen.
+  const chosen = vehicleClassFor(f);
   const nameLabel =
     role.id === 'pudo' ? t('home.join.about.nameShop') : role.id === 'mdp' ? t('home.join.about.nameHub') : role.id === 'vendor' ? t('home.join.about.nameStore') : t('home.join.about.nameDriver');
 
@@ -271,44 +273,50 @@ function AboutStep({ state, actions }: JoinScreenProps) {
           asked here, and the class offered is only what they have just said they can drive. */}
       {role.id === 'driver' ? (
         <Card title={t('home.join.about.vehicleTitle')}>
+          {/* THE WHOLE CATALOGUE, not the classes ticked above. Offering only those read as "these are
+              the only vehicles you may have" — a driver with a truck saw a bike and a van and reasonably
+              concluded the network did not carry trucks. Saying you own one also clears you to drive it. */}
           <div class="chips">
-            {f.licenceClasses.map((c) => (
+            {DRIVER_CLASSES.map((c) => (
               <button
                 key={c}
                 type="button"
-                class={`chip chip--tap${f.vehicleClass === c ? ' chip--on' : ''}`}
-                aria-pressed={f.vehicleClass === c}
-                onClick={() => actions.setForm({ vehicleClass: f.vehicleClass === c ? '' : c, truckSubtype: c === 'truck' ? f.truckSubtype : '' })}
+                class={`chip chip--tap${chosen === c ? ' chip--on' : ''}`}
+                aria-pressed={chosen === c}
+                onClick={() => actions.setForm(pickedVehicle(f, c))}
               >
                 {c}
               </button>
             ))}
           </div>
-          {f.licenceClasses.length === 0 ? <p class="card__note">{t('home.join.about.vehicleNeedsClass')}</p> : null}
           <div class="field" style="margin-top:12px">
             <label class="field__label" for="plate">
               {t('home.join.about.vehiclePlate')}
             </label>
             <input id="plate" class="input" value={f.vehiclePlate} onInput={(e) => actions.setForm({ vehiclePlate: e.currentTarget.value })} spellcheck={false} />
           </div>
-          {f.vehicleClass === 'truck' ? (
+          {chosen === 'truck' ? (
             <div class="field" style="margin-top:12px">
-              <label class="field__label" for="subtype">
-                {t('home.join.about.truckSubtype')}
-              </label>
-              <div class="chips">
-                {TRUCK_SUBTYPES.map((sub) => (
-                  <button
-                    key={sub}
-                    type="button"
-                    class={`chip chip--tap${f.truckSubtype === sub ? ' chip--on' : ''}`}
-                    aria-pressed={f.truckSubtype === sub}
-                    onClick={() => actions.setForm({ truckSubtype: sub })}
-                  >
-                    {sub}
-                  </button>
-                ))}
-              </div>
+              <span class="field__label">{t('home.join.about.truckSubtype')}</span>
+              {/* Read from the network, never restated here: the catalogue runs to twenty-odd bodies and
+                  combinations, and a hand-typed list in a client is wrong the day after it is written. */}
+              {state.truckSubtypes.length === 0 ? (
+                <p class="card__note">{t('home.join.about.truckSubtypeLoading')}</p>
+              ) : (
+                <div class="chips">
+                  {state.truckSubtypes.map((sub) => (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      class={`chip chip--tap${f.truckSubtype === sub.id ? ' chip--on' : ''}`}
+                      aria-pressed={f.truckSubtype === sub.id}
+                      onClick={() => actions.setForm({ truckSubtype: sub.id })}
+                    >
+                      {sub.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           ) : null}
           <p class="card__note">{t('home.join.about.vehicleNote')}</p>

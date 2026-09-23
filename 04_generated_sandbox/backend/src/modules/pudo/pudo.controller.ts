@@ -3840,7 +3840,15 @@ export class SbgController {
     return this.vehicles.listFor({ status: status as never, vehicleClass: vehicleClass as never, managerDid: actingTenant(actor) }, actingTenant(actor), actor?.role === 'operator');
   }
 
-  /** The truck sub-type catalog (label + capacity + handling capabilities) for registration UIs. */
+  /**
+   * The truck sub-type catalog (label + capacity + handling capabilities) for registration UIs.
+   *
+   * @Public because the front door's join form needs it BEFORE anybody has an account, and a list of body
+   * types is a catalogue rather than somebody's data. It was behind a token, so the only way to build a
+   * registration form against it was to restate the enum in the client — which the join form did, wrongly,
+   * with seven hand-typed names of which two were not real keys at all.
+   */
+  @Public()
   @Get('vehicles/truck-subtypes')
   truckSubtypes() {
     return Object.entries(TRUCK_SUBTYPE_CATALOG).map(([id, s]) => ({ id, ...s }));

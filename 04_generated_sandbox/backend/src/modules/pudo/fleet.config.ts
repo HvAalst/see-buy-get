@@ -64,6 +64,16 @@ export const TRUCK_SUBTYPE_CATALOG = {
   logging: { label: 'Logging / timber', capacityKg: 25000, oversized: true, equipment: ['CRN'] },
   tow_recovery: { label: 'Tow / recovery', capacityKg: 8000, equipment: ['CRN'] },
   refuse: { label: 'Refuse / compactor', capacityKg: 12000 },
+  // Added 2026-09-23 after a driver in the Netherlands looked for their own vehicle and did not find it.
+  // The combinations are how most road freight in Europe actually moves, and were missing entirely: the
+  // catalogue had bodies but no way to say the unit pulls one.
+  semi_trailer: { label: 'Tractor unit + semi-trailer (artic)', capacityKg: 26000 },
+  drawbar: { label: 'Drawbar (rigid + trailer)', capacityKg: 24000 },
+  walking_floor: { label: 'Walking floor (moving-floor trailer)', capacityKg: 24000, bulk: true },
+  // A forklift carried ON the truck, not a crane on it. It is what lets a pallet reach an address with no
+  // dock and nobody to help, so it is equipment the load planner can actually match against.
+  kooiaap: { label: 'Truck-mounted forklift (kooiaap)', capacityKg: 12000, equipment: ['FLT'] },
+  tail_lift: { label: 'Box with tail-lift', capacityKg: 10000, equipment: ['TLT'] },
 } satisfies Record<string, TruckSubtypeSpec>;
 
 export type TruckSubtype = keyof typeof TRUCK_SUBTYPE_CATALOG;

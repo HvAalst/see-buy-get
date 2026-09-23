@@ -12609,7 +12609,7 @@
       "get": {
         "operationId": "Sbg.truckSubtypes",
         "summary": "",
-        "description": "The truck sub-type catalog (label + capacity + handling capabilities) for registration UIs.",
+        "description": "The truck sub-type catalog (label + capacity + handling capabilities) for registration UIs.\n\n because the front door's join form needs it BEFORE anybody has an account, and a list of body\ntypes is a catalogue rather than somebody's data. It was behind a token, so the only way to build a\nregistration form against it was to restate the enum in the client — which the join form did, wrongly,\nwith seven hand-typed names of which two were not real keys at all.",
         "parameters": [],
         "responses": {
           "200": {
@@ -25182,7 +25182,12 @@
                 "lowboy",
                 "logging",
                 "tow_recovery",
-                "refuse"
+                "refuse",
+                "semi_trailer",
+                "drawbar",
+                "walking_floor",
+                "kooiaap",
+                "tail_lift"
               ]
             }
           },
@@ -25282,7 +25287,12 @@
               "lowboy",
               "logging",
               "tow_recovery",
-              "refuse"
+              "refuse",
+              "semi_trailer",
+              "drawbar",
+              "walking_floor",
+              "kooiaap",
+              "tail_lift"
             ]
           }
         },
@@ -27471,7 +27481,12 @@
               "lowboy",
               "logging",
               "tow_recovery",
-              "refuse"
+              "refuse",
+              "semi_trailer",
+              "drawbar",
+              "walking_floor",
+              "kooiaap",
+              "tail_lift"
             ]
           },
           "basis": {
@@ -27566,7 +27581,12 @@
               "lowboy",
               "logging",
               "tow_recovery",
-              "refuse"
+              "refuse",
+              "semi_trailer",
+              "drawbar",
+              "walking_floor",
+              "kooiaap",
+              "tail_lift"
             ]
           }
         },
@@ -27617,7 +27637,12 @@
               "lowboy",
               "logging",
               "tow_recovery",
-              "refuse"
+              "refuse",
+              "semi_trailer",
+              "drawbar",
+              "walking_floor",
+              "kooiaap",
+              "tail_lift"
             ]
           },
           "excludedBodies": {
@@ -27649,7 +27674,12 @@
                 "lowboy",
                 "logging",
                 "tow_recovery",
-                "refuse"
+                "refuse",
+                "semi_trailer",
+                "drawbar",
+                "walking_floor",
+                "kooiaap",
+                "tail_lift"
               ]
             }
           },
@@ -28292,7 +28322,12 @@
               "lowboy",
               "logging",
               "tow_recovery",
-              "refuse"
+              "refuse",
+              "semi_trailer",
+              "drawbar",
+              "walking_floor",
+              "kooiaap",
+              "tail_lift"
             ]
           },
           "capacityKg": {
@@ -29105,7 +29140,12 @@
                 "lowboy",
                 "logging",
                 "tow_recovery",
-                "refuse"
+                "refuse",
+                "semi_trailer",
+                "drawbar",
+                "walking_floor",
+                "kooiaap",
+                "tail_lift"
               ]
             }
           },
@@ -29207,7 +29247,12 @@
               "lowboy",
               "logging",
               "tow_recovery",
-              "refuse"
+              "refuse",
+              "semi_trailer",
+              "drawbar",
+              "walking_floor",
+              "kooiaap",
+              "tail_lift"
             ]
           },
           "fragile": {
@@ -29342,7 +29387,12 @@
               "lowboy",
               "logging",
               "tow_recovery",
-              "refuse"
+              "refuse",
+              "semi_trailer",
+              "drawbar",
+              "walking_floor",
+              "kooiaap",
+              "tail_lift"
             ]
           },
           "commitMode": {
@@ -29872,6 +29922,11 @@
               "logging",
               "tow_recovery",
               "refuse",
+              "semi_trailer",
+              "drawbar",
+              "walking_floor",
+              "kooiaap",
+              "tail_lift",
               "unknown"
             ]
           },

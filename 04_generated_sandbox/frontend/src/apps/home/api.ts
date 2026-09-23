@@ -86,6 +86,12 @@ export function fetchCountries(): Promise<Result<OperatingCountry[]>> {
   return publicRequest<OperatingCountry[]>(homeConfig(), '/v1/sbg/countries');
 }
 
+/** The truck body types the network actually knows, READ rather than restated. Public, because a join
+ *  form has no token yet and a list of body types is a catalogue rather than anybody's data. */
+export function fetchTruckSubtypes(): Promise<Result<Array<{ id: string; label: string }>>> {
+  return publicRequest<Array<{ id: string; label: string }>>(homeConfig(), '/v1/sbg/vehicles/truck-subtypes');
+}
+
 /* ------------------------------------------------------- FB3b: the market -- */
 
 /** One load as the public market publishes it. Mirrors backend MarketRow — note what is NOT here: no

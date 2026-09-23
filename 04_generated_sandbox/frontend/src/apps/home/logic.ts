@@ -93,8 +93,18 @@ export const DRIVER_CLASSES = ['bike', 'motorcycle', 'tuktuk', 'car', 'van', 'bu
  */
 export const HEAVY_CLASSES = ['tuktuk', 'car', 'van', 'bus', 'truck'] as const;
 
-/** A truck is not registrable without one; the backend refuses it. Mirrors TRUCK_SUBTYPE_CATALOG. */
-export const TRUCK_SUBTYPES = ['flatbed', 'tipper', 'refrigerated', 'tanker', 'lowboy', 'curtainside', 'boxbody'] as const;
+/**
+ * A truck is not registrable without a sub-type, and the list is READ FROM THE SERVER, never restated.
+ *
+ * It was restated here first, as seven hand-typed names — of which two ('curtainside', 'boxbody') were not
+ * keys in the catalogue at all, so the form offered body types the server would refuse. The real catalogue
+ * has more than twenty, including the combinations most European road freight actually moves on. A client
+ * list of somebody else's enum is wrong the day it is written or the day after.
+ */
+export interface TruckSubtype {
+  id: string;
+  label: string;
+}
 
 /** Whether what this person says they drive needs a licence on record. */
 export function needsLicence(classes: string[]): boolean {
@@ -232,10 +242,11 @@ export function stepBlocker(role: RoleSpec, step: JoinStep, f: JoinForm, t: Tran
       // The vehicle they arrive with. Asked for, not optional: this door only makes self-employed
       // couriers, and one without a vehicle is an account that cannot accept a load.
       if (role.id === 'driver') {
-        if (!f.vehicleClass.trim()) return t('home.block.vehicleClass');
-        if (!f.licenceClasses.includes(f.vehicleClass)) return t('home.block.vehicleNotCleared');
+        // Derived, so this only ever asks when there is genuinely more than one thing they could mean.
+        const vehicle = vehicleClassFor(f);
+        if (!vehicle) return t('home.block.vehicleClass');
         if (!f.vehiclePlate.trim()) return t('home.block.vehiclePlate');
-        if (f.vehicleClass === 'truck' && !f.truckSubtype.trim()) return t('home.block.truckSubtype');
+        if (vehicle === 'truck' && !f.truckSubtype.trim()) return t('home.block.truckSubtype');
       }
       return null;
     case 'where':
@@ -489,7 +500,34 @@ export function marketShape(rows: Array<{ bodyDerived?: { body: string } }>): { 
 export function pickedClasses(f: JoinForm, cls: string): Partial<JoinForm> {
   const on = f.licenceClasses.includes(cls);
   const licenceClasses = on ? f.licenceClasses.filter((x) => x !== cls) : [...f.licenceClasses, cls];
-  // One class to choose from is not a choice worth making somebody make.
-  const vehicleClass = licenceClasses.length === 1 ? licenceClasses[0] : licenceClasses.includes(f.vehicleClass) ? f.vehicleClass : '';
+  const vehicleClass = vehicleClassFor({ ...f, licenceClasses });
   return { licenceClasses, vehicleClass, ...(vehicleClass === 'truck' ? {} : { truckSubtype: '' }) };
+}
+
+/**
+ * WHICH VEHICLE IS THE ONE THEY OWN — derived, never left as an empty string somebody has to notice.
+ *
+ * This is the defect a driver hit on the first day the form shipped: the vehicle was only ever set by
+ * TAPPING a chip, so a courier who accepted the default, or ticked one class and moved on, had no vehicle
+ * chosen. Continue stayed dead with the reason printed at the very bottom of a long form, against a
+ * second row of chips that looked like a repeat of the first. Deriving it means the only time anybody has
+ * to choose is when there is genuinely more than one thing they could mean.
+ */
+export function vehicleClassFor(f: Pick<JoinForm, 'licenceClasses' | 'vehicleClass'>): string {
+  if (f.licenceClasses.includes(f.vehicleClass)) return f.vehicleClass; // still a valid answer: keep it
+  return f.licenceClasses.length === 1 ? f.licenceClasses[0] : '';
+}
+
+/**
+ * Choosing the vehicle they own from the WHOLE catalogue, which also clears them to drive it.
+ *
+ * The card used to offer only the classes already ticked above, so it read as "these are the only
+ * vehicles you may have" — a driver with a truck saw a bike and a van and reasonably concluded the
+ * network did not carry trucks. Owning one is a good reason to be licensed for it, so saying so here
+ * grants the class rather than sending somebody back up the form to tick it first.
+ */
+export function pickedVehicle(f: JoinForm, cls: string): Partial<JoinForm> {
+  if (f.vehicleClass === cls) return { vehicleClass: '', truckSubtype: '' };
+  const licenceClasses = f.licenceClasses.includes(cls) ? f.licenceClasses : [...f.licenceClasses, cls];
+  return { licenceClasses, vehicleClass: cls, ...(cls === 'truck' ? {} : { truckSubtype: '' }) };
 }
