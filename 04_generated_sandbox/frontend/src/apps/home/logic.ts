@@ -82,6 +82,31 @@ export function roleMeta(role: RoleSpec, t: Translate): RoleMeta {
  */
 export const DRIVER_CLASSES = ['bike', 'motorcycle', 'tuktuk', 'car', 'van', 'bus', 'truck'] as const;
 
+/**
+ * The classes the network puts in its HEAVY registry, which require a real licence number and expiry.
+ * Mirrors VEHICLE_SPEC[c].registry on the backend, declared here for the same standalone-build reason.
+ *
+ * This list is why an independent courier could not join at all before 2026-09-23: the form asked what
+ * somebody drives and never asked for the licence, so anything above a motorcycle was refused outright
+ * by `drivers.register` — and the only conclusion available to the person refused was that they had to
+ * come in through a fleet.
+ */
+export const HEAVY_CLASSES = ['tuktuk', 'car', 'van', 'bus', 'truck'] as const;
+
+/** A truck is not registrable without one; the backend refuses it. Mirrors TRUCK_SUBTYPE_CATALOG. */
+export const TRUCK_SUBTYPES = ['flatbed', 'tipper', 'refrigerated', 'tanker', 'lowboy', 'curtainside', 'boxbody'] as const;
+
+/** Whether what this person says they drive needs a licence on record. */
+export function needsLicence(classes: string[]): boolean {
+  return classes.some((c) => (HEAVY_CLASSES as readonly string[]).includes(c));
+}
+
+/** A licence that ran out before today. Compared as dates, so "today" is still valid. */
+export function expired(isoDay: string): boolean {
+  const when = new Date(`${isoDay}T23:59:59`).getTime();
+  return Number.isFinite(when) ? when < Date.now() : false;
+}
+
 /* ------------------------------------------------------------------ phone -- */
 
 /**
@@ -129,6 +154,19 @@ export interface JoinForm {
   country: string;
   /* role extras */
   licenceClasses: string[];
+  /** Heavy registry only — the network refuses a van on an unrecorded licence, and says so. */
+  licenceNumber: string;
+  licenceExpiresAt: string;
+  /**
+   * THE VEHICLE AN INDEPENDENT COURIER ARRIVES WITH.
+   *
+   * The front door has no fleet code, so everybody who joins here is self-employed — and a self-employed
+   * courier with no vehicle cannot take a single load. The backend has always accepted `profile.vehicle`
+   * on this path; nothing ever sent one.
+   */
+  vehiclePlate: string;
+  vehicleClass: string;
+  truckSubtype: string;
 }
 
 export const EMPTY_JOIN: JoinForm = {
@@ -144,6 +182,11 @@ export const EMPTY_JOIN: JoinForm = {
   zone: '',
   country: '',
   licenceClasses: ['bike'],
+  licenceNumber: '',
+  licenceExpiresAt: '',
+  vehiclePlate: '',
+  vehicleClass: '',
+  truckSubtype: '',
 };
 
 /** The wizard's steps, per role. `vendor` skips the phone gate the backend does not ask for. */
@@ -181,6 +224,19 @@ export function stepBlocker(role: RoleSpec, step: JoinStep, f: JoinForm, t: Tran
       if (role.id !== 'mdp' && !f.fullName.trim()) return t('home.block.fullName');
       if (role.id !== 'mdp' && !f.nationalId.trim()) return t('home.block.idNumber');
       if (role.id === 'driver' && f.licenceClasses.length === 0) return t('home.block.drive');
+      if (role.id === 'driver' && needsLicence(f.licenceClasses)) {
+        if (!f.licenceNumber.trim()) return t('home.block.licenceNumber');
+        if (!f.licenceExpiresAt.trim()) return t('home.block.licenceExpiry');
+        if (expired(f.licenceExpiresAt)) return t('home.block.licenceExpired');
+      }
+      // The vehicle they arrive with. Asked for, not optional: this door only makes self-employed
+      // couriers, and one without a vehicle is an account that cannot accept a load.
+      if (role.id === 'driver') {
+        if (!f.vehicleClass.trim()) return t('home.block.vehicleClass');
+        if (!f.licenceClasses.includes(f.vehicleClass)) return t('home.block.vehicleNotCleared');
+        if (!f.vehiclePlate.trim()) return t('home.block.vehiclePlate');
+        if (f.vehicleClass === 'truck' && !f.truckSubtype.trim()) return t('home.block.truckSubtype');
+      }
       return null;
     case 'where':
       if (!f.country.trim()) return t('home.block.country');
@@ -254,10 +310,22 @@ export function signupBody(role: RoleSpec, f: JoinForm, deviceMarker: string): R
           nationalId: f.nationalId.trim(),
           mobile: phone,
           licenceClasses: f.licenceClasses,
+          // The heavy registry will not take a driver without these, and this door never sent them —
+          // which is what made every class above a motorcycle un-joinable except through a fleet.
+          ...(needsLicence(f.licenceClasses)
+            ? { licenceNumber: f.licenceNumber.trim(), licenceExpiresAt: f.licenceExpiresAt.trim() }
+            : {}),
           // An INDEPENDENT courier is contracted by a sister and needs to say which; one who joins a fleet
           // carries no jurisdiction at all by design, and the backend ignores this for them.
           jurisdiction: f.country.trim().toUpperCase(),
           homeZone: f.zone.trim(),
+        },
+        // Their own vehicle. The backend registers it as driver_owned, refuses a class they are not
+        // cleared for, and puts it on their first morning's screen so there is something to start on.
+        vehicle: {
+          plate: f.vehiclePlate.trim(),
+          vehicleClass: f.vehicleClass,
+          ...(f.vehicleClass === 'truck' && f.truckSubtype ? { truckSubtype: f.truckSubtype } : {}),
         },
       },
     };
@@ -408,4 +476,20 @@ export function marketShape(rows: Array<{ bodyDerived?: { body: string } }>): { 
     // Commonest first, then alphabetically so equal counts do not reorder between two reads of the same market.
     .sort((a, b) => b.n - a.n || a.body.localeCompare(b.body));
   return { bodies, total: rows.length };
+}
+
+/**
+ * Toggling one of the classes somebody can drive, and keeping their VEHICLE honest about it.
+ *
+ * The two answers are tied: an owner-driver's vehicle has to be a class they are cleared for, and the
+ * server refuses the pair if it is not. Rather than let the form reach that refusal, the vehicle follows
+ * the licence — picked automatically when there is only one thing it could be, and cleared when the class
+ * it named is taken away. Pure, so the rule is tested rather than watched.
+ */
+export function pickedClasses(f: JoinForm, cls: string): Partial<JoinForm> {
+  const on = f.licenceClasses.includes(cls);
+  const licenceClasses = on ? f.licenceClasses.filter((x) => x !== cls) : [...f.licenceClasses, cls];
+  // One class to choose from is not a choice worth making somebody make.
+  const vehicleClass = licenceClasses.length === 1 ? licenceClasses[0] : licenceClasses.includes(f.vehicleClass) ? f.vehicleClass : '';
+  return { licenceClasses, vehicleClass, ...(vehicleClass === 'truck' ? {} : { truckSubtype: '' }) };
 }

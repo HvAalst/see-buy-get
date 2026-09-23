@@ -695,6 +695,24 @@
   margin-bottom: 12px;
 }
 
+/* A field that is a single tick rather than a box with a label above it — the box and its words sit on
+   one line, because "I have cleared the record check" is the label, not a heading for something else. */
+.cfield--check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--navy);
+  cursor: pointer;
+}
+
+.cfield--check input {
+  margin: 2px 0 0;
+  flex: none;
+}
+
 /* NAVY, not grey. A field label is a small TITLE — it says what the box under it is for — and every
    other title on this surface is navy: the panel heading, a table lead, a row name, the account menu.
    At --tx2 they read as disabled text, which the user put plainly: they appear dark grey. */

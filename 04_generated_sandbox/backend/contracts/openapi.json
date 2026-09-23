@@ -28833,6 +28833,10 @@
           "approve": {
             "type": "boolean"
           },
+          "criminalRecordClear": {
+            "type": "boolean",
+            "description": "The record check, recorded BY THE PERSON WHO DID IT, at the moment they approve.\n\nA fleet asserts this when it registers its own driver. Nobody asserted it for a courier who\nregistered themselves, so `criminalRecordClear` stayed false and approval was blocked for ever with\nno way to unblock it — the last locked door on the independent path. It is deliberately not something\nthe applicant can tick: a self-declared clear record is not a check, and the whole point of this gate\nis that somebody looked."
+          },
           "by": {
             "type": "string"
           },

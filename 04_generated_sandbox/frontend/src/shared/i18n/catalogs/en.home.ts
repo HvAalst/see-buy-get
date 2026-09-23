@@ -246,6 +246,15 @@ export const enHome = {
   'home.block.fullName': 'Type your full name.',
   'home.block.idNumber': 'Type your ID number.',
   'home.block.drive': 'Pick what you drive.',
+  /* The licence, and the vehicle. Both were missing from this form, and between them they made joining
+     as an independent courier impossible above a motorcycle. The blockers name the field and say why. */
+  'home.block.licenceNumber': 'Type your driving licence number — the network cannot put you behind anything heavier than a motorcycle without it.',
+  'home.block.licenceExpiry': 'Say when your licence runs out.',
+  'home.block.licenceExpired': 'That licence has already run out. Renew it first — we cannot register you on an expired one.',
+  'home.block.vehicleClass': 'Say which of those you will be driving.',
+  'home.block.vehicleNotCleared': 'Pick a vehicle you are cleared to drive, or add that class above.',
+  'home.block.vehiclePlate': 'Type your number plate.',
+  'home.block.truckSubtype': 'Say what kind of truck it is.',
   'home.block.location': 'Tap the map to drop a pin where you are.',
   'home.block.country': 'Pick the country you are joining in.',
   'home.block.zone': 'Pick the area you serve.',
@@ -288,6 +297,17 @@ export const enHome = {
   'home.join.about.privacyNote': 'Your name and ID are kept private — they never show on the network.',
   'home.join.about.driveTitle': 'What do you drive?',
   'home.join.about.driveNote': 'A bike or motorcycle starts today. Anything heavier needs a licence check first.',
+  'home.join.about.licenceNumber': 'Driving licence number',
+  'home.join.about.licenceExpiry': 'Licence runs out',
+  'home.join.about.licenceNote': 'Kept against your record, checked by staff before you carry anything heavy. We will tell you before it runs out.',
+
+  /* The vehicle an independent courier arrives with. Said as "your vehicle", singular, because that is
+     what an owner-driver has — and because the class list here is only what they just said they drive. */
+  'home.join.about.vehicleTitle': 'Your vehicle',
+  'home.join.about.vehiclePlate': 'Number plate',
+  'home.join.about.truckSubtype': 'What kind of truck',
+  'home.join.about.vehicleNeedsClass': 'Pick what you drive first, above.',
+  'home.join.about.vehicleNote': 'This is the vehicle you will start your first shift on. You can add more later, or scan the sticker on any vehicle a fleet has registered.',
   'home.join.about.ctaVendor': 'Create my store',
 
   // Join wizard — step: where.

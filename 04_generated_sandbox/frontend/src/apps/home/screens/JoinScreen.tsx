@@ -3,7 +3,7 @@ import { Button, Card, Checklist, CodeBoxes, ErrorNote, Icon, Note, PlaceMap, Re
 import { toPlaceWords } from '../../../shared/placewords';
 import { useT } from '../../../shared/i18n';
 
-import { DRIVER_CLASSES, joinSpoken, roleMeta, stepBlocker, stepsFor } from '../logic';
+import { DRIVER_CLASSES, TRUCK_SUBTYPES, joinSpoken, needsLicence, pickedClasses, roleMeta, stepBlocker, stepsFor } from '../logic';
 import type { HomeActions, HomeState } from '../useHomeApp';
 
 export interface JoinScreenProps {
@@ -219,8 +219,10 @@ function AboutStep({ state, actions }: JoinScreenProps) {
         ) : null}
       </Card>
 
+      {/* `title`, not `label`: "What do you drive?" was the section's aria-label and rendered nothing, so
+          the form showed a row of bare chips and never asked the question out loud. */}
       {role.id === 'driver' ? (
-        <Card label={t('home.join.about.driveTitle')}>
+        <Card title={t('home.join.about.driveTitle')}>
           <div class="chips">
             {DRIVER_CLASSES.map((c) => {
               const on = f.licenceClasses.includes(c);
@@ -230,7 +232,7 @@ function AboutStep({ state, actions }: JoinScreenProps) {
                   type="button"
                   class={`chip chip--tap${on ? ' chip--on' : ''}`}
                   aria-pressed={on}
-                  onClick={() => actions.setForm({ licenceClasses: on ? f.licenceClasses.filter((x) => x !== c) : [...f.licenceClasses, c] })}
+                  onClick={() => actions.setForm(pickedClasses(f, c))}
                 >
                   {c}
                 </button>
@@ -238,6 +240,78 @@ function AboutStep({ state, actions }: JoinScreenProps) {
             })}
           </div>
           <p class="card__note">{t('home.join.about.driveNote')}</p>
+
+          {/* THE LICENCE, asked for only where the network actually requires one. Without these two
+              fields anything above a motorcycle was refused outright, which is why joining independently
+              looked impossible. Shown the moment a heavy class is picked, so the reason is visible. */}
+          {needsLicence(f.licenceClasses) ? (
+            <>
+              <div class="field" style="margin-top:12px">
+                <label class="field__label" for="licno">
+                  {t('home.join.about.licenceNumber')}
+                </label>
+                <input id="licno" class="input" value={f.licenceNumber} onInput={(e) => actions.setForm({ licenceNumber: e.currentTarget.value })} spellcheck={false} />
+              </div>
+              <div class="field" style="margin-top:12px">
+                <label class="field__label" for="licexp">
+                  {t('home.join.about.licenceExpiry')}
+                </label>
+                <input id="licexp" class="input" type="date" value={f.licenceExpiresAt} onInput={(e) => actions.setForm({ licenceExpiresAt: e.currentTarget.value })} />
+              </div>
+              <p class="card__note">{t('home.join.about.licenceNote')}</p>
+            </>
+          ) : null}
+        </Card>
+      ) : null}
+
+      {/* THE VEHICLE THEY ARRIVE WITH.
+          This door makes self-employed couriers — there is no fleet code on it — and one without a
+          vehicle is an account that cannot take a load: the driver app opens on "scan the sticker on the
+          dashboard", and the only stickers in the network belong to vehicles a fleet registered. So it is
+          asked here, and the class offered is only what they have just said they can drive. */}
+      {role.id === 'driver' ? (
+        <Card title={t('home.join.about.vehicleTitle')}>
+          <div class="chips">
+            {f.licenceClasses.map((c) => (
+              <button
+                key={c}
+                type="button"
+                class={`chip chip--tap${f.vehicleClass === c ? ' chip--on' : ''}`}
+                aria-pressed={f.vehicleClass === c}
+                onClick={() => actions.setForm({ vehicleClass: f.vehicleClass === c ? '' : c, truckSubtype: c === 'truck' ? f.truckSubtype : '' })}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+          {f.licenceClasses.length === 0 ? <p class="card__note">{t('home.join.about.vehicleNeedsClass')}</p> : null}
+          <div class="field" style="margin-top:12px">
+            <label class="field__label" for="plate">
+              {t('home.join.about.vehiclePlate')}
+            </label>
+            <input id="plate" class="input" value={f.vehiclePlate} onInput={(e) => actions.setForm({ vehiclePlate: e.currentTarget.value })} spellcheck={false} />
+          </div>
+          {f.vehicleClass === 'truck' ? (
+            <div class="field" style="margin-top:12px">
+              <label class="field__label" for="subtype">
+                {t('home.join.about.truckSubtype')}
+              </label>
+              <div class="chips">
+                {TRUCK_SUBTYPES.map((sub) => (
+                  <button
+                    key={sub}
+                    type="button"
+                    class={`chip chip--tap${f.truckSubtype === sub ? ' chip--on' : ''}`}
+                    aria-pressed={f.truckSubtype === sub}
+                    onClick={() => actions.setForm({ truckSubtype: sub })}
+                  >
+                    {sub}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          <p class="card__note">{t('home.join.about.vehicleNote')}</p>
         </Card>
       ) : null}
 

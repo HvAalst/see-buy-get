@@ -545,6 +545,16 @@ function DriverApplicationRow({ row, state, actions }: { row: DriverApplication;
   const t = useT();
   const busy = state.busyId === row.did;
   const [why, setWhy] = useState<string | null>(null);
+  /*
+   * THE RECORD CHECK, TICKED BY THE PERSON WHO DID IT.
+   *
+   * A fleet asserts this when it registers its own driver, so a fleet applicant arrives with it already
+   * true. NOBODY asserts it for a courier who registered themselves — and approval is blocked without it,
+   * which left the independent path permanently closed with no control anywhere to open it. It is not
+   * something the applicant may tick: a self-declared clear record is not a check.
+   */
+  const [cleared, setCleared] = useState(false);
+  const needsRecord = !row.criminalRecordClear;
   const refs = [row.kyc?.licenceCopyRef, row.kyc?.idCopyRef].filter((x): x is string => Boolean(x));
 
   return (
@@ -563,8 +573,19 @@ function DriverApplicationRow({ row, state, actions }: { row: DriverApplication;
         </td>
         <td class="ctbl__sub"><span class="ctbl__lbl">{t('tower.drivers.col.papers')}</span>{row.kyc?.submittedAt ? t('tower.drivers.sent', { date: row.kyc.submittedAt.slice(0, 10) }) : t('tower.drivers.noPapers')}</td>
         <td>
+          {needsRecord ? (
+            <label class="cfield cfield--check">
+              <input type="checkbox" checked={cleared} onChange={(e) => setCleared((e.target as HTMLInputElement).checked)} />
+              <span>{t('tower.drivers.recordCleared')}</span>
+            </label>
+          ) : null}
           <span class="twr-clear__act">
-            <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy} onClick={() => void actions.decideDriver(row.did, true)}>
+            <button
+              type="button"
+              class="cbtn cbtn--primary cbtn--sm"
+              disabled={busy || (needsRecord && !cleared)}
+              onClick={() => void actions.decideDriver(row.did, true, undefined, cleared)}
+            >
               {t('tower.approvals.approve')}
             </button>
             <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} aria-expanded={why != null} onClick={() => setWhy(why == null ? '' : null)}>

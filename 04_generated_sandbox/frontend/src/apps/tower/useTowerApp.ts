@@ -253,7 +253,8 @@ export interface TowerActions {
   /** `reason` is required by the server when refusing — the applicant is shown it. */
   decideApproval(did: string, approve: boolean, reason?: string): Promise<void>;
   /** Vet a heavy-registry driver. A refusal carries the reason the driver is shown. */
-  decideDriver(did: string, approve: boolean, reason?: string): Promise<void>;
+  /** `criminalRecordClear` is the vetting staff member's own tick — never the applicant's. */
+  decideDriver(did: string, approve: boolean, reason?: string, criminalRecordClear?: boolean): Promise<void>;
   runPayouts(): Promise<void>;
   movePayout(payoutId: string, action: PayoutAction, reason?: string): Promise<void>;
   /** Move one funding request along. the provider reference is what a confirmation cannot do without. */
@@ -1181,11 +1182,11 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
        *
        * A refusal carries the reason: the driver is shown it and is the only person who can put it right.
        */
-      decideDriver: async (did: string, approve: boolean, reason?: string) => {
+      decideDriver: async (did: string, approve: boolean, reason?: string, criminalRecordClear?: boolean) => {
         const client = clientRef.current;
         if (!client) return;
         setState((s) => ({ ...s, busyId: did, queueError: null }));
-        const { error } = await client.api.decideDriverKyc(did, { approve, by: stateRef.current.who?.name, ...(reason ? { reason } : {}) });
+        const { error } = await client.api.decideDriverKyc(did, { approve, by: stateRef.current.who?.name, ...(reason ? { reason } : {}), ...(criminalRecordClear ? { criminalRecordClear } : {}) });
         if (error) {
           setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
           return;

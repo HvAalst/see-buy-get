@@ -3665,10 +3665,89 @@ describe('PUDO Light', () => {
     expect(drivers.get(fleetDriver.did).managerDid).toBe(m.did); // employed by the fleet
   });
 
+  /*
+   * JOINING AS A COURIER WITH YOUR OWN VAN, WHICH WAS NOT POSSIBLE.
+   *
+   * The user tried it and concluded they could only join through a fleet. They were right, and the path
+   * was closed in four separate places: the join form never asked for the licence the heavy registry
+   * requires (a hard LICENCE_REQUIRED), never asked for a vehicle (so the first screen said "scan the
+   * sticker on the dashboard" and no sticker existed), the DRAFT notice told them a FLEET OFFICE had to
+   * activate them, and nothing anywhere could clear the criminal-record check that approval demands.
+   *
+   * This walks the whole thing, because every one of those four was individually invisible.
+   */
+  it('lets an independent courier join with their own van, and work once staff have cleared them', () => {
+    const phone = '+254700790';
+    otp.verify(phone, otp.request(phone).code);
+    const joined = accounts.signup({
+      role: 'driver',
+      email: 'owner@d.test',
+      password: 'secret1',
+      phone,
+      profile: {
+        driver: {
+          displayName: 'Owner', fullName: 'O Driver', nationalId: 'ID-OWN1', mobile: phone,
+          licenceClasses: ['van'], licenceNumber: 'DL-OWN1', licenceExpiresAt: '2099-01-01', jurisdiction: 'KE',
+        },
+        vehicle: { plate: 'KDD 001', vehicleClass: 'van' },
+      },
+    });
+
+    const driver = drivers.get(joined.did);
+    expect(driver.managerDid).toBeUndefined(); // nobody's employee — the network contracts them directly
+    expect(driver.status).toBe('DRAFT'); // a van is the heavy registry, and it starts unvetted
+
+    // THEIR VAN IS ON THEIR FIRST MORNING'S SCREEN. recentVehicles is a history, so without the claim at
+    // signup this is empty and the app can only tell them to scan a sticker that does not exist.
+    const morning = fleet.recentVehicles(joined.did);
+    expect(morning.map((v) => v.plate)).toEqual(['KDD 001']);
+
+    // They can send their own documents — the route always allowed it; only a fleet ever had a screen.
+    drivers.submitKyc(joined.did, { idCopyRef: 'media_id', licenceCopyRef: 'media_lic' });
+    expect(drivers.get(joined.did).status).toBe('KYC_PENDING');
+
+    // Approval WITHOUT the record check is still refused: the gate is real, it just had no key before.
+    expect(() => drivers.decideKyc(joined.did, true, 'ops')).toThrow(/criminal-record check/);
+    drivers.decideKyc(joined.did, true, 'ops', undefined, true);
+    expect(drivers.get(joined.did).status).toBe('ACTIVE');
+
+    // And the whole point: a shift starts, on their own van, with no fleet anywhere in it.
+    expect(fleet.couple(joined.did, morning[0].vehicleId).status).toBe('active');
+  });
+
+  it('refuses a vehicle the courier is not licensed for, at signup rather than at the first shift', () => {
+    // Registering a van while cleared only for a bicycle used to pass every check here and fail at the
+    // first coupling — with the vehicle already in the network and the person already signed up.
+    const phone = '+254700791';
+    otp.verify(phone, otp.request(phone).code);
+    expect(() =>
+      accounts.signup({
+        role: 'driver', email: 'mismatch@d.test', password: 'secret1', phone,
+        profile: {
+          driver: { displayName: 'Mix', fullName: 'M X', nationalId: 'ID-MIX1', mobile: phone, licenceClasses: ['bike'] },
+          vehicle: { plate: 'KDD 002', vehicleClass: 'van' },
+        },
+      }),
+    ).toThrow(/not licence-cleared for a van/);
+  });
+
+  it('names the field somebody forgot instead of answering a 500', () => {
+    // SignupDto.profile is an unvalidated Record, so a join form that omits a field reaches the service
+    // with it missing. It used to call .trim() on undefined and answer "Something went wrong".
+    const phone = '+254700792';
+    otp.verify(phone, otp.request(phone).code);
+    expect(() =>
+      accounts.signup({
+        role: 'driver', email: 'nofields@d.test', password: 'secret1', phone,
+        profile: { driver: { displayName: 'No ID', mobile: phone, licenceClasses: ['bike'] } },
+      }),
+    ).toThrow(/full name/);
+  });
+
   it('S20 — one person, many roles: a driver who signs up can enroll as a consumer and send, under one account', () => {
     // A driver signs up through the existing PUDO account flow — which now links them to a person by phone.
     const phone = '+254700711'; otp.verify(phone, otp.request(phone).code);
-    const driver = accounts.signup({ role: 'driver', email: 'multi@d.test', password: 'secret1', phone, profile: { driver: { displayName: 'Multi', fullName: 'M', nationalId: 'ID-M1', mobile: phone, licenceClasses: ['bike'] }, vehicle: { plate: 'MU-1', vehicleClass: 'motorcycle', ownerName: 'M' } } });
+    const driver = accounts.signup({ role: 'driver', email: 'multi@d.test', password: 'secret1', phone, profile: { driver: { displayName: 'Multi', fullName: 'M', nationalId: 'ID-M1', mobile: phone, licenceClasses: ['motorcycle'] }, vehicle: { plate: 'MU-1', vehicleClass: 'motorcycle' } } });
 
     const linked = persons.findByPhone(phone);
     expect(linked).toBeDefined();

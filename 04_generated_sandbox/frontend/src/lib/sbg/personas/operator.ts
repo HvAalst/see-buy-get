@@ -728,7 +728,7 @@ export function createOperatorApi(sbg: SbgClient) {
      */
     driverKycQueue: () => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/kyc-queue', {})),
 
-    decideDriverKyc: (did: string, body: { approve: boolean; by?: string; reason?: string }) =>
+    decideDriverKyc: (did: string, body: { approve: boolean; by?: string; reason?: string; criminalRecordClear?: boolean }) =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/kyc-decision', { params: { path: { did } }, body: body as never })),
 
     /**

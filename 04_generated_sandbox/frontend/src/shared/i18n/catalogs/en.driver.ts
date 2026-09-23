@@ -121,6 +121,20 @@ export const enDriver = {
   'driver.home.startTitle': 'Start your shift',
   'driver.home.startLede': 'Scan the QR sticker on the dashboard of the vehicle you are driving today.',
   'driver.home.notActivated': 'Not activated yet',
+
+  /* GETTING CLEARED WITHOUT A FLEET. Anything above a motorcycle starts at DRAFT and needs an ID and a
+     licence read by staff. A fleet's office sends those; an independent courier had nobody to ask. */
+  'driver.clearance.needTitle': 'Two documents before your first load',
+  'driver.clearance.needBody': 'A van or anything larger needs your ID and your driving licence checked. Send photos of both and staff will look at them.',
+  'driver.clearance.send': 'Send my documents',
+  'driver.clearance.sheetBody': 'Photograph both, flat and in good light. Staff read them by hand — nothing is checked automatically, and nothing on your account changes until they have.',
+  'driver.clearance.idPhoto': 'Your ID',
+  'driver.clearance.licencePhoto': 'Your driving licence',
+  'driver.clearance.submit': 'Send them',
+  'driver.clearance.pendingTitle': 'Your documents are with us',
+  'driver.clearance.pendingBody': 'Staff are checking your ID and licence. You will be told the moment you are cleared to take a load.',
+  'driver.clearance.sent': 'Documents sent',
+  'driver.clearance.refused': 'Could not send those',
   'driver.home.qrLabel': 'Vehicle QR',
   'driver.home.qrPlaceholder': 'Scan the code on the dashboard',
   'driver.home.qrNote': 'Scanning the dashboard sticker couples you to that vehicle for the day.',
@@ -448,6 +462,8 @@ export const enDriver = {
   'driver.logic.rateDetail': 'Your rate {mine} per km. Most drivers charge {median} ({min}–{max} across {count} vehicles).',
   'driver.logic.matchLabel': 'Match {price}',
   'driver.logic.statusNotice': 'Your driver account is {status}. The fleet office must activate you before you can start a shift.',
+  // The same fact for somebody with no fleet: it names who actually clears them, and what they can do now.
+  'driver.logic.statusNoticeOwn': 'Your driver account is {status}. Send your ID and your licence below — SeeBuyGet staff check them, and you can start once they have.',
   'driver.logic.shiftSummary': 'On shift with {plate}. Remaining capacity {kg} kilograms. {count} claimed loads.',
   'driver.logic.offShiftSummary': 'Scan the vehicle QR on the dashboard to start your shift.',
   'driver.logic.offersNone': 'No shipments waiting on this route right now.',

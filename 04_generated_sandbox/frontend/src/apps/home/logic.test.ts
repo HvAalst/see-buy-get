@@ -20,6 +20,8 @@ import {
   roleById,
   roleMeta,
   servedPct,
+  needsLicence,
+  pickedClasses,
   signupBody,
   stepBlocker,
   stepsFor,
@@ -108,6 +110,73 @@ describe('stepBlocker', () => {
   it('a driver must say what they drive; a hub needs no personal ID', () => {
     expect(stepBlocker(role('driver'), 'about', { ...filled(), licenceClasses: [] }, t)).toContain('what you drive');
     expect(stepBlocker(role('mdp'), 'about', { ...filled(), fullName: '', nationalId: '' }, t)).toBeNull();
+  });
+
+  /*
+   * THE FRONT DOOR USED TO REFUSE EVERY COURIER ABOVE A MOTORCYCLE.
+   *
+   * It asked what somebody drives and never asked for the licence the network requires to put them behind
+   * it, so `drivers.register` answered LICENCE_REQUIRED and the only conclusion available to the person
+   * refused was that they had to come in through a fleet — which is exactly what the user reported.
+   */
+  it('lets a bike or motorcycle courier through with no licence paperwork at all', () => {
+    const rider = { ...filled(), licenceClasses: ['bike'], vehicleClass: 'bike', vehiclePlate: 'BCY-1' };
+    expect(needsLicence(['bike'])).toBe(false);
+    expect(needsLicence(['motorcycle'])).toBe(false);
+    expect(stepBlocker(role('driver'), 'about', rider, t)).toBeNull();
+  });
+
+  it('asks a van or truck courier for the licence the network will demand anyway', () => {
+    expect(needsLicence(['van'])).toBe(true);
+    // Mixed: one heavy class among light ones still needs it — the registry is decided by the heaviest.
+    expect(needsLicence(['bike', 'van'])).toBe(true);
+    const base = { ...filled(), licenceClasses: ['van'], vehicleClass: 'van', vehiclePlate: 'KDD 1' };
+    expect(stepBlocker(role('driver'), 'about', base, t)).toContain('licence number');
+    expect(stepBlocker(role('driver'), 'about', { ...base, licenceNumber: 'DL-9' }, t)).toContain('runs out');
+    // An expiry already past is refused HERE, not after the account is otherwise built.
+    expect(stepBlocker(role('driver'), 'about', { ...base, licenceNumber: 'DL-9', licenceExpiresAt: '2020-01-01' }, t)).toContain('already run out');
+    expect(stepBlocker(role('driver'), 'about', { ...base, licenceNumber: 'DL-9', licenceExpiresAt: '2099-01-01' }, t)).toBeNull();
+  });
+
+  it('will not let a courier join with no vehicle, because this door only makes self-employed ones', () => {
+    const base = { ...filled(), licenceClasses: ['bike'], vehicleClass: 'bike' };
+    expect(stepBlocker(role('driver'), 'about', { ...base, vehiclePlate: '' }, t)).toContain('number plate');
+    // A class they did not say they could drive — the server refuses the pair, so the form does first.
+    expect(stepBlocker(role('driver'), 'about', { ...base, vehicleClass: 'van', vehiclePlate: 'X' }, t)).toContain('cleared to drive');
+    // And a truck is not registrable without its kind.
+    const trucker = { ...filled(), licenceClasses: ['truck'], vehicleClass: 'truck', vehiclePlate: 'T-1', licenceNumber: 'DL-9', licenceExpiresAt: '2099-01-01' };
+    expect(stepBlocker(role('driver'), 'about', trucker, t)).toContain('kind of truck');
+    expect(stepBlocker(role('driver'), 'about', { ...trucker, truckSubtype: 'flatbed' }, t)).toBeNull();
+  });
+
+  it('keeps the vehicle honest about the licence as the classes are tapped', () => {
+    // One class to choose from is not a choice worth making somebody make.
+    expect(pickedClasses({ ...EMPTY_JOIN, licenceClasses: [] }, 'van')).toMatchObject({ licenceClasses: ['van'], vehicleClass: 'van' });
+    // Taking away the class the vehicle named clears the vehicle rather than leaving a pair the server refuses.
+    expect(pickedClasses({ ...EMPTY_JOIN, licenceClasses: ['van', 'truck'], vehicleClass: 'truck' }, 'truck')).toMatchObject({ licenceClasses: ['van'], vehicleClass: 'van' });
+    // A class that is not the vehicle's is added without disturbing it.
+    expect(pickedClasses({ ...EMPTY_JOIN, licenceClasses: ['van', 'bike'], vehicleClass: 'van' }, 'car')).toMatchObject({ vehicleClass: 'van' });
+    // A sub-type never survives the truck it described: dropping the truck clears both.
+    expect(pickedClasses({ ...EMPTY_JOIN, licenceClasses: ['truck'], vehicleClass: 'truck', truckSubtype: 'tipper' }, 'truck')).toMatchObject({ vehicleClass: '', truckSubtype: '' });
+    // But it survives a class being ADDED alongside — the vehicle is still that truck.
+    expect(pickedClasses({ ...EMPTY_JOIN, licenceClasses: ['truck'], vehicleClass: 'truck', truckSubtype: 'tipper' }, 'van').truckSubtype).toBeUndefined();
+  });
+
+  it('SENDS the licence and the vehicle, which is the half that was missing', () => {
+    const body = signupBody(role('driver'), filled({
+      licenceClasses: ['van'], licenceNumber: 'DL-9', licenceExpiresAt: '2099-01-01', vehicleClass: 'van', vehiclePlate: ' kdd 1 ',
+    }), 'x') as { profile: { driver: Record<string, unknown>; vehicle: Record<string, unknown> } };
+    expect(body.profile.driver.licenceNumber).toBe('DL-9');
+    expect(body.profile.driver.licenceExpiresAt).toBe('2099-01-01');
+    expect(body.profile.vehicle).toEqual({ plate: 'kdd 1', vehicleClass: 'van' });
+  });
+
+  it('sends NO licence fields for a rider who needs none — an empty string is not "no licence"', () => {
+    const body = signupBody(role('driver'), filled({ licenceClasses: ['bike'], vehicleClass: 'bike', vehiclePlate: 'B-1' }), 'x') as {
+      profile: { driver: Record<string, unknown> };
+    };
+    expect(body.profile.driver.licenceNumber).toBeUndefined();
+    expect(body.profile.driver.licenceExpiresAt).toBeUndefined();
   });
 
   it('a store needs its name and the country that will invoice it', () => {

@@ -183,6 +183,19 @@ export class DriverService {
       if (this.isExpired(input.licenceExpiresAt)) throw new GlosError('LICENCE_EXPIRED', 'The driving licence has expired');
     }
 
+    /*
+     * THE THREE FIELDS THE REST OF THIS METHOD ASSUMES IT HAS.
+     *
+     * `SignupDto.profile` is an unvalidated `Record<string, unknown>` — class-validator checks that it is
+     * an object and nothing inside it — so a join form that forgets a field reaches here with it missing.
+     * Until now the first thing to touch it was `fp()`, which called `.trim()` on undefined and answered
+     * the person with a 500 and the word "Something went wrong". A missing name is not an internal error;
+     * it is a question nobody was asked, and the answer has to name the field.
+     */
+    if (!input.fullName?.trim()) throw new GlosError('FIELD_REQUIRED', 'A driver needs their full name');
+    if (!input.nationalId?.trim()) throw new GlosError('FIELD_REQUIRED', 'A national ID number is required to register a driver');
+    if (!input.mobile?.trim()) throw new GlosError('FIELD_REQUIRED', 'A mobile number is required — it is how this driver signs in');
+
     // Dedup — one national ID, one mobile, one licence number across the network.
     const prints = { id: fp(input.nationalId), mobile: fp(input.mobile), ...(input.licenceNumber ? { lic: fp(input.licenceNumber) } : {}) };
     if (this.fingerprints.has(prints.id)) throw new GlosError('DUPLICATE', 'A driver with this national ID already exists');
@@ -242,8 +255,11 @@ export class DriverService {
    * and a refusal they cannot act on leaves them where saying nothing did. Their papers are cleared so a
    * replacement pair can be sent — `submitKyc` only accepts a full set, and only from DRAFT.
    */
-  decideKyc(did: string, approve: boolean, by?: string, reason?: string): FleetDriver {
+  decideKyc(did: string, approve: boolean, by?: string, reason?: string, criminalRecordClear?: boolean): FleetDriver {
     const driver = this.require(did);
+    // The record check, recorded by the staff member doing the vetting. One-way on purpose: this clears a
+    // driver, it never un-clears one, and taking somebody off the road is `suspend` with its own trail.
+    if (criminalRecordClear) driver.criminalRecordClear = true;
     if (driver.status !== 'KYC_PENDING') throw new GlosError('INVALID_STATE', `Driver is ${driver.status}, expected KYC_PENDING`);
     if (!approve) {
       const why = reason?.trim();

@@ -44,6 +44,16 @@ export function createDriverApi(sbg: SbgClient) {
     sendLicenceRenewal: (did: string, body: { copyRef: string; expiresAt: string; number?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/licence-renewal', { params: { path: { did } }, body: body as never })),
 
+    /**
+     * HEAVY REGISTRY: SEND THE DOCUMENTS THAT GET YOU CLEARED — an ID copy and the licence itself.
+     *
+     * The route has always accepted a driver's own token; only a fleet ever had a screen for it. So an
+     * independent courier who registered for anything above a motorcycle sat at DRAFT being told that
+     * "the fleet office must activate you", with no fleet office and no way to send anything.
+     */
+    submitKyc: (did: string, body: { idCopyRef: string; licenceCopyRef: string; photoRef?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/submit-kyc', { params: { path: { did } }, body: body as never })),
+
     /** The current shift session (coupled vehicle, corridor) — null-ish when off shift. */
     session: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}/session', { params: { path: { did } } })),
 

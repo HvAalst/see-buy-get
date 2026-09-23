@@ -134,10 +134,18 @@ export function rateBand(pricePerKm: number | null | undefined, benchmark: Bench
 
 /* ---------------------------------------------------------------- driver -- */
 
-/** The office must activate a driver before any shift can start. Null when they are ACTIVE. */
-export function driverStatusNotice(status: DriverStatus | undefined, t: Translate): string | null {
+/**
+ * Why no shift can start yet. Null when they are ACTIVE.
+ *
+ * IT HAS TO NAME THE RIGHT PARTY. This said "the fleet office must activate you" to everybody, including
+ * couriers who have no fleet — and to somebody who had just signed up on their own, that sentence reads
+ * as "you joined the wrong way". It was the last link in a chain that made independent registration look
+ * impossible, and the only one made of words rather than of a missing field.
+ */
+export function driverStatusNotice(status: DriverStatus | undefined, t: Translate, hasFleet = true): string | null {
   if (!status || status === 'ACTIVE') return null;
-  return t('driver.logic.statusNotice', { status: status.replace(/_/g, ' ').toLowerCase() });
+  const state = status.replace(/_/g, ' ').toLowerCase();
+  return t(hasFleet ? 'driver.logic.statusNotice' : 'driver.logic.statusNoticeOwn', { status: state });
 }
 
 export function canStartShift(status: DriverStatus | undefined): boolean {

@@ -4131,7 +4131,7 @@ export class SbgController {
   @Roles('operator')
   @Post('fleet/drivers/:did/kyc-decision')
   driverDecideKyc(@Param('did') did: string, @Body() dto: DriverKycDecisionDto, @Actor() actor: IntrospectionResult) {
-    return this.drivers.decideKyc(did, dto.approve, auditActor(actor, dto.by), dto.reason);
+    return this.drivers.decideKyc(did, dto.approve, auditActor(actor, dto.by), dto.reason, dto.criminalRecordClear);
   }
 
   @Roles('operator')

@@ -1565,6 +1565,16 @@ export class DriverKycDto {
 
 export class DriverKycDecisionDto {
   @IsBoolean() approve!: boolean;
+  /**
+   * The record check, recorded BY THE PERSON WHO DID IT, at the moment they approve.
+   *
+   * A fleet asserts this when it registers its own driver. Nobody asserted it for a courier who
+   * registered themselves, so `criminalRecordClear` stayed false and approval was blocked for ever with
+   * no way to unblock it — the last locked door on the independent path. It is deliberately not something
+   * the applicant can tick: a self-declared clear record is not a check, and the whole point of this gate
+   * is that somebody looked.
+   */
+  @IsOptional() @IsBoolean() criminalRecordClear?: boolean;
   @IsOptional() @IsString() by?: string;
   /** Required when refusing: the driver is shown it, and is the only person who can put it right. */
   @IsOptional() @IsString() reason?: string;

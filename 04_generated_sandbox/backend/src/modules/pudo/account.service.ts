@@ -12,6 +12,7 @@ import { AgentService } from './agent.service';
 import { DriverService } from './driver.service';
 import { MdpService } from './mdp.service';
 import { VehicleService } from './vehicle.service';
+import { FleetService } from './fleet.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
@@ -65,6 +66,7 @@ export class AccountService implements OnApplicationBootstrap {
     private readonly mdps: MdpService,
     private readonly vehicles: VehicleService,
     private readonly managers: FleetManagerService,
+    private readonly fleet: FleetService,
     private readonly otp: OtpService,
     private readonly auth: AuthService,
     private readonly persons: PersonService,
@@ -222,7 +224,34 @@ export class AccountService implements OnApplicationBootstrap {
       let managerDid: string | undefined;
       if (profile.fleetCode) managerDid = this.managers.login(String(profile.fleetCode)).did; // join an existing fleet
       const driver = this.drivers.register({ ...(profile.driver as object), managerDid } as never);
-      if (!managerDid && profile.vehicle) this.vehicles.register((profile.vehicle ?? {}) as never); // self-employed: own vehicle
+      /*
+       * A SELF-EMPLOYED COURIER ARRIVES WITH THEIR OWN VEHICLE, OR THEY ARRIVE UNABLE TO WORK.
+       *
+       * This branch existed and nothing ever reached it: the front door never collected a vehicle, so a
+       * courier who signed up independently landed on a screen telling them to scan the sticker on a
+       * dashboard — and the only stickers in the network belonged to vehicles a FLEET had registered.
+       * The honest reading of that is the one the user reached: you can only join through a fleet.
+       *
+       * Three things are settled here rather than trusted to the form.
+       *
+       * The OWNER is the driver. It is their van; `driver_owned` is what the vehicle record is for, and
+       * the name on it is theirs rather than whatever a client chose to send.
+       *
+       * The CLASS MUST BE ONE THEY ARE CLEARED FOR. Registering a van while licensed only for a bicycle
+       * produced an account that passed every check at signup and was refused at the first coupling —
+       * "Driver is not licence-cleared for a van" — with a vehicle already in the network. Refusing it
+       * here costs a sentence; refusing it later costs somebody their first morning.
+       *
+       * And it becomes a vehicle they can START ON today, not one they must have driven before.
+       */
+      if (!managerDid && profile.vehicle) {
+        const wanted = profile.vehicle as { vehicleClass?: string };
+        if (wanted.vehicleClass && !driver.licence.classes.includes(wanted.vehicleClass as never)) {
+          throw new GlosError('CANNOT_COUPLE', `You are not licence-cleared for a ${wanted.vehicleClass}. Add it to what you can drive, or register a vehicle you are cleared for`);
+        }
+        const vehicle = this.vehicles.register({ ...(profile.vehicle as object), ownerType: 'driver_owned', ownerName: driver.displayName } as never);
+        this.fleet.claimOwnVehicle(driver.did, vehicle.vehicleId);
+      }
       if (profile.kyc && driver.registry === 'heavy') this.drivers.submitKyc(driver.did, profile.kyc as never);
       return { did: driver.did, entityStatus: this.drivers.get(driver.did).status, tenant: managerDid };
     }

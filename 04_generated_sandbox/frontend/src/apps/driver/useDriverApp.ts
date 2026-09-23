@@ -817,6 +817,30 @@ export function useDriverApp() {
     [client, did, pushToast, refresh],
   );
 
+  /**
+   * SEND THE DOCUMENTS THAT GET AN INDEPENDENT COURIER CLEARED TO WORK.
+   *
+   * The twin of sendLicenceRenewal, and it exists for the same reason: the route always took the
+   * driver's own token, and only a fleet ever had a screen for it. A courier who registered for a van
+   * sat at DRAFT, on a screen telling them a fleet office had to activate them, with nothing to press.
+   */
+  const sendClearance = useCallback(
+    async (body: { idCopyRef: string; licenceCopyRef: string }): Promise<boolean> => {
+      if (!client || !did) return false;
+      setState((s) => ({ ...s, busy: 'clearance' }));
+      const r = await client.api.submitKyc(did, body);
+      setState((s) => ({ ...s, busy: null }));
+      if (r.error) {
+        pushToast({ tone: 'danger', icon: 'warning', title: t('driver.clearance.refused'), detail: r.error.detail || r.error.title });
+        return false;
+      }
+      pushToast({ tone: 'ok', icon: 'check', title: t('driver.clearance.sent') });
+      await refresh();
+      return true;
+    },
+    [client, did, pushToast, refresh],
+  );
+
   /* ------------------------------------------------- the road, as drivers report it */
 
   /**
@@ -1496,6 +1520,7 @@ const r = await client.api.startSession(did, vehicleId ? { vehicleId } : { vehic
       loadObservationNotice,
       recordObservation,
       sendLicenceRenewal,
+      sendClearance,
       countries,
       loadRoad,
       reportRoad,

@@ -58,7 +58,7 @@ function PushAsk({ actions }: { actions: DriverActions }) {
 
 function OffShift({ state, actions }: HomeScreenProps) {
   const t = useT();
-  const notice = driverStatusNotice(state.driver?.status, t);
+  const notice = driverStatusNotice(state.driver?.status, t, Boolean(state.driver?.managerDid));
   // FP4 — a lapsed licence stops the shift before the walk to the yard, in the server's own words (the same
   // ones the coupling would refuse with). A licence running out is said here too, once, where it can be acted on.
   const offRoad = state.driver?.offRoad ?? [];
@@ -86,6 +86,7 @@ function OffShift({ state, actions }: HomeScreenProps) {
       <Explainer who={state.driver?.did} id="driver.shift.how" text={t('driver.home.startLede')} />
 
       {notice ? <Note tone="warn" icon="clock" title={t('driver.home.notActivated')} detail={notice} /> : null}
+      <Clearance state={state} actions={actions} />
       {offRoad.length ? (
         <Note tone="danger" icon="clock" title={t('driver.home.offRoadTitle')} detail={offRoad.join('. ') + '.' + (cardSent ? '' : ' ' + t(own ? 'driver.home.offRoadDetailOwn' : 'driver.home.offRoadDetail'))} />
       ) : null}
@@ -240,6 +241,65 @@ function OffShift({ state, actions }: HomeScreenProps) {
  * waiting to be checked, or a card that was not accepted and why. A courier whose licence is fine sees
  * nothing here at all.
  */
+/**
+ * GETTING CLEARED, FOR SOMEBODY WHO HAS NOBODY TO DO IT FOR THEM.
+ *
+ * Anything heavier than a motorcycle puts a courier in the heavy registry, which starts at DRAFT and
+ * needs an ID copy and a licence copy read by network staff. A fleet driver's office sends those. An
+ * INDEPENDENT courier has no office — and until this card there was nothing on their screen but a
+ * sentence telling them to wait for one, which is why signing up on your own looked impossible.
+ *
+ * Shown only to a courier with no fleet behind them, and only while they are not yet cleared. A driver
+ * whose documents are with staff sees that they are, and no button: sending them twice is not an action.
+ */
+function Clearance({ state, actions }: HomeScreenProps) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const [idCopy, setIdCopy] = useState('');
+  const [licenceCopy, setLicenceCopy] = useState('');
+  const driver = state.driver;
+  // A fleet driver's papers are their office's business; a SUSPENDED one is not a paperwork problem.
+  if (!driver || driver.managerDid || driver.status === 'ACTIVE' || driver.status === 'SUSPENDED') return null;
+
+  if (driver.status === 'KYC_PENDING') {
+    return <Note tone="info" icon="check" title={t('driver.clearance.pendingTitle')} detail={t('driver.clearance.pendingBody')} />;
+  }
+
+  return (
+    <>
+      <Note tone="warn" icon="badge" title={t('driver.clearance.needTitle')} detail={t('driver.clearance.needBody')} />
+      <Button variant="outline" onClick={() => setOpen(true)}>
+        {t('driver.clearance.send')}
+      </Button>
+
+      {open ? (
+        <Sheet open onClose={() => setOpen(false)} title={t('driver.clearance.send')}>
+          <p class="t-body">{t('driver.clearance.sheetBody')}</p>
+          <PhotoField id="kyc-id" value={idCopy} label={t('driver.clearance.idPhoto')} upload={(file) => actions.uploadPhoto('kyc_id', file)} onCapture={setIdCopy} />
+          <PhotoField id="kyc-licence" value={licenceCopy} label={t('driver.clearance.licencePhoto')} upload={(file) => actions.uploadPhoto('kyc_licence', file)} onCapture={setLicenceCopy} />
+          <Button
+            chevron={false}
+            disabled={!idCopy || !licenceCopy}
+            busy={state.busy === 'clearance'}
+            onClick={async () => {
+              const ok = await actions.sendClearance({ idCopyRef: idCopy, licenceCopyRef: licenceCopy });
+              if (!ok) return;
+              setOpen(false);
+              setIdCopy('');
+              setLicenceCopy('');
+            }}
+          >
+            {t('driver.clearance.submit')}
+          </Button>
+          <Button variant="link" onClick={() => setOpen(false)}>
+            {t('driver.notYet')}
+          </Button>
+        </Sheet>
+      ) : null}
+    </>
+  );
+}
+
 function LicenceRenewal({ state, actions, needed }: HomeScreenProps & { needed: boolean }) {
   const t = useT();
   const [open, setOpen] = useState(false);

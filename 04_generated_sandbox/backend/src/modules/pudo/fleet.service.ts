@@ -161,6 +161,22 @@ export class FleetService {
       }));
   }
 
+  /**
+   * AN OWNER-DRIVER'S OWN VEHICLE, KNOWN BEFORE THEY HAVE EVER DRIVEN IT.
+   *
+   * `recentVehicles` is a history, so it is empty on somebody's first morning — which was fine while
+   * every vehicle belonged to a fleet that had already put drivers in it, and wrong the moment a courier
+   * could register their own van at signup. Without this they would open the app, be told to scan the
+   * sticker on the dashboard, and find no sticker: the vehicle they had just declared existed in the
+   * network and not on their screen.
+   *
+   * Seeding the history is the honest way to say it. It is their vehicle; the list is what they may start
+   * on; and the first real coupling moves it to the head the same way any other would.
+   */
+  claimOwnVehicle(driverDid: string, vehicleId: string): void {
+    this.rememberVehicle(driverDid, vehicleId);
+  }
+
   /** Keep the vehicle at the head of this driver's history (the same road-re-run rule as the legs). */
   private rememberVehicle(driverDid: string, vehicleId: string): void {
     const rest = (this.vehicleHistory.get(driverDid) ?? []).filter((id) => id !== vehicleId);

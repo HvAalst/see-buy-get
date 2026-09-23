@@ -1548,6 +1548,9 @@ export const enTowerQueues = {
   'tower.drivers.sent': 'sent {date}',
   'tower.drivers.noPapers': 'Nothing sent yet',
   'tower.drivers.recordNotClear': 'criminal-record check not cleared',
+  // Ticked by the staff member who did the check, at the moment they approve. A fleet asserts this for its
+  // own drivers; nobody asserted it for a courier who registered themselves, which left them stuck at DRAFT.
+  'tower.drivers.recordCleared': 'I have cleared the criminal-record check',
   'tower.drivers.whatTheySent': 'What they sent — the licence first, then the ID. Tap one to see it full size.',
   'tower.drivers.nothingToSee': 'No document images are stored for this driver, so there is nothing here to check. Approving means approving on the typed licence number and expiry alone — say so in your note if you do.',
   'tower.drivers.whyLabel': 'Why are you refusing these papers?',
