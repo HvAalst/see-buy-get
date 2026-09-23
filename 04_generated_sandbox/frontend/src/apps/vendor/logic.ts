@@ -287,7 +287,13 @@ export function orderRowsToCsv(rows: OrderRow[]): string {
 /** The merchant's word for a ledger entry type — the shipment billing reads as "Shipment". For ON-SCREEN
  *  display (translated); the CSV export deliberately keeps English (see ledgerRowsToCsv). */
 export function ledgerTypeWord(type: SettlementRow['type'], t: Translate): string {
-  return type === 'TOP_UP' ? t('vendor.ledger.typeTopUp') : type === 'BILLING' ? t('vendor.ledger.typeShipment') : t('vendor.ledger.typeRebate');
+  // A chain, not a fallback: a new row type arriving here used to render as 'Rebate', which is a wrong
+  // word rather than a missing one — the worst way for a register to be out of date.
+  if (type === 'TOP_UP') return t('vendor.ledger.typeTopUp');
+  if (type === 'TOP_UP_FEE') return t('vendor.ledger.typeTopUpFee');
+  if (type === 'BILLING') return t('vendor.ledger.typeShipment');
+  if (type === 'REBATE') return t('vendor.ledger.typeRebate');
+  return type;
 }
 
 /** The bookkeeping export columns — SAME set + order as the server's ledger export (vendorLedgerToCsv), so a

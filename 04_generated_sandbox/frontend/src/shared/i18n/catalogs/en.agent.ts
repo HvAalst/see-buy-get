@@ -142,6 +142,7 @@ export const enAgent = {
   'agent.logic.roleOrigin': 'Took in',
   'agent.logic.roleDest': 'Handed out',
   'agent.logic.ledgerTopUp': 'Top-up',
+  'agent.logic.ledgerTopUpFee': 'Top-up fee',
   'agent.logic.ledgerFee': 'Shipping fee',
   'agent.logic.ledgerPayout': 'Handling pay',
   'agent.logic.ledgerRefund': 'Refund',

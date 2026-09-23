@@ -138,6 +138,7 @@ export const enVendor = {
 
   // The merchant's word for a ledger entry type (ledgerTypeWord — UI only; CSV stays English).
   'vendor.ledger.typeTopUp': 'Top-up',
+  'vendor.ledger.typeTopUpFee': 'Top-up fee',
   'vendor.ledger.typeShipment': 'Shipment',
   'vendor.ledger.typeRebate': 'Rebate',
 

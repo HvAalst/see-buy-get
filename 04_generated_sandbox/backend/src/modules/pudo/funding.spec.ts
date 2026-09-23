@@ -218,6 +218,91 @@ describe('a shop’s float rests on a confirmed payment', () => {
       expect(books.balance(ke(), ACCOUNT_CODES.RECEIVABLE_AGENT)).toBe(0);
     });
 
+    /*
+     * WHAT WE CHARGE FOR MOVING THE MONEY — decided 2026-08-18, buildable only once a rail existed.
+     *
+     * The design's whole claim is that the cost lands on the behaviour that causes it and that the payer
+     * can SEE it. Both halves are asserted here: the shop is credited the gross and charged separately
+     * (never a net 480 they have to work backwards from), and the books still balance with the charge
+     * sitting in revenue rather than quietly reducing what we owe them.
+     */
+    describe('what it costs a shop to put money in', () => {
+      const charging = (freeAbove: number, amount: number) => entities.setTopUpFee(ke(), { freeAbove, amount }, 'a test');
+
+      it('charges nothing at all until a sister has set a fee', async () => {
+        // A charge nobody decided must never appear on a shopkeeper's screen.
+        const a = shop();
+        const request = await funding.open({ payerKind: 'agent', payerDid: a.did, amount: 500 });
+        await railConfirms(request.reference, 500);
+        expect(agents.balance(a.did)).toBe(500);
+        expect(books.balance(ke(), ACCOUNT_CODES.REVENUE)).toBe(0);
+      });
+
+      it('credits the GROSS and charges the fee as its own line', async () => {
+        charging(2000, 20);
+        const a = shop();
+        const request = await funding.open({ payerKind: 'agent', payerDid: a.did, amount: 500 });
+        await railConfirms(request.reference, 500);
+
+        expect(held()).toBe(500); // all of it arrived and all of it is in the account
+        expect(agents.balance(a.did)).toBe(480); // 500 credited, 20 charged — two facts, not one
+        expect(books.balance(ke(), ACCOUNT_CODES.REVENUE)).toBe(-20); // earned, and named as earned
+        expect(books.balances(ke()).balanced).toBe(true);
+      });
+
+      it('shows the charge as a row of its own, so it can be read rather than deduced', async () => {
+        charging(2000, 20);
+        const a = shop();
+        const request = await funding.open({ payerKind: 'agent', payerDid: a.did, amount: 500 });
+        await railConfirms(request.reference, 500);
+
+        const rows = gate.entries({ did: a.did });
+        const credit = rows.find((r) => r.type === 'TOP_UP');
+        const fee = rows.find((r) => r.type === 'TOP_UP_FEE');
+        expect(credit).toMatchObject({ sign: '+', amount: 500 });
+        expect(fee).toMatchObject({ sign: '-', amount: 20 });
+        // Both point at the same journal entry: one movement, two lines a shopkeeper can read.
+        expect(fee?.entryId).toBe(credit?.entryId);
+      });
+
+      it('is free above the threshold — which is the point of having one', async () => {
+        charging(2000, 20);
+        const a = shop();
+        const request = await funding.open({ payerKind: 'agent', payerDid: a.did, amount: 2000 });
+        await railConfirms(request.reference, 2000);
+        expect(agents.balance(a.did)).toBe(2000);
+        expect(books.balance(ke(), ACCOUNT_CODES.REVENUE)).toBe(0);
+      });
+
+      it('charges on what ARRIVED, not on what was asked for', async () => {
+        /*
+         * The rail decides the amount, and the fee follows it. A shop that asks for 5,000 (free) and pays
+         * 400 has cost us a small payment to carry, and is charged as one — charging on the request would
+         * let the fee be avoided by asking for more than you intend to pay.
+         */
+        charging(2000, 20);
+        const a = shop();
+        const request = await funding.open({ payerKind: 'agent', payerDid: a.did, amount: 5000 });
+        await railConfirms(request.reference, 400);
+        expect(agents.balance(a.did)).toBe(380);
+      });
+
+      it('refuses a fee that is a tariff on being short rather than a payment cost', () => {
+        expect(() => charging(1000, 500)).toThrow(/tariff on being short/);
+        expect(() => charging(0, 20)).toThrow(/threshold of nothing/);
+        expect(() => charging(2000, 0)).toThrow(/remove the rule instead/);
+      });
+
+      it('goes back to charging nothing when the rule is cleared', async () => {
+        charging(2000, 20);
+        entities.setTopUpFee(ke(), null, 'a test');
+        const a = shop();
+        const request = await funding.open({ payerKind: 'agent', payerDid: a.did, amount: 500 });
+        await railConfirms(request.reference, 500);
+        expect(agents.balance(a.did)).toBe(500);
+      });
+    });
+
     it('credits the amount that ARRIVED when a shop pays less than it asked for', async () => {
       const a = shop();
       const request = await funding.open({ payerKind: 'agent', payerDid: a.did, amount: 5000 });

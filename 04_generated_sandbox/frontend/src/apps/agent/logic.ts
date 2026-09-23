@@ -709,6 +709,8 @@ export function agentLedgerTypeWord(type: string, t: Translate): string {
   switch (type) {
     case 'TOP_UP':
       return t('agent.logic.ledgerTopUp');
+    case 'TOP_UP_FEE':
+      return t('agent.logic.ledgerTopUpFee');
     case 'FEE':
       return t('agent.logic.ledgerFee');
     case 'LABOR_PAYOUT':

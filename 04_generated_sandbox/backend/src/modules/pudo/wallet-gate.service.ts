@@ -24,6 +24,10 @@ export function agentLedgerTypeWord(type: LedgerType): string {
   switch (type) {
     case 'TOP_UP':
       return 'Top-up';
+    // Charged BY us for moving the money in, and a different thing from the shipping fee below it — see
+    // TopUpFeeRule. Its own row so a shopkeeper can see what it cost and what would have been free.
+    case 'TOP_UP_FEE':
+      return 'Top-up fee';
     case 'FEE':
       return 'Shipping fee';
     case 'LABOR_PAYOUT':
@@ -225,14 +229,33 @@ export class WalletGateService {
     // its debt before it builds a float again. Only what is left over becomes spendable balance.
     const repay = Math.min(amount, this.agents.creditOwed(did));
     const toDeposit = Math.round((amount - repay) * 100) / 100;
+    /*
+     * WHAT WE CHARGE FOR MOVING IT — never netted off the credit, and that distinction is the whole rule.
+     *
+     * The shop is credited the GROSS. The fee is a separate line against the same deposit and a separate
+     * row in their register, so "5,000 in, 20 charged" is two facts a shopkeeper can read and check,
+     * rather than one number of 4,980 they have to work backwards from. Netting it would push an opaque
+     * deduction onto the least sophisticated party in the network, which is the thing this design exists
+     * to avoid. See TopUpFeeRule for why the cost is recovered here at all.
+     *
+     * Charged on what ARRIVED, because that is what it cost us to carry. A shop that asks for 2,000 and
+     * pays 400 is charged on the 400.
+     */
+    const ourFee = this.entities.topUpFeeFor(this.agents.entityIdOf(this.agents.get(did)), amount).fee;
     const entryId = this.postAgent(did, 'top-up', bankRef, [
       // What we actually hold is what the payer sent LESS what the rail took on the way.
       { code: ACCOUNT_CODES.CASH_CUSTODY, amount: Math.round((amount - cost) * 100) / 100 },
       ...(cost > 0 ? [{ code: ACCOUNT_CODES.EXPENSE_PAYMENT_FEES, amount: cost }] : []),
       ...(repay > 0 ? [{ code: ACCOUNT_CODES.RECEIVABLE_AGENT, counterparty: did, amount: -repay }] : []),
       ...(toDeposit > 0 ? [{ code: ACCOUNT_CODES.DEPOSIT_AGENT, counterparty: did, amount: -toDeposit }] : []),
+      // One entry, so the credit and its charge either both land or neither does.
+      ...(ourFee > 0 ? [{ code: ACCOUNT_CODES.DEPOSIT_AGENT, counterparty: did, amount: ourFee }] : []),
+      ...(ourFee > 0 ? [{ code: ACCOUNT_CODES.REVENUE, amount: -ourFee }] : []),
     ]);
     const entry = this.record('TOP_UP', '+', amount, did, bankRef, 'bank', entryId);
+    // Two register rows off one journal entry: the register is a projection, and the shop is owed both
+    // lines. Their net still equals the deposit movement the books derive, which is the invariant.
+    if (ourFee > 0) this.record('TOP_UP_FEE', '-', ourFee, did, bankRef, 'bank', entryId);
     this.agents.refreshLock(did);
     void this.events.publish(GlosEvent.Pudo.WalletToppedUp, { did, amount, bankRef }, { source: 'pudo' }).catch(() => undefined);
     return entry;

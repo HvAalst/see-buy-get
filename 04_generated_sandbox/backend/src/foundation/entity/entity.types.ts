@@ -69,6 +69,41 @@ export class ResolvedRates {
  * summed with each other; tax is charged on the sister's whole price INCLUDING those layers, because what
  * is taxed is the sale, not the profit.
  */
+/**
+ * WHAT A SHOP PAYS TO PUT MONEY IN — and the reasoning is the point, because the obvious alternative is
+ * worse in a way that is hard to see.
+ *
+ * Moving money costs us: the provider takes a cut of every top-up, and that cut is largely PER PAYMENT
+ * rather than per shilling. The tempting recovery is to bake it into the parcel price, where nobody has
+ * to be told about it. That overcharges the shop that tops up 20,000 once a month in order to subsidise
+ * the shop that tops up 500 eleven times, and it gives nobody any reason to do the cheaper thing. A
+ * visible fee inverts both: the cost lands on the behaviour that causes it, and topping up sensibly is
+ * rewarded in a way a shopkeeper can see and act on. (Decided 2026-08-18.)
+ *
+ * FLAT, NOT A PERCENTAGE, because what it recovers is a per-transaction cost. A percentage would charge
+ * twice as much for a top-up that costs us the same to carry, which is a different fee wearing this one's
+ * name.
+ *
+ * FREE ABOVE A THRESHOLD, which is what stops it being friction at the worst possible moment: a shop that
+ * has run dry mid-morning and needs to scan again tops up properly once, free, rather than being charged
+ * for being short. It is also what the airtime and mobile-money distributors around us already do, so it
+ * is a shape a shopkeeper recognises.
+ *
+ * A SISTER'S KNOB, not a constant. What a payment costs in Nairobi is not what it costs in Addis, and a
+ * number that has to be right everywhere is a number that is wrong nearly everywhere. Absent means NO
+ * FEE — a charge nobody decided must never appear on a shopkeeper's screen.
+ */
+export interface TopUpFeeRule {
+  /**
+   * Top up this much or more and it costs nothing. In the sister's own currency, like every other figure
+   * it holds. Zero would make the fee unreachable, which is a confusing way to write "no fee" — leave the
+   * whole rule off instead.
+   */
+  freeAbove: number;
+  /** The flat charge below that threshold, in the same currency. */
+  amount: number;
+}
+
 export interface TaxRule {
   /** As a fraction — 0.16 is sixteen percent. Zero is a real and complete answer, and it is the default. */
   ratePct: number;
@@ -208,7 +243,7 @@ export class EntityChange {
   /** The name the token carried, or the DID when a machine did it. Never a string from a request body. */
   by: string;
   @ApiProperty({ enum: ['rates', 'tax', 'cover', 'fee', 'created', 'record', 'activated'] })
-  what: 'rates' | 'tax' | 'cover' | 'fee' | 'created' | 'record' | 'activated';
+  what: 'rates' | 'tax' | 'cover' | 'fee' | 'topUpFee' | 'created' | 'record' | 'activated';
   /** The lane it applies to; absent means the company's default for everything. */
   @ApiPropertyOptional()
   lane?: string;
@@ -367,6 +402,12 @@ export class Entity {
    * the state every sister is in until an operator deliberately says otherwise.
    */
   tax?: TaxRule;
+  /**
+   * What a shop or store pays this sister to put money in. Absent means nothing — see TopUpFeeRule for
+   * why the cost is recovered here rather than folded into a parcel price. Read it through
+   * `EntityService.topUpFeeFor()`, never off the record, so a sister created before the knob still answers.
+   */
+  topUpFee?: TopUpFeeRule;
   /**
    * Per-lane tax overrides, keyed by the caller's vocabulary exactly as `ratesByLane` is.
    *

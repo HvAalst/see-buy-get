@@ -175,7 +175,7 @@ export interface MintView {
 
 export interface SettlementRow {
   id: string;
-  type: 'TOP_UP' | 'BILLING' | 'REBATE';
+  type: 'TOP_UP' | 'TOP_UP_FEE' | 'BILLING' | 'REBATE';
   sign: '+' | '-';
   amount: number;
   parcelId?: string;

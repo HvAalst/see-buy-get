@@ -1993,7 +1993,13 @@ export class SbgController {
   @Get('agents/:did/funding')
   agentFunding(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
     this.assertAgentActs(did, actor);
-    return { open: this.funding.openFor(did), items: this.funding.list({ payerDid: did }).slice(0, 10) };
+    // The TERMS travel with it, so the top-up sheet can say what a fee would be BEFORE the shop commits
+    // to an amount. A charge somebody discovers afterwards is the opaque deduction this design refuses.
+    return {
+      open: this.funding.openFor(did),
+      items: this.funding.list({ payerDid: did }).slice(0, 10),
+      terms: this.entities.topUpFeeFor(this.agents.entityIdOf(this.agents.get(did)), 0),
+    };
   }
 
   /** A shop's EARNINGS register (R4): its OWN ledger (top-ups / handling pay / shipping fees / refunds),
@@ -2756,7 +2762,11 @@ export class SbgController {
   @Get('vendors/:id/funding')
   vendorFunding(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
     this.assertVendorOwner(id, actor);
-    return { open: this.funding.openFor(id), items: this.funding.list({ payerDid: id }).slice(0, 10) };
+    return {
+      open: this.funding.openFor(id),
+      items: this.funding.list({ payerDid: id }).slice(0, 10),
+      terms: this.entities.topUpFeeFor(this.vendors.entityIdOf(this.vendors.get(id)), 0),
+    };
   }
 
   /** A vendor's prepaid balance + settlement book (top-ups / billings / rebates). Owner-scoped — this is the

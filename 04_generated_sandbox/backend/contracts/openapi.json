@@ -7825,6 +7825,7 @@
             "schema": {
               "enum": [
                 "TOP_UP",
+                "TOP_UP_FEE",
                 "FEE",
                 "LABOR_PAYOUT",
                 "REFUND"
@@ -7927,6 +7928,7 @@
             "schema": {
               "enum": [
                 "TOP_UP",
+                "TOP_UP_FEE",
                 "FEE",
                 "LABOR_PAYOUT",
                 "REFUND"
@@ -8029,6 +8031,7 @@
             "schema": {
               "enum": [
                 "TOP_UP",
+                "TOP_UP_FEE",
                 "FEE",
                 "LABOR_PAYOUT",
                 "REFUND"
@@ -20534,6 +20537,10 @@
           "tax": {
             "type": "object",
             "description": "What this sister charges in tax on everything it sells. Absent means none — the network default, and\nthe state every sister is in until an operator deliberately says otherwise."
+          },
+          "topUpFee": {
+            "type": "object",
+            "description": "What a shop or store pays this sister to put money in. Absent means nothing — see TopUpFeeRule for\nwhy the cost is recovered here rather than folded into a parcel price. Read it through\n`EntityService.topUpFeeFor()`, never off the record, so a sister created before the knob still answers."
           },
           "taxByLane": {
             "type": "object",

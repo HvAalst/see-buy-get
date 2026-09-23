@@ -966,7 +966,7 @@ export class AgentParcelsQueryDto {
 /** R4 — the agent earnings-ledger register query. */
 export class AgentLedgerQueryDto {
   @IsOptional() @IsString() q?: string; // reference (parcel id / bank ref) or type word
-  @IsOptional() @IsIn(['TOP_UP', 'FEE', 'LABOR_PAYOUT', 'REFUND']) type?: 'TOP_UP' | 'FEE' | 'LABOR_PAYOUT' | 'REFUND';
+  @IsOptional() @IsIn(['TOP_UP', 'TOP_UP_FEE', 'FEE', 'LABOR_PAYOUT', 'REFUND']) type?: 'TOP_UP' | 'TOP_UP_FEE' | 'FEE' | 'LABOR_PAYOUT' | 'REFUND';
   @IsOptional() @IsIn(['in', 'out']) direction?: 'in' | 'out';
   @IsOptional() @IsString() from?: string; // ISO or YYYY-MM-DD (inclusive)
   @IsOptional() @IsString() to?: string;

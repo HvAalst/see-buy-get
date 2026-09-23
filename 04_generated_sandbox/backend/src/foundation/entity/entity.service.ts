@@ -21,6 +21,7 @@ import {
   ResolvedTax,
   RuleOrigin,
   TaxRule,
+  TopUpFeeRule,
   canHoldCustody,
   canTransact,
 } from './entity.types';
@@ -262,6 +263,68 @@ export class EntityService implements OnApplicationBootstrap {
    */
   taxFor(entityId: string, lane?: string): ResolvedTax {
     return EntityService.resolveTax(this.get(entityId), lane);
+  }
+
+  /**
+   * WHAT THIS TOP-UP COSTS THE PAYER, and the terms behind the number.
+   *
+   * Both halves are returned together on purpose. The fee alone cannot be explained to anybody — a
+   * shopkeeper charged 20 wants to know what would have been free, and the whole design depends on them
+   * being able to see that. So the caller gets the charge AND the threshold, and the screens say both.
+   *
+   * `amount` is what actually arrived, never what was asked for: the rail decides how much was paid, and
+   * a shop that asks for 2,000 and pays 400 is charged on the 400. Pass zero to read the terms alone.
+   */
+  /**
+   * SET WHAT THIS SISTER CHARGES A SHOP TO PUT MONEY IN, or clear it back to nothing.
+   *
+   * `null` removes the rule entirely, which is not the same as setting it to zero — one says "we do not
+   * charge for this", the other invites a screen to announce a fee of nothing. Both halves must arrive
+   * together, because a threshold with no charge and a charge with no threshold are each half a sentence.
+   *
+   * The ceiling is deliberate and low. This recovers a per-payment cost; a fee that can grow past a
+   * fifth of the threshold has stopped recovering a cost and started being a tariff on being poor, which
+   * is the outcome the free-above-a-threshold shape exists to prevent.
+   */
+  setTopUpFee(entityId: string, rule: { freeAbove: number; amount: number } | null, by?: string): Entity {
+    const entity = this.requireTransacting(entityId);
+    const before = entity.topUpFee;
+
+    let next: TopUpFeeRule | undefined;
+    if (rule !== null) {
+      const freeAbove = Number(rule?.freeAbove);
+      const amount = Number(rule?.amount);
+      if (!Number.isFinite(freeAbove) || freeAbove <= 0) {
+        throw new GlosError('INVALID_INPUT', 'Say the amount above which topping up is free — a threshold of nothing charges everybody');
+      }
+      if (!Number.isFinite(amount) || amount <= 0) {
+        throw new GlosError('INVALID_INPUT', 'Say what is charged below that threshold. To charge nothing, remove the rule instead');
+      }
+      if (amount > freeAbove / 5) {
+        throw new GlosError('INVALID_INPUT', `A fee of ${amount} against a ${freeAbove} threshold is a fifth of it or more — that is a tariff on being short, not a payment cost`);
+      }
+      next = { freeAbove: Math.round(freeAbove * 100) / 100, amount: Math.round(amount * 100) / 100 };
+    }
+
+    // Candidate first, stored only once every bound has held — the same discipline as setRates.
+    entity.topUpFee = next;
+    this.entities.set(entity.entityId, entity);
+    const line = (r?: TopUpFeeRule) => (r ? `${r.amount} below ${r.freeAbove}` : 'none');
+    this.record(entity.entityId, { at: new Date().toISOString(), by: by ?? 'unknown', what: 'topUpFee', from: line(before), to: line(next) });
+    return entity;
+  }
+
+  topUpFeeFor(entityId: string, amount: number): { fee: number; charge: number; freeAbove: number; currency?: string } {
+    const entity = this.get(entityId);
+    const rule = entity.topUpFee;
+    const freeAbove = Math.max(0, Number(rule?.freeAbove) || 0);
+    const charge = Math.max(0, Number(rule?.amount) || 0);
+    const paid = Math.max(0, Number(amount) || 0);
+    // No rule, no charge, or nothing to charge it on — all three are "free", and none of them is an error.
+    const fee = freeAbove > 0 && charge > 0 && paid > 0 && paid < freeAbove ? Math.round(charge * 100) / 100 : 0;
+    // `charge` and `freeAbove` are the TERMS and stand whatever this particular amount is, so a screen can
+    // say "we charge 20 below 2,000" before anybody has typed a figure. `fee` answers for this amount only.
+    return { fee, charge: freeAbove > 0 ? Math.round(charge * 100) / 100 : 0, freeAbove, currency: entity.currency };
   }
 
   /** The resolution itself, over a plain shape — so a CANDIDATE can be checked before anything is stored. */

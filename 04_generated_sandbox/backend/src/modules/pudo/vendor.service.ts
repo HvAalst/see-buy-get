@@ -19,7 +19,7 @@ export interface VendorSettlement {
   id: string;
   vendorId: string;
   country: string;
-  type: 'TOP_UP' | 'BILLING' | 'REBATE' | 'CLAIM';
+  type: 'TOP_UP' | 'TOP_UP_FEE' | 'BILLING' | 'REBATE' | 'CLAIM';
   sign: '+' | '-';
   amount: number;
   /** What the amount IS. Absent on rows written before the field existed — read it through
@@ -296,12 +296,18 @@ export class VendorService {
     const cost = Math.min(Math.max(Number.isFinite(fee) ? Math.round(fee * 100) / 100 : 0, 0), amount);
     // The store's float is a DEPOSIT: the sister holds the money and owes it back as shipping. Nothing
     // is earned until a parcel moves — we charge for service, not for balance.
+    // What this sister charges for moving the money in — the store's half of the shop's rule. Credited
+    // GROSS and charged separately, never netted: see TopUpFeeRule, and the shop's topUp for the same lines.
+    const ourFee = this.entities.topUpFeeFor(this.entityIdOf(vendor), amount).fee;
     const entryId = this.post(vendor, 'top-up', ref ?? vendorId, [
       { code: ACCOUNT_CODES.CASH_CUSTODY, amount: Math.round((amount - cost) * 100) / 100 },
       ...(cost > 0 ? [{ code: ACCOUNT_CODES.EXPENSE_PAYMENT_FEES, amount: cost }] : []),
       { code: ACCOUNT_CODES.DEPOSIT_VENDOR, counterparty: vendorId, amount: -amount },
+      ...(ourFee > 0 ? [{ code: ACCOUNT_CODES.DEPOSIT_VENDOR, counterparty: vendorId, amount: ourFee }] : []),
+      ...(ourFee > 0 ? [{ code: ACCOUNT_CODES.REVENUE, amount: -ourFee }] : []),
     ]);
     this.book(vendor, 'TOP_UP', '+', amount, undefined, 'prepay', entryId);
+    if (ourFee > 0) this.book(vendor, 'TOP_UP_FEE', '-', ourFee, undefined, 'top-up fee', entryId);
     return { vendor: this.syncBalance(vendor), entryId };
   }
 
