@@ -324,6 +324,18 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* What a top-up will cost, sitting under the amount box it is about (TopUpCostNote). Tied to the box
+   above it rather than floating between two fields: a charge has to read as this amount's consequence,
+   not as a separate announcement further down the sheet. */
+.topupcost {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: var(--r-card);
+  background: var(--panel);
+}
+
 /* ------------------------------------------------------------- key/value -- */
 
 .kv {

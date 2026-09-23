@@ -773,6 +773,9 @@ export class EntityService implements OnApplicationBootstrap {
       currency: entity.currency,
       transacting: canTransact(entity),
       taxRegistration: entity.taxRegistration,
+      // The rule AS DECIDED, not resolved against an amount — this is the screen that sets it, and what
+      // it has to show is whether anybody has decided anything. `undefined` is the answer "no fee here".
+      topUpFee: entity.topUpFee,
       // The default first: every lane row below is read against it, and a table whose fallback row is
       // buried in the middle makes "inherited from where?" a question you have to hunt for.
       lanes: [rowFor(), ...lanes.map((l) => rowFor(l))],

@@ -259,6 +259,8 @@ export const enVendor = {
   'vendor.topup.pushNote': 'We asked M-Pesa for {amount}',
   'vendor.topup.referenceAlso': 'If the prompt does not arrive, quote this',
   'vendor.topup.refused': 'The last request was not paid',
+  // The twin of agent.home.topUpLands — a store prepays a balance rather than running a float.
+  'vendor.topup.lands': 'Your balance rises by',
 
   /* Asking for notifications, where somebody will see the ask — see shared/ui/PushPrompt. The reason
      names the two things a store operator is actually waiting on, because a permission prompt with no

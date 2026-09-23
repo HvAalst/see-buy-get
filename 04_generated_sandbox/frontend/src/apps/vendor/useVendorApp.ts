@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { isMintSourced, narrow, type SbgError } from '../../lib/sbg';
 import { t } from '../../shared/i18n'; // plain t(): toasts/notes are built at action time in the store's active locale
 import { triggerDownload } from '../../shared/download';
+import { topUpTermsOf, type TopUpTerms } from '../../shared/topup-fee';
 import type { IconName } from '../../shared/ui/Icon';
 import {
   clearCreds,
@@ -109,6 +110,9 @@ export interface VendorState {
   vendor: VendorView | null;
   /** A prepayment asked for and not yet confirmed by the payment provider. Null when nothing is waiting. */
   funding: VendorFundingView | null;
+  /** What this sister charges to prepay, so the sheet can say it before an amount is committed to.
+   *  Null where nobody decided a fee — the default, and then no sentence is shown at all. */
+  topUpTerms: TopUpTerms | null;
   orders: OrderRow[];
   ordersTotal: number;
   ordersState: 'idle' | 'loading' | 'ready' | 'error';
@@ -164,6 +168,7 @@ const INITIAL: VendorState = {
   screen: 'orders',
   vendor: null,
   funding: null,
+  topUpTerms: null,
   orders: [],
   ordersTotal: 0,
   ordersState: 'idle',
@@ -341,6 +346,10 @@ export function useVendorApp() {
         returns: returnsR.error ? s.returns : (narrow<{ items: ReturnOfferView[] }>(returnsR.data)?.items ?? []),
         // A prepayment still waiting on the provider — the answer to "why is my balance still low".
         funding: fundingR.error ? s.funding : (narrow<{ open: VendorFundingView | null }>(fundingR.data)?.open ?? null),
+        // What a prepayment costs, carried on the same read so the sheet never has to ask separately.
+        // Kept from the last good read on a failure: a fee that blinks out when one request fails would
+        // leave the sheet quietly promising a free top-up it cannot honour.
+        topUpTerms: fundingR.error ? s.topUpTerms : topUpTermsOf(narrow<{ terms?: unknown }>(fundingR.data)?.terms),
         error: null,
         stale: false,
         refreshing: false,

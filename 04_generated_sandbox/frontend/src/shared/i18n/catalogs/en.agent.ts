@@ -270,6 +270,8 @@ export const enAgent = {
   // then the paybill is the way through. Hiding it would leave them with nothing.
   'agent.home.topUpReferenceAlso': 'If the prompt does not arrive, quote this',
   'agent.home.topUpRefused': 'The last request was not paid',
+  // The one line of the fee block that differs between the two apps: a shop's money is its float.
+  'agent.home.topUpLands': 'Your float rises by',
 
   /* Asking for notifications where a shopkeeper will see the ask, rather than inside the bell they are
      not being notified by. The reason names what they are actually waiting on. */

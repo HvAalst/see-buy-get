@@ -61,6 +61,12 @@ export function createOperatorApi(sbg: SbgClient) {
     setTax: (entityId: string, body: { lane?: string; ratePct?: number | null; label?: string | null; registration?: string | null }) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/tax', { params: { path: { entityId } }, body: body as never })),
 
+    /** Set what a sister charges a shop or a store to put money in — flat below a threshold, free above.
+     *  An EMPTY body removes the rule, which is how "we charge nothing to top up here" is said; a fee of
+     *  zero is refused, because a charge of nothing still puts a fee on a shopkeeper's screen. */
+    setTopUpFee: (entityId: string, body: { amount?: number; freeAbove?: number }) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/top-up-fee', { params: { path: { entityId } }, body: body as never })),
+
     /** Set what a sister covers for free, and what it charges to cover more. */
     setInsurance: (entityId: string, body: { lane?: string; premiumPct?: number | null; freeLimit?: number | null }) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/insurance', { params: { path: { entityId } }, body: body as never })),

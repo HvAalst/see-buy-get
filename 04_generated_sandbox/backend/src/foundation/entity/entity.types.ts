@@ -93,14 +93,16 @@ export class ResolvedRates {
  * number that has to be right everywhere is a number that is wrong nearly everywhere. Absent means NO
  * FEE — a charge nobody decided must never appear on a shopkeeper's screen.
  */
-export interface TopUpFeeRule {
+export class TopUpFeeRule {
   /**
    * Top up this much or more and it costs nothing. In the sister's own currency, like every other figure
    * it holds. Zero would make the fee unreachable, which is a confusing way to write "no fee" — leave the
    * whole rule off instead.
    */
+  @ApiProperty()
   freeAbove: number;
   /** The flat charge below that threshold, in the same currency. */
+  @ApiProperty()
   amount: number;
 }
 
@@ -338,6 +340,15 @@ export class EntityPricing {
   /** The number this sister collects tax under. Sister-wide: a registration is not a per-lane fact. */
   @ApiPropertyOptional()
   taxRegistration?: string;
+  /**
+   * What this sister charges a shop or a store to put money in. Sister-wide, like the registration above
+   * and for the same reason: a top-up is not a lane of work, so there is nothing for it to vary by.
+   *
+   * ABSENT MEANS NO FEE, and the console has to say so in those words rather than showing zeroes — a
+   * threshold of 0 against a charge of 0 reads like a decision somebody made, and nobody made it.
+   */
+  @ApiPropertyOptional({ type: TopUpFeeRule })
+  topUpFee?: TopUpFeeRule;
   /** The sister's default first, then one row per lane. */
   @ApiProperty({ type: [LanePricing] })
   lanes: LanePricing[];

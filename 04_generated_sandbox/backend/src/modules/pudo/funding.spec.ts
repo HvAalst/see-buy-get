@@ -293,6 +293,43 @@ describe('a shop’s float rests on a confirmed payment', () => {
         expect(() => charging(2000, 0)).toThrow(/remove the rule instead/);
       });
 
+      /*
+       * THE HALF THE DESIGN DEPENDS ON: the payer is told BEFORE they pay.
+       *
+       * A fee discovered afterwards in the register is the opaque deduction this whole shape refuses —
+       * just slower, and found by the person least able to do anything about it. The two top-up sheets
+       * read the standing terms off the funding state, and the console reads the rule off the pricing,
+       * so both are pinned here. Neither is decoration: if `topUpFeeFor` ever stopped answering for an
+       * amount of zero, both sheets would go quiet and start charging people silently.
+       */
+      it('states the terms with NO amount, so a sheet can say what a top-up costs before one is typed', () => {
+        charging(2000, 20);
+        const terms = entities.topUpFeeFor(ke(), 0);
+        expect(terms.charge).toBe(20); // what it costs below the threshold — true whatever is typed
+        expect(terms.freeAbove).toBe(2000);
+        expect(terms.fee).toBe(0); // and nothing is owed on an amount nobody has entered
+        expect(terms.currency).toBe('KES');
+      });
+
+      it('states NO terms where no fee was decided, so the sheets show nothing rather than a free-top-up claim', () => {
+        const terms = entities.topUpFeeFor(ke(), 500);
+        expect(terms).toMatchObject({ fee: 0, charge: 0, freeAbove: 0 });
+      });
+
+      it('puts the rule as DECIDED on the console’s pricing — absent, not zeroed, when nobody set one', () => {
+        // Two zeroes read like a decision somebody made and could adjust. Nobody made it, and the console
+        // has to say so in words: removing the rule is the only way to charge nothing.
+        expect(entities.pricingFor(ke(), []).topUpFee).toBeUndefined();
+        charging(2000, 20);
+        expect(entities.pricingFor(ke(), []).topUpFee).toEqual({ freeAbove: 2000, amount: 20 });
+      });
+
+      it('records who changed the fee, in words, on the audit trail the console shows', () => {
+        charging(2000, 20);
+        const change = entities.pricingFor(ke(), []).recentChanges.find((c) => c.what === 'topUpFee');
+        expect(change).toMatchObject({ by: 'a test', from: 'none', to: '20 below 2000' });
+      });
+
       it('goes back to charging nothing when the rule is cleared', async () => {
         charging(2000, 20);
         entities.setTopUpFee(ke(), null, 'a test');

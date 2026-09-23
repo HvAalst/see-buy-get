@@ -2,7 +2,7 @@ import { HelpLink } from '../../../shared/guide/HelpLink';
 import { agentConfig } from '../api';
 import { ChangePasswordSheet } from '../../../shared/account/ChangePasswordSheet';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { AuthImage, Button, Card, ErrorNote, GlanceNumber, Icon, Note, Pill, PlaceMap, PushPrompt, ReadAloud, Sheet, type IconName } from '../../../shared/ui';
+import { AuthImage, Button, Card, ErrorNote, GlanceNumber, Icon, Note, Pill, PlaceMap, PushPrompt, ReadAloud, Sheet, TopUpCostNote, type IconName } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { fromPlaceWords, toPlaceWords } from '../../../shared/placewords';
 import { canAccept, gateNotice, homeSummary, money, statusNotice } from '../logic';
@@ -308,6 +308,14 @@ function TopUpSheet({ open, onClose, state, actions }: { open: boolean; onClose:
         </label>
         <input id="topup" class="input" type="number" inputMode="decimal" min="1" step="1" value={amount} onInput={(e) => setAmount(e.currentTarget.value)} />
       </div>
+      {/*
+       * WHAT IT COSTS, HERE, WHERE THE AMOUNT IS BEING DECIDED.
+       *
+       * Directly under the box rather than by the button, because the threshold can only change what
+       * somebody types while they are still typing it. Nothing at all renders where this sister charges
+       * no fee, which is the default.
+       */}
+      <TopUpCostNote terms={state.topUpTerms} amount={value} risesBy={t('agent.home.topUpLands')} />
       {/*
        * THE NUMBER THE PROMPT GOES TO — typed, never read off the shop's record.
        *

@@ -116,6 +116,19 @@ export interface CoverForm {
   premium: string;
 }
 
+/**
+ * What this sister charges a shop or a store to put money in.
+ *
+ * NOT A PERCENTAGE, unlike every other knob in this module, and the difference is the whole design: it
+ * recovers a per-PAYMENT cost, so a percentage would charge twice as much for a top-up that costs the
+ * same to carry. Two plain amounts in the sister's own currency, and no lane — a top-up is not a lane of
+ * work, so there is nothing for it to vary by and nothing for it to inherit from.
+ */
+export interface TopUpFeeForm {
+  charge: string;
+  freeAbove: string;
+}
+
 /** The form as it opens: only the layers this level actually holds, so an empty box means inherited. */
 export function rateFormOf(row: LanePricing): RateForm {
   // A lane row shows a value only where the LANE holds it; the default row, only where the sister does.
@@ -137,6 +150,47 @@ export function taxFormOf(row: LanePricing, registration: string | undefined): T
     label: owned ? (row.tax.label ?? '') : '',
     registration: registration ?? '',
   };
+}
+
+/** The form as it opens: empty where no fee was decided, which is a real state and the default one. */
+export function topUpFeeFormOf(pricing: Pick<EntityPricing, 'topUpFee'>): TopUpFeeForm {
+  return {
+    charge: pricing.topUpFee ? String(pricing.topUpFee.amount) : '',
+    freeAbove: pricing.topUpFee ? String(pricing.topUpFee.freeAbove) : '',
+  };
+}
+
+/**
+ * What goes on the wire. BOTH BOXES EMPTY SENDS `{}`, which REMOVES the rule — the only way to say "we
+ * charge nothing here", and distinct from a fee of zero, which the server refuses on purpose.
+ */
+export function topUpFeePayload(form: TopUpFeeForm): { amount?: number; freeAbove?: number } {
+  if (!form.charge.trim() && !form.freeAbove.trim()) return {};
+  return { amount: amountOf(form.charge) ?? 0, freeAbove: amountOf(form.freeAbove) ?? 0 };
+}
+
+/**
+ * The server's own bounds, said before anybody presses save.
+ *
+ * HALF A RULE IS THE ERROR WORTH CATCHING HERE. A threshold with no charge behind it charges nobody, and
+ * a charge with no threshold is a fee nobody can escape by topping up more — which is not this fee. The
+ * ceiling is the other one: past a fifth of its own threshold a charge has stopped recovering a payment
+ * cost and started being a tariff on being short, which is what the free-above shape exists to prevent.
+ */
+export function topUpFeeFormError(form: TopUpFeeForm, t: Translate): string | null {
+  const charge = form.charge.trim();
+  const freeAbove = form.freeAbove.trim();
+  if (!charge && !freeAbove) return null; // both empty = remove the rule, which is always allowed
+  if (!charge || !freeAbove) return t('tower.topupfee.needsBoth');
+
+  const amount = amountOf(charge);
+  const threshold = amountOf(freeAbove);
+  if (amount === null) return t('tower.rates.notANumber', { field: t('tower.topupfee.charge') });
+  if (threshold === null) return t('tower.rates.notANumber', { field: t('tower.topupfee.freeAbove') });
+  if (amount <= 0) return t('tower.topupfee.chargeTooLow');
+  if (threshold <= 0) return t('tower.topupfee.thresholdTooLow');
+  if (amount > threshold / 5) return t('tower.topupfee.tooSteep', { max: String(Math.round((threshold / 5) * 100) / 100) });
+  return null;
 }
 
 export function coverFormOf(row: LanePricing): CoverForm {

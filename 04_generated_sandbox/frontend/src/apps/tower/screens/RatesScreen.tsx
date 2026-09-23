@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
-import { useT, type Translate } from '../../../shared/i18n';
+import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
 import { EntityPicker } from './EntityPicker';
 import {
   coverFormError,
@@ -17,11 +17,15 @@ import {
   taxFormError,
   taxFormOf,
   taxPayload,
+  topUpFeeFormError,
+  topUpFeeFormOf,
+  topUpFeePayload,
   type CoverForm,
   type EntityPricing,
   type LanePricing,
   type RateForm,
   type TaxForm,
+  type TopUpFeeForm,
 } from '../money';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
@@ -124,6 +128,7 @@ export function RatesScreen({ state, actions }: { state: TowerState; actions: To
             </table>
           </section>
 
+          <TopUpFee pricing={pricing} state={state} actions={actions} />
           <RecentChanges pricing={pricing} />
           <Administrators pricing={pricing} state={state} actions={actions} />
           <RateImpact state={state} />
@@ -173,6 +178,78 @@ function LaneRow({ row, pricing, state, actions }: { row: LanePricing; pricing: 
         </tr>
       ) : null}
     </>
+  );
+}
+
+/**
+ * WHAT IT COSTS A SHOP OR A STORE TO PUT MONEY IN.
+ *
+ * ITS OWN PANEL, OUTSIDE THE TABLE, because it is the one charge on this screen that is not per lane.
+ * Everything in the table above resolves through lane → sister → network; this resolves through nothing.
+ * Putting it in a lane row would invite somebody to set a different top-up fee for bulk than for parcels,
+ * which is not a distinction a payment has.
+ *
+ * ABSENT IS STATED IN WORDS, not shown as two zeroes. A threshold of 0 against a charge of 0 reads like a
+ * decision somebody made and could adjust; nobody made it, and the difference matters because removing
+ * the rule is the only way to charge nothing — a fee of zero is refused by the server on purpose.
+ */
+function TopUpFee({ pricing, state, actions }: { pricing: EntityPricing; state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const [form, setForm] = useState<TopUpFeeForm>(() => topUpFeeFormOf(pricing));
+  const [tried, setTried] = useState(false);
+
+  // A save re-reads the pricing, so the boxes follow what was actually stored rather than what was typed.
+  useEffect(() => {
+    setForm(topUpFeeFormOf(pricing));
+    setTried(false);
+  }, [pricing]);
+
+  const err = tried ? topUpFeeFormError(form, t) : null;
+  const busy = state.busyId === 'topUpFee';
+  const currency = pricing.currency ?? '';
+  const label = (key: MessageKey) => (currency ? t('tower.topupfee.inCurrency', { label: t(key), currency }) : t(key));
+
+  const save = () => {
+    setTried(true);
+    if (topUpFeeFormError(form, t)) return;
+    void actions.saveTopUpFee(topUpFeePayload(form));
+  };
+
+  return (
+    <section class="cons__panel" style="margin-top:18px">
+      <div class="cons__panelhead">
+        <span class="cons__panelt">{t('tower.topupfee.title')}</span>
+        {/* What is charged TODAY, read off the record rather than off the boxes — the boxes are a draft
+            until somebody saves them, and the two are not the same claim. */}
+        <span class="ctbl__sub">
+          {pricing.topUpFee
+            ? t('tower.topupfee.current', {
+                charge: `${pricing.topUpFee.amount.toLocaleString()} ${currency}`.trim(),
+                freeAbove: `${pricing.topUpFee.freeAbove.toLocaleString()} ${currency}`.trim(),
+              })
+            : t('tower.topupfee.none')}
+        </span>
+      </div>
+
+      <div class="twr-knobs">
+        <p class="chint">{t('tower.topupfee.hint')}</p>
+        <div class="twr-knobs__row">
+          <section class="twr-knob">
+            <Text label={label('tower.topupfee.charge')} value={form.charge} onInput={(v) => setForm({ ...form, charge: v })} />
+            <Text
+              label={label('tower.topupfee.freeAbove')}
+              value={form.freeAbove}
+              hint={t('tower.topupfee.clearHint')}
+              onInput={(v) => setForm({ ...form, freeAbove: v })}
+            />
+            {err ? <p class="cerr">{err}</p> : null}
+            <button type="button" class="cbtn cbtn--primary" disabled={!pricing.editable || busy} onClick={save}>
+              {t('tower.rates.save')}
+            </button>
+          </section>
+        </div>
+      </div>
+    </section>
   );
 }
 

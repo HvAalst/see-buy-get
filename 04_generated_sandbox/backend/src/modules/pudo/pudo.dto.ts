@@ -1142,6 +1142,25 @@ export class EntityTaxDto {
 }
 
 /**
+ * Set what a sister charges a shop or a store to put money in — flat below a threshold, free above it.
+ *
+ * NOT the three-way optionality of its neighbours, and the difference is the point. A fee is one decision
+ * with two halves: a charge nobody can escape by topping up more is not this fee, and a threshold with
+ * nothing behind it charges nobody. So the two numbers travel together or the whole rule comes off —
+ * `{}` removes it, which is how "we charge nothing to top up here" is said. Half a rule is not a state
+ * this knob can be left in.
+ *
+ * No lane, unlike every other knob on that screen: a top-up is not a lane of work, so there is nothing
+ * for it to vary by.
+ */
+export class EntityTopUpFeeDto {
+  /** Top up this much or more and it costs nothing, in the sister's own currency. */
+  @IsOptional() @IsNumber() @ApiPropertyOptional() freeAbove?: number;
+  /** The flat charge below that threshold. The service refuses one worth a fifth of the threshold or more. */
+  @IsOptional() @IsNumber() @ApiPropertyOptional() amount?: number;
+}
+
+/**
  * Set what a sister covers when it breaks something, and what it charges to cover more.
  *
  * Same three-way optionality as the rate and tax knobs: absent leaves it alone, a number sets it,

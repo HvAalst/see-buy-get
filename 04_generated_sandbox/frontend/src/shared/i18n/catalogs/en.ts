@@ -39,6 +39,17 @@ export const en = {
   'common.noMatches': 'Nothing in this list matches that.',
   'common.stop': 'Stop',
 
+  /* WHAT A TOP-UP COSTS, SAID BEFORE IT IS PAID (TopUpCostNote) — the shop's sheet and the store's, in
+     the same words, because it is the same charge. Rendered at all only where a fee was actually decided.
+     "Charged" rather than "deducted": the amount paid is credited in full and the fee posted as its own
+     line, so nothing is taken out of the payment on the way in. */
+  'common.topUpFee.terms': 'Top-ups under {freeAbove} cost {charge}. {freeAbove} or more is free.',
+  'common.topUpFee.charged': 'Top-up fee',
+  // The nudge says what to do, not only what it costs — a threshold nobody is shown cannot change
+  // anybody's mind, and making the cheaper habit worth choosing is the whole reason this fee has a shape.
+  'common.topUpFee.nudge': 'Add {more} more and this one is free — {freeAbove} or more is never charged.',
+  'common.topUpFee.free': 'No fee on this one. {freeAbove} or more is always free.',
+
   // CV1 — a conversation about a load (shared by the driver asking and the shop or store answering).
   'common.chat.title': 'About {code}',
   'common.chat.withWho': 'With {who}',

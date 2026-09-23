@@ -17,6 +17,7 @@ import type { IconName } from '../../shared/ui/Icon';
 import { agentConfig, clearDid, createAgentClient, purgeAgentTokens, readDid, readEmail, saveDid, saveEmail } from './api';
 import { signal } from '../../shared/feedback';
 import { triggerDownload } from '../../shared/download';
+import { topUpTermsOf, type TopUpTerms } from '../../shared/topup-fee';
 import { bodyHintValue, bookFreightMissing, EMPTY_ACCEPT, excludedBodiesValue, handoverRoute, incotermValue, otpValid, packagingValue, parseBudget, parseDims, plannedPickupIso, termsBlock, type AcceptForm, type DimsForm } from './logic';
 import type { GeoPoint } from '../../shared/geo';
 import type {
@@ -164,6 +165,9 @@ export interface AgentState {
   /** A top-up asked for and not yet confirmed by the payment provider. Null when nothing is pending —
    *  which is the ordinary state, because a confirmed payment stops being a waiting one. */
   funding: FundingView | null;
+  /** What this sister charges to put money in, so the sheet can say it BEFORE the shop commits to an
+   *  amount. Null where nobody decided a fee, which is the default and shows no sentence at all. */
+  topUpTerms: TopUpTerms | null;
   /** Parcels waiting at this shop for the bus (loaded when the handover screen opens). */
   shopParcels: ParcelView[];
   shopParcelsState: 'idle' | 'loading' | 'ready' | 'error';
@@ -279,6 +283,7 @@ const INITIAL: AgentState = {
   agent: null,
   gate: null,
   funding: null,
+  topUpTerms: null,
   shopParcels: [],
   shopParcelsState: 'idle',
   bagPlan: { groups: [], bags: [] },
@@ -458,7 +463,12 @@ export function useAgentApp() {
        */
       const fundingR = await client.api.funding(did);
       if (superseded()) return;
-      const funding = fundingR.error ? null : (narrow<{ open: FundingView | null }>(fundingR.data).open ?? null);
+      const fundingState = fundingR.error ? null : narrow<{ open: FundingView | null; terms?: unknown }>(fundingR.data);
+      const funding = fundingState?.open ?? null;
+      // The TERMS ride along with it: what a top-up costs has to be on the sheet before an amount is
+      // committed to, not in the register afterwards. Kept from the last good read on a failure, because
+      // a fee that flickers out of existence when one request fails is the worst of both answers.
+      const topUpTerms = fundingR.error ? undefined : topUpTermsOf(fundingState?.terms);
 
       setState((s) => ({
         ...s,
@@ -466,6 +476,7 @@ export function useAgentApp() {
         agent,
         gate,
         funding,
+        topUpTerms: topUpTerms === undefined ? s.topUpTerms : topUpTerms,
         error: null,
         stale: false,
         refreshing: false,

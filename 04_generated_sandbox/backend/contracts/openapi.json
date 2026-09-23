@@ -7091,6 +7091,45 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/top-up-fee": {
+      "post": {
+        "operationId": "Sbg.setEntityTopUpFee",
+        "summary": "",
+        "description": "Set what a sister charges a shop or a store to put money in.\n\nThe knob behind a design decided on 2026-08-18: the payment provider's cost is per PAYMENT, so it is\nrecovered where it occurs rather than baked into a parcel price where the shop that tops up sensibly\nwould be subsidising the one that drips. Flat below a threshold, free above it.\n\nSending `{}` REMOVES the rule, which is how a sister says it charges nothing — distinct from a fee of\nzero, which the service refuses. Absent means no fee anywhere it is read, so removal is a real and\nreachable state rather than a number small enough to ignore.\n\nIt reprices nothing already asked for: a funding request carries the terms it was opened under.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityTopUpFeeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Entity"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/entities/{entityId}/tax": {
       "post": {
         "operationId": "Sbg.setEntityTax",
@@ -20159,6 +20198,23 @@
           "name"
         ]
       },
+      "TopUpFeeRule": {
+        "type": "object",
+        "properties": {
+          "freeAbove": {
+            "type": "number",
+            "description": "Top up this much or more and it costs nothing. In the sister's own currency, like every other figure\nit holds. Zero would make the fee unreachable, which is a confusing way to write \"no fee\" — leave the\nwhole rule off instead."
+          },
+          "amount": {
+            "type": "number",
+            "description": "The flat charge below that threshold, in the same currency."
+          }
+        },
+        "required": [
+          "freeAbove",
+          "amount"
+        ]
+      },
       "CompanyAddress": {
         "type": "object",
         "properties": {
@@ -20539,8 +20595,12 @@
             "description": "What this sister charges in tax on everything it sells. Absent means none — the network default, and\nthe state every sister is in until an operator deliberately says otherwise."
           },
           "topUpFee": {
-            "type": "object",
-            "description": "What a shop or store pays this sister to put money in. Absent means nothing — see TopUpFeeRule for\nwhy the cost is recovered here rather than folded into a parcel price. Read it through\n`EntityService.topUpFeeFor()`, never off the record, so a sister created before the knob still answers."
+            "description": "What a shop or store pays this sister to put money in. Absent means nothing — see TopUpFeeRule for\nwhy the cost is recovered here rather than folded into a parcel price. Read it through\n`EntityService.topUpFeeFor()`, never off the record, so a sister created before the knob still answers.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TopUpFeeRule"
+              }
+            ]
           },
           "taxByLane": {
             "type": "object",
@@ -23685,6 +23745,14 @@
             "type": "string",
             "description": "The number this sister collects tax under. Sister-wide: a registration is not a per-lane fact."
           },
+          "topUpFee": {
+            "description": "What this sister charges a shop or a store to put money in. Sister-wide, like the registration above\nand for the same reason: a top-up is not a lane of work, so there is nothing for it to vary by.\n\nABSENT MEANS NO FEE, and the console has to say so in those words rather than showing zeroes — a\nthreshold of 0 against a charge of 0 reads like a decision somebody made, and nobody made it.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TopUpFeeRule"
+              }
+            ]
+          },
           "lanes": {
             "description": "The sister's default first, then one row per lane.",
             "type": "array",
@@ -23905,6 +23973,19 @@
             "type": "number",
             "nullable": true,
             "description": "The general company layer, on everything."
+          }
+        }
+      },
+      "EntityTopUpFeeDto": {
+        "type": "object",
+        "properties": {
+          "freeAbove": {
+            "type": "number",
+            "description": "Top up this much or more and it costs nothing, in the sister's own currency."
+          },
+          "amount": {
+            "type": "number",
+            "description": "The flat charge below that threshold. The service refuses one worth a fifth of the threshold or more."
           }
         }
       },

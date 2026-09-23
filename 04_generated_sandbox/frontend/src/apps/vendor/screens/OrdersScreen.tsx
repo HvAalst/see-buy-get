@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, Checkbox, Chip, CodeCard, ErrorNote, GlanceNumber, Icon, Note, Pager, Pill, ReadAloud, PushPrompt, SearchInput, SelectionBar, Sheet } from '../../../shared/ui';
+import { Button, Card, Checkbox, Chip, CodeCard, ErrorNote, GlanceNumber, Icon, Note, Pager, Pill, ReadAloud, PushPrompt, SearchInput, SelectionBar, Sheet, TopUpCostNote } from '../../../shared/ui';
 import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
 import { triggerDownload } from '../../../shared/download';
 import { toggleAll, toggleId } from '../../../shared/register';
@@ -462,6 +462,8 @@ function TopUpSheet({ open, onClose, state, actions }: { open: boolean; onClose:
         </label>
         <input id="vtopup" class="input" type="number" inputMode="decimal" min="1" step="1" value={amount} onInput={(e) => setAmount(e.currentTarget.value)} />
       </div>
+      {/* What it costs, under the box where the amount is still being decided — the shop app's twin. */}
+      <TopUpCostNote terms={state.topUpTerms} amount={value} risesBy={t('vendor.topup.lands')} />
       {/* The number that will ring, typed rather than read off the store's record — the line that pays is
           often the owner's own, and a PIN prompt on a handset nobody offered is worse than no prompt. */}
       <div class="field">

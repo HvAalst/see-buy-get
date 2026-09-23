@@ -1927,9 +1927,20 @@ export class ParcelService implements OnApplicationBootstrap {
 
     // Which secret does this parcel release on? An inbound parcel carries a collection code from mint;
     // a peer-send gets its OTP at arrival. Rotate the one that is actually in play.
+    /*
+     * THE NEW CODE MUST NOT BE THE OLD ONE.
+     *
+     * Both generators draw at random and neither looked at what it was replacing, so a reissue could hand
+     * back the code it had just retired — one in ten thousand for a four-digit OTP. That is not a near
+     * miss: the whole promise of a reissue is that the code somebody lost STOPS WORKING, and a receiver
+     * who is told their code was replaced would be holding a live one. Draw again until it has changed.
+     */
     const kind: 'otp' | 'collection' = parcel.collectionCode ? 'collection' : 'otp';
     if (kind === 'collection') {
-      parcel.collectionCode = `COL-${randomBytes(4).toString('hex').toUpperCase()}`;
+      const was = parcel.collectionCode;
+      do {
+        parcel.collectionCode = `COL-${randomBytes(4).toString('hex').toUpperCase()}`;
+      } while (parcel.collectionCode === was);
       this.scan(parcel, 'Ready_For_Pickup', byDid, 'collection code reissued');
       void this.events
         .publish(GlosEvent.Pudo.ParcelReleaseCodeReissued, { parcelId, destAgentDid: parcel.destAgentDid, vendorId: parcel.vendorId, externalOrderId: parcel.externalOrderId }, { source: 'pudo' })
@@ -1937,7 +1948,8 @@ export class ParcelService implements OnApplicationBootstrap {
       return { parcelId, kind };
     }
 
-    const otp = releaseOtp();
+    let otp = releaseOtp();
+    while (otp === parcel.otp) otp = releaseOtp();
     parcel.otp = otp;
     this.scan(parcel, 'Ready_For_Pickup', byDid, 'release code reissued');
     void this.events

@@ -1142,6 +1142,25 @@ export const enTower = {
   'tower.cover.premium': 'Premium',
   'tower.cover.negative': 'A free cover limit cannot be negative.',
 
+  /* WHAT IT COSTS TO PUT MONEY IN — the one knob on this screen that is not a lane and not a percentage.
+     The hint has to carry the reasoning, because an operator setting this is deciding for every shop in
+     the country and the shape of the fee is the argument for it. */
+  'tower.topupfee.title': 'What it costs to put money in',
+  'tower.topupfee.hint':
+    'A flat charge on a top-up below the threshold, and nothing at or above it. Flat because what it recovers is a cost per PAYMENT, not per shilling — a percentage would charge twice as much for a top-up that costs us the same to carry. Free above the threshold so it is never friction for a shop that has run dry mid-morning. The shop is credited the full amount and charged separately, and both lines show on its register.',
+  'tower.topupfee.charge': 'Charge below the threshold',
+  'tower.topupfee.freeAbove': 'Free at or above',
+  'tower.topupfee.inCurrency': '{label} ({currency})',
+  'tower.topupfee.none': 'No fee. Shops and stores in this country top up for nothing, and neither app shows a charge.',
+  'tower.topupfee.current': 'Now: {charge} on anything under {freeAbove}. {freeAbove} or more is free.',
+  'tower.topupfee.clearHint': 'Empty both boxes and save to charge nothing at all. That is not the same as a fee of zero, which is refused — a charge of nothing still puts a fee on a shopkeeper’s screen.',
+  'tower.topupfee.needsBoth': 'Set both, or neither. A threshold with no charge behind it charges nobody, and a charge with no threshold is one nobody can avoid by topping up more.',
+  'tower.topupfee.chargeTooLow': 'A charge has to be more than nothing. To charge nothing, empty both boxes instead.',
+  'tower.topupfee.thresholdTooLow': 'The threshold has to be more than nothing, or the fee can never be avoided.',
+  'tower.topupfee.tooSteep': 'That is a fifth of the threshold or more, which is a tariff on being short rather than a payment cost. The most this threshold allows is {max}.',
+  'tower.topupfee.saved': 'Saved. Every shop and store in this country sees the charge on its top-up sheet before it pays.',
+  'tower.topupfee.removed': 'Removed. Topping up costs nothing here, and neither app shows a fee.',
+
   'tower.lane.default': 'Everything (default)',
   'tower.lane.pudo': 'Parcels · shop to shop',
   'tower.lane.mdp': 'Parcels · through a hub',
@@ -1375,6 +1394,12 @@ export const enTowerCompanies = {
   'tower.changes.what.tax': 'Tax',
   'tower.changes.what.cover': 'Cover',
   'tower.changes.what.fee': 'Margin (the old single knob)',
+  // The rest of the EntityChange union. Without these the audit table renders its own key as the reason a
+  // price moved, which is the one column on it that has to be readable by somebody asking what happened.
+  'tower.changes.what.topUpFee': 'Top-up fee',
+  'tower.changes.what.created': 'Company created',
+  'tower.changes.what.record': 'Company record',
+  'tower.changes.what.activated': 'Switched on',
 
   'tower.admins.title': 'Who can sign in for {name}',
   'tower.admins.add': 'Add somebody',

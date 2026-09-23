@@ -2036,6 +2036,50 @@ describe('PUDO Light', () => {
       expect(() => parcels.pickup('QR-REISS', dest.did, original)).toThrow(/Incorrect OTP/); // the old one is dead
       expect(parcels.pickup('QR-REISS', dest.did, out.otp!, 'delivered.jpg').status).toBe('Delivered');
     });
+
+    it('draws again rather than handing back the code it is replacing', () => {
+      /*
+       * FOUR DIGITS MEANS ONE REISSUE IN TEN THOUSAND DREW THE CODE IT HAD JUST RETIRED — and that is not
+       * a near miss, it is the reissue failing silently in the direction that matters. The receiver is
+       * told their old code no longer works, an operator has read a new one down the phone, and the code
+       * somebody lost is still live at the counter. Caught as an intermittent failure of the test above,
+       * which is exactly how this class of defect presents itself.
+       *
+       * Forced rather than waited for: the draw is scripted to collide once, so the retry is what is
+       * actually under test instead of the odds.
+       */
+      const origin = onboardAgent('Same Origin', 'NorthTown', 50);
+      const dest = onboardAgent('Same Dest', 'SouthTown', 50);
+      const corridor = corridors.addCorridor({ name: 'N-S same', originZone: 'NorthTown', destZone: 'SouthTown' });
+      const driver = corridors.addDriver({ driverDid: 'did:glos:dsame', name: 'D', corridorId: corridor.corridorId });
+
+      // releaseOtp() reads two bytes; everything else that wants randomness still gets the real thing.
+      const crypto = require('crypto') as { randomBytes: (n: number) => Buffer };
+      const real = crypto.randomBytes;
+      const draws = [0, 0, 65535]; // → '1000' at arrival, '1000' again (the collision), then '9999'
+      const spy = jest.spyOn(crypto, 'randomBytes').mockImplementation(((size: number) => {
+        if (size === 2 && draws.length) {
+          const v = draws.shift()!;
+          return Buffer.from([v >> 8, v & 0xff]);
+        }
+        return real(size);
+      }) as never);
+
+      try {
+        parcels.accept({ agentDid: origin.did, parcelId: 'QR-SAME', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: 'p.jpg' });
+        parcels.handover({ agentDid: origin.did, driverBadgeId: driver.badgeId, parcelIds: ['QR-SAME'] });
+        parcels.arrive('QR-SAME', dest.did);
+        expect(releaseCodeOf('QR-SAME')).toBe('1000');
+
+        const out = parcels.reissueRelease('QR-SAME', 'operator:ops-1');
+        expect(out.otp).toBe('9999'); // the collision was thrown away, not handed to the operator
+      } finally {
+        spy.mockRestore();
+      }
+
+      // And the retired code is genuinely dead at the counter, which is the promise a reissue makes.
+      expect(() => parcels.pickup('QR-SAME', dest.did, '1000')).toThrow(/Incorrect OTP/);
+    });
   });
 
   it('quotes from open-data rates, gates on prepaid, derives size, then rebates the flexible over-hold on delivery', () => {

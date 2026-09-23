@@ -272,6 +272,8 @@ export interface TowerActions {
   saveRates(body: { lane?: string; costOfRiskPct: number | null; profitOnRiskPct: number | null; marginPct: number | null }, lane?: string): Promise<void>;
   saveTax(body: { lane?: string; ratePct: number | null; label: string | null; registration: string | null }, lane?: string): Promise<void>;
   saveCover(body: { lane?: string; freeLimit: number | null; premiumPct: number | null }, lane?: string): Promise<void>;
+  /** Sister-wide, so no lane: a top-up is not a lane of work. An empty body removes the fee. */
+  saveTopUpFee(body: { amount?: number; freeAbove?: number }): Promise<void>;
 }
 
 const INITIAL: TowerState = {
@@ -883,7 +885,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
    * is exactly what the pricing read model exists to avoid.
    */
   const saveKnob = useCallback(
-    async (lane: string | undefined, run: (client: TowerClient, entityId: string) => Promise<{ error: SbgError | null }>) => {
+    async (lane: string | undefined, run: (client: TowerClient, entityId: string) => Promise<{ error: SbgError | null }>, done?: string) => {
       const client = clientRef.current;
       const entityId = state.entityId;
       if (!client || !entityId) return;
@@ -895,7 +897,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         setState((s) => ({ ...s, busyId: null, saveError: error }));
         return;
       }
-      setState((s) => ({ ...s, busyId: null, saveError: null, done: t('tower.rates.saved', { lane: rowId }) }));
+      setState((s) => ({ ...s, busyId: null, saveError: null, done: done ?? t('tower.rates.saved', { lane: rowId }) }));
       await loadPricing(client, entityId);
       // The overview holds the same numbers from a different angle; leaving it stale would put two
       // different answers to one question on two tabs of the same console.
@@ -1466,6 +1468,14 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       saveRates: (body, lane) => saveKnob(lane, (client, entityId) => client.api.setRates(entityId, body)),
       saveTax: (body, lane) => saveKnob(lane, (client, entityId) => client.api.setTax(entityId, body)),
       saveCover: (body, lane) => saveKnob(lane, (client, entityId) => client.api.setInsurance(entityId, body)),
+      // Its own busy id and its own confirmation: this knob is not a lane, and "Saved — default" would
+      // tell an operator they had just changed the default LANE, which is a different panel entirely.
+      saveTopUpFee: (body) =>
+        saveKnob(
+          'topUpFee',
+          (client, entityId) => client.api.setTopUpFee(entityId, body),
+          body.amount === undefined ? t('tower.topupfee.removed') : t('tower.topupfee.saved'),
+        ),
     },
   };
 }
