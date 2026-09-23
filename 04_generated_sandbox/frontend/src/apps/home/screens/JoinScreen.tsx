@@ -151,6 +151,7 @@ function CountryField({ id, state, actions }: JoinScreenProps & { id: string }) 
   const { countries, countriesState, form } = state;
   if (countriesState === 'error') return <Note tone="warn" icon="warning" title={t('home.join.country.unavailable')} />;
   if (countries.length < 2) return null;
+  const chosenCountry = countries.find((c) => c.country === form.country);
   return (
     <div class="field" style="margin-top:12px">
       <label class="field__label" for={id}>
@@ -164,7 +165,26 @@ function CountryField({ id, state, actions }: JoinScreenProps & { id: string }) 
           </option>
         ))}
       </select>
-      <p class="card__note">{t('home.join.country.note')}</p>
+      {/*
+       * A COUNTRY WE MATCH IN BUT DO NOT STAND IN.
+       *
+       * The list said "· not active yet" after the name and the note underneath promised "the company you
+       * will be paid by" — which for a matched country is a company that does not exist. Money and
+       * responsibility are the whole difference between the two rungs, so where there is no company the
+       * page says so in full, before anybody joins, rather than leaving it to be discovered on the first
+       * load delivered. Chosen deliberately as a Note and not a parenthesis: it is the most consequential
+       * sentence on this screen for anybody outside the two countries with a company behind them.
+       */}
+      {chosenCountry && chosenCountry.settles === false ? (
+        <Note
+          tone="warn"
+          icon="info"
+          title={t('home.join.country.notActiveTitle', { name: chosenCountry.name })}
+          detail={t('home.join.country.notActiveBody', { name: chosenCountry.name })}
+        />
+      ) : (
+        <p class="card__note">{t('home.join.country.activeNote')}</p>
+      )}
     </div>
   );
 }

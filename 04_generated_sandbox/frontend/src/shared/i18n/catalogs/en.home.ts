@@ -288,8 +288,15 @@ export const enHome = {
   // Country picker (JoinScreen CountryField) — shown only where there is more than one to choose from.
   'home.join.country.label': 'Country',
   'home.join.country.choose': 'Choose a country',
-  'home.join.country.noMoney': 'you settle with the carrier',
+  'home.join.country.noMoney': 'not active yet',
   'home.join.country.note': 'This is the company you will be paid by, so it has to be where you really are.',
+  /* A country the network MATCHES but does not stand in. The suffix in the list is not enough — money and
+     responsibility are the whole difference, and somebody joining deserves to read it in full before they
+     do, not discover it when their first load is delivered. */
+  'home.join.country.notActiveTitle': 'SeeBuyGet is not active in {name} yet',
+  'home.join.country.notActiveBody':
+    'We can match you with loads here, and you can register today. What we cannot do is handle the money: there is no SeeBuyGet company in {name}, so nobody of ours invoices, pays you, or carries any responsibility for what you are owed. You agree the price with whoever you carry for and you settle it with them directly. When a company is established here, that changes and you will be told.',
+  'home.join.country.activeNote': 'This is the company you will be paid by, so it has to be where you really are.',
   'home.join.country.unavailable': 'We could not load the countries just now — try again in a moment.',
   'home.join.about.fullName': 'Your full name',
   'home.join.about.fullNamePh': 'As on your ID',
