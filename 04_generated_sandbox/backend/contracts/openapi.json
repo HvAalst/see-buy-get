@@ -13179,6 +13179,248 @@
         }
       }
     },
+    "/v1/sbg/fleet/managers/{did}/departures": {
+      "post": {
+        "operationId": "Sbg.declareDeparture",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeclareDepartureDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Departure"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "Sbg.fleetDepartures",
+        "summary": "",
+        "description": "This fleet's own departures, soonest first, with who is aboard each.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/departures/{departureId}/status": {
+      "post": {
+        "operationId": "Sbg.setDepartureStatus",
+        "summary": "",
+        "description": "Stop selling, mark it gone, or call it off. The fleet's own call, on its own run.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "departureId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DepartureStatusDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Departure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/departures": {
+      "get": {
+        "operationId": "Sbg.departureOffers",
+        "summary": "",
+        "description": "SPACE A SHIPPER CAN BUY — open runs that have not left, soonest first.\n\nReadable by anybody signed in, like the freight board: a shop, a store or a courier all ship things,\nand which of them you are does not change what space is for sale. A full departure is simply absent.",
+        "parameters": [
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/departures/{departureId}/quote": {
+      "post": {
+        "operationId": "Sbg.quoteDeparture",
+        "summary": "",
+        "description": "What this load would cost on that departure, and which axis of it the load fills — BEFORE booking.",
+        "parameters": [
+          {
+            "name": "departureId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookDepartureDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/departures/{departureId}/book": {
+      "post": {
+        "operationId": "Sbg.bookDeparture",
+        "summary": "",
+        "description": "Take space on it. The actor is the shipper — their own DID, never one they name.",
+        "parameters": [
+          {
+            "name": "departureId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookDepartureDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartureBooking"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/departures/{departureId}/bookings/{bookingId}/cancel": {
+      "post": {
+        "operationId": "Sbg.cancelDepartureBooking",
+        "summary": "",
+        "description": "Give the space back — the shipper who took it, or the fleet that sold it.",
+        "parameters": [
+          {
+            "name": "departureId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "bookingId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Departure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/drivers/{did}/submit-kyc": {
       "post": {
         "operationId": "Sbg.driverSubmitKyc",
@@ -28927,6 +29169,279 @@
         },
         "required": [
           "stars"
+        ]
+      },
+      "DeclareDepartureDto": {
+        "type": "object",
+        "properties": {
+          "basis": {
+            "type": "string",
+            "enum": [
+              "per_trip",
+              "per_km",
+              "per_hour",
+              "per_kg"
+            ]
+          },
+          "corridorId": {
+            "type": "string"
+          },
+          "leavesAt": {
+            "type": "string"
+          },
+          "capacityKg": {
+            "type": "number",
+            "minimum": 1
+          },
+          "capacityM3": {
+            "type": "number",
+            "description": "Cubic metres of hold. Absent where the fleet has not measured it — then only weight can bind.",
+            "minimum": 0.1
+          },
+          "amount": {
+            "type": "number",
+            "minimum": 0.01
+          },
+          "minCharge": {
+            "type": "number",
+            "description": "The least the run will take. What stopping and strapping down already cost.",
+            "minimum": 0
+          },
+          "km": {
+            "type": "number",
+            "description": "Required when charging by the kilometre — otherwise every booking prices at nothing.",
+            "minimum": 1
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 240
+          }
+        },
+        "required": [
+          "basis",
+          "corridorId",
+          "leavesAt",
+          "capacityKg",
+          "amount"
+        ]
+      },
+      "DepartureRate": {
+        "type": "object",
+        "properties": {
+          "basis": {
+            "type": "string",
+            "enum": [
+              "per_trip",
+              "per_km",
+              "per_hour",
+              "per_kg"
+            ]
+          },
+          "amount": {
+            "type": "number",
+            "description": "In the currency of the country the fleet stands in."
+          },
+          "minCharge": {
+            "type": "number",
+            "description": "The least this departure will take, whatever the arithmetic says.\n\nNot a detail: on every basis except `per_trip` a small booking can price at almost nothing, and a\ncarrier who has stopped, opened the back and strapped something down has already spent the expensive\npart of the job. Optional, because a flat trip price needs no floor."
+          },
+          "currency": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "basis",
+          "amount",
+          "currency"
+        ]
+      },
+      "DepartureBooking": {
+        "type": "object",
+        "properties": {
+          "freightId": {
+            "type": "string",
+            "description": "The load itself, where one exists on the board. Absent for space bought ahead of the goods."
+          },
+          "volumeM3": {
+            "type": "number",
+            "description": "Cubic metres, where the shipper measured. See `binds` for why both axes are kept."
+          },
+          "binds": {
+            "type": "string",
+            "description": "WHICH AXIS ACTUALLY FILLED THE TRUCK for this booking — 'weight' or 'space'.\n\nRecorded rather than derived later, because it is the whole argument for why the price was what it\nwas, and a fleet reading a past run deserves to see that the load which cost them the trip was the\nlight one. It is also the honest answer to \"why did my pallet of foam cost that\".",
+            "enum": [
+              "weight",
+              "space"
+            ]
+          },
+          "price": {
+            "type": "number",
+            "description": "What it was quoted at, on the departure's basis, in the departure's currency."
+          },
+          "units": {
+            "type": "number",
+            "description": "What the basis was applied to — kilometres, hours, kilograms, or 1 for a trip. Kept so the price can be re-read."
+          },
+          "bookingId": {
+            "type": "string"
+          },
+          "shipperDid": {
+            "type": "string",
+            "description": "Who bought the space — a store, a shop, a person. Whoever the freight belongs to."
+          },
+          "description": {
+            "type": "string"
+          },
+          "weightKg": {
+            "type": "number"
+          },
+          "at": {
+            "type": "string"
+          },
+          "status": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "binds",
+          "price",
+          "units",
+          "bookingId",
+          "shipperDid",
+          "description",
+          "weightKg",
+          "at",
+          "status"
+        ]
+      },
+      "Departure": {
+        "type": "object",
+        "properties": {
+          "capacityM3": {
+            "type": "number"
+          },
+          "rate": {
+            "$ref": "#/components/schemas/DepartureRate"
+          },
+          "km": {
+            "type": "number",
+            "description": "The distance the line runs, where it is known — what `per_km` is multiplied by."
+          },
+          "note": {
+            "type": "string",
+            "description": "What the fleet wants a shipper to know: a tail-lift, a reefer, \"no hazmat\"."
+          },
+          "status": {
+            "type": "string",
+            "description": "open       taking bookings\nclosed     the fleet stopped selling, and what is booked still travels\ndeparted   it has gone\ncancelled  the run is not happening, and everybody booked on it has to be told",
+            "enum": [
+              "open",
+              "closed",
+              "departed",
+              "cancelled"
+            ]
+          },
+          "bookings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DepartureBooking"
+            }
+          },
+          "departureId": {
+            "type": "string"
+          },
+          "corridorId": {
+            "type": "string",
+            "description": "The fleet's own published line. Only its owner may put a departure on it."
+          },
+          "lineName": {
+            "type": "string"
+          },
+          "managerDid": {
+            "type": "string"
+          },
+          "company": {
+            "type": "string"
+          },
+          "originZone": {
+            "type": "string"
+          },
+          "destZone": {
+            "type": "string"
+          },
+          "leavesAt": {
+            "type": "string",
+            "description": "When the vehicle actually goes. The one fact a shipper plans around."
+          },
+          "capacityKg": {
+            "type": "number",
+            "description": "WHAT IS FOR SALE, ON BOTH AXES, because whichever runs out first is what \"full\" means.\n\nA truck is not a number of kilograms. The parcel side of this product worked that out already and\nprices a parcel on `max(kg, volume / divisor)`; this is the same fact at truck scale. A fleet that\ndeclared only kilograms would sell four tonnes of tempex it cannot physically fit, and one that\ndeclared only cubic metres would sell a load of steel that breaks its axle.\n\nSpace is optional: a fleet that has not measured its hold says nothing rather than guessing, and then\nonly weight binds — which is stated on the booking rather than assumed."
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "rate",
+          "status",
+          "bookings",
+          "departureId",
+          "corridorId",
+          "lineName",
+          "managerDid",
+          "company",
+          "originZone",
+          "destZone",
+          "leavesAt",
+          "capacityKg",
+          "createdAt"
+        ]
+      },
+      "DepartureStatusDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "closed",
+              "departed",
+              "cancelled"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "BookDepartureDto": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "weightKg": {
+            "type": "number",
+            "minimum": 0.1
+          },
+          "volumeM3": {
+            "type": "number",
+            "minimum": 0.01
+          },
+          "hours": {
+            "type": "number",
+            "description": "Only read when the departure charges by the hour.",
+            "minimum": 0.25
+          },
+          "freightId": {
+            "type": "string",
+            "description": "A load already on the board, where this is space for one."
+          }
+        },
+        "required": [
+          "description",
+          "weightKg"
         ]
       },
       "DriverKycDto": {

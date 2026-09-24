@@ -65,6 +65,7 @@ import { EntityAdminService } from '../../foundation/entity/entity-admin.service
 import { OperatorAccountService } from '../../foundation/entity/operator-account.service';
 import { PresenceService } from '../../foundation/presence/presence.service';
 import { InterestService } from '../../foundation/interest/interest.service';
+import { DepartureService } from './departure.service';
 import { BooksService } from '../../foundation/books/books.service';
 import { FxService } from '../../foundation/money/fx.service';
 import { IdentityVault } from '../../foundation/data-firewall/identity-vault.service';
@@ -122,7 +123,7 @@ describe('dimensional weight', () => {
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
         AccountService, OtpService, PersonService, InviteService, ApiKeyService, AuthService,
         WalletService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
-        EntityService, EntityAdminService, OperatorAccountService, ConsignmentNoteService, PresenceService, InterestService, CompanyDocumentService, HandleService, HandleDirectory, CompanyReadinessService, BorderRuleService, BooksService, FxService,
+        EntityService, EntityAdminService, OperatorAccountService, ConsignmentNoteService, PresenceService, InterestService, DepartureService, CompanyDocumentService, HandleService, HandleDirectory, CompanyReadinessService, BorderRuleService, BooksService, FxService,
         PayoutService, ReturnService, UnclaimedService, MerchantRatingService, SandboxPayoutRail, { provide: PAYOUT_RAIL, useExisting: SandboxPayoutRail },
         FundingService, FundingPayerRegistrar, SandboxFundingRail, { provide: FUNDING_RAIL, useExisting: SandboxFundingRail },
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },

@@ -1,6 +1,7 @@
 import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsIn, IsNumber, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
 import { INCOTERM_CODES } from '../../foundation/incoterms/catalogue';
 import { INTEREST_KINDS, MAX_INTEREST_MESSAGE } from '../../foundation/interest/interest.service';
+import { RATE_BASES } from './departure.types';
 import { PRESENCE_LEVELS, type PresenceLevel } from '../../foundation/presence/presence.types';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
@@ -1382,6 +1383,42 @@ export class InterestDto {
   @IsString() @MaxLength(160) email!: string;
   /** Why they are asking. The motivation is the evidence a switch-on decision is made on. */
   @IsString() @MaxLength(MAX_INTEREST_MESSAGE) message!: string;
+}
+
+/**
+ * F3 — a fleet putting space for sale on a run it is making anyway.
+ *
+ * Both capacity axes, because whichever runs out first is what "full" means for a vehicle; and the price
+ * BASIS, because per-kilogram is the one that loses money on the loads that actually fill a truck.
+ */
+export class DeclareDepartureDto {
+  @IsString() corridorId!: string;
+  @IsString() leavesAt!: string;
+  @IsNumber() @Min(1) capacityKg!: number;
+  /** Cubic metres of hold. Absent where the fleet has not measured it — then only weight can bind. */
+  @IsOptional() @IsNumber() @Min(0.1) capacityM3?: number;
+  @IsIn(RATE_BASES) @ApiProperty({ enum: RATE_BASES }) basis!: string;
+  @IsNumber() @Min(0.01) amount!: number;
+  /** The least the run will take. What stopping and strapping down already cost. */
+  @IsOptional() @IsNumber() @Min(0) minCharge?: number;
+  /** Required when charging by the kilometre — otherwise every booking prices at nothing. */
+  @IsOptional() @IsNumber() @Min(1) km?: number;
+  @IsOptional() @IsString() @MaxLength(240) note?: string;
+}
+
+/** Taking some of that space. */
+export class BookDepartureDto {
+  @IsString() @MaxLength(160) description!: string;
+  @IsNumber() @Min(0.1) weightKg!: number;
+  @IsOptional() @IsNumber() @Min(0.01) volumeM3?: number;
+  /** Only read when the departure charges by the hour. */
+  @IsOptional() @IsNumber() @Min(0.25) hours?: number;
+  /** A load already on the board, where this is space for one. */
+  @IsOptional() @IsString() freightId?: string;
+}
+
+export class DepartureStatusDto {
+  @IsIn(['open', 'closed', 'departed', 'cancelled']) status!: 'open' | 'closed' | 'departed' | 'cancelled';
 }
 
 export class PhoneRequestDto {

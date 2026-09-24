@@ -30,6 +30,8 @@ export const ERROR_CODES = {
   // Somebody asking to be told when a country opens, about one that is already open. Not a failure on
   // their part: the right answer is a link to the sign-up, which is what the caller turns this into.
   ALREADY_OPEN: { status: 400, title: 'The network already reaches that country' },
+  // F3 — a departure that cannot take this load. Weight or space; the message says which.
+  NO_ROOM: { status: 409, title: 'There is not enough room on that departure' },
   PASSWORD_TOO_SHORT: { status: 400, title: 'Password is too short' },
   PHONE_REQUIRED: { status: 400, title: 'A phone number is required' },
   PHONE_INVALID: { status: 400, title: 'Phone number is not valid' },

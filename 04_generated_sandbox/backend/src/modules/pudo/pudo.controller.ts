@@ -8,6 +8,7 @@ import { FieldObservationService, OBSERVATION_BASIS } from './field-observation.
 import { MailService } from '../../foundation/mail/mail.service';
 import { appUrl } from '../../foundation/mail/mail.templates';
 import { InterestService } from '../../foundation/interest/interest.service';
+import { DepartureService } from './departure.service';
 import { isSandbox } from '../../foundation/runtime/sandbox';
 import { Body, Controller, Delete, Get, Header, Inject, Param, Patch, Post, Query, Res, StreamableFile, Optional } from '@nestjs/common';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
@@ -107,7 +108,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyRecordDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto } from './pudo.dto';
+  BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, CoupleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, BookDepartureDto, DeclareDepartureDto, DepartureStatusDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto } from './pudo.dto';
 import { incotermEntry } from '../../foundation/incoterms/catalogue';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
@@ -228,6 +229,7 @@ export class SbgController {
     private readonly contacts: ContactCardService,
     @Inject(GEOCODER) private readonly geocoder: Geocoder,
     private readonly interest: InterestService,
+    private readonly departures: DepartureService,
     @Optional() private readonly mail?: MailService,
     @Optional() private readonly papers?: PapersWatchService,
   ) {}
@@ -4204,6 +4206,69 @@ export class SbgController {
     const by = this.assertFreightSender(id, actor);
     const f = this.dispatch.rateFreight(id, by.did, { stars: dto.stars, issues: dto.issues });
     return { freightId: f.freightId, code: f.code, rating: f.rating };
+  }
+
+  /* ----------------------------------------------- F3: space for sale on a run that is happening -- */
+
+  /**
+   * A fleet puts a departure on one of its own published lines.
+   *
+   * This is the market running the other way. Everything until now has been a shipper posting a load and
+   * carriers bidding; the cheapest capacity in the network is a truck that is leaving regardless with air
+   * in the back, and there was no way to sell it.
+   */
+  @Post('fleet/managers/:did/departures')
+  declareDeparture(@Param('did') did: string, @Body() dto: DeclareDepartureDto, @Actor() actor: IntrospectionResult) {
+    this.assertFleetSelf(did, actor);
+    return this.departures.declare({ managerDid: did, ...dto });
+  }
+
+  /** This fleet's own departures, soonest first, with who is aboard each. */
+  @Get('fleet/managers/:did/departures')
+  fleetDepartures(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
+    this.assertFleetSelf(did, actor);
+    return { items: this.departures.forFleet(did) };
+  }
+
+  /** Stop selling, mark it gone, or call it off. The fleet's own call, on its own run. */
+  @Post('fleet/managers/:did/departures/:departureId/status')
+  setDepartureStatus(@Param('did') did: string, @Param('departureId') departureId: string, @Body() dto: DepartureStatusDto, @Actor() actor: IntrospectionResult) {
+    this.assertFleetSelf(did, actor);
+    return this.departures.setStatus(departureId, dto.status, did);
+  }
+
+  /**
+   * SPACE A SHIPPER CAN BUY — open runs that have not left, soonest first.
+   *
+   * Readable by anybody signed in, like the freight board: a shop, a store or a courier all ship things,
+   * and which of them you are does not change what space is for sale. A full departure is simply absent.
+   */
+  @Get('departures')
+  departureOffers(@Query('from') from?: string, @Query('to') to?: string) {
+    return { items: this.departures.offers({ ...(from ? { from } : {}), ...(to ? { to } : {}) }) };
+  }
+
+  /** What this load would cost on that departure, and which axis of it the load fills — BEFORE booking. */
+  @Post('departures/:departureId/quote')
+  quoteDeparture(@Param('departureId') departureId: string, @Body() dto: BookDepartureDto) {
+    return this.departures.quote(departureId, { weightKg: dto.weightKg, volumeM3: dto.volumeM3, hours: dto.hours });
+  }
+
+  /** Take space on it. The actor is the shipper — their own DID, never one they name. */
+  @Post('departures/:departureId/book')
+  bookDeparture(@Param('departureId') departureId: string, @Body() dto: BookDepartureDto, @Actor() actor: IntrospectionResult) {
+    const shipperDid = actingDid(actor);
+    if (!shipperDid) throw new GlosError('FORBIDDEN', 'Sign in as the party whose goods these are');
+    const { booking } = this.departures.book(departureId, { shipperDid, ...dto });
+    return booking;
+  }
+
+  /** Give the space back — the shipper who took it, or the fleet that sold it. */
+  @Post('departures/:departureId/bookings/:bookingId/cancel')
+  cancelDepartureBooking(@Param('departureId') departureId: string, @Param('bookingId') bookingId: string, @Actor() actor: IntrospectionResult) {
+    const who = actingDid(actor);
+    if (!who) throw new GlosError('FORBIDDEN', 'Sign in first');
+    return this.departures.cancelBooking(departureId, bookingId, who);
   }
 
   /** Heavy registry: upload ID + licence copy → KYC_PENDING. */
