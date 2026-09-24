@@ -110,6 +110,8 @@ export interface RecentVehicleView {
   busy: boolean;
   /** FP4 — the papers that have lapsed, in words. Non-empty: listed, marked, and refused at the coupling. */
   offRoad?: string[];
+  /** The dashboard sticker, present only for a vehicle no fleet owns — see RecentVehicle on the server. */
+  qr?: string;
 }
 
 /**

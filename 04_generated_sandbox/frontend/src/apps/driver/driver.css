@@ -438,11 +438,46 @@
   gap: 9px;
 }
 
+/* Reasons a load cannot be taken. A COLUMN of wrapping lines, not a row of lozenges: each one is a
+   sentence written for a driver to act on, and a pill is nowrap by design, so on a phone they ran off
+   the edge of the card. The tone is a dot now — the colour still says how hard the blocker is. */
 .board__blockers {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-direction: column;
+  gap: 7px;
   list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.board__blocker {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--tx2);
+}
+
+.board__blocker-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  margin-top: 7px;
+  border-radius: 50%;
+  background: var(--signal);
+}
+
+.board__blocker--danger .board__blocker-dot {
+  background: var(--dang);
+}
+
+.board__blocker--warn .board__blocker-dot {
+  background: var(--org);
+}
+
+.board__blocker--info .board__blocker-dot {
+  background: var(--blue);
 }
 
 .board__can {

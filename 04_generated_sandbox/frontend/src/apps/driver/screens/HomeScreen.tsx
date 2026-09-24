@@ -17,6 +17,7 @@ import {
   shiftSummary,
   usedPercent,
 } from '../logic';
+import type { RecentVehicleView } from '../types';
 import type { DriverActions, DriverState } from '../useDriverApp';
 
 export interface HomeScreenProps {
@@ -79,6 +80,10 @@ function OffShift({ state, actions }: HomeScreenProps) {
   // is one tap, and the dashboard QR below stays the way a NEW vehicle joins the list.
   const [vehicleId, setVehicleId] = useState<string | null>(null);
   const free = state.vehicles.filter((v) => !v.busy && !v.offRoad?.length);
+  // The vehicles no fleet owns — the server sends a dashboard code only for those, so this is both
+  // "which are mine" and "which stickers am I allowed to see" in one read.
+  const mine = state.vehicles.filter((v) => Boolean(v.qr));
+  const [sticker, setSticker] = useState<RecentVehicleView | null>(null);
 
   return (
     <div class="scr">
@@ -110,8 +115,10 @@ function OffShift({ state, actions }: HomeScreenProps) {
 
       {/* Your own vehicles first — the morning question is "which one today?", and it has an answer before
           the driver has walked anywhere. One in use by someone else is shown and blocked, never hidden. */}
+      {/* `title`, not `label`: `label` is only the section's aria-label and renders nothing, so this card
+          asked "Which vehicle?" of nobody at all — the fourth instance of that same defect. */}
       {state.vehicles.length ? (
-        <Card label={t('driver.home.whichVehicle')}>
+        <Card title={t('driver.home.whichVehicle')}>
           <div class="rows" role="list">
             {state.vehicles.map((v) => (
               <button
@@ -150,7 +157,49 @@ function OffShift({ state, actions }: HomeScreenProps) {
           </div>
           {/* Nothing to pick: say which reason, because "out with someone else" is untrue of a vehicle off the road. */}
           {free.length === 0 ? <p class="card__note">{t(state.vehicles.every((v) => v.busy) ? 'driver.home.allBusy' : 'driver.home.allOffRoad')}</p> : null}
+
+          {/*
+            * THE DASHBOARD STICKER, FOR A VAN THAT IS THEIR OWN.
+            *
+            * A shift starts by scanning the sticker on the dashboard, and a fleet prints those for its
+            * vehicles. A courier who registered their own van at signup had nowhere to get one — the code
+            * was on the record and on no screen they could reach. They can start by tapping the van above,
+            * so this is not the way in; it is how the sticker gets onto the dashboard in the first place,
+            * for the mornings when scanning is quicker and for anyone else who ever drives it.
+            *
+            * Only for a vehicle no fleet owns: the server withholds the code for a fleet's van, because a
+            * sticker is a physical thing and handing its code to a phone is a coupling from anywhere.
+            */}
+          {mine.length ? (
+            <Button variant="link" full={false} onClick={() => setSticker(mine[0])}>
+              {t(mine.length === 1 ? 'driver.home.stickerOne' : 'driver.home.stickerMany')}
+            </Button>
+          ) : null}
         </Card>
+      ) : null}
+
+      {sticker ? (
+        <Sheet open onClose={() => setSticker(null)} title={t('driver.home.stickerTitle', { plate: sticker.plate })}>
+          <p class="t-body">{t('driver.home.stickerBody')}</p>
+          <QrBlock value={qrPayload('vehicle', sticker.qr!)} size={196} caption={sticker.qr} label={t('driver.home.stickerQrLabel', { plate: sticker.plate })} />
+          {mine.length > 1 ? (
+            <div class="rows" role="list">
+              {mine.map((v) => (
+                <button key={v.vehicleId} type="button" class={`row${v.vehicleId === sticker.vehicleId ? ' row--on' : ''}`} onClick={() => setSticker(v)}>
+                  <span class="row__ic">
+                    <Icon name="truck" size={24} />
+                  </span>
+                  <span class="row__body">
+                    <span class="row__t">{v.plate}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <Button variant="link" onClick={() => setSticker(null)}>
+            {t('driver.close')}
+          </Button>
+        </Sheet>
       ) : null}
 
       <Card label={state.vehicles.length ? t('driver.home.orScan') : undefined}>

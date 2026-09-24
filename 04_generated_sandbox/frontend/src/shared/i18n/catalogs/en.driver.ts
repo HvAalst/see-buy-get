@@ -43,12 +43,12 @@ export const enDriver = {
 
   // Sign-in screen (driver identity capture).
   'driver.signin.title': 'Who is driving?',
-  'driver.signin.lede': 'Sign in with the phone number your fleet registered, and your 4-digit PIN.',
+  'driver.signin.lede': 'Sign in with the phone number you are registered with, and your 4-digit PIN.',
   'driver.signin.phoneLabel': 'Phone number',
-  'driver.signin.phoneNote': 'The number your fleet registered you with. Wrong number? Ask your fleet manager to check it.',
+  'driver.signin.phoneNote': 'The number you signed up with — or, if a fleet took you on, the one they registered for you.',
   'driver.signin.pinLabel': 'PIN',
   'driver.signin.notDriver': 'This phone is not registered to a driver',
-  'driver.signin.notDriverNote': 'Your PIN is fine. Ask your fleet manager which number they registered you with.',
+  'driver.signin.notDriverNote': 'Your PIN is fine — no driver is registered to this number. Check the number you signed up with, or the one your fleet used if they took you on.',
   'driver.signin.continue': 'Sign in',
   'driver.signin.firstTime': 'First time here, or forgot your PIN?',
   'driver.signin.codeTitle': 'Choose your PIN',
@@ -63,7 +63,7 @@ export const enDriver = {
   'driver.signin.why1': 'Nobody can drive as you with your badge alone',
   'driver.signin.why2': 'A new PIN signs out every other phone',
   'driver.signin.why3': 'Five wrong PINs lock it; a code opens it again',
-  'driver.signin.aloud': 'Type the phone number your fleet registered, then your four digit PIN. First time here? Tap first time, and we send you a code.',
+  'driver.signin.aloud': 'Type the phone number you are registered with, then your four digit PIN. First time here? Tap first time, and we send you a code.',
 
   // Route screen (choose start + destination, then get offers).
   'driver.route.title': 'Where are you going?',
@@ -120,6 +120,17 @@ export const enDriver = {
   // Home screen — off shift.
   'driver.home.startTitle': 'Start your shift',
   'driver.home.startLede': 'Scan the QR sticker on the dashboard of the vehicle you are driving today.',
+  /* THE DASHBOARD STICKER, for a van the driver owns. A fleet prints these for its vehicles; a courier
+     who registered their own at signup had nowhere to get one — the code was on the record and on no
+     screen they could reach. They can start by tapping the van, so this is not the way IN; it is how the
+     sticker gets onto the dashboard, for the mornings when scanning is quicker and for anyone else who
+     ever drives it. Offered only for a vehicle no fleet owns — the server withholds the rest. */
+  'driver.home.stickerOne': 'Show my van’s sticker',
+  'driver.home.stickerMany': 'Show a vehicle’s sticker',
+  'driver.home.stickerTitle': 'The sticker for {plate}',
+  'driver.home.stickerBody': 'Print this and put it on the dashboard, where it can be scanned from the driver’s seat. Anyone who scans it and is cleared for this vehicle can start a shift on it — so it belongs inside the cab, not on the outside of the van.',
+  'driver.home.stickerQrLabel': 'Dashboard code for {plate}',
+
   'driver.home.notActivated': 'Not activated yet',
 
   /* GETTING CLEARED WITHOUT A FLEET. Anything above a motorcycle starts at DRAFT and needs an ID and a

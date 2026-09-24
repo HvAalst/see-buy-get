@@ -316,11 +316,24 @@ function BoardCard({ row, onPropose, onAsk }: { row: BoardRow; onPropose: () => 
         ) : null}
       </div>
 
+      {/*
+        * A BLOCKER IS A SENTENCE, AND A PILL IS A BADGE.
+        *
+        * These were rendered as pills, and `.pill` is `white-space: nowrap` — correctly, because a pill
+        * holds a status WORD. The server's blockers are reasons written for a driver to act on ("Couple
+        * to a vehicle to see whether you can take this load"), so on a phone they ran straight off the
+        * right edge of the card, clipped mid-word. Reported from a screenshot.
+        *
+        * Made to read as what it is: a line, wrapping, with the tone carried by a dot rather than by a
+        * lozenge around the text. It mirrors the "you can take this" line in the other branch, which is
+        * the same kind of statement with the opposite answer.
+        */}
       {row.blockers.length > 0 ? (
         <ul class="board__blockers">
           {row.blockers.map((b) => (
-            <li key={b.code}>
-              <Pill tone={blockerTone(b.kind)}>{b.message}</Pill>
+            <li key={b.code} class={`board__blocker board__blocker--${blockerTone(b.kind)}`}>
+              <span class="board__blocker-dot" aria-hidden="true" />
+              <span>{b.message}</span>
             </li>
           ))}
         </ul>

@@ -48,6 +48,18 @@ export interface RecentVehicle {
   busy: boolean;
   /** FP4 — the papers that have lapsed, in words. Non-empty: listed, marked, and refused at the coupling. */
   offRoad: string[];
+  /**
+   * THE DASHBOARD STICKER — only for a vehicle NO FLEET OWNS.
+   *
+   * A shift starts by scanning the sticker on the dashboard, and a fleet prints those for its own
+   * vehicles. An independent courier who registered their own van at signup had nowhere to get one: the
+   * code existed on the record and appeared on no screen they could reach, which is what the user asked.
+   *
+   * Withheld where a fleet DOES own the vehicle, and that is not squeamishness. The sticker is a physical
+   * thing on a dashboard, and handing its code to somebody's phone is handing them a coupling they could
+   * do from anywhere — for a fleet's van that is the fleet's decision to make, not ours.
+   */
+  qr?: string;
 }
 
 /**
@@ -158,6 +170,7 @@ export class FleetService {
         verified: v.verified,
         busy: !!this.activeForVehicle(v.vehicleId),
         offRoad: this.vehicles.offRoadReasons(v.vehicleId),
+        ...(v.managerDid ? {} : { qr: v.qr }),
       }));
   }
 
