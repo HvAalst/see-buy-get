@@ -345,6 +345,32 @@ export default defineConfig({
     port: app.devPort,
     // The apps import ../../lib/sbg and ../../shared, which live outside `root`.
     fs: { allow: [ROOT] },
+    /**
+     * IN DEV, THE FRONT DOOR STANDS IN FOR THE WHOLE SITE — as it does in production.
+     *
+     * Deployed, every app is one origin: `/`, `/driver/`, `/agent/`. So the sign-in router links to
+     * `/driver/` and that is correct. In dev each app is its own server on its own port, and `/driver/`
+     * on the root app's port is just… the root app — served back by its own navigate fallback. Clicking
+     * "driver" on "I already work with SeeBuyGet" returned you to the front door, which is what the user
+     * reported, and it made the whole sign-in path untestable without anybody noticing for months.
+     *
+     * The divergence is the bug, so this closes it rather than teaching the client about ports: the root
+     * dev server proxies each sibling's base to that sibling's dev server, off the SAME `APPS` table that
+     * defines the deploy paths. One origin in dev too — which also means the hand-off after sign-up
+     * (localStorage, and localStorage is per ORIGIN) reaches the app it is handing off to.
+     *
+     * A sibling that is not running gives a proxy error, which is a far better answer than silently
+     * rendering the front door at another app's address.
+     */
+    ...(IS_ROOT
+      ? {
+          proxy: Object.fromEntries(
+            Object.values(APPS)
+              .filter((a) => a.base !== '/')
+              .map((a) => [a.base, { target: `http://localhost:${a.devPort}`, changeOrigin: false, ws: true }]),
+          ),
+        }
+      : {}),
   },
 
   preview: {
